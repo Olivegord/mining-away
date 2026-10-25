@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Fetch pinned official Luau tools
         env:
           GH_TOKEN: ${{ github.token }}
@@ -34,7 +36,7 @@ jobs:
       - name: Upload review build
         uses: actions/upload-artifact@v4
         with:
-          name: mining-away-${{ github.sha }}
+          name: mining-away-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             build/mining-away.rbxl
             build/mining-away-review.zip
