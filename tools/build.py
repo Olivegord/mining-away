@@ -22,7 +22,7 @@ def module_bundle(names):
   s+='local '+name+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','MapLayout','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
  return module_bundle(('Feel','Feedback','SentryMotion','Presentation'))+(ROOT/'src/Client.lua').read_text()
 def build(original,out):

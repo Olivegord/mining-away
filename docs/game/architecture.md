@@ -7,6 +7,7 @@ Read [owner requirements](../OWNER_REQUIREMENTS.md) first. This is one game repo
 | Source | Responsibility | Common changes |
 | --- | --- | --- |
 | [`src/Config.lua`](../../src/Config.lua) | Field definitions and shared simulation tuning. | Field populations, mineral values, defense strength, timing, command distance. Check the consuming runtime because some constants are still duplicated there. |
+| [`src/MapLayout.lua`](../../src/MapLayout.lua) | Pure compact-valley plan: connected routes, rounded bends, terrain cuts and biome groves. | Field/route clearance and terrain composition; run `map-layout.spec.lua` and the real Studio map checks. |
 | [`src/World.lua`](../../src/World.lua) | Runtime map assembly, original asset integration, station props, paths, trees, scenery, materials, lighting; drone and turret cloning. | Map, atmosphere, palette, station placement, safe terrain, original pyramid appearance. |
 | [`src/Feel.lua`](../../src/Feel.lua) | Pure original-motion equations, formation, hover, mining stations, growth and crystal-stage helpers. | Original-feel corrections. Preserve the contract and its equation tests. |
 | [`src/Rules.lua`](../../src/Rules.lua) | Pure finite encounter state machine, immutable-life eligibility, clearance, atomic depletion, free reprint transitions. | Anti-attrition, encounter lifecycle, contribution and ownership rules. |
@@ -15,7 +16,7 @@ Read [owner requirements](../OWNER_REQUIREMENTS.md) first. This is one game repo
 | [`src/Persistence.lua`](../../src/Persistence.lua) | Storage adapters, session leases, revision fences, atomic transactions/receipts, retry/reconciliation, save/release. | Save correctness. Keep it independent of world presentation. |
 | [`src/Server.lua`](../../src/Server.lua) | Server entrypoint: player lifecycle, validated commands, fixed-step gameplay, authoritative resource/combat simulation, runtime encounter integration and replication. | Damage, target selection, rewards, remote validation, world/profile integration. |
 | [`src/Client.lua`](../../src/Client.lua) | Client entrypoint: compact HUD, station interactions, three-card/prestige/fleet screens, all-player drone/resource rendering, beams, input and cleanup. | Controls, card layout, visual interpolation, crystals, screen responsiveness. |
-| [`src/SentryMotion.lua`](../../src/SentryMotion.lua) | Pure cosmetic sentry idle, scan, blink, tracking, charge, recoil and flinch poses. Bundled before Presentation. | Sentry motion tuning; never combat decisions or damage. |
+| [`src/SentryMotion.lua`](../../src/SentryMotion.lua) | Pure sentry choreography: closed dormant stack, full-turn expanding wake, weighted spring settling/tracking, independent recoil/flinch, and accelerated falls that stop at impact. Bundled before Presentation. | Sentry motion tuning; never combat decisions or damage. |
 | [`src/Presentation.lua`](../../src/Presentation.lua) | Cosmetic authored-mesh animation for all drones and pyramid turrets, telegraphs, hit/death/rebuild effects, bounded fragments/audio. | Sentry animation, combat readability, destruction/reprint presentation. Never gameplay damage. |
 | [`src/Feedback.lua`](../../src/Feedback.lua) | Pure cosmetic event detection and elapsed-time envelopes. | No-replay late-join feedback, flash/recoil/assembly/fall timing. |
 
@@ -39,7 +40,7 @@ These `.lua` files are editable module-shaped sources. The place builder bundles
 
 The base SHA-256 is `480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b`. The builder refuses a different base and refuses identical input/output paths. It replaces `GlobalDroneControl` and `ClientDroneControl`, enables those two, and disables other historical Script/LocalScript controllers. Do not enable legacy `DroneControl` alongside the new simulation.
 
-Server bundle order is `Config → Feel → Rules → Profile → Cards → Persistence → World → Server`. Client bundle order is `Feel → Feedback → SentryMotion → Presentation → Client`. If you add a source dependency, update the builder order and test the generated bundles; a standalone file compiling does not establish a working bundle.
+Server bundle order is `Config → Feel → Rules → Profile → Cards → Persistence → MapLayout → World → Server`. Client bundle order is `Feel → Feedback → SentryMotion → Presentation → Client`. If you add a source dependency, update the builder order and test the generated bundles; a standalone file compiling does not establish a working bundle.
 
 ## Runtime and replication
 
