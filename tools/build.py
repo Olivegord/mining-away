@@ -24,7 +24,7 @@ def module_bundle(names):
 def bundle():
  return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Feel','Feedback','Presentation'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Feel','Feedback','SentryMotion','Presentation'))+(ROOT/'src/Client.lua').read_text()
 def build(original,out):
  assert original.resolve()!=out.resolve(),'Input and output must differ'
  out.parent.mkdir(parents=True,exist_ok=True)

@@ -2,9 +2,11 @@
 -- Feedback is bundled immediately before this module by tools/build.py.
 local P={};P.__index=P
 local F=Feedback
-local ICE=Color3.fromRGB(151,235,231)
-local HOT=Color3.fromRGB(255,199,158)
-local WHITE=Color3.fromRGB(255,247,228)
+local S=SentryMotion
+local ICE=Color3.fromRGB(126,241,221)
+local HOT=Color3.fromRGB(255,179,102)
+local WHITE=Color3.fromRGB(255,249,230)
+local RUIN=Color3.fromRGB(34,61,67)
 local segmentRanks={bottemseg=0,lowerseg=1,upperseg=2,topseg=3,eye=1,eyecase=1,spawnEye=1}
 local requiredSegments={'bottemseg','lowerseg','upperseg','topseg','eye','eyecase','spawnEye'}
 local function snapshot(source)
@@ -199,17 +201,23 @@ function P:registerTurret(source,now)
  clean(view);view.Name='View_'..source.Name;view.Parent=self.parent
  local eye=view:FindFirstChild('eye',true)
  local endpoint=barePart(self.parent,'SentryAim');endpoint.Size=Vector3.one*.05;endpoint.Transparency=1
+ local cue=barePart(self.parent,'SentryChargeMark');cue.Shape=Enum.PartType.Cylinder
+ cue.Size=Vector3.new(.025,7,7);cue.Color=HOT;cue.Transparency=1
  local a=Instance.new('Attachment');a.Name='ChargeOrigin';a.Parent=eye
  local b=Instance.new('Attachment');b.Parent=endpoint
  local beam=Instance.new('Beam');beam.Name='SentryTelegraph';beam.Attachment0=a;beam.Attachment1=b
- beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=1
- beam.Transparency=NumberSequence.new(.5);beam.Enabled=false;beam.Parent=view
- local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=HOT;light.Range=8
+ beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=1;beam.LightInfluence=0
+ beam.Transparency=NumberSequence.new(.7);beam.Segments=1;beam.Enabled=false;beam.Parent=view
+ local core=beam:Clone();core.Name='SentryBeamCore';core.Color=ColorSequence.new(WHITE)
+ core.Transparency=NumberSequence.new(.15);core.Parent=view
+ local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=ICE;light.Range=7
  light.Shadows=false;light.Brightness=0;light.Parent=eye
  local initial=F.new(snapshot(source))
- local record={source=source,view=view,eye=eye,endpoint=endpoint,attachment=a,beam=beam,light=light,
+ local record={source=source,view=view,eye=eye,endpoint=endpoint,cue=cue,attachment=a,beam=beam,core=core,light=light,
   parts={},pieces=partsOf(view),hidden={},accents={},events=initial,yaw=0,hitAt=-100,shotAt=-100,
-  deathAt=initial.dead and now-10 or nil,restoreAt=nil,floor=base.Position.Y+base.Size.Y*.5,eyeCenter=eye.Position}
+  deathAt=initial.dead and now-10 or nil,restoreAt=nil,floor=base.Position.Y+base.Size.Y*.5,
+  baseCenter=base.Position,eyeCenter=eye.Position,phase=base.Position.X*.17+base.Position.Z*.23}
+ record.motion=S.new(now,record.phase)
  for _,item in ipairs(record.pieces) do record.parts[item.part]=true end
  for _,name in ipairs({'eye','spawnEye'}) do
   local part=view:FindFirstChild(name,true);record.accents[part]=part.Color
@@ -232,29 +240,36 @@ function P:renderTurret(record,dt,now)
  if self.closed or not record.view.Parent then return end
  local source=record.source;local event=F.observe(record.events,snapshot(source))
  if event.died then
-  record.deathAt=now;record.restoreAt=nil;self:_pulse(record.eye.Position,HOT,5.4,now,.24)
+  record.deathAt=now;record.restoreAt=nil;self:_pulse(record.eye.Position,HOT,3.6,now,.24)
   self:_sound(record.eye.Position,'death',now)
  elseif event.revived then record.restoreAt=now;record.deathAt=nil end
  if event.hit then record.hitAt=now end
  if event.shot then
-  record.shotAt=now;self:_pulse(record.eye.Position,HOT,2.3,now,.16);self:_sound(record.eye.Position,'hit',now)
+  record.shotAt=now;self:_pulse(record.eye.Position,HOT,1.25,now,.13);self:_sound(record.eye.Position,'hit',now)
  end
  local dead=record.events.dead
  local charging=source:GetAttribute('Telegraph')==true and not dead
  local aim=source:GetAttribute('Aim')
  local fireAt=source:GetAttribute('FireAt') or now
  local charge=charging and math.clamp(1-(fireAt-now)/.8,0,1) or 0
+ local wound=1-math.clamp((source:GetAttribute('HP') or 0)/math.max(1,source:GetAttribute('MaxHP') or 1),0,1)
  local flash=F.flash(now-record.shotAt,.16)
  local hit=F.flash(now-record.hitAt,.11)
- local recoil=F.recoil(now-record.shotAt)
- if typeof(aim)=='Vector3' and not dead then
-  local delta=aim-record.eye.Position
-  if delta.X*delta.X+delta.Z*delta.Z>.01 then
-   local target=math.atan2(-delta.X,-delta.Z)
-   local difference=math.atan2(math.sin(target-record.yaw),math.cos(target-record.yaw))
-   record.yaw=record.yaw+difference*(1-.84^(60*math.min(math.max(dt,0),.1)))
+ local aimYaw,aimPitch
+ if typeof(aim)=='Vector3' then
+  -- Aim from the immutable socket center, so cosmetic movement cannot feed
+  -- back into tracking. Eye, housing and secondary lens share one pivot.
+  local delta=aim-record.eyeCenter
+  local horizontal=math.sqrt(delta.X*delta.X+delta.Z*delta.Z)
+  if horizontal>.1 then
+   aimYaw=math.atan2(-delta.X,-delta.Z)
+   aimPitch=math.atan2(delta.Y,horizontal)
   end
  end
+ local pose=S.step(record.motion,dt,now,record.phase,{dead=dead,charging=charging,charge=charge,
+  aimYaw=aimYaw,aimPitch=aimPitch,shotAge=now-record.shotAt,hitAge=now-record.hitAt})
+ local warm=pose.charge;local breathe=pose.breath
+ local eyeColor=record.accents[record.eye]:Lerp(ICE,.2):Lerp(HOT,math.max(warm,wound*.3))
  for index,item in ipairs(record.pieces) do
   local part=item.part
   if part.Parent then
@@ -268,34 +283,67 @@ function P:renderTurret(record,dt,now)
      *frame.Rotation*CFrame.Angles(math.sin(angle)*.36,angle*.11,math.cos(angle)*.48)
     if dead then
      local collapse=F.smooth(F.progress(now,(record.deathAt or now-10)+rank*.045,.8))
-     frame=frame:Lerp(ruin,collapse);color=item.color:Lerp(Color3.fromRGB(38,46,48),.72*collapse)
+     -- Fall from the actual last animated pose, including a charging/aimed eye.
+     frame=(item.lastFrame or frame):Lerp(ruin,collapse);color=item.color:Lerp(RUIN,.78*collapse)
      if part.Name=='eye' or part.Name=='spawnEye' then transparency=math.max(transparency,collapse*.85) end
     else
      local restoring=record.restoreAt and 1-F.smooth(F.progress(now,record.restoreAt,.85)) or 0
      local eyePart=part.Name=='eye' or part.Name=='eyecase' or part.Name=='spawnEye'
-     local yaw=record.yaw*(eyePart and 1 or .055*(rank+1))
-     local origin=eyePart and record.eyeCenter or frame.Position
-     frame=CFrame.new(origin)*CFrame.Angles(0,yaw,0)*CFrame.new(-origin)*frame
-     frame=frame*CFrame.new(0,charge*rank*.07-recoil*rank*.14,recoil*(eyePart and .17 or .03))
+     local motion=S.segment(rank,now,record.phase,pose,eyePart)
+     -- All shell pieces turn about one stable center; rotating every off-center
+     -- mesh about its own pivot tears apart the original segmented silhouette.
+     local origin=eyePart and record.eyeCenter or record.baseCenter
+     local rotation=CFrame.Angles(0,motion.yaw,0)*CFrame.Angles(motion.pitch,0,motion.roll)
+     frame=CFrame.new(origin)*rotation*CFrame.new(0,motion.lift,motion.back)*CFrame.new(-origin)*frame
      if restoring>0 then frame=frame:Lerp(ruin,restoring);color=color:Lerp(ICE,restoring*.3) end
+     item.lastFrame=frame
      if part.Name=='eye' or part.Name=='spawnEye' then
-      color=item.color:Lerp(HOT,charge*.75):Lerp(WHITE,math.max(flash,hit*.4))
+      color=item.color:Lerp(ICE,.2):Lerp(HOT,math.max(warm,wound*.3)):Lerp(WHITE,math.max(flash,hit*.4))
+     elseif part.Name~='eyecase' then
+      color=color:Lerp(HOT,warm*.055):Lerp(WHITE,flash*.18)
+     end
+     -- Brief narrowing reads as an aperture focusing, with no extra visible
+     -- geometry. Never scale the housing or let the two eye meshes separate.
+     if part.Name=='eye' or part.Name=='spawnEye' then
+      part.Size=Vector3.new(item.size.X,item.size.Y*(1-warm*.1-pose.blink*.82+pose.focus),item.size.Z)
      end
     end
    end
    part.CFrame=frame;part.Color=color;part.Transparency=transparency
   end
  end
- record.light.Brightness=dead and 0 or charge*1.4+flash*2
+ record.light.Color=eyeColor;record.light.Brightness=dead and 0 or .12+breathe*.035+warm*.95+flash*1.4
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=not dead and aiming and (charging or flash>.01)
- record.beam.Width0=.025+charge*.035+flash*.18;record.beam.Width1=.025+charge*.035+flash*.24
+ record.beam.Width0=.035+warm*.045+flash*.2;record.beam.Width1=.035+warm*.045+flash*.15
+ -- Two narrow layers read as a precise threat, then a crisp white shot. Neither
+ -- the target endpoint nor any local pulse can change server damage or aim.
+ record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.012+flash*.065
+ record.core.Width1=.012+warm*.012+flash*.045
  if aiming then record.endpoint.Position=aim end
+ -- The frozen server aim is projected to ground once per charge. The single
+ -- faint disc projects the server's 3.5-stud aim tolerance onto the field plane.
+ if charging and aiming then
+  if record.markAim~=aim then
+   record.markAim=aim
+   local field=source.Parent and source.Parent:FindFirstChild('Field')
+   local ground=nil
+   if field and field:IsA('BasePart') then
+    local point=field.CFrame:PointToObjectSpace(aim)
+    if math.abs(point.X)<=field.Size.X*.5 and math.abs(point.Z)<=field.Size.Z*.5 then
+     -- Crystals shrinking above the field must not leave the marker floating.
+     ground=field.CFrame:PointToWorldSpace(Vector3.new(point.X,field.Size.Y*.5,point.Z)).Y
+    end
+   end
+   record.cue.CFrame=CFrame.new(aim.X,(ground or self:_floor(aim,source))+.035,aim.Z)*CFrame.Angles(0,0,math.pi*.5)
+  end
+  record.cue.Transparency=.94-warm*.09
+ else record.cue.Transparency=1;record.markAim=nil end
 end
 function P:destroyTurret(record)
  if not record then return end
  for part,original in pairs(record.hidden) do if part.Parent then part.LocalTransparencyModifier=original end end
- record.endpoint:Destroy();record.view:Destroy();self.turrets[record.source]=nil
+ record.endpoint:Destroy();record.cue:Destroy();record.view:Destroy();self.turrets[record.source]=nil
 end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
