@@ -50,6 +50,13 @@ check('heading wraps by the shortest arc',function()
  local p=M.step(s,1/60,0,0,input({charging=true,aimYaw=-math.pi+.01}))
  assert(p.yaw>math.pi-.01 or p.yaw< -math.pi+.01)
 end)
+check('shell stays continuous when the eye crosses the heading wrap seam',function()
+ local a=M.step(M.new(0,0),0,0,0,input())
+ local b=table.clone(a);a.yaw=math.pi-1e-5;b.yaw=-math.pi+1e-5
+ for rank=0,3 do
+  near(M.segment(rank,0,0,a,false).yaw,M.segment(rank,0,0,b,false).yaw,1e-5)
+ end
+end)
 check('death suppresses aim and cannot leave charge active',function()
  local s=M.new(0,0)
  for n=1,120 do M.step(s,1/60,n/60,0,input({dead=true,charging=true,charge=1,aimYaw=2})) end

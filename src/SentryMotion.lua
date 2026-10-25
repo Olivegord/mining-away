@@ -54,6 +54,7 @@ function M.step(state,dt,now,phase,input)
   focus=state.charge*state.charge*math.sin(now*47+phase)*.012}
 end
 function M.segment(rank,now,phase,pose,eye)
+ local headYaw: number=pose.yaw
  if eye then
   return {yaw=pose.yaw,pitch=pose.pitch+pose.flinch*.045,
    roll=pose.flinch*.035,lift=pose.breath*.065*pose.idle-pose.recoil*.08,
@@ -62,7 +63,8 @@ function M.segment(rank,now,phase,pose,eye)
  local weight=rank/3
  -- The anchored plinth stays fixed. Shell rings counter-turn and breathe in a
  -- travelling wave; higher pieces anticipate a shot then compress on discharge.
- return {yaw=pose.yaw*(.08+weight*.14)+math.sin(now*.72+phase-rank*.65)*(.025+weight*.075)*pose.idle,
+ -- Periodic head influence prevents a shell snap when aiming crosses ±pi.
+ return {yaw=math.sin(headYaw)*(.08+weight*.14)+math.sin(now*.72+phase-rank*.65)*(.025+weight*.075)*pose.idle,
   pitch=pose.flinch*weight*.04,roll=math.sin(now*.9+phase-rank*.7)*weight*.018*pose.idle,
   lift=weight*(.15+math.sin(now*1.3+phase-rank*.7)*.13)*pose.idle
    +pose.charge*weight*.48-pose.recoil*weight*.36,

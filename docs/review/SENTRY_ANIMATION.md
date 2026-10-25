@@ -43,9 +43,10 @@ No new gameplay remotes, marketplace assets or permanent UI were introduced.
   at simulated 30/60/144 FPS. Charge, layered beams, damage, duplicate-shot
   suppression, collapse, reassembly, silent late-join ruins and source immutability
   passed. Maximum socket drift was 0.0000551 studs; base drift was zero.
-- Eleven standalone animation tests cover patrol continuity, independent phases,
+- Twelve standalone animation tests cover patrol continuity, independent phases,
   blink interruption, stale aim, shortest-arc turns, frame-rate convergence,
-  release/recovery, dead-state suppression and long-running bounded poses.
+  release/recovery, dead-state suppression, the shell's heading wrap seam and
+  long-running bounded poses.
 - Controlled renderer samples are not measured rendering FPS or a two-client
   test. Real two-player/late-join synchronization and network latency remain
   unverified. The original-versus-repaired full mining video remains outside
@@ -70,7 +71,7 @@ these tests did not restart, save over or publish the place.
 
 The release is built from `assets/mining-away-base.rbxl` into
 `build/Mining Away.rbxl`. `build/revision.json` identifies the exact source commit
-and build checksum. The working folder also contains pre-existing/concurrent
-map, card and documentation edits; they are preserved, and a release made while
-they remain uncommitted is explicitly marked `source_dirty: true`. Its ZIP holds
-the actual source snapshot. This is not a claim of a clean committed release.
+and build checksum. The concurrent map, card and documentation work was committed
+separately before this animation pass. The final release records
+`source_dirty: false`; its ZIP contains the committed source snapshot used to
+produce the place.
