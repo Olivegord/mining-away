@@ -1,0 +1,60 @@
+PASS finite remote numbers
+PASS ownership and alive validation
+PASS simultaneous geode shell hits pay once
+PASS no invalid damage or healing exploit
+PASS ordinary crystal concurrent kill rewards once
+PASS geode child rewards independent, not shell duplicates
+PASS gather phase finite cooperative roster
+PASS repeat enrollment cannot add reprinted life
+PASS dead and reprinting drones excluded from roster
+PASS wipe resets before a simultaneous last turret kill
+PASS staggered deaths cannot reinforce friend encounter
+PASS retreat permanently spends participation even before timeout
+PASS kiting cannot stall hard assault deadline
+PASS inactivity timeout has one cleanup transition
+PASS disconnect same identity cannot rejoin active group
+PASS destroyed turrets never preserve chip progress after reset
+PASS legitimate clear reward emitted once
+PASS clear window expires then refresh has guarded cooldown
+PASS free reprint retains inventory equipment and upgrades
+PASS no respawn life in original roster even without spent bit
+20 deterministic rule tests passed
+PASS integration three server-owned replicated drones and late-join state
+PASS integration remote rejects invalid patches and out-of-range order
+PASS integration remote flood bucket bounds commands
+PASS integration shared geode shell generates five children once
+PASS integration dead drones cannot damage or reserve geodes
+PASS integration free reprint is at home, keeps inventory and both upgrades
+PASS integration sale belongs to invoker and requires home range
+PASS integration credit funded upgrades reject bad type and remote location
+PASS integration ordinary resources reserve only one slot in actual selector
+PASS integration simultaneous ordinary hits credit only one owner
+PASS integration all turret health including killed defenses resets on wipe
+PASS integration friend cannot recruit free replacements during active assault
+PASS integration retreat and reconnect cannot recover original roster life
+PASS integration clear window cancels mining and resets geodes on expiry
+PASS integration server fixed-step catchup is bounded to three damage ticks
+15 actual-server integration tests passed using API doubles; not Studio
+BALANCE tier=3 level=0 result=Resetting elapsed=8.6 remainingHP=0.0
+PASS integration unupgraded fleet cannot brute force Amber in actual simulation
+BALANCE tier=2 level=1 result=Cleared elapsed=9.4 remainingHP=303.0
+PASS integration recommended Cobalt fleet can defeat defenses
+BALANCE tier=3 level=3 result=Cleared elapsed=13.7 remainingHP=406.0
+PASS integration recommended Amber fleet can defeat defenses
+BALANCE tier=3 level=0 result=Resetting elapsed=8.7 remainingHP=0.0
+BALANCE tier=3 level=0 result=Resetting elapsed=9.2 remainingHP=0.0
+BALANCE tier=3 level=0 result=Resetting elapsed=9.2 remainingHP=0.0
+PASS integration failed repeated Amber attempts restart every turret at full health
+PASS integration server line of sight blocks both sides combat damage
+20 total actual-server integration tests passed using API doubles; not Studio
+PASS integration dead fleet cannot start an empty guarded encounter
+PASS integration remote bucket blocks repeated upgrade mutation
+PASS integration geode selector caps three simultaneous drones
+23 FINAL actual-server integration tests passed using API doubles; not Studio
+PASS all source Luau syntax checks
+PASS bundled server/client standalone lint with explicit any-typed Roblox host bindings (not API type validation)
+PASS binary deterministic build
+PASS binary all asset, hierarchy and other property chunks byte-identical
+PASS binary only new server and client entrypoints enabled, sources round-trip
+PASS binary unverified input rejected
+4 binary build tests passed

@@ -1,0 +1,60 @@
+local R=require('../src/Rules')
+local passed=0
+local function check(name,f)
+ local ok,err=pcall(f);assert(ok,name..': '..tostring(err));passed=passed+1;print('PASS '..name)
+end
+local function eq(a,b) assert(a==b,tostring(a)..' ~= '..tostring(b)) end
+local function drone(id,user) return {id=id or 'a',owner=user or 1,hp=70,state='Follow',life=1,power=3,hull=2,cargo=45,credits=120,readyAt=0} end
+local function active()
+ local e=R.newEncounter();local d=drone();R.gather(e,0);R.enroll(e,1,{d});eq(R.step(e,4,1,true,false),'start');return e,d
+end
+check('finite remote numbers',function() eq(R.finite(0/0),false);eq(R.finite(math.huge),false);eq(R.finite(-math.huge),false);eq(R.finite({}),false);eq(R.finite('2'),false);eq(R.finite(2),true) end)
+check('ownership and alive validation',function() eq(R.allowed(1,2,'Mine'),false);eq(R.allowed(1,1,'Destroyed'),false);eq(R.allowed(1,1,'Reprinting'),false);eq(R.allowed(1,1,'Mine'),true) end)
+check('simultaneous geode shell hits pay once',function()
+ local r={hp=2,paid=false};local count=0
+ for i=1,100 do if R.damage(r,1) then count=count+1 end end
+ eq(count,1);eq(r.hp,0)
+end)
+check('no invalid damage or healing exploit',function() local r={hp=10,paid=false};for _,n in ipairs({-10,0,math.huge,0/0}) do eq(R.damage(r,n),false) end;eq(r.hp,10) end)
+check('ordinary crystal concurrent kill rewards once',function() local r={hp=1,paid=false};eq(R.damage(r,5),true);eq(R.damage(r,5),false) end)
+check('geode child rewards independent, not shell duplicates',function()
+ local shell={hp=1,paid=false};local children=0
+ for i=1,3 do if R.damage(shell,2) then children=children+5 end end;eq(children,5)
+end)
+check('gather phase finite cooperative roster',function()
+ local e=R.newEncounter();local a=drone('a',1);local b=drone('b',2)
+ eq(R.gather(e,0),true);eq(R.enroll(e,1,{a}),true);eq(R.enroll(e,2,{b}),true)
+ eq(R.step(e,3.9,2,true,false),nil);eq(R.step(e,4,2,true,false),'start');eq(R.participates(e,a),true);eq(R.participates(e,b),true)
+ eq(R.enroll(e,3,{drone('c',3)}),false)
+end)
+check('repeat enrollment cannot add reprinted life',function()
+ local e=R.newEncounter();local a=drone();R.gather(e,0);R.enroll(e,1,{a});a.life=2
+ eq(R.enroll(e,1,{a}),false);R.step(e,4,1,true,false);eq(R.participates(e,a),false)
+end)
+check('dead and reprinting drones excluded from roster',function()
+ local e=R.newEncounter();local d=drone();d.hp=0;d.state='Reprinting';R.gather(e,0);R.enroll(e,1,{d});eq(next(e.roster),nil)
+ eq(R.step(e,4,0,false,false),'reset')
+end)
+check('wipe resets before a simultaneous last turret kill',function() local e=active();eq(R.step(e,5,0,true,true),'reset');eq(e.phase,'Resetting');eq(next(e.roster),nil) end)
+check('staggered deaths cannot reinforce friend encounter',function()
+ local e,d=active();local b=drone('b',2)
+ eq(R.enroll(e,2,{b}),false);R.spend(e,d.id);R.reprint(d,5,12);R.finishReprint(d,17,70)
+ eq(R.participates(e,d),false);eq(R.enroll(e,1,{d}),false)
+end)
+check('retreat permanently spends participation even before timeout',function() local e,d=active();R.spend(e,d.id);eq(R.participates(e,d),false);eq(R.step(e,5,0,false,false),'reset') end)
+check('kiting cannot stall hard assault deadline',function() local e=active();eq(R.step(e,94,1,true,false),'reset') end)
+check('inactivity timeout has one cleanup transition',function() local e=active();eq(R.step(e,12,1,false,false),'reset');eq(R.step(e,13,0,false,false),nil);eq(R.step(e,18,0,false,false),'guard') end)
+check('disconnect same identity cannot rejoin active group',function() local e,d=active();R.spend(e,d.id);local reconnect=drone(d.id,1);eq(R.participates(e,reconnect),false);eq(R.enroll(e,1,{reconnect}),false) end)
+check('destroyed turrets never preserve chip progress after reset',function()
+ local e=active();local turrets={0,12,100};local event=R.step(e,5,0,false,false)
+ if event=='reset' then for i=1,#turrets do turrets[i]=100 end end
+ for _,hp in ipairs(turrets) do eq(hp,100) end;eq(e.phase,'Resetting')
+end)
+check('legitimate clear reward emitted once',function() local e=active();eq(R.step(e,5,1,true,true),'clear');for i=6,100 do eq(R.step(e,i,1,true,true),nil) end end)
+check('clear window expires then refresh has guarded cooldown',function() local e=active();R.step(e,5,1,true,true);eq(R.step(e,125,1,true,true),'reset');eq(e.phase,'Resetting');eq(R.step(e,131,0,false,false),'guard');eq(e.phase,'Guarded');eq(R.gather(e,132),true);eq(e.epoch,2) end)
+check('free reprint retains inventory equipment and upgrades',function()
+ local d=drone();R.reprint(d,0,12);eq(d.target,nil);eq(R.finishReprint(d,11.99,180),false);eq(R.finishReprint(d,12,180),true)
+ eq(d.power,3);eq(d.hull,2);eq(d.cargo,45);eq(d.credits,120);eq(d.hp,180);eq(d.life,2);eq(d.state,'Follow');eq(R.finishReprint(d,13,180),false)
+end)
+check('no respawn life in original roster even without spent bit',function() local e,d=active();R.reprint(d,5,12);R.finishReprint(d,17,70);eq(R.participates(e,d),false) end)
+print(string.format('%d deterministic rule tests passed',passed))

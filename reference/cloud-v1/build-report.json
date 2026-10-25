@@ -1,0 +1,21 @@
+{
+  "original_sha256": "480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b",
+  "output_sha256": "a1cde389efbbf99dce1e900a5fa7ae26cd1b37e39c170223f20aad1559150958",
+  "original_bytes": 220660,
+  "output_bytes": 267703,
+  "changed_sources": [
+    [
+      "LocalScript",
+      3,
+      "ClientDroneControl",
+      "replaced"
+    ],
+    [
+      "Script",
+      2,
+      "GlobalDroneControl",
+      "replaced"
+    ]
+  ],
+  "policy": "Only Script/LocalScript Source and Disabled properties change; all assets, hierarchy, other property chunks remain byte-identical. Original controllers are disabled, not deleted. Only the two named v2 entrypoints run."
+}

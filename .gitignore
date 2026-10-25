@@ -1,0 +1,17 @@
+.DS_Store
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxl.previous
+__pycache__/
+*.pyc
+build/*
+!build/.gitkeep
+cloud-build/
+cloud-handoff/
+tests/generated-server.spec.lua
+.env
+.env.*
+!.env.example
+node_modules/
+.tools/
+

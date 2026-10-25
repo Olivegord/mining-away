@@ -1,0 +1,41 @@
+name: Validate and build Mining Away
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned official Luau tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/mining-away-luau"
+          gh release download 0.744 --repo luau-lang/luau --pattern luau-ubuntu.zip --dir "$RUNNER_TEMP/mining-away-luau"
+          cd "$RUNNER_TEMP/mining-away-luau"
+          echo '6506f0852c623aaffcb28494aac16c26dc04a269ea0e16cc0aafc8c8ac79f3ec  luau-ubuntu.zip' | sha256sum --check
+          unzip -q luau-ubuntu.zip
+          chmod +x luau luau-compile luau-analyze
+      - name: Validate Luau and execute rule/server tests
+        run: python3 tools/test.py "$RUNNER_TEMP/mining-away-luau"
+      - name: Validate deterministic build and asset preservation
+        run: python3 tests/binary.spec.py
+      - name: Build revision-stamped review artifact
+        run: python3 tools/release.py
+      - name: Upload review build
+        uses: actions/upload-artifact@v4
+        with:
+          name: mining-away-${{ github.sha }}
+          path: |
+            build/mining-away.rbxl
+            build/mining-away-review.zip
+            build/revision.json
+          if-no-files-found: error
+
