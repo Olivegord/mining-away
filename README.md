@@ -6,9 +6,9 @@ The single source project is [Olivegord/mining-away](https://github.com/Olivegor
 
 Current review branch: [`codex/restore-feel-prestige`](https://github.com/Olivegord/mining-away/tree/codex/restore-feel-prestige). Downloadable review builds, the original handoff and validation status are on the [source Page](https://chatgpt.com/space/page_80b705099bb481918ea713e1780329fe). Each release ZIP contains `revision.json` with its exact source commit and place checksum; it must say `source_dirty: false`.
 
-## Run the review copy
+## Open the game
 
-Open `build/mining-away.rbxl` in Studio and Play. Studio/unpublished sessions use an explicitly labeled **isolated temporary Preview adapter**, including negative local-test user IDs. Preview is not durable storage. The published-server code contains a real UpdateAsync/session-lock adapter; this cloud pass did not enable API access, touch live player data or publish to Roblox.
+Use **`build/Mining Away.rbxl`** as the single working place. The old cloud/review/temporary place copies have been removed. Edit the connected place through Studio MCP; keep `assets/mining-away-base.rbxl` only as the preserved source asset. Open the working place in Studio and Play. Studio/unpublished sessions use an explicitly labeled **isolated temporary Preview adapter**, including negative local-test user IDs. Preview is not durable storage. The published-server code contains a real UpdateAsync/session-lock adapter; this cloud pass did not enable API access, touch live player data or publish to Roblox.
 
 A fresh profile owns one permanent Blue drone. Walk toward Landing Quartz or Ruby Grove, then click a field or use its contextual assignment button. Drones follow in the original radius-10 ring, ease and decelerate in flight, settle directly above a rock, warm their laser, and mine. Crystals use the original union, organic server-random positions, 50–100 base HP, two-second growth and 75/50/25% shrink/tilt stages. Cargo fills and the crew recalls. Use the original Converter to sell.
 
@@ -73,7 +73,7 @@ python3 tests/geometry.spec.py
 python3 tools/release.py
 ```
 
-`release.py` builds the single `build/mining-away.rbxl`, full tracked-source `build/mining-away-review.zip`, and exact `build/revision.json`. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
+`release.py` builds the single `build/Mining Away.rbxl`, full tracked-source `build/mining-away-review.zip`, and exact `build/revision.json`. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
 
 The new tests cover original-equation 30/60/120/144 Hz motion, growth/three stages, all domain boundaries, actual-server/API-double behavior, real persistence logic with a fault-injecting storage double, source asset preservation and finite progression models. They replace the old three-drone baseline expectations. See [docs/review/VALIDATION.md](docs/review/VALIDATION.md), [progression model](docs/review/PROGRESSION_SIMULATION.md), [geometry/layout review](docs/review/ORIGINAL_GEOMETRY_AND_LAYOUT.md), and [UI review](docs/UI_REVIEW.md).
 

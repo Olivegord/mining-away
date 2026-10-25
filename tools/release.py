@@ -19,7 +19,7 @@ def git(*args: str) -> str:
 
 
 def main() -> None:
-    output = ROOT / "build" / "mining-away.rbxl"
+    output = ROOT / "build" / "Mining Away.rbxl"
     output.parent.mkdir(exist_ok=True)
     report = build(ROOT / "assets" / "mining-away-base.rbxl", output)
     try:
@@ -42,7 +42,7 @@ def main() -> None:
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
     package = output.parent / "mining-away-review.zip"
     with zipfile.ZipFile(package, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.write(output, "mining-away.rbxl")
+        archive.write(output, output.name)
         archive.write(metadata_path, "revision.json")
         archive.write(output.parent / "build-report.json", "build-report.json")
         for relative in source_paths:

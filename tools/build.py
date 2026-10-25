@@ -67,6 +67,6 @@ def build(original,out):
  report={'original_sha256':EXPECTED,'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'original_bytes':len(b),'output_bytes':out.stat().st_size,'changed_sources':changed,'policy':'Only Script/LocalScript Source and Disabled properties change; all assets, hierarchy, other property chunks remain byte-identical. Original controllers are disabled, not deleted. Only the two named v2 entrypoints run.'}
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2));return report
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'build/mining-away.rbxl');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'build/Mining Away.rbxl');a=p.parse_args()
  assert a.original.resolve()!=a.output.resolve(),'Use a NEW output path'
  print(json.dumps(build(a.original,a.output),indent=2))
