@@ -26,7 +26,9 @@ jobs:
       - name: Validate Luau and execute rule/server tests
         run: python3 tools/test.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate deterministic build and asset preservation
-        run: python3 tests/binary.spec.py
+        run: |
+          python3 tests/binary.spec.py
+          python3 tests/geometry.spec.py
       - name: Build revision-stamped review artifact
         run: python3 tools/release.py
       - name: Upload review build

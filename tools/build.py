@@ -15,13 +15,19 @@ def chunks(b):
   raw=b[i:i+(cl or ul)];i+=cl or ul
   yield kind,(lz4(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
+def module_bundle(names):
+ s='-- Mining Away • Olivegord/mining-away • generated from editable source.\n'
+ for name in names:
+  code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  s+='local '+name+' = (function()\n'+code+'\nend)()\n'
+ return s
 def bundle():
- s='-- Mining Away cloud build. Source modules are in the accompanying package.\n'
- for name in ('Config','Rules','World'):
-  s+='local '+name+' = (function()\n'+(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')+'\nend)()\n'
- return s+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','World'))+(ROOT/'src/Server.lua').read_text()
+def client_bundle():
+ return module_bundle(('Feel',))+(ROOT/'src/Client.lua').read_text()
 def build(original,out):
  assert original.resolve()!=out.resolve(),'Input and output must differ'
+ out.parent.mkdir(parents=True,exist_ok=True)
  b=original.read_bytes();assert hashlib.sha256(b).hexdigest()==EXPECTED,'Wrong source; refusing to alter an unverified place'
  cs=list(chunks(b));classes={};names={}
  for k,d,_ in cs:
@@ -44,7 +50,7 @@ def build(original,out):
     for i in range(count):v,p=string(d,p);vals.append(v)
     for i,name in enumerate(names[cid]):
      if cls=='Script' and name=='GlobalDroneControl': vals[i]=bundle();changed.append([cls,i,name,'replaced'])
-     elif cls=='LocalScript' and name=='ClientDroneControl': vals[i]=(ROOT/'src/Client.lua').read_text();changed.append([cls,i,name,'replaced'])
+     elif cls=='LocalScript' and name=='ClientDroneControl': vals[i]=client_bundle();changed.append([cls,i,name,'replaced'])
     output.append(chunk(k,struct.pack('<I',cid)+packstr(prop)+bytes([typ])+b''.join(packstr(v) for v in vals)));continue
    if cls in ('Script','LocalScript') and prop=='Disabled':
     assert typ==2
@@ -61,6 +67,6 @@ def build(original,out):
  report={'original_sha256':EXPECTED,'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'original_bytes':len(b),'output_bytes':out.stat().st_size,'changed_sources':changed,'policy':'Only Script/LocalScript Source and Disabled properties change; all assets, hierarchy, other property chunks remain byte-identical. Original controllers are disabled, not deleted. Only the two named v2 entrypoints run.'}
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2));return report
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'mining-away-cloud.rbxl');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'build/mining-away.rbxl');a=p.parse_args()
  assert a.original.resolve()!=a.output.resolve(),'Use a NEW output path'
  print(json.dumps(build(a.original,a.output),indent=2))
