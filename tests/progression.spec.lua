@@ -255,6 +255,16 @@ test('ten weak attempts reset all finite defenses without protected earnings',fu
  local p=P.new(44,123)
  for attempt=1,10 do local win=encounter(p,Config.Fields[3],attempt);eq(win,false);eq(p.run.saleEarnings,0);eq(P.cargoUnits(p),0);eq(#p.fleet,1) end
 end)
+test('mixed Burst Splash and pure Arc Relay both reach the real paired-guard spacing',function()
+ local p=P.new(44,123);local target=p.fleet[1].id
+ local function card(id)
+  for _,entry in ipairs(Cards.CATALOG) do if entry.cardId==id then local c=P.clone(entry);c.targetDroneId=target;return c end end;error(id)
+ end
+ local defense={cardId='model-survival',scope='Fleet',effects={health=3,reduction=.5}}
+ p.run.cards={P.clone(defense),card('D09')};local _,_,_,_,burst=encounter(p,Config.Fields[4],7)
+ p.run.cards={P.clone(defense),card('D16')};local _,_,_,_,relay=encounter(p,Config.Fields[4],7)
+ assert(burst.arcs>0,'Burst Splash never reached the 17-stud pair');assert(relay.arcs>0,'Arc Relay never reached the 17-stud pair')
+end)
 for run=1,2 do
  local packs,times,cardCounts={},{},{}
  for seed=1,10 do table.insert(packs,reports[seed][run].firstPack);table.insert(times,reports[seed][run].prestige);table.insert(cardCounts,reports[seed][run].packs) end

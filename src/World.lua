@@ -32,6 +32,18 @@ function W.drone(parent,template,pos,color)
  model:SetAttribute('OriginalDrone',template~=nil)
  return model,part,emitter
 end
+local function finishConstruct(model)
+ local shell={bottemseg=true,lowerseg=true,upperseg=true,topseg=true}
+ for _,v in ipairs(model:GetDescendants()) do
+  if v:IsA('BasePart') then
+   v.Reflectance=0;v.MaterialVariant=''
+   if shell[v.Name] then v.Material=Enum.Material.SmoothPlastic;v.Color=Color3.fromRGB(218,232,219)
+   elseif v.Name=='eyecase' then v.Material=Enum.Material.Metal;v.Color=Color3.fromRGB(47,91,91)
+   elseif v.Name=='basepart' then v.Material=Enum.Material.Slate;v.Color=Color3.fromRGB(35,66,70);v.Transparency=0
+   elseif v.Name=='eye' or v.Name=='spawnEye' then v.Material=Enum.Material.Neon;v.Color=Color3.fromRGB(102,224,206) end
+  end
+ end
+end
 function W.turret(parent,template,pos,color)
  assert(template and template:IsA('Model'),'Original Workspace.construct template is required; refusing a replacement box turret')
  local model=template:Clone();model.Name='PyramidTurret'
@@ -47,7 +59,9 @@ function W.turret(parent,template,pos,color)
   assert(model:FindFirstChild(name,true),'Original construct missing '..name)
  end
  model.PrimaryPart=base;model.Parent=parent;model:PivotTo(CFrame.new(pos))
- local eye=model:FindFirstChild('eye',true);eye.Material=Enum.Material.Neon;eye.Color=color
+ -- Retain every authored mesh/pivot, but give the construct one coherent ceramic shell.
+ finishConstruct(model)
+ local eye=model:FindFirstChild('eye',true)
  -- One invisible query body admits range/LOS checks without changing the authored silhouette.
  local hit=W.part(model,'DefenseHitbox',base.Position+Vector3.new(0,4.5,0),Vector3.new(8,10,8),color)
  hit.Transparency=1;hit.CanQuery=true
@@ -76,10 +90,10 @@ function W.setBeam(b,on,pos)
  for i,v in ipairs(b.beams) do v.Enabled=on;v.Width0=on and (i==1 and .3 or .65) or 0;v.Width1=v.Width0 end
 end
 local P={
- ground=Color3.fromRGB(75,85,80),dust=Color3.fromRGB(111,113,98),stone=Color3.fromRGB(67,78,80),
- ledge=Color3.fromRGB(94,107,105),metal=Color3.fromRGB(38,51,55),edge=Color3.fromRGB(112,134,132),
- ivory=Color3.fromRGB(227,224,199),ink=Color3.fromRGB(24,37,42),mint=Color3.fromRGB(127,206,179),
- amber=Color3.fromRGB(223,169,101),blue=Color3.fromRGB(135,178,209),
+ ground=Color3.fromRGB(112,157,146),dust=Color3.fromRGB(210,216,183),stone=Color3.fromRGB(65,103,106),
+ ledge=Color3.fromRGB(186,207,191),metal=Color3.fromRGB(30,65,73),edge=Color3.fromRGB(117,171,162),
+ ivory=Color3.fromRGB(245,237,207),ink=Color3.fromRGB(22,49,60),mint=Color3.fromRGB(100,229,201),
+ amber=Color3.fromRGB(245,182,96),blue=Color3.fromRGB(118,201,228),coral=Color3.fromRGB(226,129,145),
 }
 local function solid(p) p.CanCollide=true;p.CanQuery=true;return p end
 local function block(parent,name,at,size,color,material,rotation)
@@ -92,6 +106,8 @@ local function textFace(part,title,subtitle,color,face)
  local g=Instance.new('SurfaceGui');g.Name='SignFace';g.Face=face or Enum.NormalId.Front;g.CanvasSize=Vector2.new(600,180);g.LightInfluence=0;g.Parent=part
  local t=Instance.new('TextLabel');t.Size=UDim2.fromScale(.92,.48);t.Position=UDim2.fromScale(.04,.09);t.BackgroundTransparency=1;t.Font=Enum.Font.GothamBold;t.TextSize=44;t.TextXAlignment=Enum.TextXAlignment.Left;t.TextColor3=color;t.Text=title;t.Parent=g
  local s=Instance.new('TextLabel');s.Size=UDim2.fromScale(.92,.28);s.Position=UDim2.fromScale(.04,.65);s.BackgroundTransparency=1;s.Font=Enum.Font.GothamMedium;s.TextSize=24;s.TextXAlignment=Enum.TextXAlignment.Left;s.TextColor3=P.ivory;s.Text=subtitle;s.Parent=g
+ -- Machines and field approaches can be visited from either direction.
+ if not face then local back=g:Clone();back.Name='SignReverse';back.Face=Enum.NormalId.Back;back.Parent=part end
  return g
 end
 local function sign(parent,at,title,subtitle,color,facing)
@@ -110,7 +126,7 @@ local function light(parent,color,range,brightness)
 end
 local function path(parent,a,b,width)
  local middle=(a+b)/2
- local p=solid(block(parent,'Trail',middle,Vector3.new(width or 11,.28,(b-a).Magnitude),P.dust,Enum.Material.Ground))
+ local p=solid(block(parent,'Trail',middle,Vector3.new(width or 11,.28,(b-a).Magnitude),P.dust,Enum.Material.SmoothPlastic))
  p.CFrame=CFrame.lookAt(middle,b);p:SetAttribute('WalkRoute',true)
  -- Inlaid shoulder and short waymarkers give the trail a direction without neon rails.
  local flat=Vector3.new(b.X-a.X,0,b.Z-a.Z);local side=Vector3.new(-flat.Z,0,flat.X).Unit
@@ -161,39 +177,66 @@ end
 local function tree(parent,x,z,h,color,ground,yaw)
  local m=Instance.new('Model');m.Name='QuarryTree';m.Parent=parent
  ground=ground or 0;yaw=yaw or x*.1
- local trunkColor=Color3.fromRGB(70,84,82)
+ local trunkColor=Color3.fromRGB(50,88,91)
  local function localPart(name,p,size,tint,turn)
   local cf=CFrame.new(x,ground,z)*CFrame.Angles(0,yaw,0)*CFrame.new(p)
   local v=block(m,name,cf.Position,size,tint,Enum.Material.SmoothPlastic);v.CFrame=cf*CFrame.Angles(0,0,turn or 0);return v
  end
  localPart('Trunk',Vector3.new(0,h*.43,0),Vector3.new(.8,h*.86,.85),trunkColor,math.rad(-5))
  localPart('Fork',Vector3.new(1.5,h*.72,0),Vector3.new(.6,h*.46,.65),trunkColor,math.rad(-32))
- localPart('Canopy',Vector3.new(-.6,h,.25),Vector3.new(h*.69,1.45,h*.48),color,math.rad(-6))
- localPart('Canopy',Vector3.new(2.7,h*.94,.1),Vector3.new(h*.5,1.3,h*.39),color:Lerp(P.ledge,.12),math.rad(7))
- localPart('Canopy',Vector3.new(-1.1,h+1.1,.3),Vector3.new(h*.43,1.1,h*.35),color:Lerp(P.ivory,.08),math.rad(-3))
+ localPart('Canopy',Vector3.new(-.6,h,.25),Vector3.new(h*.78,2.1,h*.56),color,math.rad(-6))
+ localPart('Canopy',Vector3.new(2.7,h*.94,.1),Vector3.new(h*.58,1.8,h*.47),color:Lerp(P.ledge,.12),math.rad(7))
+ localPart('Canopy',Vector3.new(-1.1,h+1.6,.3),Vector3.new(h*.51,1.7,h*.43),color:Lerp(P.ivory,.23),math.rad(-3))
+ localPart('LeafLight',Vector3.new(-1,h+2.5,.3),Vector3.new(h*.26,.12,h*.25),color:Lerp(P.ivory,.45))
  return m
 end
 local function stone(parent,at,size,tilt,color,name)
- return solid(block(parent,name or 'WeatheredStone',at,size,color or P.stone,Enum.Material.Slate,{math.rad(tilt[1] or 0),math.rad(tilt[2] or 0),math.rad(tilt[3] or 0)}))
+ return solid(block(parent,name or 'WeatheredStone',at,size,color or P.stone,Enum.Material.SmoothPlastic,{math.rad(tilt[1] or 0),math.rad(tilt[2] or 0),math.rad(tilt[3] or 0)}))
 end
 local function geology(parent,x,z,w,h,d,yaw)
  local m=Instance.new('Model');m.Name='StratifiedOutcrop';m.Parent=parent
- stone(m,Vector3.new(x,h*.35,z),Vector3.new(w,h*.7,d),{0,yaw,-6},P.stone)
- stone(m,Vector3.new(x-1.2,h*.77,z-.5),Vector3.new(w*.77,h*.31,d*.85),{0,yaw+5,-7},P.ledge)
- block(m,'MineralSeam',Vector3.new(x-.8,h*.64,z),Vector3.new(w*.82,.18,d*.89),P.ground,Enum.Material.SmoothPlastic,{0,math.rad(yaw+3),math.rad(-6)})
+ stone(m,Vector3.new(x,h*.34,z),Vector3.new(w,h*.68,d),{0,yaw,-4},P.stone)
+ stone(m,Vector3.new(x-.7,h*.68,z-.3),Vector3.new(w*.94,h*.3,d*.93),{0,yaw+3,-4},P.ledge)
+ stone(m,Vector3.new(x-1.2,h*.87,z-.5),Vector3.new(w*.78,h*.17,d*.83),{0,yaw+5,-4},P.ivory:Lerp(P.ledge,.28))
+ -- Sloped fractured toes keep cliffs grounded without a wall of freestanding boxes.
+ for _,side in ipairs({-1,1}) do
+  local toe=Instance.new('WedgePart');toe.Name='Talus';toe.Size=Vector3.new(d*.9,h*.42,w*.48)
+  toe.CFrame=CFrame.new(x+side*w*.48,h*.18,z)*CFrame.Angles(0,math.rad(yaw)+side*math.pi/2,0)
+  toe.Color=P.stone:Lerp(P.ledge,.16);toe.Material=Enum.Material.SmoothPlastic;toe.Anchored=true;toe.CanTouch=false;toe.Parent=m
+ end
+ block(m,'MineralSeam',Vector3.new(x-.6,h*.52,z),Vector3.new(w*.98,.22,d*.98),P.mint:Lerp(P.stone,.55),Enum.Material.SmoothPlastic,{0,math.rad(yaw+2),math.rad(-4)})
  return m
+end
+local function pool(parent,x,z,radius)
+ -- Shallow mineral pools sit outside every field/trail; no gameplay collision or reward.
+ local m=Instance.new('Model');m.Name='MineralPool';m.Parent=parent
+ local function disc(name,r,y,color,material)
+  local p=block(m,name,Vector3.new(x,y,z),Vector3.new(.12,r*2,r*2),color,material)
+  p.Shape=Enum.PartType.Cylinder;p.CFrame=CFrame.new(p.Position)*CFrame.Angles(0,0,math.pi/2);return p
+ end
+ disc('ChalkRim',radius+.8,.065,P.ivory,Enum.Material.SmoothPlastic)
+ disc('Water',radius,.14,Color3.fromRGB(52,134,151),Enum.Material.SmoothPlastic)
+ disc('MineralIsland',radius*.22,.22,P.ledge,Enum.Material.SmoothPlastic)
+end
+local function surveyGate(parent,at,color)
+ local m=Instance.new('Model');m.Name='ExpeditionGate';m.Parent=parent
+ for _,s in ipairs({-1,1}) do
+  stone(m,at+Vector3.new(s*8,3.5,0),Vector3.new(2,7,3),{0,0,s*-5},P.ledge,'ChalkPylon')
+  block(m,'GateMarker',at+Vector3.new(s*7.9,5.6,-1.53),Vector3.new(.3,2,.12),color,Enum.Material.Neon)
+ end
+ block(m,'GateLintel',at+Vector3.new(0,7.5,0),Vector3.new(18,1.15,3),P.ivory,Enum.Material.SmoothPlastic)
 end
 local function lighting()
  local l=game:GetService('Lighting')
- l.ClockTime=16.4;l.GeographicLatitude=28;l.Brightness=2.35;l.ExposureCompensation=.12
- l.Ambient=Color3.fromRGB(94,102,120);l.OutdoorAmbient=Color3.fromRGB(132,140,148)
- l.ColorShift_Top=Color3.fromRGB(255,226,194);l.ColorShift_Bottom=Color3.fromRGB(74,92,112)
- l.EnvironmentDiffuseScale=.72;l.EnvironmentSpecularScale=.22;l.GlobalShadows=true;l.ShadowSoftness=.3
- l.FogColor=Color3.fromRGB(167,172,183);l.FogStart=200;l.FogEnd=700
- local a=l:FindFirstChildOfClass('Atmosphere') or Instance.new('Atmosphere');a.Name='QuarryAtmosphere';a.Density=.255;a.Offset=.12;a.Color=Color3.fromRGB(192,198,209);a.Decay=Color3.fromRGB(121,137,150);a.Glare=.12;a.Haze=1.2;a.Parent=l
- local grade=l:FindFirstChildOfClass('ColorCorrectionEffect') or Instance.new('ColorCorrectionEffect');grade.Name='QuarryGrade';grade.Enabled=true;grade.Brightness=.015;grade.Contrast=.08;grade.Saturation=-.12;grade.TintColor=Color3.fromRGB(255,245,232);grade.Parent=l
- local bloom=l:FindFirstChildOfClass('BloomEffect') or Instance.new('BloomEffect');bloom.Name='QuarryBloom';bloom.Enabled=true;bloom.Intensity=.11;bloom.Size=20;bloom.Threshold=1.6;bloom.Parent=l
- local rays=l:FindFirstChildOfClass('SunRaysEffect') or Instance.new('SunRaysEffect');rays.Name='QuarrySun';rays.Intensity=.035;rays.Spread=.65;rays.Parent=l
+ l.ClockTime=15.5;l.GeographicLatitude=24;l.Brightness=2.4;l.ExposureCompensation=.05
+ l.Ambient=Color3.fromRGB(95,126,143);l.OutdoorAmbient=Color3.fromRGB(153,176,181)
+ l.ColorShift_Top=Color3.fromRGB(255,231,197);l.ColorShift_Bottom=Color3.fromRGB(84,133,148)
+ l.EnvironmentDiffuseScale=.8;l.EnvironmentSpecularScale=.3;l.GlobalShadows=true;l.ShadowSoftness=.4
+ l.FogColor=Color3.fromRGB(174,209,207);l.FogStart=150;l.FogEnd=540
+ local a=l:FindFirstChildOfClass('Atmosphere') or Instance.new('Atmosphere');a.Name='ReachAtmosphere';a.Density=.3;a.Offset=.18;a.Color=Color3.fromRGB(199,224,215);a.Decay=Color3.fromRGB(104,157,172);a.Glare=.08;a.Haze=1.55;a.Parent=l
+ local grade=l:FindFirstChildOfClass('ColorCorrectionEffect') or Instance.new('ColorCorrectionEffect');grade.Name='ReachGrade';grade.Enabled=true;grade.Brightness=.01;grade.Contrast=.12;grade.Saturation=.06;grade.TintColor=Color3.fromRGB(255,248,231);grade.Parent=l
+ local bloom=l:FindFirstChildOfClass('BloomEffect') or Instance.new('BloomEffect');bloom.Name='MineralBloom';bloom.Enabled=true;bloom.Intensity=.16;bloom.Size=24;bloom.Threshold=1.9;bloom.Parent=l
+ local rays=l:FindFirstChildOfClass('SunRaysEffect') or Instance.new('SunRaysEffect');rays.Name='ReachSun';rays.Intensity=.025;rays.Spread=.7;rays.Parent=l
  for _,v in ipairs(l:GetChildren()) do if v:IsA('DepthOfFieldEffect') then v.Enabled=false end end
  local sky=l:FindFirstChildOfClass('Sky');if sky then sky.SunAngularSize=8;sky.MoonAngularSize=4;sky.StarCount=450 end
 end
@@ -213,23 +256,41 @@ function W.initialize()
  for _,name in ipairs({'FaceTest','Test','sphere','Mesh','Crystals','MiningEffect','Beam','Cat','potato'}) do
   local original=workspace:FindFirstChild(name);if original then original.Parent=archive end
  end
+ -- These unlabelled top-level blocks are the old off-route construction experiment.
+ -- Preserve their exact objects beside other reference props rather than leaving
+ -- grey stairs and a giant beige slab in the composed landscape.
+ for _,v in ipairs(workspace:GetChildren()) do
+  if v:IsA('BasePart') and v.Name=='Part' then v.Parent=archive end
+ end
  local construct=workspace:FindFirstChild('construct')
  assert(construct and construct:IsA('Model'),'The supplied source must retain Workspace.construct')
  local turretTemplate=construct:Clone();turretTemplate.Name='OriginalConstructTemplate';turretTemplate.Parent=storage
- construct:SetAttribute('DormantLandmark',true)
+ finishConstruct(construct);construct:SetAttribute('DormantLandmark',true)
  local baseplate=workspace:FindFirstChild('Baseplate')
- if baseplate and baseplate:IsA('BasePart') then cleanSurface(baseplate,archive);baseplate.Color=P.ground;baseplate.Material=Enum.Material.Ground end
+ if baseplate and baseplate:IsA('BasePart') then cleanSurface(baseplate,archive);baseplate.Color=P.ground;baseplate.Material=Enum.Material.SmoothPlastic end
  if spawn then cleanSurface(spawn,archive);spawn.Color=P.ledge;spawn.Material=Enum.Material.Metal end
  -- Retain the author's simple parts-built trees, now under the same restrained palette.
  for _,model in ipairs(workspace:GetChildren()) do
   if model:IsA('Model') and model.Name=='Model' then
+   -- Original trees were perched on the old abandoned test stairs. Keep the
+   -- same two-part geometry, scale and ground it as a distant southern grove.
+   local parts={};local low,high=math.huge,-math.huge;local anchor=nil
+   for _,v in ipairs(model:GetDescendants()) do if v:IsA('BasePart') then
+    table.insert(parts,v);anchor=anchor or v.Position
+    low=math.min(low,v.Position.Y-v.Size.Y/2);high=math.max(high,v.Position.Y+v.Size.Y/2)
+   end end
+   local scale=math.min(1,18/math.max(1,high-low))
+   if anchor then for _,v in ipairs(parts) do
+    local p=v.Position;v.Size=v.Size*scale
+    v.CFrame=CFrame.new(anchor.X+(p.X-anchor.X)*scale,(p.Y-low)*scale,anchor.Z+(p.Z-anchor.Z)*scale)*v.CFrame.Rotation
+   end end
    for _,v in ipairs(model:GetDescendants()) do
-    if v:IsA('BasePart') then cleanSurface(v,archive);v.Material=Enum.Material.SmoothPlastic;v.Color=v.Size.Y>v.Size.X*1.7 and Color3.fromRGB(70,84,82) or Color3.fromRGB(94,126,119) end
+    if v:IsA('BasePart') then cleanSurface(v,archive);v.Material=Enum.Material.SmoothPlastic;v.Color=v.Size.Y>v.Size.X*1.7 and Color3.fromRGB(50,88,91) or Color3.fromRGB(107,182,159) end
    end
   end
  end
  lighting()
- local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),P.ledge,Enum.Material.Concrete));depot:SetAttribute('SafeDepot',true)
+ local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),P.ivory:Lerp(P.ledge,.2),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
  -- Flush panel joints and painted corner brackets make one deliberate working yard.
  for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end
  for _,z in ipairs({-8,0,8}) do block(map,'ApronJoint',Vector3.new(home.X,.216,home.Z+z),Vector3.new(38,.02,.1),P.stone) end
@@ -245,6 +306,9 @@ function W.initialize()
   local lamp=block(map,'DepotLamp',Vector3.new(home.X+dx,10.8,home.Z-12.5),Vector3.new(1.4,.4,.4),P.ivory,Enum.Material.Neon);light(lamp,P.ivory,22,.7)
  end
  block(map,'DepotLintel',Vector3.new(home.X,11.3,home.Z-13),Vector3.new(35,.8,1.2),P.edge,Enum.Material.Metal)
+ block(map,'DepotCanopy',Vector3.new(home.X,12,home.Z-8),Vector3.new(38,.65,13),P.ivory,Enum.Material.SmoothPlastic)
+ block(map,'CanopyInset',Vector3.new(home.X,11.64,home.Z-8),Vector3.new(34,.1,10),P.metal,Enum.Material.Metal)
+ block(map,'DepotSunstripe',Vector3.new(home.X,12.36,home.Z-4),Vector3.new(31,.06,1.6),P.amber,Enum.Material.SmoothPlastic)
  local header=block(map,'DepotHeader',Vector3.new(home.X,10.7,home.Z-13.65),Vector3.new(12,1.9,.18),P.ink)
  textFace(header,'MINING AWAY','EXTRACTION DEPOT  /  01',P.ivory)
  local printer=station(map,'Printer',home+Vector3.new(12,-.5,-2),P.mint,'Free reprint','Printer')
@@ -273,25 +337,29 @@ function W.initialize()
   else local o=field.Offset;part=block(model,'Field',home+Vector3.new(o[1],o[2],o[3]),Vector3.new(unpack(field.Size)),P.ground,Enum.Material.Ground) end
   cleanSurface(part,archive)
   local accent=Color3.fromRGB(unpack(field.Color))
-  part.Name='Field';part.Anchored=true;part.CanCollide=true;part.CanQuery=true;part.Color=P.ground:Lerp(accent,.13);part.Material=Enum.Material.Ground;part:SetAttribute('FieldId',id);part:SetAttribute('Patch',id)
+  local beds={Color3.fromRGB(158,196,173),Color3.fromRGB(165,143,152),Color3.fromRGB(116,162,180),Color3.fromRGB(144,149,177),Color3.fromRGB(90,162,142)}
+  part.Name='Field';part.Anchored=true;part.CanCollide=true;part.CanQuery=true;part.Color=beds[id];part.Material=Enum.Material.SmoothPlastic;part:SetAttribute('FieldId',id);part:SetAttribute('Patch',id)
   local top=part.Position.Y+part.Size.Y/2;local bottom=part.Position.Y-part.Size.Y/2
   -- The original raised Ruby patch is now visibly supported by a low layered mesa.
   if bottom>.4 then
-   solid(block(model,'FieldBedrock',Vector3.new(part.Position.X,bottom/2,part.Position.Z),Vector3.new(part.Size.X+4,bottom,part.Size.Z+4),P.stone,Enum.Material.Slate))
-   solid(block(model,'FieldSkirt',Vector3.new(part.Position.X,bottom*.23,part.Position.Z),Vector3.new(part.Size.X+10,math.max(.4,bottom*.46),part.Size.Z+8),P.ledge,Enum.Material.Slate))
+   solid(block(model,'FieldBedrock',Vector3.new(part.Position.X,bottom/2,part.Position.Z),Vector3.new(part.Size.X+4,bottom,part.Size.Z+4),P.stone,Enum.Material.SmoothPlastic))
+   solid(block(model,'FieldSkirt',Vector3.new(part.Position.X,bottom*.23,part.Position.Z),Vector3.new(part.Size.X+10,math.max(.4,bottom*.46),part.Size.Z+8),P.ledge,Enum.Material.SmoothPlastic))
+   block(model,'ChalkCrown',Vector3.new(part.Position.X,bottom-.45,part.Position.Z),Vector3.new(part.Size.X+5,.65,part.Size.Z+5),P.ivory,Enum.Material.SmoothPlastic)
   end
   -- Authored shoulder locations follow each incoming trail. Ground-level feet
   -- avoid the former floating Ruby sign and keep boards off the walking centerline.
   local shoulders={{-3,-23},{6,-33},{-12,24},{-30,9},{-32,-5}}
   local shoulder=shoulders[id];local edge=Vector3.new(part.Position.X+shoulder[1],0,part.Position.Z+shoulder[2])
-  local subtitle=id==1 and 'SAFE  /  START HERE' or field.Turrets>0 and 'GUARDED  /  '..field.RecommendedFleet..'+ DRONES' or 'SAFE  /  RICHER ORE'
+  local subtitle=id==1 and 'SAFE  /  START HERE' or field.Turrets>0 and (id==3 and 'GUARDED  /  BUILD COMBAT CARDS' or 'GUARDED  /  '..field.RecommendedFleet..'+ DRONES') or 'SAFE  /  RICHER ORE'
   local facing=id>3 and fields[id-1].center or home
   sign(model,edge,string.format('%02d  %s',id,field.Name:upper()),subtitle,accent,facing)
   -- Short corner caps read as a footprint and leave every field side walkable.
   for _,x in ipairs({-1,1}) do for _,z in ipairs({-1,1}) do
    local corner=part.Position+Vector3.new(x*(part.Size.X/2+.3),top-part.Position.Y+.15,z*(part.Size.Z/2+.3))
-   block(model,'FieldCorner',corner-Vector3.new(x*2.2,0,0),Vector3.new(4.4,.25,.42),accent:Lerp(P.ledge,.45),Enum.Material.SmoothPlastic)
-   block(model,'FieldCorner',corner-Vector3.new(0,0,z*2.2),Vector3.new(.42,.25,4.4),accent:Lerp(P.ledge,.45),Enum.Material.SmoothPlastic)
+   block(model,'FieldCorner',corner-Vector3.new(x*2.2,0,0),Vector3.new(4.4,.25,.42),P.ivory,Enum.Material.SmoothPlastic)
+   block(model,'FieldCorner',corner-Vector3.new(0,0,z*2.2),Vector3.new(.42,.25,4.4),P.ivory,Enum.Material.SmoothPlastic)
+   local beacon=block(model,'SurveyPin',corner+Vector3.new(0,.75,0),Vector3.new(.3,1.5,.3),P.metal,Enum.Material.Metal)
+   block(model,'PinLight',beacon.Position+Vector3.new(0,.76,0),Vector3.new(.32,.16,.32),accent,Enum.Material.Neon)
   end end
   table.insert(fields,{id=id,cfg=field,center=part.Position,part=part,model=model})
  end
@@ -300,22 +368,24 @@ function W.initialize()
  path(map,home+Vector3.new(12,-.2,9),fields[1].center+Vector3.new(-10,1.14,-10),12)
  path(map,home+Vector3.new(-9,-.2,14),Vector3.new(-76,6,32),12)
  path(map,Vector3.new(-76,6,32),fields[2].center+Vector3.new(0,1.14,-14),12)
- path(map,home+Vector3.new(0,-.2,-16),fields[3].center+Vector3.new(0,1.14,17),12)
+ path(map,home+Vector3.new(0,-.2,-16),fields[3].center+Vector3.new(0,1.14,14),12)
  path(map,fields[3].center+Vector3.new(15,1.14,3),fields[4].center+Vector3.new(-18,1.14,3),11)
  path(map,fields[4].center+Vector3.new(18,1.14,7),fields[5].center+Vector3.new(-19,1.14,-5),11)
+ surveyGate(map,Vector3.new(-51.2,0,-57),P.amber)
+ pool(map,-113,-72,10);pool(map,-2,3,9);pool(map,51,27,15)
  -- Sparse field-specific silhouettes frame the playable clearings instead of filling them.
  local trees={
   {-111,30,12,2},{-115,62,15,2},{-101,82,11,2},{-72,79,12,2},{-47,54,9,1},{-6,49,12,1},{0,16,10,1},
   {-81,-108,10,3},{-68,-113,13,3},{-21,-113,9,3},{3,-107,11,4},{56,-93,14,4},{61,-45,11,4},
   {74,7,12,5},{115,-6,16,5},{118,-43,13,5},{-113,-12,10,1},{-106,-55,12,1},
  }
- local foliage={Color3.fromRGB(96,132,119),Color3.fromRGB(151,106,120),Color3.fromRGB(105,129,151),Color3.fromRGB(128,118,149),Color3.fromRGB(76,135,119)}
+ local foliage={Color3.fromRGB(99,180,151),Color3.fromRGB(214,129,153),Color3.fromRGB(111,183,207),Color3.fromRGB(162,145,205),Color3.fromRGB(76,197,162)}
  for i,t in ipairs(trees) do tree(map,t[1],t[2],t[3],foliage[t[4]],0,i*.73) end
  local rocks={
   {-112,45,15,8,10,-12},{-99,74,13,6,10,25},{-76,73,11,7,9,-20},
   {-80,-94,17,8,13,15},{-64,-113,16,11,12,-8},{-15,-105,21,9,12,8},
-  {19,-98,24,12,15,-16},{53,-90,17,9,12,22},{65,-44,12,7,10,20},
-  {79,-58,19,12,11,-8},{114,-45,17,14,12,14},{119,-12,14,10,12,-18},
+  {19,-98,24,12,15,-16},{53,-90,17,9,12,22},{52,-26,12,7,10,20},
+  {79,-58,19,12,11,-8},{128,-45,17,14,12,14},{129,-12,14,10,12,-18},
   {-9,66,18,7,12,-12},{-123,-15,19,12,16,17},
  }
  for _,r in ipairs(rocks) do geology(map,unpack(r)) end
@@ -326,7 +396,16 @@ function W.initialize()
   local p=Vector3.new(133+i*7,0,-79+i*5)
   stone(map,p+Vector3.new(0,6+i*3,0),Vector3.new(3,12+i*6,3),{0,0,(i-2)*6},P.ledge,'SurveyMonolith')
  end
- root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Weathered Quarry / Warm Sun / Cool Mineral')
+ -- Low bioluminescent reeds repeat each biome color at the edges, keeping targets clear.
+ for i,t in ipairs(trees) do
+  for n=1,3 do
+   local a=i*1.7+n*2.2;local x=t[1]+math.cos(a)*(3+n);local z=t[2]+math.sin(a)*(3+n)
+   local h=.7+n*.22
+   block(map,'MineralReed',Vector3.new(x,h/2,z),Vector3.new(.18,h,.18),foliage[t[4]],Enum.Material.SmoothPlastic,{0,a,.15})
+   block(map,'ReedTip',Vector3.new(x,h,z),Vector3.new(.28,.16,.28),foliage[t[4]]:Lerp(P.ivory,.5),Enum.Material.Neon)
+  end
+ end
+ root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Alabaster Reach / Teal Minerals / Coral Groves')
  return {root=root,map=map,home=home,printer=printer,packStation=packs,prestigeStation=prestige,converter=converter,fields=fields,turretTemplate=turretTemplate,droneTemplate=rs:FindFirstChild('Drone'),crystalTemplate=rs:FindFirstChild('Crystal')}
 end
 return W

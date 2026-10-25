@@ -1,5 +1,5 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=2,BASE_CAPACITY=120}
+local C={CONTENT_VERSION=3,BASE_CAPACITY=120}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function finite(x) return type(x)=='number' and x==x and x>-math.huge and x<math.huge end
@@ -7,29 +7,29 @@ local function card(id,title,scope,effects,description,kind)
  return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,expires='This run'}
 end
 C.CATALOG={
- card('F01','Sharper Beams','Fleet',{mining=.15},'+15% mining output'),
- card('F02','Fast Rotors','Fleet',{speed=.20},'+20% flight speed'),
- card('F03','Combat Calibration','Fleet',{combat=.20},'+20% combat shot damage'),
- card('F04','Reinforced Frames','Fleet',{health=.20},'+20% maximum hull; heal only the added hull'),
- card('F05','Ceramic Plating','Fleet',{reduction=.10},'10 percentage points less turret damage'),
- card('F06','Cargo Lattice','Player',{capacity=.25},'+25% shared cargo capacity'),
- card('F07','Warm Emitters','Fleet',{startup=.30},'+30% laser startup rate'),
- card('F08','Clean Extraction','Fleet',{yield=.10},'+10% ore units; uses matching cargo space'),
+ card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
+ card('F02','Fast Rotors','Fleet',{speed=.30},'+30% flight speed across your fleet'),
+ card('F03','Combat Calibration','Fleet',{combat=.30},'+30% combat shot damage across your fleet'),
+ card('F04','Reinforced Frames','Fleet',{health=.35},'+35% maximum hull; restore only the added hull'),
+ card('F05','Ceramic Plating','Fleet',{reduction=.15},'Block 15 percentage points of incoming turret damage'),
+ card('F06','Cargo Lattice','Player',{capacity=.35},'+35% shared cargo: 120 → 162 ore alone'),
+ card('F07','Warm Emitters','Fleet',{startup=.50},'+50% startup rate: one-third less laser warmup alone'),
+ card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills cargo faster'),
  card('C01','Blue Afterburners','Color',{speed=1},'+100% Blue flight speed: 2× alone','Blue'),
- card('C02','Blue Lenses','Color',{mining=.35},'+35% Blue mining output','Blue'),
- card('C03','Red Targeting','Color',{combat=.45},'+45% Red combat shot damage','Red'),
- card('C04','Red Bulkheads','Color',{health=.40},'+40% Red maximum hull; heal only added hull','Red'),
- card('C05','Green Recovery','Color',{yield=.25},'+25% ore units awarded by Green drones','Green'),
- card('C06','Green Ignition','Color',{startup=.75},'+75% Green laser startup rate','Green'),
- card('D01','Diamond Tip','Individual',{mining=.65},'+65% mining output for this named drone'),
- card('D02','Battle Emitter','Individual',{combat=.75},'+75% combat shot damage for this named drone'),
- card('D03','Titanium Hull','Individual',{health=.75},'+75% maximum hull; heal only the added hull'),
- card('D04','Racing Rotors','Individual',{speed=.70},'+70% flight speed for this named drone'),
+ card('C02','Blue Lenses','Color',{mining=.50},'+50% mining output for every Blue drone','Blue'),
+ card('C03','Red Targeting','Color',{combat=.65},'+65% combat shot damage for every Red drone','Red'),
+ card('C04','Red Bulkheads','Color',{health=.60},'+60% Red maximum hull; restore only the added hull','Red'),
+ card('C05','Green Recovery','Color',{yield=.40},'+40% ore units awarded by Green drones','Green'),
+ card('C06','Green Ignition','Color',{startup=1},'Double Green startup rate: half laser warmup alone','Green'),
+ card('D01','Diamond Tip','Individual',{mining=.90},'+90% mining output for this named drone'),
+ card('D02','Battle Emitter','Individual',{combat=1},'Double this named drone’s combat shot damage alone'),
+ card('D03','Titanium Hull','Individual',{health=1},'Double maximum hull alone; restore only the added hull'),
+ card('D04','Racing Rotors','Individual',{speed=1},'Double this named drone’s flight speed alone'),
  card('D05','Instant Ignition','Individual',{startup=1},'+100% startup rate: half warmup alone; damage unchanged'),
  card('D06','Long Lens','Individual',{range=.40},'+40% combat working range; command radius unchanged'),
  card('D07','Turret Insulation','Individual',{reduction=.25},'25 percentage points less turret damage'),
  card('D08','Critical Optics','Individual',{crit=.15},'15% server-rolled chance of a double combat hit'),
- card('D09','Burst Splash','Individual',{splash=.25},'Combat hit splashes 25% to one eligible nearby turret'),
+ card('D09','Burst Splash','Individual',{combat=.20,splash=.15,chain=16},'+20% shot damage; arc 15% hit damage to one other sentry within 22 studs'),
  card('D10','Fracture Fork','Individual',{fork=.20},'Mining tick forks 20% to one eligible nearby crystal'),
  card('D11','Entry Shield','Individual',{shield=.20},'Absorb 20% built-in hull once per fresh assault'),
  card('D12','Rapid Cycling','Individual',{rate=.35},'+35% combat firing rate; final DPS remains capped'),
@@ -38,12 +38,18 @@ C.CATALOG={
  card('D15','Salvage Reactor','Individual',{salvage=.30},'Destroy a sentry to repair 30% built-in hull on this drone'),
  card('D16','Arc Relay','Individual',{splash=.25,chain=16},'Arc 25% shot damage to one other sentry within 22 studs'),
  card('F09','Prism Splitter','Fleet',{fork=.20,forkRange=6},'Split 20% mining damage into one other crystal within 12 studs'),
- card('T01','Glass Cutter','Tradeoff',{mining=.35,health=-.15},'+35% mining output; −15% maximum hull'),
- card('T02','Battle Formation','Tradeoff',{combat=.30,mining=-.10},'+30% combat shot damage; −10% mining output'),
- card('T03','Heavy Cargo','Tradeoff',{capacity=.35,speed=-.10},'+35% cargo capacity; −10% flight speed'),
- card('T04','Hot Emitters','Tradeoff',{startup=.40,health=-.10},'+40% startup rate; −10% maximum hull'),
+ card('F10','Bulwark Network','Fleet',{health=.25,reduction=.10},'+25% hull and block 10 percentage points of turret damage'),
+ card('F11','Courier Network','Fleet',{yield=.15,speed=.20,capacity=.20},'+15% ore, +20% flight speed and +20% shared cargo'),
+ card('D17','Siege Focus','Individual',{combat=.45,finisher=.50,speed=-.15},'+45% shot damage; +50% finishing damage below 35% sentry hull; −15% flight speed'),
+ card('D18','Pulse Cannon','Individual',{rate=.50,combat=.15,mining=-.20},'+50% fire rate and +15% shot damage; −20% mining output'),
+ card('D19','Prospector Rig','Individual',{geode=.60,yield=.20,speed=-.15},'+60% geode damage and +20% ore; −15% flight speed'),
+ card('D20','Shard Harvester','Individual',{fork=.20,forkRange=6,mining=.25,health=-.15},'Split 20% mining damage within 12 studs; +25% mining output; −15% hull'),
+ card('T01','Glass Cutter','Tradeoff',{mining=.60,health=-.20},'+60% fleet mining output; −20% maximum hull'),
+ card('T02','Battle Formation','Tradeoff',{combat=.60,mining=-.20},'+60% fleet combat shot damage; −20% mining output'),
+ card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% shared cargo; −15% fleet flight speed'),
+ card('T04','Hot Emitters','Tradeoff',{startup=1,health=-.20},'Double fleet startup rate alone; −20% maximum hull'),
 }
-local fallback={
+C.FALLBACK={
  card('R01','Mining Reserve','Fleet',{mining=.10},'+10% mining output; repeatable until cap'),
  card('R02','Combat Reserve','Fleet',{combat=.10},'+10% combat shot damage; repeatable until cap'),
  card('R03','Cargo Reserve','Player',{capacity=.10},'+10% cargo capacity; repeatable until cap'),
@@ -51,6 +57,14 @@ local fallback={
 local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true,finisher=true,salvage=true,chain=true}
 local function isCombat(c)
  for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
+end
+local economicEffects={mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true}
+local function isEconomic(c)
+ for stat,n in pairs(c.effects) do if economicEffects[stat] and n>0 then return true end end;return false
+end
+local function signature(c)
+ local e=c.effects
+ return (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0
 end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
@@ -105,7 +119,13 @@ local function vector(p,c)
  local out={capacity=C.capacity(p,c)}
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
-  for k in pairs(statLabels) do if k~='shotInterval' then out[d.id..':'..k]=k=='warmup' and -st[k] or st[k] end end
+  for k in pairs(statLabels) do if k~='shotInterval' then
+   -- Extra reach has no gameplay value until its secondary beam exists.
+   -- Do not sell a capped split/arc as useful solely for its dormant range.
+   local value=st[k]
+   if k=='splashRange' and st.splashFraction==0 or k=='forkRange' and st.forkFraction==0 then value=0 end
+   out[d.id..':'..k]=k=='warmup' and -value or value
+  end end
  end
  return out
 end
@@ -146,7 +166,13 @@ local function preview(p,c)
  local lines={}
  if c.effects.capacity then table.insert(lines,{label='Shared cargo',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  local target
- for _,d in ipairs(p.fleet) do if affects(c,d) then target=d;break end end
+ -- A fleet card can benefit Red while an already capped first Blue gains
+ -- nothing. Show a drone that actually changes, rather than an empty example.
+ for _,d in ipairs(p.fleet) do if affects(c,d) then
+  local before,after=C.stats(p,d),C.stats(p,d,c)
+  for k in pairs(statLabels) do if math.abs(before[k]-after[k])>1e-8 then target=d;break end end
+  if target then break end
+ end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval'}) do
@@ -159,7 +185,7 @@ local function preview(p,c)
    end
   end
  end
- return lines
+ return lines,target and target.name
 end
 local function resolve(p,entry,seed,combatVisible)
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
@@ -175,11 +201,16 @@ local function resolve(p,entry,seed,combatVisible)
   c.targetDroneId=d.id;c.targetName=d.name;c.type=d.type
  end
  if not beneficial(p,c) then return nil end
- c.preview=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
+ c.preview,c.previewTargetName=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
  local purposes={combat='Break through guarded fields',survival='Keep your assault alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
- local headlines={D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='+100% STARTUP RATE'}
+ local headlines={D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
  c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
- c.tradeoff=(c.cardId=='D14' and '15% slower flight') or (c.cardId=='T01' and '15% less hull') or (c.cardId=='T02' and '10% slower mining') or (c.cardId=='T03' and '10% slower flight') or (c.cardId=='T04' and '10% less hull') or 'No drawback'
+ local drawbacks={}
+ for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','cargo capacity'}}) do
+  local n=c.effects[loss[1]]
+  if n and n<0 then table.insert(drawbacks,string.format('%g%% less %s',-n*100,loss[2])) end
+ end
+ c.tradeoff=#drawbacks>0 and table.concat(drawbacks,'; ') or 'No stat penalty'
  c.stackText=stackLimit(c)==1 and 'Unique for this target · this run' or ('Copy '..(countOwned(p,c)+1)..' of '..stackLimit(c)..' · adds to base · this run')
  return c
 end
@@ -205,43 +236,34 @@ function C.buy(p,tx,expectedRun,context)
  local random=rng(seed);local pool={}
  for _,entry in ipairs(C.CATALOG) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
  local function addFallback()
-  for _,entry in ipairs(fallback) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
+  for _,entry in ipairs(C.FALLBACK) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
  end
  if #pool<6 then addFallback() end
  for i=#pool,2,-1 do local n=random(i);pool[i],pool[n]=pool[n],pool[i] end
- local chosen={}
- local function pairOK(c) for _,other in ipairs(chosen) do if c.cardId==other.cardId or not compatible(c,other) then return false end end;return true end
- local requireCombat=context.combatVisible and p.run.offersWithoutCombat>=2
- if requireCombat then for _,c in ipairs(pool) do if isCombat(c) then table.insert(chosen,c);break end end end
- -- Early packs always expose a behavior-changing build direction when eligible.
- -- The saved offer/target still comes entirely from this deterministic server pool.
- local function signature(c) local e=c.effects;return e.finisher or e.geode or e.salvage or e.chain or e.forkRange end
- if p.run.packIndex<3 then for _,c in ipairs(pool) do if signature(c) and pairOK(c) then table.insert(chosen,c);break end end end
- while #chosen<3 do
-  local best,bestScore=nil,-math.huge
-  for _,c in ipairs(pool) do
-   if pairOK(c) then
-    local score=0
-    for _,other in ipairs(chosen) do if other._category~=c._category then score=score+3 end;if other.scope~=c.scope then score=score+1 end end
-    if score>bestScore then best=c;bestScore=score end
-   end
-  end
-  if not best then break end;table.insert(chosen,best)
+ -- Search the bounded catalog rather than letting a greedy first pick prevent a
+ -- useful triple. Seeded shuffle breaks ties; repeated requests cannot reroll.
+ -- Prefer both a guarded-field answer and a productive economy option, then a
+ -- signature mechanic in early packs, then different categories and scopes.
+ -- Caps can exhaust a lane; never invent a useless card just to fill that lane.
+ local pairsOK,combat,economic,special={},{},{},{}
+ for i,a in ipairs(pool) do
+  pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
+  for j=i+1,#pool do pairsOK[i][j]=a.cardId~=pool[j].cardId and compatible(a,pool[j]) end
  end
- -- If the first greedy choices conflict, bounded search finds a valid distinct triple.
- if #chosen<3 then
-  chosen={}
-  for i=1,#pool do
-   for j=i+1,#pool do
-    if compatible(pool[i],pool[j]) then
-     for k=j+1,#pool do
-      if compatible(pool[i],pool[k]) and compatible(pool[j],pool[k]) and (not requireCombat or isCombat(pool[i]) or isCombat(pool[j]) or isCombat(pool[k])) then chosen={pool[i],pool[j],pool[k]};break end
-     end
-    end
-    if #chosen==3 then break end
-   end
-   if #chosen==3 then break end
-  end
+ local chosen,bestScore={},-math.huge
+ for i=1,#pool do
+  for j=i+1,#pool do if pairsOK[i][j] then
+   for k=j+1,#pool do if pairsOK[i][k] and pairsOK[j][k] then
+    local a,b,c=pool[i],pool[j],pool[k]
+    local score=0
+    if context.combatVisible and (combat[i] or combat[j] or combat[k]) then score=score+1000 end
+    if economic[i] or economic[j] or economic[k] then score=score+1000 end
+    if p.run.packIndex<3 and (special[i] or special[j] or special[k]) then score=score+100 end
+    if a._category~=b._category then score=score+4 end;if a._category~=c._category then score=score+4 end;if b._category~=c._category then score=score+4 end
+    if a.scope~=b.scope then score=score+1 end;if a.scope~=c.scope then score=score+1 end;if b.scope~=c.scope then score=score+1 end
+    if score>bestScore then chosen={a,b,c};bestScore=score end
+   end end
+  end end
  end
  if #chosen~=3 then return false,'No three useful distinct choices remain; pursue your prestige objective' end
  local hasCombat=false

@@ -1,3 +1,5 @@
+> Earlier validation snapshot. The latest visual/upgrade pass, exact new checks, and Studio observations are in [ALABASTER_UPGRADES.md](ALABASTER_UPGRADES.md).
+
 # Validation and independent review
 
 This report covers the restore-feel/card/prestige implementation and October 25 presentation pass. The old baseline's 47 checks were not reused as evidence. An intermediate polish build was reopened from disk and entered Play in local Roblox Studio; its world and HUD were inspected. The Mac then locked before gameplay checks. Final polish changes, true two-client sessions, touch and live DataStore remain unverified. See POLISH_PASS.md for exact limits.

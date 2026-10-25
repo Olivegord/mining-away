@@ -354,4 +354,25 @@ check('geode replenishment consumes its full five-node budget without growing re
  end
  seed.NextNumber=originalNext;f.cfg.Count=oldCount
 end)
+check('resource placement rejects solid map obstruction without reserving node budget',function()
+ fixture();local f=patches[1]
+ for _,r in ipairs(f.resources) do resources[r.id]=nil;r.part:Destroy() end;f.resources={};f.respawnQueue={}
+ local originalRaycast=workspace.Raycast;local calls=0;local blocker
+ for _,v in ipairs(scene.map:GetDescendants()) do if v:IsA('BasePart') and v.CanQuery then blocker=v;break end end
+ assert(blocker,'Fixture has no solid map scenery')
+ local ok,err=pcall(function()
+  workspace.Raycast=function(_,origin,direction,params)
+   calls=calls+1;eq(params.FilterType,Enum.RaycastFilterType.Include);eq(#params.FilterDescendantsInstances,1);eq(params.FilterDescendantsInstances[1],scene.map)
+   close(direction.X,0);close(direction.Z,0);assert(direction.Y<0);assert(origin.Y>f.center.Y+10)
+   close(origin.Y+direction.Y,f.part.Position.Y+f.part.Size.Y/2+.05)
+   return {Instance=blocker}
+  end
+  local serial=resourceSerial;local spawned,cost=spawnResource(f,'Crystal')
+  eq(spawned,false);eq(cost,nil);eq(calls,18);eq(nodeUsage(f),0);eq(#f.resources,0);eq(resourceSerial,serial);eq(#f.respawnQueue,0)
+  workspace.Raycast=function() return nil end
+  spawned,cost=spawnResource(f,'Crystal');eq(spawned,true);eq(cost,1);eq(nodeUsage(f),1);eq(#f.resources,1);eq(resourceSerial,serial+1)
+ end)
+ workspace.Raycast=originalRaycast
+ assert(ok,err)
+end)
 print(checks..' actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested')

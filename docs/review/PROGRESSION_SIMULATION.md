@@ -1,3 +1,5 @@
+> Historical pre-v3 report. Current card-v3 modeled timings and limitations are in [upgrades.md](../game/upgrades.md) and [ALABASTER_UPGRADES.md](ALABASTER_UPGRADES.md).
+
 # Deterministic progression model
 
 Status: rerun locally on October 25, 2026 with official Luau 0.744 after the signature-card update. **These are model outputs, not Studio playtest times, observed player picks, visual evidence, or multiplayer results.** Reproduce with `luau tests/progression.spec.lua`. The script prints all ten fixed seeds, their exact chosen card IDs/targets, both run timings, and the one-through-six fleet comparison. It uses the actual `Profile`, `Cards`, `Feel`, `Rules` and `Config` modules; it does not run the Roblox engine or substitute a separate economy implementation.

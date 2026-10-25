@@ -47,12 +47,12 @@ end)
 test('Blue wide speed affects all only Blue at additive base',function()
  local p=funded();ready(p);P.prestige(p,'p1',p.run.id,{atDepot=true,confirmed=true});ready(p);P.prestige(p,'p2',p.run.id,{atDepot=true,confirmed=true});ready(p);P.prestige(p,'p3',p.run.id,{atDepot=true,confirmed=true})
  p.run.cards={entry('C01'),entry('F02')}
- for _,d in ipairs(p.fleet) do near(C.stats(p,d).maxStep60,d.base.maxStep60*(d.type=='Blue' and 2.2 or 1.2)) end
+ for _,d in ipairs(p.fleet) do near(C.stats(p,d).maxStep60,d.base.maxStep60*(d.type=='Blue' and 2.3 or 1.3)) end
 end)
 test('named startup halves warmup alone, never active damage',function()
  local p=funded();local d=p.fleet[1];local base=C.stats(p,d);p.run.cards={entry('D05',d.id)};local a=C.stats(p,d)
  near(a.warmup,base.warmup/2);near(a.miningDPS,base.miningDPS);near(a.combatDPS,base.combatDPS)
- table.insert(p.run.cards,entry('F07'));near(C.stats(p,d).warmup,d.base.warmup/2.3)
+ table.insert(p.run.cards,entry('F07'));near(C.stats(p,d).warmup,d.base.warmup/2.5)
 end)
 test('run mods remain on same permanent ID through reprint/reload',function()
  local p=funded();local id=p.fleet[1].id;p.run.cards={entry('D05',id),entry('C01')};local stats=C.stats(p,p.fleet[1])
@@ -131,3 +131,88 @@ test('signature upgrades expose bounded distinct mechanics and survive saved off
  for _,c in ipairs(o.choices) do assert(c.headline and c.purpose and c.tradeoff and c.stackText and c.category);for _,line in ipairs(c.preview) do assert(line.label~='Flight / 60Hz') end end
 end)
 print(passed..' TOTAL cards tests passed')
+test('every fresh visible pack offers combat economy and an early signature mechanic',function()
+ local combatKeys={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true,finisher=true,salvage=true,chain=true}
+ local economicKeys={mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true}
+ local signatureKeys={finisher=true,geode=true,salvage=true,chain=true,fork=true,shield=true,crit=true}
+ for seed=1,80 do
+  local p=funded(seed)
+  for pack=1,5 do
+   local ok,o=buy(p,'variety:'..pack);eq(ok,true)
+   local combat,economic,special=false,false,false
+   for _,c in ipairs(o.choices) do for key,n in pairs(c.effects) do if n>0 then
+    combat=combat or combatKeys[key] or false;economic=economic or economicKeys[key] or false;special=special or signatureKeys[key] or false
+   end end end
+   assert(combat,'No guarded-field answer in seed '..seed..' pack '..pack);assert(economic,'No economy answer in seed '..seed..' pack '..pack)
+   if pack<=3 then assert(special,'No signature in early pack '..pack) end
+   eq(C.select(p,o.id,(pack-1)%3+1,'take:'..pack,p.run.id,{atDepot=true}),true)
+  end
+ end
+end)
+test('combo builds change finite stats with explicit costs and one target',function()
+ local p=funded();ready(p);P.prestige(p,'new-red',p.run.id,{atDepot=true,confirmed=true})
+ local blue,red=p.fleet[1],p.fleet[2]
+ p.run.cards={entry('D17',blue.id),entry('D18',blue.id)}
+ local b,r=C.stats(p,blue),C.stats(p,red)
+ near(b.combatDPS,blue.base.combatDPS*1.6*1.5);near(b.finisherMultiplier,1.5);near(b.maxStep60,blue.base.maxStep60*.85);near(b.miningDPS,blue.base.miningDPS*.8)
+ near(r.combatDPS,red.base.combatDPS);near(r.miningDPS,red.base.miningDPS)
+ p.run.cards={entry('F10'),entry('F11'),entry('D19',blue.id),entry('D20',blue.id)}
+ b,r=C.stats(p,blue),C.stats(p,red)
+ near(b.geodeMultiplier,1.6);near(b.forkFraction,.2);near(b.forkRange,12);near(b.maxHealth,blue.base.maxHealth*1.10)
+ near(b.yieldMultiplier,1.35);near(r.yieldMultiplier,1.15);eq(C.capacity(p),144);near(r.damageReduction,.1)
+ local loaded=assert(P.migrate(p,44));assert(same(p.run.cards,loaded.run.cards));eq(P.validate(loaded,44),true)
+end)
+test('saved content v2 offer keeps original weaker numbers through catalog upgrade',function()
+ local p=funded();p.run.packIndex=1;p.run.credits=920
+ local original={id=p.run.id..':pack:1',runId=p.run.id,contentVersion=2,packIndex=1,price=80,choices={
+  {cardId='F01',title='Sharper Beams',scope='Fleet',effects={mining=.15}},
+  {cardId='F06',title='Cargo Lattice',scope='Player',effects={capacity=.25}},
+  {cardId='D05',title='Instant Ignition',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1}},
+ }}
+ p.run.pendingOffer=P.clone(original)
+ local loaded=assert(P.migrate(p,44));local ok,o=buy(loaded,'reopen-old');eq(ok,true);assert(same(o,original));eq(loaded.run.credits,920)
+ eq(C.select(loaded,o.id,1,'take-old',loaded.run.id,{atDepot=true}),true)
+ near(C.stats(loaded,loaded.fleet[1]).miningDPS,loaded.fleet[1].base.miningDPS*1.15);eq(loaded.run.cards[1].effects.mining,.15)
+end)
+test('unused secondary reach does not qualify as a useful upgrade',function()
+ local catalog=C.CATALOG;C.CATALOG={{cardId='test-reach',title='Dormant Range',scope='Fleet',effects={chain=16,forkRange=6}}}
+ local p=funded();local ok,o=buy(p,'no-dormant');C.CATALOG=catalog
+ eq(ok,true);for _,c in ipairs(o.choices) do assert(c.cardId~='test-reach') end
+end)
+test('every negative effect is disclosed in the saved tradeoff field',function()
+ local all={};for _,c in ipairs(C.CATALOG) do all[c.cardId]=true end
+ local seen={}
+ for seed=1,160 do
+  local p=funded(seed);local ok,o=buy(p,'disclosure');eq(ok,true)
+  for _,c in ipairs(o.choices) do
+   seen[c.cardId]=true
+   for _,n in pairs(c.effects) do if n<0 then assert(c.tradeoff and c.tradeoff~='No stat penalty',c.cardId..' omitted its cost');assert(string.find(c.tradeoff,tostring(-n*100)..'%%'),c.cardId..' omitted its exact cost') end end
+  end
+ end
+ -- These new signatures all reach real offers, rather than remaining dead data.
+ for _,id in ipairs({'F10','F11','D17','D18','D19','D20'}) do assert(all[id] and seen[id],'Never offered '..id) end
+end)
+print(passed..' UPGRADE cards tests passed')
+test('Burst Splash trades arc fraction for direct damage at useful paired-guard reach',function()
+ local p=funded();local d=p.fleet[1]
+ p.run.cards={entry('D09',d.id)};local burst=C.stats(p,d)
+ near(burst.combatDPS,d.base.combatDPS*1.20);near(burst.splashFraction,.15);near(burst.splashRange,22)
+ p.run.cards={entry('D16',d.id)};local relay=C.stats(p,d)
+ near(relay.combatDPS,d.base.combatDPS);near(relay.splashFraction,.25);near(relay.splashRange,22)
+ table.insert(p.run.cards,entry('D09',d.id));local both=C.stats(p,d)
+ near(both.combatDPS,burst.combatDPS);near(both.splashFraction,.25);near(both.splashRange,22)
+end)
+print(passed..' ARC cards tests passed')
+test('fleet preview selects a changed drone when the first fleet member is capped',function()
+ local p=funded();ready(p);P.prestige(p,'next',p.run.id,{atDepot=true,confirmed=true});p.run.credits=1000000
+ local blue,red=p.fleet[1],p.fleet[2]
+ p.run.cards={{cardId='capped-first',scope='Individual',targetDroneId=blue.id,effects={mining=3}}}
+ local catalog=C.CATALOG;C.CATALOG={entry('F01'),entry('F06'),entry('F03'),entry('D11',blue.id)}
+ local ok,o=buy(p,'preview-capped');C.CATALOG=catalog;eq(ok,true)
+ local found=false
+ for _,c in ipairs(o.choices) do if c.cardId=='F01' then
+  found=true;eq(c.previewTargetName,red.name);eq(#c.preview,1);eq(c.preview[1].label,'Mining / sec');near(c.preview[1].before,red.base.miningDPS);near(c.preview[1].after,red.base.miningDPS*1.25)
+ end end
+ assert(found,'Controlled useful F01 did not reach offer')
+end)
+print(passed..' PREVIEW cards tests passed')

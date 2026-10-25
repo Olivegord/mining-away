@@ -98,7 +98,7 @@ end
 local modalSize=nil
 local function layoutModal()
  local v=viewport();local mobile=v.X<760
- local width=math.min(940,math.max(248,v.X-24));local height=math.min(mobile and 650 or 520,math.max(200,v.Y-32))
+ local width=math.min(940,math.max(248,v.X-24));local height=math.min(mobile and 650 or 570,math.max(200,v.Y-32))
  sheet.Size=UDim2.fromOffset(width,height);sheet.Position=UDim2.new(.5,-width/2,.5,-height/2);modalSize=v
  modalTitle.TextSize=width<380 and 19 or 23
  return mobile,width
@@ -120,7 +120,7 @@ local function previewLines(choice)
     if unit~='%' and (title=='Turret resistance' or title=='Critical chance' or title=='Combat splash' or title=='Mining fork') then before=before*100;after=after*100;unit='%' end
     if title=='Shared cargo' then title='Cargo';unit=' ore' end
     table.insert(result,title..'  '..number(before)..' → '..number(after)..unit)
-    if #result==3 then break end
+    if #result==4 then break end
    end
   end
  end
@@ -154,7 +154,7 @@ openOffer=function()
  local mobile,width=layoutModal();local cardWidth=mobile and width-48 or (width-76)/3
  local list=Instance.new('UIListLayout');list.FillDirection=mobile and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal;list.Padding=UDim.new(0,14);list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local card=frame(body,UDim2.fromOffset(0,0),UDim2.fromOffset(cardWidth,394),palette.panel);card.LayoutOrder=index;corner(card,3);stroke(card)
+  local card=frame(body,UDim2.fromOffset(0,0),UDim2.fromOffset(cardWidth,440),palette.panel);card.LayoutOrder=index;corner(card,5);stroke(card)
   local category=categoryText(choice);local tint=colors[choice.type] or ((category=='COMBAT' or category=='SURVIVAL') and palette.accent or palette.mineral)
   frame(card,UDim2.fromOffset(0,0),UDim2.new(1,0,0,3),tint)
   label(card,UDim2.fromOffset(14,14),UDim2.new(1,-50,0,15),category,10,tint,true)
@@ -170,8 +170,10 @@ openOffer=function()
    downside=hasLoss and ('TRADEOFF  '..(choice.description or 'See card effect.')) or 'No stat penalty.'
   end
   local tradeoff=label(card,UDim2.fromOffset(14,235),UDim2.new(1,-28,0,35),downside,11,palette.accent);tradeoff.TextYAlignment=Enum.TextYAlignment.Top
-  local preview=label(card,UDim2.fromOffset(14,273),UDim2.new(1,-28,0,42),previewLines(choice),11,palette.text);preview.TextYAlignment=Enum.TextYAlignment.Top
-  local stacks=label(card,UDim2.fromOffset(14,317),UDim2.new(1,-28,0,30),stackText(choice),10,palette.muted);stacks.TextYAlignment=Enum.TextYAlignment.Top
+  local previewName=choice.previewTargetName or choice.targetName
+  label(card,UDim2.fromOffset(14,274),UDim2.new(1,-28,0,16),previewName and ('STATS  /  '..previewName) or 'YOUR CURRENT STATS',10,palette.muted,true)
+  local preview=label(card,UDim2.fromOffset(14,296),UDim2.new(1,-28,0,60),previewLines(choice),11,palette.text);preview.TextYAlignment=Enum.TextYAlignment.Top
+  local stacks=label(card,UDim2.fromOffset(14,363),UDim2.new(1,-28,0,29),stackText(choice),10,palette.muted);stacks.TextYAlignment=Enum.TextYAlignment.Top
   local choose
   choose=button(card,UDim2.new(0,14,1,-46),UDim2.new(1,-28,0,34),'Take this card',function()
    if not pending() or pending().id~=offer.id then return end

@@ -139,6 +139,8 @@ local function spawnResource(field,forceKind)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
+ local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Include;clearance.FilterDescendantsInstances={scene.map}
+ local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local spot
  for _=1,18 do
   local inset=kind=='Geode' and 6 or 3
@@ -149,6 +151,14 @@ local function spawnResource(field,forceKind)
    for _,t in ipairs(field.turrets) do
     if (Vector3.new(candidate.X,0,candidate.Z)-Vector3.new(t.body.Position.X,0,t.body.Position.Z)).Magnitude<(kind=='Geode' and 9 or 7) then valid=false;break end
    end
+  end
+  if valid then
+   -- Query only the map's solid scenery, above the complete crystal volume.
+   -- Decorative parts are non-queryable; field beds/nodes/guards are outside
+   -- this filter. Start above the current cliffs so an inside-origin ray cannot
+   -- miss an outcrop that would bury the resource. Sampling remains bounded.
+   local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)
+   if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then valid=false end
   end
   if valid then spot=candidate;break end
  end
