@@ -1,20 +1,39 @@
-"""Verify exact binary preservation and deterministic, fail-closed builds."""
+"""Verify deterministic builds, original instance preservation and native Lighting import."""
 import hashlib,pathlib,sys,tempfile
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'tools'))
 from build import build,chunks,u32,string,ROOT,bundle
+from import_lighting import refs,words
 original=ROOT/'assets/mining-away-base.rbxl'
+
+def key(k,d):
+ if k==b'PROP':return k,u32(d),string(d,4)[0]
+ if k==b'INST':return k,u32(d)
+ return (k,)
+
+def parents(cs):
+ d=next(d for k,d,_ in cs if k==b'PRNT');n=u32(d,1)
+ return dict(zip(refs(d[5:5+n*4],n),refs(d[5+n*4:],n)))
+
 with tempfile.TemporaryDirectory() as tmp:
  tmp=pathlib.Path(tmp);a=tmp/'a.rbxl';b=tmp/'b.rbxl'
+ checksum=hashlib.sha256(original.read_bytes()).hexdigest()
  build(original,a);build(original,b)
- assert a.read_bytes()==b.read_bytes();print('PASS binary deterministic build')
+ assert a.read_bytes()==b.read_bytes();print('PASS binary deterministic native-Lighting build')
  old=list(chunks(original.read_bytes()));new=list(chunks(a.read_bytes()))
- assert len(old)==len(new)
+ lookup={key(k,d):(d,raw) for k,d,raw in new}
  changes=[]
- for (k,d,raw),(nk,nd,nraw) in zip(old,new):
-  assert k==nk
+ for k,d,raw in old:
+  nd,nraw=lookup[key(k,d)]
+  if k in (b'SSTR',b'PRNT'):continue
   if raw!=nraw:
    assert k==b'PROP';cid=u32(d);name,p=string(d,4);assert cid in (39,66) and name in ('Source','Disabled');changes.append((cid,name))
- assert len(changes)==4;print('PASS binary all asset, hierarchy and other property chunks byte-identical')
+ assert len(changes)==4
+ old_parents,new_parents=parents(old),parents(new)
+ assert all(new_parents[k]==v for k,v in old_parents.items())
+ old_shared=next(d for k,d,_ in old if k==b'SSTR');new_shared=next(d for k,d,_ in new if k==b'SSTR')
+ assert new_shared[8:8+len(old_shared)-8]==old_shared[8:]
+ assert hashlib.sha256(original.read_bytes()).hexdigest()==checksum
+ print('PASS binary every original instance parent and asset/property payload preserved except four controller properties')
  for k,d,raw in new:
   if k!=b'PROP':continue
   cid=u32(d);prop,p=string(d,4);typ=d[p];p+=1
@@ -25,10 +44,44 @@ with tempfile.TemporaryDirectory() as tmp:
    vals=[]
    while p<len(d):v,p=string(d,p);vals.append(v)
    assert vals[2]==bundle()
- print('PASS binary only new server and client entrypoints enabled, sources round-trip')
+ print('PASS binary historical controllers disabled and server source round-trips')
+ native=list(chunks((ROOT/'reference/alabaster-harbor/Lighting.rbxm').read_bytes()))
+ max_cid=max(u32(d) for k,d,_ in old if k==b'INST');class_offset=max_cid+1
+ ref_offset=max(old_parents)+1;shared_offset=u32(old_shared,4)
+ native_classes={}
+ for k,d,_ in native:
+  if k==b'INST':
+   cid=u32(d);name,p=string(d,4);native_classes[cid]=u32(d,p+1)
+  elif k==b'PROP':
+   cid=u32(d);name,p=string(d,4);nd,_=lookup[(k,cid+class_offset,name)];_,np=string(nd,4)
+   assert d[p]==nd[np]
+   value,nvalue=d[p+1:],nd[np+1:];n=native_classes[cid]
+   if d[p]==0x13:assert refs(nvalue,n)==[r+ref_offset if r>=0 else r for r in refs(value,n)]
+   elif d[p]==0x1c:assert words(nvalue,n)==[r+shared_offset for r in words(value,n)]
+   else:assert value==nvalue,(cid,name)
+ for name,typ,value in [('LightingStyle',0x12,b'\0'*4),('PrioritizeLightingQuality',2,b'\1')]:
+  d,_=lookup[(b'PROP',38,name)];_,p=string(d,4);assert d[p]==typ and d[p+1:]==value
+ print('PASS binary all native Harbor sky/effects/UI/script properties imported, references rebased, render settings persisted')
+ # Verify the actual third-party skinned meshes and every bind/bone property.
+ from import_foliage import prepare
+ from build import client_bundle
+ prepared=list(chunks(prepare((ROOT/'reference/skinned-grass/SkinnedGrass.rbxm').read_bytes(),ROOT/'reference/skinned-grass/src')))
+ next_cid=max(u32(d) for k,d,_ in new if k==b'INST')-max(u32(d) for k,d,_ in prepared if k==b'INST')
+ grass_classes={}
+ for k,d,_ in prepared:
+  if k==b'INST':
+   cid=u32(d);cls,p=string(d,4);grass_classes[cid]=(cls,u32(d,p+1))
+  if k==b'PROP':
+   cid=u32(d);prop,p=string(d,4);typ=d[p]
+   nd,_=lookup[(k,cid+next_cid,prop)];_,np=string(nd,4)
+   if typ not in (0x13,0x1c):assert d[p:]==nd[np:],('grass property',cid,prop)
+   if grass_classes[cid][0]=='Script' and prop=='Disabled':assert nd[np+1:]==b'\1'*grass_classes[cid][1]
+ assert sum(n for cls,n in grass_classes.values() if cls=='Bone')==200
+ assert 'local Foliage' in client_bundle() and 'Foliage.new(world,localFX)' in client_bundle()
+ print('PASS binary original SkinnedGrass rig/mesh properties and reviewed source imported; all demo runners disabled')
  bad=tmp/'bad.rbxl';bad.write_bytes(b'not a place')
  try:build(bad,tmp/'bad-output.rbxl')
  except AssertionError:pass
  else:raise AssertionError('unverified input accepted')
  print('PASS binary unverified input rejected')
-print('4 binary build tests passed')
+print('6 binary build tests passed; engine load is checked separately')

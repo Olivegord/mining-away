@@ -204,25 +204,11 @@ local function surveyGate(parent,at,color)
  end
  block(m,'GateLintel',at+Vector3.new(0,7.5,0),Vector3.new(18,1.15,3),P.ivory,Enum.Material.SmoothPlastic)
 end
-local function lighting()
- local l=game:GetService('Lighting')
- l.ClockTime=13.8;l.GeographicLatitude=24;l.Brightness=2.4;l.ExposureCompensation=.05
- l.Ambient=Color3.fromRGB(95,126,143);l.OutdoorAmbient=Color3.fromRGB(153,176,181)
- l.ColorShift_Top=Color3.fromRGB(255,231,197);l.ColorShift_Bottom=Color3.fromRGB(84,133,148)
- l.EnvironmentDiffuseScale=.8;l.EnvironmentSpecularScale=.3;l.GlobalShadows=true;l.ShadowSoftness=.4
- l.FogColor=Color3.fromRGB(174,209,207);l.FogStart=150;l.FogEnd=540
- local a=l:FindFirstChildOfClass('Atmosphere') or Instance.new('Atmosphere');a.Name='ReachAtmosphere';a.Density=.22;a.Offset=.18;a.Color=Color3.fromRGB(199,224,215);a.Decay=Color3.fromRGB(104,157,172);a.Glare=.08;a.Haze=1.1;a.Parent=l
- local grade=l:FindFirstChildOfClass('ColorCorrectionEffect') or Instance.new('ColorCorrectionEffect');grade.Name='ReachGrade';grade.Enabled=true;grade.Brightness=.01;grade.Contrast=.12;grade.Saturation=.16;grade.TintColor=Color3.fromRGB(255,248,231);grade.Parent=l
- local bloom=l:FindFirstChildOfClass('BloomEffect') or Instance.new('BloomEffect');bloom.Name='MineralBloom';bloom.Enabled=true;bloom.Intensity=.16;bloom.Size=24;bloom.Threshold=1.9;bloom.Parent=l
- local rays=l:FindFirstChildOfClass('SunRaysEffect') or Instance.new('SunRaysEffect');rays.Name='ReachSun';rays.Intensity=.025;rays.Spread=.7;rays.Parent=l
- for _,v in ipairs(l:GetChildren()) do if v:IsA('DepthOfFieldEffect') then v.Enabled=false end end
- local sky=l:FindFirstChildOfClass('Sky');if sky then sky.SunAngularSize=8;sky.MoonAngularSize=4;sky.StarCount=450 end
-end
 local function cleanSurface(part,archive)
  part.MaterialVariant='';part.Reflectance=0;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  for _,v in ipairs(part:GetChildren()) do if v:IsA('Texture') or v:IsA('Decal') then v.Parent=archive end end
 end
-function W.initialize()
+function W.initialize(): any
  local cfg=Config
  local rs=game:GetService('ReplicatedStorage');local storage=game:GetService('ServerStorage')
  local root=Instance.new('Folder');root.Name='MiningAway';root.Parent=workspace
@@ -270,7 +256,7 @@ function W.initialize()
    end
   end
  end
- lighting()
+ HarborLighting.apply()
  local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),P.ivory:Lerp(P.ledge,.2),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
  -- Flush panel joints and painted corner brackets make one deliberate working yard.
  for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end
@@ -351,14 +337,41 @@ function W.initialize()
  local foliage={Color3.fromRGB(81,174,104),Color3.fromRGB(173,57,49),Color3.fromRGB(64,150,185),Color3.fromRGB(157,103,192),Color3.fromRGB(36,157,110)}
  local soils={Color3.fromRGB(112,171,112),Color3.fromRGB(158,104,83),Color3.fromRGB(103,165,174),Color3.fromRGB(148,129,173),Color3.fromRGB(64,147,107)}
  local terrain=Instance.new('Model');terrain.Name='ConnectedCliffs';terrain.Parent=map
- for _,c in ipairs(plan.terrain) do
-  local rockColor=c.biome==2 and Color3.fromRGB(111,76,70) or P.stone
-  solid(block(terrain,'CliffBody',Vector3.new(c.x,c.h/2,c.z),Vector3.new(c.w,c.h,c.d),rockColor))
-  if c.h>5 then
-   block(terrain,'ChalkStratum',Vector3.new(c.x,c.h*.61,c.z),Vector3.new(c.w+.04,.65,c.d+.04),P.ledge:Lerp(soils[c.biome],.2))
+ local batch=Instance.new('Model');batch.Name='SlopePatch';local facetCells=0
+ for _,cell in ipairs(plan.terrain) do
+  for _,face in ipairs(cell.faces) do
+   local a,b,c=Vector3.new(face[1][1],face[1][2],face[1][3]),Vector3.new(face[2][1],face[2][2],face[2][3]),Vector3.new(face[3][1],face[3][2],face[3][3])
+   local normal=(b-a):Cross(c-a).Unit
+   local steep=math.abs(normal.Y)<.72
+   local color=steep and (cell.biome==2 and Color3.fromRGB(111,76,70) or P.stone) or soils[cell.biome]
+   Facets.triangle(batch,a,b,c,color)
   end
-  block(terrain,'LivingCap',Vector3.new(c.x,c.h+.045,c.z),Vector3.new(c.w,.09,c.d),soils[c.biome])
+  facetCells+=1
+  if facetCells%40==0 then batch.Parent=terrain;task.wait();batch=Instance.new('Model');batch.Name='SlopePatch' end
  end
+ batch.Parent=terrain
+ for _,r in ipairs(plan.rocks) do
+  local m=Instance.new('Model');m.Name='FracturedCliff';m.Parent=terrain
+  local tint=r.biome==2 and Color3.fromRGB(112,76,70) or P.stone
+  stone(m,Vector3.new(r.x,r.y+r.h*.32,r.z),Vector3.new(r.w,r.h*.8,r.d),{-5,r.yaw,4},tint,'CliffButtress')
+  stone(m,Vector3.new(r.x-2,r.y+r.h*.75,r.z+1),Vector3.new(r.w*.72,r.h*.35,r.d*.8),{4,r.yaw+17,-8},tint:Lerp(P.ledge,.18),'BrokenCrown')
+ end
+ -- Replicate lightweight planting markers. Rigged meshes and animation live
+ -- entirely on each client; grass never changes gameplay collision/query state.
+ local planting=Instance.new('Folder');planting.Name='FoliagePatches'
+ for i,g in ipairs(plan.grass) do
+  local marker=Instance.new('Vector3Value');marker.Name=string.format('Patch%03d',i)
+  marker.Value=Vector3.new(g.x,g.y,g.z);marker:SetAttribute('Width',g.w)
+  -- Four corners let the client ground every blade on the actual slope.
+  marker:SetAttribute('H00',plan:surface(g.x-g.w/2,g.z-g.d/2))
+  marker:SetAttribute('H10',plan:surface(g.x+g.w/2,g.z-g.d/2))
+  marker:SetAttribute('H01',plan:surface(g.x-g.w/2,g.z+g.d/2))
+  marker:SetAttribute('H11',plan:surface(g.x+g.w/2,g.z+g.d/2))
+  marker:SetAttribute('Depth',g.d);marker.Parent=planting
+ end
+ planting.Parent=root
+ root:SetAttribute('NativeGrassPatches',0);root:SetAttribute('SkinnedGrassPatches',#plan.grass)
+ root:SetAttribute('TerrainStyle','Irregular slopes and fractured cliffs')
  local function v(a) return Vector3.new(unpack(a)) end
  local routes=Instance.new('Model');routes.Name='WindingRoutes';routes.Parent=map
  for _,r in ipairs(plan.routes) do

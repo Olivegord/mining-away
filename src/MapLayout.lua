@@ -52,12 +52,12 @@ function L.rounded(route)
  table.insert(result,route.points[#route.points])
  return result
 end
-function L.plan(config,home): any
+function L.plan(config: any,home: any): any
  home=home or {-56,.5,-11}
  local dx,dy,dz=home[1]+56,home[2]-.5,home[3]+11
  local p={fields={},routes={},terrain={},cells={},trees={},dx=dx,dy=dy,dz=dz}
- function p:point(x,z) return -56+(x+56)*L.Scale+dx,-11+(z+11)*L.Scale+dz end
- function p:biomePoint(id,x,z)
+ function p:point(x: number,z: number) return -56+(x+56)*L.Scale+dx,-11+(z+11)*L.Scale+dz end
+ function p:biomePoint(id: number,x: number,z: number)
   local f=self.fields[id];local base=config[id].Offset
   local ox,oz=-56+base[1]/L.Scale,-11+base[3]/L.Scale
   return f.x+(x-ox)*L.FieldScale,f.z+(z-oz)*L.FieldScale
@@ -93,61 +93,103 @@ function L.plan(config,home): any
   for _,f in ipairs(self.fields) do if math.abs(x-f.x)<f.w/2+radius and math.abs(z-f.z)<f.d/2+radius then return false end end
   return true
  end
+ local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
+ local function mound(x,z,cx,cz,rx,rz,h)
+  local d=math.sqrt(((x-cx)/rx)^2+((z-cz)/rz)^2)
+  return h*(1-smooth((d-.15)/.85))
+ end
  local function height(x,z)
-  local h,biome=0,1
-  -- Overlapping land masses form one valley. Paths cut through them below,
-  -- while the Ruby backing rises in successively steeper shelves.
-  if x<-59 and z>16 then h=math.max(4,math.min(58,(z-17)*.67+(math.max(0,-x-107))*.8));biome=2 end
-  if z<-29 and x<-24 then h=math.max(h,math.min(44,(-z-28)*.66));biome=3 end
-  if z<-24 and x>=-24 then h=math.max(h,math.min(57,24+(-z-24)*.6));biome=4 end
-  if x>0 and z>=-24 then h=math.max(h,math.max(0,math.min(44,x*2.2)-math.max(0,z-27)*.85));biome=5 end
-  -- Irregular outer perimeter, rather than a rectangular artificial island.
-  if ((x+26)/109)^2+((z+3)/106)^2>1.08 then return 0,biome end
-  h=math.floor(h/4)*4
-  return h,biome
+  local h=math.max(
+   mound(x,z,-99,78,37,31,51),mound(x,z,-117,47,21,39,30),mound(x,z,-73,86,22,23,40),
+   mound(x,z,-64,-79,47,38,36),mound(x,z,-92,-86,24,25,47),
+   mound(x,z,14,-86,47,35,58),mound(x,z,-3,-55,37,38,35),
+   mound(x,z,57,-18,35,53,49),mound(x,z,35,12,39,37,43),mound(x,z,10,38,32,37,28))
+  -- Small broad undulations break up regular silhouettes without noisy spikes.
+  h=math.max(0,h+(math.sin(x*.089+z*.047)*2.8+math.cos(z*.13-x*.04)*1.8)*math.min(1,h/12))
+  local edge=math.min(x-L.Origin[1],L.Origin[1]+L.Columns*L.Cell-x,z-L.Origin[2],L.Origin[2]+L.Rows*L.Cell-z)
+  return h*smooth(edge/14)
  end
- for iz=0,L.Rows-1 do
-  local row={}
-  for ix=0,L.Columns-1 do
-   local rawX,rawZ=L.Origin[1]+(ix+.5)*L.Cell,L.Origin[2]+(iz+.5)*L.Cell
-   local x,z=p:point(rawX,rawZ)
-   local h,biome=height(rawX,rawZ);h=h+dy
-   -- A cell's circumscribed radius conservatively clears every ramp, bend
-   -- and field. This prevents invisible walls from cutting through walkways.
-   local radius=L.Cell*L.Scale/math.sqrt(2)
-   for _,r in ipairs(p.routes) do for i=1,#r.samples-1 do
-    local dist,y=distance(x,z,r.samples[i],r.samples[i+1])
-    if dist<r.width/2+radius+2 then
-     local a,b=r.samples[i],r.samples[i+1]
-     local gradient=math.abs(b[2]-a[2])/math.sqrt((b[1]-a[1])^2+(b[3]-a[3])^2)
-     h=math.min(h,y-radius*gradient-.5)
-    end
-   end end
-   for _,f in ipairs(p.fields) do if math.abs(x-f.x)<f.w/2+L.Cell*L.Scale/2+2 and math.abs(z-f.z)<f.d/2+L.Cell*L.Scale/2+2 then h=math.min(h,f.top-2.1) end end
-   -- The depot, original Converter and connecting lane stay on original ground.
-   if not p:hubClear(x,z,L.Cell*L.Scale/2) then h=0 end
-   if math.abs(x-(-86+dx))<11 and math.abs(z-(-37.5+dz))<15 then h=0 end
-   local mineX,mineZ=p:biomePoint(2,-88,66)
-   if math.abs(x-mineX)<12+L.Cell*L.Scale/2 and math.abs(z-mineZ)<9+L.Cell*L.Scale/2 then h=math.min(h,12.5+dy) end
-   h=math.max(0,math.floor(h*2)/2)
-   local cell={x=x,z=z,h=h,biome=biome,w=L.Cell*L.Scale,d=L.Cell*L.Scale};row[ix+1]=cell;p.cells[iz*L.Columns+ix+1]=cell
+ local step=L.Cell*L.Scale
+ local radius=step*math.sqrt(2)
+ local vertices={}
+ local function vertex(ix,iz) return vertices[iz*(L.Columns+1)+ix+1] end
+ for iz=0,L.Rows do for ix=0,L.Columns do
+  local rawX,rawZ=L.Origin[1]+ix*L.Cell,L.Origin[2]+iz*L.Cell
+  local x,z=p:point(rawX,rawZ);local h=height(rawX,rawZ)+dy
+  -- Broad level field shoulders give way to forested slopes, then outer cliffs.
+  local nearest,biome=math.huge,1
+  for id,f in ipairs(p.fields) do
+   local fieldDistance=math.max(math.abs(x-f.x)-f.w/2,math.abs(z-f.z)-f.d/2,0)
+   if fieldDistance<nearest then nearest=fieldDistance;biome=id end
+   if fieldDistance<28 then
+    local mix=smooth(fieldDistance/28)
+    h=h*mix+math.max(0,f.top-2.1)*(1-mix)
+   end
+   -- Entire triangles that touch a clearing stay below its ore surface.
+   if math.abs(x-f.x)<f.w/2+step+2 and math.abs(z-f.z)<f.d/2+step+2 then h=math.min(h,f.top-2.1) end
   end
-  -- Merge equal adjacent cells into long strata. No visible grid seams.
-  local start=1
-  while start<=#row do
-   local last=start
-   while last<#row and row[last+1].h==row[start].h and row[last+1].biome==row[start].biome do last=last+1 end
-   local c=row[start]
-   if c.h>.5 then table.insert(p.terrain,{x=(c.x+row[last].x)/2,z=c.z,h=c.h,biome=c.biome,w=(last-start+1)*L.Cell*L.Scale,d=L.Cell*L.Scale}) end
-   start=last+1
+  -- Conservative vertex clearance also clears triangle interiors between vertices.
+  for _,r in ipairs(p.routes) do for i=1,#r.samples-1 do
+   local d,y=distance(x,z,r.samples[i],r.samples[i+1])
+   if d<r.width/2+radius+2 then
+    local a,b=r.samples[i],r.samples[i+1]
+    local gradient=math.abs(b[2]-a[2])/math.sqrt((b[1]-a[1])^2+(b[3]-a[3])^2)
+    h=math.min(h,y-radius*gradient-.55)
+   end
+  end end
+  if not p:hubClear(x,z,radius) then h=0 end
+  if math.abs(x-(-86+dx))<12+radius and math.abs(z-(-37.5+dz))<12+radius then h=0 end
+  local mx,mz=p:biomePoint(2,-88,66)
+  if math.abs(x-mx)<12+step and math.abs(z-mz)<9+step then h=math.min(h,12.5+dy) end
+  vertices[iz*(L.Columns+1)+ix+1]={x,math.max(0,h),z,biome}
+ end end
+ p.vertices=vertices
+ for iz=0,L.Rows-1 do for ix=0,L.Columns-1 do
+  local a,b,c,d=vertex(ix,iz),vertex(ix+1,iz),vertex(ix+1,iz+1),vertex(ix,iz+1)
+  local cell={a=a,b=b,c=c,d=d,alternate=(ix+iz)%2==1,h=math.max(a[2],b[2],c[2],d[2]),biome=a[4]}
+  p.cells[iz*L.Columns+ix+1]=cell
+  if cell.h>.05 then
+   cell.faces=cell.alternate and {{a,b,c},{a,c,d}} or {{a,b,d},{b,c,d}}
+   table.insert(p.terrain,cell)
   end
- end
- function p:surface(x,z)
+ end end
+ function p:surface(x: number,z: number)
   local ox,oz=self:point(L.Origin[1],L.Origin[2])
-  local ix=math.floor((x-ox)/(L.Cell*L.Scale));local iz=math.floor((z-oz)/(L.Cell*L.Scale))
-  local cell=ix>=0 and ix<L.Columns and iz>=0 and iz<L.Rows and self.cells[iz*L.Columns+ix+1]
-  return cell and cell.h or 0
+  local ix,iz=math.floor((x-ox)/step),math.floor((z-oz)/step)
+  if ix<0 or ix>=L.Columns or iz<0 or iz>=L.Rows then return 0 end
+  local c=self.cells[iz*L.Columns+ix+1]
+  local u,v=(x-ox)/step-ix,(z-oz)/step-iz
+  local a,b,d,e=c.a[2],c.b[2],c.c[2],c.d[2]
+  if c.alternate then
+   if v<=u then return a+(b-a)*(u-v)+(d-a)*v end
+   return a+(d-a)*u+(e-a)*(v-u)
+  end
+  if u+v<=1 then return a+(b-a)*u+(e-a)*v end
+  return d+(e-d)*(1-u)+(b-d)*(1-v)
  end
+ -- Rock faces are short irregular clusters, never global horizontal bands.
+ p.rocks={}
+ for i,r in ipairs({{-119,72,16,11,12,17},{-99,91,22,14,15,-11},{-69,88,15,18,14,24},
+  {-94,-86,21,14,17,-13},{-64,-99,24,12,15,19},{8,-95,23,18,17,-16},
+  {39,-81,18,12,16,26},{60,-63,16,17,13,-19},{70,-16,15,18,17,12},{58,40,20,13,14,-23}}) do
+  local x,z=p:point(r[1],r[2]);local clearance=math.sqrt(r[3]^2+r[5]^2)/2+2
+  if p:hubClear(x,z,clearance) and p:routeClear(x,z,clearance) and p:fieldClear(x,z,clearance) then
+   table.insert(p.rocks,{x=x,z=z,y=p:surface(x,z),w=r[3],h=r[4],d=r[5],yaw=r[6],biome=i<=3 and 2 or 3})
+  end
+ end
+ -- Rigged grass lives only in small, gently sloping shoulder patches.
+ p.grass={}
+ for x=-170,180,12 do for z=-165,180,12 do
+  if p:hubClear(x,z,9) and p:fieldClear(x,z,10) and p:routeClear(x,z,10) then
+   local h=p:surface(x,z)
+   local slope=math.max(math.abs(p:surface(x+5,z)-h),math.abs(p:surface(x-5,z)-h),math.abs(p:surface(x,z+5)-h),math.abs(p:surface(x,z-5)-h))
+   local nearField=false
+   for _,f in ipairs(p.fields) do if math.abs(x-f.x)<f.w/2+42 and math.abs(z-f.z)<f.d/2+42 then nearField=true end end
+   if nearField and slope<.45 and math.sin(x*.17)+math.cos(z*.11)>.25 then
+    table.insert(p.grass,{x=x,z=z,y=h,w=8,d=8})
+   end
+  end
+ end end
  for i,t in ipairs(L.Trees) do
   local x,z=p:biomePoint(t[4],t[1],t[2])
   if p:hubClear(x,z,t[3]*.3) and p:routeClear(x,z,3) and p:fieldClear(x,z,t[3]*.27) then

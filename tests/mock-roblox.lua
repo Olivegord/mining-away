@@ -14,6 +14,7 @@ VM.__unm=function(a) return setmetatable({X=-a.X,Y=-a.Y,Z=-a.Z},VM) end
 VM.__mul=function(a,b) if type(a)=='number' then a,b=b,a end;return setmetatable({X=a.X*b,Y=a.Y*b,Z=a.Z*b},VM) end
 VM.__div=function(a,b) return a*(1/b) end
 function VM:Lerp(b,t) return self+(b-self)*t end
+function VM:Cross(b) return setmetatable({X=self.Y*b.Z-self.Z*b.Y,Y=self.Z*b.X-self.X*b.Z,Z=self.X*b.Y-self.Y*b.X},VM) end
 function VM:Dot(b) return self.X*b.X+self.Y*b.Y+self.Z*b.Z end
 local Vector3={new=function(x,y,z) return setmetatable({X=x or 0,Y=y or 0,Z=z or 0},VM) end};Vector3.zero=Vector3.new();Vector3.one=Vector3.new(1,1,1)
 local Vector2={new=function(x,y) return {X=x,Y=y} end}
@@ -21,6 +22,7 @@ local CF={}
 CF.__index=function(c,k) if k=='LookVector' then return Vector3.new(-math.sin(c.yaw),0,-math.cos(c.yaw)) elseif k=='Rotation' then return setmetatable({Position=Vector3.zero,yaw=c.yaw},CF) else return CF[k] end end
 local CFrame={}
 function CFrame.new(x,y,z) return setmetatable({Position=getmetatable(x)==VM and x or Vector3.new(x,y,z),yaw=0},CF) end
+function CFrame.fromMatrix(position,_,_,back) local c=CFrame.new(position);c.yaw=math.atan2(back.X,back.Z);return c end
 function CFrame.Angles(_,y,_) return setmetatable({Position=Vector3.zero,yaw=y or 0},CF) end
 function CFrame.lookAt(x,y) local d=y-x;local c=CFrame.new(x);c.yaw=math.atan2(-d.X,-d.Z);return c end
 function CF:PointToWorldSpace(v) return self.Position+Vector3.new(v.X*math.cos(self.yaw)+v.Z*math.sin(self.yaw),v.Y,-v.X*math.sin(self.yaw)+v.Z*math.cos(self.yaw)) end
@@ -56,7 +58,7 @@ function Instance.new(class)
 end
 function IM:Play() self.Playing=true end
 function IM:IsA(c)
- return c==self.ClassName or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='SpawnLocation' or self.ClassName=='MeshPart' or self.ClassName=='UnionOperation')) or (c=='LuaSourceContainer' and (self.ClassName=='Script' or self.ClassName=='LocalScript' or self.ClassName=='ModuleScript'))
+ return c==self.ClassName or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='SpawnLocation' or self.ClassName=='MeshPart' or self.ClassName=='UnionOperation' or self.ClassName=='WedgePart')) or (c=='LuaSourceContainer' and (self.ClassName=='Script' or self.ClassName=='LocalScript' or self.ClassName=='ModuleScript'))
 end
 function IM:GetChildren() return table.clone(self._children) end
 function IM:GetDescendants() local a={};for _,c in ipairs(self._children) do table.insert(a,c);for _,d in ipairs(c:GetDescendants()) do table.insert(a,d) end end;return a end
@@ -151,6 +153,11 @@ end
 fixturePart(workspace,'SpawnLocation',Vector3.new(-56,.5,-11),Vector3.new(6,1,6),'SpawnLocation')
 fixturePart(workspace,'Baseplate',Vector3.new(0,-1,0),Vector3.new(512,2,512))
 fixturePart(workspace,'Converter',Vector3.new(-50,1,-6),Vector3.new(6,2,6))
+local harborTemplate=Instance.new('Folder');harborTemplate.Name='AlabasterHarborLighting';harborTemplate.Parent=serverStorage
+for _,v in ipairs({{'Sky','Sunless Blue Sky'},{'Atmosphere','Atmosphere'},{'BloomEffect','Bloom'},{'ColorCorrectionEffect','ColorCorrection'},{'DepthOfFieldEffect','DepthOfField'},{'SunRaysEffect','SunRays'},{'BlurEffect','Blur'}}) do local n=Instance.new(v[1]);n.Name=v[2];n.Parent=harborTemplate end
+local nativeTerrain=Instance.new('Terrain');nativeTerrain.Parent=workspace
+function nativeTerrain:FillBlock(_,_,_) end
+function nativeTerrain:SetMaterialColor(_,_) end
 local originalPatches=Instance.new('Folder');originalPatches.Name='Patches';originalPatches.Parent=workspace
 fixturePart(originalPatches,'rubyPatch',Vector3.new(-89,12,55),Vector3.new(30,2,30))
 fixturePart(originalPatches,'cobaltPatch',Vector3.new(-49,.5,-85),Vector3.new(34,2,34))

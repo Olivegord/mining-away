@@ -14,7 +14,7 @@ subprocess.run([str(luau/'luau'),str(f)],check=True)
 
 # Standalone Luau has no Roblox type definitions. Host bindings are explicitly any;
 # this catches misspelled globals and normal lint errors, not API contract mistakes.
-hosts=['game','workspace','Instance','Vector3','Vector2','CFrame','Color3','UDim2','UDim','TweenInfo','Enum','ColorSequence','NumberSequence','NumberSequenceKeypoint','NumberRange','RaycastParams','task','Random','typeof']
+hosts=['game','workspace','Instance','Vector3','Vector2','CFrame','Color3','UDim2','UDim','TweenInfo','Enum','ColorSequence','NumberSequence','NumberSequenceKeypoint','NumberRange','RaycastParams','task','Random','typeof','warn']
 with tempfile.TemporaryDirectory() as tmp:
  for name,source in [('server',bundle()),('client',client_bundle())]:
   used=[h for h in hosts if re.search(r'\b'+h+r'\b',source)]
