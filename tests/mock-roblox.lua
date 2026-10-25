@@ -93,7 +93,7 @@ function workspace:GetServerTimeNow() return realTime end
 function workspace:Raycast(...) return nil end
 local heartbeat=signal();local players={PlayerAdded=signal(),PlayerRemoving=signal(),list={}}
 function players:GetPlayers() return self.list end
-local rs=Instance.new('ReplicatedStorage');local serverStorage=Instance.new('ServerStorage');local soundService=Instance.new('SoundService')
+local rs=Instance.new('ReplicatedStorage');local serverStorage=Instance.new('ServerStorage');local soundService=Instance.new('SoundService');local lighting=Instance.new('Lighting')
 local guidCounter=0;local jsonValues={};local http={}
 local function json(value)
  if value==nil then return 'null' end
@@ -124,7 +124,7 @@ local shutdown
 local game={JobId='api-double-job',GameId=100}
 function game:BindToClose(fn) shutdown=fn end
 function game:GetService(n)
- if n=='SoundService' then return soundService elseif n=='Players' then return players elseif n=='ReplicatedStorage' then return rs elseif n=='ServerStorage' then return serverStorage elseif n=='RunService' then return runService elseif n=='HttpService' then return http
+ if n=='Lighting' then return lighting elseif n=='SoundService' then return soundService elseif n=='Players' then return players elseif n=='ReplicatedStorage' then return rs elseif n=='ServerStorage' then return serverStorage elseif n=='RunService' then return runService elseif n=='HttpService' then return http
  elseif n=='DataStoreService' then return {GetDataStore=function() return runtimeStore end}
  elseif n=='Debris' then return {AddItem=function() end} end
  error('Missing mock service '..n)

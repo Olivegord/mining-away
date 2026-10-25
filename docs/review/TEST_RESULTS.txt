@@ -17,6 +17,15 @@ PASS feel break arriving before stage attribute still presents every quarter
 PASS feel presentation stall does not consume unreadable quarter stages
 PASS feel stale lower stages do not rewind presentation
 18 original-equation feel tests passed; not Studio visual parity
+PASS feedback late join initializes death and old shots silently
+PASS feedback one death across reordered HP and state snapshots
+PASS feedback damage and server shot serials trigger once per new snapshot
+PASS feedback new life and encounter serial resets do not replay old shots
+PASS feedback continuous authoritative damage does not require local timers
+PASS feedback reconstruction is timestamp based including mid print joins
+PASS feedback hit and shot envelopes return cleanly at every frame rate
+PASS feedback fragment trajectories land once and never sink or bounce forever
+PASS 8 cosmetic lifecycle/envelope tests (engine rendering still requires Studio)
 PASS finite input validation rejects malformed values
 PASS ownership and destroyed/reprinting states reject commands
 PASS concurrent geode shell death is one atomic transition
@@ -96,6 +105,8 @@ PASS cards choice effects are frozen rather than looked up in changed catalog
 PASS cards individual target randomness is persisted across six owned identities
 PASS cards owned stack limits and per-drone unique cards excluded
 19 FINAL cards tests passed
+PASS cards signature upgrades expose bounded distinct mechanics and survive saved offers
+20 TOTAL cards tests passed
 PASS persistence fresh profile acquires locked durable session
 PASS persistence duplicate server load rejected and active foreign session blocked
 PASS persistence bounded ordered retries preserve exact candidate
@@ -128,29 +139,30 @@ PASS persistence signed Studio identities are accepted only by explicit isolated
 PASS progression ten fixed seeds complete first prestige then a full two-drone second run
 PASS progression safe field retains productive zero-card path and richer mineral values
 PASS progression combat card changes finite Cobalt outcome while pure mining does not
+PASS progression signature model resolves finishers, one eligible arc, and bounded built-in kill repair
 PASS progression ten weak attempts reset all finite defenses without protected earnings
-MODEL RUN 1 FIRST_PACK_SECONDS min=52.70 median=54.95 max=57.69 PRESTIGE_SECONDS min=419.23 median=437.25 max=654.55 PACK_COUNT min=6 median=7 max=9
-MODEL RUN 2 FIRST_PACK_SECONDS min=34.24 median=35.60 max=39.18 PRESTIGE_SECONDS min=755.31 median=820.01 max=961.68 PACK_COUNT min=9 median=10 max=10
-MODEL SEED 1 RUN 1 FIRST_PACK=55.76 PRESTIGE=427.09 PICKS=D05@Blue 1,D01@Blue 1,D12@Blue 1,D08@Blue 1,D04@Blue 1,F01,F04
-MODEL SEED 1 RUN 2 FIRST_PACK=37.36 PRESTIGE=755.31 PICKS=T03,F08,F08,C01,F01,F01,F05,T01,T04
-MODEL SEED 2 RUN 1 FIRST_PACK=56.99 PRESTIGE=654.55 PICKS=F03,C02,F07,D01@Blue 1,F08,T02,D05@Blue 1,D07@Blue 1,F04
-MODEL SEED 2 RUN 2 FIRST_PACK=39.18 PRESTIGE=859.18 PICKS=C02,T04,F07,T03,F08,D06@Red 2,F07,F05,D02@Blue 1,F04
-MODEL SEED 3 RUN 1 FIRST_PACK=56.40 PRESTIGE=468.89 PICKS=D02@Blue 1,D03@Blue 1,D05@Blue 1,F06,D01@Blue 1,C02
-MODEL SEED 3 RUN 2 FIRST_PACK=34.24 PRESTIGE=827.08 PICKS=F01,T01,D01@Blue 1,F07,D10@Blue 1,F06,D03@Red 2,F01,T03,T04
-MODEL SEED 4 RUN 1 FIRST_PACK=54.51 PRESTIGE=490.01 PICKS=D07@Blue 1,D02@Blue 1,F05,T03,F08,C02
-MODEL SEED 4 RUN 2 FIRST_PACK=34.30 PRESTIGE=819.47 PICKS=F08,F08,T04,T03,F01,F01,C02,F06,D03@Red 2,D12@Blue 1
-MODEL SEED 5 RUN 1 FIRST_PACK=54.95 PRESTIGE=443.27 PICKS=T02,D11@Blue 1,D02@Blue 1,F06,D01@Blue 1,F01
-MODEL SEED 5 RUN 2 FIRST_PACK=35.66 PRESTIGE=892.52 PICKS=D05@Blue 1,F07,C02,D01@Red 2,F01,F04,T03,F01,T01,C01
-MODEL SEED 6 RUN 1 FIRST_PACK=56.44 PRESTIGE=437.25 PICKS=D01@Blue 1,F04,D12@Blue 1,D05@Blue 1,F07,D07@Blue 1,T04
-MODEL SEED 6 RUN 2 FIRST_PACK=34.51 PRESTIGE=808.61 PICKS=C02,F01,T04,F08,T03,F08,F01,T01,F07,D01@Red 2
-MODEL SEED 7 RUN 1 FIRST_PACK=52.70 PRESTIGE=422.11 PICKS=D08@Blue 1,T02,D11@Blue 1,F01,D01@Blue 1,F01
-MODEL SEED 7 RUN 2 FIRST_PACK=35.60 PRESTIGE=761.49 PICKS=F06,C02,F04,T04,F06,D05@Blue 1,F08,F07,F07
-MODEL SEED 8 RUN 1 FIRST_PACK=54.14 PRESTIGE=435.63 PICKS=F08,D08@Blue 1,T02,C02,D02@Blue 1,F06,F08
-MODEL SEED 8 RUN 2 FIRST_PACK=35.49 PRESTIGE=820.01 PICKS=T01,D05@Blue 1,T03,F08,F08,C02,F01,C01,D07@Blue 1,F06
-MODEL SEED 9 RUN 1 FIRST_PACK=53.29 PRESTIGE=419.23 PICKS=F01,F03,F04,F03,D08@Blue 1,D05@Blue 1,D03@Blue 1
-MODEL SEED 9 RUN 2 FIRST_PACK=36.10 PRESTIGE=833.43 PICKS=C02,F08,F06,F07,F06,T03,F01,D05@Red 2,T01
-MODEL SEED 10 RUN 1 FIRST_PACK=57.69 PRESTIGE=483.56 PICKS=D05@Blue 1,T02,F03,D12@Blue 1,F02,F06,C02
-MODEL SEED 10 RUN 2 FIRST_PACK=37.07 PRESTIGE=961.68 PICKS=F04,F08,F01,C02,F01,F02,T04,D06@Red 2,F07,T01
+MODEL RUN 1 FIRST_PACK_SECONDS min=52.70 median=54.95 max=57.69 PRESTIGE_SECONDS min=412.99 median=474.28 max=545.79 PACK_COUNT min=6 median=7 max=8
+MODEL RUN 2 FIRST_PACK_SECONDS min=34.18 median=35.38 max=37.85 PRESTIGE_SECONDS min=684.74 median=760.90 max=885.48 PACK_COUNT min=8 median=9 max=10
+MODEL SEED 1 RUN 1 FIRST_PACK=55.76 PRESTIGE=545.79 PICKS=F06,F04,T03,T02,C02,F06,D03@Blue 1
+MODEL SEED 1 RUN 2 FIRST_PACK=37.61 PRESTIGE=760.90 PICKS=F06,T01,C01,T03,C02,T04,F06,D14@Blue 1
+MODEL SEED 2 RUN 1 FIRST_PACK=56.99 PRESTIGE=430.67 PICKS=T03,C01,T02,F04,D02@Blue 1,F06
+MODEL SEED 2 RUN 2 FIRST_PACK=37.44 PRESTIGE=815.61 PICKS=F06,D05@Blue 1,T03,D01@Red 2,F07,F06,F01,C02
+MODEL SEED 3 RUN 1 FIRST_PACK=56.40 PRESTIGE=500.01 PICKS=D13@Blue 1,T03,F03,T02,D02@Blue 1,D05@Blue 1,T04
+MODEL SEED 3 RUN 2 FIRST_PACK=35.12 PRESTIGE=755.40 PICKS=D15@Red 2,F06,D13@Blue 1,F08,T03,F08,F07,C02,F07
+MODEL SEED 4 RUN 1 FIRST_PACK=54.51 PRESTIGE=433.92 PICKS=C02,D03@Blue 1,F03,F01,T03,C01
+MODEL SEED 4 RUN 2 FIRST_PACK=35.38 PRESTIGE=769.40 PICKS=F07,D13@Red 2,F07,F06,C02,T01,T03,F06,D06@Blue 1
+MODEL SEED 5 RUN 1 FIRST_PACK=54.95 PRESTIGE=502.78 PICKS=F06,F01,D13@Blue 1,F08,D03@Blue 1,F02,T03
+MODEL SEED 5 RUN 2 FIRST_PACK=36.19 PRESTIGE=824.04 PICKS=C02,F06,F07,T04,T01,F08,F01,F02,F08,F04
+MODEL SEED 6 RUN 1 FIRST_PACK=56.44 PRESTIGE=520.90 PICKS=F04,D13@Blue 1,T03,D08@Blue 1,F07,C02,T02,F06
+MODEL SEED 6 RUN 2 FIRST_PACK=34.18 PRESTIGE=885.48 PICKS=F09,F07,T01,F08,C02,F07,F08,T03,F02,F06
+MODEL SEED 7 RUN 1 FIRST_PACK=52.70 PRESTIGE=474.03 PICKS=F06,C02,F09,T02,D03@Blue 1,T01,F08
+MODEL SEED 7 RUN 2 FIRST_PACK=35.05 PRESTIGE=862.14 PICKS=F06,T04,F09,F04,D01@Blue 1,C02,D01@Red 2,T01,T03,F01
+MODEL SEED 8 RUN 1 FIRST_PACK=54.14 PRESTIGE=412.99 PICKS=F02,C02,T02,D13@Blue 1,D02@Blue 1,F07,D07@Blue 1
+MODEL SEED 8 RUN 2 FIRST_PACK=34.99 PRESTIGE=684.74 PICKS=F06,F06,F01,C02,D05@Red 2,T04,F09,C01
+MODEL SEED 9 RUN 1 FIRST_PACK=53.29 PRESTIGE=474.28 PICKS=F01,F06,D16@Blue 1,D11@Blue 1,D02@Blue 1,F06,F08
+MODEL SEED 9 RUN 2 FIRST_PACK=37.85 PRESTIGE=751.47 PICKS=T01,T03,F01,F08,F03,F07,F01,C04,T04
+MODEL SEED 10 RUN 1 FIRST_PACK=57.69 PRESTIGE=519.52 PICKS=F06,T02,F08,D08@Blue 1,D03@Blue 1,T01,F07
+MODEL SEED 10 RUN 2 FIRST_PACK=37.33 PRESTIGE=750.78 PICKS=T01,C01,T03,T04,F08,F06,F01,C02,F01
 MODEL FLEET 1 RUBY_FIRST_HOLD_SECONDS=49.12 CREDITS=240 PRESTIGE_SALES=2000 REQUIREMENT=Cobalt:1
 MODEL NAKED_COMBAT FLEET=1 FIELD=Cobalt WIN=false SECONDS=15.20 HULL_LEFT=0.00 TURRET_HP_LEFT=116.00
 MODEL NAKED_COMBAT FLEET=1 FIELD=Violet WIN=false SECONDS=7.40 HULL_LEFT=0.00 TURRET_HP_LEFT=732.00
@@ -175,7 +187,9 @@ MODEL FLEET 6 RUBY_FIRST_HOLD_SECONDS=23.30 CREDITS=240 PRESTIGE_SALES=73500 REQ
 MODEL NAKED_COMBAT FLEET=6 FIELD=Cobalt WIN=true SECONDS=7.20 HULL_LEFT=461.00 TURRET_HP_LEFT=0.00
 MODEL NAKED_COMBAT FLEET=6 FIELD=Violet WIN=true SECONDS=15.20 HULL_LEFT=352.00 TURRET_HP_LEFT=0.00
 MODEL NAKED_COMBAT FLEET=6 FIELD=Emerald WIN=true SECONDS=35.20 HULL_LEFT=46.00 TURRET_HP_LEFT=0.00
-4 progression model checks passed; not Studio results
+5 progression model checks passed; not Studio results
+PASS server signature combat uses threshold, bounded chain, kill repair and authoritative shot events
+PASS server core drill only boosts geodes and split range does not bypass mining gates
 PASS server fresh profile is one permanent Blue with replicated complete state
 PASS server map binds the original named construct and never generic turret box
 PASS server random field crystals use variable health scaled original union and two-second growth
@@ -209,7 +223,7 @@ PASS server large frame stall runs bounded movement steps rather than unlimited 
 PASS server failed runtime profile load spawns no replacement defaults and writes no profile
 PASS server speed modifiers do not reroll the permanent original hover phase
 PASS server geode replenishment consumes its full five-node budget without growing retry backlog
-33 actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested
+35 actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested
 PASS all source Luau syntax checks
 PASS bundled server/client standalone lint with explicit any-typed Roblox host bindings (not API type validation)
 PASS binary deterministic build

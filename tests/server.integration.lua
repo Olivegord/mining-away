@@ -62,6 +62,29 @@ local function clearFor(field,list)
  for _,t in ipairs(field.turrets) do t.hp=0 end
  encounterStep(field);eq(field.e.phase,'Cleared')
 end
+check('signature combat uses threshold, bounded chain, kill repair and authoritative shot events',function()
+ local a=fixture();local f=patches[4];local d=first(a);local p=profile(a)
+ data(p).run.cards={{cardId='sig',scope='Individual',targetDroneId=d.id,effects={finisher=.75,salvage=.3,splash=.25,chain=16}}}
+ refreshStats(p);enlist(f,{a});local target,other=f.turrets[1],f.turrets[2]
+ d.pos=(target.emitter.Position+other.emitter.Position)*.5
+ local stats=f.e.roster[d.id].stats
+ target.hp=f.cfg.TurretHP*.35;other.hp=100
+ local old=target.hp;combatHit(d,f,target,stats)
+ close(old-target.hp,stats.shotDamage*1.75);close(other.hp,100-stats.shotDamage*1.75*.25)
+ eq(d.shotSerial,1);close(d.chainUntil,now+.2)
+ d.hp=10;target.hp=1;other.hp=100;combatHit(d,f,target,stats)
+ close(d.hp,10+d.owned.base.maxHealth*.3);eq(d.model:GetAttribute('RepairSerial'),1)
+ combatHit(d,f,target,stats);close(d.hp,10+d.owned.base.maxHealth*.3);eq(d.shotSerial,2)
+ snapshotDrone(d);eq(d.model:GetAttribute('ShotSerial'),2);eq(d.model:GetAttribute('ChainRange'),22)
+end)
+check('core drill only boosts geodes and split range does not bypass mining gates',function()
+ local a=fixture();local f=patches[1];local d=first(a);local p=profile(a)
+ data(p).run.cards={{cardId='drill',scope='Individual',targetDroneId=d.id,effects={geode=.8,fork=.2,forkRange=6}}};refreshStats(p)
+ local r=newResource(f,'Geode',200,10);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(9,0,0))
+ advance(2.01);assignExact(a,f,r);local hp=r.hp;hitResource(d,r,10);close(r.hp,hp-18)
+ other.slots[d.id]=1;hp=other.hp;eq(hitResource(d,other,5,true),true);close(other.hp,hp-5);eq(d.forkTarget,other.position)
+ d.pos=d.pos+Vector3.new(2,0,0);eq(hitResource(d,other,5,true),false)
+end)
 check('fresh profile is one permanent Blue with replicated complete state',function()
  local a=fixture();local p=profile(a);local d=first(a)
  eq(#data(p).fleet,1);eq(#p.drones,1);eq(data(p).prestiges,0);eq(d.owned.type,'Blue');eq(#data(p).run.cards,0)
@@ -218,7 +241,8 @@ check('cooperative victory gives contributor run entitlements but no outsider in
  eq(playerCanMine(profile(a),f),true);eq(playerCanMine(profile(b),f),true);eq(playerCanMine(profile(c),f),false)
  eq(data(profile(a)).run.wins.Cobalt,1);eq(data(profile(b)).run.wins.Cobalt,1)
  teleport(c,f.center);input(c,'Patch',3);eq(first(c).field,nil);eq(f.e.users[c.UserId],nil)
- local late=player(fixtureSerial*10+9);players.PlayerAdded:Fire(late);advance(.1)
+ -- Allow a complete snapshot interval plus a tick, independent of prior fixture phase.
+ local late=player(fixtureSerial*10+9);players.PlayerAdded:Fire(late);advance(C.Snapshot+C.Tick*2)
  eq(playerCanMine(profile(late),f),false);eq(f.model:GetAttribute('Phase'),'Cleared');assert(first(a).model:GetAttribute('Position'))
 end)
 check('reassigning a cleared field preserves that run expedition entitlement',function()

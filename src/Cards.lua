@@ -1,5 +1,5 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=1,BASE_CAPACITY=120}
+local C={CONTENT_VERSION=2,BASE_CAPACITY=120}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function finite(x) return type(x)=='number' and x==x and x>-math.huge and x<math.huge end
@@ -33,6 +33,11 @@ C.CATALOG={
  card('D10','Fracture Fork','Individual',{fork=.20},'Mining tick forks 20% to one eligible nearby crystal'),
  card('D11','Entry Shield','Individual',{shield=.20},'Absorb 20% built-in hull once per fresh assault'),
  card('D12','Rapid Cycling','Individual',{rate=.35},'+35% combat firing rate; final DPS remains capped'),
+ card('D13','Execution Lens','Individual',{finisher=.75},'+75% shot damage against sentries below 35% hull'),
+ card('D14','Core Drill','Individual',{geode=.80,speed=-.15},'+80% mining damage to geode shells and cores; −15% flight speed'),
+ card('D15','Salvage Reactor','Individual',{salvage=.30},'Destroy a sentry to repair 30% built-in hull on this drone'),
+ card('D16','Arc Relay','Individual',{splash=.25,chain=16},'Arc 25% shot damage to one other sentry within 22 studs'),
+ card('F09','Prism Splitter','Fleet',{fork=.20,forkRange=6},'Split 20% mining damage into one other crystal within 12 studs'),
  card('T01','Glass Cutter','Tradeoff',{mining=.35,health=-.15},'+35% mining output; −15% maximum hull'),
  card('T02','Battle Formation','Tradeoff',{combat=.30,mining=-.10},'+30% combat shot damage; −10% mining output'),
  card('T03','Heavy Cargo','Tradeoff',{capacity=.35,speed=-.10},'+35% cargo capacity; −10% flight speed'),
@@ -43,7 +48,7 @@ local fallback={
  card('R02','Combat Reserve','Fleet',{combat=.10},'+10% combat shot damage; repeatable until cap'),
  card('R03','Cargo Reserve','Player',{capacity=.10},'+10% cargo capacity; repeatable until cap'),
 }
-local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true}
+local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true,finisher=true,salvage=true,chain=true}
 local function isCombat(c)
  for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
 end
@@ -76,7 +81,9 @@ function C.stats(p,d,extra)
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(.08,b.warmup/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
-  splashFraction=clamp(s.splash or 0,0,.25),forkFraction=clamp(s.fork or 0,0,.2),entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.capacity(p,extra)}
+  splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=clamp(s.fork or 0,0,.2),forkRange=6+clamp(s.forkRange or 0,0,6),
+  geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
+  entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.capacity(p,extra)}
 end
 function C.price(p)
  local n=p.run.packIndex;local prices={80,110,150,210,290,400}
@@ -93,7 +100,7 @@ local function rng(seed)
  local state=seed%2147483647;if state<=0 then state=1 end
  return function(n) state=(state*16807)%2147483647;return math.floor(state/2147483647*n)+1 end
 end
-local statLabels={miningDPS='Mining',combatDPS='Combat DPS',maxHealth='Hull',maxStep60='Flight / 60Hz',warmup='Laser warmup',range='Working range',yieldMultiplier='Ore yield',damageReduction='Turret resistance',critChance='Critical chance',splashFraction='Combat splash',forkFraction='Mining fork',entryShield='Entry shield',shotInterval='Combat interval'}
+local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c)}
  for _,d in ipairs(p.fleet) do
@@ -108,6 +115,7 @@ local function countOwned(p,c)
  return n
 end
 local function stackLimit(c)
+ if c.cardId=='F09' then return 1 end
  if string.sub(c.cardId,1,1)=='R' then return 500 end
  if c.scope=='Fleet' or c.scope=='Player' then return 2 end
  return 1
@@ -128,10 +136,10 @@ local function compatible(a,b)
  return not ((age and agt) or (bge and bgt) or (age and bge))
 end
 local function category(c)
- if c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash then return 'combat'
- elseif c.effects.health or c.effects.reduction or c.effects.shield then return 'survival'
+ if c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
+ elseif c.effects.health or c.effects.reduction or c.effects.shield or c.effects.salvage then return 'survival'
  elseif c.effects.capacity or c.effects.yield then return 'cargo'
- elseif c.effects.mining or c.effects.fork then return 'mining'
+ elseif c.effects.mining or c.effects.fork or c.effects.geode then return 'mining'
  elseif c.effects.startup then return 'startup' else return 'flight' end
 end
 local function preview(p,c)
@@ -141,8 +149,14 @@ local function preview(p,c)
  for _,d in ipairs(p.fleet) do if affects(c,d) then target=d;break end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','forkFraction','entryShield','shotInterval'}) do
-   if math.abs(before[k]-after[k])>1e-8 then table.insert(lines,{label=statLabels[k],before=before[k],after=after[k],unit=(k=='warmup' or k=='shotInterval') and 's' or ''}) end
+  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval'}) do
+   if math.abs(before[k]-after[k])>1e-8 then
+    local scale=k=='maxStep60' and 60 or 1
+    local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
+    if k=='damageReduction' or k=='critChance' or k=='splashFraction' or k=='forkFraction' or k=='salvageFraction' then scale=100;unit='%' end
+    if k=='geodeMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
+    table.insert(lines,{label=statLabels[k],before=before[k]*scale,after=after[k]*scale,unit=unit})
+   end
   end
  end
  return lines
@@ -161,7 +175,12 @@ local function resolve(p,entry,seed,combatVisible)
   c.targetDroneId=d.id;c.targetName=d.name;c.type=d.type
  end
  if not beneficial(p,c) then return nil end
- c.preview=preview(p,c);c._vector=vector(p,c);c._category=category(c)
+ c.preview=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
+ local purposes={combat='Break through guarded fields',survival='Keep your assault alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
+ local headlines={D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='+100% STARTUP RATE'}
+ c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
+ c.tradeoff=(c.cardId=='D14' and '15% slower flight') or (c.cardId=='T01' and '15% less hull') or (c.cardId=='T02' and '10% slower mining') or (c.cardId=='T03' and '10% slower flight') or (c.cardId=='T04' and '10% less hull') or 'No drawback'
+ c.stackText=stackLimit(c)==1 and 'Unique for this target · this run' or ('Copy '..(countOwned(p,c)+1)..' of '..stackLimit(c)..' · adds to base · this run')
  return c
 end
 local function receipt(p,operation,tx)
@@ -194,6 +213,10 @@ function C.buy(p,tx,expectedRun,context)
  local function pairOK(c) for _,other in ipairs(chosen) do if c.cardId==other.cardId or not compatible(c,other) then return false end end;return true end
  local requireCombat=context.combatVisible and p.run.offersWithoutCombat>=2
  if requireCombat then for _,c in ipairs(pool) do if isCombat(c) then table.insert(chosen,c);break end end end
+ -- Early packs always expose a behavior-changing build direction when eligible.
+ -- The saved offer/target still comes entirely from this deterministic server pool.
+ local function signature(c) local e=c.effects;return e.finisher or e.geode or e.salvage or e.chain or e.forkRange end
+ if p.run.packIndex<3 then for _,c in ipairs(pool) do if signature(c) and pairOK(c) then table.insert(chosen,c);break end end end
  while #chosen<3 do
   local best,bestScore=nil,-math.huge
   for _,c in ipairs(pool) do

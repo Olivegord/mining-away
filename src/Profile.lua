@@ -1,7 +1,7 @@
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
 local P={SCHEMA=2,CONTENT=1}
 local types={'Blue','Red','Green'}
-local effectKeys={mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true}
+local effectKeys={mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
 P.TYPE_SCALES={Blue={speed=1.15,mining=1,combat=1},Red={speed=1,mining=.95,combat=1.15},Green={speed=1,mining=1.10,combat=.95}}

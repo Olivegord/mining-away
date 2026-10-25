@@ -56,7 +56,7 @@ local function atHome(p)
 end
 local function release(d)
  if d.target then d.target.slots[d.id]=nil end
- d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil
+ d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.forkUntil=0
 end
 local function spend(d)
  for _,p in ipairs(patches) do R.spend(p.e,d.id) end
@@ -79,7 +79,7 @@ local function spawnDrone(p,owned,slot)
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,model=model,body=body,emitter=emitter,slot=slot,
   pos=pos,goal=pos,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,
-  beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil}
+  beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0}
  drones[d.id]=d;table.insert(p.drones,d);return d
 end
 local function rebuildFleet(p)
@@ -168,7 +168,7 @@ local function restoreTurrets(field)
  for _,t in ipairs(field.turrets) do
   t.hp=field.cfg.TurretHP;t.nextShot=now+1;t.fireAt=nil;t.lock=nil;t.aim=nil;t.shotSerial=0
   for part,transparency in pairs(t.originalTransparency) do if part.Parent then part.Transparency=transparency end end
-  t.model:SetAttribute('HP',t.hp);t.model:SetAttribute('Telegraph',false);t.model:SetAttribute('Dead',false)
+  t.model:SetAttribute('HP',t.hp);t.model:SetAttribute('Telegraph',false);t.model:SetAttribute('Dead',false);t.model:SetAttribute('ShotSerial',0)
  end
 end
 for _,f in ipairs(scene.fields) do
@@ -200,8 +200,10 @@ local function hitResource(d,r,amount,secondary)
  if not healthy(p) or d.hp<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if secondary then
   local primary=d.target
-  if not primary or primary.paid or (r.position-primary.position).Magnitude>6 or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.paid or (r.position-primary.position).Magnitude>(d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  elseif (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode')).Magnitude>1 then return false end
+ if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
+ if secondary then d.forkTarget=r.position;d.forkUntil=now+.18 end
  local previous=r.stage
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
@@ -341,15 +343,24 @@ local function combatHit(d,field,target,stats)
  local p=profiles[d.owner]
  if not healthy(p) or not R.participates(field.e,d,data(p).run.id) or target.hp<=0 then return end
  local damage=stats.shotDamage
- if (stats.critChance or 0)>0 and seed:NextNumber()<stats.critChance then damage=damage*2 end
+ if target.hp<=field.cfg.TurretHP*.35 then damage=damage*(stats.finisherMultiplier or 1) end
+ if (stats.critChance or 0)>0 and seed:NextNumber()<stats.critChance then damage=damage*2;d.lastCritAt=now end
+ d.shotSerial=(d.shotSerial or 0)+1;d.lastShotAt=now
  local dealt=math.min(target.hp,damage);target.hp=math.max(0,target.hp-damage)
+ local kills=target.hp<=0 and 1 or 0
  if dealt>0 then R.markContribution(field.e,d.owner,data(p).run.id) end
  if (stats.splashFraction or 0)>0 then
   for _,other in ipairs(field.turrets) do
-   if other~=target and other.hp>0 and (other.emitter.Position-target.emitter.Position).Magnitude<=6 and (other.emitter.Position-d.pos).Magnitude<=stats.range and los(d.pos,other.emitter.Position,other.model,{droneFolder}) then
-    other.hp=math.max(0,other.hp-damage*stats.splashFraction);break
+   if other~=target and other.hp>0 and (other.emitter.Position-target.emitter.Position).Magnitude<=(stats.splashRange or 6) and (other.emitter.Position-d.pos).Magnitude<=stats.range and los(d.pos,other.emitter.Position,other.model,{droneFolder}) then
+    other.hp=math.max(0,other.hp-damage*stats.splashFraction);if other.hp<=0 then kills=kills+1 end
+    other.model:SetAttribute('HP',other.hp);other.model:SetAttribute('Dead',other.hp<=0)
+    d.chainTarget=other.emitter.Position;d.chainUntil=now+.2;break
    end
   end
+ end
+ if kills>0 and (stats.salvageFraction or 0)>0 then
+  d.hp=math.min(d.stats.maxHealth,d.hp+d.owned.base.maxHealth*stats.salvageFraction*kills)
+  d.model:SetAttribute('RepairSerial',(d.model:GetAttribute('RepairSerial') or 0)+1)
  end
  target.model:SetAttribute('HP',target.hp);target.model:SetAttribute('Dead',target.hp<=0)
 end
@@ -409,7 +420,7 @@ local function droneStep(d,dt)
        d.mining=true;hitResource(d,r,d.stats.miningDPS*dt)
        if d.target and (d.stats.forkFraction or 0)>0 then
         for _,other in ipairs(field.resources) do
-         if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=6 then
+         if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=(d.stats.forkRange or 6) then
           local count=0;for _ in pairs(other.slots) do count=count+1 end
           if count<other.limit then
            other.slots[d.id]=1;hitResource(d,other,d.stats.miningDPS*dt*d.stats.forkFraction,true);other.slots[d.id]=nil;break
@@ -436,7 +447,9 @@ local function snapshotDrone(d)
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,
   Position=d.pos,Goal=d.goal,Yaw=d.yaw,MaxStep60=d.stats.maxStep60,PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',TargetPosition=target and target.position or d.targetPosition or d.pos,Mining=d.mining,BeamSince=d.beamSince,
-  ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now}
+  ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
+  ForkTargetPosition=d.forkTarget or d.pos,ForkUntil=d.forkUntil or 0,ChainTargetPosition=d.chainTarget or d.pos,ChainUntil=d.chainUntil or 0,
+  GeodeMultiplier=d.stats.geodeMultiplier,FinisherMultiplier=d.stats.finisherMultiplier,SalvageFraction=d.stats.salvageFraction,ChainRange=d.stats.splashRange}
  for k,v in pairs(values) do d.model:SetAttribute(k,v) end
 end
 local function resolveAfter(p,result)
@@ -535,7 +548,8 @@ local function addPlayer(pl)
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
-  leaveField(p);ch:PivotTo(CFrame.new(home+Vector3.new(0,4,0)))
+  local spawnAt=home+Vector3.new(0,4,0);local firstField=scene.fields[1].center
+  leaveField(p);ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
  end
  p.connection=pl.CharacterAdded:Connect(character)
  rebuildFleet(p);publish(p)

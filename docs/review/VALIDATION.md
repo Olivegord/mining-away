@@ -1,6 +1,6 @@
-# Cloud validation and independent review
+# Validation and independent review
 
-This report covers the new restore-feel/card/prestige implementation. The old baseline's 47 checks were not reused as evidence for these new features. No Roblox Studio renderer, engine-loaded binary, live DataStore or real two-client session ran in this cloud executor.
+This report covers the restore-feel/card/prestige implementation and October 25 presentation pass. The old baseline's 47 checks were not reused as evidence. An intermediate polish build was reopened from disk and entered Play in local Roblox Studio; its world and HUD were inspected. The Mac then locked before gameplay checks. Final polish changes, true two-client sessions, touch and live DataStore remain unverified. See POLISH_PASS.md for exact limits.
 
 ## Executed checks
 
@@ -9,13 +9,14 @@ This report covers the new restore-feel/card/prestige implementation. The old ba
 | Original feel | 18 | Shared production equations versus original .03/cap/.1 oracle at 30/60/120/144 Hz, radius10, slow hover, exact overhead stations, two-second growth and quarter stages, including coalesced stage/break presentation queues |
 | Encounter/resource rules | 35 | Finite run/life roster, contribution entitlement, all-defense reset, reprints, friend-preserving retirement, exact phase/run/encounter gates |
 | Profile | 18 | One Blue, permanent identity/base invariants, material sale, cumulative progress, exact +1 prestige, duplicate/stale calls, migration/refund, signed Preview IDs, foreign-ID/corrupt-offer rejection |
-| Cards | 19 | Actual 30-card modifier pipeline, scopes/targets, fixed three-choice offers, one debit/claim, replay, caps, offer protection across fixed seeds, six-drone target variation |
+| Cards | 20 | Actual 35-card modifier pipeline, scopes/targets, fixed three-choice offers, one debit/claim, replay, caps, offer protection across fixed seeds, six-drone target variation |
 | Persistence | 28 | Actual session manager against deterministic/fault-injecting storage, UpdateAsync callback retries, revision/lease fences, load failure, lost responses, migration, preview isolation, leave/unlock |
-| Progression model | 4 | Ten fixed seeds completing full first and second modeled runs, safe fallback, combat decisions and repeated weak failures |
-| Actual-server integration | 33 | The assembled production server running against a synthetic Roblox API/asset/storage double; not copied gameplay logic |
+| Cosmetic lifecycle | 8 | Pure event/timing helpers for one-shot death, reordered HP/state, late joins, shot/life reset, reconstruction and bounded ballistic fall; no renderer assertions |
+| Progression model | 5 | Ten fixed seeds completing full first and second modeled runs, safe fallback, combat decisions and repeated weak failures |
+| Actual-server integration | 35 | The assembled production server running against a synthetic Roblox API/asset/storage double; not copied gameplay logic |
 | Binary preservation | 4 | Determinism, only Source/Disabled chunks changed, enabled entrypoints, rejection of wrong input |
 | Original geometry | 4 | Read-only original binary hierarchy/mesh/editor-history verification |
-| **Total** | **163** | Plus all-source and assembled Luau compilation, standalone lint and archive/build metadata checks |
+| **Total** | **175** | Plus all-source and assembled Luau compilation, standalone lint and archive/build metadata checks |
 
 Official Luau 0.744 tools were used. The runtime analyzer receives explicitly `any`-typed Roblox host bindings, so it checks normal Luau errors/lint but not Roblox API contracts. Synthetic named asset fixtures establish binding logic, not that a Roblox mesh loaded/rendered correctly. No visual or network claim follows from the API double.
 
@@ -39,12 +40,12 @@ The geometry report records source dimensions/meshes and a labeled outside-engin
 
 ## Progression evidence and limits
 
-The corrected model enforces a fresh finite defense clear for each solo protected mining trip after recall. Across ten fixed seeds its first pack has median 54.95 seconds, first prestige 437.25 seconds, second-run first pack 35.60 seconds and second prestige 820.01 seconds. It uses actual Profile/Cards/Feel data and a disclosed route/card heuristic; it omits real input, occlusion, contention, network/save latency and geode/special-effect throughput. See PROGRESSION_SIMULATION.md for every assumption and the cargo/travel bottleneck at larger fleets. These are modeled results, not observed gameplay durations or optimal balance.
+The corrected model enforces a fresh finite defense clear for each solo protected mining trip after recall. Across ten fixed seeds its first pack has median 54.95 seconds, first prestige 474.28 seconds, second-run first pack 35.38 seconds and second prestige 760.90 seconds. It uses actual Profile/Cards/Feel data and a disclosed route/card heuristic; it omits real input, occlusion, contention, network/save latency and geode/special-effect throughput. See PROGRESSION_SIMULATION.md for every assumption and the cargo/travel bottleneck at larger fleets. These are modeled results, not observed gameplay durations or optimal balance.
 
 The first five thresholds remain provisional. First-run model duration is below the old 12–18-minute design hypothesis; no extra grind was added merely to match an unmeasured hypothesis. Later full runs and larger-fleet performance require Studio measurement.
 
 ## Remaining acceptance
 
-Follow ../STUDIO_ACCEPTANCE.md for original-versus-repaired video, actual binary opening and mesh/audio permissions, traversal/scale, mobile text, two-client/late-join behavior and six-drone frame/network performance. Live-only RockCrack/RockBreak assets are absent in the historical source. Real durable service operation is implemented but was not tested against live DataStore or enabled in Studio.
+Follow ../STUDIO_ACCEPTANCE.md for original-versus-repaired video, actual binary opening and mesh/audio permissions, traversal/scale, mobile text, two-client/late-join behavior and six-drone frame/network performance. Live-only RockCrack/RockBreak assets are absent in the historical source. Quiet engine-bundled impact fallbacks are now included; exact stock file presence was checked, audible playback remains pending. Real durable service operation is implemented but was not tested against live DataStore or enabled in Studio.
 
 The source is the same repository/branch and preserved historical base, not an export of the unavailable live 2026 version. No Roblox publishing, main merge or new experience occurred. The release's revision.json identifies the exact pushed source commit; its source_dirty flag must be false.

@@ -77,14 +77,14 @@ test('no absent type, no duplicate card, no inaccessible combat option',function
  end
 end)
 test('offer protection never produces three offers without combat',function()
- local isCombat=function(c) local e=c.effects;return (e.combat or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.splash or 0)>0 or (e.rate or 0)>0 end
+ local isCombat=function(c) local e=c.effects;return (e.combat or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.splash or 0)>0 or (e.rate or 0)>0 or (e.finisher or 0)>0 or (e.salvage or 0)>0 end
  for seed=1,40 do
   local p=funded(seed);local streak=0
   for i=1,8 do local ok,o=buy(p,'b'..i);eq(ok,true);local yes=false;for _,c in ipairs(o.choices) do yes=yes or isCombat(c) end;streak=yes and 0 or streak+1;assert(streak<=2);eq(p.run.offersWithoutCombat,streak);eq(C.select(p,o.id,1,'s'..i,p.run.id,{atDepot=true}),true) end
  end
 end)
 test('exhausted caps never debit for useless choices',function()
- local p=funded();p.run.cards={{cardId='caps',scope='Fleet',effects={mining=100,speed=100,combat=100,rate=100,health=100,startup=100,range=100,yield=100,crit=100,reduction=100,splash=100,fork=100,shield=100,capacity=100}}}
+ local p=funded();p.run.cards={{cardId='caps',scope='Fleet',effects={mining=100,speed=100,combat=100,rate=100,health=100,startup=100,range=100,yield=100,crit=100,reduction=100,splash=100,fork=100,shield=100,capacity=100,finisher=100,geode=100,salvage=100,chain=100,forkRange=100}}}
  local credits=p.run.credits;eq(buy(p,'no-use'),false);eq(p.run.credits,credits);eq(p.run.pendingOffer,nil)
 end)
 test('bounded receipt eviction cannot replay stale purchase pack index',function()
@@ -120,3 +120,14 @@ test('owned stack limits and per-drone unique cards excluded',function()
  end
 end)
 print(passed..' FINAL cards tests passed')
+test('signature upgrades expose bounded distinct mechanics and survive saved offers',function()
+ local p=funded();local d=p.fleet[1]
+ for _,id in ipairs({'D13','D14','D15','D16','F09'}) do table.insert(p.run.cards,entry(id,d.id)) end
+ local s=C.stats(p,d)
+ near(s.finisherMultiplier,1.75);near(s.geodeMultiplier,1.8);near(s.salvageFraction,.3);near(s.splashRange,22);near(s.forkRange,12)
+ near(s.splashFraction,.25);near(s.forkFraction,.2);near(s.maxStep60,d.base.maxStep60*.85)
+ local loaded=assert(P.migrate(p,44));assert(same(loaded.run.cards,p.run.cards));eq(P.validate(loaded,44),true)
+ local fresh=funded();local ok,o=buy(fresh,'described');eq(ok,true)
+ for _,c in ipairs(o.choices) do assert(c.headline and c.purpose and c.tradeoff and c.stackText and c.category);for _,line in ipairs(c.preview) do assert(line.label~='Flight / 60Hz') end end
+end)
+print(passed..' TOTAL cards tests passed')

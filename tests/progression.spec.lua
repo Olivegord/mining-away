@@ -31,23 +31,40 @@ local function encounter(p,field,seed)
  local e=R.newEncounter(Config);local fleet={};local random=rand(seed)
  for _,owned in ipairs(p.fleet) do
   local stats=Cards.stats(p,owned)
-  table.insert(fleet,{id=owned.id,owner=p.userId,life=1,hp=stats.maxHealth,stats=stats,state='Attack',nextShot=4,shield=stats.entryShield})
+  table.insert(fleet,{id=owned.id,owner=p.userId,life=1,hp=stats.maxHealth,stats=stats,baseHull=owned.base.maxHealth,slot=#fleet+1,state='Attack',nextShot=4,shield=stats.entryShield})
  end
  R.gather(e,0);R.enroll(e,p.userId,p.run.id,fleet);R.step(e,4,#fleet,true,false)
- local turrets={}
- for n=1,field.Turrets do table.insert(turrets,{hp=field.TurretHP,nextShot=4,fireAt=nil,target=nil}) end
+ local turrets={};local trace={finisherShots=0,arcs=0,repairs=0,repairedHull=0}
+ for n=1,field.Turrets do table.insert(turrets,{hp=field.TurretHP,x=(n-1)*17,y=0,z=0,nextShot=4,fireAt=nil,target=nil}) end
  local now=4
  while now<4+Config.AssaultLimit+.1 do
   -- Server fires drone shots before turretStep. Spatial model assumes in-range,
-  -- unobstructed stationary stations; no dodge, no splash with 17-stud sentries.
+  -- unobstructed stationary stations and no dodge. Sentries stand 17 studs apart;
+  -- the server's +11/14/8 X, +5 Y, +9 Z shot stations determine secondary reach.
   for _,d in ipairs(fleet) do
    if R.participates(e,d,p.run.id) and now+1e-7>=d.nextShot then
     local target
     for _,t in ipairs(turrets) do if t.hp>0 then target=t;break end end
     if target then
      local damage=d.stats.shotDamage
-     if random(0,1)<d.stats.critChance then damage*=2 end
+     if target.hp<=field.TurretHP*.35 then damage*=d.stats.finisherMultiplier;if d.stats.finisherMultiplier>1 then trace.finisherShots+=1 end end
+     if d.stats.critChance>0 and random(0,1)<d.stats.critChance then damage*=2 end
      target.hp=math.max(0,target.hp-damage);R.markContribution(e,p.userId,p.run.id)
+     local kills=target.hp<=0 and 1 or 0
+     if d.stats.splashFraction>0 then
+      local station={x=target.x+8+(d.slot%3)*3,y=5,z=9}
+      for _,other in ipairs(turrets) do
+       if other~=target and other.hp>0 and length(target,other)<=d.stats.splashRange and length(station,other)<=d.stats.range then
+        other.hp=math.max(0,other.hp-damage*d.stats.splashFraction);trace.arcs+=1
+        if other.hp<=0 then kills+=1 end
+        break
+       end
+      end
+     end
+     if kills>0 and d.stats.salvageFraction>0 then
+      local old=d.hp;d.hp=math.min(d.stats.maxHealth,d.hp+d.baseHull*d.stats.salvageFraction*kills)
+      trace.repairs+=1;trace.repairedHull+=d.hp-old
+     end
      d.nextShot=now+d.stats.shotInterval
     end
    end
@@ -75,11 +92,11 @@ local function encounter(p,field,seed)
   for _,d in ipairs(fleet) do if d.hp>0 then alive+=1;hp+=d.hp end end
   for _,t in ipairs(turrets) do remaining+=t.hp end
   local event=R.step(e,now,alive,true,remaining<=0)
-  if event=='clear' then return true,now,hp,remaining end
-  if event=='reset' then return false,now,hp,remaining end
+  if event=='clear' then return true,now,hp,remaining,trace end
+  if event=='reset' then return false,now,hp,remaining,trace end
   now+=1/60
  end
- return false,now,0,field.TurretHP*field.Turrets
+ return false,now,0,field.TurretHP*field.Turrets,trace
 end
 local function freshWorld(seed)
  local random=rand(seed);local fields={}
@@ -223,6 +240,16 @@ test('combat card changes finite Cobalt outcome while pure mining does not',func
  local field=Config.Fields[3];local p=P.new(44,123);local naked=encounter(p,field,5);eq(naked,false)
  p.run.cards={{cardId='model-mining',scope='Fleet',effects={mining=2}}};eq(encounter(p,field,5),false)
  p.run.cards={{cardId='model-combat',scope='Fleet',effects={combat=.75,health=.75}}};eq(encounter(p,field,5),true)
+end)
+test('signature model resolves finishers, one eligible arc, and bounded built-in kill repair',function()
+ local p=P.new(44,123)
+ p.run.cards={{cardId='model-signature',scope='Fleet',effects={combat=3,health=3,reduction=.5,finisher=.75,salvage=.3,splash=.25,chain=16}}}
+ local win,_,hull,_,trace=encounter(p,Config.Fields[4],7)
+ eq(win,true);assert(trace.finisherShots>0);assert(trace.arcs>0);assert(trace.repairs>0 and trace.repairedHull>0)
+ assert(trace.repairedHull<=p.fleet[1].base.maxHealth*.3*trace.repairs+.000001)
+ assert(hull<=Cards.stats(p,p.fleet[1]).maxHealth)
+ p.run.cards[1].effects.chain=nil
+ local _,_,_,_,short=encounter(p,Config.Fields[4],7);eq(short.arcs,0)
 end)
 test('ten weak attempts reset all finite defenses without protected earnings',function()
  local p=P.new(44,123)

@@ -1,0 +1,33 @@
+# October 25 presentation and game-feel pass
+
+The user rejected the current prototype's feel, interface, upgrades, death feedback and environment. This pass changes the existing game on `codex/restore-feel-prestige`, using the same original base and single generated place. No Roblox publishing or experience creation occurred.
+
+## Concrete changes
+
+- **World:** one quarry/depot palette, warm sun and cool shadows, atmosphere, restrained bloom, cleaned stretched legacy ground texture, material coordination, supported Ruby mesa, field-specific foliage/geology, grounded ridgeline and shoulder signs. Original tree geometry, fields, Converter, construct and source assets remain. The printer, card console and fleet station have readable physical forms. The player initially faces the safe Quartz route. Printer repairs are automatic, so its misleading manual-use prompt is disabled.
+- **Interface:** a 332 × 72 maximum instrument strip, one actionable next step, context named Mine/Fight/Sell/Pack/Review, and combat controls only when relevant. Cards separate target, benefit, drawback, actual before/after stats and stacking. Prestige separates KEEP/RESET. Responsive scrolling, inherited modal layers and processed-input checks prevent GUI clicks assigning the field behind a button. Stations nested in their machinery remain discoverable by the context UI.
+- **Feedback:** original drone shell with type tint/trim, shot recoil, damage flash, tumbling authored fragments, a timed reprint scan, mineral fracture chips, visible fork/arc beams, shield absorption and kill-repair pulses. The original segmented turret aims its eye, lifts while charging, recoils, collapses into a dark ruin and reconstructs on encounter reset. Death fragments start at the last rendered flight pose, before the logical printer teleport. All animation is cosmetic; gameplay does not read local poses.
+- **Upgrades:** the 35-card catalog adds Execution Lens (extra damage below 35% sentry hull), Core Drill (shell/core damage with slower travel), Salvage Reactor (bounded hull repair per kill), Arc Relay (one secondary sentry within 22 studs) and Prism Splitter (one secondary crystal within 12 studs). Early packs expose a behavior-changing direction when eligible. Modifiers have explicit caps, saved target/effect payloads, and remain run-only. Paid legacy offers keep their exact contents.
+- **Sound:** prefer the original named RockCrack/RockBreak references when available. Fallbacks use exact files verified in the installed Roblox Studio content directory: `action_jump_land.mp3`, `impact_explosion_03.mp3`, and `volume_slider.ogg`. Volumes and distance are restrained. This is asset-presence verification; listening quality is pending.
+
+The presentation manager caps authored debris at 64, pulse/audio objects at 12 and reconstruction scans at 16. Death debris has priority over mineral chips. Original flight easing/caps, hover/yaw, overhead stations, arrival gates and crystal stages remain intact.
+
+## Review and executed verification
+
+**Behavior/parity source review:** checked separate card/base state, persistence compatibility, frozen paid offers/targets, server damage/reward ownership, finite encounter lives, one-drone start and free reprint identity. Fixed the attack loop clearing a chain's visual lifetime before replication. Added actual-server/API-double cases for finisher thresholds, one-target chain, kill repair, duplicate dead-target hits, geode damage and secondary mining arrival/range gates.
+
+**Pacing/visual/multiplayer source review:** checked event baselines for late joins, HP/state ordering, turret shot reset, dead/reprinted identity, bounded cleanup, card hierarchy, conditional headlines, percent units, touch layout and GUI/world input separation. Fixed normalized Critical Optics values being multiplied twice, text-border strokes applying to button text, hidden nested stations, and additive upgrade headlines overstating their relative change. These are source reviews, not observed multiplayer results.
+
+Official Luau 0.744 executed **175 checks**: 18 feel, 8 cosmetic lifecycle, 35 encounter/resource, 18 profile, 20 card, 28 persistence, 5 progression model, 35 assembled-server/API-double, 4 binary preservation and 4 original geometry. All source/bundles compile; standalone lint with explicitly `any` Roblox hosts passes. Full output is in `TEST_RESULTS.txt`.
+
+The progression evaluator was updated to include conditional finishing damage, bounded kill repair and the actual 17-stud two-turret spacing/range condition for chaining. All ten unchanged seeds complete the first two runs; median prestige is 474.28 and 760.90 seconds. A naked starter still fails Cobalt and repeated weak attempts retain no chip damage or protected earnings. These are simulations, not observed player timings. Geode/fork throughput, human evade timing, occlusion and network/save latency remain outside that model.
+
+## Actual Studio evidence and remaining checks
+
+During this pass the previously running build was inspected in local Roblox Studio. Its noisy ground texture, oversized HUD and weak combat readability were visible. An intermediate polish build was then reopened from disk and successfully entered Play. Its new depot machinery, quarry geology, lighting/atmosphere, cleaned materials and HUD were visible. That inspection caught small/poorly placed field signs, an unfinished HUD layout from the concurrent edit, and default text-stroke styling; final source corrects those findings.
+
+The Mac locked immediately before a safe-field assignment/playthrough. Computer control reported: **“The Mac is locked and automatic unlock is paused because physical input was detected.”** The user was asked to unlock; code/test/build work continued. Subsequent final UI, signs, drone trim, effects and initial-facing changes have not been visually verified. An initial engine load is not a passed animation, balance, traversal, touch, two-client or final polish test.
+
+Still required: reopen the final build, inspect the safe first-time route and all station interactions, mine through all three fracture stages, watch genuine sentry charge/fire/death and drone destruction/reprint, inspect a new three-card offer, verify stock audio, test portrait/short screens, two clients and a late join, compare the original flight slice, and profile a larger fleet. Live DataStore operation and Roblox publication remain outside this local pass.
+
+Build from `assets/mining-away-base.rbxl` with `python3 tools/release.py`. `build/revision.json` records the exact source commit and place SHA256; the packaged source must be clean. The PR remains a draft until the outstanding Studio review is completed.
