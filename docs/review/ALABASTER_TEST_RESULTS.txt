@@ -32,12 +32,13 @@ PASS sentry brief staggered idle blinks never obscure a live charge or shot
 PASS sentry stale server Aim cannot stop the idle after cooldown or reset
 PASS sentry charge acquires target and shot follow through releases back to patrol
 PASS sentry heading wraps by the shortest arc
+PASS sentry shell stays continuous when the eye crosses the heading wrap seam
 PASS sentry death suppresses aim and cannot leave charge active
 PASS sentry tracking converges consistently at 30 60 120 and 144 FPS
 PASS sentry shell has a travelling idle and stronger charge anticipation without moving plinth
 PASS sentry all eye parts share one transform; recoil and flinch settle
 PASS sentry long stalls are bounded and pose never integrates displacement
-PASS 11 sentry animation logic tests (visuals require Studio)
+PASS 12 sentry animation logic tests (visuals require Studio)
 PASS finite input validation rejects malformed values
 PASS ownership and destroyed/reprinting states reject commands
 PASS concurrent geode shell death is one atomic transition
