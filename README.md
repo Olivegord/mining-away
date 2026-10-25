@@ -2,6 +2,8 @@
 
 The single source project is [Olivegord/mining-away](https://github.com/Olivegord/mining-away). This branch restores the original drone/mining presentation and implements the one-drone → run cards → permanent fleet prestige loop. It builds the same game from its preserved original assets. It does not create or publish another Roblox experience.
 
+[Draft review PR #1](https://github.com/Olivegord/mining-away/pull/1) remains unmerged pending owner/Studio review.
+
 Current review branch: [`codex/restore-feel-prestige`](https://github.com/Olivegord/mining-away/tree/codex/restore-feel-prestige). Downloadable review builds, the original handoff and validation status are on the [source Page](https://chatgpt.com/space/page_80b705099bb481918ea713e1780329fe). Each release ZIP contains `revision.json` with its exact source commit and place checksum; it must say `source_dirty: false`.
 
 ## Run the review copy
