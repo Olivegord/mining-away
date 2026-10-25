@@ -1,5 +1,7 @@
 # Client presentation review
 
+The interface descriptions below are historical. The cream/teal UI replacement, current component files, native viewport evidence, and remaining checks are recorded in [UI overhaul review](review/UI_OVERHAUL.md). The movement/effects notes remain useful background; current sentry motion is recorded separately in [SENTRY_ANIMATION.md](review/SENTRY_ANIMATION.md).
+
 These are source/layout notes. Compilation and standalone lint do not establish Roblox text rendering, touch usability, visual polish or multiplayer correctness; Studio review evidence is recorded separately.
 
 ## Interface direction

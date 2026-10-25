@@ -650,7 +650,7 @@ RunService.Heartbeat:Connect(function(dt)
     replenished=replenished+cost
    end
   end
-  for _,p in pairs(profiles) do if not p.busy then settleRuntime(p) end;if p.publishDirty then p.publishDirty=false;publish(p) end end
+  for _,p in pairs(profiles) do p.player:SetAttribute('MA_InAssault',activeAssault(p));if not p.busy then settleRuntime(p) end;if p.publishDirty then p.publishDirty=false;publish(p) end end
  end
  if autosaveElapsed>=30 then
   autosaveElapsed=0

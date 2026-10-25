@@ -10,7 +10,7 @@ Current review branch: [`codex/restore-feel-prestige`](https://github.com/Oliveg
 
 Start with [docs/game/README.md](docs/game/README.md): [architecture](docs/game/architecture.md), [map reference](docs/game/map_reference.md), [full game design](docs/game/game_design.md), [implementation plan](docs/game/implementation_plan.md), [upgrades](docs/game/upgrades.md), and [every card](docs/game/upgrade_cards.md). The card catalog lists all 41 standard + 3 reserve outcomes, exact effects, targets, penalties, caps and saved legacy behavior; no pack grinding is needed to inspect it.
 
-The latest [Alabaster Reach and upgrades review](docs/review/ALABASTER_UPGRADES.md) supersedes earlier presentation status. The runtime map now uses chalk shelves, teal minerals, coral groves, cream paths, a sheltered depot, readable original sentries and restrained bloom. Source-defined maps assemble when **Play** starts.
+The [Alabaster Reach and upgrades review](docs/review/ALABASTER_UPGRADES.md), current [map reference](docs/game/map_reference.md), and [UI overhaul review](docs/review/UI_OVERHAUL.md) record the presentation passes and their evidence. Source-defined maps assemble when **Play** starts.
 
 ## Open the game
 
@@ -26,7 +26,7 @@ At 2,000 cumulative sale credits plus one Cobalt clear, optionally confirm prest
 
 ## Presentation pass
 
-The review build now uses an alabaster/teal alien landscape, coral and lavender field foliage, cream paths, pale cliff shelves, a sheltered depot, softer haze, restrained mineral bloom and readable route signs. A 72-pixel instrument HUD gives the next useful action; cards show their exact target, effect, drawback, stacking and before/after values. Drones retain their original shell with type trim. Client-only animation adds impact flashes, shot recoil, tumbling authored drone debris, printer reconstruction, segmented sentry aiming/charge/collapse/revival, mineral chips, shield/repair pulses and visible fork/arc beams. All gameplay remains server-owned. See [polish review](docs/review/POLISH_PASS.md) for actual verification and limitations.
+The review build uses an alabaster/teal alien landscape and a compact cream HUD with original native icons, rounded headings, tactile controls, and one focused menu at a time. Cards show their exact target, effect, drawback, stacking and before/after values; adaptive desktop cards keep all three actions visible, while phone choices scroll vertically. Fleet inspection separates permanent crew from run upgrades, and prestige shows what stays and resets. See the [UI references](docs/review/UI_REFERENCES.md) and [UI validation](docs/review/UI_OVERHAUL.md). Drones retain their original shell with type trim. Client-only effects include original crystal fractures, beam/impact effects, reconstruction, and segmented sentry motion; all gameplay remains server-owned. See the [sentry review](docs/review/SENTRY_ANIMATION.md) for current motion evidence.
 
 ## Economy and tuning
 
