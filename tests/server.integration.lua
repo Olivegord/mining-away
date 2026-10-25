@@ -401,6 +401,7 @@ check('resource placement rejects solid map obstruction without reserving node b
 end)
 check('replicated assault UI gate follows muster and recall independently of card state',function()
  local a=fixture();advance(.2);eq(a:GetAttribute('MA_InAssault'),false)
+ teleport(a,patches[3].center) -- The expanded Cobalt ridge is beyond the home command radius.
  input(a,'Patch',3);advance(.2);eq(patches[3].e.phase,'Gathering');eq(a:GetAttribute('MA_InAssault'),true)
  input(a,'Recall');advance(.2);eq(a:GetAttribute('MA_InAssault'),false)
  eq(#data(profile(a)).run.cards,0)

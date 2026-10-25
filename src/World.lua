@@ -245,7 +245,8 @@ function W.initialize()
  assert(construct and construct:IsA('Model'),'The supplied source must retain Workspace.construct')
  local turretTemplate=construct:Clone();turretTemplate.Name='OriginalConstructTemplate';turretTemplate.Parent=storage
  finishConstruct(construct);construct:SetAttribute('DormantLandmark',true)
- construct.PrimaryPart=construct:FindFirstChild('basepart');construct:PivotTo(CFrame.new(62+plan.dx,40.5+plan.dy,9+plan.dz))
+ local constructX,constructZ=plan:point(62,9)
+ construct.PrimaryPart=construct:FindFirstChild('basepart');construct:PivotTo(CFrame.new(constructX,plan:surface(constructX,constructZ)+.5,constructZ))
  local baseplate=workspace:FindFirstChild('Baseplate')
  if baseplate and baseplate:IsA('BasePart') then cleanSurface(baseplate,archive);baseplate.Color=P.ground;baseplate.Material=Enum.Material.SmoothPlastic end
  if spawn then cleanSurface(spawn,archive);spawn.Color=P.ledge;spawn.Material=Enum.Material.Metal end
@@ -330,7 +331,7 @@ function W.initialize()
   end
   -- Signs stand on each actual field top, beside its incoming route.
   local shoulders={{-20,-11},{-20,-8},{-20,10},{-21,-8},{21,-8}}
-  local shoulder=shoulders[id];local edge=Vector3.new(part.Position.X+shoulder[1],top,part.Position.Z+shoulder[2])
+  local shoulder=shoulders[id];local edge=Vector3.new(part.Position.X+shoulder[1]*MapLayout.FieldScale,top,part.Position.Z+shoulder[2]*MapLayout.FieldScale)
   local subtitle=id==1 and 'SAFE  /  START HERE' or field.Turrets>0 and (id==3 and 'GUARDED  /  COMBAT CARDS' or 'GUARDED  /  '..field.RecommendedFleet..'+ DRONES') or 'SAFE  /  RICHER ORE'
   local facing=id>3 and fields[id-1].center or home
   solid(block(model,'SignTerrace',edge-Vector3.new(0,top/2,0),Vector3.new(9,math.max(.2,top),5),P.stone))
@@ -386,7 +387,13 @@ function W.initialize()
  -- Small parts-built landmarks and dense undergrowth reward the bends. All
  -- dressing is outside the resource clearings; it never substitutes for an ore node.
  local props=Instance.new('Model');props.Name='ValleyDetails';props.Parent=map
- local function at(x,y,z) return Vector3.new(x+plan.dx,y+plan.dy,z+plan.dz) end
+ local siteX,siteZ,targetX,targetZ
+ local function site(x,z,biome)
+  siteX,siteZ=x,z
+  if biome then targetX,targetZ=plan:biomePoint(biome,x,z) else targetX,targetZ=plan:point(x,z) end
+ end
+ local function at(x,y,z) return Vector3.new(targetX+x-siteX,y+plan.dy,targetZ+z-siteZ) end
+ local function groundAt(x,z) local p=at(x,0,z);return plan:surface(p.X,p.Z) end
  local function prop(name,x,y,z,sx,sy,sz,color,turn,collide)
   local p=block(props,name,at(x,y,z),Vector3.new(sx,sy,sz),color,Enum.Material.SmoothPlastic,turn and {0,math.rad(turn),0})
   if collide then solid(p) end
@@ -394,6 +401,7 @@ function W.initialize()
  end
  -- Ruby mine: actual walk-in recess at the foot of a rising cliff. The
  -- playable crystal field remains in front, with no roof over its drone stations.
+ site(-88,66,2)
  for _,x in ipairs({-99,-77}) do
   prop('RubyPortalRock',x,22,66,7,18,9,Color3.fromRGB(112,70,66),x==-99 and -8 or 8,true)
   prop('MineTimber',x==-99 and -95 or -81,19,62.5,1.1,12,1.3,Color3.fromRGB(92,65,52),0,true)
@@ -408,13 +416,15 @@ function W.initialize()
  for i=1,6 do prop('MineSleeper',-88,13.08,62+i*1.15,8,.18,.5,Color3.fromRGB(98,70,51)) end
  for _,x in ipairs({-90.8,-85.2}) do prop('OreRail',x,13.22,66.2,.16,.16,9,P.metal) end
  -- A little ore trolley and abandoned hand tools, built from the same simple parts.
- local cartX,cartZ=-63,35;local cartGround=plan:surface(cartX+plan.dx,cartZ+plan.dz)
+ site(-63,35,2)
+ local cartX,cartZ=-63,35;local cartGround=groundAt(cartX,cartZ)
  prop('OreCart',cartX,cartGround+2,cartZ,4,2.5,3,P.metal,14)
  prop('CartOre',cartX,cartGround+3.3,cartZ,3.5,.5,2.5,P.coral,14)
  for _,x in ipairs({cartX-1.6,cartX+1.6}) do for _,z in ipairs({cartZ-1,cartZ+1}) do
   local wheel=prop('CartWheel',x,cartGround+.6,z,.5,1.2,1.2,P.ink);wheel.Shape=Enum.PartType.Cylinder
  end end
  -- Walkable overlook sits above the grove; one short sign replaces floating text.
+ site(-65,77)
  prop('OverlookDeck',-65,33.8,77,13,.6,12,P.ledge,0,true)
  for _,z in ipairs({72,82}) do
   prop('LookoutRail',-65,36,z,13,.35,.35,P.metal)
@@ -422,15 +432,23 @@ function W.initialize()
  end
  sign(props,at(-65,34,81),'RUBY LOOKOUT','GROVE BELOW',P.coral,at(-87,13,46))
  -- A narrow aqueduct/waterfall gives the upper pass an unmistakable silhouette.
- for _,x in ipairs({-20,-4}) do prop('AqueductPier',x,34,-101,3.5,12,5,P.ledge,0,true) end
- prop('AqueductLintel',-12,40,-101,21,2.5,6,P.ivory,0,true)
- prop('WaterChannel',-12,41.3,-101,19,.2,2.5,Color3.fromRGB(82,193,216))
- local fall=prop('MineralWaterfall',-21,21,-102,1.1,40,3.2,Color3.fromRGB(81,190,208));fall.Transparency=.25
- prop('PoolBank',-21,.11,-104,11,.2,12,P.ledge)
- prop('PoolWater',-21,.24,-104,9,.12,10,Color3.fromRGB(54,154,181))
+ site(-12,-101)
+ local aqueductY=math.max(groundAt(-20,-101),groundAt(-4,-101))+12
+ for _,x in ipairs({-20,-4}) do prop('AqueductPier',x,aqueductY-6,-101,3.5,12,5,P.ledge,0,true) end
+ prop('AqueductLintel',-12,aqueductY,-101,21,2.5,6,P.ivory,0,true)
+ prop('WaterChannel',-12,aqueductY+1.3,-101,19,.2,2.5,Color3.fromRGB(82,193,216))
+ prop('WaterSpout',-21,aqueductY+.8,-97.5,2,1,10,P.ledge)
+ prop('SpoutWater',-21,aqueductY+1.35,-97.5,1.2,.15,10,Color3.fromRGB(82,193,216))
+ local poolGround=groundAt(-21,-94)
+ local fallTop=aqueductY+1.3;local fallHeight=fallTop-poolGround
+ local fall=prop('MineralWaterfall',-21,poolGround+fallHeight/2,-94,1.1,fallHeight,3.2,Color3.fromRGB(81,190,208));fall.Transparency=.25
+ prop('PoolBank',-21,poolGround+.11,-94,11,.2,12,P.ledge)
+ prop('PoolWater',-21,poolGround+.24,-94,9,.12,10,Color3.fromRGB(54,154,181))
  -- Emerald's preserved segmented construct crowns the ridge as a dormant landmark.
- prop('ConstructPlinth',62,39.5,9,13,1,13,P.ledge,0,true)
- prop('ConstructBedrock',62,19,9,13,38,13,P.stone,0,true)
+ site(62,9)
+ local constructGround=groundAt(62,9)
+ prop('ConstructPlinth',62,constructGround-.5,9,13,1,13,P.ledge,0,true)
+ prop('ConstructBedrock',62,constructGround/2,9,13,constructGround,13,P.stone,0,true)
  -- Leaf/flower clusters, fungi, fallen trunks and survey equipment occupy the
  -- negative space around trees. Deterministic placement keeps repeat builds equal.
  for i,t in ipairs(plan.trees) do
@@ -446,21 +464,23 @@ function W.initialize()
   end
  end
  -- Deliberate little discoveries along the lower loop, never new interaction UI.
+ site(-102,-9)
  for i=1,4 do
-  local x,z=-108+i*3,-12+i*1.5;local y=plan:surface(x+plan.dx,z+plan.dz)
+  local x,z=-108+i*3,-12+i*1.5;local y=groundAt(x,z)
   prop('SurveyCrate',x,y+1.2,z,2.4,2.4,2.4,i%2==0 and P.amber or P.edge,i*13)
   prop('CrateBand',x,y+1.2,z,2.45,.32,2.45,P.ivory,i*13)
  end
  -- Giant flat-capped alien fungi mark the first route, without copying the reference's assets.
  for _,m in ipairs({{-8,3,6},{-3,43,8},{-50,54,5}}) do
-  local x,z,h=m[1],m[2],m[3];local y=plan:surface(x+plan.dx,z+plan.dz)
+  local x,z,h=m[1],m[2],m[3];site(x,z);local y=groundAt(x,z)
   prop('FungusStalk',x,y+h/2,z,1,h,1,P.ledge)
   prop('FungusCap',x,y+h,z,h*.9,1.3,h*.75,P.amber,-8)
   prop('FungusCrown',x-.5,y+h+.9,z,h*.55,.6,h*.5,P.ivory,4)
  end
+ site(-24,-50)
  surveyGate(map,at(-24,10,-50),P.blue)
- root:SetAttribute('TreeCount',#plan.trees);root:SetAttribute('RouteCount',#plan.routes)
- root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Alabaster Valley / Auburn Cliffs / Connected Terraces')
+ root:SetAttribute('TreeCount',#plan.trees);root:SetAttribute('RouteCount',#plan.routes);root:SetAttribute('MapScale',MapLayout.Scale);root:SetAttribute('OpenHubRadius',46)
+ root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Alabaster Valley / Open Meadows / Outer Groves')
  return {root=root,map=map,home=home,printer=printer,packStation=packs,prestigeStation=prestige,converter=converter,fields=fields,turretTemplate=turretTemplate,droneTemplate=rs:FindFirstChild('Drone'),crystalTemplate=rs:FindFirstChild('Crystal')}
 end
 return W

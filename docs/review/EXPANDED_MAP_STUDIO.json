@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-25",
+  "map": "Expanded Alabaster Valley",
+  "horizontalScale": 1.9,
+  "firstWalk": {
+    "routes": [
+      {
+        "segments": 29,
+        "passed": true,
+        "route": "Ruby switchback"
+      },
+      {
+        "segments": 29,
+        "passed": true,
+        "route": "High pass"
+      },
+      {
+        "segments": 22,
+        "passed": true,
+        "route": "Cobalt ascent"
+      },
+      {
+        "segments": 22,
+        "passed": true,
+        "route": "Ruby overlook"
+      },
+      {
+        "segments": 36,
+        "passed": false,
+        "route": "Grove loop",
+        "failure": {
+          "segment": 35,
+          "goal": "-108.13999938964844, 13.140000343322754, 127.99600219726562",
+          "actual": "-107.83349609375, 15.964658737182617, 130.50331115722656"
+        }
+      },
+      {
+        "segments": 22,
+        "passed": true,
+        "route": "Emerald traverse"
+      },
+      {
+        "segments": 43,
+        "passed": true,
+        "route": "Fern stair"
+      },
+      {
+        "segments": 8,
+        "passed": true,
+        "route": "Quartz approach"
+      },
+      {
+        "segments": 8,
+        "passed": true,
+        "route": "Converter lane"
+      }
+    ],
+    "kind": "single actual Studio avatar; staged route starts, no jumping; not multiplayer",
+    "walkedSegments": 217
+  },
+  "finalGroveWalk": {
+    "routes": [
+      {
+        "segments": 36,
+        "passed": true,
+        "route": "Grove loop"
+      }
+    ],
+    "kind": "single actual Studio avatar; staged route starts, no jumping; not multiplayer",
+    "walkedSegments": 36
+  },
+  "finalCollisionProbes": {
+    "routes": 9,
+    "kind": "real Studio floor rays and avatar-volume overlap probes, not humanoid or multiplayer playtest",
+    "issues": [],
+    "samples": 3120
+  },
+  "limits": "One real Studio avatar with separately staged route starts, no jumping. Eight unchanged routes passed in the first expanded-map installation; the Grove route passed after its east-entry repair. Collision probes cover all nine final routes. Not an uninterrupted whole-run, multiplayer, late-join or production persistence test."
+}

@@ -4,14 +4,23 @@ local plan=Layout.plan(Config.Fields)
 local checks=0
 local function check(name,fn) fn();checks+=1;print('PASS map '..name) end
 local function near(a,b) assert(math.abs(a-b)<1e-6,tostring(a)..' ~= '..tostring(b)) end
-check('five nearby clearings climb one compact valley',function()
+check('five clearings span the larger valley before outer hills',function()
  local home={-56,.5,-11}
  local last=0
  for _,f in ipairs(plan.fields) do
   assert(f.top>=last);last=f.top
-  assert(math.sqrt((f.x-home[1])^2+(f.z-home[3])^2)<100)
+  assert(math.sqrt((f.x-home[1])^2+(f.z-home[3])^2)<190)
  end
  near(plan.fields[2].top,13);near(plan.fields[5].top,40)
+end)
+check('expanded world leaves a broad sparse central hub',function()
+ assert(Layout.Scale>=1.8)
+ assert(Layout.Columns*Layout.Cell*Layout.Scale>=370)
+ for x=-100,-12,4 do for z=-51,29,4 do
+  if not plan:hubClear(x,z,-8) then near(plan:surface(x,z),0) end
+ end end
+ for _,t in ipairs(plan.trees) do assert(plan:hubClear(t.x,t.z,t.h*.3),'tree in open hub') end
+ for _,f in ipairs(plan.fields) do assert(math.sqrt((f.x+56)^2+(f.z+11)^2)>80,'field crowds hub') end
 end)
 check('all walking grades are below 35 degrees and widths admit passing',function()
  for _,r in ipairs(plan.routes) do
@@ -73,6 +82,23 @@ check('no upper route foundation blocks a lower route centerline',function()
   end
  end end
 end)
+check('curved road strips do not fold back above a walking lane',function()
+ for _,r in ipairs(plan.routes) do for i=1,#r.samples-1 do
+  local a,b=r.samples[i],r.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)
+  local steps=math.ceil(len/2)
+  for n=0,steps do for _,side in ipairs({-.25,0,.25}) do
+   local t=n/steps;local x=a[1]+dx*t-dz/len*r.width*side;local z=a[3]+dz*t+dx/len*r.width*side;local y=a[2]+(b[2]-a[2])*t
+   for j=1,#r.samples-1 do
+    local c,d=r.samples[j],r.samples[j+1];local vx,vz=d[1]-c[1],d[3]-c[3];local length2=vx*vx+vz*vz
+    local u=((x-c[1])*vx+(z-c[3])*vz)/length2
+    if u>=0 and u<=1 then
+     local across=math.abs((x-c[1])*vz-(z-c[3])*vx)/math.sqrt(length2)
+     assert(across>r.width/2 or c[2]+(d[2]-c[2])*u<y+.65,r.name..' folded road edge')
+    end
+   end
+  end end
+ end end
+end)
 check('main flight corridors clear terrain without replacing original direct eased travel',function()
  local stations={{x=-56,y=10.5,z=-11}}
  for _,f in ipairs(plan.fields) do table.insert(stations,{x=f.x,y=f.top+12,z=f.z}) end
@@ -85,18 +111,18 @@ check('main flight corridors clear terrain without replacing original direct eas
 end)
 check('Ruby forest is tall, dense and clear of the mining footprint',function()
  local ruby=0
- assert(#plan.trees>=45)
+ assert(#plan.trees>=30)
  for _,t in ipairs(plan.trees) do
   assert(plan:fieldClear(t.x,t.z,t.h*.27));assert(plan:routeClear(t.x,t.z,3))
   if t.biome==2 then ruby+=1;assert(t.h>=19) end
  end
- assert(ruby>=10)
+ assert(ruby>=8)
 end)
 check('depot and original Converter are not buried by the raised world',function()
  for x=-76,-36,2 do for z=-28,6,2 do near(plan:surface(x,z),0) end end
  near(plan:surface(-86,-37.5),0)
 end)
-check('a moved source spawn translates fields routes and terrain together',function()
+check('field and route metadata follow the source spawn',function()
  local shifted=Layout.plan(Config.Fields,{-44,3.5,-18})
  for i,f in ipairs(plan.fields) do near(shifted.fields[i].x,f.x+12);near(shifted.fields[i].y,f.y+3);near(shifted.fields[i].z,f.z-7) end
  for i,r in ipairs(plan.routes) do for j,a in ipairs(r.samples) do

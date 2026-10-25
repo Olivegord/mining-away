@@ -7,7 +7,7 @@ Read [owner requirements](../OWNER_REQUIREMENTS.md) first. This is one game repo
 | Source | Responsibility | Common changes |
 | --- | --- | --- |
 | [`src/Config.lua`](../../src/Config.lua) | Field definitions and shared simulation tuning. | Field populations, mineral values, defense strength, timing, command distance. Check the consuming runtime because some constants are still duplicated there. |
-| [`src/MapLayout.lua`](../../src/MapLayout.lua) | Pure compact-valley plan: connected routes, rounded bends, terrain cuts and biome groves. | Field/route clearance and terrain composition; run `map-layout.spec.lua` and the real Studio map checks. |
+| [`src/MapLayout.lua`](../../src/MapLayout.lua) | Pure expanded-valley plan: sparse hub, field/landscape scales, connected routes, rounded bends, terrain cuts and outer groves. | Field/route clearance and terrain composition; run `map-layout.spec.lua` and the real Studio map checks. |
 | [`src/World.lua`](../../src/World.lua) | Runtime map assembly, original asset integration, station props, paths, trees, scenery, materials, lighting; drone and turret cloning. | Map, atmosphere, palette, station placement, safe terrain, original pyramid appearance. |
 | [`src/Feel.lua`](../../src/Feel.lua) | Pure original-motion equations, formation, hover, mining stations, growth and crystal-stage helpers. | Original-feel corrections. Preserve the contract and its equation tests. |
 | [`src/Rules.lua`](../../src/Rules.lua) | Pure finite encounter state machine, immutable-life eligibility, clearance, atomic depletion, free reprint transitions. | Anti-attrition, encounter lifecycle, contribution and ownership rules. |

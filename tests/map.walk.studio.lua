@@ -1,6 +1,7 @@
 -- Execute on the real Studio CLIENT after Play, with exclusive Studio control.
 -- Stages the avatar once at each route start, then walks all chords without jumps
 -- or further teleports. Poll workspace.MapWalkReview.Report.Value for results.
+local onlyRoute=nil -- Set to a route name to rerun an isolated repaired route.
 local routes=workspace.MiningAway.Map.WindingRoutes
 local player=game.Players.LocalPlayer
 local character=assert(player.Character)
@@ -18,7 +19,7 @@ task.spawn(function()
   local trails={}
   for _,trail in ipairs(route:GetChildren()) do if trail:GetAttribute('RouteStart') then table.insert(trails,trail) end end
   table.sort(trails,function(a,b) return a:GetAttribute('RouteSegment')<b:GetAttribute('RouteSegment') end)
-  if #trails>0 then
+  if #trails>0 and (onlyRoute==nil or route.Name==onlyRoute) then
    character:PivotTo(CFrame.new(trails[1]:GetAttribute('RouteStart')+Vector3.new(0,4,0)))
    task.wait(.4)
    local failed=nil

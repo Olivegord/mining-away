@@ -7,6 +7,11 @@ for _,p in ipairs(root:GetDescendants()) do
 end
 local base=workspace:FindFirstChild('Baseplate');if base then table.insert(parts,base) end
 local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=parts
+-- Floor rays handle ramps. Exclude walk surfaces from the upright body box:
+-- a box on a pitched road otherwise reports the uphill floor as a torso obstacle.
+local bodyParts={}
+for _,p in ipairs(parts) do if not p:GetAttribute('WalkRoute') then table.insert(bodyParts,p) end end
+local overlap=OverlapParams.new();overlap.FilterType=Enum.RaycastFilterType.Include;overlap.FilterDescendantsInstances=bodyParts
 local issues={};local samples=0;local routeCount=0
 for _,route in ipairs(root.Map.WindingRoutes:GetChildren()) do
  routeCount+=1
@@ -18,6 +23,8 @@ for _,route in ipairs(root.Map.WindingRoutes:GetChildren()) do
    for n=0,steps do for _,offset in ipairs({-.25,0,.25}) do
     samples+=1;local p=a:Lerp(b,n/steps)+side*trail:GetAttribute('RouteWidth')*offset
     local hit=workspace:Raycast(p+Vector3.new(0,6,0),Vector3.new(0,-7,0),params)
+    local bodies=workspace:GetPartBoundsInBox(CFrame.new(p+Vector3.new(0,3.4,0)),Vector3.new(1.8,4.8,1.8),overlap)
+    if #bodies>0 then table.insert(issues,{route=route.Name,position=tostring(p),offset=offset,body=bodies[1]:GetFullName()}) end
     if not hit or math.abs(hit.Position.Y-p.Y)>.8 then
      table.insert(issues,{route=route.Name,position=tostring(p),offset=offset,floor=hit and hit.Position.Y or 'none',part=hit and hit.Instance:GetFullName() or 'none'})
     end
@@ -25,4 +32,4 @@ for _,route in ipairs(root.Map.WindingRoutes:GetChildren()) do
   end
  end
 end
-return game:GetService('HttpService'):JSONEncode({kind='real Studio collision ray probes, not humanoid or multiplayer playtest',samples=samples,routes=routeCount,issues=issues})
+return game:GetService('HttpService'):JSONEncode({kind='real Studio floor rays and avatar-volume overlap probes, not humanoid or multiplayer playtest',samples=samples,routes=routeCount,issues=issues})

@@ -10,7 +10,7 @@ Current review branch: [`codex/restore-feel-prestige`](https://github.com/Oliveg
 
 Start with [docs/game/README.md](docs/game/README.md): [architecture](docs/game/architecture.md), [map reference](docs/game/map_reference.md), [full game design](docs/game/game_design.md), [implementation plan](docs/game/implementation_plan.md), [upgrades](docs/game/upgrades.md), and [every card](docs/game/upgrade_cards.md). The card catalog lists all 41 standard + 3 reserve outcomes, exact effects, targets, penalties, caps and saved legacy behavior; no pack grinding is needed to inspect it.
 
-The [Alabaster Reach and upgrades review](docs/review/ALABASTER_UPGRADES.md), current [map reference](docs/game/map_reference.md), and [UI overhaul review](docs/review/UI_OVERHAUL.md) record the presentation passes and their evidence. Source-defined maps assemble when **Play** starts.
+The [expanded valley and sparse hub review](docs/review/EXPANDED_MAP.md), [Alabaster Reach and upgrades review](docs/review/ALABASTER_UPGRADES.md), current [map reference](docs/game/map_reference.md), and [UI overhaul review](docs/review/UI_OVERHAUL.md) record the presentation passes and their evidence. Source-defined maps assemble when **Play** starts.
 
 ## Open the game
 
