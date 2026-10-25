@@ -15,6 +15,13 @@ for i,cell in ipairs(plan.terrain) do if i%3==0 then for _,face in ipairs(cell.f
   if gap>.4 then table.insert(issues,{x=x,z=z,y=y,gap=gap}) end
  end
 end end end
-local markers=workspace.MiningAway:FindFirstChild('FoliagePatches')
-local count=markers and #markers:GetChildren() or 0
-return game:GetService('HttpService'):JSONEncode({kind='real engine facet and planting-marker inspection',facetSamples=samples,worstHeightError=worst,issues=issues,nativeGrass=workspace.MiningAway:GetAttribute('NativeGrassPatches'),skinnedGrass=count,plannedGrass=#plan.grass})
+params.FilterDescendantsInstances={workspace.Terrain}
+local nativeHits=0;local floorErrors={};local worstMeadow=0
+for i,cell in ipairs(plan.grass) do if i%7==0 then
+ local hit=workspace:Raycast(Vector3.new(cell.x,cell.y+12,cell.z),Vector3.new(0,-28,0),params)
+ if hit then
+  nativeHits+=1;local delta=math.abs(hit.Position.Y-cell.y-.25);worstMeadow=math.max(worstMeadow,delta)
+  if delta>1.25 then table.insert(floorErrors,{x=cell.x,z=cell.z,expected=cell.y+.25,actual=hit.Position.Y}) end
+ else table.insert(floorErrors,{x=cell.x,z=cell.z,missing=true}) end
+end end
+return game:GetService('HttpService'):JSONEncode({kind='real engine facet and native-meadow inspection',facetSamples=samples,worstFacetHeightError=worst,facetIssues=issues,nativeSamples=nativeHits,worstMeadowHeightError=worstMeadow,meadowIssues=floorErrors,grassCells=workspace.MiningAway:GetAttribute('NativeGrassCells'),dryCells=workspace.MiningAway:GetAttribute('DryMeadowCells'),plannedCells=#plan.grass})

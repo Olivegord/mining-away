@@ -6,6 +6,7 @@ for _,p in ipairs(root:GetDescendants()) do
  if p:IsA('BasePart') and p.CanCollide then table.insert(parts,p) end
 end
 local base=workspace:FindFirstChild('Baseplate');if base then table.insert(parts,base) end
+table.insert(parts,workspace.Terrain)
 local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=parts
 -- Floor rays handle ramps. Exclude walk surfaces from the upright body box:
 -- a box on a pitched road otherwise reports the uphill floor as a torso obstacle.

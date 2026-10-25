@@ -62,23 +62,10 @@ with tempfile.TemporaryDirectory() as tmp:
  for name,typ,value in [('LightingStyle',0x12,b'\0'*4),('PrioritizeLightingQuality',2,b'\1')]:
   d,_=lookup[(b'PROP',38,name)];_,p=string(d,4);assert d[p]==typ and d[p+1:]==value
  print('PASS binary all native Harbor sky/effects/UI/script properties imported, references rebased, render settings persisted')
- # Verify the actual third-party skinned meshes and every bind/bone property.
- from import_foliage import prepare
  from build import client_bundle
- prepared=list(chunks(prepare((ROOT/'reference/skinned-grass/SkinnedGrass.rbxm').read_bytes(),ROOT/'reference/skinned-grass/src')))
- next_cid=max(u32(d) for k,d,_ in new if k==b'INST')-max(u32(d) for k,d,_ in prepared if k==b'INST')
- grass_classes={}
- for k,d,_ in prepared:
-  if k==b'INST':
-   cid=u32(d);cls,p=string(d,4);grass_classes[cid]=(cls,u32(d,p+1))
-  if k==b'PROP':
-   cid=u32(d);prop,p=string(d,4);typ=d[p]
-   nd,_=lookup[(k,cid+next_cid,prop)];_,np=string(nd,4)
-   if typ not in (0x13,0x1c):assert d[p:]==nd[np:],('grass property',cid,prop)
-   if grass_classes[cid][0]=='Script' and prop=='Disabled':assert nd[np+1:]==b'\1'*grass_classes[cid][1]
- assert sum(n for cls,n in grass_classes.values() if cls=='Bone')==200
- assert 'local Foliage' in client_bundle() and 'Foliage.new(world,localFX)' in client_bundle()
- print('PASS binary original SkinnedGrass rig/mesh properties and reviewed source imported; all demo runners disabled')
+ assert 'Foliage.new' not in client_bundle() and 'RenderStepped' not in (ROOT/'src/NativeMeadow.lua').read_text()
+ assert all(string(d,4)[0] != 'Bone' for k,d,_ in new if k==b'INST' and u32(d)>max_cid)
+ print('PASS binary no imported skinned grass rigs or client foliage runner; original native terrain settings preserved')
  bad=tmp/'bad.rbxl';bad.write_bytes(b'not a place')
  try:build(bad,tmp/'bad-output.rbxl')
  except AssertionError:pass

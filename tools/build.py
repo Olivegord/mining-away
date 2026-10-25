@@ -23,9 +23,9 @@ def module_bundle(names):
   s+='local '+name+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','MapLayout','HarborLighting','Facets','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','MapLayout','HarborLighting','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Feel','Feedback','SentryMotion','Presentation','UILayout','Interface','CardView','Foliage'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Feel','Feedback','SentryMotion','Presentation','UILayout','Interface','CardView'))+(ROOT/'src/Client.lua').read_text()
 def build(original,out):
  assert original.resolve()!=out.resolve(),'Input and output must differ'
  out.parent.mkdir(parents=True,exist_ok=True)
@@ -77,12 +77,6 @@ def build(original,out):
    if name=='Lighting': lighting_cid=cid
  assert storage_ref is not None and lighting_cid is not None
  merged=append_model(b''.join(output),native.read_bytes(),storage_ref,chunks,chunk,u32,string,packstr)
- # Vendor the reviewed module and real rigged meshes; demo runners stay disabled.
- grass=ROOT/'reference/skinned-grass/SkinnedGrass.rbxm'
- assert hashlib.sha256(grass.read_bytes()).hexdigest()=='b43dfe3e064d0d2130e31f39732e9b76c94ef0890796e85db3b1b117ef7ed887'
- from import_foliage import prepare
- assert replicated_ref is not None
- merged=append_model(merged,prepare(grass.read_bytes(),ROOT/'reference/skinned-grass/src'),replicated_ref,chunks,chunk,u32,string,packstr)
  # Engine rendering options must also survive opening the file before Play.
  styles=[chunk(b'PROP',struct.pack('<I',lighting_cid)+packstr('LightingStyle')+b'\x12'+b'\0'*4),
          chunk(b'PROP',struct.pack('<I',lighting_cid)+packstr('PrioritizeLightingQuality')+b'\x02\x01')]
@@ -91,7 +85,7 @@ def build(original,out):
   if k==b'PRNT':final.extend(styles)
   final.append(raw)
  out.write_bytes(b''.join(final))
- report={'original_sha256':EXPECTED,'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'original_bytes':len(b),'output_bytes':out.stat().st_size,'changed_sources':changed,'lighting_template_sha256':hashlib.sha256(native.read_bytes()).hexdigest(),'grass_template_sha256':hashlib.sha256(grass.read_bytes()).hexdigest(),'policy':'Original instance referents, parents, assets and property payloads are preserved except controller Source/Disabled. Native Harbor Lighting and SkinnedGrass templates (reviewed source, disabled demo runners) and two render settings are appended; SSTR/PRNT/header totals are rebased. Original source asset is unchanged.'}
+ report={'original_sha256':EXPECTED,'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'original_bytes':len(b),'output_bytes':out.stat().st_size,'changed_sources':changed,'lighting_template_sha256':hashlib.sha256(native.read_bytes()).hexdigest(),'policy':'Original instance referents, parents, assets and property payloads are preserved except controller Source/Disabled. A native Harbor Lighting template and two render settings are appended; native grass uses the preserved Terrain decoration settings; SSTR/PRNT/header totals are rebased. Original source asset is unchanged.'}
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2));return report
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'build/Mining Away.rbxl');a=p.parse_args()

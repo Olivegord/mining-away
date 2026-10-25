@@ -1,5 +1,7 @@
 # Interactive grass replacement — October 25, 2026
 
+Superseded by [native grass](NATIVE_GRASS.md). The owner requested continuous coverage, liked the final dense appearance, and then requested native grass because the skinned version was too slow. This is the historical first-pass report.
+
 Applied to the owner-confirmed active **Drone Blower revolution** place (`136098934779395`), the current name of this project. The owner first identified Mining Away, then explicitly redirected the live edit to Drone Blower revolution. Alabaster Harbor was not modified. The reproducible working build remains `build/Mining Away.rbxl` under the repository's build contract. No Roblox publication or cloud save was performed.
 
 The 15 former native-terrain grass patches now use the actual SkinnedGrass module and rig by xander22. Server-generated planting markers replace terrain FillBlock calls. Each client creates 15 local meshes, 1,500 blade bones and 15 origin bones; client-only distance culling keeps distant rigs out of Workspace. Wind uses 7–16 degree sway; character interaction reaches 65 degrees. Shadows, touch, query and collisions are disabled on grass meshes. The original supplied mesh/pivot needed normalization: its bounding box is 100 studs but blade roots span approximately 14 studs; its Model pivot is rotated. Scaling from that bounding box or blindly resetting its Model pivot produces tiny, sideways grass. The integration corrects both and grounds each blade on existing facets/baseplate.

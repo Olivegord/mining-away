@@ -129,4 +129,16 @@ check('field and route metadata follow the source spawn',function()
   local b=shifted.routes[i].samples[j];near(b[1],a[1]+12);near(b[2],a[2]+3);near(b[3],a[3]-7)
  end end
 end)
+check('native meadow covers broad connected land and keeps gameplay footprints clear',function()
+ assert(#plan.grass*16>30000,'meadow regressed to isolated little patches')
+ local dry,wet=0,0
+ for _,cell in ipairs(plan.grass) do
+  assert(plan:routeClear(cell.x,cell.z,3),'native grass intrudes on a route')
+  assert(plan:fieldClear(cell.x,cell.z,4),'native grass intrudes on an ore clearing')
+  assert(math.abs(cell.x+56)>=24 or math.abs(cell.z+11)>=21,'native grass covers the depot')
+  assert(cell.blades==nil,'per-blade replication returned')
+  if cell.dry then dry+=1 else wet+=1 end
+ end
+ assert(dry>#plan.grass*.05 and wet>#plan.grass*.7,'missing green/dry-ground variation')
+end)
 print(checks..' deterministic map geometry checks passed; not engine walking or multiplayer evidence')

@@ -156,6 +156,14 @@ fixturePart(workspace,'Converter',Vector3.new(-50,1,-6),Vector3.new(6,2,6))
 local harborTemplate=Instance.new('Folder');harborTemplate.Name='AlabasterHarborLighting';harborTemplate.Parent=serverStorage
 for _,v in ipairs({{'Sky','Sunless Blue Sky'},{'Atmosphere','Atmosphere'},{'BloomEffect','Bloom'},{'ColorCorrectionEffect','ColorCorrection'},{'DepthOfFieldEffect','DepthOfField'},{'SunRaysEffect','SunRays'},{'BlurEffect','Blur'}}) do local n=Instance.new(v[1]);n.Name=v[2];n.Parent=harborTemplate end
 local nativeTerrain=Instance.new('Terrain');nativeTerrain.Parent=workspace
+local Region3={new=function(low,high) return {low=low,high=high} end}
+function nativeTerrain:ReadVoxels(region,resolution)
+ local m,o={},{}
+ local size=(region.high-region.low)/resolution
+ for x=1,size.X do m[x]={};o[x]={};for y=1,size.Y do m[x][y]={};o[x][y]={};for z=1,size.Z do m[x][y][z]=Enum.Material.Air;o[x][y][z]=0 end end end
+ return m,o
+end
+function nativeTerrain:WriteVoxels(_,_,_,_) end
 function nativeTerrain:FillBlock(_,_,_) end
 function nativeTerrain:SetMaterialColor(_,_) end
 local originalPatches=Instance.new('Folder');originalPatches.Name='Patches';originalPatches.Parent=workspace

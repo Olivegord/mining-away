@@ -356,21 +356,9 @@ function W.initialize(): any
   stone(m,Vector3.new(r.x,r.y+r.h*.32,r.z),Vector3.new(r.w,r.h*.8,r.d),{-5,r.yaw,4},tint,'CliffButtress')
   stone(m,Vector3.new(r.x-2,r.y+r.h*.75,r.z+1),Vector3.new(r.w*.72,r.h*.35,r.d*.8),{4,r.yaw+17,-8},tint:Lerp(P.ledge,.18),'BrokenCrown')
  end
- -- Replicate lightweight planting markers. Rigged meshes and animation live
- -- entirely on each client; grass never changes gameplay collision/query state.
- local planting=Instance.new('Folder');planting.Name='FoliagePatches'
- for i,g in ipairs(plan.grass) do
-  local marker=Instance.new('Vector3Value');marker.Name=string.format('Patch%03d',i)
-  marker.Value=Vector3.new(g.x,g.y,g.z);marker:SetAttribute('Width',g.w)
-  -- Four corners let the client ground every blade on the actual slope.
-  marker:SetAttribute('H00',plan:surface(g.x-g.w/2,g.z-g.d/2))
-  marker:SetAttribute('H10',plan:surface(g.x+g.w/2,g.z-g.d/2))
-  marker:SetAttribute('H01',plan:surface(g.x-g.w/2,g.z+g.d/2))
-  marker:SetAttribute('H11',plan:surface(g.x+g.w/2,g.z+g.d/2))
-  marker:SetAttribute('Depth',g.d);marker.Parent=planting
- end
- planting.Parent=root
- root:SetAttribute('NativeGrassPatches',0);root:SetAttribute('SkinnedGrassPatches',#plan.grass)
+ -- Built-in terrain decoration owns grass rendering and wind. No per-blade
+ -- replication, client cloning, octrees or per-frame foliage work remains.
+ NativeMeadow.build(plan,root)
  root:SetAttribute('TerrainStyle','Irregular slopes and fractured cliffs')
  local function v(a) return Vector3.new(unpack(a)) end
  local routes=Instance.new('Model');routes.Name='WindingRoutes';routes.Parent=map

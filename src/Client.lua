@@ -11,7 +11,6 @@ local world=workspace:WaitForChild('MiningAway')
 local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local presentation=Presentation.new({parent=localFX})
-local foliage=Foliage.new(world,localFX)
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -843,7 +842,6 @@ connect(RunService.Heartbeat,function(dt)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
- foliage:destroy()
  presentation:destroy()
  for _,c in ipairs(connections) do c:Disconnect() end
  for _,c in pairs(observed) do c:Disconnect() end

@@ -177,17 +177,31 @@ function L.plan(config: any,home: any): any
    table.insert(p.rocks,{x=x,z=z,y=p:surface(x,z),w=r[3],h=r[4],d=r[5],yaw=r[6],biome=i<=3 and 2 or 3})
   end
  end
- -- Rigged grass lives only in small, gently sloping shoulder patches.
+ -- One continuous native meadow. A 4-stud terrain raster follows the same
+ -- open-land mask as the dense mesh version, with no isolated lawn squares.
  p.grass={}
- for x=-170,180,12 do for z=-165,180,12 do
-  if p:hubClear(x,z,9) and p:fieldClear(x,z,10) and p:routeClear(x,z,10) then
-   local h=p:surface(x,z)
-   local slope=math.max(math.abs(p:surface(x+5,z)-h),math.abs(p:surface(x-5,z)-h),math.abs(p:surface(x,z+5)-h),math.abs(p:surface(x,z-5)-h))
-   local nearField=false
-   for _,f in ipairs(p.fields) do if math.abs(x-f.x)<f.w/2+42 and math.abs(z-f.z)<f.d/2+42 then nearField=true end end
-   if nearField and slope<.45 and math.sin(x*.17)+math.cos(z*.11)>.25 then
-    table.insert(p.grass,{x=x,z=z,y=h,w=8,d=8})
-   end
+ local function grassHeight(x,z)
+  if math.abs(x-home[1])<24 and math.abs(z-home[3])<21 then return nil end
+  if not p:fieldClear(x,z,4) or not p:routeClear(x,z,3) then return nil end
+  local near=(x-home[1])^2+(z-home[3])^2<90^2
+  for _,f in ipairs(p.fields) do
+   if math.abs(x-f.x)<f.w/2+38 and math.abs(z-f.z)<f.d/2+38 then near=true;break end
+  end
+  if not near then return nil end
+  local h=p:surface(x,z)
+  local slope=math.max(math.abs(p:surface(x+.75,z)-h),math.abs(p:surface(x-.75,z)-h),math.abs(p:surface(x,z+.75)-h),math.abs(p:surface(x,z-.75)-h))
+  if slope>.55 then return nil end
+  return h
+ end
+ local ox,oz=p:point(L.Origin[1],L.Origin[2]);local edge=L.Columns*L.Cell*L.Scale
+ for x=math.floor(ox/4)*4,ox+edge-4,4 do for z=math.floor(oz/4)*4,oz+edge-4,4 do
+  local bx,bz=x+2,z+2;local h=grassHeight(bx,bz)
+  if h then
+   local tone=math.clamp(.45+.32*(math.sin(bx*.019+math.cos(bz*.011)*1.8)+math.cos(bz*.024-bx*.007)),0,1)
+   local scatter=(math.sin(bx*17.13+bz*7.91)*43758.5453)%1
+   -- Dry soil blends into grass, with grass blades retained across each band.
+   local dry=scatter<math.max(0,tone-.55)*1.2
+   table.insert(p.grass,{x=bx,z=bz,y=h,w=4,d=4,tone=tone,dry=dry})
   end
  end end
  for i,t in ipairs(L.Trees) do

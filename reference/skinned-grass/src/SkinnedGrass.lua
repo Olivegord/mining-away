@@ -57,6 +57,8 @@ function SkinnedGrass.new(initialSettings)
 		Settings = {},
 		SkinnedMeshesRenderedIn = {},
 		MeshParents = {},
+		MeshNodes = {},
+		ModelBoneNodes = {},
 		MeshTweenOuts = {},
 		MeshOctree = {},
 		BoneOctree = Octree.new(),
@@ -133,6 +135,8 @@ function SkinnedGrass:AddMeshes(skinnedMeshModels : {Model})
 		end
 		-- cache the bones for looping
 		local bones = meshPart:GetChildren()
+		local boneNodes = {}
+		self.ModelBoneNodes[model] = boneNodes
 		-- create origin bone for transforming bones en masse
 		local originBone = Instance.new("Bone")
 		originBone.Parent = meshPart
@@ -141,16 +145,35 @@ function SkinnedGrass:AddMeshes(skinnedMeshModels : {Model})
 		-- loop through each bone and reparent to origin bone
 		for _,bone in bones do
 			if not bone:IsA("Bone") then continue end
-			self.BoneOctree:CreateNode(bone.TransformedWorldCFrame.Position, bone)
+			if not bone:GetAttribute("FoliageHidden") then
+				table.insert(boneNodes, {self.BoneOctree:CreateNode(bone.TransformedWorldCFrame.Position, bone), bone})
+			end
 			bone.Parent = originBone
 		end
 		-- set origin bone to below skinned mesh for fade in
 		originBone.Transform = CFrame.new(0, -3, 0)
-		self.MeshOctree:CreateNode(originBone.WorldCFrame.Position, meshPart)
+		self.MeshNodes[model] = self.MeshOctree:CreateNode(originBone.WorldCFrame.Position, meshPart)
 		-- store mesh in replicated storage until needed (bones aren't calculated when not in workspace)
 		self.MeshParents[model] = model.Parent
 		model.Parent = self.Settings.MeshStorage or self.MeshFolder
 	end
+end
+
+-- Remove streamed batches from both octrees and transient animation caches.
+function SkinnedGrass:RemoveMeshes(models)
+ for _,model in models do
+  for _,entry in self.ModelBoneNodes[model] or {} do
+   entry[1]:Destroy();self.DisplaceBones[entry[2]]=nil;self.ReturnBones[entry[2]]=nil
+  end
+  local node=self.MeshNodes[model];if node then node:Destroy() end
+  local mesh=model:FindFirstChildOfClass("MeshPart")
+  local index=table.find(self.SkinnedMeshesRenderedIn,mesh)
+  if index then table.remove(self.SkinnedMeshesRenderedIn,index) end
+  for i=#self.MeshTweenOuts,1,-1 do
+   if self.MeshTweenOuts[i]:IsDescendantOf(model) then table.remove(self.MeshTweenOuts,i) end
+  end
+  self.MeshParents[model]=nil;self.MeshNodes[model]=nil;self.ModelBoneNodes[model]=nil
+ end
 end
 
 -- main logic of the module, called every interval. Put in RunService.RenderStepped for smoothest simulation
