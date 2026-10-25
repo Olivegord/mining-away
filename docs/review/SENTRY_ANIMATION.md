@@ -56,9 +56,9 @@ server-owned; no new client command or paid asset was introduced.
 
 - Original geometry and binary-preservation tests pass. The original drone travel,
   overhead mining, staged crystals and fleet persistence paths are untouched.
-- Fourteen standalone motion tests cover a completely still closed stack, large
+- Fifteen standalone motion tests cover a completely still closed stack, large
   launch amplitude, full-turn completion, delayed eye reveal, timestamp sampling,
-  independent recoil/flinch, shortest-arc tracking, 30/60/120/144 FPS spring
+  a continuous launch/return velocity, independent recoil/flinch, shortest-arc tracking, 30/60/120/144 FPS spring
   convergence, charge release, staggered accelerated falls and immovable ruins.
 - Added production-server/API-double regressions cover one wake per muster,
   triggering-player aim, observer snapshots, no shots during the opening,

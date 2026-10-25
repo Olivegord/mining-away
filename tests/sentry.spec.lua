@@ -35,6 +35,10 @@ check('each ring makes a full turn and eases into the active heading before igni
   assert(math.abs(finish-2*math.pi)<.025 and math.abs(burst)<.025)
  end
 end)
+check('the wide opening changes into the heavy return without a velocity snap',function()
+ local _,before=M.wake(.92-1e-5,0);local _,peak=M.wake(.92,0);local _,after=M.wake(.92+1e-5,0)
+ near(peak,1);assert(math.abs((peak-before)/1e-5)<.001);assert(math.abs((after-peak)/1e-5)<.001)
+end)
 check('the eye stays closed through launch and opens after the turn',function()
  near(M.segment(1,.8,0,pose(.8),true).reveal,0)
  near(M.segment(1,M.IGNITE,0,pose(M.IGNITE),true).reveal,1)

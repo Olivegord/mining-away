@@ -413,8 +413,9 @@ function P:renderTurret(record,dt,now)
     local eyePart=part.Name=='eye' or part.Name=='eyecase' or part.Name=='spawnEye'
     if dead then
      if not item.fall then self:_prepareSentryFall(record,now,true) end
-     frame=self:_sentryFallFrame(item,record,now);color=item.color:Lerp(RUIN,.88)
+     frame=self:_sentryFallFrame(item,record,now);color=item.color:Lerp(RUIN,eyePart and .92 or .38)
      part.Size=item.size
+     if eyePart then part.Material=Enum.Material.SmoothPlastic end
     else
      local motion=S.segment(rank,now,record.phase,pose,eyePart,item.compact or 0)
      local origin=eyePart and record.eyeCenter or Vector3.new(record.baseCenter.X,item.frame.Position.Y,record.baseCenter.Z)
@@ -431,6 +432,7 @@ function P:renderTurret(record,dt,now)
       if progress>=1 then item.rebuildFrom=nil end
      end
      if eyePart then
+      part.Material=item.material
       transparency=math.max(transparency,1-motion.reveal)
       if part.Name~='eyecase' then
        color=eyeColor

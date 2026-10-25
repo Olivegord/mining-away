@@ -137,6 +137,16 @@ One player's retreat/disconnect/prestige removes that player's participation/ent
 
 ### Shots, evade and recovery
 
+Sentries sleep as a tightly closed stack. The first fresh muster triggers a full
+turn and wide separation of the original layers; they ease into floating active
+spacing. At 2.15 seconds the eye faces the triggering player and ignites with a
+sound, flash and broad lens flare. This happens inside the existing four-second
+muster. Server timestamps let observers sample the same wake sequence. Each
+layer retains independent weighted motion for charges, shots and damage. On
+death the layers and eye assembly fall, thud on ground contact and stay embedded
+until encounter reset; they do not bounce or disappear. Reset draws the original
+pieces back into the closed stack. These are cosmetic poses, not damage sources.
+
 Sentries select an eligible nearby roster drone and freeze a world-space aim point for a 0.8-second visible telegraph. At firing time the server checks proximity to that point, distance and line of sight. A flank switch during the telegraph can move the drone out of the danger point. Charge does not secretly retarget its final hit to the drone's corrected position. Current configured shot cooldowns are 1.8 seconds for Cobalt/Violet and 1.7 for Emerald after firing.
 
 Drones approach a bounded attack station beside the nearest live sentry. They shoot only when their snapshotted combat range and server line of sight permit. Shot damage/interval, reduction, crit, splash/arc, entry shields, finishers and kill repair derive from server stats. Visual sparks, flashes, lasers or a visible hit cannot inflict extra damage.

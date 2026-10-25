@@ -20,7 +20,11 @@ function M.wake(age,rank)
  local opening=smooth((t-.12)/.8)
  local burst
  if t<.92 then burst=smooth((t-.12)/.8)
- else local settle=t-.92;burst=math.exp(-settle*3.8)*math.cos(settle*5.2) end
+ else
+  local settle=t-.92
+  -- Start the return at zero velocity; the slab accelerates into its settle.
+  burst=math.exp(-settle*3.8)*(math.cos(settle*5.2)+(3.8/5.2)*math.sin(settle*5.2))
+ end
  local spin=2*pi*smooth(t/1.7)
  if t>1.7 then spin+=math.sin((t-1.7)*9)*math.exp(-(t-1.7)*7)*.16 end
  return opening,burst,spin
