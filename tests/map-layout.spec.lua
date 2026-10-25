@@ -73,6 +73,16 @@ check('no upper route foundation blocks a lower route centerline',function()
   end
  end end
 end)
+check('main flight corridors clear terrain without replacing original direct eased travel',function()
+ local stations={{x=-56,y=10.5,z=-11}}
+ for _,f in ipairs(plan.fields) do table.insert(stations,{x=f.x,y=f.top+12,z=f.z}) end
+ for _,a in ipairs(stations) do for _,b in ipairs(stations) do
+  for n=0,100 do
+   local t=n/100;local x=a.x+(b.x-a.x)*t;local y=a.y+(b.y-a.y)*t;local z=a.z+(b.z-a.z)*t
+   assert(plan:surface(x,z)<y-1.5,'terrain blocks direct flight '..a.x..','..a.z..' to '..b.x..','..b.z)
+  end
+ end end
+end)
 check('Ruby forest is tall, dense and clear of the mining footprint',function()
  local ruby=0
  assert(#plan.trees>=45)

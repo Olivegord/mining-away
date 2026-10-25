@@ -82,7 +82,7 @@ function L.plan(config,home)
   if x<-59 and z>16 then h=math.max(4,math.min(58,(z-17)*.67+(math.max(0,-x-107))*.8));biome=2 end
   if z<-29 and x<-24 then h=math.max(h,math.min(44,(-z-28)*.66));biome=3 end
   if z<-24 and x>=-24 then h=math.max(h,math.min(57,24+(-z-24)*.6));biome=4 end
-  if x>0 and z>=-24 then h=math.max(h,math.max(0,44-math.max(0,z-27)*.85));biome=5 end
+  if x>0 and z>=-24 then h=math.max(h,math.max(0,math.min(44,x*2.2)-math.max(0,z-27)*.85));biome=5 end
   -- Irregular outer perimeter, rather than a rectangular artificial island.
   if ((x+26)/109)^2+((z+3)/106)^2>1.08 then return 0,biome end
   h=math.floor(h/4)*4

@@ -6,6 +6,7 @@ local player=game.Players.LocalPlayer
 local character=assert(player.Character)
 local hum=assert(character:FindFirstChildOfClass('Humanoid'))
 local root=assert(character:FindFirstChild('HumanoidRootPart'))
+assert(hum.Health>0,'Avatar must be alive')
 local old=workspace:FindFirstChild('MapWalkReview');if old then old:Destroy() end
 local status=Instance.new('Folder');status.Name='MapWalkReview';status.Parent=workspace
 local report=Instance.new('StringValue');report.Name='Report';report.Parent=status
