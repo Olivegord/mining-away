@@ -1,103 +1,126 @@
 local M=require('../src/SentryMotion')
 local passed=0
 local function check(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));passed+=1;print('PASS sentry '..name) end
-local function near(a,b,tolerance) assert(math.abs(a-b)<(tolerance or 1e-9),tostring(a)..' ~= '..tostring(b)) end
+local function near(a,b,tolerance) assert(math.abs(a-b)<(tolerance or 1e-8),tostring(a)..' ~= '..tostring(b)) end
 local function input(values)
- local result={dead=false,charging=false,charge=0,shotAge=100,hitAge=100}
+ local result={awake=true,dead=false,wakeAt=0,charging=false,charge=0,shotAge=100,hitAge=100,aimYaw=0,aimPitch=0}
  for k,v in pairs(values or {}) do result[k]=v end
  return result
 end
-check('idle patrol has visible sweep, pauses, seamless loop and independent phases',function()
- local a=M.idle(0,0);local b=M.idle(1,0)
- assert(math.abs(a-b)<.04)
- assert(math.abs(M.idle(5.5,0)-a)>1)
- assert(math.abs(M.idle(12-1e-5,0)-M.idle(12+1e-5,0))<1e-4)
- assert(math.abs(M.idle(3,0)-M.idle(3,1))>.1)
-end)
-check('late join reconstructs absolute idle and charge without replaying a shot',function()
- local a=M.new(1234,2.3);local b=M.new(1234,2.3)
- local p=M.step(a,0,1234,2.3,input({charging=true,charge=.5}))
- local q=M.step(b,0,1234,2.3,input({charging=true,charge=.5}))
- near(p.yaw,q.yaw);near(p.charge,.5);near(p.recoil,0)
-end)
-check('brief staggered idle blinks never obscure a live charge or shot',function()
- near(M.blink(.13,0),1);near(M.blink(1,0),0)
- local s=M.new(.13,0)
- assert(M.step(s,0,.13,0,input()).blink>.9)
- near(M.step(s,0,.13,0,input({charging=true,charge=.1})).blink,0)
- near(M.step(s,0,.13,0,input({shotAge=.1})).blink,0)
-end)
-check('stale server Aim cannot stop the idle after cooldown or reset',function()
- local a=M.new(0,0);local b=M.new(0,0)
- for n=1,180 do
-  local p=M.step(a,1/60,n/60,0,input({aimYaw=2.6,aimPitch=.2}))
-  local q=M.step(b,1/60,n/60,0,input())
-  near(p.yaw,q.yaw);near(p.pitch,q.pitch)
+local function pose(now,values) return M.step(M.new(now,0),0,now,0,input(values)) end
+check('dormant layers keep their exact compact offsets with no idle jiggles',function()
+ for t=0,100 do
+  local p=pose(t,{awake=false})
+  for rank=0,3 do
+   local q=M.segment(rank,t,0,p,false,-rank*.5)
+   near(q.lift,-rank*.5);near(q.yaw,0);near(q.roll,0);near(q.side,0)
+  end
+  near(M.segment(1,t,0,p,true).reveal,0)
  end
 end)
-check('charge acquires target and shot follow through releases back to patrol',function()
- local s=M.new(0,0)
- for n=1,60 do M.step(s,1/60,n/60,0,input({charging=true,charge=n/60,aimYaw=2,aimPitch=.8})) end
- near(s.yaw,2,.001);near(s.pitch,.3,.001);near(s.charge,1)
- local p=M.step(s,1/60,1.1,0,input({shotAge=.1,aimYaw=2}))
- assert(p.recoil>.1 and p.alert>.9)
- for n=1,180 do p=M.step(s,1/60,1.1+n/60,0,input({aimYaw=2})) end
- assert(p.alert<1e-7 and p.charge<1e-10 and p.recoil==0)
- assert(math.abs(p.yaw-2)>.3)
+check('wake visibly separates the crown more than seventeen studs',function()
+ local peak=0
+ for n=0,120 do
+  local t=n/60;local q=M.segment(3,t,0,pose(t),false,-1.3)
+  peak=math.max(peak,q.lift)
+ end
+ assert(peak>17,peak)
+ local active=M.segment(3,8,0,pose(8),false,-1.3)
+ assert(active.lift>3 and active.lift<6)
 end)
-check('heading wraps by the shortest arc',function()
- local s=M.new(0,0);s.yaw=math.pi-.01
- local p=M.step(s,1/60,0,0,input({charging=true,aimYaw=-math.pi+.01}))
- assert(p.yaw>math.pi-.01 or p.yaw< -math.pi+.01)
-end)
-check('shell stays continuous when the eye crosses the heading wrap seam',function()
- local a=M.step(M.new(0,0),0,0,0,input())
- local b=table.clone(a);a.yaw=math.pi-1e-5;b.yaw=-math.pi+1e-5
+check('each ring makes a full turn and eases into the active heading before ignition',function()
  for rank=0,3 do
-  near(M.segment(rank,0,0,a,false).yaw,M.segment(rank,0,0,b,false).yaw,1e-5)
+  local _,_,spin=M.wake(0,rank);near(spin,0)
+  local _,burst,finish=M.wake(M.IGNITE,rank)
+  assert(math.abs(finish-2*math.pi)<.025 and math.abs(burst)<.025)
  end
 end)
-check('death suppresses aim and cannot leave charge active',function()
- local s=M.new(0,0)
- for n=1,120 do M.step(s,1/60,n/60,0,input({dead=true,charging=true,charge=1,aimYaw=2})) end
- near(s.alert,0);near(s.charge,0)
+check('the eye stays closed through launch and opens after the turn',function()
+ near(M.segment(1,.8,0,pose(.8),true).reveal,0)
+ near(M.segment(1,M.IGNITE,0,pose(M.IGNITE),true).reveal,1)
 end)
-check('tracking converges consistently at 30 60 120 and 144 FPS',function()
+check('wake timestamps reconstruct a late join at the same opening and spin',function()
+ local a=pose(101,{wakeAt=100,aimYaw=1})
+ local b=pose(101,{wakeAt=100,aimYaw=1})
+ local x=M.segment(3,101,0,a,false,-1);local y=M.segment(3,101,0,b,false,-1)
+ near(x.lift,y.lift);near(x.yaw,y.yaw)
+end)
+check('separate rings float with distinct phases and large responsive impacts',function()
+ local a=M.segment(0,8,1,pose(8),false)
+ local b=M.segment(3,8,1,pose(8),false)
+ assert(math.abs(a.lift-b.lift)>2)
+ local resting=M.segment(3,8,1,pose(8),false)
+ local fired=M.segment(3,8,1,pose(8,{shotAge=.2}),false)
+ assert(math.abs(resting.lift-fired.lift)>.3)
+ local eye=M.segment(1,8,1,pose(8,{shotAge=.1}),true)
+ assert(eye.back>.65)
+ local hit=M.segment(2,8,1,pose(8,{hitAge=.16}),false)
+ assert(math.abs(hit.roll-resting.roll)>.025)
+end)
+check('spring tracking retains momentum and takes shortest arc across heading wrap',function()
+ local s=M.new(0,0);M.step(s,0,8,0,input({aimYaw=math.pi-.01}))
+ local p=M.step(s,1/60,8,0,input({aimYaw=-math.pi+.01}))
+ assert(p.yaw>math.pi-.01 and p.yaw<math.pi+.01)
+ assert(s.yawV>0)
+end)
+check('fixed target spring is equivalent at 30 60 120 and 144 FPS',function()
  local results={}
  for _,fps in ipairs({30,60,120,144}) do
-  local s=M.new(0,0)
-  for n=1,fps do M.step(s,1/fps,n/fps,.4,input({charging=true,charge=.7,aimYaw=1.7,aimPitch=.2})) end
+  local s=M.new(0,0);M.step(s,0,0,0,input({aimYaw=0}))
+  for n=1,fps do M.step(s,1/fps,n/fps,0,input({aimYaw=2,aimPitch=.2})) end
   table.insert(results,s)
  end
- for _,s in ipairs(results) do near(s.yaw,results[1].yaw);near(s.pitch,results[1].pitch);near(s.alert,results[1].alert);near(s.charge,results[1].charge) end
+ for _,s in ipairs(results) do near(s.yaw,results[1].yaw);near(s.yawV,results[1].yawV);near(s.pitch,results[1].pitch) end
 end)
-check('shell has a travelling idle and stronger charge anticipation without moving plinth',function()
- local s=M.new(2,0);local idle=M.step(s,0,2,0,input())
- local lower=M.segment(1,2,0,idle,false);local upper=M.segment(3,2,0,idle,false)
- assert(upper.lift>.05 and upper.lift~=lower.lift)
- local windup=M.step(s,0,2,0,input({charging=true,charge=1}))
- local charged=M.segment(3,2,0,windup,false)
- assert(charged.lift-upper.lift>.4)
- local bottom=M.segment(0,2,0,windup,false);near(bottom.lift,0);near(bottom.back,0)
+check('active target changes settle accurately while shell yaw stays continuous',function()
+ local s=M.new(0,0);M.step(s,0,0,0,input({aimYaw=math.pi-.01}))
+ local previous=M.segment(3,8,0,M.step(s,0,8,0,input({aimYaw=math.pi-.01})),false).yaw
+ for n=1,120 do
+  local p=M.step(s,1/60,8+n/60,0,input({aimYaw=-math.pi+.1}))
+  local q=M.segment(3,8+n/60,0,p,false)
+  assert(math.abs(q.yaw-previous)<.2);previous=q.yaw
+ end
+ near(s.yaw,math.pi+.1,.001)
 end)
-check('all eye parts share one transform; recoil and flinch settle',function()
- local s=M.new(2,0)
- local p=M.step(s,1/60,2,0,input({shotAge=.06,hitAge=.03}))
- local eye=M.segment(1,2,0,p,true);assert(eye.back>.1 and math.abs(eye.roll)>.001)
- for _,rank in ipairs({0,1,2,3}) do local q=M.segment(rank,2,0,p,true);near(q.yaw,eye.yaw);near(q.pitch,eye.pitch);near(q.lift,eye.lift);near(q.back,eye.back) end
- p=M.step(s,1/60,3,0,input());near(p.recoil,0);near(p.flinch,0)
+check('death suppresses activation and charging even with stale attributes',function()
+ local p=pose(8,{dead=true,charging=true,charge=1})
+ assert(not p.awake);near(p.charge,0);near(p.ignition,0)
 end)
-check('long stalls are bounded and pose never integrates displacement',function()
- local a=M.new(0,0);local b=M.new(0,0)
- local p=M.step(a,99,99,.4,input({charging=true,aimYaw=2}))
- local q=M.step(b,.1,99,.4,input({charging=true,aimYaw=2}))
- near(p.yaw,q.yaw)
- for n=1,20000 do
-  p=M.step(a,1/60,n/60,.4,input())
+check('charge release and per-ring shot reaction settle cleanly',function()
+ local s=M.new(0,0);M.step(s,0,8,0,input({charging=true,charge=1}))
+ near(s.charge,1)
+ for n=1,120 do M.step(s,1/60,8+n/60,0,input()) end
+ assert(s.charge<1e-8)
+ near(M.impulse(2,0,10,5),0);near(M.impulse(-1,0,10,5),0)
+end)
+check('heavy slabs accelerate downward and stop exactly at ground without bounce',function()
+ for _,fps in ipairs({30,60,120,144}) do
   for rank=0,3 do
-   local piece=M.segment(rank,n/60,.4,p,false)
-   assert(math.abs(piece.lift)<.9 and math.abs(piece.yaw)<1 and math.abs(piece.roll)<.1)
+   local previous=0;local landedBefore=false
+   for frame=0,fps*5 do
+    local fraction,landed=M.fall(frame/fps,15,rank)
+    assert(fraction>=previous and fraction>=0 and fraction<=1)
+    if landedBefore then near(fraction,1);assert(landed) end
+    previous=fraction;landedBefore=landed
+   end
+   assert(landedBefore)
   end
  end
+ local a=M.fall(.1,15,0);local b=M.fall(.2,15,0);near(b,a*4)
 end)
-print(string.format('PASS %d sentry animation logic tests (visuals require Studio)',passed))
+check('fall delays stagger the weight and impact age permits one-shot sound detection',function()
+ local _,a=M.fall(.7,15,0);local _,b=M.fall(.7,15,3)
+ assert(a and not b)
+ local fraction,landed,age=M.fall(10,15,3);near(fraction,1);assert(landed and age>8)
+end)
+check('long stalls are bounded and prolonged active motion never drifts',function()
+ local a=M.new(0,0);local b=M.new(0,0)
+ M.step(a,0,0,0,input());M.step(b,0,0,0,input())
+ local x=M.step(a,99,99,0,input({aimYaw=2}));local y=M.step(b,.1,99,0,input({aimYaw=2}));near(x.yaw,y.yaw)
+ for n=1,10000 do
+  local t=10+n/60;local p=M.step(a,1/60,t,.4,input())
+  local q=M.segment(3,t,.4,p,false)
+  assert(q.lift>3 and q.lift<6 and math.abs(q.roll)<.1)
+ end
+end)
+print(string.format('PASS %d large sentry animation tests; engine visuals require Studio',passed))

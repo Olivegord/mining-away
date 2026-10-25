@@ -13,7 +13,13 @@ end
 local droneFolder=root:FindFirstChild('Drones') or folder(root,'Drones')
 local net=folder(RS,'MiningAway')
 local command=Instance.new('RemoteEvent');command.Name='Command';command.Parent=net
-local profiles,drones,patches,resources,loading={},{},{},{},{}
+-- Runtime entity graphs are mutually recursive. Keep their dynamic Roblox
+-- boundaries explicit rather than expanding an unbounded inferred table type.
+local profiles: {[number]: any}={}
+local drones: {[string]: any}={}
+local patches: {any}={}
+local resources: {[string]: any}={}
+local loading: {[number]: boolean}={}
 local now=workspace:GetServerTimeNow()
 local elapsed,snapshotElapsed,autosaveElapsed=0,0,0
 local seed=Random.new()
@@ -177,9 +183,28 @@ end
 local function restoreTurrets(field)
  for _,t in ipairs(field.turrets) do
   t.hp=field.cfg.TurretHP;t.nextShot=now+1;t.fireAt=nil;t.lock=nil;t.aim=nil;t.shotSerial=0
+  t.awake=false;t.deathAt=nil;t.watcher=nil
+  t.model:SetAttribute('Awake',false);t.model:SetAttribute('WakeAt',0);t.model:SetAttribute('ActivateAt',0);t.model:SetAttribute('DeathAt',0)
+  t.model:SetAttribute('WakeAim',nil);t.model:SetAttribute('WatchPosition',nil);t.model:SetAttribute('Aim',nil)
   for part,transparency in pairs(t.originalTransparency) do if part.Parent then part.Transparency=transparency end end
   t.model:SetAttribute('HP',t.hp);t.model:SetAttribute('Telegraph',false);t.model:SetAttribute('Dead',false);t.model:SetAttribute('ShotSerial',0)
  end
+end
+local function wakeTurrets(field: any,pl: any)
+ local hr=pl and pl.Character and pl.Character:FindFirstChild('HumanoidRootPart')
+ for _,t in ipairs(field.turrets) do
+  if not t.awake and t.hp>0 then
+   t.awake=true;t.watcher=pl and pl.UserId
+   t.model:SetAttribute('WakeAt',now);t.model:SetAttribute('ActivateAt',now+2.15)
+   t.model:SetAttribute('WakeAim',hr and hr.Position or field.center)
+   t.model:SetAttribute('WatchPosition',hr and hr.Position or field.center)
+   t.model:SetAttribute('Awake',true)
+  end
+ end
+end
+local function publishTurretHealth(t: any)
+ if t.hp<=0 and not t.deathAt then t.deathAt=now;t.model:SetAttribute('DeathAt',now) end
+ t.model:SetAttribute('HP',t.hp);t.model:SetAttribute('Dead',t.hp<=0)
 end
 for _,f in ipairs(scene.fields) do
  local settings=table.clone(C);settings.EncounterPrefix=instanceId..':field:'..f.id
@@ -346,7 +371,7 @@ local function turretStep(field)
     if best then t.lock=best;t.aim=best.pos;t.fireAt=now+.8;t.model:SetAttribute('Aim',t.aim);t.model:SetAttribute('FireAt',t.fireAt) end
    end
   end
-  t.model:SetAttribute('Telegraph',t.fireAt~=nil);t.model:SetAttribute('HP',t.hp);t.model:SetAttribute('Dead',t.hp<=0)
+  t.model:SetAttribute('Telegraph',t.fireAt~=nil);publishTurretHealth(t)
  end
 end
 local function combatHit(d,field,target,stats)
@@ -363,7 +388,7 @@ local function combatHit(d,field,target,stats)
   for _,other in ipairs(field.turrets) do
    if other~=target and other.hp>0 and (other.emitter.Position-target.emitter.Position).Magnitude<=(stats.splashRange or 6) and (other.emitter.Position-d.pos).Magnitude<=stats.range and los(d.pos,other.emitter.Position,other.model,{droneFolder}) then
     other.hp=math.max(0,other.hp-damage*stats.splashFraction);if other.hp<=0 then kills=kills+1 end
-    other.model:SetAttribute('HP',other.hp);other.model:SetAttribute('Dead',other.hp<=0)
+    publishTurretHealth(other)
     d.chainTarget=other.emitter.Position;d.chainUntil=now+.2;break
    end
   end
@@ -372,7 +397,7 @@ local function combatHit(d,field,target,stats)
   d.hp=math.min(d.stats.maxHealth,d.hp+d.owned.base.maxHealth*stats.salvageFraction*kills)
   d.model:SetAttribute('RepairSerial',(d.model:GetAttribute('RepairSerial') or 0)+1)
  end
- target.model:SetAttribute('HP',target.hp);target.model:SetAttribute('Dead',target.hp<=0)
+ publishTurretHealth(target)
 end
 local function move(d,goal,dt)
  d.goal=goal;local delta=goal-d.pos
@@ -507,7 +532,7 @@ local function commandPlayer(pl,action,payload)
   leaveField(p,can and field.id or nil)
   for _,d in ipairs(fleet) do release(d);d.field=field.id;d.state='Travel';d.shotAt=now end
   if not can then
-   if field.e.phase=='Guarded' then R.gather(field.e,now) end
+   if field.e.phase=='Guarded' then R.gather(field.e,now);wakeTurrets(field,pl) end
    R.enroll(field.e,pl.UserId,data(p).run.id,fleet)
   end
  elseif action=='Sell' then
@@ -602,6 +627,16 @@ RunService.Heartbeat:Connect(function(dt)
   for _,d in pairs(drones) do snapshotDrone(d) end
   for _,field in ipairs(patches) do
    field.model:SetAttribute('Phase',field.e.phase);field.model:SetAttribute('EncounterId',field.e.id);field.model:SetAttribute('PhaseEndsAt',field.e.untilTime)
+   for _,t in ipairs(field.turrets) do
+    local watcher: any=t.watcher and profiles[t.watcher];local hr: any=watcher and characterRoot(watcher)
+    if t.awake and not hr then
+     for uid in pairs(field.e.users) do
+      local p=profiles[uid];local candidate=p and characterRoot(p)
+      if candidate then t.watcher=uid;hr=candidate;break end
+     end
+    end
+    if t.awake and t.hp>0 and hr then t.model:SetAttribute('WatchPosition',hr.Position) end
+   end
    for i=#field.resources,1,-1 do local r=field.resources[i];if r.paid and r.removeAt and now>=r.removeAt then resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,i) end end
    table.sort(field.respawnQueue)
    local replenished=0

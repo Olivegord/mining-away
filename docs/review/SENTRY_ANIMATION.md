@@ -1,56 +1,92 @@
-# Sentry animation pass — October 25, 2026
+# Large sentry animation revision — October 25, 2026
 
-The original seven-mesh construct now has a deliberate idle patrol: sweep, observe,
-hold, glance, return. The eye pitches slightly, occasionally blinks, and moves as
-one assembly with its housing and secondary lens. Higher shell segments hover
-and counter-turn in a staggered wave. Position-derived phases keep neighboring
-sentries from performing identical motions together.
+This supersedes the earlier subtle idle/recoil pass. The owner's requested
+sequence is the presentation contract: a solid dormant pyramid; a full turn
+while the layers spread far apart; a weighted settle into active spacing;
+then eye ignition, a sound, a flash and a broad lens flare facing the player.
+Dead pieces accelerate downward, thud on contact and remain embedded.
 
-A live telegraph interrupts idle and acquires the frozen server aim. The eye
-focuses, the shell extends, and the existing narrow two-layer threat beam and
-ground cue remain legible. Shots compress the shell and kick the eye backward,
-then settle into patrol. Damage produces a short damped flinch. Collapse starts
-from the actual animated pose; reset reassembles the original pieces. A stale
-`Aim` attribute cannot leave a sentry tracking its previous target indefinitely.
+## Choreography and original geometry
 
-`src/SentryMotion.lua` contains the pure animation driver; `src/Presentation.lua`
-applies its transforms to client-only copies. Transforms derive from original
-frames each render, preventing accumulated drift. The eye components share one
-pivot. The anchored plinth stays fixed. Original assets, server targeting, hit
-tests, damage, encounter rules, rewards and persistent state retain their roles.
-No new gameplay remotes, marketplace assets or permanent UI were introduced.
+- Dormant shell rims telescope together. Bounding-box contact alone left the
+  authored lower shell's eye cutout open; overlapping the original rims closes
+  the opening without adding substitute geometry. Eye and housing retract.
+- A 2.8-second wake sequence spins the original meshes one full revolution.
+  Each ring has its own launch/settle timing. The crown rises approximately
+  26 studs from its closed position, opening a roughly six-stud stack to over
+  thirty studs high, then settles into a roughly fifteen-stud active construct.
+- After the turn, the eye and housing face the triggering player's replicated
+  position. Ignition occurs at 2.15 seconds, during the existing four-second
+  server muster and before firing. A mechanical wake sound precedes a sharper
+  ignition sound, a white eye flash, local light and a 32-stud lens flare.
+- Active layers float independently with staggered phases. Analytic underdamped
+  yaw/pitch springs retain momentum. Charges draw the eye back; firing kicks it
+  backward and drives a wave of compression through the rings. Damage makes
+  the shell lurch, lean and recover. Recall/reset eases the construct shut.
+- Death removes lift rather than playing an explosion. Four stone layers and
+  the eye/socket assembly fall independently under 68 studs/s² gravity, with
+  short staggered release times. Each hits once with a low-pitched thud and dust.
+  Tilted stone bounds finish partly inside the field plane. No bounce, fade-out
+  or perpetual jiggle follows contact. Ruins persist until encounter reset.
 
-## Review 1: behavior and original-art parity
+All seven original construct meshes remain. The plinth stays fixed. The eye,
+secondary lens and housing share a pivot while alive and a rigid fall group
+when destroyed. All transforms derive from immutable frames; simulation never
+reads local cosmetic poses.
 
-- Verified all seven authored construct meshes remain in the live viewmodel.
-- Real Studio client inspection confirmed eye/housing alignment and a fixed base.
-- Existing original drone/mining feel tests pass; this animation does not alter
-  drone simulation or mining behavior.
-- Charge uses server `FireAt`; shot and damage cues use authoritative snapshots.
-  No transform is read back into server simulation.
+## Server and observer correctness
 
-## Review 2: timing, visuals and multiplayer boundaries
+The server replicates `Awake`, `WakeAt`, `ActivateAt`, `WakeAim`, `WatchPosition`
+and `DeathAt`. The first valid fresh muster sets wake timing once; a teammate
+joining cannot restart the spectacle. The triggering player remains the watch
+target, with another participant taking over if that player leaves. The live
+telegraph and brief shot follow-through override watching to aim at the drone.
+Reset clears wake, aim and death state. Direct and chained kills publish one
+stable death timestamp.
 
-- Inspected before/after idle in the connected Studio Play session with a matched
-  camera. The shell and eye visibly move; the glowing eye reads within the
-  original ceramic construct. Blink is suppressed during charge and discharge.
-- Exercised the normal Cobalt command in single-player Studio. A 240-sample
-  observation recorded four server shots, 60 charging samples, 71 visible-beam
-  samples, peak charge brightness 1.0988, and maximum eye/housing drift
-  0.0000242 studs. The Studio console was empty after the test.
-- `tests/sentry.studio.lua` exercised the production renderer with real Roblox
-  Instances/CFrames and controlled snapshots: 24 assertions across 468 samples
-  at simulated 30/60/144 FPS. Charge, layered beams, damage, duplicate-shot
-  suppression, collapse, reassembly, silent late-join ruins and source immutability
-  passed. Maximum socket drift was 0.0000551 studs; base drift was zero.
-- Twelve standalone animation tests cover patrol continuity, independent phases,
-  blink interruption, stale aim, shortest-arc turns, frame-rate convergence,
-  release/recovery, dead-state suppression, the shell's heading wrap seam and
-  long-running bounded poses.
-- Controlled renderer samples are not measured rendering FPS or a two-client
-  test. Real two-player/late-join synchronization and network latency remain
-  unverified. The original-versus-repaired full mining video remains outside
-  this focused animation pass.
+A late join samples the current wake/settle pose from server time. Already-past
+wake/ignition/impact audio is suppressed. Final ruin transforms are deterministic;
+ground sampling uses the owning field plane, so shrinking crystals cannot hold
+slabs in midair. A suspended frame skips old impact sounds instead of replaying
+them together. Sounds and dust use the existing bounded cosmetic cleanup pool.
+Original targeting, damage, health, anti-attrition, rewards and persistence remain
+server-owned; no new client command or paid asset was introduced.
+
+## Behavior/parity review
+
+- Original geometry and binary-preservation tests pass. The original drone travel,
+  overhead mining, staged crystals and fleet persistence paths are untouched.
+- Fourteen standalone motion tests cover a completely still closed stack, large
+  launch amplitude, full-turn completion, delayed eye reveal, timestamp sampling,
+  independent recoil/flinch, shortest-arc tracking, 30/60/120/144 FPS spring
+  convergence, charge release, staggered accelerated falls and immovable ruins.
+- Added production-server/API-double regressions cover one wake per muster,
+  triggering-player aim, observer snapshots, no shots during the opening,
+  stable death timestamps and complete reset. These are not network playtests.
+
+## Pacing, visual and multiplayer review
+
+The production renderer was inspected in the connected Studio Client using
+controlled authoritative snapshots at matching camera positions: closed stack,
+wide spinning separation, ignition facing the camera/player, and grounded ruins.
+The eye facing dot product at ignition was 0.99995. Studio measured a 26.3038-stud
+crown excursion from the closed stack. A screenshot showed the broad horizontal
+flare, white eye and surrounding light flash. Audio assets are installed engine
+content; tests establish creation/timing, not subjective audio quality.
+
+`tests/sentry.studio.lua` ran 41 assertions over 1,173 real-Instance/CFrame renderer
+samples at simulated 30/60/144 FPS. It verified the large flare, one wake/ignition
+pair, eye facing, layered threat beams, duplicate-shot suppression, flinches,
+five separate impact sounds, exact post-impact immobility, reset to a closed
+stack, and silent late-join ruins. Base drift was zero; maximum eye/housing
+relative-position error was 0.0000165 studs. Fixtures were removed afterward.
+
+The coordinated UI review temporarily uses the previous matched renderer in its
+live client. Source is ready for the new production server/client installation.
+A final normal-command wake/fight check is pending release of Studio by that
+review. Controlled renderer tests are not measured rendering FPS or a two-player
+session. Two-client synchronization, latency and subjective sound remain to be
+verified. Nothing was published to Roblox.
 
 ## Reproduce
 
@@ -61,17 +97,11 @@ python3 tests/geometry.spec.py
 python3 tools/release.py
 ```
 
-For the engine renderer test, install a temporary client ModuleScript named
+For the engine test, temporarily install a client ModuleScript named
 `ReplicatedStorage.SentryReviewModules` containing
 `module_bundle(('Feedback','SentryMotion','Presentation'))` from `tools/build.py`,
-then `return {Presentation=Presentation}`. Execute `tests/sentry.studio.lua` in
-Client context and remove the temporary ModuleScript. The fixture cleans up its
-own models and effects. The reviewed live client was refreshed from source;
-these tests did not restart, save over or publish the place.
-
-The release is built from `assets/mining-away-base.rbxl` into
-`build/Mining Away.rbxl`. `build/revision.json` identifies the exact source commit
-and build checksum. The concurrent map, card and documentation work was committed
-separately before this animation pass. The final release records
-`source_dirty: false`; its ZIP contains the committed source snapshot used to
-produce the place.
+followed by `return {Presentation=Presentation,Motion=SentryMotion}`. Execute
+`tests/sentry.studio.lua` in Client context and remove the temporary module.
+The fixture cleans up its models and effects. Build only from
+`assets/mining-away-base.rbxl` to `build/Mining Away.rbxl`; the release metadata
+records its exact source revision and checksum.

@@ -187,6 +187,88 @@ function P:destroyDrone(drone)
  local record=self.drones[drone]
  if record then self:_removeScan(record);self.drones[drone]=nil end
 end
+function P:_sentryAudio(position,kind,now)
+ if #self.pulses>=self.maxPulses then return end
+ local anchor=barePart(self.parent,'SentryAudio');anchor.Transparency=1;anchor.Position=position
+ local sound=Instance.new('Sound');sound.Name=kind=='impact' and 'StoneSlabThud' or 'SentryIgnition'
+ sound.SoundId=kind=='wake' and 'rbxasset://sounds/action_get_up.mp3' or 'rbxasset://sounds/impact_explosion_03.mp3'
+ sound.Volume=kind=='impact' and .65 or .5
+ sound.PlaybackSpeed=kind=='impact' and .48 or (kind=='wake' and .65 or 1.65)
+ sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
+ if kind=='impact' then
+  local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
+  dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))
+  dust.Lifetime=NumberRange.new(.45,.85);dust.Speed=NumberRange.new(3,8);dust.Drag=5
+  dust.SpreadAngle=Vector2.new(75,75);dust.Acceleration=Vector3.new(0,-4,0)
+  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(.3,2.5),NumberSequenceKeypoint.new(1,4)})
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.4,.6),NumberSequenceKeypoint.new(1,1)})
+  dust.Parent=anchor;dust:Emit(12)
+ end
+ table.insert(self.pulses,{part=anchor,start=now,duration=4,size=0,audio=true})
+end
+local function sentryFlare(eye)
+ local flare=Instance.new('BillboardGui');flare.Name='SentryLensFlare';flare.Adornee=eye
+ flare.Size=UDim2.fromScale(28,14);flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.MaxDistance=160;flare.Enabled=false;flare.Parent=eye
+ local glow=Instance.new('ImageLabel');glow.Name='Starburst';glow.BackgroundTransparency=1
+ glow.Image='rbxasset://textures/sparkle.png';glow.ImageColor3=WHITE
+ glow.Size=UDim2.fromScale(.5,1);glow.Position=UDim2.fromScale(.25,0);glow.Parent=flare
+ local streak=Instance.new('Frame');streak.Name='AnamorphicStreak';streak.AnchorPoint=Vector2.new(.5,.5)
+ streak.Position=UDim2.fromScale(.5,.5);streak.Size=UDim2.fromScale(1,.025);streak.BorderSizePixel=0;streak.BackgroundColor3=ICE;streak.Parent=flare
+ local fade=Instance.new('UIGradient');fade.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.4,.15),NumberSequenceKeypoint.new(.5,0),NumberSequenceKeypoint.new(.6,.15),NumberSequenceKeypoint.new(1,1)});fade.Parent=streak
+ return flare,glow,streak
+end
+function P:_prepareSentryFall(record,now,late)
+ record.fallGroups={}
+ for _,item in ipairs(record.pieces) do
+  local rank=segmentRanks[item.part.Name]
+  if rank then
+   local eyePart=item.part.Name=='eye' or item.part.Name=='eyecase' or item.part.Name=='spawnEye'
+   local key=eyePart and 'socket' or item.part.Name
+   local group=record.fallGroups[key]
+   if not group then
+    local start=eyePart and record.eye.CFrame or item.part.CFrame
+    local angle=record.phase+rank*2.39996;local radius=eyePart and 3.7 or 4.5+rank*.9
+    local rest=eyePart and CFrame.new(record.eyeCenter) or item.frame
+    local xz=rest.Position+Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
+    local field=record.source.Parent and record.source.Parent:FindFirstChild('Field')
+    local floor
+    if field and field:IsA('BasePart') then
+     local point=field.CFrame:PointToObjectSpace(xz)
+     if math.abs(point.X)<=field.Size.X*.5 and math.abs(point.Z)<=field.Size.Z*.5 then
+      floor=field.CFrame:PointToWorldSpace(Vector3.new(point.X,field.Size.Y*.5,point.Z)).Y
+     end
+    end
+    floor=floor or self:_floor(xz,record.source)
+    local rotation=rest.Rotation*CFrame.Angles((rank%2==0 and 1 or -1)*(.28+rank*.12),angle*.13,.2+rank*.1)
+    local size=eyePart and record.view:FindFirstChild('eyecase',true).Size or item.size
+    local support=(math.abs(rotation.RightVector.Y)*size.X+math.abs(rotation.UpVector.Y)*size.Y+math.abs(rotation.LookVector.Y)*size.Z)*.5
+    local finish=CFrame.new(xz.X,floor+support*.65,xz.Z)*rotation
+    local drop=math.max(0,start.Position.Y-finish.Position.Y)
+    group={start=start,finish=finish,drop=drop,rank=rank,ground=Vector3.new(xz.X,floor,xz.Z),impact=false}
+    if late then local _,landed=S.fall(now-record.deathAt,drop,rank);group.impact=landed end
+    record.fallGroups[key]=group
+   end
+   item.fall=group;item.fallRelative=group.start:ToObjectSpace(item.part.CFrame)
+  end
+ end
+end
+function P:_sentryFallFrame(item,record,now)
+ local group=item.fall
+ local fraction,landed,impactAge=S.fall(now-record.deathAt,group.drop,group.rank)
+ local frame
+ if landed then frame=group.finish
+ else
+  local travel=math.sqrt(fraction);local p=group.start.Position:Lerp(group.finish.Position,travel)
+  local y=group.start.Position.Y-group.drop*fraction
+  frame=CFrame.new(p.X,y,p.Z)*group.start.Rotation:Lerp(group.finish.Rotation,F.smooth(travel))
+ end
+ if landed and not group.impact then
+  group.impact=true
+  -- A long suspended frame must not replay every historical impact at once.
+  if impactAge<.22 then self:_sentryAudio(group.ground,'impact',now) end
+ end
+ return frame*item.fallRelative
+end
 function P:registerTurret(source,now)
  if self.closed or self.turrets[source] then return self.turrets[source] end
  if source:GetAttribute('HP')==nil or source:GetAttribute('Dead')==nil then return nil end
@@ -213,11 +295,32 @@ function P:registerTurret(source,now)
  local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=ICE;light.Range=7
  light.Shadows=false;light.Brightness=0;light.Parent=eye
  local initial=F.new(snapshot(source))
+ local flare,glow,streak=sentryFlare(eye)
  local record={source=source,view=view,eye=eye,endpoint=endpoint,cue=cue,attachment=a,beam=beam,core=core,light=light,
+  flare=flare,glow=glow,streak=streak,
   parts={},pieces=partsOf(view),hidden={},accents={},events=initial,yaw=0,hitAt=-100,shotAt=-100,
   deathAt=initial.dead and now-10 or nil,restoreAt=nil,floor=base.Position.Y+base.Size.Y*.5,
   baseCenter=base.Position,eyeCenter=eye.Position,phase=base.Position.X*.17+base.Position.Z*.23}
  record.motion=S.new(now,record.phase)
+ local stackCenter=base.Position.Y+base.Size.Y*.5
+ local previousHeight=nil
+ for _,name in ipairs({'bottemseg','lowerseg','upperseg','topseg'}) do
+  for _,item in ipairs(record.pieces) do if item.part.Name==name then
+   -- The authored lower shell has a deep eye cutout: touching bounding boxes
+   -- still leaves that opening exposed. Telescope the rims into one another.
+   stackCenter+=previousHeight and (previousHeight+item.size.Y)*.25 or item.size.Y*.5
+   item.compact=stackCenter-item.frame.Position.Y;previousHeight=item.size.Y
+  end end
+ end
+ record.lastAwake=source:GetAttribute('Awake')==true
+ record.lastWake=source:GetAttribute('WakeAt') or 0
+ local ignition=source:GetAttribute('ActivateAt') or record.lastWake+S.IGNITE
+ record.ignited=now>=ignition;record.wakeSound=record.lastAwake
+ if initial.dead then
+  record.deathAt=source:GetAttribute('DeathAt') or now-10
+  if record.deathAt<=0 then record.deathAt=now-10 end
+  self:_prepareSentryFall(record,now,true)
+ end
  for _,item in ipairs(record.pieces) do record.parts[item.part]=true end
  for _,name in ipairs({'eye','spawnEye'}) do
   local part=view:FindFirstChild(name,true);record.accents[part]=part.Color
@@ -239,99 +342,124 @@ end
 function P:renderTurret(record,dt,now)
  if self.closed or not record.view.Parent then return end
  local source=record.source;local event=F.observe(record.events,snapshot(source))
- if event.died then
-  record.deathAt=now;record.restoreAt=nil;self:_pulse(record.eye.Position,HOT,3.6,now,.24)
-  self:_sound(record.eye.Position,'death',now)
- elseif event.revived then record.restoreAt=now;record.deathAt=nil end
- if event.hit then record.hitAt=now end
- if event.shot then
-  record.shotAt=now;self:_pulse(record.eye.Position,HOT,1.25,now,.13);self:_sound(record.eye.Position,'hit',now)
- end
  local dead=record.events.dead
- local charging=source:GetAttribute('Telegraph')==true and not dead
+ if event.died then
+  local stamp=source:GetAttribute('DeathAt') or 0
+  record.deathAt=stamp>0 and stamp or now;record.restoreAt=nil
+  self:_prepareSentryFall(record,now,false)
+ elseif event.revived then
+  record.restoreAt=now;record.deathAt=nil;record.fallGroups=nil
+  for _,item in ipairs(record.pieces) do item.rebuildFrom=item.part.CFrame end
+ end
+ if event.hit then record.hitAt=now end
+ if event.shot then record.shotAt=now;self:_sound(record.eye.Position,'hit',now) end
+ local awake=source:GetAttribute('Awake')
+ -- Older in-memory preview servers have no new attributes. This fallback only
+ -- derives presentation from their authoritative field phase, never local input.
+ if awake==nil then
+  local phase=source.Parent and source.Parent:GetAttribute('Phase')
+  awake=phase=='Gathering' or phase=='Active' or source:GetAttribute('Telegraph')==true
+ end
+ awake=awake==true and not dead
+ local wakeAt=source:GetAttribute('WakeAt')
+ if not wakeAt or wakeAt<=0 then
+  if awake and not record.lastAwake then record.observedWake=now end
+  wakeAt=record.observedWake or now-S.WAKE_DURATION
+ end
+ local activateAt=source:GetAttribute('ActivateAt')
+ if not activateAt or activateAt<=0 then activateAt=wakeAt+S.IGNITE end
+ if not awake and record.lastAwake and not dead then
+  record.sleepAt=now
+  for _,item in ipairs(record.pieces) do item.sleepFrom=item.part.CFrame end
+ elseif awake then record.sleepAt=nil end
+ if awake and (not record.lastAwake or record.lastWake~=wakeAt) then
+  record.ignited=now>activateAt+.8;record.wakeSound=false
+ end
+ record.lastAwake=awake;record.lastWake=wakeAt
+ if awake and not record.wakeSound then
+  record.wakeSound=true
+  if now-wakeAt<.3 then self:_sentryAudio(record.baseCenter,'wake',now) end
+ end
+ if awake and not record.ignited and now>=activateAt then
+  record.ignited=true
+  if now-activateAt<.5 then self:_sentryAudio(record.eye.Position,'ignite',now);self:_pulse(record.eye.Position,WHITE,4.5,now,.3) end
+ end
+ local charging=source:GetAttribute('Telegraph')==true and awake
  local aim=source:GetAttribute('Aim')
+ local followingShot=now-record.shotAt<.35
+ local look=(charging or followingShot) and aim or source:GetAttribute('WatchPosition') or source:GetAttribute('WakeAim') or aim
  local fireAt=source:GetAttribute('FireAt') or now
  local charge=charging and math.clamp(1-(fireAt-now)/.8,0,1) or 0
- local wound=1-math.clamp((source:GetAttribute('HP') or 0)/math.max(1,source:GetAttribute('MaxHP') or 1),0,1)
- local flash=F.flash(now-record.shotAt,.16)
- local hit=F.flash(now-record.hitAt,.11)
  local aimYaw,aimPitch
- if typeof(aim)=='Vector3' then
-  -- Aim from the immutable socket center, so cosmetic movement cannot feed
-  -- back into tracking. Eye, housing and secondary lens share one pivot.
-  local delta=aim-record.eyeCenter
+ if typeof(look)=='Vector3' then
+  local delta=look-(record.eyeCenter+Vector3.new(0,1.25,0))
   local horizontal=math.sqrt(delta.X*delta.X+delta.Z*delta.Z)
-  if horizontal>.1 then
-   aimYaw=math.atan2(-delta.X,-delta.Z)
-   aimPitch=math.atan2(delta.Y,horizontal)
-  end
+  if horizontal>.1 then aimYaw=math.atan2(-delta.X,-delta.Z);aimPitch=math.atan2(delta.Y,horizontal) end
  end
- local pose=S.step(record.motion,dt,now,record.phase,{dead=dead,charging=charging,charge=charge,
-  aimYaw=aimYaw,aimPitch=aimPitch,shotAge=now-record.shotAt,hitAge=now-record.hitAt})
- local warm=pose.charge;local breathe=pose.breath
- local eyeColor=record.accents[record.eye]:Lerp(ICE,.2):Lerp(HOT,math.max(warm,wound*.3))
- for index,item in ipairs(record.pieces) do
+ local pose=S.step(record.motion,dt,now,record.phase,{dead=dead,awake=awake,wakeAt=wakeAt,
+  charging=charging,charge=charge,aimYaw=aimYaw,aimPitch=aimPitch,
+  shotAge=now-record.shotAt,hitAge=now-record.hitAt})
+ local warm=pose.charge;local shotFlash=F.flash(now-record.shotAt,.22)
+ local ignite=awake and F.flash(now-activateAt,.8) or 0
+ local hit=F.flash(now-record.hitAt,.2)
+ local eyeColor=ICE:Lerp(HOT,warm):Lerp(WHITE,math.max(ignite,shotFlash))
+ for _,item in ipairs(record.pieces) do
   local part=item.part
   if part.Parent then
    local rank=segmentRanks[part.Name]
    local frame=item.frame;local transparency=item.transparency
-   local color=item.color:Lerp(WHITE,hit*.4)
+   local color=item.color:Lerp(WHITE,hit*.65)
    if rank then
-    local angle=index*2.39996
-    local ruin=CFrame.new(frame.Position+Vector3.new(math.cos(angle)*(rank+1)*.75,
-     math.min(0,record.floor+item.size.Y*.32-frame.Position.Y),math.sin(angle)*(rank+1)*.75))
-     *frame.Rotation*CFrame.Angles(math.sin(angle)*.36,angle*.11,math.cos(angle)*.48)
+    local eyePart=part.Name=='eye' or part.Name=='eyecase' or part.Name=='spawnEye'
     if dead then
-     local collapse=F.smooth(F.progress(now,(record.deathAt or now-10)+rank*.045,.8))
-     -- Fall from the actual last animated pose, including a charging/aimed eye.
-     frame=(item.lastFrame or frame):Lerp(ruin,collapse);color=item.color:Lerp(RUIN,.78*collapse)
-     if part.Name=='eye' or part.Name=='spawnEye' then transparency=math.max(transparency,collapse*.85) end
+     if not item.fall then self:_prepareSentryFall(record,now,true) end
+     frame=self:_sentryFallFrame(item,record,now);color=item.color:Lerp(RUIN,.88)
+     part.Size=item.size
     else
-     local restoring=record.restoreAt and 1-F.smooth(F.progress(now,record.restoreAt,.85)) or 0
-     local eyePart=part.Name=='eye' or part.Name=='eyecase' or part.Name=='spawnEye'
-     local motion=S.segment(rank,now,record.phase,pose,eyePart)
-     -- All shell pieces turn about one stable center; rotating every off-center
-     -- mesh about its own pivot tears apart the original segmented silhouette.
-     local origin=eyePart and record.eyeCenter or record.baseCenter
+     local motion=S.segment(rank,now,record.phase,pose,eyePart,item.compact or 0)
+     local origin=eyePart and record.eyeCenter or Vector3.new(record.baseCenter.X,item.frame.Position.Y,record.baseCenter.Z)
      local rotation=CFrame.Angles(0,motion.yaw,0)*CFrame.Angles(motion.pitch,0,motion.roll)
-     frame=CFrame.new(origin)*rotation*CFrame.new(0,motion.lift,motion.back)*CFrame.new(-origin)*frame
-     if restoring>0 then frame=frame:Lerp(ruin,restoring);color=color:Lerp(ICE,restoring*.3) end
-     item.lastFrame=frame
-     if part.Name=='eye' or part.Name=='spawnEye' then
-      color=item.color:Lerp(ICE,.2):Lerp(HOT,math.max(warm,wound*.3)):Lerp(WHITE,math.max(flash,hit*.4))
-     elseif part.Name~='eyecase' then
-      color=color:Lerp(HOT,warm*.055):Lerp(WHITE,flash*.18)
+     frame=CFrame.new(origin+Vector3.new(motion.side,motion.lift,motion.back))*rotation*CFrame.new(-origin)*item.frame
+     if not awake and item.sleepFrom and record.sleepAt then
+      local progress=F.smooth(F.progress(now,record.sleepAt+rank*.06,.95))
+      frame=item.sleepFrom:Lerp(frame,progress)
+      if progress>=1 then item.sleepFrom=nil end
      end
-     -- Brief narrowing reads as an aperture focusing, with no extra visible
-     -- geometry. Never scale the housing or let the two eye meshes separate.
-     if part.Name=='eye' or part.Name=='spawnEye' then
-      part.Size=Vector3.new(item.size.X,item.size.Y*(1-warm*.1-pose.blink*.82+pose.focus),item.size.Z)
+     if item.rebuildFrom and record.restoreAt then
+      local progress=F.smooth(F.progress(now,record.restoreAt+rank*.07,1.15))
+      frame=item.rebuildFrom:Lerp(frame,progress)
+      if progress>=1 then item.rebuildFrom=nil end
      end
+     if eyePart then
+      transparency=math.max(transparency,1-motion.reveal)
+      if part.Name~='eyecase' then
+       color=eyeColor
+       part.Size=Vector3.new(item.size.X,item.size.Y*(1-warm*.15),item.size.Z)
+      end
+     else color=color:Lerp(HOT,warm*.13):Lerp(WHITE,ignite*.3+shotFlash*.2) end
     end
    end
-   part.CFrame=frame;part.Color=color;part.Transparency=transparency
+   part.CFrame=frame;part.Color=color;part.Transparency=transparency;item.lastFrame=frame
   end
  end
- record.light.Color=eyeColor;record.light.Brightness=dead and 0 or .12+breathe*.035+warm*.95+flash*1.4
+ record.light.Color=eyeColor;record.light.Range=12+ignite*16
+ record.light.Brightness=awake and (1+warm*2.5+ignite*8+shotFlash*3) or 0
+ local flare=awake and math.max(ignite,shotFlash*.3) or 0
+ record.flare.Enabled=flare>.005;record.flare.Size=UDim2.fromScale(12+flare*20,6+flare*10)
+ record.glow.ImageTransparency=1-flare;record.streak.BackgroundTransparency=1-flare*.95
  local aiming=typeof(aim)=='Vector3'
- record.beam.Enabled=not dead and aiming and (charging or flash>.01)
- record.beam.Width0=.035+warm*.045+flash*.2;record.beam.Width1=.035+warm*.045+flash*.15
- -- Two narrow layers read as a precise threat, then a crisp white shot. Neither
- -- the target endpoint nor any local pulse can change server damage or aim.
- record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.012+flash*.065
- record.core.Width1=.012+warm*.012+flash*.045
+ record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)
+ record.beam.Width0=.035+warm*.07+shotFlash*.32;record.beam.Width1=.035+warm*.07+shotFlash*.22
+ record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.02+shotFlash*.1
+ record.core.Width1=.012+warm*.02+shotFlash*.07
  if aiming then record.endpoint.Position=aim end
- -- The frozen server aim is projected to ground once per charge. The single
- -- faint disc projects the server's 3.5-stud aim tolerance onto the field plane.
  if charging and aiming then
   if record.markAim~=aim then
    record.markAim=aim
-   local field=source.Parent and source.Parent:FindFirstChild('Field')
-   local ground=nil
+   local field=source.Parent and source.Parent:FindFirstChild('Field');local ground=nil
    if field and field:IsA('BasePart') then
     local point=field.CFrame:PointToObjectSpace(aim)
     if math.abs(point.X)<=field.Size.X*.5 and math.abs(point.Z)<=field.Size.Z*.5 then
-     -- Crystals shrinking above the field must not leave the marker floating.
      ground=field.CFrame:PointToWorldSpace(Vector3.new(point.X,field.Size.Y*.5,point.Z)).Y
     end
    end
