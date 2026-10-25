@@ -321,7 +321,12 @@ function P:registerTurret(source,now)
   if record.deathAt<=0 then record.deathAt=now-10 end
   self:_prepareSentryFall(record,now,true)
  end
- for _,item in ipairs(record.pieces) do record.parts[item.part]=true end
+ for _,item in ipairs(record.pieces) do
+  record.parts[item.part]=true
+  if item.part.Name=='eye' or item.part.Name=='eyecase' or item.part.Name=='spawnEye' then
+   item.eyeRelative=eye.CFrame:ToObjectSpace(item.frame)
+  end
+ end
  for _,name in ipairs({'eye','spawnEye'}) do
   local part=view:FindFirstChild(name,true);record.accents[part]=part.Color
  end
@@ -433,6 +438,11 @@ function P:renderTurret(record,dt,now)
      end
      if eyePart then
       part.Material=item.material
+      -- Interpolate the socket as one rigid assembly even during closing and
+      -- reconstruction. Independent world-space lerps would shrink its orbit.
+      -- partsOf sorts eye before eyecase/spawnEye.
+      if part==record.eye then record.rigidEyeFrame=frame
+      else frame=record.rigidEyeFrame*item.eyeRelative end
       transparency=math.max(transparency,1-motion.reveal)
       if part.Name~='eyecase' then
        color=eyeColor

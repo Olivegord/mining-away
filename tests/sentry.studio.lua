@@ -79,6 +79,16 @@ local ok,err=pcall(function()
   check(audioCount('StoneSlabThud')-sounds==5,'wreck stays embedded with no bounce or repeated thuds at '..fps..' FPS')
   reset();presentation:renderTurret(record,1/fps,start+21);presentation:renderTurret(record,1/fps,start+23)
   check(record.eye.Transparency==1 and record.view.topseg.Position.Y<source.topseg.Position.Y-3,'reset reassembles closed sleeping stack at '..fps..' FPS')
+  source:SetAttribute('WakeAt',start+23);source:SetAttribute('ActivateAt',start+25.15);source:SetAttribute('Awake',true)
+  for n=0,fps*3 do presentation:renderTurret(record,1/fps,start+23+n/fps) end
+  source:SetAttribute('Awake',false)
+  for n=0,fps*1.5 do
+   presentation:renderTurret(record,1/fps,start+26+n/fps)
+   results.maxSocketDrift=math.max(results.maxSocketDrift,(record.eye.CFrame:ToObjectSpace(record.view.eyecase.CFrame).Position-socket.Position).Magnitude)
+   results.samples+=1
+   if n%120==0 then task.wait() end
+  end
+  check(record.eye.Transparency==1 and record.view.topseg.Position.Y<source.topseg.Position.Y-3,'living sentry closes without separating the socket at '..fps..' FPS')
   presentation:destroyTurret(record);presentation:update(0,start+30)
  end
  check(results.peakRise>23,'wake expands more than twenty-three studs from closed crown')

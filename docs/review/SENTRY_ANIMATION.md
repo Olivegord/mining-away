@@ -74,17 +74,24 @@ crown excursion from the closed stack. A screenshot showed the broad horizontal
 flare, white eye and surrounding light flash. Audio assets are installed engine
 content; tests establish creation/timing, not subjective audio quality.
 
-`tests/sentry.studio.lua` ran 41 assertions over 1,173 real-Instance/CFrame renderer
+`tests/sentry.studio.lua` ran 44 assertions over 1,527 real-Instance/CFrame renderer
 samples at simulated 30/60/144 FPS. It verified the large flare, one wake/ignition
 pair, eye facing, layered threat beams, duplicate-shot suppression, flinches,
 five separate impact sounds, exact post-impact immobility, reset to a closed
-stack, and silent late-join ruins. Base drift was zero; maximum eye/housing
-relative-position error was 0.0000165 studs. Fixtures were removed afterward.
+stack, living closure with a rigid socket, and silent late-join ruins. Base drift
+was zero; maximum eye/housing relative-position error was 0.0000097 studs.
+Fixtures were removed afterward.
 
-The coordinated UI review temporarily uses the previous matched renderer in its
-live client. Source is ready for the new production server/client installation.
-A final normal-command wake/fight check is pending release of Studio by that
-review. Controlled renderer tests are not measured rendering FPS or a two-player
+Installed the complete current server/client bundles in Edit and started Play.
+A normal Cobalt Fight command produced a 26.3028-stud crown rise, 23 visible-flare
+frames, four actual server shots, 62 charging frames and 74 visible-beam frames.
+Eye/player facing stayed at or above 0.99998 during activation. This exposed a
+closing-only socket drift in independently interpolated world frames; the final
+rigid assembly fix passed the expanded engine regression above. The Studio
+console was empty. Studio was then released to the coordinated map review for
+its final combined-source install and walking checks.
+
+Controlled renderer samples are not measured rendering FPS or a two-player
 session. Two-client synchronization, latency and subjective sound remain to be
 verified. Nothing was published to Roblox.
 
