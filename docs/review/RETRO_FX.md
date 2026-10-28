@@ -30,3 +30,9 @@ A source sketch, this report, simulation or one flattering still does not pass t
 - [Roblox raycasting](https://create.roblox.com/docs/workspace/raycasting): ray filters and hit position/normal. Raycast-based collision results are not a substitute for a final visual check.
 
 Owner parity clarification: the original inner beam retains its two-second active width ramp and 0.2-second hide. Warmup timing is server-owned and does not advance the inner beam; a separate visible charging cue remains subject to actual Studio motion review.
+
+## Fair contact verification follow-up
+
+An independent API-double reproduction rejected the earlier scheduler: with 48 stable primary beams at 30 FPS, only 18 ever appeared, and a starved previously verified beam stayed visible behind a new wall for 270 frames. The current renderer collects a frame's requests, serves oldest-due primary contacts before optional branches, and retains the 12-ray frame cap. Inactive contacts spend no rays. A verified anchor expires after 0.75 seconds; a valid recall started before expiry may complete its 0.2-second fade. If demand exceeds the available budget, expired beams hide until their fair verification turn instead of retaining a false contact. This deliberately bounded degradation may be visible under severe load and needs real-engine review.
+
+The actual Presentation module's API-double suite covers 48 primaries at 30/60/144 FPS with and without branches, inactive predecessors, primary priority, wall appearance, 240-beam overload and recovery, continued arrivals, and recall/fade expiry boundaries. An independent countercheck observed all 48 at 30 FPS and the obstructed late beam clearing within seven frames. These are not Studio render or multiplayer tests; the visual gate remains NOT VERIFIED.

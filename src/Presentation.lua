@@ -45,12 +45,12 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=48,maxPulses=10,maxScans=12,beamRays=0,maxBeamRays=12,closed=false},P)
+  maxFragments=48,maxPulses=10,maxScans=12,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
 function P:beginFrame()
- self.beamRays=0
+ self.beamRays=0;self.beamQueue={}
 end
 local function newBeamLayer(parent,template,name,color,opacity,z)
  local beam=template and template:FindFirstChild(name,true)
@@ -91,11 +91,11 @@ function P:destroyMiningBeam(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
-function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource)
+function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery)
  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
- if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0 end
- if now>=(cache.nextSample or 0) and self.beamRays+2<=self.maxBeamRays then
-  self.beamRays+=2;cache.nextSample=now+.08
+ if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
+ if not noQuery and now>=(cache.nextSample or 0) and self.beamRays+2<=self.maxBeamRays then
+  self.beamRays+=2;cache.nextSample=now+.08;cache.dueSince=cache.nextSample;cache.lastSample=now
   local direction=part.Position-origin
   if direction.Magnitude<.01 then cache.anchor=nil;return nil end
   local include=RaycastParams.new();include.FilterType=Enum.RaycastFilterType.Include;include.FilterDescendantsInstances={part}
@@ -113,7 +113,11 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource)
   if blocked and (blocked.Position-hit.Position).Magnitude>.12 then cache.anchor=nil;return nil end
   cache.anchor=F.surfaceAnchor(part.CFrame:PointToObjectSpace(hit.Position),part.Size)
   cache.normal=part.CFrame:VectorToObjectSpace(hit.Normal)
+  cache.verifiedAt=now
  end
+ -- A verified contact may bridge several frames of bounded contention, but it
+ -- cannot remain visible indefinitely after a newly appeared obstruction.
+ if cache.verifiedAt and now>math.max(cache.verifiedAt+.75,cache.fadeUntil or 0) then cache.anchor=nil;cache.normal=nil end
  if not cache.anchor or not cache.normal then return nil end
  local x,y,z=F.surfaceComponents(cache.anchor,part.Size)
  if not x then cache.anchor=nil;return nil end
@@ -122,14 +126,20 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource)
  if normal.Magnitude<.001 then return nil end
  return point,normal.Unit
 end
-function P:renderMiningBeam(beam,sample,now)
+function P:renderMiningBeam(beam,sample,now,noQuery)
  if self.closed or not beam or not beam.origin.Parent then return end
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
   beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
  local part=sample.part
  local point,normal
- if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now) end
+ -- A recall starting with a still-valid contact may finish its authored fade,
+ -- even when its verification expires during those final 0.2 seconds.
+ if sample.active then beam.surface.fadeUntil=nil
+ elseif sample.alive and beam.envelope.active and beam.surface.verifiedAt and now-beam.surface.verifiedAt<=.75 then
+  beam.surface.fadeUntil=now+.2
+ end
+ if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery) end
  local valid=point~=nil and normal~=nil
  local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=valid,
   key=sample.key,life=sample.life,active=sample.active,since=sample.since})
@@ -144,12 +154,59 @@ function P:renderMiningBeam(beam,sample,now)
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
  beam.secondary.Enabled=false
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
-  local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource)
+  local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery)
   if secondary and secondaryNormal then
    beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or ICE)
    beam.secondary.Width0=.085*width;beam.secondary.Width1=.055*width;beam.secondary.Enabled=true
   end
  end
+end
+-- Collect a frame before spending any rays. Oldest-due primary contacts are
+-- served first, independent of the caller's pairs() order. Secondary branches
+-- use only remaining capacity. On overload the .75s verified-cache deadline
+-- hides stale anchors until their fair turn; it never expands without bound.
+function P:queueMiningBeam(beam,sample,now)
+ if self.closed or not beam or not beam.origin.Parent then return end
+ if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
+  beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
+ end
+ table.insert(self.beamQueue,{beam=beam,sample=sample,now=now})
+end
+function P:flushMiningBeams()
+ local primary={};local secondary={}
+ local function add(list,entry,cache,part,origin,source,ignored)
+  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return end
+  if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=entry.now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
+  if not cache.order then self.beamOrder+=1;cache.order=self.beamOrder end
+  if entry.now>=(cache.nextSample or 0) then
+   table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored})
+  end
+ end
+ local function run(list)
+  table.sort(list,function(a,b)
+   local x,y=a.cache.dueSince or a.entry.now,b.cache.dueSince or b.entry.now
+   return x==y and a.cache.order<b.cache.order or x<y
+  end)
+  for _,v in ipairs(list) do
+   if self.beamRays+2>self.maxBeamRays then break end
+   self:_surface(v.entry.beam,v.cache,v.origin,v.part,v.source,v.entry.now,v.ignored)
+  end
+ end
+ for _,e in ipairs(self.beamQueue) do
+  local b,s=e.beam,e.sample
+  if s.alive and s.active then add(primary,e,b.surface,s.part,b.origin.WorldPosition,s.serverSource,nil) end
+ end
+ run(primary)
+ for _,e in ipairs(self.beamQueue) do
+  local b,s=e.beam,e.sample
+  if s.alive and s.active and s.secondaryPart and s.secondaryKey then
+   local point,normal=self:_surface(b,b.surface,b.origin.WorldPosition,s.part,s.serverSource,e.now,nil,true)
+   if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,point+normal*.08,s.secondarySource,s.serverSource) end
+  end
+ end
+ run(secondary)
+ for _,e in ipairs(self.beamQueue) do self:renderMiningBeam(e.beam,e.sample,e.now,true) end
+ self.beamQueue={}
 end
 function P:_pulse(position,color,size,now,duration)
  if self.closed or #self.pulses>=self.maxPulses then return end

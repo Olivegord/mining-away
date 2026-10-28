@@ -745,7 +745,7 @@ local function renderDrone(d,dt,now)
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
  local extra,extraSource
  if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
- presentation:renderMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
+ presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
   since=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now),
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
@@ -759,6 +759,7 @@ connect(RunService.RenderStepped,function(dt)
  -- Resolve the current animated eye before drawing any attack beams.
  for _,t in pairs(turrets) do presentation:renderTurret(t,dt,now) end
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
+ presentation:flushMiningBeams()
  presentation:update(dt,now)
 end)
 

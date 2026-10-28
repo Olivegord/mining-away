@@ -7,4 +7,5 @@ function Players:GetPlayerByUserId(_) return {Character={FindFirstChild=function
 local presentation={}
 function presentation:renderDrone(_,_,_) end
 function presentation:renderMiningBeam(_,sample,_) self.lastBeam=sample end
+function presentation:queueMiningBeam(_,sample,_) self.lastBeam=sample end
 local function resolveRenderedTarget() return nil end
