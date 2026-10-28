@@ -1,10 +1,15 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=3,BASE_CAPACITY=120}
+local C={CONTENT_VERSION=4,BASE_CAPACITY=120}
+-- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
+C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
+local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true}
+local uncommon={C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function finite(x) return type(x)=='number' and x==x and x>-math.huge and x<math.huge end
 local function card(id,title,scope,effects,description,kind)
- return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,expires='This run'}
+ local rarity=rare[id] and 'Rare' or (uncommon[id] and 'Uncommon' or 'Common')
+ return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,rarity=rarity,expires='This run'}
 end
 C.CATALOG={
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
@@ -113,6 +118,23 @@ C.hash=hash
 local function rng(seed)
  local state=seed%2147483647;if state<=0 then state=1 end
  return function(n) state=(state*16807)%2147483647;return math.floor(state/2147483647*n)+1 end
+end
+-- Weighted draw without replacement determines candidate order. The exhaustive
+-- compatible-triple score still wins before this order breaks exact ties.
+-- Priority protection and eligibility change marginal odds; no fixed percentages.
+function C.weightedOrder(items,random)
+ local remaining=table.clone(items);local ordered={}
+ while #remaining>0 do
+  local total=0
+  for _,item in ipairs(remaining) do total=total+(C.RARITY_WEIGHTS[item.rarity] or C.RARITY_WEIGHTS.Common) end
+  local ticket=random(total);local index=1
+  for i,item in ipairs(remaining) do
+   ticket=ticket-(C.RARITY_WEIGHTS[item.rarity] or C.RARITY_WEIGHTS.Common)
+   if ticket<=0 then index=i;break end
+  end
+  table.insert(ordered,table.remove(remaining,index))
+ end
+ return ordered
 end
 local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval'}
 local function vector(p,c)
@@ -239,9 +261,9 @@ function C.buy(p,tx,expectedRun,context)
   for _,entry in ipairs(C.FALLBACK) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
  end
  if #pool<6 then addFallback() end
- for i=#pool,2,-1 do local n=random(i);pool[i],pool[n]=pool[n],pool[i] end
+ pool=C.weightedOrder(pool,random)
  -- Search the bounded catalog rather than letting a greedy first pick prevent a
- -- useful triple. Seeded shuffle breaks ties; repeated requests cannot reroll.
+ -- useful triple. Seeded weighted ordering breaks ties; repeated requests cannot reroll.
  -- Prefer both a guarded-field answer and a productive economy option, then a
  -- signature mechanic in early packs, then different categories and scopes.
  -- Caps can exhaust a lane; never invent a useless card just to fill that lane.

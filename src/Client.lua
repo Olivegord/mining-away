@@ -39,6 +39,7 @@ local function button(parent,pos,size,text,callback,color)
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
 local openOffer,openPack,openPrestige,openFleet,openRunCards
+local beginDroneSelection
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(360,88));hud.Name='Resources';hud.Active=true
 U.icon(hud,'coin',UDim2.fromOffset(10,9),UDim2.fromOffset(40,40),palette.accent)
 local creditsLabel=label(hud,UDim2.fromOffset(58,4),UDim2.new(1,-190,0,32),'0',28,palette.ink,true);creditsLabel.Name='Credits'
@@ -74,8 +75,29 @@ local modalSubtitle=label(sheet,UDim2.fromOffset(24,66),UDim2.new(1,-48,0,32),''
 local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white;close:FindFirstChildOfClass('UIGradient').Enabled=false
 local body=Instance.new('ScrollingFrame');body.Name='MenuContent';body.Position=UDim2.fromOffset(24,112);body.Size=UDim2.new(1,-48,1,-136);body.BackgroundTransparency=1;body.BorderSizePixel=0;body.ScrollBarThickness=4;body.ScrollBarImageColor3=palette.muted;body.CanvasSize=UDim2.fromScale(0,0);body.AutomaticCanvasSize=Enum.AutomaticSize.Y;body.ZIndex=22;body.Parent=sheet
 local modalMode,modalSize=nil,nil
+local availabilitySignature=''
 local actionPending=nil
-local function clearBody() for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
+local revealGeneration,revealTweens,lastRevealId=0,{},nil
+local offerActions,offerButtons,offerReady,offerHosts={},{},{},{}
+local skipOffer=nil
+local offerExtras={}
+local focusedOfferId,focusedIndex=nil,1
+local pendingClaim,offerConfirmAction=nil,nil
+local function cancelOfferReveal()
+ revealGeneration+=1
+ for _,tween in ipairs(revealTweens) do tween:Cancel() end
+ revealTweens={};offerActions={};offerButtons={};offerReady={};offerHosts={}
+ if skipOffer then skipOffer:Destroy();skipOffer=nil end
+ for _,x in ipairs(offerExtras) do x:Destroy() end;offerExtras={}
+ offerConfirmAction=nil
+end
+local function clearBody() cancelOfferReveal();for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
+connect(modal:GetPropertyChangedSignal('Visible'),function() if not modal.Visible then cancelOfferReveal() end end)
+local function reducedMotion()
+ if profile and profile.settings and profile.settings.reducedMotion==true then return true end
+ local ok,value=pcall(function() return game:GetService('GuiService').ReducedMotionEnabled end)
+ return ok and value==true
+end
 local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
@@ -93,16 +115,23 @@ local function viewport()
 end
 local function currentLayout() local v=viewport();return UILayout.calculate(v.X,v.Y,UIS.TouchEnabled and not UIS.KeyboardEnabled) end
 local function layoutModal()
- local v=viewport();local l=currentLayout()
+ local v=viewport();local l=modalMode=='offer' and UILayout.offer(v.X,v.Y,UIS.TouchEnabled and not UIS.KeyboardEnabled) or currentLayout()
  sheet.Size=UDim2.fromOffset(l.panelWidth,l.panelHeight);sheet.Position=UDim2.fromOffset(l.panelX,l.panelY);modalSize=v
- body.Position=UDim2.fromOffset(l.panelPadding,l.headerHeight);body.Size=UDim2.fromOffset(l.bodyWidth,l.bodyHeight)
- modalTitle.TextSize=l.panelWidth<400 and 23 or 30
- modalTitle.Position=UDim2.fromOffset(l.panelWidth<400 and 74 or 90,16)
- modalTitle.Size=UDim2.new(1,l.panelWidth<400 and -136 or -158,0,43)
- modalEmblem.Size=UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54)
+ local isOffer=modalMode=='offer'
+ body.Position=UDim2.fromOffset(isOffer and l.bodyX or l.panelPadding,isOffer and l.bodyY or l.headerHeight);body.Size=UDim2.fromOffset(l.bodyWidth,l.bodyHeight)
+ body.AutomaticCanvasSize=isOffer and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
+ body.ScrollingDirection=isOffer and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
+ modal.BackgroundTransparency=isOffer and .94 or .22
+ sheet.BackgroundTransparency=isOffer and 1 or 0
+ local stroke=sheet:FindFirstChildOfClass('UIStroke');if stroke then stroke.Enabled=not isOffer end
+ modalTitle.Visible=not isOffer;modalSubtitle.Visible=not isOffer;close.Visible=not isOffer
+ modalTitle.TextSize=isOffer and (l.panelWidth<400 and 19 or 22) or (l.panelWidth<400 and 23 or 30)
+ modalTitle.Position=UDim2.fromOffset(isOffer and 57 or (l.panelWidth<400 and 74 or 90),isOffer and 12 or 16)
+ modalTitle.Size=UDim2.new(1,isOffer and -221 or (l.panelWidth<400 and -136 or -158),0,isOffer and 34 or 43)
+ modalEmblem.Size=UDim2.fromOffset(isOffer and 30 or (l.panelWidth<400 and 42 or 54),isOffer and 30 or (l.panelWidth<400 and 42 or 54))
  modalEmblem.Position=UDim2.fromOffset(18,18)
- modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,l.short and 58 or 66)
- modalSubtitle.Size=UDim2.new(1,-l.panelPadding*2,0,l.short and 29 or 32)
+ modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,isOffer and 63 or (l.short and 58 or 66))
+ modalSubtitle.Size=UDim2.new(1,-l.panelPadding*2,0,isOffer and 23 or (l.short and 29 or 32))
  return l
 end
 local menuTween=nil
@@ -111,15 +140,16 @@ local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
  if l.panelWidth<400 then
-  local shortTitles={pack='Upgrade pack',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
+  local shortTitles={pack='Upgrade pack',offer='Pick one',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
- modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54),palette.mineral)
+ modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(mode=='offer' and 30 or (l.panelWidth<400 and 42 or 54),mode=='offer' and 30 or (l.panelWidth<400 and 42 or 54)),palette.mineral)
+ modalEmblem.Visible=mode~='offer'
  modal.Visible=true
  if entering then
   if menuTween then menuTween:Cancel() end
-  sheetScale.Scale=.98;menuTween=TweenService:Create(sheetScale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});menuTween:Play()
+  if reducedMotion() then sheetScale.Scale=1 else sheetScale.Scale=.98;menuTween=TweenService:Create(sheetScale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});menuTween:Play() end
  end
  return l
 end
@@ -196,19 +226,72 @@ local function progress(parent,y,width,title,detail,fraction,color)
 end
 openOffer=function()
  local offer=pending();if not offer then return end
- local l=menu('offer','Pick your upgrade','Pack '..offer.packIndex..' · Choose one. These paid choices stay saved when you close.','cards')
- local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
- for index,choice in ipairs(offer.choices) do
-  local view
-  view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{category=categoryText(choice),target=targetText(choice),previewRows=previewRows(choice),stackText=stackText(choice),onChoose=function()
-   if not pending() or pending().id~=offer.id or not canAct() then return end
-   if send('ChooseCard',{offerId=offer.id,index=index}) then
-    for _,card in ipairs(body:GetChildren()) do if card:IsA('Frame') then local b=card:FindFirstChild('ChooseCard');if b then enableAction(b,false);b.Text=card==view.root and 'Installing…' or 'Please wait' end end end
-   end
-  end})
-  local usable=canAct();enableAction(view.button,usable)
-  if not usable then local _,reason=availability('ChooseCard');view.button.Text=reason end
+ local l=menu('offer','Choose one card','','cards')
+ local motionOff=reducedMotion();U.setReducedMotion(motionOff)
+ local animate=not motionOff and lastRevealId~=offer.id;lastRevealId=offer.id
+ if focusedOfferId~=offer.id then focusedOfferId=offer.id;focusedIndex=1 end
+ local generation=revealGeneration
+ local allowed,reason=availability('ChooseCard');availabilitySignature='offer:'..tostring(allowed)..':'..reason
+ local list=Instance.new('UIListLayout');list.FillDirection=Enum.FillDirection.Horizontal;list.Padding=UDim.new(0,l.cardGap);list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
+ local padding=Instance.new('UIPadding');padding.PaddingLeft=UDim.new(0,math.max(0,math.floor((l.bodyWidth-(#offer.choices*(l.cardWidth+6)+(#offer.choices-1)*l.cardGap))/2)));padding.Parent=body
+ local details=U.panel(sheet,UDim2.fromOffset(l.detailX,l.detailY),UDim2.fromOffset(l.detailWidth,l.detailHeight),palette.panel,9);details.Name='FocusedCardDetail';details.ZIndex=24;table.insert(offerExtras,details)
+ local detailContent=Instance.new('ScrollingFrame');detailContent.BackgroundTransparency=1;detailContent.BorderSizePixel=0;detailContent.ScrollBarThickness=4;detailContent.Size=UDim2.new(1,-20,1,-16);detailContent.Position=UDim2.fromOffset(10,8);detailContent.AutomaticCanvasSize=Enum.AutomaticSize.Y;detailContent.CanvasSize=UDim2.fromScale(0,0);detailContent.ZIndex=25;detailContent.Parent=details
+ local choose=button(sheet,UDim2.fromOffset(l.actionX,l.actionY),UDim2.fromOffset(l.actionWidth,44),'Choose',function() if offerConfirmAction then offerConfirmAction() end end,palette.accent);choose.Name='ConfirmCard';choose.TextSize=16;table.insert(offerExtras,choose)
+ local later=button(sheet,UDim2.fromOffset(l.closeX,l.closeY),UDim2.fromOffset(l.closeWidth,44),'Later',function() modal.Visible=false end,palette.paper);later.Name='CloseOffer';later.TextSize=16;table.insert(offerExtras,later)
+ local views={};local focusCard
+ local function revealAll()
+  for _,tween in ipairs(revealTweens) do tween:Cancel() end;revealTweens={}
+  for n,h in pairs(offerHosts) do h.group.GroupTransparency=0;h.scale.Scale=1;offerReady[n]=true end
+  choose.Text=allowed and 'Choose' or reason
+  if focusCard then focusCard(focusedIndex,false) end
  end
+ local function allReady() for i=1,#offer.choices do if not offerReady[i] then return false end end;return true end
+ focusCard=function(index,scroll)
+  if not offerReady[index] or not views[index] then return end
+  focusedIndex=index
+  for n,v in pairs(views) do v.setFocus(n==index,motionOff) end
+  for _,child in ipairs(detailContent:GetChildren()) do child:Destroy() end
+  local layout=Instance.new('UIListLayout');layout.Padding=UDim.new(0,5);layout.SortOrder=Enum.SortOrder.LayoutOrder;layout.Parent=detailContent
+  local choice=offer.choices[index]
+  local order=0
+  local function line(text,bold,size,color)
+   if not text or text=='' then return end;order+=1
+   local item=label(detailContent,UDim2.fromOffset(0,0),UDim2.new(1,-6,0,0),text,size,color or palette.ink,bold)
+   item.LayoutOrder=order;item.AutomaticSize=Enum.AutomaticSize.Y;item.TextWrapped=true;item.TextYAlignment=Enum.TextYAlignment.Top;item.ZIndex=26
+  end
+  line(choice.title,true,18);line(targetText(choice),true,18)
+  line(choice.description,false,16)
+  for _,row in ipairs(previewRows(choice)) do line(row,true,18) end
+  line(choice.tradeoff and ('Tradeoff: '..choice.tradeoff) or 'No stat penalty',false,16)
+  line('THIS RUN • '..stackText(choice),false,16,palette.muted)
+  if choice.rarity=='Common' or choice.rarity=='Uncommon' or choice.rarity=='Rare' then line(choice.rarity..' • '..categoryText(choice),false,16,palette.muted) end
+  detailContent.CanvasPosition=Vector2.zero
+  if scroll then local h=offerHosts[index].group;local x=h.AbsolutePosition.X-body.AbsolutePosition.X+body.CanvasPosition.X;body.CanvasPosition=Vector2.new(math.clamp(x-(l.bodyWidth-h.AbsoluteSize.X)/2,0,math.max(0,body.AbsoluteCanvasSize.X-body.AbsoluteWindowSize.X)),0) end
+  if not l.shortOffer then local h=offerHosts[index].group;local x=h.AbsolutePosition.X-sheet.AbsolutePosition.X+h.AbsoluteSize.X/2-l.detailWidth/2;details.Position=UDim2.fromOffset(math.clamp(x,0,l.panelWidth-l.detailWidth),l.detailY) end
+ end
+ offerConfirmAction=function()
+  if not allReady() then revealAll();return end
+  if not offerReady[focusedIndex] or not pending() or pending().id~=offer.id or not canAct() then return end
+  local choice=offer.choices[focusedIndex];local index=focusedIndex
+  if send('ChooseCard',{offerId=offer.id,index=index}) then
+   pendingClaim={offerId=offer.id,runId=profile.run.id,index=index,cardId=choice.cardId,targetDroneId=choice.targetDroneId,cardCount=#profile.run.cards}
+   choose.Text='Installing…';enableAction(choose,false)
+  end
+ end
+ for index,choice in ipairs(offer.choices) do
+  local host=Instance.new('CanvasGroup');host.Name='OfferSlot'..index;host.LayoutOrder=index;host.Size=UDim2.fromOffset(l.cardWidth+6,l.cardHeight+6);host.BackgroundTransparency=1;host.ZIndex=23;host.Parent=body
+  host.GroupTransparency=animate and 1 or 0;local scale=Instance.new('UIScale');scale.Scale=animate and .98 or 1;scale.Parent=host
+  views[index]=CardView.create(U,host,choice,index,l.cardWidth,l.cardHeight,{offerCompact=true,category=categoryText(choice),target=targetText(choice),previewRows=previewRows(choice),onFocus=function(n) focusCard(n,false) end})
+  offerHosts[index]={group=host,scale=scale};offerReady[index]=not animate;offerActions[index]=function() focusCard(index,true) end;offerButtons[index]=views[index].button
+  if animate then task.delay(UILayout.revealDelay(index,false),function()
+   if generation~=revealGeneration or not modal.Visible or not pending() or pending().id~=offer.id or not host.Parent or offerReady[index] then return end
+   local fade=TweenService:Create(host,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{GroupTransparency=0});local lift=TweenService:Create(scale,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});table.insert(revealTweens,fade);table.insert(revealTweens,lift)
+   fade.Completed:Connect(function(state) if state~=Enum.PlaybackState.Completed or generation~=revealGeneration or not host.Parent then return end;offerReady[index]=true;if index==focusedIndex then focusCard(index,false) end;if allReady() then choose.Text=allowed and 'Choose' or reason end end);fade:Play();lift:Play()
+  end) end
+ end
+ choose.Text=animate and 'Reveal all' or (allowed and 'Choose' or reason)
+ if not animate then task.defer(function() if generation==revealGeneration and modal.Visible then focusCard(focusedIndex,false) end end) end
+ for index,b in pairs(offerButtons) do b.NextSelectionLeft=offerButtons[index-1];b.NextSelectionRight=offerButtons[index+1];b.NextSelectionDown=choose end
 end
 openPack=function()
  if pending() then openOffer();return end
@@ -251,9 +334,9 @@ openFleet=function()
  local columns=width>=650 and 2 or 1;local gap=14;local rowWidth=(width-gap*(columns-1))/columns
  for index,d in ipairs(profile.fleet or {}) do
   local stats=(profile.droneStats and profile.droneStats[d.id]) or d.effective or d.base or {}
-  local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*254
+  local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*304
   local tint=colors[d.type] or palette.mineral
-  local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,236),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
+  local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,286),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
   U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
   label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,33),d.name or ('Drone '..index),24,palette.ink,true)
   label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),'PERMANENT · '..string.upper(d.type or 'Blue'),10,palette.muted,true)
@@ -263,9 +346,10 @@ openFleet=function()
   statTile(row,tileWidth+28,91,tileWidth,'COMBAT',number(stats.combatDPS or 12)..' /s')
   statTile(row,14,153,tileWidth,'MAX HULL',number(stats.maxHealth or 80))
   statTile(row,tileWidth+28,153,tileWidth,'LASER START',number(stats.warmup or .8)..' sec')
-  label(row,UDim2.fromOffset(15,213),UDim2.new(1,-30,0,16),tostring(count)..' matching run cards · reprints free',10,palette.muted)
+  label(row,UDim2.fromOffset(15,210),UDim2.new(1,-30,0,20),tostring(count)..' run cards · free reprints',16,palette.muted)
+  local selectDrone=button(row,UDim2.fromOffset(14,236),UDim2.new(1,-28,0,44),'Select for mining',function() beginDroneSelection(d) end,palette.mineral);selectDrone.Name='SelectDrone'..index;selectDrone.TextSize=16
  end
- local index=#profile.fleet+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*254
+ local index=#profile.fleet+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*304
  local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,236),palette.accent:Lerp(palette.white,.76),14)
  local narrowTile=rowWidth<330;local tileTextX=narrowTile and 70 or 81
  U.icon(nextDrone,'prestige',UDim2.fromOffset(14,16),UDim2.fromOffset(narrowTile and 45 or 55,narrowTile and 45 or 55),palette.accent)
@@ -338,7 +422,7 @@ local function refreshModal()
  task.defer(function()
   RunService.Heartbeat:Wait()
   if serial==refreshSerial and modal.Visible and modalMode==mode and body.Parent then
-   body.CanvasPosition=Vector2.new(0,math.min(savedScroll.Y,math.max(0,body.AbsoluteCanvasSize.Y-body.AbsoluteWindowSize.Y)))
+   body.CanvasPosition=mode=='offer' and Vector2.new(math.min(savedScroll.X,math.max(0,body.AbsoluteCanvasSize.X-body.AbsoluteWindowSize.X)),0) or Vector2.new(0,math.min(savedScroll.Y,math.max(0,body.AbsoluteCanvasSize.Y-body.AbsoluteWindowSize.Y)))
   end
  end)
 end
@@ -349,6 +433,7 @@ local function readProfile()
  local oldProfile=profile
  local changedRun=profile and profile.run.id~=p.run.id
  profile=p
+ U.setReducedMotion(reducedMotion())
  if actionPending then
   local offer=p.run.pendingOffer
   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) then actionPending=nil end
@@ -356,7 +441,14 @@ local function readProfile()
  if changedRun and modalMode=='prestige' then modal.Visible=false end
  local offer=pending()
  if offer and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
- elseif not offer and modalMode=='offer' then modal.Visible=false;modalMode=nil
+ elseif not offer and modalMode=='offer' then
+  local claim=pendingClaim;local cards=p.run.cards or {};local last=cards[#cards]
+  local confirmed=claim and not changedRun and claim.runId==p.run.id and oldProfile and oldProfile.run.pendingOffer and oldProfile.run.pendingOffer.id==claim.offerId and #cards==claim.cardCount+1 and last and last.cardId==claim.cardId and last.targetDroneId==claim.targetDroneId
+  pendingClaim=nil
+  if confirmed and not reducedMotion() and offerHosts[claim.index] then
+   local g=revealGeneration;local host=offerHosts[claim.index];local pulse=TweenService:Create(host.scale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1.05});table.insert(revealTweens,pulse);pulse:Play()
+   task.delay(.18,function() if g==revealGeneration and modal.Visible and modalMode=='offer' and not pending() then modal.Visible=false;modalMode=nil end end)
+  else modal.Visible=false;modalMode=nil end
  elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
   if p.pendingTransaction~=(oldProfile and oldProfile.pendingTransaction) then refreshModal() end
  elseif modalMode=='fleet' or modalMode=='run' then
@@ -372,15 +464,6 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
 end)
 
-local sparkCount=0
-local function sparkBurst(pos,color,amount)
- for _=1,math.min(amount,math.max(0,48-sparkCount)) do
-  sparkCount=sparkCount+1
-  local p=Instance.new('Part');p.Name='MineralChip';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Size=Vector3.new(.14,.14,.3);p.Material=Enum.Material.Neon;p.Color=color;p.Position=pos;p.Parent=localFX
-  TweenService:Create(p,TweenInfo.new(.35),{Position=pos+Vector3.new(math.random(-4,4),math.random(2,5),math.random(-4,4)),Transparency=1,Size=Vector3.new(.03,.03,.03)}):Play()
-  task.delay(.4,function() p:Destroy();sparkCount=sparkCount-1 end)
- end
-end
 local soundCount=0
 local function safeSound(name,parent)
  if soundCount>=16 then return end
@@ -407,28 +490,7 @@ local function localPart(parent,name,pos)
  local p=Instance.new('Part');p.Name=name;p.Size=Vector3.new(.05,.05,.05);p.Position=pos;p.Transparency=1;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=parent;return p
 end
 local function createBeam(view,emitter)
- local anchor=Instance.new('Attachment');anchor.Name='RenderedBeamOrigin';anchor.Parent=emitter
- local endpoint=localPart(localFX,'BeamImpact',emitter.Position)
- local endAttachment=Instance.new('Attachment');endAttachment.Parent=endpoint
- local secondaryPoint=localPart(localFX,'SecondaryImpact',emitter.Position)
- local secondaryAttachment=Instance.new('Attachment');secondaryAttachment.Parent=secondaryPoint
- local secondary=Instance.new('Beam');secondary.Name='PrismArc';secondary.Attachment0=endAttachment;secondary.Attachment1=secondaryAttachment;secondary.FaceCamera=true;secondary.LightEmission=.9;secondary.Width0=.12;secondary.Width1=.06;secondary.Enabled=false;secondary.Color=ColorSequence.new(Color3.fromRGB(110,225,247));secondary.Transparency=NumberSequence.new(.15);secondary.Parent=endpoint
- local miningFX=RS:FindFirstChild('MiningFX')
- local template=miningFX and miningFX:FindFirstChild('Beam')
- local beamModel=template and template:Clone() or Instance.new('Model');beamModel.Name='RenderedMiningBeam';beamModel.Parent=localFX;sanitize(beamModel)
- local beams={}
- for _,v in ipairs(beamModel:GetDescendants()) do
-  if v:IsA('BasePart') then v.Transparency=1
-  elseif v:IsA('Beam') then table.insert(beams,v) end
- end
- if #beams==0 then
-  for i=1,2 do
-   local b=Instance.new('Beam');b.Name=i==1 and 'InnerBeam' or 'OuterBeam';b.Color=ColorSequence.new(i==1 and Color3.new(1,1,1) or Color3.fromRGB(114,222,246));b.Transparency=NumberSequence.new(i==1 and .05 or .7);b.FaceCamera=true;b.LightEmission=1;b.Parent=beamModel;table.insert(beams,b)
-  end
- end
- for _,b in ipairs(beams) do b.Attachment0=anchor;b.Attachment1=endAttachment;b.Width0=0;b.Width1=0;b.Enabled=true end
- local impact=Instance.new('ParticleEmitter');impact.Name='BoundedImpact';impact.Texture='rbxasset://textures/particles/sparkles_main.dds';impact.Rate=0;impact.Lifetime=NumberRange.new(.12,.25);impact.Speed=NumberRange.new(1,3);impact.SpreadAngle=Vector2.new(80,80);impact.LightEmission=.8;impact.Size=NumberSequence.new(.12);impact.Color=ColorSequence.new(Color3.fromRGB(167,234,240));impact.Parent=endAttachment
- return {model=beamModel,origin=anchor,endpoint=endpoint,beams=beams,impact=impact,secondary=secondary,secondaryPoint=secondaryPoint,width=0,view=view,active=false,particleClock=0}
+ return presentation:createMiningBeam(view,emitter)
 end
 local function registerDrone(source)
  if drones[source] or not source:IsA('Model') then return end
@@ -528,7 +590,7 @@ end)
 for _,source in ipairs(world:GetDescendants()) do observe(source) end
 local function destroyDrone(d)
  presentation:destroyDrone(d)
- d.view:Destroy();d.beam.model:Destroy();d.beam.endpoint:Destroy();d.beam.secondaryPoint:Destroy()
+ presentation:destroyMiningBeam(d.beam);d.view:Destroy()
 end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
@@ -566,8 +628,26 @@ local function renderResource(r,now)
   view.CFrame=CFrame.new(pos)*CFrame.Angles(ax,seed*.01,az)
   view.Color=r.baseColor:Lerp(Color3.new(.12,.12,.15),stage*.13)
  else view.Transparency=1 end
- if event=='stage' then safeSound('RockCrack',view);sparkBurst(view.Position,r.baseColor,2);presentation:resourceImpact(r,event,now)
- elseif event=='break' then safeSound('RockBreak',view);sparkBurst(view.Position,r.baseColor,8);presentation:resourceImpact(r,event,now) end
+ if event=='stage' then safeSound('RockCrack',view);presentation:resourceImpact(r,event,now)
+ elseif event=='break' then safeSound('RockBreak',view);presentation:resourceImpact(r,event,now) end
+end
+local function resolveRenderedTarget(kind,id)
+ if type(id)~='string' or id=='' then return nil end
+ if kind=='resource' then
+  local r=resourceById(id)
+  if r and r.source.Parent and (r.source:GetAttribute('BreakSerial') or 0)==0
+   and r.view.Parent and not r.visual.broken then return r.view,r.source,r end
+ elseif kind=='turret' then
+  for source,t in pairs(turrets) do
+   if source.Parent and source:GetAttribute('TurretId')==id and source:GetAttribute('Dead')~=true
+    and t.view and t.view.Parent then
+    -- spawnEye is the original slightly larger visible eye shell around eye.
+    local eye=t.view:FindFirstChild('spawnEye',true) or t.eye
+    if eye and eye:IsA('BasePart') and eye.Parent and eye.Transparency<.99 then return eye,source,nil end
+   end
+  end
+ end
+ return nil
 end
 local function renderDrone(d,dt,now)
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
@@ -603,35 +683,33 @@ local function renderDrone(d,dt,now)
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true
  local attacking=state=='Attack' and s:GetAttribute('Firing')==true
- local active=(mining or attacking) and state~='Destroyed' and state~='Reprinting'
- local r=resourceById(s:GetAttribute('TargetId'))
- local target=s:GetAttribute('TargetPosition')
- if r and r.view.Parent and r.view.Transparency<1 then target=r.view.CFrame:PointToWorldSpace(Vector3.new(0,r.view.Size.Y/2,0)) end
- if typeof(target)~='Vector3' then active=false end
+ local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
+ local active=alive and (mining or attacking)
  local beam=d.beam
- if active then
-  local since=s:GetAttribute('BeamSince') or now
-  local progress=math.clamp((now-since)/2,0,1)
-  beam.width=1-(1-progress)^2
-  beam.endpoint.Position=target
- else beam.width=math.max(0,beam.width-dt/.2) end
- for _,b in ipairs(beam.beams) do
-  local inner=b.Name=='InnerBeam'
-  b.Width0=(inner and .3 or .65)*beam.width;b.Width1=(inner and .3 or .65)*beam.width;b.Enabled=beam.width>0.001
- end
- local fork=state=='Mine' and now<(s:GetAttribute('ForkUntil') or 0)
- local chain=state=='Attack' and now<(s:GetAttribute('ChainUntil') or 0)
- local secondaryTarget=s:GetAttribute(chain and 'ChainTargetPosition' or 'ForkTargetPosition')
- beam.secondary.Enabled=active and (fork or chain) and typeof(secondaryTarget)=='Vector3'
- if beam.secondary.Enabled then beam.secondaryPoint.Position=secondaryTarget;beam.secondary.Color=ColorSequence.new(chain and Color3.fromRGB(255,194,104) or Color3.fromRGB(110,225,247)) end
- beam.particleClock=beam.particleClock+dt
- if active and beam.particleClock>.08 then beam.impact:Emit(1);beam.particleClock=0 end
+ local kind=state=='Attack' and 'turret' or 'resource'
+ local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
+ if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
+ elseif not active and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
+ local part,source,resource=resolveRenderedTarget(kind,id)
+ local procKind=state=='Attack' and 'turret' or 'resource'
+ local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
+ local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
+ local extra,extraSource
+ if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
+ presentation:renderMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
+  contact=active,
+  since=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now),
+  part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
+  secondaryKey=procId,secondaryColor=state=='Attack' and Color3.fromRGB(255,179,102) or nil},now)
+
 end
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
+ presentation:beginFrame()
  for _,r in pairs(resources) do renderResource(r,now) end
- for _,d in pairs(drones) do renderDrone(d,dt,now) end
+ -- Resolve the current animated eye before drawing any attack beams.
  for _,t in pairs(turrets) do presentation:renderTurret(t,dt,now) end
+ for _,d in pairs(drones) do renderDrone(d,dt,now) end
  presentation:update(dt,now)
 end)
 
@@ -675,9 +753,68 @@ end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
  if (not who or who==player) and prompt.Parent and prompt.Parent:IsA('BasePart') then performStation(prompt.Parent) end
 end)
+local selectedDrone,selectedResource,assignmentPending=nil,nil,nil
+local assignmentAcknowledgedUntil=0
+local selectionDock=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(296,72),palette.panel,10);selectionDock.Name='SelectMiningTarget';selectionDock.Visible=false
+local selectionTitle=label(selectionDock,UDim2.fromOffset(8,3),UDim2.new(1,-16,0,22),'Select a crystal',16,palette.ink,true)
+local cycleCandidate,submitCandidate
+local nextTarget=button(selectionDock,UDim2.fromOffset(5,26),UDim2.new(.33,-7,0,44),'Next [T]',function() cycleCandidate() end,palette.paper);nextTarget.TextSize=16
+local assignTarget=button(selectionDock,UDim2.new(.33,0,0,26),UDim2.new(.34,-5,0,44),'Assign',function() submitCandidate() end,palette.mineral);assignTarget.TextSize=16
+local function cancelSelection()
+ if assignmentPending and selectedDrone and profile then
+  for source in pairs(drones) do if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('DroneId')==selectedDrone.id then
+   command:FireServer('CancelDrone',{requestId=tx(),runId=profile.run.id,droneId=selectedDrone.id,life=source:GetAttribute('Life')});break
+  end end
+ end
+ if assignmentPending then notice.Text='Cancellation requested';noticeUntil=os.clock()+5 else notice.Text='Selection cancelled';noticeUntil=os.clock()+3 end
+ assignmentPending=nil;selectedDrone=nil;selectedResource=nil;assignmentAcknowledgedUntil=0;selectionDock.Visible=false
+end
+local cancelTarget=button(selectionDock,UDim2.new(.67,0,0,26),UDim2.new(.33,-5,0,44),'Cancel',cancelSelection,palette.paper);cancelTarget.TextSize=16
+local marker=Instance.new('Highlight');marker.Name='SelectedCrystal';marker.FillTransparency=.8;marker.OutlineColor=palette.mineral;marker.DepthMode=Enum.HighlightDepthMode.Occluded;marker.Enabled=false;marker.Parent=localFX
+local function updateSelectedResource(source)
+ selectedResource=source;local r=source and resources[source];marker.Adornee=r and r.view or nil;marker.Enabled=r~=nil
+ local count=source and math.max(0,(source:GetAttribute('SlotCapacity') or 1)-(source:GetAttribute('SlotsUsed') or 0)) or 0
+ selectionTitle.Text=selectedDrone and ((selectedDrone.name or 'Drone')..' • '..(source and (tostring(count)..' open slots') or 'select a crystal')) or ''
+end
+beginDroneSelection=function(d)
+ selectedDrone=d;assignmentPending=nil;assignmentAcknowledgedUntil=0;nextTarget.Visible=true;assignTarget.Visible=true;cancelTarget.Visible=true;updateSelectedResource(nil);modal.Visible=false;selectionDock.Visible=true
+end
+cycleCandidate=function()
+ local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');local options={};local now=workspace:GetServerTimeNow()
+ for source in pairs(resources) do if source.Parent and (source:GetAttribute('HP') or 0)>0 and (source:GetAttribute('ReadyAt') or math.huge)<=now and (source:GetAttribute('SlotsUsed') or 0)<(source:GetAttribute('SlotCapacity') or 1) and hr and (source.Position-hr.Position).Magnitude<=90 then table.insert(options,source) end end
+ table.sort(options,function(a,b) return tostring(a:GetAttribute('ResourceId'))<tostring(b:GetAttribute('ResourceId')) end)
+ if #options==0 then updateSelectedResource(nil);selectionTitle.Text='No ready slots nearby';return end
+ local n=1;for i,v in ipairs(options) do if v==selectedResource then n=i%#options+1;break end end;updateSelectedResource(options[n])
+end
+submitCandidate=function()
+ if not selectedDrone or not selectedResource or not profile or assignmentPending then return end
+ local source=nil;for d in pairs(drones) do if d:GetAttribute('Owner')==player.UserId and d:GetAttribute('DroneId')==selectedDrone.id then source=d;break end end
+ if not source then selectionTitle.Text='Drone unavailable';return end
+ local id=tx();assignmentPending=id;selectionTitle.Text='Assigning…'
+ command:FireServer('AssignSlot',{requestId=id,runId=profile.run.id,fieldId=selectedResource:GetAttribute('FieldId'),droneId=selectedDrone.id,life=source:GetAttribute('Life'),resourceId=tostring(selectedResource:GetAttribute('ResourceId'))})
+ task.delay(8,function() if assignmentPending==id then assignmentPending=nil;selectionTitle.Text='No confirmation • try again' end end)
+end
+connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
+ local raw=gui.Parent:GetAttribute('MA_CommandState');if type(raw)~='string' then return end
+ local ok,result=pcall(function() return Http:JSONDecode(raw) end);if not ok then return end
+ local status,message=UILayout.assignmentReceipt(assignmentPending,result,selectedDrone and selectedDrone.name)
+ if not status then return end
+ assignmentPending=nil;selectionTitle.Text=message
+ if status=='accepted' then
+  selectedDrone=nil;selectedResource=nil;marker.Enabled=false
+  assignmentAcknowledgedUntil=os.clock()+3
+  nextTarget.Visible=false;assignTarget.Visible=false;cancelTarget.Visible=false
+ else assignmentAcknowledgedUntil=0 end
+ notice.Text=message;noticeUntil=os.clock()+5
+end)
 local function assignField(target)
  if modal.Visible then return end
  local node=target
+ if selectedDrone then
+  while node and node~=workspace do if node:GetAttribute('ResourceId') and resources[node] then updateSelectedResource(node);submitCandidate();return end;node=node.Parent end
+  selectionTitle.Text='Tap a crystal, or use Next';return
+ end
+ node=target
  while node and node~=workspace do
   local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
   if type(field)=='number' then command:FireServer('Patch',field);return end
@@ -698,6 +835,17 @@ end)
 connect(UIS.InputBegan,function(input,processed)
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
+ if selectedDrone and not modal.Visible then
+  if input.KeyCode==Enum.KeyCode.T then cycleCandidate();return elseif input.KeyCode==Enum.KeyCode.Return then submitCandidate();return elseif input.KeyCode==Enum.KeyCode.Escape then cancelSelection();return end
+ end
+ if modal.Visible then
+  if modalMode=='offer' then
+   local shortcuts={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3}
+   local index=shortcuts[input.KeyCode]
+   if index and offerActions[index] then offerActions[index]() elseif (input.KeyCode==Enum.KeyCode.Return or input.KeyCode==Enum.KeyCode.KeypadEnter) and offerConfirmAction then offerConfirmAction() end
+  end
+  return
+ end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then assignField(mouse.Target);return end
  local key=input.KeyCode
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
@@ -710,13 +858,12 @@ connect(UIS.InputBegan,function(input,processed)
  end
 end)
 local hudClock=0
-local availabilitySignature=''
 local contextKind='mining'
 connect(RunService.Heartbeat,function(dt)
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
  hud.Position=UDim2.fromOffset(l.hudX,l.hudY);hud.Size=UDim2.fromOffset(l.hudWidth,l.hudHeight)
- creditsLabel.Size=UDim2.fromOffset(l.hudWidth-190,32);saveLabel.Size=UDim2.fromOffset(l.hudWidth-190,13)
+ creditsLabel.Size=UDim2.fromOffset(l.hudWidth-190,32);saveLabel.Size=UDim2.fromOffset(l.hudWidth-190,18)
  creditsLabel.TextSize=l.hudWidth<330 and 24 or 28
  cargoText.Size=UDim2.fromOffset(l.hudWidth-158,18);cargoText.Position=UDim2.fromOffset(15,l.short and 47 or 53)
  cargoTrack.Position=UDim2.fromOffset(14,l.short and 67 or 76)
@@ -725,9 +872,11 @@ connect(RunService.Heartbeat,function(dt)
  objectiveBox.Position=UDim2.fromOffset(l.hudX,l.objectiveY)
  objectiveBox.Visible=not modal.Visible and not l.short
  context.Size=UDim2.fromOffset(l.contextWidth,l.contextHeight);context.Position=UDim2.fromOffset(l.contextX,l.contextY)
+ selectionDock.Size=UDim2.fromOffset(l.contextWidth,72);selectionDock.Position=UDim2.fromOffset(l.contextX,l.contextY);selectionDock.Visible=(selectedDrone~=nil or os.clock()<assignmentAcknowledgedUntil) and not modal.Visible
+ if not selectedDrone then marker.Enabled=false end
  contextButton.Position=UDim2.new(1,-112,0,(l.contextHeight-44)/2)
- contextTitle.TextSize=l.contextWidth<350 and 13 or 18
- contextDetail.TextSize=l.contextWidth<350 and 10 or 11
+ contextTitle.TextSize=18
+ contextDetail.TextSize=16
  contextIcon.Position=UDim2.fromOffset(12,(l.contextHeight-34)/2)
  recall.Position=UDim2.fromOffset(l.recallX,l.recallY);evade.Position=UDim2.fromOffset(l.evadeX,l.evadeY)
  recall.Size=UDim2.fromOffset(l.recallWidth,44);evade.Size=recall.Size
@@ -748,7 +897,7 @@ connect(RunService.Heartbeat,function(dt)
  elseif status:find('unavailable') then saveLabel.Text='PROFILE UNAVAILABLE'
  elseif status:find('saved') then saveLabel.Text='CREDITS · AUTOSAVED'
  else saveLabel.Text='SAVE PAUSED' end
- if l.hudWidth<310 then saveLabel.TextSize=8 else saveLabel.TextSize=9.5 end
+ saveLabel.TextSize=16
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(137,91,37) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 120
@@ -811,7 +960,8 @@ connect(RunService.Heartbeat,function(dt)
    end
   end
  end
- if l.contextReplacesHUD and context.Visible then hud.Visible=false end
+ if selectedDrone or os.clock()<assignmentAcknowledgedUntil then context.Visible=false end
+ if l.contextReplacesHUD and (context.Visible or selectionDock.Visible) then hud.Visible=false end
  local hr=ownerRoot();local nearestEnemy,dist=nil,65
  if hr then for turret in pairs(turrets) do if turret.Parent then
   local hp=turret:GetAttribute('HP') or 0;local rootPart=turret.PrimaryPart or turret:FindFirstChildWhichIsA('BasePart',true)

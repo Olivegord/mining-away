@@ -49,4 +49,56 @@ function F.fragment(age,groundDrop,vy,gravity)
  if age<impact then return vy*age-.5*gravity*age*age,false,age end
  return floor,true,impact
 end
+-- Stable, size-normalised anchor on the *queried rendered part* surface.
+-- A cached anchor transforms with crystal shrink and tilt between bounded raycasts.
+function F.surfaceAnchor(point,size)
+ if not point or not size then return nil end
+ local function ratio(v,n)
+  if not finite(v) or not finite(n) or n<=0 then return nil end
+  return math.clamp(v/n,-.5,.5)
+ end
+ local x,y,z=ratio(point.X,size.X),ratio(point.Y,size.Y),ratio(point.Z,size.Z)
+ if x==nil or y==nil or z==nil then return nil end
+ return {x=x,y=y,z=z}
+end
+function F.surfaceComponents(anchor,size)
+ if not anchor or not size or not finite(size.X) or not finite(size.Y) or not finite(size.Z)
+  or size.X<=0 or size.Y<=0 or size.Z<=0 then return nil end
+ return anchor.x*size.X,anchor.y*size.Y,anchor.z*size.Z
+end
+-- One coherent envelope; never replay a stale contact across death/life/target changes.
+function F.newBeam()
+ return {key=nil,ever=false,active=false,width=0,life=nil,startAt=0,startWidth=0,hideAt=nil,hideWidth=0}
+end
+function F.beamStep(record: any,sample: any)
+ local now: any=sample.now
+ if type(now)~='number' or not finite(now) then return 0 end
+ if not sample.alive or not sample.valid or not sample.key then
+  record.key=nil;record.width=0;record.active=false;record.hideAt=nil;record.life=sample.life
+  return 0
+ end
+ local changed=record.key~=sample.key or (record.life~=nil and sample.life~=record.life)
+ if changed then
+  record.key=sample.key;record.width=0;record.active=false;record.hideAt=nil
+ end
+ record.life=sample.life
+ if sample.active then
+  if not record.active then
+   -- First discovery may be a late join: reconstruct the current server envelope.
+   -- A subsequent target/life change always grows from zero without a frame pop.
+   local since=now
+   if type(sample.since)=='number' and finite(sample.since) then since=math.min(sample.since,now) end
+   record.startAt=record.ever and now or since
+   record.startWidth=record.width;record.active=true;record.hideAt=nil;record.ever=true
+  end
+  local t=math.clamp((now-record.startAt)/2,0,1)
+  record.width=record.startWidth+(1-record.startWidth)*(1-(1-t)^2)
+ else
+  if record.active or record.hideAt==nil then record.hideAt=now;record.hideWidth=record.width end
+  record.active=false
+  local t=math.clamp((now-record.hideAt)/.2,0,1)
+  record.width=record.hideWidth*(1-t)^2
+ end
+ return record.width
+end
 return F

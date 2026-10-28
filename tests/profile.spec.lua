@@ -91,3 +91,18 @@ test('saved pending choices reject invalid scopes unknown effects and nonfinite 
  p=withOffer();p.run.pendingOffer.choices[1].effects={mining=math.huge};eq(P.validate(p,44),false)
 end)
 print(passed..' COMPLETE profile tests passed')
+test('saved run cards accept known rarity and legacy nil but reject foreign labels',function()
+ local p=P.new(44,123);local c={cardId='F01',scope='Fleet',effects={mining=.15}};p.run.cards={c}
+ for _,tier in ipairs({'Common','Uncommon','Rare'}) do c.rarity=tier;eq(P.validate(p,44),true);assert(P.migrate(p,44)) end
+ c.rarity=nil;eq(P.validate(p,44),true);assert(P.migrate(p,44))
+ c.rarity='Legendary';eq(P.validate(p,44),false);eq(P.migrate(p,44),nil)
+end)
+test('saved offer rejects invalid rarity without reroll or mutation',function()
+ local p=P.new(44,123);p.run.credits=20;p.run.packIndex=1
+ p.run.pendingOffer={id='44:run:1:pack:1',runId=p.run.id,price=80,choices={{cardId='F01',scope='Fleet',effects={mining=.15},rarity='Common'},{cardId='F06',scope='Player',effects={capacity=.25},rarity='Uncommon'},{cardId='D05',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1},rarity='Rare'}}}
+ eq(P.validate(p,44),true);local copy=P.migrate(p,44);assert(copy);eq(copy.run.pendingOffer.choices[3].rarity,'Rare')
+ p.run.pendingOffer.choices[1].rarity=nil;eq(P.validate(p,44),true);assert(P.migrate(p,44))
+ p.run.pendingOffer.choices[1].rarity='Legendary';eq(P.validate(p,44),false);eq(P.migrate(p,44),nil)
+ eq(p.run.credits,20);eq(p.run.pendingOffer.choices[1].rarity,'Legendary');eq(p.run.packIndex,1)
+end)
+print(passed..' COMPLETE rarity and profile tests passed')

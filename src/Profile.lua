@@ -3,6 +3,7 @@ local P={SCHEMA=2,CONTENT=1}
 local types={'Blue','Red','Green'}
 local effectKeys={mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
+local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
 P.TYPE_SCALES={Blue={speed=1.15,mining=1,combat=1},Red={speed=1,mining=.95,combat=1.15},Green={speed=1,mining=1.10,combat=.95}}
 local function integer(n) return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
@@ -47,6 +48,7 @@ function P.validate(p,uid)
  if #r.cards>500 then return false,'Invalid card count' end
  for _,c in ipairs(r.cards) do
   if type(c)~='table' or type(c.cardId)~='string' or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid run card' end
+  if not validRarity(c.rarity) then return false,'Invalid run card rarity' end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
@@ -57,6 +59,7 @@ function P.validate(p,uid)
   local seen={}
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
+   if not validRarity(c.rarity) then return false,'Invalid offer choice rarity' end
    for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true

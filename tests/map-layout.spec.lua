@@ -17,7 +17,7 @@ check('expanded world leaves a broad sparse central hub',function()
  assert(Layout.Scale>=1.8)
  assert(Layout.Columns*Layout.Cell*Layout.Scale>=370)
  for x=-100,-12,4 do for z=-51,29,4 do
-  if not plan:hubClear(x,z,-8) then near(plan:surface(x,z),0) end
+  if not plan:hubClear(x,z,-8) then near(plan:surface(x,z),.04) end
  end end
  for _,t in ipairs(plan.trees) do assert(plan:hubClear(t.x,t.z,t.h*.3),'tree in open hub') end
  for _,f in ipairs(plan.fields) do assert(math.sqrt((f.x+56)^2+(f.z+11)^2)>80,'field crowds hub') end
@@ -36,7 +36,7 @@ end)
 check('terrain stays below every mining clearing including its outer edges',function()
  for _,f in ipairs(plan.fields) do
   for x=f.x-f.w/2,f.x+f.w/2,1 do for z=f.z-f.d/2,f.z+f.d/2,1 do
-   assert(plan:surface(x,z)<=math.max(0,f.top-2),'terrain intrudes field '..f.x)
+   assert(plan:surface(x,z)<=math.max(0,f.top-2)+.041,'terrain intrudes field '..f.x)
   end end
  end
 end)
@@ -119,8 +119,8 @@ check('Ruby forest is tall, dense and clear of the mining footprint',function()
  assert(ruby>=8)
 end)
 check('depot and original Converter are not buried by the raised world',function()
- for x=-76,-36,2 do for z=-28,6,2 do near(plan:surface(x,z),0) end end
- near(plan:surface(-86,-37.5),0)
+ for x=-76,-36,2 do for z=-28,6,2 do near(plan:surface(x,z),.04) end end
+ near(plan:surface(-86,-37.5),.04)
 end)
 check('field and route metadata follow the source spawn',function()
  local shifted=Layout.plan(Config.Fields,{-44,3.5,-18})
@@ -129,16 +129,43 @@ check('field and route metadata follow the source spawn',function()
   local b=shifted.routes[i].samples[j];near(b[1],a[1]+12);near(b[2],a[2]+3);near(b[3],a[3]-7)
  end end
 end)
-check('native meadow covers broad connected land and keeps gameplay footprints clear',function()
- assert(#plan.grass*16>30000,'meadow regressed to isolated little patches')
- local dry,wet=0,0
- for _,cell in ipairs(plan.grass) do
-  assert(plan:routeClear(cell.x,cell.z,3),'native grass intrudes on a route')
-  assert(plan:fieldClear(cell.x,cell.z,4),'native grass intrudes on an ore clearing')
-  assert(math.abs(cell.x+56)>=24 or math.abs(cell.z+11)>=21,'native grass covers the depot')
-  assert(cell.blades==nil,'per-blade replication returned')
-  if cell.dry then dry+=1 else wet+=1 end
+check('all four starter walks join the depot and clear its three machines',function()
+ local home={-56,.5,-11};local count=0
+ local machines={{-68,-13},{-44,-13},{-56,-23}}
+ for _,route in ipairs(plan.routes) do
+  local a,b=Layout.depotLink(route,home)
+  if a then
+   count+=1;near(math.sqrt((a[1]-home[1])^2+(a[3]-home[3])^2),20)
+   near(a[2],b[2]);near(a[2],.34)
+   for _,machine in ipairs(machines) do
+    local distance=Layout.distance(machine[1],machine[2],a,b)
+    assert(distance>route.width/2+3.1,route.name..' clips a depot machine')
+   end
+   for n=0,50 do local t=n/50;local x=a[1]+(b[1]-a[1])*t;local z=a[3]+(b[3]-a[3])*t
+    assert(plan:surface(x,z)<a[2],'depot link has no floor clearance')
+   end
+  end
  end
- assert(dry>#plan.grass*.05 and wet>#plan.grass*.7,'missing green/dry-ground variation')
+ assert(count==4)
+end)
+check('part-built terraces match their actual square cap and never use native meadow blades',function()
+ assert(#plan.cells==Layout.Columns*Layout.Rows);assert(#plan.grass==0)
+ for _,cell in ipairs(plan.cells) do
+  local x=(cell.a[1]+cell.c[1])/2;local z=(cell.a[3]+cell.c[3])/2
+  near(plan:surface(x,z),cell.h+.04)
+  assert(cell.h<=math.min(cell.a[2],cell.b[2],cell.c[2],cell.d[2])+.001,'part clips higher than the original clearance vertices')
+  assert(cell.faces==nil,'faceted geometry returned')
+ end
+end)
+check('every generated tree has a grounded level root pad across cell borders',function()
+ for _,t in ipairs(plan.trees) do
+  local top,bottom=plan:foundation(t.x,t.z,3.2)
+  near(t.ground,top);near(t.foundationBottom,bottom)
+  assert(top-bottom<=4.5,'tree footing spans an abrupt cliff')
+  for ix=-2,2 do for iz=-2,2 do
+   local height=plan:surface(t.x+3.2*ix/2,t.z+3.2*iz/2)
+   assert(height<=top+1e-6 and height>=bottom-1e-6,'unsupported tree footing')
+  end end
+ end
 end)
 print(checks..' deterministic map geometry checks passed; not engine walking or multiplayer evidence')

@@ -1,5 +1,5 @@
 import pathlib,subprocess,sys,re,tempfile
-from build import ROOT,bundle,client_bundle
+from build import ROOT,bundle,client_bundle,module_bundle
 luau=pathlib.Path(sys.argv[1] if len(sys.argv)>1 else '/tmp/luau')
 for p in sorted((ROOT/'src').glob('*.lua')):
  subprocess.run([str(luau/'luau-compile'),str(p)],stdout=subprocess.DEVNULL,check=True)
@@ -11,6 +11,10 @@ f=ROOT/'tests/generated-server.spec.lua'
 f.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+bundle()+'\n'+(ROOT/'tests/server.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(f)],stdout=subprocess.DEVNULL,check=True)
 subprocess.run([str(luau/'luau'),str(f)],check=True)
+beam=ROOT/'tests/generated-beam.spec.lua'
+beam.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+module_bundle(('Feedback','SentryMotion','Presentation'))+'\n'+(ROOT/'tests/beam.integration.lua').read_text())
+subprocess.run([str(luau/'luau-compile'),str(beam)],stdout=subprocess.DEVNULL,check=True)
+subprocess.run([str(luau/'luau'),str(beam)],check=True)
 
 # Standalone Luau has no Roblox type definitions. Host bindings are explicitly any;
 # this catches misspelled globals and normal lint errors, not API contract mistakes.

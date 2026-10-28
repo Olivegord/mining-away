@@ -15,3 +15,5 @@ tests/generated-server.spec.lua
 node_modules/
 .tools/
 
+
+tests/generated-beam.spec.lua

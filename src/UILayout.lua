@@ -108,4 +108,55 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  }
 end
 
+-- Card offers use a smaller, world-visible sheet. Other menus retain their
+-- existing larger scrolling layout. The source offer is already committed;
+-- this function changes presentation geometry only.
+function Layout.offer(viewportWidth, viewportHeight, touch)
+ local l=Layout.calculate(viewportWidth,viewportHeight,touch)
+ local width=dimension(viewportWidth,1280)
+ local height=dimension(viewportHeight,720)
+ l.panelWidth=math.min(500,math.max(1,width-24))
+ l.panelHeight=math.min(520,math.max(1,height-24))
+ l.panelX=(width-l.panelWidth)/2
+ l.panelY=math.max(12,height-l.panelHeight-20)
+ l.panelPadding=0
+ l.shortOffer=height<550
+ l.cardGap=10;l.cardColumns=3;l.cardWidth=150;l.cardHeight=200
+ if l.shortOffer then
+  -- In landscape the detail/controls sit beside a horizontally scrolling hand.
+  l.detailWidth=math.min(220,math.max(150,math.floor(l.panelWidth*.4)))
+  l.detailHeight=math.max(1,l.panelHeight-60);l.detailX=0;l.detailY=0
+  l.bodyX=l.detailWidth+8;l.bodyY=0;l.bodyWidth=math.max(1,l.panelWidth-l.bodyX);l.bodyHeight=math.min(214,l.panelHeight-8)
+  l.actionX=0;l.actionY=l.panelHeight-48;l.actionWidth=math.max(90,l.detailWidth-72)
+  l.closeX=l.actionWidth+6;l.closeY=l.actionY;l.closeWidth=math.max(56,l.detailWidth-l.actionWidth-6)
+ else
+  l.detailWidth=math.min(300,l.panelWidth);l.detailHeight=246
+  l.detailX=(l.panelWidth-l.detailWidth)/2;l.detailY=0
+  l.bodyX=0;l.bodyY=252;l.bodyWidth=l.panelWidth;l.bodyHeight=212
+  l.actionWidth=146;l.actionX=(l.panelWidth-l.actionWidth-70)/2;l.actionY=470
+  l.closeWidth=64;l.closeX=l.actionX+l.actionWidth+6;l.closeY=l.actionY
+ end
+ l.cardWidth=math.max(56,math.min(150,math.floor((l.bodyWidth-2*l.cardGap)/3)-6))
+ l.headerHeight=0
+ return l
+end
+
+-- A fixed reveal rhythm for already-saved choices. This is cosmetic timing,
+-- never a roll, selection, timer, or condition for a server transaction.
+function Layout.revealDelay(index,reducedMotion)
+ if reducedMotion then return 0 end
+ return math.clamp((tonumber(index) or 1)-1,0,2)*.12
+end
+
+-- Only a matching server receipt can mark an assignment as complete.
+function Layout.assignmentReceipt(pendingId,receipt,droneName)
+ if type(pendingId)~='string' or type(receipt)~='table' or receipt.requestId~=pendingId then return nil end
+ if receipt.status=='accepted' then
+  return 'accepted',(droneName or 'Drone')..' assigned'..(receipt.slot and (' · slot '..tostring(receipt.slot)) or '')
+ elseif receipt.status=='rejected' then
+  return 'rejected',tostring(receipt.reason or 'Assignment rejected')
+ end
+ return nil
+end
+
 return Layout

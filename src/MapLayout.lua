@@ -35,6 +35,14 @@ local function distance(x,z,a,b)
  return math.sqrt((x-px)^2+(z-pz)^2),a[2]+(b[2]-a[2])*t
 end
 L.distance=distance
+local depotRoutes={['Quartz approach']=true,['Ruby switchback']=true,['Cobalt ascent']=true,['Converter lane']=true}
+function L.depotLink(route,home)
+ if not depotRoutes[route.name] then return nil end
+ local b=route.samples[1];local dx,dz=b[1]-home[1],b[3]-home[3]
+ local distance=math.sqrt(dx*dx+dz*dz)
+ if distance<=21 then return nil end
+ return {home[1]+dx/distance*20,b[2],home[3]+dz/distance*20},b
+end
 -- Round the horizontal AND vertical bend together. Straight overlapping slabs
 -- and large flat joint discs create a raised lip; these short smooth chords do not.
 function L.rounded(route)
@@ -146,10 +154,13 @@ function L.plan(config: any,home: any): any
  p.vertices=vertices
  for iz=0,L.Rows-1 do for ix=0,L.Columns-1 do
   local a,b,c,d=vertex(ix,iz),vertex(ix+1,iz),vertex(ix+1,iz+1),vertex(ix,iz+1)
-  local cell={a=a,b=b,c=c,d=d,alternate=(ix+iz)%2==1,h=math.max(a[2],b[2],c[2],d[2]),biome=a[4]}
+  -- The play surface is a stack of deliberately square retro parts. Use the
+  -- *lowest* height of the old route-clearance vertices so the new flat top
+  -- never rises above a former slope into a path, field, or flight corridor.
+  local h=math.max(0,math.floor(math.min(a[2],b[2],c[2],d[2])*2)/2)
+  local cell={a=a,b=b,c=c,d=d,ix=ix,iz=iz,h=h,biome=a[4]}
   p.cells[iz*L.Columns+ix+1]=cell
   if cell.h>.05 then
-   cell.faces=cell.alternate and {{a,b,c},{a,c,d}} or {{a,b,d},{b,c,d}}
    table.insert(p.terrain,cell)
   end
  end end
@@ -158,14 +169,18 @@ function L.plan(config: any,home: any): any
   local ix,iz=math.floor((x-ox)/step),math.floor((z-oz)/step)
   if ix<0 or ix>=L.Columns or iz<0 or iz>=L.Rows then return 0 end
   local c=self.cells[iz*L.Columns+ix+1]
-  local u,v=(x-ox)/step-ix,(z-oz)/step-iz
-  local a,b,d,e=c.a[2],c.b[2],c.c[2],c.d[2]
-  if c.alternate then
-   if v<=u then return a+(b-a)*(u-v)+(d-a)*v end
-   return a+(d-a)*u+(e-a)*(v-u)
-  end
-  if u+v<=1 then return a+(b-a)*u+(e-a)*v end
-  return d+(e-d)*(1-u)+(b-d)*(1-v)
+  -- World.lua places a .08-stud part centered at this cell height.
+  return c.h+.04
+ end
+ -- A root footing spans every touched block surface. This prevents sloping
+ -- terrain / step boundaries from leaving tree roots hovering or buried.
+ function p:foundation(x,z,radius)
+  local high,low=-math.huge,math.huge
+  for ix=-2,2 do for iz=-2,2 do
+   local h=self:surface(x+radius*ix/2,z+radius*iz/2)
+   high=math.max(high,h);low=math.min(low,h)
+  end end
+  return high,low
  end
  -- Rock faces are short irregular clusters, never global horizontal bands.
  p.rocks={}
@@ -177,37 +192,17 @@ function L.plan(config: any,home: any): any
    table.insert(p.rocks,{x=x,z=z,y=p:surface(x,z),w=r[3],h=r[4],d=r[5],yaw=r[6],biome=i<=3 and 2 or 3})
   end
  end
- -- One continuous native meadow. A 4-stud terrain raster follows the same
- -- open-land mask as the dense mesh version, with no isolated lawn squares.
+ -- The retro world is made of parts. Do not generate native grass or a per-blade
+ -- meadow: the original continuous landscape remains part of the asset base.
  p.grass={}
- local function grassHeight(x,z)
-  if math.abs(x-home[1])<24 and math.abs(z-home[3])<21 then return nil end
-  if not p:fieldClear(x,z,4) or not p:routeClear(x,z,3) then return nil end
-  local near=(x-home[1])^2+(z-home[3])^2<90^2
-  for _,f in ipairs(p.fields) do
-   if math.abs(x-f.x)<f.w/2+38 and math.abs(z-f.z)<f.d/2+38 then near=true;break end
-  end
-  if not near then return nil end
-  local h=p:surface(x,z)
-  local slope=math.max(math.abs(p:surface(x+.75,z)-h),math.abs(p:surface(x-.75,z)-h),math.abs(p:surface(x,z+.75)-h),math.abs(p:surface(x,z-.75)-h))
-  if slope>.55 then return nil end
-  return h
- end
- local ox,oz=p:point(L.Origin[1],L.Origin[2]);local edge=L.Columns*L.Cell*L.Scale
- for x=math.floor(ox/4)*4,ox+edge-4,4 do for z=math.floor(oz/4)*4,oz+edge-4,4 do
-  local bx,bz=x+2,z+2;local h=grassHeight(bx,bz)
-  if h then
-   local tone=math.clamp(.45+.32*(math.sin(bx*.019+math.cos(bz*.011)*1.8)+math.cos(bz*.024-bx*.007)),0,1)
-   local scatter=(math.sin(bx*17.13+bz*7.91)*43758.5453)%1
-   -- Dry soil blends into grass, with grass blades retained across each band.
-   local dry=scatter<math.max(0,tone-.55)*1.2
-   table.insert(p.grass,{x=bx,z=bz,y=h,w=4,d=4,tone=tone,dry=dry})
-  end
- end end
  for i,t in ipairs(L.Trees) do
   local x,z=p:biomePoint(t[4],t[1],t[2])
-  if p:hubClear(x,z,t[3]*.3) and p:routeClear(x,z,3) and p:fieldClear(x,z,t[3]*.27) then
-   table.insert(p.trees,{x=x,z=z,h=t[3],biome=t[4],ground=p:surface(x,z),yaw=i*.73})
+  if p:hubClear(x,z,t[3]*.3) and p:routeClear(x,z,3.4) and p:fieldClear(x,z,t[3]*.27) then
+   local ground,low=p:foundation(x,z,3.2)
+   -- Do not place a planter across a sheer multi-stud cliff edge.
+   if ground-low<=4.5 then
+    table.insert(p.trees,{x=x,z=z,h=t[3],biome=t[4],ground=ground,foundationBottom=low,yaw=i*.73})
+   end
   end
  end
  return p

@@ -1,12 +1,12 @@
-# Map reference — expanded Alabaster Valley
+# Map reference — parts-built Alabaster Valley
 
 The map assembles on **Play** from `src/World.lua` and the pure terrain/route plan in `src/MapLayout.lua`. Build the original project with `python3 tools/release.py`. The historical edit scene and original asset base remain preserved.
 
-The owner liked the first dense terrain overhaul but found it cramped. The current revision expands the horizontal landscape by **1.9× in both directions**, about **3.6× the planning footprint**, and enlarges mineral fields by 1.4× horizontally. It leaves a sparse central meadow around the original depot, with the fields between home and the outer wooded hills. Further decorative detail is deferred until scale and traversal are accepted.
+The current candidate retains the expanded 1.9× route plan but rebuilds its ground from studded square Part terraces, adds depot connections and landmarks, and grounds trees on sampled footings. It is a source implementation awaiting actual visual and traversal review; see [the retro world report](../review/RETRO_WORLD.md).
 
 ## Layout
 
-The generated terrain envelope is X −192.8…202.4 and Z −187.7…207.5, about 395×395 studs, with an irregular perimeter. The preserved baseplate extends beyond it. The central meadow has protected half-widths of 50 and 46 studs around home: terrain stays at ground level, and new tree canopies are excluded. The depot, printer, card console and prestige uplink remain in their original compact service area. The original Converter remains at (−86,4,−37.5).
+The generated terrain envelope is X −192.8…202.4 and Z −187.7…207.5, about 395×395 studs, with an irregular perimeter. The preserved baseplate extends beyond it. The central open depot has protected half-widths of 50 and 46 studs around home: terrain stays at ground level, and new tree canopies are excluded. The depot, printer, card console and prestige uplink remain in their original compact service area. The original Converter remains at (−86,4,−37.5).
 
 ```text
                             NORTH / −Z
@@ -14,7 +14,7 @@ The generated terrain envelope is X −192.8…202.4 and Z −187.7…207.5, abo
                       ╲                        ╲
                open approach             Emerald ridge
                        ╲                     ╱
-             Converter ─── HOME / OPEN MEADOW
+             Converter ─── HOME / OPEN DEPOT
                             ╲              ╱
                     Ruby ───── Quartz ───┘
                 woodland/cliff     wider low field
@@ -46,12 +46,12 @@ Every `Trail` carries `RouteName`, `RouteSegment`, `RouteStart`, `RouteEnd` and 
 
 Ruby retains red/auburn forked trees, warm rock, an amber-lit timber mine entrance and a higher overlook. Cobalt has cyan groves; Violet lavender woodland; Emerald green forest and fern switchbacks. Larger open approaches separate these outer areas from the hub. The original segmented construct is moved intact onto a supported outer ridge; active guards remain clones of the original model.
 
-Existing mine, trolley, aqueduct/waterfall, fungi and survey props move as complete local assemblies so their component spacing is preserved. No new decoration pass was added during the expansion. Current generated groves contain 41 trees after route/field/hub clearance filtering. This is a count, not a performance certification.
+Existing mine, trolley, aqueduct/waterfall, fungi and survey props move as complete local assemblies so their component spacing is preserved. No new decoration pass was added during the expansion. Current generated groves contain 34 trees after route, field, hub and footing-clearance filtering. This is a count, not a performance certification.
 
-Keep the established low-poly palette: teal rock, pale chalk bands, cream trails, auburn/cyan/lavender/green biomes, dark machinery and restrained light accents. Daylight remains 13.8 hours with .22 atmosphere density and moderate color saturation. No Bee Swarm assets were imported.
+The candidate uses a retro parts-built material vocabulary: green and stone terraces, pale connected trails, mineral-colored accents, dark machinery and restrained lighting. No Bee Swarm assets were imported. Native meadow and faceted terrain code are retained as references but are not invoked for the current ground.
 
 The original base remains `assets/mining-away-base.rbxl`. The builder preserves all non-controller binary chunks and changes only controller sources/enabled states. Runtime archives old experiments and decals instead of deleting the original source content. Original drone/crystal/beam assets, construct meshes/rig and source animation history remain preserved.
 
 ## Validation
 
-The 12 pure map checks cover expanded scale/open hub, grades, terrain/field and route clearance, field-entry heights, crossed foundations, folded road edges, representative flight, forest clearance, depot clearance and spawn metadata. Full source/domain/API-double and binary/original-asset suites pass. Actual Studio evidence includes 3,120 final floor/body samples with no issues and real-avatar coverage of all nine routes across the initial pass and repaired Grove rerun. See `docs/review/EXPANDED_MAP.md` and its JSON evidence for scope and remaining limits.
+Fifteen pure map checks cover geometry, clearance, depot links and tree footing samples. Earlier Studio floor and avatar results in `docs/review/EXPANDED_MAP.md` concern the historical map, not this candidate. The new candidate requires fresh in-engine traversal, contact and visual checks; `tests/terrain-surface.studio.lua` has not been run.

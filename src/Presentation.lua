@@ -45,13 +45,117 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=64,maxPulses=12,maxScans=16,closed=false},P)
+  maxFragments=48,maxPulses=10,maxScans=12,beamRays=0,maxBeamRays=12,closed=false},P)
+end
+-- One budget per render frame; cached anchors remain in the visible part's local
+-- coordinates between queries, so a shrinking or tilted crystal carries its impact.
+function P:beginFrame()
+ self.beamRays=0
+end
+local function newBeamLayer(parent,template,name,color,opacity,z)
+ local beam=template and template:FindFirstChild(name,true)
+ beam=beam and beam:IsA('Beam') and beam:Clone() or Instance.new('Beam')
+ beam.Name=name;beam.Texture='';beam.CurveSize0=0;beam.CurveSize1=0
+ beam.Segments=1;beam.FaceCamera=true;beam.LightEmission=.55;beam.LightInfluence=0
+ beam.Color=ColorSequence.new(color);beam.Transparency=NumberSequence.new(opacity)
+ beam.ZOffset=z;beam.Width0=0;beam.Width1=0;beam.Enabled=false;beam.Parent=parent
+ return beam
+end
+function P:createMiningBeam(view,emitter)
+ local holder=Instance.new('Folder');holder.Name='MiningBeam';holder.Parent=self.parent
+ local muzzle=Instance.new('Attachment');muzzle.Name='RenderedMuzzle';muzzle.Parent=emitter
+ local body=view.PrimaryPart
+ if body then
+  -- Original emitter is enclosed in the authored shell. Exit from the actual
+  -- rendered underside, in emitter-local coordinates, and follow the viewmodel.
+  local bottom=body.CFrame:PointToWorldSpace(Vector3.new(0,-body.Size.Y*.5,0))
+  muzzle.Position=emitter.CFrame:PointToObjectSpace(bottom)
+ end
+ local endpoint=barePart(holder,'MiningEndpoint');endpoint.Size=Vector3.one*.05;endpoint.Transparency=1
+ local target=Instance.new('Attachment');target.Parent=endpoint
+ local impact=barePart(holder,'ContactLight');impact.Shape=Enum.PartType.Ball
+ impact.Size=Vector3.one*.14;impact.Transparency=1;impact.Color=ICE
+ local extra=barePart(holder,'SecondaryEndpoint');extra.Size=Vector3.one*.05;extra.Transparency=1
+ local extraAttachment=Instance.new('Attachment');extraAttachment.Parent=extra
+ local rs=game:GetService('ReplicatedStorage');local fx=rs:FindFirstChild('MiningFX');local template=fx and fx:FindFirstChild('Beam')
+ local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.84,0)
+ local core=newBeamLayer(holder,template,'InnerBeam',WHITE,.08,.025)
+ halo.Attachment0=muzzle;halo.Attachment1=target;core.Attachment0=muzzle;core.Attachment1=target
+ local branch=newBeamLayer(holder,nil,'SecondaryBeam',ICE,.32,.01)
+ branch.Attachment0=target;branch.Attachment1=extraAttachment
+ return {holder=holder,origin=muzzle,endpoint=endpoint,marker=impact,secondaryPoint=extra,
+  core=core,halo=halo,secondary=branch,envelope=F.newBeam(),surface={},secondarySurface={},lastKey=nil,lastKind=nil}
+end
+function P:destroyMiningBeam(beam)
+ if not beam then return end
+ if beam.origin then beam.origin:Destroy() end
+ if beam.holder then beam.holder:Destroy() end
+end
+function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource)
+ if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
+ if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0 end
+ if now>=(cache.nextSample or 0) and self.beamRays+2<=self.maxBeamRays then
+  self.beamRays+=2;cache.nextSample=now+.08
+  local direction=part.Position-origin
+  if direction.Magnitude<.01 then cache.anchor=nil;return nil end
+  local include=RaycastParams.new();include.FilterType=Enum.RaycastFilterType.Include;include.FilterDescendantsInstances={part}
+  -- Query the local rendered union/mesh, not the untouched server collider. The
+  -- temporary query flag is reset even if the engine rejects the query.
+  local previous=part.CanQuery;part.CanQuery=true
+  local ok,hit=pcall(function() return workspace:Raycast(origin,direction*1.5,include) end)
+  part.CanQuery=previous
+  if not ok or not hit or hit.Instance~=part then cache.anchor=nil;return nil end
+  local exclude=RaycastParams.new();exclude.FilterType=Enum.RaycastFilterType.Exclude
+  local ignored={self.parent};if serverSource then table.insert(ignored,serverSource) end
+  if ignoredSource and ignoredSource~=serverSource then table.insert(ignored,ignoredSource) end
+  exclude.FilterDescendantsInstances=ignored
+  local blocked=workspace:Raycast(origin,hit.Position-origin,exclude)
+  if blocked and (blocked.Position-hit.Position).Magnitude>.12 then cache.anchor=nil;return nil end
+  cache.anchor=F.surfaceAnchor(part.CFrame:PointToObjectSpace(hit.Position),part.Size)
+  cache.normal=part.CFrame:VectorToObjectSpace(hit.Normal)
+ end
+ if not cache.anchor or not cache.normal then return nil end
+ local x,y,z=F.surfaceComponents(cache.anchor,part.Size)
+ if not x then cache.anchor=nil;return nil end
+ local point=part.CFrame:PointToWorldSpace(Vector3.new(x,y,z))
+ local normal=part.CFrame:VectorToWorldSpace(cache.normal)
+ if normal.Magnitude<.001 then return nil end
+ return point,normal.Unit
+end
+function P:renderMiningBeam(beam,sample,now)
+ if self.closed or not beam or not beam.origin.Parent then return end
+ if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
+  beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
+ end
+ local part=sample.part
+ local point,normal
+ if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now) end
+ local valid=point~=nil and normal~=nil
+ local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=valid,
+  key=sample.key,life=sample.life,active=sample.active,since=sample.since})
+ if valid then
+  beam.endpoint.Position=point;beam.marker.Position=point+normal*.07
+  if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
+ end
+ local visible=valid and width>.001
+ beam.core.Enabled=visible;beam.halo.Enabled=visible
+ beam.core.Width0=.3*width;beam.core.Width1=.3*width
+ beam.halo.Width0=.52*width;beam.halo.Width1=.42*width
+ beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
+ beam.secondary.Enabled=false
+ if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
+  local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource)
+  if secondary and secondaryNormal then
+   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or ICE)
+   beam.secondary.Width0=.085*width;beam.secondary.Width1=.055*width;beam.secondary.Enabled=true
+  end
+ end
 end
 function P:_pulse(position,color,size,now,duration)
  if self.closed or #self.pulses>=self.maxPulses then return end
  local part=barePart(self.parent,'ImpactPulse');part.Shape=Enum.PartType.Ball
- part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.4
- table.insert(self.pulses,{part=part,start=now,size=size,duration=duration or .2})
+ part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.72
+ table.insert(self.pulses,{part=part,start=now,size=math.min(size,1.1),duration=duration or .2})
 end
 function P:_sound(position,kind,now)
  -- Roblox Studio's shipped sounds were verified locally; no external asset IDs.
@@ -195,27 +299,8 @@ function P:_sentryAudio(position,kind,now)
  sound.Volume=kind=='impact' and .65 or .5
  sound.PlaybackSpeed=kind=='impact' and .48 or (kind=='wake' and .65 or 1.65)
  sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
- if kind=='impact' then
-  local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
-  dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))
-  dust.Lifetime=NumberRange.new(.45,.85);dust.Speed=NumberRange.new(3,8);dust.Drag=5
-  dust.SpreadAngle=Vector2.new(75,75);dust.Acceleration=Vector3.new(0,-4,0)
-  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(.3,2.5),NumberSequenceKeypoint.new(1,4)})
-  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.4,.6),NumberSequenceKeypoint.new(1,1)})
-  dust.Parent=anchor;dust:Emit(12)
- end
+
  table.insert(self.pulses,{part=anchor,start=now,duration=4,size=0,audio=true})
-end
-local function sentryFlare(eye)
- local flare=Instance.new('BillboardGui');flare.Name='SentryLensFlare';flare.Adornee=eye
- flare.Size=UDim2.fromScale(28,14);flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.MaxDistance=160;flare.Enabled=false;flare.Parent=eye
- local glow=Instance.new('ImageLabel');glow.Name='Starburst';glow.BackgroundTransparency=1
- glow.Image='rbxasset://textures/sparkle.png';glow.ImageColor3=WHITE
- glow.Size=UDim2.fromScale(.5,1);glow.Position=UDim2.fromScale(.25,0);glow.Parent=flare
- local streak=Instance.new('Frame');streak.Name='AnamorphicStreak';streak.AnchorPoint=Vector2.new(.5,.5)
- streak.Position=UDim2.fromScale(.5,.5);streak.Size=UDim2.fromScale(1,.025);streak.BorderSizePixel=0;streak.BackgroundColor3=ICE;streak.Parent=flare
- local fade=Instance.new('UIGradient');fade.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.4,.15),NumberSequenceKeypoint.new(.5,0),NumberSequenceKeypoint.new(.6,.15),NumberSequenceKeypoint.new(1,1)});fade.Parent=streak
- return flare,glow,streak
 end
 function P:_prepareSentryFall(record,now,late)
  record.fallGroups={}
@@ -289,15 +374,13 @@ function P:registerTurret(source,now)
  local b=Instance.new('Attachment');b.Parent=endpoint
  local beam=Instance.new('Beam');beam.Name='SentryTelegraph';beam.Attachment0=a;beam.Attachment1=b
  beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=1;beam.LightInfluence=0
- beam.Transparency=NumberSequence.new(.7);beam.Segments=1;beam.Enabled=false;beam.Parent=view
+ beam.Transparency=NumberSequence.new(.82);beam.Segments=1;beam.Texture='';beam.ZOffset=0;beam.Enabled=false;beam.Parent=view
  local core=beam:Clone();core.Name='SentryBeamCore';core.Color=ColorSequence.new(WHITE)
- core.Transparency=NumberSequence.new(.15);core.Parent=view
+ core.Transparency=NumberSequence.new(.08);core.Texture='';core.ZOffset=.025;core.Parent=view
  local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=ICE;light.Range=7
  light.Shadows=false;light.Brightness=0;light.Parent=eye
  local initial=F.new(snapshot(source))
- local flare,glow,streak=sentryFlare(eye)
  local record={source=source,view=view,eye=eye,endpoint=endpoint,cue=cue,attachment=a,beam=beam,core=core,light=light,
-  flare=flare,glow=glow,streak=streak,
   parts={},pieces=partsOf(view),hidden={},accents={},events=initial,yaw=0,hitAt=-100,shotAt=-100,
   deathAt=initial.dead and now-10 or nil,restoreAt=nil,floor=base.Position.Y+base.Size.Y*.5,
   baseCenter=base.Position,eyeCenter=eye.Position,phase=base.Position.X*.17+base.Position.Z*.23}
@@ -454,16 +537,13 @@ function P:renderTurret(record,dt,now)
    part.CFrame=frame;part.Color=color;part.Transparency=transparency;item.lastFrame=frame
   end
  end
- record.light.Color=eyeColor;record.light.Range=12+ignite*16
- record.light.Brightness=awake and (1+warm*2.5+ignite*8+shotFlash*3) or 0
- local flare=awake and math.max(ignite,shotFlash*.3) or 0
- record.flare.Enabled=flare>.005;record.flare.Size=UDim2.fromScale(12+flare*20,6+flare*10)
- record.glow.ImageTransparency=1-flare;record.streak.BackgroundTransparency=1-flare*.95
+ record.light.Color=eyeColor;record.light.Range=7+ignite*3
+ record.light.Brightness=awake and (.3+warm*.55+ignite*.8+shotFlash*.55) or 0
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)
- record.beam.Width0=.035+warm*.07+shotFlash*.32;record.beam.Width1=.035+warm*.07+shotFlash*.22
- record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.02+shotFlash*.1
- record.core.Width1=.012+warm*.02+shotFlash*.07
+ record.beam.Width0=.028+warm*.04+shotFlash*.18;record.beam.Width1=.028+warm*.04+shotFlash*.14
+ record.core.Enabled=record.beam.Enabled;record.core.Width0=.01+warm*.015+shotFlash*.065
+ record.core.Width1=.01+warm*.015+shotFlash*.05
  if aiming then record.endpoint.Position=aim end
  if charging and aiming then
   if record.markAim~=aim then
@@ -487,15 +567,29 @@ function P:destroyTurret(record)
 end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
- local view=resource.view;local floor=self:_floor(view.Position,resource.source)
- local amount=event=='break' and 5 or 2
+ local view=resource.view;local contact=resource.lastContact
+ if not view or not view.Parent or not contact or not contact.anchor or not contact.normal then return end
+ local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
+ if not x then return end
+ local normal=view.CFrame:VectorToWorldSpace(contact.normal)
+ if normal.Magnitude<.001 then return end
+ normal=normal.Unit
+ local point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z))
+ local floor=self:_floor(point,resource.source)
+ -- Use a couple of small pieces of the actual crystal. Their centres and initial
+ -- velocities are outside and away from the struck surface. No textured quads.
+ local amount=event=='break' and 3 or 1
  for i=1,amount do
-  local angle=i*2.4+now*.1
   local full=resource.source:GetAttribute('FullSize') or view.Size
-  local scale=(event=='break' and .16 or .07)*full.X/math.max(.01,view.Size.X)
-  self:_fragment(view,view.CFrame,resource.baseColor,0,scale,
-   Vector3.new(math.cos(angle)*(event=='break' and 4 or 2),2+i*.45,math.sin(angle)*3),
-   Vector3.new(i*1.5,1,-i),floor,now,event=='break' and .9 or .55)
+  local scale=(event=='break' and .11 or .065)*full.X/math.max(.01,view.Size.X)
+  local radius=math.sqrt(view.Size.X^2+view.Size.Y^2+view.Size.Z^2)*scale*.5
+  local frame=CFrame.new(point+normal*(radius+.04))*view.CFrame.Rotation
+  local tangent=normal:Cross(Vector3.new(0,1,0))
+  if tangent.Magnitude<.01 then tangent=normal:Cross(Vector3.new(1,0,0)) end
+  tangent=tangent.Unit
+  local offset=(i-(amount+1)/2)*.8
+  self:_fragment(view,frame,resource.baseColor,0,scale,normal*(1.2+i*.45)+tangent*offset,
+   Vector3.new(i*.75,.7,-i*.5),floor,now,event=='break' and .65 or .42)
  end
 end
 function P:update(_dt,now)
@@ -517,7 +611,7 @@ function P:update(_dt,now)
   local item=self.pulses[i];local progress=F.progress(now,item.start,item.duration)
   if progress>=1 or not item.part.Parent then item.part:Destroy();table.remove(self.pulses,i)
   elseif not item.audio then
-   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.45+.55*progress
+   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.72+.28*progress
   end
  end
 end

@@ -4,8 +4,8 @@ local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
 local RunService=game:GetService('RunService')
 local Http=game:GetService('HttpService')
-local C,R=Config,Rules
-local scene=World.initialize()
+local C: any,R: any=Config,Rules
+local scene: any=World.initialize()
 local root,home=scene.root,scene.home
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
@@ -19,7 +19,10 @@ local profiles: {[number]: any}={}
 local drones: {[string]: any}={}
 local patches: {any}={}
 local resources: {[string]: any}={}
-local loading: {[number]: boolean}={}
+local loading: {[number]: any}={}
+-- At most one replacement Player may wait per user. A reconnect cannot acquire
+-- another lease until the retiring local session is saved and released.
+local pendingJoins: {[number]: any}={}
 local now=workspace:GetServerTimeNow()
 local elapsed,snapshotElapsed,autosaveElapsed=0,0,0
 local seed=Random.new()
@@ -35,8 +38,8 @@ local store=Persistence.new(adapter,{
 })
 root:SetAttribute('PersistenceMode',preview and 'PREVIEW • isolated temporary profiles' or 'DataStore • session-locked')
 root:SetAttribute('Build','restore-feel-prestige')
-local function data(p) return p.session.data end
-local function healthy(p) return p and not p.leaving and not p.busy and store:healthy(p.session) end
+local function data(p: any): any return p.session.data end
+local function healthy(p: any) return p and not p.leaving and not p.busy and store:healthy(p.session) end
 local function notice(p,message)
  if p.player.Parent then p.player:SetAttribute('MA_Notice',message) end
 end
@@ -60,9 +63,14 @@ end
 local function atHome(p)
  local hr=characterRoot(p);return hr and (hr.Position-home).Magnitude<30
 end
-local function release(d)
- if d.target then d.target.slots[d.id]=nil end
- d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.forkUntil=0
+local function updateSlots(r)
+ local count=0;for _ in pairs(r.slots) do count=count+1 end
+ if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
+end
+local function release(d,keepCombatEffects)
+ if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
+ d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil
+ if not keepCombatEffects then d.chainUntil=0;d.chainTargetId=nil end
 end
 local function spend(d)
  for _,p in ipairs(patches) do R.spend(p.e,d.id) end
@@ -138,7 +146,7 @@ local function makeResource(field,position,kind,maxHealth,ore)
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
   slots={},limit=shell and 3 or 1,kind=kind,paid=false,ore=ore,spawnAt=now,readyAt=now+2,stage=0,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  resources[r.id]=r;table.insert(field.resources,r)
- for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageSeed=r.stageSeed,SpawnAt=now,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,BreakSerial=0}) do part:SetAttribute(k,v) end
+ for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageSeed=r.stageSeed,SpawnAt=now,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
 end
 local function spawnResource(field,forceKind)
@@ -179,6 +187,12 @@ local function seedField(field)
  end
  field.resources={};field.respawnQueue={}
  for _=1,field.cfg.Count do if not spawnResource(field) then break end end
+ -- A blocked initial sampling pass must not permanently strand a safe field.
+ -- Reserve one retry token for each missing unit of the population budget;
+ -- geodes already count as five units through nodeUsage.
+ for _=1,math.max(0,field.cfg.Count-nodeUsage(field)) do
+  table.insert(field.respawnQueue,now+2)
+ end
 end
 local function restoreTurrets(field)
  for _,t in ipairs(field.turrets) do
@@ -223,22 +237,22 @@ for _,f in ipairs(scene.fields) do
  table.insert(patches,field);restoreTurrets(field);seedField(field)
 end
 local prices={};for _,field in ipairs(patches) do prices[field.cfg.Material or field.cfg.Key or field.cfg.Name]=field.cfg.Value end
-local function award(d,r)
+local function award(d: any,r: any)
  local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) then return end
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
  local amount=r.ore*d.stats.yieldMultiplier+(profile.run.yieldRemainders[material] or 0)
  local units=math.floor(amount);profile.run.yieldRemainders[material]=amount-units
  Profile.addCargo(profile,material,units,Cards.capacity(profile));p.dirty=true;p.publishDirty=true
 end
-local function hitResource(d,r,amount,secondary)
+local function hitResource(d: any,r: any,amount: number,secondary: boolean?)
  local p=profiles[d.owner]
- if not healthy(p) or d.hp<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if secondary then
   local primary=d.target
   if not primary or primary.paid or (r.position-primary.position).Magnitude>(d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  elseif (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode')).Magnitude>1 then return false end
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
- if secondary then d.forkTarget=r.position;d.forkUntil=now+.18 end
+ if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  local previous=r.stage
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
@@ -248,6 +262,7 @@ local function hitResource(d,r,amount,secondary)
  if broken then
   r.part:SetAttribute('BreakSerial',1);r.removeAt=now+2
   for id in pairs(r.slots) do if drones[id] and drones[id].target==r then release(drones[id]) else r.slots[id]=nil end end
+  updateSlots(r)
   if r.kind=='Geode' then
    makeResource(r.field,r.position,'Core',seed:NextInteger(50,100),r.ore*4)
    for n=1,4 do local a=n*math.pi/2;makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',seed:NextInteger(50,70),r.ore) end
@@ -267,7 +282,7 @@ local function chooseResource(d,field)
  if best then
   local occupied={};for _,slot in pairs(best.slots) do occupied[slot]=true end
   local slot=1;while occupied[slot] do slot=slot+1 end
-  best.slots[d.id]=slot;d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mining=false
+  best.slots[d.id]=slot;updateSlots(best);d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mining=false
  end
 end
 local function eligible(d,field)
@@ -313,7 +328,7 @@ local function settleRuntime(p)
  local pending=p.pendingClears;p.pendingClears={}
  for _,entry in pairs(pending or {}) do grantClear(p,entry.field,entry.entitlement) end
 end
-local function encounterStep(field)
+local function encounterStep(field: any)
  if field.cfg.Turrets==0 then return end
  local alive,contact,active=0,false,0
  for id,record in pairs(field.e.roster) do
@@ -345,7 +360,7 @@ local function hurtDrone(d,damage)
  if damage<=0 then return end
  if damage>=d.hp then kill(d) else d.hp=d.hp-damage end
 end
-local function turretStep(field)
+local function turretStep(field: any)
  if field.e.phase~='Active' then
   for _,t in ipairs(field.turrets) do t.fireAt=nil;t.lock=nil;t.model:SetAttribute('Telegraph',false) end;return
  end
@@ -389,7 +404,7 @@ local function combatHit(d,field,target,stats)
    if other~=target and other.hp>0 and (other.emitter.Position-target.emitter.Position).Magnitude<=(stats.splashRange or 6) and (other.emitter.Position-d.pos).Magnitude<=stats.range and los(d.pos,other.emitter.Position,other.model,{droneFolder}) then
     other.hp=math.max(0,other.hp-damage*stats.splashFraction);if other.hp<=0 then kills=kills+1 end
     publishTurretHealth(other)
-    d.chainTarget=other.emitter.Position;d.chainUntil=now+.2;break
+    d.chainTarget=other.emitter.Position;d.chainTargetId=other.model:GetAttribute('TurretId');d.chainUntil=now+.2;break
    end
   end
  end
@@ -409,7 +424,7 @@ local function move(d,goal,dt)
  -- Exact logical pose; no server presentation lerp, no body pitch.
  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
 end
-local function droneStep(d,dt)
+local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
  if d.hp<=0 then
   d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
@@ -419,7 +434,10 @@ local function droneStep(d,dt)
  end
  local hr=characterRoot(p)
  if not hr then if d.field then leaveField(p) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0),dt);return end
- if not store:healthy(p.session) or p.busy then release(d);return end
+ -- Freeze the job during a yielding save; no damage or profile mutation occurs.
+ -- Shift the warmup clock so storage latency cannot skip weapon startup.
+ if p.busy then if d.warmAt then d.warmAt=d.warmAt+dt end;return end
+ if not store:healthy(p.session) then release(d);return end
  local field=d.field and patches[d.field]
  if field and (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then
   d.commandOutAt=d.commandOutAt or now
@@ -428,7 +446,7 @@ local function droneStep(d,dt)
  if field then
   if field.e.phase=='Gathering' then d.state='Travel';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
   elseif field.e.phase=='Active' and R.participates(field.e,d,data(p).run.id) then
-   release(d);local target,dist=nil,math.huge
+   release(d,true);local target,dist=nil,math.huge
    for _,t in ipairs(field.turrets) do local n=(t.emitter.Position-d.pos).Magnitude;if t.hp>0 and n<dist then target=t;dist=n end end
    if target then
     local stats=field.e.roster[d.id].stats
@@ -479,11 +497,16 @@ local function droneStep(d,dt)
 end
 local function snapshotDrone(d)
  local target=d.target
+ if (d.forkUntil or 0)<=now then d.forkTargetId=nil end
+ if (d.chainUntil or 0)<=now then d.chainTargetId=nil end
+ local combatTarget=d.state=='Attack' and d.mining and d.combatTarget
+ local combatId=combatTarget and combatTarget.hp>0 and combatTarget.model.Parent and combatTarget.model:GetAttribute('TurretId') or ''
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,
   Position=d.pos,Goal=d.goal,Yaw=d.yaw,MaxStep60=d.stats.maxStep60,PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
-  TargetId=target and target.id or '',TargetPosition=target and target.position or d.targetPosition or d.pos,Mining=d.mining,BeamSince=d.beamSince,
+  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or d.targetPosition or d.pos,Mining=d.mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.stats.warmup,
   ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
-  ForkTargetPosition=d.forkTarget or d.pos,ForkUntil=d.forkUntil or 0,ChainTargetPosition=d.chainTarget or d.pos,ChainUntil=d.chainUntil or 0,
+  ForkTargetPosition=d.forkTarget or d.pos,ForkTargetId=(d.forkUntil or 0)>now and (d.forkTargetId or '') or '',ForkUntil=d.forkUntil or 0,
+  ChainTargetPosition=d.chainTarget or d.pos,ChainTargetId=(d.chainUntil or 0)>now and (d.chainTargetId or '') or '',ChainUntil=d.chainUntil or 0,
   GeodeMultiplier=d.stats.geodeMultiplier,FinisherMultiplier=d.stats.finisherMultiplier,SalvageFraction=d.stats.salvageFraction,ChainRange=d.stats.splashRange}
  for k,v in pairs(values) do d.model:SetAttribute(k,v) end
 end
@@ -511,30 +534,96 @@ end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
 end
-local function commandPlayer(pl,action,payload)
- local p=profiles[pl.UserId];if not p then return end
+local function validCommandId(v)
+ return type(v)=='string' and #v>0 and #v<=80 and v:match('^[%w%-%_%.%:]+$')~=nil
+end
+local function commandReply(pl: any,payload: any,status: any,reason: any,field: any,drone: any,resource: any,slot: any)
+ if type(payload)~='table' or not validCommandId(payload.requestId) then return end
+ local gui=pl:FindFirstChildOfClass('PlayerGui');if not gui then return end
+ local count,available=0,0
+ local p=profiles[pl.UserId]
+ if field and p then
+  for _,d in ipairs(p.drones) do if d.hp>0 and d.field==field.id then count=count+1 end end
+  if playerCanMine(p,field) then for _,r in ipairs(field.resources) do
+   if not r.paid and r.hp>0 and now>=r.readyAt then local used=0;for _ in pairs(r.slots) do used=used+1 end;available=available+math.max(0,r.limit-used) end
+  end end
+ end
+ local state={requestId=payload.requestId,status=status,reason=reason,fieldId=field and field.id or nil,assignedCount=count,availableSlots=available,phase=field and field.e.phase or nil,droneId=drone and drone.id or nil,life=drone and drone.life or nil,resourceId=resource and resource.id or nil,slot=slot}
+ gui:SetAttribute('MA_CommandState',Http:JSONEncode(state))
+end
+local function dropFieldIfEmpty(p: any,fieldId: any)
+ if not fieldId then return end
+ for _,d in ipairs(p.drones) do if d.hp>0 and d.field==fieldId then return end end
+ local field=patches[fieldId];if field then R.removeUser(field.e,p.player.UserId,data(p).run.id);data(p).run.entitlements[tostring(fieldId)]=nil end
+end
+local function commandPlayer(pl: any,action: any,payload: any)
+ local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');return end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
- if p.tokens<1 then return end;p.tokens=p.tokens-1
- if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then return end
- if action=='Recall' then leaveField(p);notice(p,'Fleet recalled. Assault slots are retired.')
+ if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands') end;return end;p.tokens=p.tokens-1
+ if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');return end
+ if action=='Recall' then leaveField(p);notice(p,'Fleet recalled. Assault slots are retired.');commandReply(pl,payload,'recalled','Fleet recalled')
  elseif action=='Evade' then
   if now<(p.nextEvade or 0) then return end;p.nextEvade=now+2
   for _,d in ipairs(p.drones) do if d.field and R.participates(patches[d.field].e,d,data(p).run.id) then d.evade=d.evade+1 end end
+ elseif action=='CancelDrone' or action=='AssignSlot' then
+  local function reject(why,field,d,r) commandReply(pl,payload,'rejected',why,field,d,r) end
+  if type(payload)~='table' or not validCommandId(payload.requestId) or type(payload.runId)~='string' or #payload.runId>100 or type(payload.droneId)~='string' or #payload.droneId>160 or not R.finite(payload.life) or payload.life%1~=0 then reject('Invalid request');return end
+  if payload.runId~=data(p).run.id then reject('Run changed');return end
+  local d=drones[payload.droneId]
+  if not d or d.owner~=pl.UserId then reject('Drone unavailable');return end
+  if d.life~=payload.life or d.hp<=0 or not R.allowed(d.owner,pl.UserId,d.state) then reject('Drone reprinted or unavailable',nil,d);return end
+  if action=='CancelDrone' then
+   local old=d.field;release(d);spend(d);d.field=nil;d.state='Return';dropFieldIfEmpty(p,old)
+   commandReply(pl,payload,'accepted','Drone recalled',patches[old],d);return
+  end
+  if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
+  local field=patches[payload.fieldId];local r=resources[payload.resourceId]
+  if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
+  if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
+  if Profile.cargoUnits(data(p))>=Cards.capacity(data(p)) then reject('Cargo is full',field,d);return end
+  if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
+  if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
+  if d.target==r and d.field==field.id and r.slots[d.id] then commandReply(pl,payload,'accepted','Already assigned',field,d,r,r.slots[d.id]);return end
+  local occupied={};for _,v in pairs(r.slots) do occupied[v]=true end
+  local slot=1;while slot<=r.limit and occupied[slot] do slot=slot+1 end
+  if slot>r.limit then reject('Resource is busy',field,d,r);return end
+  local old=d.field;release(d);spend(d);d.field=field.id;d.target=r;d.targetSlot=slot;r.slots[d.id]=slot;updateSlots(r);d.state='Travel';d.shotAt=now
+  if old~=field.id then dropFieldIfEmpty(p,old) end
+  commandReply(pl,payload,'accepted','Drone assigned',field,d,r,slot)
  elseif action=='Patch' then
-  if not R.finite(payload) or payload%1~=0 then return end
-  local field=patches[payload];local hr=characterRoot(p)
-  if not field or (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then return end
+  local fieldId=type(payload)=='table' and payload.fieldId or payload
+  if type(payload)=='table' and not validCommandId(payload.requestId) then return end
+  if not R.finite(fieldId) or fieldId%1~=0 then commandReply(pl,payload,'rejected','Invalid field');return end
+  local field=patches[fieldId];local hr=characterRoot(p)
+  if not field or (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then commandReply(pl,payload,'rejected','Too far from field',field);return end
+  local already=false
+  for _,d in ipairs(p.drones) do if d.hp>0 and d.field==field.id then already=true;break end end
   local can=playerCanMine(p,field)
-  if not can and (field.e.phase=='Active' or field.e.phase=='Cleared' or field.e.phase=='Resetting') then notice(p,'An expedition is in progress. Join the next fresh muster.');return end
-  if not can and field.e.phase=='Gathering' and (field.e.users[pl.UserId] or now>=field.e.untilTime) then return end
+  if already then
+   -- Never add reprints to a locked muster. On a mineable field, however,
+   -- dispatch idle fleet members without restarting existing drone jobs.
+   if can and not activeAssault(p) and Profile.cargoUnits(data(p))<Cards.capacity(data(p)) then
+    for _,d in ipairs(p.drones) do
+     if d.hp>0 and d.field~=field.id and R.allowed(d.owner,pl.UserId,d.state) then
+      local old=d.field;release(d);spend(d);d.field=field.id;d.state='Travel';d.shotAt=now
+      if old then dropFieldIfEmpty(p,old) end
+     end
+    end
+   end
+   commandReply(pl,payload,'accepted','Already assigned',field);return
+  end
+  if not can and (field.e.phase=='Active' or field.e.phase=='Cleared' or field.e.phase=='Resetting') then notice(p,'An expedition is in progress. Join the next fresh muster.');commandReply(pl,payload,'rejected','Wait for the next muster',field);return end
+  if not can and field.e.phase=='Gathering' and (field.e.users[pl.UserId] or now>=field.e.untilTime) then commandReply(pl,payload,'rejected','Muster closed',field);return end
+  if Profile.cargoUnits(data(p))>=Cards.capacity(data(p)) then commandReply(pl,payload,'rejected','Cargo is full',field);return end
   local fleet={};for _,d in ipairs(p.drones) do if d.hp>0 and R.allowed(d.owner,pl.UserId,d.state) then table.insert(fleet,d) end end
-  if #fleet==0 then return end
+  if #fleet==0 then commandReply(pl,payload,'rejected','Fleet unavailable',field);return end
   leaveField(p,can and field.id or nil)
   for _,d in ipairs(fleet) do release(d);d.field=field.id;d.state='Travel';d.shotAt=now end
   if not can then
    if field.e.phase=='Guarded' then R.gather(field.e,now);wakeTurrets(field,pl) end
    R.enroll(field.e,pl.UserId,data(p).run.id,fleet)
   end
+  commandReply(pl,payload,'accepted','Fleet assigned',field)
  elseif action=='Sell' then
   if activeAssault(p) then notice(p,'Recall your assault fleet before selling.');return end
   if not atStation(p,scene.converter or scene.packStation,18) then notice(p,'Return to the Converter to sell.');return end
@@ -568,14 +657,67 @@ local function commandPlayer(pl,action,payload)
  p.publishDirty=true
 end
 command.OnServerEvent:Connect(commandPlayer)
-local function addPlayer(pl)
- if profiles[pl.UserId] or loading[pl.UserId] then return end
- loading[pl.UserId]=true
+local addPlayer
+local function failPendingJoin(uid,why)
+ local waiting=pendingJoins[uid];pendingJoins[uid]=nil
+ if waiting and waiting.Parent then
+  waiting:SetAttribute('MA_SaveStatus','Previous profile session unavailable — no defaults written')
+  waiting:SetAttribute('MA_Notice',why)
+ end
+end
+local function drainPendingJoin(uid,previous)
+ if profiles[uid] or loading[uid] then return end
+ local waiting=pendingJoins[uid];pendingJoins[uid]=nil
+ if waiting and waiting~=previous and waiting.Parent then task.spawn(addPlayer,waiting) end
+end
+addPlayer=function(pl)
+ local current=profiles[pl.UserId]
+ if current then
+  -- PlayerAdded can race ahead of PlayerRemoving. A distinct same-ID Player
+  -- must wait for the prior session even before its leave handler starts.
+  if current.player~=pl and pl.Parent then pendingJoins[pl.UserId]=pl end
+  return
+ end
+ if loading[pl.UserId] then
+  if loading[pl.UserId]~=pl then pendingJoins[pl.UserId]=pl end
+  return
+ end
+ loading[pl.UserId]=pl
  pl:SetAttribute('MA_SaveStatus','Loading profile...')
+ -- A prior bounded final-release attempt may have failed after its Player
+ -- left. Recover that exact session before loading again; the manager's local
+ -- lease guard would otherwise block every later reconnect in this server.
+ local orphan=store.sessions[pl.UserId]
+ if orphan and not orphan.closed then
+  local resolved=true
+  if orphan.readOnly then resolved=store:reconcile(orphan) end
+  if resolved and not orphan.closed then resolved=store:release(orphan) end
+  if not resolved then
+   loading[pl.UserId]=nil
+   if pl.Parent then pl:SetAttribute('MA_SaveStatus','Previous profile session unavailable — no defaults written');pl:SetAttribute('MA_Notice','Previous session still needs safe reconciliation; try again later.') end
+   drainPendingJoin(pl.UserId,pl);return
+  end
+ end
  local session,err=store:load(pl.UserId)
  loading[pl.UserId]=nil
- if not session then pl:SetAttribute('MA_SaveStatus','Profile unavailable — no defaults written');pl:SetAttribute('MA_Notice',tostring(err));return end
- if not pl.Parent then store:release(session);return end
+ if not session then
+  if pl.Parent then pl:SetAttribute('MA_SaveStatus','Profile unavailable — no defaults written');pl:SetAttribute('MA_Notice',tostring(err)) end
+  drainPendingJoin(pl.UserId,pl);return
+ end
+ if not pl.Parent then
+  -- The first Player left while loading. Finish releasing its acquired lease
+  -- before starting one queued replacement; uncertain storage never falls back
+  -- to a new profile or bypasses that lease.
+  local released=false
+  for attempt=1,3 do
+   if session.readOnly then store:reconcile(session) end
+   if session.closed or store:release(session) then released=true;break end
+   task.wait(.2*attempt)
+  end
+  if released then drainPendingJoin(pl.UserId,pl)
+  else failPendingJoin(pl.UserId,'Previous session could not be safely released; try again later.') end
+  return
+ end
  -- A new server cannot inherit a previous server's world encounter token.
  session.data.run.entitlements={}
  local p={player=pl,session=session,drones={},tokens=7,bucketAt=now,busy=false,dirty=false,leaving=false,publishDirty=true}
@@ -598,20 +740,23 @@ local function removePlayer(pl)
  -- Wait for the one ordered economy operation, then final save/unlock. No default fallback.
  local deadline=os.clock()+12
  while p.busy and os.clock()<deadline do task.wait(.1) end
+ local released=false
  if not p.busy then
   p.session.data.run.entitlements={}
   for attempt=1,3 do
    if p.session.readOnly then local recovered,result=store:reconcile(p.session);if recovered then resolveAfter(p,result) end end
-   if p.session.closed then break end
-   local saved=store:release(p.session);if saved then break end
+   if p.session.closed then released=true;break end
+   local saved=store:release(p.session);if saved then released=true;break end
    if os.clock()>=deadline then break end;task.wait(.2*attempt)
   end
  end
  profiles[pl.UserId]=nil
+ if released then drainPendingJoin(pl.UserId,pl)
+ else failPendingJoin(pl.UserId,'Previous session could not be safely released; try again later.') end
 end
 Players.PlayerRemoving:Connect(removePlayer)
 for _,pl in ipairs(Players:GetPlayers()) do task.spawn(addPlayer,pl) end
-RunService.Heartbeat:Connect(function(dt)
+RunService.Heartbeat:Connect(function(dt: number)
  now=workspace:GetServerTimeNow()
  elapsed=math.min(elapsed+math.max(0,dt),C.Tick*(C.MaxCatchup or 6))
  local steps=0
@@ -645,7 +790,15 @@ RunService.Heartbeat:Connect(function(dt)
     -- A geode reserves five future nodes. Consume five due replenishment tokens,
     -- rather than leaving four immortal retries behind after every shell cycle.
     local spawned,cost=spawnResource(field,due<5 and 'Crystal' or nil)
-    if not spawned then field.respawnQueue[1]=now+2;table.sort(field.respawnQueue);break end
+    if not spawned then
+     -- One failed sample set establishes a field-level backoff for every token
+     -- already due, rather than re-running 18 raycasts per snapshot for each
+     -- blocked missing slot in turn. Future tokens keep their own due times.
+     for i,at in ipairs(field.respawnQueue) do
+      if at<=now then field.respawnQueue[i]=now+2 end
+     end
+     table.sort(field.respawnQueue);break
+    end
     for _=1,cost do table.remove(field.respawnQueue,1) end
     replenished=replenished+cost
    end

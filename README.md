@@ -4,7 +4,7 @@ The single source project is [Olivegord/mining-away](https://github.com/Olivegor
 
 [Draft review PR #1](https://github.com/Olivegord/mining-away/pull/1) remains unmerged pending owner/Studio review.
 
-Current review branch: [`codex/restore-feel-prestige`](https://github.com/Olivegord/mining-away/tree/codex/restore-feel-prestige). Downloadable review builds, the original handoff and validation status are on the [source Page](https://chatgpt.com/space/page_80b705099bb481918ea713e1780329fe). Each release ZIP contains `revision.json` with its exact source commit and place checksum; it must say `source_dirty: false`.
+Current review branch: [`codex/restore-feel-prestige`](https://github.com/Olivegord/mining-away/tree/codex/restore-feel-prestige). Downloadable review builds, the original handoff and validation status are on the [source Page](https://chatgpt.com/space/page_80b705099bb481918ea713e1780329fe). Each release ZIP contains `revision.json` with its exact source commit and place checksum; it must say `source_dirty: false`. This candidate uses a retro parts-built map and a compact three-card comparison. Its independent [art-director gate](docs/review/ART_DIRECTOR_GATE.md) is **NOT VERIFIED** until the exact build is inspected in motion in Roblox Studio; historical screenshots do not validate it.
 
 ## Game handbook
 

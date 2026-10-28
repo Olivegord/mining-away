@@ -118,6 +118,15 @@ return function(Interface,CardView,options)
     end
    end
   end
+  currentCase='compact portrait focus dispatch'
+  local focusCount,lastFocus=0,nil
+  local compact=CardView.create(Interface,host,fixtures[1].choice,2,150,200,{offerCompact=true,category='COMBAT',target=fixtures[1].target,previewRows=fixtures[1].rows,onFocus=function(index) focusCount+=1;lastFocus=index end})
+  rendered(compact.root)
+  check(compact.button.AbsoluteSize.X>=44 and compact.button.AbsoluteSize.Y>=44,'portrait focus target meets touch minimum')
+  compact.select();check(focusCount==1 and lastFocus==2,'shared activated handler selects correct saved index')
+  compact.setFocus(true,true);check(compact.root.Position.Y.Offset==0,'reduced motion focus lift resolves immediately')
+  compact.setFocus(false,true);check(compact.root.Position.Y.Offset==6,'focus clears without replay')
+  compact.root:Destroy()
   currentCase='optional production safe bounds'
   local safeRoot=options.safeRoot
   if safeRoot then

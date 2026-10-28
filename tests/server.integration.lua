@@ -96,6 +96,7 @@ check('signature combat uses threshold, bounded chain, kill repair and authorita
  local old=target.hp;combatHit(d,f,target,stats)
  close(old-target.hp,stats.shotDamage*1.75);close(other.hp,100-stats.shotDamage*1.75*.25)
  eq(d.shotSerial,1);close(d.chainUntil,now+.2)
+ snapshotDrone(d);eq(d.model:GetAttribute('ChainTargetId'),other.model:GetAttribute('TurretId'))
  d.hp=10;target.hp=1;other.hp=100;combatHit(d,f,target,stats)
  close(d.hp,10+d.owned.base.maxHealth*.3);eq(d.model:GetAttribute('RepairSerial'),1)
  combatHit(d,f,target,stats);close(d.hp,10+d.owned.base.maxHealth*.3);eq(d.shotSerial,2)
@@ -107,7 +108,19 @@ check('core drill only boosts geodes and split range does not bypass mining gate
  local r=newResource(f,'Geode',200,10);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(9,0,0))
  advance(2.01);assignExact(a,f,r);local hp=r.hp;hitResource(d,r,10);close(r.hp,hp-18)
  other.slots[d.id]=1;hp=other.hp;eq(hitResource(d,other,5,true),true);close(other.hp,hp-5);eq(d.forkTarget,other.position)
+ snapshotDrone(d);eq(d.model:GetAttribute('ForkTargetId'),other.id)
  d.pos=d.pos+Vector3.new(2,0,0);eq(hitResource(d,other,5,true),false)
+end)
+check('cosmetic target identities follow authoritative attack state and retire cleanly',function()
+ local a=fixture();local f=patches[3];enlist(f,{a});local d=first(a);local target=f.turrets[1]
+ d.state='Attack';d.mining=true;d.combatTarget=target;snapshotDrone(d)
+ eq(d.model:GetAttribute('CombatTargetId'),target.model:GetAttribute('TurretId'))
+ target.hp=0;snapshotDrone(d);eq(d.model:GetAttribute('CombatTargetId'),'')
+ target.hp=1;d.combatTarget=target;d.mining=true;d.chainTargetId='short-chain';d.chainUntil=now+.2
+ snapshotDrone(d);eq(d.model:GetAttribute('ChainTargetId'),'short-chain')
+ release(d);snapshotDrone(d);eq(d.model:GetAttribute('CombatTargetId'),'');eq(d.model:GetAttribute('ChainTargetId'),'')
+ d.forkTargetId='expired';d.forkUntil=now-.01;d.chainTargetId='expired';d.chainUntil=now-.01;snapshotDrone(d)
+ eq(d.model:GetAttribute('ForkTargetId'),'');eq(d.model:GetAttribute('ChainTargetId'),'')
 end)
 check('fresh profile is one permanent Blue with replicated complete state',function()
  local a=fixture();local p=profile(a);local d=first(a)
@@ -343,6 +356,48 @@ check('leave saves durable run and removes all server models and reservations',f
  eq(runtimeStore.values['player:'..a.UserId].data.run.credits,341);eq(runtimeStore.values['player:'..a.UserId].lock,nil)
  players.PlayerAdded:Fire(a);eq(data(profile(a)).run.credits,341);eq(first(a).id,id)
 end)
+check('same-server reconnect during a yielding final release loads only after old lease closes',function()
+ local old=fixture();local oldProfile=profile(old);data(oldProfile).run.credits=421;local id=first(old).id
+ local replacement=player(old.UserId)
+ runtimeStore.hook=function() players.PlayerAdded:Fire(replacement);eq(profile(replacement),oldProfile) end
+ players.PlayerRemoving:Fire(old)
+ local current=profile(replacement);assert(current and current.player==replacement,'Queued reconnect did not load')
+ eq(data(current).run.credits,421);eq(first(replacement).id,id)
+ local owned=0;for _,d in pairs(drones) do if d.owner==replacement.UserId then owned=owned+1 end end;eq(owned,1)
+end)
+check('same-server replacement arriving before prior PlayerRemoving is not discarded',function()
+ local old=fixture();local p=profile(old);data(p).run.credits=212;local replacement=player(old.UserId)
+ players.PlayerAdded:Fire(replacement);eq(profile(replacement),p)
+ players.PlayerRemoving:Fire(old)
+ local current=profile(replacement);assert(current and current.player==replacement)
+ eq(data(current).run.credits,212);eq(#current.drones,1)
+end)
+check('reconnect queued during abandoned initial load waits for acquired lease release',function()
+ fixture();local old=player(990001);local replacement=player(old.UserId)
+ runtimeStore.hook=function() old.Parent=nil;players.PlayerAdded:Fire(replacement) end
+ players.PlayerAdded:Fire(old)
+ local current=profile(replacement);assert(current and current.player==replacement,'Queued player did not load after abandoned lease')
+ eq(#current.drones,1);eq(#data(current).fleet,1);assert(runtimeStore.values['player:'..old.UserId].lock)
+end)
+check('reconnect waits through lost final-release responses and restores committed inventory',function()
+ local old=fixture();local p=profile(old);data(p).run.credits=779;local replacement=player(old.UserId)
+ runtimeStore.hook=function() players.PlayerAdded:Fire(replacement);runtimeStore.failAfter=3 end
+ players.PlayerRemoving:Fire(old)
+ local current=profile(replacement);assert(current and current.player==replacement)
+ eq(data(current).run.credits,779);eq(#current.drones,1)
+end)
+check('failed final release does not load defaults for a queued reconnect',function()
+ local old=fixture();local p=profile(old);data(p).run.credits=991;local replacement=player(old.UserId)
+ runtimeStore.hook=function() players.PlayerAdded:Fire(replacement);runtimeStore.failAfter=1;runtimeStore.failBefore=100 end
+ players.PlayerRemoving:Fire(old);runtimeStore.failBefore=0;runtimeStore.failAfter=0
+ eq(profile(replacement),nil);assert(string.find(replacement:GetAttribute('MA_SaveStatus'),'no defaults'))
+ eq(runtimeStore.values['player:'..old.UserId].data.run.credits,991)
+ -- A later reconnect can recover the exact orphaned session once storage is
+ -- available; it must not stay permanently stuck behind a stale local lease.
+ local retry=player(old.UserId);players.PlayerAdded:Fire(retry)
+ local recovered=profile(retry);assert(recovered and recovered.player==retry)
+ eq(data(recovered).run.credits,991);eq(#recovered.drones,1)
+end)
 check('large frame stall runs bounded movement steps rather than unlimited catchup',function()
  local a=fixture();local d=first(a);local start=d.pos;teleport(a,start+Vector3.new(200,0,0));local cap=d.stats.maxStep60
  realTime=realTime+10;heartbeat:Fire(10);assert((d.pos-start).Magnitude<=cap*8+.001)
@@ -399,11 +454,101 @@ check('resource placement rejects solid map obstruction without reserving node b
  workspace.Raycast=originalRaycast
  assert(ok,err)
 end)
+check('fully blocked initial safe field retries and recovers after obstruction clears',function()
+ fixture();local f=patches[1];local originalRaycast=workspace.Raycast
+ local ok,err=pcall(function()
+  workspace.Raycast=function() return {Instance=scene.packStation} end
+  seedField(f);eq(#f.resources,0);eq(nodeUsage(f),0);eq(#f.respawnQueue,f.cfg.Count)
+  workspace.Raycast=function() return nil end
+  advance(2.3);assert(nodeUsage(f)>0,'Safe field stayed empty after obstruction cleared')
+  assert(nodeUsage(f)<=f.cfg.Count);eq(#f.respawnQueue+nodeUsage(f),f.cfg.Count)
+ end)
+ workspace.Raycast=originalRaycast;assert(ok,err)
+end)
+check('partial initial spawn preserves one retry token for each missing budget unit',function()
+ fixture();local f=patches[1];local originalRaycast=workspace.Raycast;local calls=0
+ local ok,err=pcall(function()
+  workspace.Raycast=function() calls=calls+1;if calls==1 then return nil end;return {Instance=scene.packStation} end
+  seedField(f);eq(nodeUsage(f),1);eq(#f.respawnQueue,f.cfg.Count-1)
+  workspace.Raycast=function() return nil end
+  advance(2.3);assert(nodeUsage(f)>1,'Remaining slots did not recover')
+  eq(#f.respawnQueue+nodeUsage(f),f.cfg.Count)
+ end)
+ workspace.Raycast=originalRaycast;assert(ok,err)
+end)
+check('fully blocked respawn slots share bounded field backoff before retry',function()
+ fixture();local f=patches[1];local originalRaycast=workspace.Raycast;local calls=0
+ local ok,err=pcall(function()
+  workspace.Raycast=function() calls=calls+1;return {Instance=scene.packStation} end
+  seedField(f);eq(calls,18);eq(#f.respawnQueue,f.cfg.Count)
+  advance(2.25);eq(calls,36);eq(nodeUsage(f),0);eq(#f.respawnQueue,f.cfg.Count)
+  workspace.Raycast=function() return nil end
+  advance(2.25);assert(nodeUsage(f)>0);eq(nodeUsage(f)+#f.respawnQueue,f.cfg.Count)
+ end)
+ workspace.Raycast=originalRaycast;assert(ok,err)
+end)
+check('partial geode seed reserves five units and retries only remaining budget',function()
+ fixture();local f=patches[2];local originalRaycast=workspace.Raycast;local originalNext=seed.NextNumber;local calls=0
+ local ok,err=pcall(function()
+  seed.NextNumber=function(self,lo,hi) if lo==nil then return .01 end;return originalNext(self,lo,hi) end
+  workspace.Raycast=function() calls=calls+1;if calls==1 then return nil end;return {Instance=scene.packStation} end
+  seedField(f);eq(#f.resources,1);eq(f.resources[1].kind,'Geode');eq(nodeUsage(f),5);eq(#f.respawnQueue,f.cfg.Count-5)
+  workspace.Raycast=function() return nil end
+  advance(2.3);assert(nodeUsage(f)>5);eq(#f.respawnQueue+nodeUsage(f),f.cfg.Count)
+ end)
+ workspace.Raycast=originalRaycast;seed.NextNumber=originalNext;assert(ok,err)
+end)
 check('replicated assault UI gate follows muster and recall independently of card state',function()
  local a=fixture();advance(.2);eq(a:GetAttribute('MA_InAssault'),false)
  teleport(a,patches[3].center) -- The expanded Cobalt ridge is beyond the home command radius.
  input(a,'Patch',3);advance(.2);eq(patches[3].e.phase,'Gathering');eq(a:GetAttribute('MA_InAssault'),true)
  input(a,'Recall');advance(.2);eq(a:GetAttribute('MA_InAssault'),false)
  eq(#data(profile(a)).run.cards,0)
+end)
+check('field repeats preserve target and warmup for legacy and acknowledged commands',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local d=assignExact(a,f,r);d.warmAt=now-0.2
+ local gui=Instance.new('PlayerGui');gui.Parent=a;local warm=d.warmAt
+ input(a,'Patch',1);eq(d.target,r);eq(d.warmAt,warm);eq(r.slots[d.id],1)
+ input(a,'Patch',{fieldId=1,requestId='same-field'});local ack=Http:JSONDecode(gui:GetAttribute('MA_CommandState'));eq(ack.status,'accepted');eq(d.target,r);eq(d.warmAt,warm)
+end)
+check('owned slot assignment revalidates busy, stale run and drone life without losing previous work',function()
+ local a,b=fixture(2);local f=patches[1];local r=newResource(f,'Crystal',100,10);local other=newResource(f,'Crystal',100,10);advance(2.1)
+ local d=assignExact(a,f,r);local rival=assignExact(b,f,other);local gui=Instance.new('PlayerGui');gui.Parent=a;d.warmAt=now-.2
+ local req={requestId='request-1',runId=data(profile(a)).run.id,fieldId=1,droneId=d.id,life=d.life,resourceId=other.id};local warm=d.warmAt
+ input(a,'AssignSlot',req);eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'rejected');eq(d.target,r);eq(d.warmAt,warm);eq(r.slots[d.id],1)
+ req.resourceId=r.id;req.life=d.life+1;input(a,'AssignSlot',req);eq(d.target,r);eq(d.warmAt,warm)
+ req.life=d.life;req.runId='stale';input(a,'AssignSlot',req);eq(d.target,r)
+ req.runId=data(profile(a)).run.id;req.resourceId=r.id;input(a,'AssignSlot',req);eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'accepted');eq(d.warmAt,warm)
+ release(rival);req.resourceId=other.id;input(a,'AssignSlot',req);eq(d.target,other);eq(r.slots[d.id],nil);eq(other.slots[d.id],1);eq(other.part:GetAttribute('SlotsUsed'),1);eq(r.part:GetAttribute('SlotsUsed'),0)
+ input(a,'CancelDrone',{requestId='cancel',runId=req.runId,droneId=d.id,life=d.life});eq(d.field,nil);eq(other.part:GetAttribute('SlotsUsed'),0)
+end)
+check('yielding save freezes mining and warmup while retaining slot then resumes',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local d=assignExact(a,f,r);local p=profile(a)
+ d.warmAt=now-.1;local before=r.hp;local beforeWarm=d.warmAt;local cargo=Profile.cargoUnits(data(p));updateSlots(r)
+ runtimeStore.hook=function()
+  advance(.5);eq(p.busy,true);eq(d.target,r);eq(r.slots[d.id],1);eq(r.part:GetAttribute('SlotsUsed'),1);eq(r.hp,before);eq(Profile.cargoUnits(data(p)),cargo);close(d.warmAt-beforeWarm,.5,.02)
+ end
+ transact(p,'pause-save',function() return {saved=true} end)
+ eq(d.target,r);assert(not p.busy);snapshotDrone(d);eq(d.model:GetAttribute('WarmupStart'),d.warmAt);eq(d.model:GetAttribute('WarmupDuration'),d.stats.warmup)
+end)
+check('slot intent rejects foreign drones and guarded resources without disturbing jobs',function()
+ local a,b=fixture(2);local safe=patches[1];local guarded=patches[3];local r=newResource(safe,'Crystal',100,10);local protected=newResource(guarded,'Crystal',100,10);advance(2.1)
+ local d=assignExact(a,safe,r);local theirs=first(b);local gui=Instance.new('PlayerGui');gui.Parent=a;d.warmAt=now-.2;local warm=d.warmAt
+ local req={requestId='foreign',runId=data(profile(a)).run.id,fieldId=1,droneId=theirs.id,life=theirs.life,resourceId=r.id};input(a,'AssignSlot',req);eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'rejected');eq(d.target,r);eq(d.warmAt,warm)
+ teleport(a,guarded.center);req.requestId='gate';req.droneId=d.id;req.life=d.life;req.fieldId=guarded.id;req.resourceId=protected.id;input(a,'AssignSlot',req);eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'rejected');eq(d.target,r);eq(r.slots[d.id],1);eq(d.warmAt,warm);eq(protected.slots[d.id],nil)
+end)
+check('lost save response cannot produce mining rewards while session is busy',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local d=assignExact(a,f,r);local p=profile(a);d.warmAt=now-2
+ local before=r.hp;local cargo=Profile.cargoUnits(data(p));p.dirty=true
+ runtimeStore.hook=function() advance(.2);eq(d.target,r);eq(r.hp,before);eq(Profile.cargoUnits(data(p)),cargo);runtimeStore.failAfter=3 end
+ transact(p,'lost-response-mine',function() return {saved=true} end)
+ runtimeStore.failAfter=0
+ eq(r.hp,before);eq(Profile.cargoUnits(data(p)),cargo)
+ if store:healthy(p.session) then eq(d.target,r) else droneStep(d,1/60);eq(d.target,nil) end
+end)
+check('same-field dispatch preserves current mining and adds idle living fleet only in mineable field',function()
+ local a=fixture();local p=profile(a);data(p).run.saleEarnings=2000;data(p).run.wins.Cobalt=1;station(a,scene.prestigeStation);input(a,'Prestige',payload(a,'mixed-fleet',{confirm=true}));eq(#p.drones,2)
+ local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local d=assignExact(a,f,r);local idle=p.drones[2];d.warmAt=now-.2;local warm=d.warmAt
+ input(a,'Patch',1);eq(d.target,r);eq(d.warmAt,warm);eq(r.slots[d.id],1);eq(idle.field,1);eq(idle.state,'Travel')
 end)
 print(checks..' actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested')

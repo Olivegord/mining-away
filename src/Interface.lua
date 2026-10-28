@@ -34,8 +34,15 @@ function U.badge(parent,pos,size,text,color)
  return b
 end
 local bases=setmetatable({},{__mode='k'});local tweens=setmetatable({},{__mode='k'})
+local reducedMotion=false
+function U.setReducedMotion(enabled) reducedMotion=enabled==true end
 local function paint(button,color,scale)
  if tweens[button] then for _,t in ipairs(tweens[button]) do t:Cancel() end end
+ if reducedMotion then
+  button.BackgroundColor3=color
+  local uiScale=button:FindFirstChild('ButtonScale');if uiScale then uiScale.Scale=1 end
+  tweens[button]=nil;return
+ end
  local a=TweenService:Create(button,TweenInfo.new(.11,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=color})
  local uiScale=button:FindFirstChild('ButtonScale');local b=uiScale and TweenService:Create(uiScale,TweenInfo.new(.11),{Scale=scale or 1})
  tweens[button]={a,b};a:Play();if b then b:Play() end
@@ -51,6 +58,8 @@ function U.button(parent,pos,size,text,callback,color)
  bases[b]=b.BackgroundColor3
  b.MouseEnter:Connect(function() if b.Active then paint(b,bases[b]:Lerp(C.white,.14),1.025) end end)
  b.MouseLeave:Connect(function() if b.Active then paint(b,bases[b],1) end end)
+ b.SelectionGained:Connect(function() if b.Active then paint(b,bases[b]:Lerp(C.white,.14),1.025) end end)
+ b.SelectionLost:Connect(function() if b.Active then paint(b,bases[b],1) end end)
  b.MouseButton1Down:Connect(function() if b.Active then paint(b,bases[b]:Lerp(C.ink,.10),.975) end end)
  b.MouseButton1Up:Connect(function() if b.Active then paint(b,bases[b],1) end end)
  b.Activated:Connect(function() if b.Active and callback then callback() end end)

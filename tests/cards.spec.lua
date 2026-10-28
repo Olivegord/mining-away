@@ -204,7 +204,7 @@ test('Burst Splash trades arc fraction for direct damage at useful paired-guard 
 end)
 print(passed..' ARC cards tests passed')
 test('fleet preview selects a changed drone when the first fleet member is capped',function()
- local p=funded();ready(p);P.prestige(p,'next',p.run.id,{atDepot=true,confirmed=true});p.run.credits=1000000
+ local p=funded(4);ready(p);P.prestige(p,'next',p.run.id,{atDepot=true,confirmed=true});p.run.credits=1000000
  local blue,red=p.fleet[1],p.fleet[2]
  p.run.cards={{cardId='capped-first',scope='Individual',targetDroneId=blue.id,effects={mining=3}}}
  local catalog=C.CATALOG;C.CATALOG={entry('F01'),entry('F06'),entry('F03'),entry('D11',blue.id)}
@@ -216,3 +216,42 @@ test('fleet preview selects a changed drone when the first fleet member is cappe
  assert(found,'Controlled useful F01 did not reach offer')
 end)
 print(passed..' PREVIEW cards tests passed')
+
+-- The test exercises the actual production ordering function on an unbiased
+-- three-candidate equal-priority fixture. Full-offer constraints can override it.
+test('rarity candidate weights materially influence an equal-priority tie',function()
+ local counts={Common=0,Uncommon=0,Rare=0};local items={{rarity='Common'},{rarity='Uncommon'},{rarity='Rare'}}
+ local seedState=7349
+ for _=1,6000 do
+  seedState=(seedState*48271)%2147483647
+  local state=seedState
+  local function draw(n) state=(state*16807)%2147483647;return math.floor(state/2147483647*n)+1 end
+  local order=C.weightedOrder(items,draw);counts[order[1].rarity]+=1
+ end
+ assert(counts.Common>counts.Uncommon*1.6,counts.Common..' / '..counts.Uncommon)
+ assert(counts.Uncommon>counts.Rare*2.1,counts.Uncommon..' / '..counts.Rare)
+ assert(counts.Common>3200 and counts.Common<4000,counts.Common)
+ assert(counts.Uncommon>1400 and counts.Uncommon<2200,counts.Uncommon)
+ assert(counts.Rare>350 and counts.Rare<850,counts.Rare)
+ print(string.format('RARITY equal-priority fixture: Common=%d Uncommon=%d Rare=%d / 6000; not offer odds',counts.Common,counts.Uncommon,counts.Rare))
+end)
+test('new offers store honest weighted tiers through pending replay and claim',function()
+ local p=funded(913);local initial=p.run.credits;local ok,offer=buy(p,'tier-pack');eq(ok,true);eq(offer.contentVersion,4)
+ for _,c in ipairs(offer.choices) do assert(C.RARITY_WEIGHTS[c.rarity],c.cardId..' is missing its saved server tier') end
+ local snapshot=P.clone(offer);local restored=assert(P.migrate(p,44));local ok2,replay=buy(restored,'other-id');eq(ok2,true);assert(same(snapshot,replay));eq(restored.run.credits,initial-80)
+ local which=2;local selected=offer.choices[which]
+ local ok3,result=C.select(restored,offer.id,which,'tier-claim',offer.runId,{atDepot=true});eq(ok3,true);eq(result.card.rarity,selected.rarity);eq(restored.run.cards[1].rarity,selected.rarity)
+ local ok4,again=C.select(restored,offer.id,which,'tier-claim',offer.runId,{atDepot=true});eq(ok4,true);assert(same(result,again));eq(#restored.run.cards,1)
+end)
+test('pre-tier purchased offer stays exact and is never assigned a fake tier',function()
+ local p=funded(77);p.run.packIndex=1;p.run.credits=920
+ local old={id=p.run.id..':pack:1',runId=p.run.id,contentVersion=3,packIndex=1,price=80,choices={
+  {cardId='F01',title='Sharper Beams',scope='Fleet',effects={mining=.25}},
+  {cardId='F06',title='Cargo Lattice',scope='Player',effects={capacity=.35}},
+  {cardId='D05',title='Instant Ignition',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1}},
+ }}
+ p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));local ok,replay=buy(restored,'legacy-reopen');eq(ok,true);assert(same(replay,old))
+ for _,c in ipairs(replay.choices) do eq(c.rarity,nil) end
+ local selected,receipt=C.select(restored,old.id,3,'legacy-select',p.run.id,{atDepot=true});eq(selected,true);eq(receipt.card.rarity,nil);eq(restored.run.credits,920);eq(#restored.run.cards,1)
+end)
+print(passed..' RARITY cards tests passed')

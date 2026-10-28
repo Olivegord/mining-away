@@ -1,4 +1,16 @@
-# Owner requirements — October 25, 2026
+# Owner requirements
+
+## October 27 current direction and visual veto
+
+The owner's newest instructions supersede conflicting older visual choices: keep this same game and source repository, but make the map intentionally retro Roblox and **parts-built**, with legible connected fields, grounded structures, landmarks and a coherent authored alien identity. Avoid the current low-poly/faceted filler terrain. Bee Swarm Simulator is a reference for field/route readability, not an asset or theme source. Preserve the original drone, crystal and segmented construct pyramid assets, original overhead mining and eased flight, real server authority, durable pending offers, free reprints and prestige.
+
+Gameplay is the priority and the pack/card UI is the highest-priority visual concern. Adapt the concrete structure of the [official Balatro Celestial Pack screen](https://www.playbalatro.com/press-kit/Screenshots/Celestial%20Pack.png): three distinct small portrait cards in a spaced lower-center row, focused details just above the focused card, and a separate small choice control. Keep the world visible; do not copy copyrighted art, branding, poker HUD or background. Consult the [official Arcana Pack wrappers](https://www.playbalatro.com/press-kit/Screenshots/Arcana%20Packs.png) for tactile package reference, not color/illustration copying. The earned-currency pack should reveal exactly three already-saved server choices, choose exactly one, and feel compact, tactile and responsive; benefits, tradeoffs, named/type targets and this-run duration remain clear. Show a short opening and stagger, restrained hover/tap/focus lift, immediate press response, server-confirmed choice pulse and collapse, with a reduced-motion equivalent. These timings are implementation proposals, not measured claims about the reference. No fake near miss, paid Robux RNG or cosmetic reroll. Beam cores/halos, impacts, turret telegraphs, fractures and reprint transitions must remain readable, attached, bounded and clean for every observer.
+
+An independent art director has veto authority and may not approve without **actual final-candidate Roblox engine motion evidence**. Reject clipped or detached beam layers/muzzle/impact, opaque square/noisy particles, effects through surfaces, snapping/jittering/clipping animations or broken transitions, floating/buried trees and props (including slopes), bad road joins, generic empty platforms, faceted filler, random clutter, giant dashboard UI or generic rainbow/gradient rarity piles. Inspect normal and close player viewpoints in motion, low/high graphics, desktop/phone and busy multiplayer; fix defects and obtain fresh evidence. If final evidence is unavailable the verdict is NOT VERIFIED and the full visual goal remains incomplete. Do not infer authorship from pixels or claim these patterns characterize most AI games.
+
+See [independent visual quality gate](VISUAL_QUALITY_GATE.md), [visual acceptance](review/VISUAL_ACCEPTANCE.md), [art director report](review/ART_DIRECTOR_GATE.md), [negative prompt and positive alternatives](review/NEGATIVE_PROMPT.md), [exemplar research](EXEMPLAR_RESEARCH.md) and [public prompting research](ROBLOX_PROMPT_RESEARCH.md). Published suggestions and mockups are references, not proof of a polished game. No Roblox publishing or main merge.
+
+## October 25 foundation
 
 These instructions supersede earlier concepts and the rejected first cloud build.
 
@@ -33,3 +45,9 @@ Replace the rejected cluttered UI with a small coherent HUD and deliberate, attr
 
 Work in the existing cloud implementation chat and the single GitHub project; avoid another disconnected prototype. Produce a reproducible high-quality review build, readable source, meaningful tests and visual evidence where possible. Do not stop useful work if GitHub access, modeling, file opening or another integration blocks: continue independent code, math/simulation, models, documentation, review, and available playtests. A blocker must be stated accurately; passing automated checks is not evidence of polished visuals. Do not publish to Roblox without a separate request.
 
+
+## Latest overnight acceptance refinements
+
+The top visual priority is a compact, legible three-card selection using the spatial hierarchy of the owner-selected Balatro Arcana choice reference, with original Mining Away content. Essential targets and effects should aim for 18 px and supporting text 16 px at a 720p desktop baseline; compactness must not rely on 8–11 px microcopy. Compare all choices on touch, with focus and explicit confirmation. Individual owned-drone resource selection must show available slots and pending, accepted, rejected and canceled outcomes; repeat commands must preserve an existing job. Autosave must not discard reservations or warmup while saving, and must retain safe transaction isolation.
+
+Retain the original inner beam's two-second width ramp and 0.2-second hide. Any charging cue must reflect authoritative warmup without changing that ramp. The independent art director has a non-waivable real-engine gate: clipped or detached beams, ugly or opaque particles, snapping animation, and floating or buried props are hard failures. Normal-speed final-build inspection must cover ordinary and busy scenes, low and high graphics, multiple viewports and camera angles. Without exact final-build evidence the verdict is NOT VERIFIED, not approval.
