@@ -614,8 +614,8 @@ end
 local function chooseCard(p: any,pl: any,payload: any)
    if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then offerReply(pl,payload,'rejected','Invalid choice');return end
    p.pendingOfferTx=payload.txId
-   local started=transact(p,'choose:'..payload.txId,function(copy)
-    local ok,r=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+   local started=transact(p,'choose:'..payload.txId,function(copy: any)
+    local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
    end,function() refreshStats(p);notice(p,'Card installed • this run only.') end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
