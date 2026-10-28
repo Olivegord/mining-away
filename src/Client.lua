@@ -116,7 +116,8 @@ local function viewport()
 end
 local function currentLayout() local v=viewport();return UILayout.calculate(v.X,v.Y,UIS.TouchEnabled and not UIS.KeyboardEnabled) end
 local function layoutModal()
- local v=viewport();local l=modalMode=='offer' and UILayout.offer(v.X,v.Y,UIS.TouchEnabled and not UIS.KeyboardEnabled) or currentLayout()
+ local v=viewport();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
+ local l=modalMode=='offer' and UILayout.offer(v.X,v.Y,touch) or ((modalMode=='fleet' or modalMode=='run') and UILayout.inspector(v.X,v.Y,touch) or currentLayout())
  sheet.Size=UDim2.fromOffset(l.panelWidth,l.panelHeight);sheet.Position=UDim2.fromOffset(l.panelX,l.panelY);modalSize=v
  local isOffer=modalMode=='offer'
  local subtitleY=66
@@ -130,7 +131,7 @@ local function layoutModal()
  body.Position=UDim2.fromOffset(isOffer and l.bodyX or l.panelPadding,isOffer and l.bodyY or l.headerHeight);body.Size=UDim2.fromOffset(l.bodyWidth,l.bodyHeight)
  body.AutomaticCanvasSize=isOffer and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
  body.ScrollingDirection=isOffer and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
- modal.BackgroundTransparency=isOffer and .94 or .22
+ modal.BackgroundTransparency=isOffer and .94 or ((modalMode=='fleet' or modalMode=='run') and .9 or .22)
  sheet.BackgroundTransparency=isOffer and 1 or 0
  local stroke=sheet:FindFirstChildOfClass('UIStroke');if stroke then stroke.Enabled=not isOffer end
  modalTitle.Visible=not isOffer;modalSubtitle.Visible=not isOffer;close.Visible=not isOffer
@@ -328,75 +329,85 @@ local function wrappedHeight(text,width,size,bold,minimum)
  local ok,bounds=pcall(function() return TextService:GetTextSize(text,size,bold and Enum.Font.FredokaOne or Enum.Font.GothamMedium,Vector2.new(math.max(1,width),1000)) end)
  return math.max(minimum or 0,ok and math.ceil(bounds.Y)+8 or 96)
 end
-local function statTile(parent,x,y,width,title,value,color)
- local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,66),palette.panel);corner(tile,9)
- label(tile,UDim2.fromOffset(8,4),UDim2.new(1,-16,0,24),title,16,palette.muted,true)
- label(tile,UDim2.fromOffset(8,30),UDim2.new(1,-16,0,28),value,19,color or palette.ink,true)
-end
+local focusedFleetId=nil
+local restoreFleetFocus=false
 local function tabs(width,mode)
- local a=button(body,UDim2.fromOffset(3,3),UDim2.fromOffset((width-14)/2,44),'Permanent fleet',openFleet,mode=='fleet' and palette.mineral or palette.paper)
- local b=button(body,UDim2.fromOffset((width-14)/2+11,3),UDim2.fromOffset((width-14)/2,44),'This run · '..#profile.run.cards,openRunCards,mode=='run' and palette.accent or palette.paper)
+ local a=button(body,UDim2.fromOffset(3,2),UDim2.fromOffset(112,44),'Fleet ('..#profile.fleet..')',openFleet,mode=='fleet' and palette.mineral or palette.paper)
+ local b=button(body,UDim2.fromOffset(121,2),UDim2.fromOffset(112,44),'Run ('..#profile.run.cards..')',openRunCards,mode=='run' and palette.accent or palette.paper)
  a.Name='FleetTab';b.Name='RunTab'
+end
+-- The actual preserved drone template is used when present. The viewport is
+-- cosmetic only: it never sends commands or substitutes for server models.
+local function fleetPortrait(parent,tint)
+ local template=RS:FindFirstChild('Drone')
+ if not template or not template:IsA('Model') then U.icon(parent,'drone',UDim2.fromOffset(10,12),UDim2.fromOffset(58,58),tint);return end
+ local view=Instance.new('ViewportFrame');view.Name='OriginalDronePortrait';view.BackgroundTransparency=1;view.Size=UDim2.fromOffset(70,70);view.Position=UDim2.fromOffset(8,6);view.ZIndex=23;view.Parent=parent
+ local ok=pcall(function()
+  local model=template:Clone()
+  for _,part in ipairs(model:GetDescendants()) do
+   if part:IsA('LuaSourceContainer') or part:IsA('Sound') or part:IsA('ParticleEmitter') or part:IsA('Beam') or part:IsA('Trail') then part:Destroy()
+   elseif part:IsA('BasePart') then part.Anchored=true;part.CanCollide=false end
+  end
+  local worldModel=Instance.new('WorldModel');worldModel.Parent=view;model.Parent=worldModel
+  local center,size=model:GetBoundingBox();local radius=math.max(size.X,size.Y,size.Z,1)
+  local camera=Instance.new('Camera');camera.CFrame=CFrame.lookAt(center.Position+Vector3.new(radius*1.3,radius*.9,radius*1.7),center.Position);camera.Parent=view;view.CurrentCamera=camera
+ end)
+ if not ok then view:Destroy();U.icon(parent,'drone',UDim2.fromOffset(10,12),UDim2.fromOffset(58,58),tint) end
 end
 openFleet=function()
  if not profile then return end
- local l=menu('fleet','Meet your crew','Permanent drones; stats include this run’s cards.','drone');local width=l.bodyWidth-6
+ local l=menu('fleet','Your crew','Drones are permanent; stats include run cards.','drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
- local rowWidth=width;local y=64
+ local roster=Instance.new('ScrollingFrame');roster.Name='FleetRoster';roster.Position=UDim2.fromOffset(3,54);roster.Size=UDim2.fromOffset(width,49)
+ roster.BackgroundTransparency=1;roster.BorderSizePixel=0;roster.ScrollBarThickness=3;roster.ScrollingDirection=Enum.ScrollingDirection.X;roster.AutomaticCanvasSize=Enum.AutomaticSize.X;roster.CanvasSize=UDim2.fromScale(0,0);roster.Parent=body
+ local flow=Instance.new('UIListLayout');flow.FillDirection=Enum.FillDirection.Horizontal;flow.SortOrder=Enum.SortOrder.LayoutOrder;flow.Padding=UDim.new(0,6);flow.Parent=roster
+ local selected=UILayout.focusFleet(profile.fleet,focusedFleetId);focusedFleetId=selected and selected.id or nil
  for index,d in ipairs(profile.fleet or {}) do
-  local stats=(profile.droneStats and profile.droneStats[d.id]) or d.effective or d.base or {}
-  local tint=colors[d.type] or palette.mineral
-  local title=d.name or ('Drone '..index);local identity='Permanent · '..(d.type or 'Blue')
-  local nameHeight=wrappedHeight(title,rowWidth-102,22,true,33)
-  local identityHeight=wrappedHeight(identity,rowWidth-102,16,true,30)
-  local identityY=18+nameHeight;local tilesY=math.max(91,identityY+identityHeight+10)
-  local rowHeight=tilesY+247
-  local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(rowWidth,rowHeight),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
-  U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
-  label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,nameHeight),title,22,palette.ink,true)
-  label(row,UDim2.fromOffset(87,identityY),UDim2.new(1,-102,0,identityHeight),identity,16,palette.muted,true)
-  local count=0;for _,c in ipairs(profile.run.cards) do if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id) then count=count+1 end end
-  local tileWidth=(rowWidth-42)/2
-  statTile(row,14,tilesY,tileWidth,'Mining',number(stats.miningDPS or 30)..' /s')
-  statTile(row,tileWidth+28,tilesY,tileWidth,'Combat',number(stats.combatDPS or 12)..' /s')
-  statTile(row,14,tilesY+75,tileWidth,'Max hull',number(stats.maxHealth or 80))
-  statTile(row,tileWidth+28,tilesY+75,tileWidth,'Startup',number(stats.warmup or .8)..' sec')
-  label(row,UDim2.fromOffset(15,tilesY+149),UDim2.new(1,-30,0,34),tostring(count)..' run cards · free reprints',16,palette.muted)
-  local selectDrone=button(row,UDim2.fromOffset(14,tilesY+191),UDim2.new(1,-28,0,44),'Select for mining',function() beginDroneSelection(d) end,palette.mineral);selectDrone.Name='SelectDrone'..index;selectDrone.TextSize=16
-  y+=rowHeight+18
+  local text=d.name or ('Drone '..index);local tab=button(roster,UDim2.fromOffset(0,0),UDim2.fromOffset(112,44),text,function() restoreFleetFocus=game:GetService('GuiService').SelectedObject~=nil;focusedFleetId=d.id;openFleet() end,d==selected and palette.mineral or palette.paper)
+  tab.Name='FleetMember'..index;tab.LayoutOrder=index;tab.TextSize=16;tab:SetAttribute('Focused',d==selected)
+  if d==selected then task.spawn(function() RunService.Heartbeat:Wait();if roster.Parent and tab.Parent then local x=math.max(0,(index-1)*118+112-roster.AbsoluteWindowSize.X);roster.CanvasPosition=Vector2.new(math.min(x,math.max(0,roster.AbsoluteCanvasSize.X-roster.AbsoluteWindowSize.X)),0);if restoreFleetFocus then game:GetService('GuiService').SelectedObject=tab;restoreFleetFocus=false end end end) end
  end
- local nextDrone=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(rowWidth,260),palette.accent:Lerp(palette.white,.76),14);nextDrone.Name='NextDrone'
- U.icon(nextDrone,'prestige',UDim2.fromOffset(14,16),UDim2.fromOffset(45,45),palette.accent)
- label(nextDrone,UDim2.fromOffset(70,15),UDim2.new(1,-85,0,30),'Next drone',21,palette.ink,true)
- label(nextDrone,UDim2.fromOffset(70,48),UDim2.new(1,-85,0,32),'+1 permanent drone',16,palette.muted,true)
- local pre=profile.prestigePreview or {};local earned=pre.earnings or 0;local required=pre.saleRequired or 2000
- label(nextDrone,UDim2.fromOffset(16,91),UDim2.new(1,-32,0,46),comma(earned)..' / '..comma(required)..' credits sold',16,palette.ink,true)
- label(nextDrone,UDim2.fromOffset(16,142),UDim2.new(1,-32,0,34),(pre.field or 'Cobalt')..' clears '..(pre.wins or 0)..' / '..(pre.winsRequired or 1),16,palette.muted)
- local review=button(nextDrone,UDim2.fromOffset(14,197),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
+ if selected then
+  local stats=(profile.droneStats and profile.droneStats[selected.id]) or selected.effective or selected.base or {}
+  local tint=colors[selected.type] or palette.mineral
+  local panel=U.panel(body,UDim2.fromOffset(3,111),UDim2.fromOffset(width,194),tint:Lerp(palette.white,.82),10);panel.Name='FleetDrone'
+  fleetPortrait(panel,tint)
+  local name=selected.name or 'Drone';local nameHeight=wrappedHeight(name,width-94,20,true,25)
+  local identityHeight=wrappedHeight(selected.type or 'Blue',width-94,16,false,23)
+  label(panel,UDim2.fromOffset(82,6),UDim2.new(1,-90,0,nameHeight),name,20,palette.ink,true)
+  label(panel,UDim2.fromOffset(82,9+nameHeight),UDim2.new(1,-90,0,identityHeight),selected.type or 'Blue',16,palette.muted)
+  local statsY=math.max(75,12+nameHeight+identityHeight)
+  local col=(width-28)/2
+  label(panel,UDim2.fromOffset(10,statsY),UDim2.fromOffset(col,25),'Mine  '..number(stats.miningDPS or 30)..'/s',16,palette.ink,true)
+  label(panel,UDim2.fromOffset(14+col,statsY),UDim2.fromOffset(col,25),'Fight  '..number(stats.combatDPS or 12)..'/s',16,palette.ink,true)
+  label(panel,UDim2.fromOffset(10,statsY+28),UDim2.fromOffset(col,25),'Hull  '..number(stats.maxHealth or 80),16,palette.ink,true)
+  label(panel,UDim2.fromOffset(14+col,statsY+28),UDim2.fromOffset(col,25),'Warmup  '..number(stats.warmup or .8)..'s',16,palette.ink,true)
+  local selectDrone=button(panel,UDim2.fromOffset(10,statsY+59),UDim2.fromOffset(math.min(width-20,150),44),'Select',function() beginDroneSelection(selected) end,palette.mineral);selectDrone.Name='SelectDrone';selectDrone.TextSize=16
+  panel.Size=UDim2.fromOffset(width,statsY+113)
+  local y=111+statsY+125
+  local nextDrone=button(body,UDim2.fromOffset(3,y),UDim2.fromOffset(math.min(width,174),44),'Next drone',openPrestige,palette.accent);nextDrone.Name='NextDrone'
+  local pre=profile.prestigePreview or {}
+  label(body,UDim2.fromOffset(3,y+50),UDim2.fromOffset(width,50),comma(pre.earnings or 0)..' / '..comma(pre.saleRequired or 2000)..' sold · '..(pre.field or 'Cobalt')..' '..(pre.wins or 0)..' / '..(pre.winsRequired or 1),16,palette.muted)
+ end
 end
 openRunCards=function()
  if not profile then return end
- local l=menu('run','Your current build','Run cards survive reprints. Prestige clears them.','cards');local width=l.bodyWidth-6
+ local l=menu('run','Run cards','Cards survive reprints; prestige clears them.','cards');local width=l.bodyWidth-6
  tabs(width,'run')
  if #profile.run.cards==0 then
-  U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
-  local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,42),'Your first upgrade is waiting',22,palette.ink,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,76),'Mine, sell at the Converter, then choose one card at the depot.',16,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
-  button(body,UDim2.fromOffset(6,344),UDim2.fromOffset(width-12,48),'View next pack',openPack,palette.accent)
+  label(body,UDim2.fromOffset(8,65),UDim2.fromOffset(width-16,54),'Mine and sell ore to choose a card.',16,palette.ink)
+  button(body,UDim2.fromOffset(8,125),UDim2.fromOffset(math.min(width-16,150),44),'View pack',openPack,palette.accent)
  else
-  local y=63
+  local y=58
   for index,c in ipairs(profile.run.cards) do
    local title=c.title or 'Run upgrade';local target=targetText(c);local effect=c.description or c.headline or 'See its resolved stats in your fleet.'
-   local titleHeight=wrappedHeight(title,width-80,20,true,35)
-   local targetHeight=wrappedHeight(target,width-80,16,true,42)
-   local effectHeight=wrappedHeight(effect,width-30,16,false,72)
-   local targetY=15+titleHeight;local effectY=targetY+targetHeight+6;local rowHeight=effectY+effectHeight+14
-   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,rowHeight),palette.paper,12);row.Name='RunCard'..index
-   U.icon(row,categoryText(c)=='LASER' and 'startup' or string.lower(categoryText(c)),UDim2.fromOffset(12,13),UDim2.fromOffset(40,40),colors[c.type] or palette.mineral)
-   label(row,UDim2.fromOffset(64,9),UDim2.new(1,-80,0,titleHeight),title,20,palette.ink,true)
-   label(row,UDim2.fromOffset(64,targetY),UDim2.new(1,-80,0,targetHeight),target,16,palette.muted,true)
-   label(row,UDim2.fromOffset(15,effectY),UDim2.new(1,-30,0,effectHeight),effect,16,palette.ink)
-   y+=rowHeight+16
+   local titleHeight=wrappedHeight(title,width-24,18,true,25);local targetHeight=wrappedHeight(target,width-24,16,true,25);local effectHeight=wrappedHeight(effect,width-24,16,false,32)
+   local rowHeight=titleHeight+targetHeight+effectHeight+22
+   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,rowHeight),palette.paper,8);row.Name='RunCard'..index
+   label(row,UDim2.fromOffset(10,5),UDim2.new(1,-20,0,titleHeight),title,18,palette.ink,true)
+   label(row,UDim2.fromOffset(10,7+titleHeight),UDim2.new(1,-20,0,targetHeight),target,16,palette.muted,true)
+   label(row,UDim2.fromOffset(10,10+titleHeight+targetHeight),UDim2.new(1,-20,0,effectHeight),effect,16,palette.ink)
+   y+=rowHeight+8
   end
  end
 end

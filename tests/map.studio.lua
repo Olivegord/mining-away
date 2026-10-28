@@ -1,19 +1,34 @@
 -- Execute on a real Studio SERVER after Play. Tests the actual assembled solids,
 -- not the Lua API double. Keep the return value as evidence; no place is saved.
 local root=assert(workspace:FindFirstChild('MiningAway'),'Start Mining Away first')
-local parts={}
-for _,p in ipairs(root:GetDescendants()) do
- if p:IsA('BasePart') and p.CanCollide then table.insert(parts,p) end
+-- Scan every static collidable world part, not just MiningAway.Map. Original
+-- preserved assets may live directly under Workspace and still obstruct routes.
+-- Skip player characters and dynamic gameplay collections to keep this a map
+-- geometry probe; real two-client behavior remains a separate test.
+local previous=workspace:FindFirstChild('MapBodyProbe');if previous then previous:Destroy() end
+local Players=game:GetService('Players')
+local characterRoots={};for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(characterRoots,player.Character) end end
+local dynamic={root:FindFirstChild('Drones'),root:FindFirstChild('Resources'),root:FindFirstChild('Turrets')}
+local function transient(part)
+ for _,character in ipairs(characterRoots) do if part:IsDescendantOf(character) then return true end end
+ for _,folder in pairs(dynamic) do if folder and part:IsDescendantOf(folder) then return true end end
+ local model=part:FindFirstAncestorOfClass('Model')
+ if model and model:FindFirstChildOfClass('Humanoid') then return true end
+ return false
 end
-local base=workspace:FindFirstChild('Baseplate');if base then table.insert(parts,base) end
+local parts={};local externalParts=0
+for _,part in ipairs(workspace:GetDescendants()) do
+ if part:IsA('BasePart') and part.CanCollide and not transient(part) then
+  table.insert(parts,part);if not part:IsDescendantOf(root) then externalParts+=1 end
+ end
+end
 table.insert(parts,workspace.Terrain)
 local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances=parts
 -- Floor rays handle ramps. Exclude walk surfaces from the upright body box:
 -- a box on a pitched road otherwise reports the uphill floor as a torso obstacle.
 local bodyParts={}
 for _,p in ipairs(parts) do if not p:GetAttribute('WalkRoute') then table.insert(bodyParts,p) end end
-local overlap=OverlapParams.new();overlap.FilterType=Enum.RaycastFilterType.Include;overlap.FilterDescendantsInstances=bodyParts
-local previous=workspace:FindFirstChild('MapBodyProbe');if previous then previous:Destroy() end
+local overlap=OverlapParams.new();overlap.FilterType=Enum.RaycastFilterType.Include;overlap.FilterDescendantsInstances=bodyParts;overlap.RespectCanCollide=true
 local probe=Instance.new('Part');probe.Name='MapBodyProbe';probe.Anchored=true;probe.CanCollide=false;probe.CanQuery=false;probe.CanTouch=false;probe.Transparency=1;probe.Size=Vector3.new(1.8,4.8,1.8);probe.Parent=workspace
 local issues={};local samples=0;local routeCount=0
 for _,route in ipairs(root.Map.WindingRoutes:GetChildren()) do
@@ -37,4 +52,4 @@ for _,route in ipairs(root.Map.WindingRoutes:GetChildren()) do
  end
 end
 probe:Destroy()
-return game:GetService('HttpService'):JSONEncode({kind='real Studio floor rays and exact avatar-volume overlap probes, not humanoid or multiplayer playtest',samples=samples,routes=routeCount,issues=issues})
+return game:GetService('HttpService'):JSONEncode({kind='real Studio floor rays and exact avatar-volume overlap probes, not humanoid or multiplayer playtest',samples=samples,routes=routeCount,externalCollidableParts=externalParts,issues=issues})

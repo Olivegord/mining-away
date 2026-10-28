@@ -83,6 +83,18 @@ return function(_Interface,_CardView,options)
    check(inside(control,sheet),name..' action outside offer sheet')
   end
  end
+ if mode=='fleet' then
+  local roster=body:FindFirstChild('FleetRoster');local selected=body:FindFirstChild('SelectDrone',true)
+  check(roster~=nil and selected~=nil,'compact roster or selected-drone action missing')
+  if selected then check(selected.AbsoluteSize.X>=44 and selected.AbsoluteSize.Y>=44 and inside(selected,root),'select action outside safe content or under 44px') end
+  if roster then
+   local focused=0
+   for _,member in ipairs(roster:GetChildren()) do if member:IsA('TextButton') and member:GetAttribute('Focused') then
+    focused+=1;check(member.AbsoluteSize.X>=44 and member.AbsoluteSize.Y>=44,'focused drone target under 44px');check(inside(member,roster),'focused drone is not visible in roster')
+   end end
+   check(focused==1,'fleet must show exactly one focused drone')
+  end
+ end
  if mode=='offer' then
   local detail=sheet:FindFirstChild('FocusedCardDetail',true)
   check(detail~=nil and inside(detail,root),'focused card detail missing or offscreen')

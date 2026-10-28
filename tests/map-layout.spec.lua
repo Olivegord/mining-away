@@ -126,6 +126,62 @@ check('solid trail-earth footprints avoid pedestrian bands on all routes',functi
  end end
  print('map worst modeled support-to-slab low-edge gap '..tostring(worstGap)..' studs')
 end)
+check('slope-fitting support caps contact each road while clearing other pedestrian bands',function()
+ local caps={}
+ for _,r in ipairs(plan.routes) do for i=1,#r.samples-1 do
+  local a,b=r.samples[i],r.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local run=math.sqrt(dx*dx+dz*dz)
+  local count=math.ceil(run/3)
+  for n=1,count do
+   local c=Layout.supportCap(a,b,count,n,Layout.supportTrim(r.name,i))
+   if c.base>.3 and c.rise>=.05 then
+    c.width=r.width-.3;c.route=r.name;table.insert(caps,c)
+    for _,offset in ipairs({-.45,0,.45}) do
+     local along=offset*c.length;local progress=along/c.length+.5
+     if not c.highTowardB then progress=1-progress end
+     local capHeight=c.base+c.rise*progress
+     local roadHeight=c.center[2]+(b[2]-a[2])/run*along
+     local underside=roadHeight-.14*math.sqrt(1+((b[2]-a[2])/run)^2)
+     local gap=underside-capHeight
+     assert(gap>=-.05 and gap<.3,r.name..' slope cap misses slab: '..tostring(gap))
+    end
+   end
+  end
+ end end
+ assert(#caps>0 and #caps<500,'unexpected cap population')
+ for _,r in ipairs(plan.routes) do for i=1,#r.samples-1 do
+  local a,b=r.samples[i],r.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)
+  for n=0,math.ceil(len*8) do for _,side in ipairs({-r.width*.25,-2,0,2,r.width*.25}) do
+   local t=n/math.ceil(len*8);local x=a[1]+dx*t-dz/len*side;local z=a[3]+dz*t+dx/len*side;local y=a[2]+(b[2]-a[2])*t
+   for _,c in ipairs(caps) do
+    local rx,rz=x-c.center[1],z-c.center[3];local along=rx*c.ux+rz*c.uz;local lateral=math.abs(rx*c.uz-rz*c.ux)
+    if math.abs(along)<=c.length/2+1 and lateral<=c.width/2+1 then
+     local u=math.clamp(along/c.length+.5,0,1);if not c.highTowardB then u=1-u end
+     local height=c.base+c.rise*u
+     -- Native floor rays sample within the actual footprint with an unchanged
+     -- .8 limit; the body probe begins 1 stud above route center height and
+     -- is checked conservatively for a full extra stud around the footprint.
+     if math.abs(along)<=c.length/2 and lateral<=c.width/2 then
+      assert(height<y+.8,r.name..' cap raises sampled floor')
+     end
+     assert(height<y+1,r.name..' cap obstructs pedestrian body')
+    end
+   end
+  end end
+ end end
+end)
+check('Ruby overlook native collision location clears its minimally trimmed support cap',function()
+ local route;for _,r in ipairs(plan.routes) do if r.name=='Ruby overlook' then route=r;break end end
+ assert(route);local a,b=route.samples[6],route.samples[7]
+ local len=math.sqrt((b[1]-a[1])^2+(b[3]-a[3])^2);local count=math.ceil(len/3)
+ assert(count==1 and Layout.supportTrim(route.name,6)==.19)
+ local c=Layout.supportCap(a,b,count,1,Layout.supportTrim(route.name,6))
+ local x,y,z=-156.7444,19.542339,136.550415
+ local rx,rz=x-c.center[1],z-c.center[3];local along=rx*c.ux+rz*c.uz
+ local margin=.9*(math.abs(c.ux)+math.abs(c.uz))
+ local u=c.highTowardB and math.clamp((along+margin)/c.length+.5,0,1) or 1-math.clamp((along-margin)/c.length+.5,0,1)
+ assert(c.base+c.rise*u<y+1,'trimmed cap reaches reported avatar body')
+ assert(Layout.supportTrim(route.name,5)==0 and Layout.supportTrim('Grove loop',6)==0)
+end)
 check('reported Grove and Fern failures cannot be raised by nearby joint supports',function()
  for _,case in ipairs({{name='Grove loop',x=-63.275322,z=114.320717,segment=22},
                        {name='Fern stair',x=53.873516,z=101.772247,segment=15}}) do
@@ -245,5 +301,29 @@ check('every generated tree has a grounded level root pad across cell borders',f
    assert(height<=top+1e-6 and height>=bottom-1e-6,'unsupported tree footing')
   end end
  end
+end)
+check('depot miters follow their link and first road chord',function()
+ local home={-56,.5,-11};local count=0
+ for _,r in ipairs(plan.routes) do
+  local a,b=Layout.depotSeam(r,home)
+  if a then
+   count+=1;local linkA,linkB=Layout.depotLink(r,home)
+   local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)
+   assert(len>.1 and len<6.5,'depot seam must stay short')
+   local ix,iz=linkB[1]-linkA[1],linkB[3]-linkA[3];local ox,oz=r.samples[2][1]-linkB[1],r.samples[2][3]-linkB[3]
+   local il=math.sqrt(ix*ix+iz*iz);local ol=math.sqrt(ox*ox+oz*oz);local cosine=math.clamp((ix*ox+iz*oz)/(il*ol),-.95,1)
+   local need=r.width/2*math.sqrt((1-cosine)/(1+cosine))
+   local approach=math.sqrt((a[1]-linkB[1])^2+(a[3]-linkB[3])^2)
+   assert(approach+.175>=need,'miter too short for outside turn')
+   for _,t in ipairs({0,.25,.5,.75,1}) do for _,side in ipairs({-.45,0,.45}) do
+    local x=a[1]+dx*t-dz/len*r.width*side;local z=a[3]+dz*t+dx/len*r.width*side
+    local y=a[2]+(b[2]-a[2])*t
+    local d1,h1=Layout.distance(x,z,linkA,linkB);local d2,h2=Layout.distance(x,z,r.samples[1],r.samples[2])
+    if d1<=r.width/2 then assert(y-h1<.5,'miter above depot approach') end
+    if d2<=r.width/2 then assert(y-h2<.5,'miter above road approach') end
+   end end
+  end
+ end
+ assert(count==4,'all starter junctions need a miter')
 end)
 print(checks..' deterministic map geometry checks passed; not engine walking or multiplayer evidence')

@@ -227,4 +227,19 @@ check('offer transaction receipts are tied to exact tx run and offer',function()
  rejected.status='uncertain';assert(Layout.offerReceipt(claim,rejected)=='uncertain')
  rejected.status='accepted';assert(Layout.offerReceipt(claim,rejected)=='accepted')
 end)
+check('fleet inspector limits coverage while preserving readable 44px actions',function()
+ for _,v in ipairs({{1280,720,false},{1920,1080,false},{320,568,true},{390,844,true},{667,375,true}}) do
+  local l=Layout.inspector(v[1],v[2],v[3]);inside(rect(l.panelX,l.panelY,l.panelWidth,l.panelHeight),v[1],v[2])
+  assert(l.panelWidth<=440 and l.panelHeight<=468)
+  assert(l.bodyWidth>=200,'roster or inspector is too narrow for readable actions')
+  assert(l.bodyHeight>=44,'short screen must keep an accessible viewport')
+  if v[1]>=1280 then assert(l.panelWidth*l.panelHeight<v[1]*v[2]*.25,'fleet sheet obscures the world') end
+ end
+end)
+check('fleet focus retains permanent identity when fleet is reordered or life changes',function()
+ local a={id='one',life=1};local b={id='two',life=1}
+ assert(Layout.focusFleet({a,b},'two')==b)
+ local reprinted={id='two',life=2};assert(Layout.focusFleet({reprinted,a},'two')==reprinted)
+ assert(Layout.focusFleet({a},'missing')==a);assert(Layout.focusFleet({},'missing')==nil)
+end)
 print(string.format('PASS %d responsive safe-content geometry tests (rendering and native touch controls still require Studio)',passed))

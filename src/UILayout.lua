@@ -132,6 +132,26 @@ function Layout.objectiveHeightFor(textHeight)
  return math.max(42,math.ceil(tonumber(textHeight) or 32)+10)
 end
 
+-- Compact fleet/run inspector. Keep the world visible while preserving native
+-- text and 44px interaction targets; short screens scroll within the sheet.
+function Layout.inspector(viewportWidth,viewportHeight,touch)
+ local l=Layout.calculate(viewportWidth,viewportHeight,touch)
+ local width=dimension(viewportWidth,1280);local height=dimension(viewportHeight,720)
+ l.panelWidth=math.min(440,math.max(1,width-24))
+ l.panelHeight=math.min(468,math.max(1,height-24))
+ l.panelX=(width-l.panelWidth)/2;l.panelY=math.max(12,(height-l.panelHeight)/2)
+ l.panelPadding=12;l.headerHeight=94
+ l.bodyWidth=math.max(1,l.panelWidth-24);l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-12)
+ return l
+end
+
+-- Resolve focus by permanent drone identity across reprints and reordering.
+function Layout.focusFleet(fleet,id)
+ if type(fleet)~='table' then return nil end
+ for _,drone in ipairs(fleet) do if drone.id==id then return drone end end
+ return fleet[1]
+end
+
 -- Card offers use a smaller, world-visible sheet. Other menus retain their
 -- existing larger scrolling layout. The source offer is already committed;
 -- this function changes presentation geometry only.

@@ -35,6 +35,31 @@ local function distance(x,z,a,b)
  return math.sqrt((x-px)^2+(z-pz)^2),a[2]+(b[2]-a[2])*t
 end
 L.distance=distance
+-- Slope-fitting cap for one yaw-only support. Its bottom is level with the
+-- column, and its top rises toward the high end of this road chord. The cap
+-- seats against the underside of the pitched road rather than crossing it.
+function L.supportCap(a: any,b: any,count: number,index: number,trim: number?): any
+ local dx,dz=b[1]-a[1],b[3]-a[3]
+ local run=math.sqrt(dx*dx+dz*dz)
+ local t=(index-.5)/count
+ local center={a[1]+dx*t,a[2]+(b[2]-a[2])*t,a[3]+dz*t}
+ local length=run/count+.08
+ local grade=math.abs(b[2]-a[2])/run
+ -- The underside of the pitched .28-stud trail is .14/cos(angle)
+ -- below its center plane at any vertical ray. Seat the wedge's low end
+ -- 0.002 studs into that underside to remove the visible air gap.
+ local top=center[2]-grade*length/2-.14*math.sqrt(1+grade*grade)+.002
+ -- At the one native-reported body overlap, lower the whole support a tiny
+ -- amount as well as trimming the cap. All other supports stay flush.
+ if trim and trim>0 then top-=.03 end
+ -- The native avatar-volume probe found a tiny overlap at this one bend.
+ -- Trim only that cap's high end; its low end stays seated on the column.
+ local rise=math.max(0,grade*length-(trim or 0))
+ return {center=center,length=length,base=top,rise=rise,highTowardB=b[2]>a[2],ux=dx/run,uz=dz/run}
+end
+function L.supportTrim(routeName: string,index: number): number
+ return routeName=='Ruby overlook' and index==6 and .19 or 0
+end
 -- A horizontal joint cap must fit BELOW every walking lane it overlaps. A
 -- full-radius cylinder at the bend's center height becomes a vertical wall
 -- across a descending lane. Include an avatar margin beyond the cap radius,
@@ -81,11 +106,39 @@ function L.depotLink(route,home)
  if distance<=21 then return nil end
  return {home[1]+dx/distance*20,b[2],home[3]+dz/distance*20},b
 end
+-- A narrow pitched bridge at a link-to-road bend closes the exterior miter
+-- without a broad raised disc across the sloped walking lane.
+function L.depotSeam(route,home)
+ local a,b=L.depotLink(route,home)
+ local c=route.samples[2]
+ if not a or not c then return nil end
+ local ix,iz=b[1]-a[1],b[3]-a[3]
+ local ox,oz=c[1]-b[1],c[3]-b[3]
+ local il=math.sqrt(ix*ix+iz*iz);local ol=math.sqrt(ox*ox+oz*oz)
+ if il<1e-6 or ol<1e-6 then return nil end
+ local cosine=math.clamp((ix*ox+iz*oz)/(il*ol),-.95,1)
+ local setback=math.min(3,math.max(1.2,(route.width/2)*math.sqrt((1-cosine)/(1+cosine))+.25))
+ local function along(from,to,dist)
+  local dx,dz=to[1]-from[1],to[3]-from[3]
+  local len=math.sqrt(dx*dx+dz*dz)
+  local t=math.min(1,dist/math.max(len,1e-6))
+  return {from[1]+dx*t,from[2]+(to[2]-from[2])*t-.12,from[3]+dz*t}
+ end
+ local remaining=setback;local previous=b;local endPoint
+ for i=2,#route.samples do
+  local nextPoint=route.samples[i]
+  local dx,dz=nextPoint[1]-previous[1],nextPoint[3]-previous[3]
+  local len=math.sqrt(dx*dx+dz*dz)
+  if len>=remaining then endPoint=along(previous,nextPoint,remaining);break end
+  remaining-=len;previous=nextPoint
+ end
+ return along(b,a,setback),endPoint or {previous[1],previous[2]-.12,previous[3]}
+end
 -- Round the horizontal AND vertical bend together. Straight overlapping slabs
 -- and large flat joint discs create a raised lip; these short smooth chords do not.
-function L.rounded(route)
- local result={route.points[1]}
- local function mix(a,b,t) return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t} end
+function L.rounded(route: any): {{number}}
+ local result: {{number}}={route.points[1]}
+ local function mix(a: {number},b: {number},t: number): {number} return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t} end
  for i=2,#route.points-1 do
   local a,b,c=route.points[i-1],route.points[i],route.points[i+1]
   local la=math.sqrt((a[1]-b[1])^2+(a[3]-b[3])^2)
@@ -157,8 +210,8 @@ function L.plan(config: any,home: any): any
  end
  local step=L.Cell*L.Scale
  local radius=step*math.sqrt(2)
- local vertices={}
- local function vertex(ix,iz) return vertices[iz*(L.Columns+1)+ix+1] end
+ local vertices: {{number}}={}
+ local function vertex(ix: number,iz: number): {number} return vertices[iz*(L.Columns+1)+ix+1] end
  for iz=0,L.Rows do for ix=0,L.Columns do
   local rawX,rawZ=L.Origin[1]+ix*L.Cell,L.Origin[2]+iz*L.Cell
   local x,z=p:point(rawX,rawZ);local h=height(rawX,rawZ)+dy

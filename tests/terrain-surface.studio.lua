@@ -45,7 +45,14 @@ for _,lane in ipairs(root.Map.WindingRoutes:GetChildren()) do
     local hit=workspace:Raycast(origin,Vector3.new(0,10,0),ray);trailSupportSamples+=1
     if not hit then table.insert(issues,{kind='trail support does not meet road above',route=lane.Name,index=segment,offset=offset})
     else
-     local gap=hit.Position.Y-origin.Y;worstTrailSupportGap=math.max(worstTrailSupportGap,gap)
+     -- Check the actual solid support assembly (column plus its optional
+     -- slope-fitting wedge) from the road underside. A cap is not accepted
+     -- merely because it exists: every native ray must hit real geometry.
+     local supports=RaycastParams.new();supports.FilterType=Enum.RaycastFilterType.Include
+     local cap=support:FindFirstChild('TrailEarthCap')
+     supports.FilterDescendantsInstances=cap and {support,cap} or {support}
+     local contact=workspace:Raycast(hit.Position+Vector3.new(0,.02,0),Vector3.new(0,-10,0),supports)
+     local gap=contact and (hit.Position.Y-contact.Position.Y) or math.huge;worstTrailSupportGap=math.max(worstTrailSupportGap,gap)
      if gap>.3 then table.insert(issues,{kind='trail support separated from road',route=lane.Name,index=segment,offset=offset,gap=gap}) end
     end
    end

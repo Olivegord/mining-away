@@ -20,7 +20,8 @@ def module_bundle(names):
  s='-- Mining Away • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
-  s+='local '+name+' = (function()\n'+code+'\nend)()\n'
+  boundary=': any' if name=='World' else ''
+  s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
  return module_bundle(('Config','Feel','Rules','Profile','Cards','Persistence','MapLayout','HarborLighting','World'))+(ROOT/'src/Server.lua').read_text()

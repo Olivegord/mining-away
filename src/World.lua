@@ -90,7 +90,7 @@ function W.setBeam(b,on,pos)
  for i,v in ipairs(b.beams) do v.Enabled=on;v.Width0=on and (i==1 and .3 or .65) or 0;v.Width1=v.Width0 end
 end
 local P={
- ground=Color3.fromRGB(84,154,115),dust=Color3.fromRGB(210,216,183),stone=Color3.fromRGB(65,103,106),
+ ground=Color3.fromRGB(84,154,115),dust=Color3.fromRGB(187,184,148),stone=Color3.fromRGB(79,98,91),
  ledge=Color3.fromRGB(186,207,191),metal=Color3.fromRGB(30,65,73),edge=Color3.fromRGB(117,171,162),
  ivory=Color3.fromRGB(245,237,207),ink=Color3.fromRGB(22,49,60),mint=Color3.fromRGB(100,229,201),
  amber=Color3.fromRGB(245,182,96),blue=Color3.fromRGB(118,201,228),coral=Color3.fromRGB(226,129,145),
@@ -197,13 +197,13 @@ local function tree(parent,x,z,h,color,ground,yaw,foundationBottom)
  localPart('Crown',Vector3.new(-1,h+2.1,.3),Vector3.new(h*.29,1.5,h*.3),color:Lerp(P.ivory,.27),math.rad(-5))
  return m
 end
-local function stone(parent,at,size,tilt,color,name)
+local function stone(parent: any,at: any,size: any,tilt: {number},color: any,name: any)
  return solid(block(parent,name or 'WeatheredStone',at,size,color or P.stone,Enum.Material.SmoothPlastic,{math.rad(tilt[1] or 0),math.rad(tilt[2] or 0),math.rad(tilt[3] or 0)}))
 end
-local function surveyGate(parent,at,color,plan)
+local function surveyGate(parent: any,at: any,color: any,plan: any)
  local m=Instance.new('Model');m.Name='ExpeditionGate';m.Parent=parent
- local surfaces={}
- local gateY=at.Y
+ local surfaces: {[number]: {number}}={}
+ local gateY: number=at.Y
  for _,s in ipairs({-1,1}) do
   local top,bottom=plan:foundation(at.X+s*8,at.Z,1.8);surfaces[s]={top,bottom};gateY=math.max(gateY,top)
  end
@@ -219,35 +219,28 @@ local function cleanSurface(part,archive)
  part.MaterialVariant='';part.Reflectance=0;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  for _,v in ipairs(part:GetChildren()) do if v:IsA('Texture') or v:IsA('Decal') then v.Parent=archive end end
 end
-function W.initialize(): any
- local cfg=Config
- local rs=game:GetService('ReplicatedStorage');local storage=game:GetService('ServerStorage')
- local root=Instance.new('Folder');root.Name='MiningAway';root.Parent=workspace
- local map=Instance.new('Folder');map.Name='Map';map.Parent=root
- for _,name in ipairs({'Fields','Drones','Resources','Turrets'}) do local f=Instance.new('Folder');f.Name=name;f.Parent=root end
- local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
- local home=spawn and spawn.Position or Vector3.new(-56,.5,-11)
- local plan=MapLayout.plan(cfg.Fields,{home.X,home.Y,home.Z})
- local archive=Instance.new('Folder');archive.Name='MiningAwayOriginalReference';archive.Parent=storage
- for _,name in ipairs({'FaceTest','Test','sphere','Mesh','Crystals','MiningEffect','Beam','Cat','potato'}) do
-  local original=workspace:FindFirstChild(name);if original then original.Parent=archive end
+local function fernTreeDestination(parts: any,anchor: any,scale: number,plan: any,model: any): (any, any)
+ if not anchor or #parts~=2 then return anchor and anchor.X,anchor and anchor.Z end
+ local match=false
+ for _,part in ipairs(parts) do
+  local expected=anchor+(part.Position-anchor)*scale;local size=part.Size*scale
+  if math.abs(expected.X-(56.4000168+plan.dx))<.15 and math.abs(expected.Z-(104.3143997+plan.dz))<.15
+   and math.abs(size.X-4.7368422)<.08 and math.abs(size.Y-7.1052628)<.08 and math.abs(size.Z-5.210526)<.08 then match=true end
  end
- -- These unlabelled top-level blocks are the old off-route construction experiment.
- -- Preserve their exact objects beside other reference props rather than leaving
- -- grey stairs and a giant beige slab in the composed landscape.
- for _,v in ipairs(workspace:GetChildren()) do
-  if v:IsA('BasePart') and v.Name=='Part' then v.Parent=archive end
- end
- local construct=workspace:FindFirstChild('construct')
- assert(construct and construct:IsA('Model'),'The supplied source must retain Workspace.construct')
- local turretTemplate=construct:Clone();turretTemplate.Name='OriginalConstructTemplate';turretTemplate.Parent=storage
- finishConstruct(construct);construct:SetAttribute('DormantLandmark',true)
- local constructX,constructZ=plan:point(62,9)
- local constructGround,constructLow=plan:foundation(constructX,constructZ,7)
- construct.PrimaryPart=construct:FindFirstChild('basepart');construct:PivotTo(CFrame.new(constructX,constructGround+.5,constructZ))
- local baseplate=workspace:FindFirstChild('Baseplate')
- if baseplate and baseplate:IsA('BasePart') then cleanSurface(baseplate,archive);baseplate.Color=Color3.fromRGB(36,63,58);baseplate.Material=Enum.Material.SmoothPlastic end
- if spawn then cleanSurface(spawn,archive);spawn.Color=P.ledge;spawn.Material=Enum.Material.Metal end
+ if not match then return anchor.X,anchor.Z end
+ -- Search deterministically near the recorded original, with a 12-stud
+ -- clearance envelope and grounded footing; preserve the whole model.
+ for distance=8,96,8 do for n=0,15 do
+  local angle=n*math.pi/8;local x,z=anchor.X+math.cos(angle)*distance,anchor.Z+math.sin(angle)*distance
+  if plan:routeClear(x,z,12) and plan:fieldClear(x,z,12) and plan:hubClear(x,z,12) then
+   local upper,lower=plan:foundation(x,z,3.2)
+   if upper-lower<=4.5 then model:SetAttribute('FernRouteRelocated',true);return x,z end
+  end
+ end end
+ warn('Original Fern tree could not be safely relocated; route may remain blocked')
+ return anchor.X,anchor.Z
+end
+local function preserveOriginalTrees(plan: any,archive: any)
  -- Retain the author's simple parts-built trees, now under the same restrained palette.
  for _,model in ipairs(workspace:GetChildren()) do
   if model:IsA('Model') and model.Name=='Model' then
@@ -270,15 +263,16 @@ function W.initialize(): any
    -- arbitrary first child that might instead be a remote canopy part.
    if trunk then anchor=trunk.Position end
    local scale=math.min(1,18/math.max(1,high-low))
+   local destX,destZ=fernTreeDestination(parts,anchor,scale,plan,model)
    local originalGround,footBottom=0,0
-   if anchor then originalGround,footBottom=plan:foundation(anchor.X,anchor.Z,3.2) end
+   if anchor then originalGround,footBottom=plan:foundation(destX,destZ,3.2) end
    if anchor then for _,v in ipairs(parts) do
     local p=v.Position;v.Size=v.Size*scale
-    v.CFrame=CFrame.new(anchor.X+(p.X-anchor.X)*scale,originalGround+(p.Y-low)*scale,anchor.Z+(p.Z-anchor.Z)*scale)*v.CFrame.Rotation
+    v.CFrame=CFrame.new(destX+(p.X-anchor.X)*scale,originalGround+(p.Y-low)*scale,destZ+(p.Z-anchor.Z)*scale)*v.CFrame.Rotation
    end end
    if anchor then
     local depth=math.max(.2,originalGround-footBottom+.2)
-    local footing=solid(block(model,'OriginalTreeFooting',Vector3.new(anchor.X,originalGround-depth/2,anchor.Z),Vector3.new(6.4,depth,6.4),P.ledge))
+    local footing=solid(block(model,'OriginalTreeFooting',Vector3.new(destX,originalGround-depth/2,destZ),Vector3.new(6.4,depth,6.4),P.ledge))
     footing:SetAttribute('GroundedBase',true);footing:SetAttribute('FootTop',originalGround)
    end
    for _,v in ipairs(model:GetDescendants()) do
@@ -286,61 +280,8 @@ function W.initialize(): any
    end
   end
  end
- HarborLighting.apply()
- local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),P.ivory:Lerp(P.ledge,.2),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
- -- Flush panel joints and painted corner brackets make one deliberate working yard.
- for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end
- for _,z in ipairs({-8,0,8}) do block(map,'ApronJoint',Vector3.new(home.X,.216,home.Z+z),Vector3.new(38,.02,.1),P.stone) end
- for _,dx in ipairs({-19,19}) do
-  for _,dz in ipairs({-16,16}) do
-   block(map,'YardPaint',Vector3.new(home.X+dx,.235,home.Z+dz*.86),Vector3.new(.18,.025,4),P.ivory)
-   block(map,'YardPaint',Vector3.new(home.X+dx*.9,.235,home.Z+dz),Vector3.new(4,.025,.18),P.ivory)
-  end
- end
- -- Rear service frame leaves the original follow ring and the route ahead open.
- for _,dx in ipairs({-17,17}) do
-  block(map,'DepotPillar',Vector3.new(home.X+dx,5.8,home.Z-13),Vector3.new(.8,11.6,.8),P.metal,Enum.Material.Metal)
-  local lamp=block(map,'DepotLamp',Vector3.new(home.X+dx,10.8,home.Z-12.5),Vector3.new(1.4,.4,.4),P.ivory,Enum.Material.Neon);light(lamp,P.ivory,22,.7)
- end
- block(map,'DepotLintel',Vector3.new(home.X,11.3,home.Z-13),Vector3.new(35,.8,1.2),P.edge,Enum.Material.Metal)
- block(map,'DepotCanopy',Vector3.new(home.X,12,home.Z-8),Vector3.new(38,.65,13),P.ivory,Enum.Material.SmoothPlastic)
- block(map,'CanopyInset',Vector3.new(home.X,11.64,home.Z-8),Vector3.new(34,.1,10),P.metal,Enum.Material.Metal)
- block(map,'DepotSunstripe',Vector3.new(home.X,12.36,home.Z-4),Vector3.new(31,.06,1.6),P.amber,Enum.Material.SmoothPlastic)
- -- The retrieval beacon is a single memorable skyline silhouette and a
- -- navigation landmark from every field. Its two legs connect to the depot,
- -- rather than floating a glowing sign above the scene.
- local tower=Instance.new('Model');tower.Name='RetrievalBeacon';tower.Parent=map
- for _,x in ipairs({-2,2}) do
-  local column=block(tower,'BeaconLeg',Vector3.new(home.X+17+x,24,home.Z-13),Vector3.new(.8,24,.8),P.metal,Enum.Material.Metal)
-  column.TopSurface=Enum.SurfaceType.Studs
- end
- for _,y in ipairs({15,21,27,33}) do
-  block(tower,'BeaconRung',Vector3.new(home.X+17,y,home.Z-13),Vector3.new(4.8,.5,.8),P.edge,Enum.Material.Metal)
- end
- block(tower,'BeaconCrossbar',Vector3.new(home.X+17,36.5,home.Z-13),Vector3.new(12,1.2,2),P.ivory)
- block(tower,'BeaconCounterweight',Vector3.new(home.X+13,35.3,home.Z-13),Vector3.new(2.2,1.4,2.2),P.amber)
- local beacon=block(tower,'BeaconLens',Vector3.new(home.X+21,35.3,home.Z-13),Vector3.new(2.2,1.4,2.2),P.mint,Enum.Material.Neon)
- light(beacon,P.mint,10,.35)
- local header=block(map,'DepotHeader',Vector3.new(home.X,10.7,home.Z-13.65),Vector3.new(12,1.9,.18),P.ink)
- textFace(header,'MINING AWAY','EXTRACTION DEPOT  /  01',P.ivory)
- local printer=station(map,'Printer',home+Vector3.new(12,-.5,-2),P.mint,'Free reprint','Printer')
- local packs=station(map,'PackStation',home+Vector3.new(-12,-.5,-2),P.blue,'Open pack','Pack')
- local prestige=station(map,'PrestigeStation',home+Vector3.new(0,-.5,-12),P.amber,'Review prestige','Prestige')
- local converter=workspace:FindFirstChild('Converter')
- if converter and converter:IsA('BasePart') then
-  cleanSurface(converter,archive);converter.Color=P.metal;converter.Material=Enum.Material.Metal;converter:SetAttribute('Interaction','Sell')
-  for _,v in ipairs(converter:GetChildren()) do if v:IsA('ProximityPrompt') then v:Destroy() end end
-  local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Sell cargo';prompt.ObjectText='CONVERTER';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=converter
-  local p=converter.Position;local half=converter.Size/2
-  block(map,'ConverterCollar',Vector3.new(p.X,p.Y+half.Y-.3,p.Z),Vector3.new(converter.Size.X+1,.6,converter.Size.Z+1),P.edge,Enum.Material.Metal)
-  for _,dx in ipairs({-.34,.34}) do
-   block(map,'ConverterRib',Vector3.new(p.X+converter.Size.X*dx,p.Y,p.Z-half.Z-.15),Vector3.new(.45,converter.Size.Y*.85,.35),P.edge,Enum.Material.Metal)
-  end
-  block(map,'ConverterIntake',Vector3.new(p.X,p.Y,p.Z-half.Z-.3),Vector3.new(converter.Size.X*.5,converter.Size.Y*.42,.28),P.ink)
-  block(map,'ConverterLight',Vector3.new(p.X,p.Y+half.Y*.42,p.Z-half.Z-.48),Vector3.new(converter.Size.X*.4,.18,.08),P.mint,Enum.Material.Neon)
-  local name=block(map,'ConverterName',Vector3.new(p.X,p.Y+half.Y+1,p.Z-half.Z-.2),Vector3.new(7,1.6,.22),P.ink);textFace(name,'CONVERTER','SELL YOUR CARGO',P.mint)
-  block(map,'OreChute',Vector3.new(p.X,p.Y-half.Y+.6,p.Z-half.Z-2),Vector3.new(converter.Size.X*.7,1.2,3.5),P.ledge,Enum.Material.Metal)
- end
+end
+local function createFields(cfg: any,home: any,root: any,archive: any): any
  local fields={};local originals=workspace:FindFirstChild('Patches')
  for id,field in ipairs(cfg.Fields) do
   local model=Instance.new('Model');model.Name=field.Key;model:SetAttribute('FieldId',id);model:SetAttribute('Tier',id);model:SetAttribute('DisplayName',field.Name);model.Parent=root.Fields
@@ -385,42 +326,9 @@ function W.initialize(): any
   end end
   table.insert(fields,{id=id,cfg=field,center=part.Position,part=part,model=model})
  end
- -- Retro landscape: square solid parts with studded top surfaces. The old
- -- faceted slopes and native terrain meadow remain in source as reference but
- -- are intentionally not created in this authored parts-built scene.
- local foliage={Color3.fromRGB(81,174,104),Color3.fromRGB(173,57,49),Color3.fromRGB(64,150,185),Color3.fromRGB(157,103,192),Color3.fromRGB(36,157,110)}
- local terrain=Instance.new('Model');terrain.Name='ConnectedCliffs';terrain.Parent=map
- local batch=Instance.new('Model');batch.Name='PartTerrace';local terrainCells=0
- for _,cell in ipairs(plan.cells) do
-  local x=(cell.a[1]+cell.c[1])/2;local z=(cell.a[3]+cell.c[3])/2
-  local width=cell.b[1]-cell.a[1];local depth=cell.d[3]-cell.a[3]
-  if cell.h>.05 then
-   local earth=solid(block(batch,'TerraceBody',Vector3.new(x,cell.h/2,z),Vector3.new(width,cell.h,depth),P.stone))
-   earth:SetAttribute('LandscapeSurface',true)
-  end
-  local green=Color3.fromRGB(112,162,113):Lerp(Color3.fromRGB(59,108,82),math.min(cell.h/120,.20))
-  local cap=solid(block(batch,'StuddedGround',Vector3.new(x,cell.h,z),Vector3.new(width,.08,depth),green))
-  cap.TopSurface=Enum.SurfaceType.Studs;cap:SetAttribute('LandscapeSurface',true)
-  terrainCells+=1
-  if terrainCells%40==0 then batch.Parent=terrain;task.wait();batch=Instance.new('Model');batch.Name='PartTerrace' end
- end
- batch.Parent=terrain
- for _,r in ipairs(plan.rocks) do
-  local radius=math.sqrt(r.w*r.w+r.d*r.d)/2+1
-  local ground,bottom=plan:foundation(r.x,r.z,radius)
-  -- Restrained buttresses only where an actual short supporting footing fits.
-  -- Avoid hiding a floating rock with a giant improvised pedestal.
-  if ground-bottom<=5 then
-   local m=Instance.new('Model');m.Name='TerracedButtress';m.Parent=terrain
-   local tint=r.biome==2 and Color3.fromRGB(112,76,70) or P.stone
-   local depth=math.max(.2,ground-bottom+.2)
-   solid(block(m,'ButtressFooting',Vector3.new(r.x,ground-depth/2,r.z),Vector3.new(r.w+2,depth,r.d+2),tint,Enum.Material.SmoothPlastic,{0,math.rad(r.yaw),0}))
-   stone(m,Vector3.new(r.x,ground+r.h*.4,r.z),Vector3.new(r.w,r.h*.8,r.d),{0,r.yaw,0},tint,'CliffButtress')
-   stone(m,Vector3.new(r.x-2,ground+r.h*.75,r.z+1),Vector3.new(r.w*.72,r.h*.35,r.d*.8),{0,r.yaw+17,0},tint:Lerp(P.ledge,.18),'BrokenCrown')
-  end
- end
- root:SetAttribute('TerrainStyle','Studded part terraces')
- root:SetAttribute('GrassRenderer','None - parts-built retro landscape')
+ return fields
+end
+local function createRoutes(map: any,plan: any,home: any)
  local function v(a) return Vector3.new(unpack(a)) end
  local routes=Instance.new('Model');routes.Name='WindingRoutes';routes.Parent=map
  for _,r in ipairs(plan.routes) do
@@ -431,12 +339,23 @@ function W.initialize(): any
    -- Close the underside with contiguous earth supports, never a floating ramp.
    local flat=Vector3.new(b.X-a.X,0,b.Z-a.Z);local count=math.ceil(flat.Magnitude/3)
    for n=1,count do
-    local t=(n-.5)/count;local at=a:Lerp(b,t)
-    local top=at.Y-math.abs(b.Y-a.Y)/(count*2)-.35
+    local capPlan=MapLayout.supportCap(r.samples[i],r.samples[i+1],count,n,MapLayout.supportTrim(r.name,i))
+    local at=v(capPlan.center);local top=capPlan.base
     if top>.3 then
-     local fill=solid(block(lane,'TrailEarth',Vector3.new(at.X,top/2,at.Z),Vector3.new(r.width-.3,top,flat.Magnitude/count+.08),P.stone))
+     local fill=solid(block(lane,'TrailEarth',Vector3.new(at.X,top/2,at.Z),Vector3.new(r.width-.3,top,capPlan.length),P.stone))
      fill.CFrame=CFrame.lookAt(fill.Position,fill.Position+flat)
      fill:SetAttribute('RouteSegment',i)
+     -- A single low wedge sits on the column and rises with the road. The
+     -- wedge is bounded to this support footprint, rather than pitching the
+     -- whole tall column into nearby lanes.
+     if capPlan.rise>=.05 then
+      local cap=Instance.new('WedgePart');cap.Name='TrailEarthCap';cap.Anchored=true
+      cap.CanCollide=true;cap.CanQuery=true;cap.CanTouch=false;cap.CastShadow=false
+      cap.Size=Vector3.new(r.width-.3,capPlan.rise,capPlan.length);cap.Color=P.stone;cap.Material=Enum.Material.SmoothPlastic
+      local center=Vector3.new(at.X,top+capPlan.rise/2,at.Z)
+      local downhill=capPlan.highTowardB and -flat or flat
+      cap.CFrame=CFrame.lookAt(center,center+downhill);cap.Parent=fill
+     end
     end
    end
   end
@@ -465,8 +384,48 @@ function W.initialize(): any
    local lane=Instance.new('Model');lane.Name='Depot link - '..r.name;lane.Parent=routes
    local trail=path(lane,a,b,r.width);trail:SetAttribute('RouteSegment',1);trail:SetAttribute('RouteName',lane.Name)
    trail:SetAttribute('RouteStart',a);trail:SetAttribute('RouteEnd',b);trail:SetAttribute('RouteWidth',r.width)
+   -- Bridge the narrow outside miter at the link/first-chord turn. The short
+   -- pitched slab follows both approaches and sits below their walking tops.
+   local left,right=MapLayout.depotSeam(r,{home.X,home.Y,home.Z})
+   if left then local seam=path(lane,v(left),v(right),r.width);seam.Name='DepotMiter' end
   end
  end
+end
+local function createTerraces(map: any,plan: any,districtStone: any,root: any)
+ local terrain=Instance.new('Model');terrain.Name='ConnectedCliffs';terrain.Parent=map
+ local batch=Instance.new('Model');batch.Name='PartTerrace';local terrainCells=0
+ for _,cell in ipairs(plan.cells) do
+  local x=(cell.a[1]+cell.c[1])/2;local z=(cell.a[3]+cell.c[3])/2
+  local width=cell.b[1]-cell.a[1];local depth=cell.d[3]-cell.a[3]
+  if cell.h>.05 then
+   local earth=solid(block(batch,'TerraceBody',Vector3.new(x,cell.h/2,z),Vector3.new(width,cell.h,depth),districtStone[cell.biome] or P.stone))
+   earth:SetAttribute('LandscapeSurface',true)
+  end
+  local green=Color3.fromRGB(112,162,113):Lerp(Color3.fromRGB(59,108,82),math.min(cell.h/120,.20))
+  local cap=solid(block(batch,'StuddedGround',Vector3.new(x,cell.h,z),Vector3.new(width,.08,depth),green))
+  cap.TopSurface=Enum.SurfaceType.Studs;cap:SetAttribute('LandscapeSurface',true)
+  terrainCells+=1
+  if terrainCells%40==0 then batch.Parent=terrain;task.wait();batch=Instance.new('Model');batch.Name='PartTerrace' end
+ end
+ batch.Parent=terrain
+ for _,r in ipairs(plan.rocks) do
+  local radius=math.sqrt(r.w*r.w+r.d*r.d)/2+1
+  local ground,bottom=plan:foundation(r.x,r.z,radius)
+  -- Restrained buttresses only where an actual short supporting footing fits.
+  -- Avoid hiding a floating rock with a giant improvised pedestal.
+  if ground-bottom<=5 then
+   local m=Instance.new('Model');m.Name='TerracedButtress';m.Parent=terrain
+   local tint=r.biome==2 and Color3.fromRGB(112,76,70) or P.stone
+   local depth=math.max(.2,ground-bottom+.2)
+   solid(block(m,'ButtressFooting',Vector3.new(r.x,ground-depth/2,r.z),Vector3.new(r.w+2,depth,r.d+2),tint,Enum.Material.SmoothPlastic,{0,math.rad(tonumber(r.yaw) or 0),0}))
+   stone(m,Vector3.new(r.x,ground+r.h*.4,r.z),Vector3.new(r.w,r.h*.8,r.d),{0,r.yaw,0},tint,'CliffButtress')
+   stone(m,Vector3.new(r.x-2,ground+r.h*.75,r.z+1),Vector3.new(r.w*.72,r.h*.35,r.d*.8),{0,r.yaw+17,0},tint:Lerp(P.ledge,.18),'BrokenCrown')
+  end
+ end
+ root:SetAttribute('TerrainStyle','Studded part terraces')
+ root:SetAttribute('GrassRenderer','None - parts-built retro landscape')
+end
+local function createLandscapeProps(map: any,plan: any,foliage: any,constructGround: number,constructLow: number)
  -- The old mint baseplate extended unbounded past the authored landscape.
  -- Segmented low retaining walls give it a constructed edge without an
  -- enormous opaque backdrop; every wall panel starts at its actual ground.
@@ -500,8 +459,8 @@ function W.initialize(): any
   if biome then targetX,targetZ=plan:biomePoint(biome,x,z) else targetX,targetZ=plan:point(x,z) end
  end
  local function at(x,y,z) return Vector3.new(targetX+x-siteX,y+plan.dy+siteY,targetZ+z-siteZ) end
- local function groundAt(x,z) local p=at(x,0,z);return plan:surface(p.X,p.Z) end
- local function prop(name,x,y,z,sx,sy,sz,color,turn,collide)
+ local function groundAt(x: number,z: number): number local p=at(x,0,z);return plan:surface(p.X,p.Z) end
+ local function prop(name: any,x: number,y: number,z: number,sx: number,sy: number,sz: number,color: any,turn: number?,collide: boolean?)
   local p=block(props,name,at(x,y,z),Vector3.new(sx,sy,sz),color,Enum.Material.SmoothPlastic,turn and {0,math.rad(turn),0})
   if collide then solid(p) end
   return p
@@ -610,6 +569,106 @@ function W.initialize(): any
  end
  site(-24,-50)
  surveyGate(map,at(-24,groundAt(-24,-50)-plan.dy,-50),P.blue,plan)
+end
+function W.initialize(): any
+ local cfg=Config
+ local rs=game:GetService('ReplicatedStorage');local storage=game:GetService('ServerStorage')
+ local root=Instance.new('Folder');root.Name='MiningAway';root.Parent=workspace
+ local map=Instance.new('Folder');map.Name='Map';map.Parent=root
+ for _,name in ipairs({'Fields','Drones','Resources','Turrets'}) do local f=Instance.new('Folder');f.Name=name;f.Parent=root end
+ local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+ local home=spawn and spawn.Position or Vector3.new(-56,.5,-11)
+ local plan=MapLayout.plan(cfg.Fields,{home.X,home.Y,home.Z})
+ local archive=Instance.new('Folder');archive.Name='MiningAwayOriginalReference';archive.Parent=storage
+ for _,name in ipairs({'FaceTest','Test','sphere','Mesh','Crystals','MiningEffect','Beam','Cat','potato'}) do
+  local original=workspace:FindFirstChild(name);if original then original.Parent=archive end
+ end
+ -- These unlabelled top-level blocks are the old off-route construction experiment.
+ -- Preserve their exact objects beside other reference props rather than leaving
+ -- grey stairs and a giant beige slab in the composed landscape.
+ for _,v in ipairs(workspace:GetChildren()) do
+  if v:IsA('BasePart') and v.Name=='Part' then v.Parent=archive end
+ end
+ local construct=workspace:FindFirstChild('construct')
+ assert(construct and construct:IsA('Model'),'The supplied source must retain Workspace.construct')
+ local turretTemplate=construct:Clone();turretTemplate.Name='OriginalConstructTemplate';turretTemplate.Parent=storage
+ finishConstruct(construct);construct:SetAttribute('DormantLandmark',true)
+ local constructX,constructZ=plan:point(62,9)
+ local constructGround,constructLow=plan:foundation(constructX,constructZ,7)
+ construct.PrimaryPart=construct:FindFirstChild('basepart');construct:PivotTo(CFrame.new(constructX,constructGround+.5,constructZ))
+ local baseplate=workspace:FindFirstChild('Baseplate')
+ if baseplate and baseplate:IsA('BasePart') then cleanSurface(baseplate,archive);baseplate.Color=Color3.fromRGB(36,63,58);baseplate.Material=Enum.Material.SmoothPlastic end
+ if spawn then cleanSurface(spawn,archive);spawn.Color=P.ledge;spawn.Material=Enum.Material.Metal end
+ preserveOriginalTrees(plan,archive)
+ HarborLighting.apply()
+ local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),Color3.fromRGB(172,182,158),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
+ -- Flush panel joints and painted corner brackets make one deliberate working yard.
+ for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end
+ for _,z in ipairs({-8,0,8}) do block(map,'ApronJoint',Vector3.new(home.X,.216,home.Z+z),Vector3.new(38,.02,.1),P.stone) end
+ for _,dx in ipairs({-19,19}) do
+  for _,dz in ipairs({-16,16}) do
+   block(map,'YardPaint',Vector3.new(home.X+dx,.235,home.Z+dz*.86),Vector3.new(.18,.025,4),P.ivory)
+   block(map,'YardPaint',Vector3.new(home.X+dx*.9,.235,home.Z+dz),Vector3.new(4,.025,.18),P.ivory)
+  end
+ end
+ -- Rear service frame leaves the original follow ring and the route ahead open.
+ for _,dx in ipairs({-17,17}) do
+  block(map,'DepotPillar',Vector3.new(home.X+dx,5.8,home.Z-13),Vector3.new(.8,11.6,.8),P.metal,Enum.Material.Metal)
+  local lamp=block(map,'DepotLamp',Vector3.new(home.X+dx,10.8,home.Z-12.5),Vector3.new(1.4,.4,.4),P.ivory,Enum.Material.Neon);light(lamp,P.ivory,22,.7)
+ end
+ block(map,'DepotLintel',Vector3.new(home.X,11.3,home.Z-13),Vector3.new(35,.8,1.2),P.edge,Enum.Material.Metal)
+ block(map,'DepotCanopy',Vector3.new(home.X,12,home.Z-8),Vector3.new(38,.65,13),P.ivory,Enum.Material.SmoothPlastic)
+ block(map,'CanopyInset',Vector3.new(home.X,11.64,home.Z-8),Vector3.new(34,.1,10),P.metal,Enum.Material.Metal)
+ block(map,'DepotSunstripe',Vector3.new(home.X,12.36,home.Z-4),Vector3.new(31,.06,1.6),P.amber,Enum.Material.SmoothPlastic)
+ -- The retrieval beacon is a single memorable skyline silhouette and a
+ -- navigation landmark from every field. Its two legs connect to the depot,
+ -- rather than floating a glowing sign above the scene.
+ local tower=Instance.new('Model');tower.Name='RetrievalBeacon';tower.Parent=map
+ for _,x in ipairs({-2,2}) do
+  local column=block(tower,'BeaconLeg',Vector3.new(home.X+17+x,24,home.Z-13),Vector3.new(.8,24,.8),P.metal,Enum.Material.Metal)
+  column.TopSurface=Enum.SurfaceType.Studs
+ end
+ for _,y in ipairs({15,21,27,33}) do
+  block(tower,'BeaconRung',Vector3.new(home.X+17,y,home.Z-13),Vector3.new(4.8,.5,.8),P.edge,Enum.Material.Metal)
+ end
+ block(tower,'BeaconCrossbar',Vector3.new(home.X+17,36.5,home.Z-13),Vector3.new(12,1.2,2),P.ivory)
+ block(tower,'BeaconCounterweight',Vector3.new(home.X+13,35.3,home.Z-13),Vector3.new(2.2,1.4,2.2),P.amber)
+ local beacon=block(tower,'BeaconLens',Vector3.new(home.X+21,35.3,home.Z-13),Vector3.new(2.2,1.4,2.2),P.mint,Enum.Material.Neon)
+ light(beacon,P.mint,10,.35)
+ local header=block(map,'DepotHeader',Vector3.new(home.X,10.7,home.Z-13.65),Vector3.new(12,1.9,.18),P.ink)
+ textFace(header,'MINING AWAY','EXTRACTION DEPOT  /  01',P.ivory)
+ -- One grounded pointer connects the starting instruction to the first field.
+ -- Its posts are noncolliding, set aside from the walking route and machines.
+ sign(map,Vector3.new(home.X-15,home.Y-.5,home.Z+12),'QUARTZ','SAFE FIELD  /  FIRST ORE',P.mint,Vector3.new(home.X,home.Y,home.Z))
+ local printer=station(map,'Printer',home+Vector3.new(12,-.5,-2),P.mint,'Free reprint','Printer')
+ local packs=station(map,'PackStation',home+Vector3.new(-12,-.5,-2),P.blue,'Open pack','Pack')
+ local prestige=station(map,'PrestigeStation',home+Vector3.new(0,-.5,-12),P.amber,'Review prestige','Prestige')
+ local converter=workspace:FindFirstChild('Converter')
+ if converter and converter:IsA('BasePart') then
+  cleanSurface(converter,archive);converter.Color=P.metal;converter.Material=Enum.Material.Metal;converter:SetAttribute('Interaction','Sell')
+  for _,v in ipairs(converter:GetChildren()) do if v:IsA('ProximityPrompt') then v:Destroy() end end
+  local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Sell cargo';prompt.ObjectText='CONVERTER';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=converter
+  local p=converter.Position;local half=converter.Size/2
+  block(map,'ConverterCollar',Vector3.new(p.X,p.Y+half.Y-.3,p.Z),Vector3.new(converter.Size.X+1,.6,converter.Size.Z+1),P.edge,Enum.Material.Metal)
+  for _,dx in ipairs({-.34,.34}) do
+   block(map,'ConverterRib',Vector3.new(p.X+converter.Size.X*dx,p.Y,p.Z-half.Z-.15),Vector3.new(.45,converter.Size.Y*.85,.35),P.edge,Enum.Material.Metal)
+  end
+  block(map,'ConverterIntake',Vector3.new(p.X,p.Y,p.Z-half.Z-.3),Vector3.new(converter.Size.X*.5,converter.Size.Y*.42,.28),P.ink)
+  block(map,'ConverterLight',Vector3.new(p.X,p.Y+half.Y*.42,p.Z-half.Z-.48),Vector3.new(converter.Size.X*.4,.18,.08),P.mint,Enum.Material.Neon)
+  local name=block(map,'ConverterName',Vector3.new(p.X,p.Y+half.Y+1,p.Z-half.Z-.2),Vector3.new(7,1.6,.22),P.ink);textFace(name,'CONVERTER','SELL YOUR CARGO',P.mint)
+  block(map,'OreChute',Vector3.new(p.X,p.Y-half.Y+.6,p.Z-half.Z-2),Vector3.new(converter.Size.X*.7,1.2,3.5),P.ledge,Enum.Material.Metal)
+ end
+ local fields=createFields(cfg,home,root,archive)
+ -- Retro landscape: square solid parts with studded top surfaces. The old
+ -- faceted slopes and native terrain meadow remain in source as reference but
+ -- are intentionally not created in this authored parts-built scene.
+ local foliage={Color3.fromRGB(81,174,104),Color3.fromRGB(173,57,49),Color3.fromRGB(64,150,185),Color3.fromRGB(157,103,192),Color3.fromRGB(36,157,110)}
+ -- District-specific subdued stone colors break up flat walls while remaining
+ -- legible beside each mineral's field accent.
+ local districtStone={Color3.fromRGB(79,98,91),Color3.fromRGB(101,82,75),Color3.fromRGB(75,93,105),Color3.fromRGB(91,83,99),Color3.fromRGB(72,98,78)}
+ createTerraces(map,plan,districtStone,root)
+ createRoutes(map,plan,home)
+ createLandscapeProps(map,plan,foliage,constructGround,constructLow)
  root:SetAttribute('TreeCount',#plan.trees);root:SetAttribute('RouteCount',#plan.routes);root:SetAttribute('MapScale',MapLayout.Scale);root:SetAttribute('OpenHubRadius',46)
  root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Mining Away / Studded Terraces / Retrieval Beacon')
  return {root=root,map=map,home=home,printer=printer,packStation=packs,prestigeStation=prestige,converter=converter,fields=fields,turretTemplate=turretTemplate,droneTemplate=rs:FindFirstChild('Drone'),crystalTemplate=rs:FindFirstChild('Crystal')}

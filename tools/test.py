@@ -12,6 +12,10 @@ f=ROOT/'tests/generated-server.spec.lua'
 f.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+bundle()+'\n'+(ROOT/'tests/server.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(f)],stdout=subprocess.DEVNULL,check=True)
 subprocess.run([str(luau/'luau'),str(f)],check=True)
+fern=ROOT/'tests/generated-world-fern.spec.lua'
+fern.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+(ROOT/'tests/world-fern.setup.lua').read_text()+'\n'+module_bundle(('Config','MapLayout','HarborLighting','World'))+'\n'+(ROOT/'tests/world-fern.integration.lua').read_text())
+subprocess.run([str(luau/'luau-compile'),str(fern)],stdout=subprocess.DEVNULL,check=True)
+subprocess.run([str(luau/'luau'),str(fern)],check=True)
 beam=ROOT/'tests/generated-beam.spec.lua'
 beam.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+module_bundle(('Feedback','SentryMotion','Presentation'))+'\n'+(ROOT/'tests/beam.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(beam)],stdout=subprocess.DEVNULL,check=True)

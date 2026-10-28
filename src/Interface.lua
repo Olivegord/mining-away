@@ -82,7 +82,7 @@ function U.icon(parent,kind,pos,size,color)
  end
  if kind=='coin' then
   shape(.12,.12,.76,.76,tint,1,nil,true);shape(.25,.25,.5,.5,tint:Lerp(C.white,.28),1)
-  local t=U.text(root,UDim2.fromScale(.18,.16),UDim2.fromScale(.64,.64),'C',size.X.Offset*.43,C.ink,true);t.TextXAlignment=Enum.TextXAlignment.Center
+  local t=U.text(root,UDim2.fromScale(.18,.16),UDim2.fromScale(.64,.64),'C',math.max(16,size.X.Offset*.43),C.ink,true);t.TextXAlignment=Enum.TextXAlignment.Center
  elseif kind=='cargo' then
   shape(.30,.10,.4,.22,C.ink,.25);shape(.19,.24,.62,.62,tint,.16,nil,true)
   shape(.29,.55,.42,.20,tint:Lerp(C.ink,.18),.12);shape(.47,.28,.07,.55,C.white,.1)
