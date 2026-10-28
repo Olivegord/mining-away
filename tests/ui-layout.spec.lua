@@ -69,6 +69,38 @@ for _, view in ipairs(viewports) do
  end)
 end
 
+check('430px native width uses compact readable modal title copy',function()
+ local l=Layout.calculate(430,720,false)
+ assert(l.panelWidth==406 and Layout.compactMenuTitles(l.panelWidth),'the measured 30px title would wrap to 60px in a 43px box')
+ assert(not Layout.compactMenuTitles(500))
+end)
+check('context reflows measured narrow copy without shrinking or intersecting action',function()
+ -- Native Studio measurements supplied by the owner: both examples need
+ -- 32px at 16px GothamMedium in the previous 122/192px text boxes.
+ for _,w in ipairs({320,390}) do
+  local l=Layout.calculate(w,568,true)
+  local c=Layout.contextText(l.contextWidth,l.contextHeight,22)
+  assert(c.textX==12 and c.showDetail and c.detailHeight>=32)
+  assert(c.textWidth>=(w==320 and 122 or 192),'compact text lost usable width')
+  assert(c.textX+c.textWidth<=l.contextWidth-120,'copy overlaps the action button')
+  assert(c.detailY+c.detailHeight<=l.contextHeight-4)
+ end
+ local l=Layout.calculate(568,262,true)
+ local selection=rect(l.contextX,l.contextY+l.contextHeight-72,l.contextWidth,72)
+ inside(selection,568,262);assert(selection.y+selection.h<=262-130,'target dock intrudes on native controls')
+ local tallTitle=Layout.contextText(l.contextWidth,l.contextHeight,40)
+ assert(not tallTitle.showDetail and tallTitle.titleHeight>=40,'short landscape must prioritize wrapped title without overlapping detail')
+end)
+check('measured three-line objective grows without reaching controls',function()
+ for _,size in ipairs({{320,568},{390,844}}) do
+  local l=Layout.calculate(size[1],size[2],true)
+  local height=Layout.objectiveHeightFor(48) -- native Studio first-run/prestige metrics
+  assert(height>=58 and height-10>=48)
+  inside(rect(l.hudX,l.objectiveY,l.objectiveWidth,height),size[1],size[2])
+  separate(rect(l.hudX,l.objectiveY,l.objectiveWidth,height),rect(l.recallX,l.recallY,l.recallWidth,l.recallHeight))
+ end
+end)
+
 check('short landscape preserves native movement space without hiding commands',function()
  for _, view in ipairs({{667,375},{844,390},{667,317},{568,262},{844,332}}) do
   local l = Layout.calculate(view[1],view[2],true)

@@ -28,7 +28,7 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  -- when a station prompt becomes visible while the player is moving.
  local bottomReserve = touch == true and 130 or 16
  local contextWidth = math.min(short and 360 or 420, availableWidth)
- local contextHeight = short and 64 or 72
+ local contextHeight = short and 64 or 88
  local contextX = (width - contextWidth) / 2
  local contextY = math.max(margin, height - bottomReserve - contextHeight)
 
@@ -106,6 +106,30 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
   objectiveY = objectiveY,
   bottomReserve = bottomReserve,
  }
+end
+
+
+function Layout.compactMenuTitles(panelWidth)
+ return panelWidth < 500
+end
+
+-- Reserve separate readable text and action areas in the context dock. Narrow
+-- screens trade the icon for more text width; a wrapped title takes priority
+-- over helper copy if a short landscape dock cannot contain both.
+function Layout.contextText(contextWidth, contextHeight, titleHeight)
+ local icon = contextWidth >= 380
+ local x = icon and 55 or 12
+ local width = math.max(1, contextWidth-x-120)
+ local title = math.max(22, math.ceil(titleHeight or 22))
+ local maxTitle = contextHeight-8
+ title = math.min(title,maxTitle)
+ local detailY = 4+title
+ local detailHeight = math.max(0,contextHeight-detailY-4)
+ return {textX=x,textWidth=width,titleY=4,titleHeight=title,detailY=detailY,detailHeight=detailHeight,showDetail=detailHeight>=32,showIcon=icon}
+end
+
+function Layout.objectiveHeightFor(textHeight)
+ return math.max(42,math.ceil(tonumber(textHeight) or 32)+10)
 end
 
 -- Card offers use a smaller, world-visible sheet. Other menus retain their

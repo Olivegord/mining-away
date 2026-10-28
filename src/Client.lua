@@ -62,8 +62,8 @@ local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',16,pal
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if requestRecall then requestRecall() end end,palette.panel);recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local contextIcon=U.icon(context,'mining',UDim2.fromOffset(12,17),UDim2.fromOffset(34,34),palette.mineral)
-local contextTitle=label(context,UDim2.fromOffset(55,6),UDim2.new(1,-174,0,30),'',18,palette.ink,true)
-local contextDetail=label(context,UDim2.fromOffset(55,35),UDim2.new(1,-174,0,27),'',16,palette.muted)
+local contextTitle=label(context,UDim2.fromOffset(12,4),UDim2.new(1,-132,0,26),'',18,palette.ink,true);contextTitle.Name='ContextTitle'
+local contextDetail=label(context,UDim2.fromOffset(12,30),UDim2.new(1,-132,0,40),'',16,palette.muted);contextDetail.Name='ContextDetail'
 local contextAction=nil
 local contextButton=button(context,UDim2.new(1,-112,0,14),UDim2.fromOffset(100,44),'Use [E]',function() if contextAction then contextAction() end end)
 contextButton.Name='UseContext'
@@ -134,10 +134,10 @@ local function layoutModal()
  sheet.BackgroundTransparency=isOffer and 1 or 0
  local stroke=sheet:FindFirstChildOfClass('UIStroke');if stroke then stroke.Enabled=not isOffer end
  modalTitle.Visible=not isOffer;modalSubtitle.Visible=not isOffer;close.Visible=not isOffer
- modalTitle.TextSize=isOffer and (l.panelWidth<400 and 19 or 22) or (l.panelWidth<400 and 23 or 30)
- modalTitle.Position=UDim2.fromOffset(isOffer and 57 or (l.panelWidth<400 and 74 or 90),isOffer and 12 or 16)
- modalTitle.Size=UDim2.new(1,isOffer and -221 or (l.panelWidth<400 and -136 or -158),0,isOffer and 34 or 43)
- modalEmblem.Size=UDim2.fromOffset(isOffer and 30 or (l.panelWidth<400 and 42 or 54),isOffer and 30 or (l.panelWidth<400 and 42 or 54))
+ modalTitle.TextSize=isOffer and (UILayout.compactMenuTitles(l.panelWidth) and 19 or 22) or (UILayout.compactMenuTitles(l.panelWidth) and 23 or 30)
+ modalTitle.Position=UDim2.fromOffset(isOffer and 57 or (UILayout.compactMenuTitles(l.panelWidth) and 74 or 90),isOffer and 12 or 16)
+ modalTitle.Size=UDim2.new(1,isOffer and -221 or (UILayout.compactMenuTitles(l.panelWidth) and -136 or -158),0,isOffer and 34 or 43)
+ modalEmblem.Size=UDim2.fromOffset(isOffer and 30 or (UILayout.compactMenuTitles(l.panelWidth) and 42 or 54),isOffer and 30 or (UILayout.compactMenuTitles(l.panelWidth) and 42 or 54))
  modalEmblem.Position=UDim2.fromOffset(18,18)
  modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,isOffer and 63 or subtitleY)
  modalSubtitle.Size=UDim2.new(1,-l.panelPadding*2,0,isOffer and 23 or subtitleHeight)
@@ -148,12 +148,12 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle;local l=layoutModal()
- if l.panelWidth<400 then
+ if UILayout.compactMenuTitles(l.panelWidth) then
   local shortTitles={pack='Upgrade pack',offer='Pick one',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
- modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(mode=='offer' and 30 or (l.panelWidth<400 and 42 or 54),mode=='offer' and 30 or (l.panelWidth<400 and 42 or 54)),palette.mineral)
+ modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(mode=='offer' and 30 or (UILayout.compactMenuTitles(l.panelWidth) and 42 or 54),mode=='offer' and 30 or (UILayout.compactMenuTitles(l.panelWidth) and 42 or 54)),palette.mineral)
  modalEmblem.Visible=mode~='offer'
  modal.Visible=true
  if entering then
@@ -1013,7 +1013,7 @@ connect(RunService.Heartbeat,function(dt)
  objectiveBox.Position=UDim2.fromOffset(l.hudX,l.objectiveY)
  objectiveBox.Visible=not modal.Visible and not l.short
  context.Size=UDim2.fromOffset(l.contextWidth,l.contextHeight);context.Position=UDim2.fromOffset(l.contextX,l.contextY)
- selectionDock.Size=UDim2.fromOffset(l.contextWidth,72);selectionDock.Position=UDim2.fromOffset(l.contextX,l.contextY);selectionDock.Visible=(selectedDrone~=nil or os.clock()<assignmentAcknowledgedUntil) and not modal.Visible
+ selectionDock.Size=UDim2.fromOffset(l.contextWidth,72);selectionDock.Position=UDim2.fromOffset(l.contextX,l.contextY+l.contextHeight-72);selectionDock.Visible=(selectedDrone~=nil or os.clock()<assignmentAcknowledgedUntil) and not modal.Visible
  if not selectedDrone then marker.Enabled=false;marker.Adornee=nil end
  contextButton.Position=UDim2.new(1,-112,0,(l.contextHeight-44)/2)
  contextTitle.TextSize=18
@@ -1062,6 +1062,11 @@ connect(RunService.Heartbeat,function(dt)
   elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s clears: %d / %d.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',pre.wins or 0,pre.winsRequired or 1)
   else objective.Text='Mine, sell and build a stronger crew.\nSentries guard the richest minerals.' end
  end
+ -- Objectives may wrap to three lines at 320px. Measure the real copy at the
+ -- available width, keeping the next action separate rather than clipping.
+ local objectiveTextHeight=wrappedHeight(objective.Text,l.objectiveWidth-52,16,false,32)
+ local objectiveHeight=UILayout.objectiveHeightFor(objectiveTextHeight)
+ if not l.short then objectiveBox.Size=UDim2.fromOffset(l.objectiveWidth,objectiveHeight) end
  local ownActive=false;local reprints={};local now=workspace:GetServerTimeNow()
  for source in pairs(drones) do
   if source:GetAttribute('Owner')==player.UserId then
@@ -1104,6 +1109,15 @@ connect(RunService.Heartbeat,function(dt)
    end
   end
  end
+ -- Reflow using the actual current title and text width, without shrinking the
+ -- font or placing text beneath the 44px action. In very short landscape a
+ -- long title takes priority over detail instead of clipping both.
+ local textWidth=l.contextWidth-(l.contextWidth>=380 and 55 or 12)-120
+ local titleHeight=math.max(22,wrappedHeight(contextTitle.Text,textWidth,18,true,22)-8)
+ local c=UILayout.contextText(l.contextWidth,l.contextHeight,titleHeight)
+ contextIcon.Visible=c.showIcon
+ contextTitle.Position=UDim2.fromOffset(c.textX,c.titleY);contextTitle.Size=UDim2.fromOffset(c.textWidth,c.titleHeight)
+ contextDetail.Position=UDim2.fromOffset(c.textX,c.detailY);contextDetail.Size=UDim2.fromOffset(c.textWidth,c.detailHeight);contextDetail.Visible=c.showDetail
  if selectedDrone or os.clock()<assignmentAcknowledgedUntil then context.Visible=false end
  if l.contextReplacesHUD and (context.Visible or selectionDock.Visible) then hud.Visible=false end
  local hr=ownerRoot();local nearestEnemy,dist=nil,65

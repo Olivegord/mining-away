@@ -162,13 +162,45 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
 end
 -- Collect a frame before spending any rays. Oldest-due primary contacts are
--- served first, independent of the caller's pairs() order. Secondary branches
--- use only remaining capacity. On overload the .75s verified-cache deadline
--- hides stale anchors until their fair turn; it never expands without bound.
+-- given at least half of six contact slots and scheduled first. Branches receive
+-- two slots, escalating to three under heavier load; unused slots return.
+-- The .75s verified-cache deadline hides stale anchors during overload.
 function P:queueMiningBeam(beam,sample,now)
  if self.closed or not beam or not beam.origin.Parent then return end
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
+  beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.cachedLife=sample.life;beam.cacheKey=sample.key
+ end
+ -- A short-lived authoritative proc can end before its fair verification turn.
+ -- Retain the observed target cosmetically for at most 1.2 s, and only until
+ -- 0.12 s after its first successful verification. No gameplay is performed.
+ local incoming=sample.alive and sample.active and sample.secondaryPart and sample.secondaryKey
+ local incomingSource=sample.secondarySource
+ local incomingHP=incomingSource and incomingSource:GetAttribute('HP')
+ local incomingDead=incomingSource and incomingSource:GetAttribute('Dead')
+ if incoming and (not sample.secondaryPart.Parent or (incomingSource and not incomingSource.Parent)
+  or incomingDead==true or (type(incomingHP)=='number' and incomingHP<=0)) then
+  sample=table.clone(sample);sample.secondaryPart=nil;sample.secondaryKey=nil;incoming=nil
+ end
+ local hold=beam.branchHold
+ if incoming then
+  if not hold or hold.key~=sample.secondaryKey or hold.part~=sample.secondaryPart then
+   hold={key=sample.secondaryKey,part=sample.secondaryPart,source=sample.secondarySource,color=sample.secondaryColor}
+   beam.branchHold=hold;beam.secondarySurface={}
+  end
+  hold.deadline=now+1.2
+ elseif hold then
+  local verified=hold.firstVerifiedAt
+  local sourceHP=hold.source and hold.source:GetAttribute('HP')
+  local sourceDead=hold.source and hold.source:GetAttribute('Dead')
+  if not sample.alive or not sample.active or not hold.part.Parent or (hold.source and not hold.source.Parent)
+   or sourceDead==true or (type(sourceHP)=='number' and sourceHP<=0)
+   or now>hold.deadline or (verified and now>verified+.12) then
+   beam.branchHold=nil;beam.secondarySurface={};hold=nil
+  else
+   sample=table.clone(sample)
+   sample.secondaryPart=hold.part;sample.secondaryKey=hold.key
+   sample.secondarySource=hold.source;sample.secondaryColor=hold.color
+  end
  end
  table.insert(self.beamQueue,{beam=beam,sample=sample,now=now})
 end
@@ -182,21 +214,44 @@ function P:flushMiningBeams()
    table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored})
   end
  end
- local function run(list)
+ local function run(list,limit)
   table.sort(list,function(a,b)
    local x,y=a.cache.dueSince or a.entry.now,b.cache.dueSince or b.entry.now
    return x==y and a.cache.order<b.cache.order or x<y
   end)
+  local used=0
   for _,v in ipairs(list) do
-   if self.beamRays+2>self.maxBeamRays then break end
-   self:_surface(v.entry.beam,v.cache,v.origin,v.part,v.source,v.entry.now,v.ignored)
+   if used>=limit or self.beamRays+2>self.maxBeamRays then break end
+   if not v.served then
+    self:_surface(v.entry.beam,v.cache,v.origin,v.part,v.source,v.entry.now,v.ignored)
+    v.served=true;used+=1
+   end
   end
  end
+ local branchCount=0;local primaryCount=0
  for _,e in ipairs(self.beamQueue) do
   local b,s=e.beam,e.sample
-  if s.alive and s.active then add(primary,e,b.surface,s.part,b.origin.WorldPosition,s.serverSource,nil) end
+  if s.alive and s.active then
+   primaryCount+=1
+   add(primary,e,b.surface,s.part,b.origin.WorldPosition,s.serverSource,nil)
+   if s.secondaryPart and s.secondaryKey then branchCount+=1 end
+  end
  end
- run(primary)
+ local slots=math.floor(self.maxBeamRays/2)
+ local frameNow=self.beamQueue[1] and self.beamQueue[1].now
+ local dt=frameNow and self.lastBeamFrame and math.clamp(frameNow-self.lastBeamFrame,1/240,1/10) or 1/60
+ if frameNow then self.lastBeamFrame=frameNow end
+ local reserved=branchCount>0 and math.min(2,math.max(0,slots-1)) or 0
+ -- Allocate according to both populations, preserving at least two primary
+ -- and two branch slots where the budget permits. A 0.74s planning window
+ -- leaves a small margin before the 0.75s verified-contact deadline.
+ if reserved>0 then
+  local primaryNeed=math.ceil(primaryCount*dt/.74)
+  local branchNeed=math.ceil(branchCount*dt/.74)
+  local primaryFloor=math.min(slots-2,math.max(2,primaryNeed))
+  reserved=math.min(slots-primaryFloor,math.max(reserved,branchNeed))
+ end
+ run(primary,slots-reserved)
  for _,e in ipairs(self.beamQueue) do
   local b,s=e.beam,e.sample
   if s.alive and s.active and s.secondaryPart and s.secondaryKey then
@@ -204,7 +259,16 @@ function P:flushMiningBeams()
    if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,point+normal*.08,s.secondarySource,s.serverSource) end
   end
  end
- run(secondary)
+ run(secondary,reserved)
+ -- If no usable branch was due, its reservation must not waste the budget.
+ run(primary,slots)
+ run(secondary,slots)
+ for _,e in ipairs(self.beamQueue) do
+  local hold=e.beam.branchHold
+  if hold and not hold.firstVerifiedAt and e.beam.secondarySurface.verifiedAt then
+   hold.firstVerifiedAt=e.beam.secondarySurface.verifiedAt
+  end
+ end
  for _,e in ipairs(self.beamQueue) do self:renderMiningBeam(e.beam,e.sample,e.now,true) end
  self.beamQueue={}
 end

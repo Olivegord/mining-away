@@ -146,12 +146,14 @@ check('inactive retained targets consume no rays after recall fade',function()
  for i=1,90 do frame(p,rows,i/30);if i>15 then for n=19,48 do assert(rows[n].b.core.Enabled) end end end
  for i=1,18 do assert(rows[i].b.surface.lastSample==nil,'inactive beam consumed a ray') end
 end)
-check('all due primary contacts precede optional secondary branches',function()
+check('primary has four slots, branches reserve two, unused capacity returns',function()
  local p=Presentation.new({parent=localFx});local rows=population(6,true)
  frame(p,rows,1);assert(p.beamRays==12)
- for _,r in ipairs(rows) do assert(r.b.surface.verifiedAt==1 and r.b.secondarySurface.verifiedAt==nil) end
- frame(p,rows,1.01);assert(p.beamRays==12)
- for _,r in ipairs(rows) do assert(r.b.secondarySurface.verifiedAt==1.01) end
+ local main,branch=0,0
+ for _,r in ipairs(rows) do if r.b.surface.verifiedAt then main+=1 end;if r.b.secondarySurface.verifiedAt then branch+=1 end end
+ assert(main==4 and branch==2,'contested frame must reserve primary majority and branch service')
+ local only=Presentation.new({parent=localFx});local plain=population(6,false);frame(only,plain,1)
+ for _,r in ipairs(plain) do assert(r.b.surface.verifiedAt==1,'unused branch capacity lost') end
 end)
 check('prewarmed contact is invalidated after new wall under contention',function()
  local p=Presentation.new({parent=localFx});local rows=population(48,false)
@@ -202,5 +204,100 @@ check('continuous arrivals do not starve older due contacts',function()
    assert(frameNo/30-r.b.surface.verifiedAt<.75,'existing contact was not reverified')
   end
  end
+end)
+for _,case in ipairs({{30,18},{60,30},{30,48},{60,48},{144,48}}) do
+ check(('branches get bounded sustained service %dfps %d beams'):format(case[1],case[2]),function()
+  local fps,n=case[1],case[2];local p=Presentation.new({parent=localFx});local rows=population(n,true)
+  local seenPrimary,seenBranch={},{};local lastBranch={};local maxGap=0
+  for i=1,fps*10 do
+   frame(p,rows,i/fps,i%2==0)
+   for j,r in ipairs(rows) do
+    if r.b.core.Enabled then seenPrimary[j]=true end
+    if r.b.secondary.Enabled then seenBranch[j]=true end
+    if i>fps and n==48 then assert(r.b.core.Enabled and r.b.secondary.Enabled,'48-contact normal load flickered') end
+    local t=r.b.secondarySurface.lastSample
+    if t and t~=lastBranch[j] then
+     if lastBranch[j] and i>fps*2 then maxGap=math.max(maxGap,t-lastBranch[j]) end
+     lastBranch[j]=t
+    end
+   end
+  end
+  for j=1,n do assert(seenPrimary[j] and seenBranch[j],'contact never appeared '..j);assert(lastBranch[j] and 10-lastBranch[j]<1.3,'branch starvation '..j) end
+  assert(maxGap<1.3,'branch service gap '..maxGap)
+ end)
+end
+for _,case in ipairs({{80,43},{43,43}}) do
+ check(('asymmetric feasible load preserves freshness %d primaries %d branches'):format(case[1],case[2]),function()
+  local p=Presentation.new({parent=localFx});local rows=population(case[1],true)
+  for i=case[2]+1,#rows do rows[i].q.secondaryPart=nil;rows[i].q.secondaryKey=nil end
+  for i=1,180 do
+   frame(p,rows,i/30,i%2==0)
+   if i>90 then for n,r in ipairs(rows) do
+    assert(r.b.core.Enabled,'primary flickered in feasible asymmetric load '..n)
+    if n<=case[2] then assert(r.b.secondary.Enabled,'branch flickered in feasible asymmetric load '..n) end
+   end end
+  end
+ end)
+end
+check('branch churn and target key changes invalidate stale secondary contact',function()
+ local p=Presentation.new({parent=localFx});local rows=population(18,true)
+ for i=1,60 do frame(p,rows,i/30) end
+ for i=1,9 do rows[i].q.secondaryKey=nil;rows[i].q.secondaryPart=nil end
+ for i=61,100 do frame(p,rows,i/30) end
+ for i=1,9 do assert(not rows[i].b.secondary.Enabled and not rows[i].b.secondarySurface.anchor) end
+ for i=1,9 do rows[i].q.secondaryKey='new-'..i;rows[i].q.secondaryPart=rows[i].q.part end
+ for i=101,150 do frame(p,rows,i/30) end
+ for i=1,18 do assert(rows[i].b.secondary.Enabled,'branch did not recover after changing load') end
+ local r=rows[1];r.q.secondaryKey='different';blockedAll=true;frame(p,rows,151/30);blockedAll=false
+ assert(not r.b.secondary.Enabled and not r.b.secondarySurface.anchor,'changed branch key reused old surface')
+end)
+for _,case in ipairs({{30,18},{30,48},{60,30},{60,48},{144,48}}) do
+ local fps,n=case[1],case[2]
+ check(('short authoritative proc burst gets bounded cosmetic service at %dfps for %d beams'):format(fps,n),function()
+  local p=Presentation.new({parent=localFx});local rows=population(n,true);local seen={}
+  for i=1,fps*2 do
+   if i/fps>.18 then for _,r in ipairs(rows) do r.q.secondaryKey=nil;r.q.secondaryPart=nil end end
+   frame(p,rows,i/fps)
+   for j,r in ipairs(rows) do if r.b.secondary.Enabled then seen[j]=true end end
+  end
+  for j,r in ipairs(rows) do assert(seen[j],'short proc branch never displayed '..j);assert(not r.b.secondary.Enabled and not r.b.branchHold,'cosmetic extension failed to expire') end
+ end)
+end
+check('extreme burst expires bounded unserved cosmetic backlog',function()
+ local p=Presentation.new({parent=localFx});local rows=population(240,true);local seen={}
+ for i=1,75 do
+  local now=i/30;if now>.18 then for _,r in ipairs(rows) do r.q.secondaryPart=nil;r.q.secondaryKey=nil end end
+  frame(p,rows,now)
+  for n,r in ipairs(rows) do if r.b.secondary.Enabled then seen[n]=true end end
+ end
+ local total=0;for n,r in ipairs(rows) do if seen[n] then total+=1 end;assert(not r.b.branchHold and not r.b.secondary.Enabled,'expired event leaked') end
+ assert(total>0 and total<240,'extreme finite-budget limitation not exercised')
+end)
+check('held proc clears on death, target loss, life and primary changes',function()
+ for _,cause in ipairs({'dead','gone','life','primary','inactive','occluded'}) do
+  local p=Presentation.new({parent=localFx});local rows=population(18,true);local r=rows[18]
+  local secondarySource=Instance.new('Part');secondarySource.Parent=workspace;secondarySource:SetAttribute('HP',100);r.q.secondarySource=secondarySource
+  frame(p,rows,1);r.q.secondaryPart=nil;r.q.secondaryKey=nil
+  if cause=='dead' then secondarySource:SetAttribute('HP',0)
+  elseif cause=='gone' then secondarySource:Destroy()
+  elseif cause=='life' then r.q.life=2
+  elseif cause=='primary' then r.q.key='another-primary'
+  elseif cause=='inactive' then r.q.active=false
+  else blockedAll=true end
+  for i=1,50 do frame(p,rows,1+i/30);assert(not r.b.secondary.Enabled,'invalid held branch visible: '..cause) end
+  if cause~='occluded' then assert(not r.b.branchHold,'invalid hold survived: '..cause) end
+  blockedAll=false
+ end
+end)
+check('delayed proc extension expires after first verified contact without refresh',function()
+ local p=Presentation.new({parent=localFx});local rows=population(18,true);local r=rows[18]
+ frame(p,rows,1);r.q.secondaryPart=nil;r.q.secondaryKey=nil
+ local first
+ for i=1,36 do
+  local now=1+i/30;frame(p,rows,now)
+  if r.b.branchHold and r.b.branchHold.firstVerifiedAt then first=first or r.b.branchHold.firstVerifiedAt end
+  if first and now>first+.12 then assert(not r.b.secondary.Enabled and not r.b.branchHold,'verified extension refreshed beyond .12s') end
+ end
+ assert(first,'late proc was never verified')
 end)
 print(passed..' production Presentation endpoint and bounded scheduling checks with synthetic API double; not a Studio visual test')
