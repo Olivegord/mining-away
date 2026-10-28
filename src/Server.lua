@@ -440,28 +440,7 @@ local function move(d,goal,dt)
  -- Exact logical pose; no server presentation lerp, no body pitch.
  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
 end
-local function droneStep(d: any,dt: number)
- local p=profiles[d.owner];if not p then return end
- if d.hp<=0 then
-  d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
-  d.model:PivotTo(CFrame.new(d.pos))
-  if R.finishReprint(d,now,d.stats.maxHealth) then d.field=nil;d.commandOutAt=nil end
-  return
- end
- -- Freeze the job during a yielding save; no damage or profile mutation occurs.
- -- Shift the warmup clock so storage latency cannot skip weapon startup.
- if p.busy then if d.warmAt then d.warmAt=d.warmAt+dt end;return end
- if not store:healthy(p.session) then release(d);return end
- local hr=characterRoot(p)
- if not hr then if d.field then leaveField(p) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0),dt);return end
- local field=d.field and patches[d.field]
- if field and (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then
-  d.commandOutAt=d.commandOutAt or now
-  if now-d.commandOutAt>3 then leaveDroneField(p,d);field=nil end
- else d.commandOutAt=nil end
- if field then
-  if field.e.phase=='Gathering' then d.state='Travel';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
-  elseif field.e.phase=='Active' and R.participates(field.e,d,data(p).run.id) then
+local function attackDrone(d: any,field: any,dt: number)
    release(d,true);local target,dist=nil,math.huge
    for _,t in ipairs(field.turrets) do local n=(t.emitter.Position-d.pos).Magnitude;if t.hp>0 and n<dist then target=t;dist=n end end
    if target then
@@ -474,7 +453,8 @@ local function droneStep(d: any,dt: number)
      if now>=d.shotAt then combatHit(d,field,target,stats);d.shotAt=now+stats.shotInterval end
     end
    end
-  elseif playerCanMine(p,field) then
+end
+local function mineDrone(d: any,p: any,field: any,dt: number)
    if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then leaveField(p)
    else
     if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
@@ -501,6 +481,32 @@ local function droneStep(d: any,dt: number)
      else d.warmAt=nil;d.mining=false end
     else d.state='Follow';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt) end
    end
+end
+local function droneStep(d: any,dt: number)
+ local p=profiles[d.owner];if not p then return end
+ if d.hp<=0 then
+  d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
+  d.model:PivotTo(CFrame.new(d.pos))
+  if R.finishReprint(d,now,d.stats.maxHealth) then d.field=nil;d.commandOutAt=nil end
+  return
+ end
+ -- Freeze the job during a yielding save; no damage or profile mutation occurs.
+ -- Shift the warmup clock so storage latency cannot skip weapon startup.
+ if p.busy then if d.warmAt then d.warmAt=d.warmAt+dt end;return end
+ if not store:healthy(p.session) then release(d);return end
+ local hr=characterRoot(p)
+ if not hr then if d.field then leaveField(p) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0),dt);return end
+ local field=d.field and patches[d.field]
+ if field and (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then
+  d.commandOutAt=d.commandOutAt or now
+  if now-d.commandOutAt>3 then leaveDroneField(p,d);field=nil end
+ else d.commandOutAt=nil end
+ if field then
+  if field.e.phase=='Gathering' then d.state='Travel';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
+  elseif field.e.phase=='Active' and R.participates(field.e,d,data(p).run.id) then
+   attackDrone(d,field,dt)
+  elseif playerCanMine(p,field) then
+   mineDrone(d,p,field,dt)
   else leaveDroneField(p,d) end
  else
   d.mining=false;d.combatTarget=nil
