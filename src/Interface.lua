@@ -50,11 +50,8 @@ end
 function U.button(parent,pos,size,text,callback,color)
  local b=Instance.new('TextButton');b.Position=pos;b.Size=size;b.BackgroundColor3=color or C.mineral;b.BorderSizePixel=0
  b.Text=text;b.TextColor3=C.ink;b.TextSize=16;b.Font=Enum.Font.FredokaOne;b.TextWrapped=true;b.AutoButtonColor=false
- b.TextStrokeTransparency=1;b.ZIndex=layer(parent);b.Parent=parent;U.corner(b,10);U.stroke(b,C.line,2)
- U.gradient(b,b.BackgroundColor3)
- local highlight=U.frame(b,UDim2.fromOffset(8,3),UDim2.new(1,-16,0,2),C.white);highlight.BackgroundTransparency=.45;U.corner(highlight,1)
+ b.TextStrokeTransparency=1;b.ZIndex=layer(parent);b.Parent=parent;U.corner(b,4);U.stroke(b,C.line,1.5)
  local scale=Instance.new('UIScale');scale.Name='ButtonScale';scale.Parent=b
- local edge=U.frame(b,UDim2.new(0,6,1,-3),UDim2.new(1,-12,0,3),C.ink);edge.BackgroundTransparency=.72;U.corner(edge,2)
  bases[b]=b.BackgroundColor3
  b.MouseEnter:Connect(function() if b.Active then paint(b,bases[b]:Lerp(C.white,.14),1.025) end end)
  b.MouseLeave:Connect(function() if b.Active then paint(b,bases[b],1) end end)

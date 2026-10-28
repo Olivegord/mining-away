@@ -1,5 +1,15 @@
 # Owner requirements
 
+## October 28 owner rejection — visual rework required
+
+The owner explicitly rejected actual 1c22606 screenshots: “this is so bad. bro.” This is a rejection of the presentation, not a near-finished visual pass. Preserve the existing game, source, original assets, server authority, progression and safety rules. Keep the PR draft and do not publish.
+
+The card offer must closely adapt the selected Balatro physical-card hierarchy using original mechanic-specific artwork: identifiable laser lens or drone emitter, splitting prism and drone battle formation. Art should dominate, with concise readable name, target and benefit, full exact terms on focus, a clear focus/press state and an appropriate choose action. Lead with actual benefit and place penalties second; Battle Formation must show its combat benefit, and Long Lens is combat range rather than flight. Rarity is subordinate to card identity. Avoid repetitive rounded cream dashboards, generic icons, balloon tutorial panels, oversized padding and indiscriminate gradients. Keep native 16–18 px legibility. Use a recognizable lit original drone thumbnail and a compact utilitarian HUD/roster. Hide contextual controls behind menus and never offer mining when cargo is full.
+
+Remove imported global depth of field, excessive bloom and exposure. Create sharp readable daytime, matte paths, distinct mineral shapes, a purposeful depot-to-first-field sightline and legible original pyramid landmark. Preserve grounded structures and validated collision fixes. Rework the spawn canopy so it does not block the initial view. Avoid empty mint planes, huge monotonous faces, white paving, bright point-light blobs, blank station faces, random clutter and indiscriminate tree placement.
+
+Actual final-build Studio comparison at matching camera angles, in motion, at desktop/phone and low/high graphics remains mandatory. The independent art director has non-waivable veto; no passing tests, attractive source or old screenshots establish approval. The 1c build was rejected and the final visual gate is NOT VERIFIED until new evidence is reviewed.
+
 ## October 27 current direction and visual veto
 
 The owner's newest instructions supersede conflicting older visual choices: keep this same game and source repository, but make the map intentionally retro Roblox and **parts-built**, with legible connected fields, grounded structures, landmarks and a coherent authored alien identity. Avoid the current low-poly/faceted filler terrain. Bee Swarm Simulator is a reference for field/route readability, not an asset or theme source. Preserve the original drone, crystal and segmented construct pyramid assets, original overhead mining and eased flight, real server authority, durable pending offers, free reprints and prestige.

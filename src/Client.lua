@@ -73,7 +73,7 @@ local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
 local modalTitle=label(sheet,UDim2.fromOffset(90,18),UDim2.new(1,-158,0,39),'Build your next adventure',30,palette.ink,true)
 local modalSubtitle=label(sheet,UDim2.fromOffset(24,66),UDim2.new(1,-48,0,32),'',16,palette.muted)
-local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white;close:FindFirstChildOfClass('UIGradient').Enabled=false
+local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white
 local body=Instance.new('ScrollingFrame');body.Name='MenuContent';body.Position=UDim2.fromOffset(24,112);body.Size=UDim2.new(1,-48,1,-136);body.BackgroundTransparency=1;body.BorderSizePixel=0;body.ScrollBarThickness=4;body.ScrollBarImageColor3=palette.muted;body.CanvasSize=UDim2.fromScale(0,0);body.AutomaticCanvasSize=Enum.AutomaticSize.Y;body.ZIndex=22;body.Parent=sheet
 local modalMode,modalSize=nil,nil
 local availabilitySignature=''
@@ -93,7 +93,9 @@ local function cancelOfferReveal()
  offerConfirmAction=nil
 end
 local function clearBody() cancelOfferReveal();for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
-connect(modal:GetPropertyChangedSignal('Visible'),function() if not modal.Visible then cancelOfferReveal() end end)
+connect(modal:GetPropertyChangedSignal('Visible'),function()
+ if modal.Visible then context.Visible=false;contextAction=nil else cancelOfferReveal() end
+end)
 local function reducedMotion()
  if profile and profile.settings and profile.settings.reducedMotion==true then return true end
  local ok,value=pcall(function() return game:GetService('GuiService').ReducedMotionEnabled end)
@@ -187,7 +189,7 @@ local function number(n)
  return string.format('%.3g',n)
 end
 local function previewRows(choice)
- local result={}
+ local result={};local costs={}
  for _,item in ipairs(choice.preview or {}) do
   if type(item)=='table' then
    local before,after=tonumber(item.before),tonumber(item.after)
@@ -197,11 +199,16 @@ local function previewRows(choice)
     if unit~='%' and (title=='Turret resistance' or title=='Critical chance' or title=='Combat splash' or title=='Mining fork') then before=before*100;after=after*100;unit='%' end
     if title=='Shared cargo' then title='Cargo';unit='ore' end
     local separator=(unit=='' or unit=='%' or unit=='×') and '' or ' '
-    table.insert(result,title..'  '..number(before)..' → '..number(after)..separator..unit)
-    if #result==4 then break end
+    local row=title..'  '..number(before)..' → '..number(after)..separator..unit
+    -- Benefits lead; warmup and firing interval improve when they decrease.
+    local lowerIsBetter=title=='Laser warmup' or title=='Shot interval'
+    local beneficial=lowerIsBetter and after<before or (not lowerIsBetter and after>before)
+    table.insert(beneficial and result or costs,row)
    end
   end
  end
+ for _,row in ipairs(costs) do table.insert(result,row) end
+ while #result>4 do table.remove(result) end
  return result
 end
 local function targetText(choice)
@@ -213,7 +220,7 @@ local function categoryText(choice)
  local e=choice.effects or {}
  local function gain(k) return type(e[k])=='number' and e[k]>0 end
  -- Category reflects the benefit, not a negative hull/mining tradeoff in an old saved payload.
- if gain('combat') or gain('rate') or gain('crit') or gain('splash') or gain('finisher') then return 'COMBAT' end
+ if gain('combat') or gain('rate') or gain('crit') or gain('splash') or gain('finisher') or gain('range') or gain('chain') then return 'COMBAT' end
  if gain('health') or gain('reduction') or gain('shield') or gain('salvage') then return 'SURVIVAL' end
  if gain('capacity') or gain('yield') then return 'CARGO' end
  if gain('mining') or gain('fork') or gain('geode') then return 'MINING' end
@@ -250,10 +257,14 @@ openOffer=function()
  local choose=button(sheet,UDim2.fromOffset(l.actionX,l.actionY),UDim2.fromOffset(l.actionWidth,44),'Choose',function() if offerConfirmAction then offerConfirmAction() end end,palette.accent);choose.Name='ConfirmCard';choose.TextSize=16;table.insert(offerExtras,choose)
  local later=button(sheet,UDim2.fromOffset(l.closeX,l.closeY),UDim2.fromOffset(l.closeWidth,44),'Later',function() modal.Visible=false end,palette.paper);later.Name='CloseOffer';later.TextSize=16;table.insert(offerExtras,later)
  local views={};local focusCard
+ local function chooseLabel()
+  local choice=offer.choices[focusedIndex];local title=choice and choice.title
+  return title and l.actionWidth>=210 and #title<=19 and ('Choose '..title) or 'Choose'
+ end
  local function revealAll()
   for _,tween in ipairs(revealTweens) do tween:Cancel() end;revealTweens={}
   for n,h in pairs(offerHosts) do h.group.GroupTransparency=0;h.scale.Scale=1;offerReady[n]=true end
-  choose.Text=allowed and 'Choose' or reason
+  choose.Text=allowed and chooseLabel() or reason
   if focusCard then focusCard(focusedIndex,false) end
  end
  local function allReady() for i=1,#offer.choices do if not offerReady[i] then return false end end;return true end
@@ -264,6 +275,7 @@ openOffer=function()
   for _,child in ipairs(detailContent:GetChildren()) do child:Destroy() end
   local layout=Instance.new('UIListLayout');layout.Padding=UDim.new(0,5);layout.SortOrder=Enum.SortOrder.LayoutOrder;layout.Parent=detailContent
   local choice=offer.choices[index]
+  if allowed and not actionPending then choose.Text=chooseLabel() end
   local order=0
   local function line(text,bold,size,color)
    if not text or text=='' then return end;order+=1
@@ -273,9 +285,9 @@ openOffer=function()
   line(choice.title,true,18);line(targetText(choice),true,18)
   line(choice.description,false,16)
   for _,row in ipairs(previewRows(choice)) do line(row,true,18) end
-  line(choice.tradeoff and ('Tradeoff: '..choice.tradeoff) or 'No stat penalty',false,16)
-  line('THIS RUN • '..stackText(choice),false,16,palette.muted)
-  if choice.rarity=='Common' or choice.rarity=='Uncommon' or choice.rarity=='Rare' then line(choice.rarity..' • '..categoryText(choice),false,16,palette.muted) end
+  if choice.tradeoff and choice.tradeoff~='No stat penalty' and (not choice.description or not string.find(string.lower(choice.description),string.lower(choice.tradeoff),1,true)) then line('Tradeoff: '..choice.tradeoff,false,16) end
+  local stack=stackText(choice)
+  line(string.find(string.lower(stack),'this run',1,true) and stack or ('This run • '..stack),false,16,palette.muted)
   detailContent.CanvasPosition=Vector2.zero
   if scroll then local h=offerHosts[index].group;local x=h.AbsolutePosition.X-body.AbsolutePosition.X+body.CanvasPosition.X;body.CanvasPosition=Vector2.new(math.clamp(x-(l.bodyWidth-h.AbsoluteSize.X)/2,0,math.max(0,body.AbsoluteCanvasSize.X-body.AbsoluteWindowSize.X)),0) end
   if not l.shortOffer then local h=offerHosts[index].group;local x=h.AbsolutePosition.X-sheet.AbsolutePosition.X+h.AbsoluteSize.X/2-l.detailWidth/2;details.Position=UDim2.fromOffset(math.clamp(x,0,l.panelWidth-l.detailWidth),l.detailY) end
@@ -298,10 +310,10 @@ openOffer=function()
   if animate then task.delay(UILayout.revealDelay(index,false),function()
    if generation~=revealGeneration or not modal.Visible or not pending() or pending().id~=offer.id or not host.Parent or offerReady[index] then return end
    local fade=TweenService:Create(host,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{GroupTransparency=0});local lift=TweenService:Create(scale,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});table.insert(revealTweens,fade);table.insert(revealTweens,lift)
-   fade.Completed:Connect(function(state) if state~=Enum.PlaybackState.Completed or generation~=revealGeneration or not host.Parent then return end;offerReady[index]=true;if index==focusedIndex then focusCard(index,false) end;if allReady() then choose.Text=allowed and 'Choose' or reason end end);fade:Play();lift:Play()
+   fade.Completed:Connect(function(state) if state~=Enum.PlaybackState.Completed or generation~=revealGeneration or not host.Parent then return end;offerReady[index]=true;if index==focusedIndex then focusCard(index,false) end;if allReady() then choose.Text=allowed and chooseLabel() or reason end end);fade:Play();lift:Play()
   end) end
  end
- choose.Text=animate and 'Reveal all' or (allowed and 'Choose' or reason)
+ choose.Text=animate and 'Reveal all' or (allowed and chooseLabel() or reason)
  if not animate then task.defer(function() if generation==revealGeneration and modal.Visible then focusCard(focusedIndex,false) end end) end
  for index,b in pairs(offerButtons) do b.NextSelectionLeft=offerButtons[index-1];b.NextSelectionRight=offerButtons[index+1];b.NextSelectionDown=choose end
 end
@@ -342,11 +354,16 @@ local function fleetPortrait(parent,tint)
  local template=RS:FindFirstChild('Drone')
  if not template or not template:IsA('Model') then U.icon(parent,'drone',UDim2.fromOffset(10,12),UDim2.fromOffset(58,58),tint);return end
  local view=Instance.new('ViewportFrame');view.Name='OriginalDronePortrait';view.BackgroundTransparency=1;view.Size=UDim2.fromOffset(70,70);view.Position=UDim2.fromOffset(8,6);view.ZIndex=23;view.Parent=parent
+ view.Ambient=Color3.fromRGB(185,185,180);view.LightColor=Color3.fromRGB(255,243,220);view.LightDirection=Vector3.new(-1,-1,-1)
  local ok=pcall(function()
   local model=template:Clone()
   for _,part in ipairs(model:GetDescendants()) do
    if part:IsA('LuaSourceContainer') or part:IsA('Sound') or part:IsA('ParticleEmitter') or part:IsA('Beam') or part:IsA('Trail') then part:Destroy()
-   elseif part:IsA('BasePart') then part.Anchored=true;part.CanCollide=false end
+   elseif part:IsA('BasePart') then
+    part.Anchored=true;part.CanCollide=false
+    if part==model.PrimaryPart or part.Name=='Mesh' then part.Color=part.Color:Lerp(tint,.25)
+    elseif part.Name=='Emmiter' then part.Color=tint end
+   end
   end
   local worldModel=Instance.new('WorldModel');worldModel.Parent=view;model.Parent=worldModel
   local center,size=model:GetBoundingBox();local radius=math.max(size.X,size.Y,size.Z,1)
@@ -1022,7 +1039,7 @@ connect(RunService.Heartbeat,function(dt)
  fleetButton.Size=UDim2.fromOffset(52,l.hudHeight-18);runButton.Size=fleetButton.Size
  objectiveBox.Size=UDim2.fromOffset(l.objectiveWidth,l.objectiveHeight)
  objectiveBox.Position=UDim2.fromOffset(l.hudX,l.objectiveY)
- objectiveBox.Visible=not modal.Visible and not l.short
+ objectiveBox.Visible=not modal.Visible and not l.short and not pending()
  context.Size=UDim2.fromOffset(l.contextWidth,l.contextHeight);context.Position=UDim2.fromOffset(l.contextX,l.contextY)
  selectionDock.Size=UDim2.fromOffset(l.contextWidth,72);selectionDock.Position=UDim2.fromOffset(l.contextX,l.contextY+l.contextHeight-72);selectionDock.Visible=(selectedDrone~=nil or os.clock()<assignmentAcknowledgedUntil) and not modal.Visible
  if not selectedDrone then marker.Enabled=false;marker.Adornee=nil end
@@ -1112,11 +1129,17 @@ connect(RunService.Heartbeat,function(dt)
   if nearest then
    local id=nearest:GetAttribute('FieldId') or nearest:GetAttribute('Tier')
    if id then
-    contextAction=function() requestField(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
-    local phase=nearest:GetAttribute('Phase') or 'Safe'
-    local actionText=(phase=='Guarded' or phase=='Active') and 'Fight' or (phase=='Gathering' and 'Join' or 'Mine')
-    contextDetail.Text=(phase=='Active' and 'Starting crew only') or (phase=='Guarded' and 'Sentries block mining') or (phase=='Gathering' and 'Join before the fight starts') or 'Gather minerals with your fleet'
-    contextButton.Text=actionText..(touch and '' or ' [E]');context.Visible=true
+    if profile and profile.run and cargoUnits(profile)>=(profile.capacity or 120) then
+     contextAction=function() requestRecall() end;contextTitle.Text='Cargo full'
+     contextDetail.Text='Return to the converter';contextButton.Text=touch and 'Recall' or 'Recall [R]'
+    else
+     contextAction=function() requestField(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
+     local phase=nearest:GetAttribute('Phase') or 'Safe'
+     local actionText=(phase=='Guarded' or phase=='Active') and 'Fight' or (phase=='Gathering' and 'Join' or 'Mine')
+     contextDetail.Text=(phase=='Active' and 'Starting crew only') or (phase=='Guarded' and 'Sentries block mining') or (phase=='Gathering' and 'Join before the fight starts') or 'Gather minerals with your fleet'
+     contextButton.Text=actionText..(touch and '' or ' [E]')
+    end
+    context.Visible=true
    end
   end
  end

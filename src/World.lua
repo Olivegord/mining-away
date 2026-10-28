@@ -90,8 +90,8 @@ function W.setBeam(b,on,pos)
  for i,v in ipairs(b.beams) do v.Enabled=on;v.Width0=on and (i==1 and .3 or .65) or 0;v.Width1=v.Width0 end
 end
 local P={
- ground=Color3.fromRGB(84,154,115),dust=Color3.fromRGB(187,184,148),stone=Color3.fromRGB(79,98,91),
- ledge=Color3.fromRGB(186,207,191),metal=Color3.fromRGB(30,65,73),edge=Color3.fromRGB(117,171,162),
+ ground=Color3.fromRGB(91,124,91),dust=Color3.fromRGB(145,138,112),stone=Color3.fromRGB(75,85,78),
+ ledge=Color3.fromRGB(153,169,148),metal=Color3.fromRGB(44,65,65),edge=Color3.fromRGB(107,133,123),
  ivory=Color3.fromRGB(245,237,207),ink=Color3.fromRGB(22,49,60),mint=Color3.fromRGB(100,229,201),
  amber=Color3.fromRGB(245,182,96),blue=Color3.fromRGB(118,201,228),coral=Color3.fromRGB(226,129,145),
 }
@@ -121,14 +121,15 @@ local function sign(parent,at,title,subtitle,color,facing)
  textFace(board,title,subtitle,color)
  return board
 end
-local function light(parent,color,range,brightness)
- local l=Instance.new('PointLight');l.Name='WorkLight';l.Color=color;l.Range=range;l.Brightness=brightness;l.Shadows=false;l.Parent=parent
+-- Daytime landmarks use colored surfaces rather than bloom-producing point lights.
+local function light(_parent,_color,_range,_brightness)
+ return nil
 end
 local function path(parent,a,b,width)
  local middle=(a+b)/2
  -- All chords share one flat color. Tiny dark shoulder strips at every bend
  -- produced visible comb teeth in the real baseline Studio screenshot.
- local p=solid(block(parent,'Trail',middle,Vector3.new(width or 11,.28,(b-a).Magnitude+.35),P.dust,Enum.Material.SmoothPlastic))
+ local p=solid(block(parent,'Trail',middle,Vector3.new(width or 11,.28,(b-a).Magnitude+.35),P.dust,Enum.Material.Concrete))
  p.CFrame=CFrame.lookAt(middle,b);p:SetAttribute('WalkRoute',true)
  return p
 end
@@ -292,7 +293,7 @@ local function createFields(cfg: any,home: any,root: any,archive: any): any
   part.CFrame=CFrame.new(home+Vector3.new(unpack(field.Offset)));part.Size=Vector3.new(unpack(field.Size))
   cleanSurface(part,archive)
   local accent=Color3.fromRGB(unpack(field.Color))
-  local beds={Color3.fromRGB(130,190,139),Color3.fromRGB(159,102,91),Color3.fromRGB(88,146,179),Color3.fromRGB(142,117,178),Color3.fromRGB(63,156,114)}
+  local beds={Color3.fromRGB(132,143,112),Color3.fromRGB(139,83,69),Color3.fromRGB(73,112,139),Color3.fromRGB(110,88,134),Color3.fromRGB(55,118,82)}
   part.Name='Field';part.Anchored=true;part.CanCollide=true;part.CanQuery=true;part.Color=beds[id];part.Material=Enum.Material.SmoothPlastic;part:SetAttribute('FieldId',id);part:SetAttribute('Patch',id)
   part.TopSurface=Enum.SurfaceType.Studs
   local top=part.Position.Y+part.Size.Y/2;local bottom=part.Position.Y-part.Size.Y/2
@@ -311,7 +312,7 @@ local function createFields(cfg: any,home: any,root: any,archive: any): any
   sign(model,edge,string.format('%02d  %s',id,field.Name:upper()),subtitle,accent,facing)
   -- Flat, nonblocking perimeter rails make each complete working field easy
   -- to recognize from player height without fence collisions at entrances.
-  local rim=accent:Lerp(P.ivory,.45)
+  local rim=accent:Lerp(P.ivory,.2)
   for _,sgn in ipairs({-1,1}) do
    block(model,'FieldRim',Vector3.new(part.Position.X,top+.06,part.Position.Z+sgn*(part.Size.Z/2-.32)),Vector3.new(part.Size.X-.35,.12,.55),rim)
    block(model,'FieldRim',Vector3.new(part.Position.X+sgn*(part.Size.X/2-.32),top+.06,part.Position.Z),Vector3.new(.55,.12,part.Size.Z-.35),rim)
@@ -601,7 +602,7 @@ function W.initialize(): any
  if spawn then cleanSurface(spawn,archive);spawn.Color=P.ledge;spawn.Material=Enum.Material.Metal end
  preserveOriginalTrees(plan,archive)
  HarborLighting.apply()
- local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),Color3.fromRGB(172,182,158),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
+ local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),Color3.fromRGB(135,146,122),Enum.Material.Concrete));depot:SetAttribute('SafeDepot',true)
  -- Flush panel joints and painted corner brackets make one deliberate working yard.
  for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end
  for _,z in ipairs({-8,0,8}) do block(map,'ApronJoint',Vector3.new(home.X,.216,home.Z+z),Vector3.new(38,.02,.1),P.stone) end
@@ -617,9 +618,6 @@ function W.initialize(): any
   local lamp=block(map,'DepotLamp',Vector3.new(home.X+dx,10.8,home.Z-12.5),Vector3.new(1.4,.4,.4),P.ivory,Enum.Material.Neon);light(lamp,P.ivory,22,.7)
  end
  block(map,'DepotLintel',Vector3.new(home.X,11.3,home.Z-13),Vector3.new(35,.8,1.2),P.edge,Enum.Material.Metal)
- block(map,'DepotCanopy',Vector3.new(home.X,12,home.Z-8),Vector3.new(38,.65,13),P.ivory,Enum.Material.SmoothPlastic)
- block(map,'CanopyInset',Vector3.new(home.X,11.64,home.Z-8),Vector3.new(34,.1,10),P.metal,Enum.Material.Metal)
- block(map,'DepotSunstripe',Vector3.new(home.X,12.36,home.Z-4),Vector3.new(31,.06,1.6),P.amber,Enum.Material.SmoothPlastic)
  -- The retrieval beacon is a single memorable skyline silhouette and a
  -- navigation landmark from every field. Its two legs connect to the depot,
  -- rather than floating a glowing sign above the scene.
@@ -639,7 +637,7 @@ function W.initialize(): any
  textFace(header,'MINING AWAY','EXTRACTION DEPOT  /  01',P.ivory)
  -- One grounded pointer connects the starting instruction to the first field.
  -- Its posts are noncolliding, set aside from the walking route and machines.
- sign(map,Vector3.new(home.X-15,home.Y-.5,home.Z+12),'QUARTZ','SAFE FIELD  /  FIRST ORE',P.mint,Vector3.new(home.X,home.Y,home.Z))
+ sign(map,Vector3.new(home.X+13,home.Y-.5,home.Z+12),'QUARTZ','SAFE FIELD  /  FIRST ORE',P.mint,Vector3.new(home.X,home.Y,home.Z))
  local printer=station(map,'Printer',home+Vector3.new(12,-.5,-2),P.mint,'Free reprint','Printer')
  local packs=station(map,'PackStation',home+Vector3.new(-12,-.5,-2),P.blue,'Open pack','Pack')
  local prestige=station(map,'PrestigeStation',home+Vector3.new(0,-.5,-12),P.amber,'Review prestige','Prestige')
@@ -668,6 +666,31 @@ function W.initialize(): any
  local districtStone={Color3.fromRGB(79,98,91),Color3.fromRGB(101,82,75),Color3.fromRGB(75,93,105),Color3.fromRGB(91,83,99),Color3.fromRGB(72,98,78)}
  createTerraces(map,plan,districtStone,root)
  createRoutes(map,plan,home)
+ -- A low, non-queryable threshold marks the safe quarry entrance without
+ -- changing field collision or crystal placement. Its posts sit on the field.
+ local quartz=plan.fields[1]
+ local approach
+ for _,route in ipairs(plan.routes) do
+  if route.name=='Quartz approach' then approach=route;break end
+ end
+ if quartz and approach then
+  local endpoint=approach.samples[#approach.samples]
+  local x=math.clamp(endpoint[1],quartz.x-quartz.w/2+6,quartz.x+quartz.w/2-6)
+  local z=math.clamp(endpoint[3],quartz.z-quartz.d/2+6,quartz.z+quartz.d/2-6)
+  local direction=Vector3.new(quartz.x-x,0,quartz.z-z)
+  if direction.Magnitude>.01 then
+   local forward=direction.Unit;local side=Vector3.new(-forward.Z,0,forward.X)
+   local entry=Instance.new('Model');entry.Name='QuartzQuarryEntry';entry.Parent=map
+   local center=Vector3.new(x,quartz.top,z)
+   local sill=block(entry,'EntrySill',center+Vector3.new(0,.055,0),Vector3.new(10,.08,4),P.dust,Enum.Material.Concrete)
+   sill.CFrame=CFrame.lookAt(sill.Position,sill.Position+forward)
+   for _,n in ipairs({-1,1}) do
+    local foot=center+side*(n*4.5)
+    block(entry,'EntryPost',foot+Vector3.new(0,1.5,0),Vector3.new(.65,3,.65),P.metal,Enum.Material.Metal)
+    block(entry,'EntryMarker',foot+Vector3.new(0,3.05,0),Vector3.new(.85,.2,.85),P.ivory,Enum.Material.SmoothPlastic)
+   end
+  end
+ end
  createLandscapeProps(map,plan,foliage,constructGround,constructLow)
  root:SetAttribute('TreeCount',#plan.trees);root:SetAttribute('RouteCount',#plan.routes);root:SetAttribute('MapScale',MapLayout.Scale);root:SetAttribute('OpenHubRadius',46)
  root:SetAttribute('SourceSceneIntegrated',true);root:SetAttribute('FieldCount',#fields);root:SetAttribute('ArtDirection','Mining Away / Studded Terraces / Retrieval Beacon')
