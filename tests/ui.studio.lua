@@ -102,6 +102,12 @@ return function(_Interface,_CardView,options)
    local slot=body:FindFirstChild('OfferSlot'..index)
    local card=slot and slot:FindFirstChild('CardChoice'..index,true)
    local focus=card and card:FindFirstChild('FocusCard',true)
+   local title=card and card:FindFirstChild('CardTitle',true)
+   if title and title.Text=='Prism Splitter' then
+    local art=card:FindFirstChild('MechanicArtwork',true);local crystals=0
+    if art then for _,part in ipairs(art:GetDescendants()) do if part.Name=='ForkCrystalPrimary' or part.Name=='ForkCrystalSecondary' then crystals+=1 end end end
+    check(crystals==2,'prism must show one primary and one secondary target')
+   end
    check(focus~=nil,'missing focus card '..index)
    if focus then
     check(focus.AbsoluteSize.X>=44 and focus.AbsoluteSize.Y>=44,'focus card '..index..' target under 44px')

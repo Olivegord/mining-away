@@ -69,6 +69,14 @@ for _, view in ipairs(viewports) do
  end)
 end
 
+check('resource and objective surfaces stay compact without reducing targets',function()
+ for _,view in ipairs({{320,568,true},{390,844,true},{1280,720,false},{1920,1080,false}}) do
+  local l=Layout.calculate(view[1],view[2],view[3])
+  assert(l.hudWidth<=290 and l.objectiveWidth<=290,'HUD should leave the world visible')
+  assert(l.hudHeight>=76 and l.recallWidth>=44 and l.recallHeight>=44,'readable HUD and touch targets must fit')
+ end
+end)
+
 check('430px native width uses compact readable modal title copy',function()
  local l=Layout.calculate(430,720,false)
  assert(l.panelWidth==406 and Layout.compactMenuTitles(l.panelWidth),'the measured 30px title would wrap to 60px in a 43px box')

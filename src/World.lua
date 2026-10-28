@@ -187,15 +187,19 @@ local function tree(parent,x,z,h,color,ground,yaw,foundationBottom)
   if name=='Canopy' or name=='Crown' then v.TopSurface=Enum.SurfaceType.Studs end
   return v
  end
- -- Forked trunks and chunky, tiered crowns keep the original parts-built language.
+ -- Smaller, asymmetric crowns keep lanes and landmarks readable from below.
+ -- Variant is stable for each authored position; roots and footings are unchanged.
+ local variant=math.floor(math.abs(x*3+z*5))%3
  localPart('Trunk',Vector3.new(0,h*.39,0),Vector3.new(1.35,h*.78,1.5),trunkColor)
  localPart('Root',Vector3.new(-.55,.65,0),Vector3.new(3.6,1.3,2.7),trunkColor)
- localPart('Fork',Vector3.new(2,h*.68,0),Vector3.new(.85,h*.44,.9),trunkColor,math.rad(-29))
- localPart('Fork',Vector3.new(-2.2,h*.65,.3),Vector3.new(.8,h*.34,.85),trunkColor,math.rad(32))
- localPart('Canopy',Vector3.new(-2.5,h*.84,.3),Vector3.new(h*.52,3.4,h*.46),color,math.rad(-9))
- localPart('Canopy',Vector3.new(3.5,h*.88,-.3),Vector3.new(h*.43,3.1,h*.39),color:Lerp(P.amber,.12),math.rad(8))
- localPart('Canopy',Vector3.new(0,h,0),Vector3.new(h*.48,3.5,h*.42),color:Lerp(P.ivory,.14),math.rad(-3))
- localPart('Crown',Vector3.new(-1,h+2.1,.3),Vector3.new(h*.29,1.5,h*.3),color:Lerp(P.ivory,.27),math.rad(-5))
+ localPart('Fork',Vector3.new(1.35,h*.68,0),Vector3.new(.85,h*.40,.9),trunkColor,math.rad(-20))
+ localPart('Fork',Vector3.new(-1.3,h*.65,.3),Vector3.new(.8,h*.32,.85),trunkColor,math.rad(23))
+ localPart('Canopy',Vector3.new(-1.65,h*.83,.2),Vector3.new(h*(variant==0 and .29 or .25),2.5,h*.25),color,math.rad(-5))
+ localPart('Canopy',Vector3.new(1.65,h*.88,-.3),Vector3.new(h*.24,2.3,h*(variant==1 and .28 or .22)),color:Lerp(P.amber,.08),math.rad(5))
+ localPart('Canopy',Vector3.new(0,h*.95,0),Vector3.new(h*(variant==2 and .30 or .25),2.5,h*.24),color:Lerp(P.ivory,.08),0)
+ if variant~=1 then
+  localPart('Crown',Vector3.new(-.5,h+1,.2),Vector3.new(h*.18,1.0,h*.18),color:Lerp(P.ivory,.14),0)
+ end
  return m
 end
 local function stone(parent: any,at: any,size: any,tilt: {number},color: any,name: any)
@@ -433,6 +437,7 @@ local function createLandscapeProps(map: any,plan: any,foliage: any,constructGro
  local edge=Instance.new('Model');edge.Name='ValleyRetainingEdge';edge.Parent=map
  local x0,z0=plan:point(MapLayout.Origin[1],MapLayout.Origin[2])
  local x1,z1=plan:point(MapLayout.Origin[1]+MapLayout.Columns*MapLayout.Cell,MapLayout.Origin[2]+MapLayout.Rows*MapLayout.Cell)
+ local boundaryIndex=0
  local function boundary(a,b)
   local delta=b-a;local n=math.ceil(delta.Magnitude/32)
   for i=1,n do
@@ -441,6 +446,15 @@ local function createLandscapeProps(map: any,plan: any,foliage: any,constructGro
    local panel=solid(block(edge,'RetainingPanel',Vector3.new(mid.X,ground+3,mid.Z),Vector3.new(2,6,(finish-start).Magnitude),P.edge))
    panel.CFrame=CFrame.lookAt(panel.Position,Vector3.new(finish.X,panel.Position.Y,finish.Z))
    panel.TopSurface=Enum.SurfaceType.Studs;panel:SetAttribute('GroundedBase',true);panel:SetAttribute('FootTop',ground)
+   boundaryIndex+=1
+   -- Four authored breaks in the boundary silhouette; fixed positions rather
+   -- than a repeated decorative carpet. These blocks sit on the existing wall.
+   if boundaryIndex==3 or boundaryIndex==14 or boundaryIndex==27 or boundaryIndex==42 then
+    local crest=block(edge,'BoundaryOutcrop',panel.Position+Vector3.new(0,3.6,0),Vector3.new(3.4,1.2,8),P.stone)
+    crest.CFrame=CFrame.new(crest.Position)*panel.CFrame.Rotation
+    local step=block(edge,'BoundaryOutcropStep',crest.Position+Vector3.new(0,.9,0),Vector3.new(2.2,.6,4),P.ledge)
+    step.CFrame=CFrame.new(step.Position)*panel.CFrame.Rotation
+   end
   end
  end
  boundary(Vector3.new(x0,0,z0),Vector3.new(x1,0,z0));boundary(Vector3.new(x1,0,z0),Vector3.new(x1,0,z1))

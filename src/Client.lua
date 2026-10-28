@@ -54,9 +54,8 @@ local fleetCount=label(fleetButton,UDim2.fromOffset(0,34),UDim2.new(1,0,0,23),'1
 local runButton=button(hud,UDim2.new(1,-68,0,10),UDim2.fromOffset(52,64),'',function() if profile and profile.run.pendingOffer then openOffer() else openRunCards() end end,palette.accent:Lerp(palette.white,.45));runButton.Name='OpenRunCards'
 U.icon(runButton,'cards',UDim2.fromOffset(11,3),UDim2.fromOffset(30,30),palette.accent)
 local runCount=label(runButton,UDim2.fromOffset(0,34),UDim2.new(1,0,0,23),'0',16,palette.ink,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
-local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(360,48),palette.panel,10);objectiveBox.Name='NextStep'
-U.icon(objectiveBox,'crystal',UDim2.fromOffset(9,9),UDim2.fromOffset(27,27),palette.mineral)
-local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine a field, then sell your cargo.',16,palette.ink);objective.Name='Objective'
+local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(290,48),palette.panel,10);objectiveBox.Name='NextStep';objectiveBox.BackgroundTransparency=1
+local objective=label(objectiveBox,UDim2.fromOffset(0,5),UDim2.new(1,0,1,-10),'Mine a field, then sell your cargo.',16,palette.ink);objective.Name='Objective';objective.TextStrokeColor3=palette.white;objective.TextStrokeTransparency=.45
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',16,palette.ink,true);notice.TextXAlignment=Enum.TextXAlignment.Center
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if requestRecall then requestRecall() end end,palette.panel);recall.Name='Recall'
@@ -1085,14 +1084,14 @@ connect(RunService.Heartbeat,function(dt)
   elseif amount>=capacity then objective.Text='Cargo full! Recall your fleet,\nthen sell at the Converter.'
   elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
   elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' credits.\nOpen your next pack at the depot.'
-  elseif (profile.run.packIndex or 0)==0 then objective.Text='Send your drone to a mineral field.\nMine → sell → choose your first upgrade.'
+  elseif (profile.run.packIndex or 0)==0 then objective.Text='Mine → sell → choose a card.'
   elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Defeat %s to grow your crew.\nSentry clears: %d / %d.',pre.field or 'Cobalt',pre.wins or 0,pre.winsRequired or 1)
   elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s clears: %d / %d.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',pre.wins or 0,pre.winsRequired or 1)
   else objective.Text='Mine, sell and build a stronger crew.\nSentries guard the richest minerals.' end
  end
  -- Objectives may wrap to three lines at 320px. Measure the real copy at the
  -- available width, keeping the next action separate rather than clipping.
- local objectiveTextHeight=wrappedHeight(objective.Text,l.objectiveWidth-52,16,false,32)
+ local objectiveTextHeight=wrappedHeight(objective.Text,l.objectiveWidth,16,false,32)
  local objectiveHeight=UILayout.objectiveHeightFor(objectiveTextHeight)
  if not l.short then objectiveBox.Size=UDim2.fromOffset(l.objectiveWidth,objectiveHeight) end
  local ownActive=false;local reprints={};local now=workspace:GetServerTimeNow()
@@ -1109,6 +1108,8 @@ connect(RunService.Heartbeat,function(dt)
  if ownActive then objectiveBox.Visible=false end
  if #reprints>0 and os.clock()>noticeUntil then notice.Text=#reprints>2 and tostring(#reprints)..' drones reprinting for free' or table.concat(reprints,' · ') end
  local station=nearbyInteraction();contextAction=nil;context.Visible=false
+ -- The native prompt remains usable, but a fresh run does not need a prestige dock.
+ if station and station:GetAttribute('Interaction')=='Prestige' and profile and profile.run and (profile.run.saleEarnings or 0)<=0 then station=nil end
  local desiredContext=station and ({Pack='cards',Prestige='prestige',Sell='cargo'})[station:GetAttribute('Interaction')] or 'mining'
  if desiredContext~=contextKind then contextKind=desiredContext;contextIcon:Destroy();contextIcon=U.icon(context,contextKind,UDim2.fromOffset(12,(l.contextHeight-34)/2),UDim2.fromOffset(34,34),palette.mineral) end
  if station and not modal.Visible then

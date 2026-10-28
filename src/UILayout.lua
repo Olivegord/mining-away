@@ -17,7 +17,7 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  local margin = width < 900 and 12 or 16
  local availableWidth = math.max(1, width - margin * 2)
 
- local hudWidth = math.min(360, availableWidth)
+ local hudWidth = math.min(290, availableWidth)
  local hudHeight = short and 76 or 88
  local hudX, hudY = margin, 12
  local objectiveHeight = short and 28 or 42
@@ -101,7 +101,7 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
   recallY = actionY,
   evadeX = actionX + actionButtonWidth + actionGap,
   evadeY = actionY,
-  objectiveWidth = math.min(360, availableWidth),
+  objectiveWidth = math.min(290, availableWidth),
   objectiveHeight = objectiveHeight,
   objectiveY = objectiveY,
   bottomReserve = bottomReserve,

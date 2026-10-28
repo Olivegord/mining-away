@@ -56,16 +56,14 @@ local function illustration(U,card,choice,category,width,height)
   shape(.68,.62,.035,.20,copper,-48)
   shape(.68,.27,.19,.035,ink,0)
  elseif isPrism then
-  -- One incoming laser becomes three distinct rays around a central prism.
+  -- A primary laser continues to its crystal and splits to ONE more.
   drone(.34,.08,1.15)
   shape(.48,.27,.035,.25,copper)
   shape(.37,.48,.26,.26,teal,45)
-  shape(.17,.69,.28,.025,copper,-28)
-  shape(.48,.70,.04,.22,copper)
-  shape(.56,.69,.27,.025,copper,28)
-  shape(.12,.78,.14,.10,ink,45)
-  shape(.40,.88,.14,.10,ink,45)
-  shape(.74,.78,.14,.10,ink,45)
+  shape(.25,.69,.27,.025,copper,-26)
+  shape(.52,.69,.27,.025,copper,26)
+  shape(.13,.78,.16,.11,ink,45).Name='ForkCrystalPrimary'
+  shape(.71,.78,.16,.11,ink,45).Name='ForkCrystalSecondary'
  elseif isCombat then
   -- Fleet formation facing the original stepped pyramid silhouette.
   drone(.08,.12,.8);drone(.38,.05,.8);drone(.67,.12,.8)
@@ -117,15 +115,16 @@ local function compactCard(U,parent,choice,index,width,height,options)
  local card=U.panel(parent,UDim2.fromOffset(3,6),UDim2.fromOffset(width,height),Color3.fromRGB(244,229,195),4)
  card.Name='CardChoice'..tostring(index);card.LayoutOrder=index
  -- Illustration occupies the face; details remain in the focused panel.
- local artHeight=math.max(42,math.floor(height*.54))
+ local artHeight=math.max(42,math.floor(height*.52))
  local titleY=artHeight+9
- local titleHeight=height>=170 and math.max(20,height-titleY-43) or math.max(30,height-titleY-6)
+ local hasSummary=width>=120 and height>=170
+ local titleHeight=hasSummary and math.max(20,height-titleY-43) or math.max(30,height-titleY-6)
  illustration(U,card,choice,category,width,artHeight)
  local title=U.text(card,UDim2.fromOffset(6,titleY),UDim2.fromOffset(width-12,titleHeight),choice.title or 'Run card',16,p.ink,true)
  title.Name='CardTitle';title.TextXAlignment=Enum.TextXAlignment.Center
  local rows=options.previewRows or {}
  local summary=U.text(card,UDim2.fromOffset(6,height-41),UDim2.fromOffset(width-12,35),rows[1] or '',16,p.ink,true)
- summary.Name='CardSummary';summary.TextXAlignment=Enum.TextXAlignment.Center;summary.Visible=width>=120 and height>=170 and rows[1]~=nil
+ summary.Name='CardSummary';summary.TextXAlignment=Enum.TextXAlignment.Center;summary.Visible=hasSummary and rows[1]~=nil
  local rarity=(choice.rarity=='Common' or choice.rarity=='Uncommon' or choice.rarity=='Rare') and choice.rarity or nil
  if rarity and width>=120 then
   -- An understated edge mark signals rarity without displacing the art.

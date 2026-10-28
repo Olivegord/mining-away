@@ -621,10 +621,13 @@ local function chooseCard(p: any,pl: any,payload: any)
 end
 local function executePrestige(p: any,pl: any,payload: any)
  if payload.confirm~=true or not atStation(p,scene.prestigeStation,20) then return end
- local profileRuntime: any=Profile
- transact(p,'prestige:'..payload.txId,function(copy: any)
-  local ok,r=profileRuntime.prestige(copy,payload.txId,payload.runId,{atDepot=true,activeEncounter=activeAssault(p),confirmed=true});if ok then return r end;return nil,r
- end,function()
+ local function applyPrestige(copy: any): (any, any)
+  local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true}
+  local ok: boolean,result: any=Pro.prestige(copy,payload.txId,payload.runId,context)
+  if ok then return result end
+  return nil,result
+ end
+ transact(p,'prestige:'..payload.txId,applyPrestige,function()
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
   rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
  end)
