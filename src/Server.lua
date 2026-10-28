@@ -638,6 +638,33 @@ local function executePrestige(p: any,pl: any,payload: any)
   rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
  end)
 end
+local function economyAction(p: any,pl: any,action: string,payload: any): boolean
+ if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
+  if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
+  return false
+ end
+ if not atHome(p) then
+  notice(p,'Use the pack machine or prestige beacon at the depot.')
+  if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
+  return false
+ end
+ if action=='BuyPack' then
+  if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
+  if not atStation(p,scene.packStation,20) then return false end
+  local function buyCard(copy: any): (any, any)
+   local options: any={combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
+   if ok then return result end
+   return nil,result
+  end
+  transact(p,'buy:'..payload.txId,buyCard,function() notice(p,'Choose one card. All three choices and targets are saved.') end)
+ elseif action=='ChooseCard' then
+  chooseCard(p,pl,payload)
+ else
+  executePrestige(p,pl,payload)
+ end
+ return true
+end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
  if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
@@ -713,19 +740,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local expected=data(p).run.id;local tx='sale:'..Http:GenerateGUID(false)
   transact(p,tx,function(copy) local ok,r=Pro.sell(copy,prices,tx,expected);if ok then return r end;return nil,r end,function(r) notice(p,'Sold for '..r.credits..' credits.') end)
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
-  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end;return end
-  if not atHome(p) then notice(p,'Use the pack machine or prestige beacon at the depot.');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end;return end
-  if action=='BuyPack' then
-   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return end
-   if not atStation(p,scene.packStation,20) then return end
-   transact(p,'buy:'..payload.txId,function(copy)
-    local ok,r=Ca.buy(copy,payload.txId,payload.runId,{combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
-   end,function() notice(p,'Choose one card. All three choices and targets are saved.') end)
-  elseif action=='ChooseCard' then
-   chooseCard(p,pl,payload)
-  else
-   executePrestige(p,pl,payload)
-  end
+  if not economyAction(p,pl,action,payload) then return end
  end
  p.publishDirty=true
 end
