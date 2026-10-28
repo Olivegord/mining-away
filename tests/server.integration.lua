@@ -551,4 +551,24 @@ check('same-field dispatch preserves current mining and adds idle living fleet o
  local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local d=assignExact(a,f,r);local idle=p.drones[2];d.warmAt=now-.2;local warm=d.warmAt
  input(a,'Patch',1);eq(d.target,r);eq(d.warmAt,warm);eq(r.slots[d.id],1);eq(idle.field,1);eq(idle.state,'Travel')
 end)
+check('routine autosave UpdateAsync preserves live job and pauses warmup across yielding save',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local p=profile(a);local d=assignExact(a,f,r)
+ d.warmAt=now-.1;updateSlots(r);p.dirty=true;local called=false
+ runtimeStore.hook=function()
+  called=true;eq(p.busy,true);local hp=r.hp;local warm=d.warmAt;local cargo=Profile.cargoUnits(data(p))
+  advance(.3);eq(d.target,r);eq(r.slots[d.id],1);eq(r.part:GetAttribute('SlotsUsed'),1);eq(r.hp,hp);eq(Profile.cargoUnits(data(p)),cargo);close(d.warmAt-warm,.3,.02)
+ end
+ autosaveElapsed=29.99;advance(.05);eq(called,true);eq(p.busy,false);eq(d.target,r);eq(r.slots[d.id],1);eq(p.dirty,false)
+ local hp=r.hp;d.warmAt=now-d.stats.warmup-.1;advance(.1);assert(r.hp<hp);eq(Profile.cargoUnits(data(p)),0)
+end)
+check('routine autosave freezes an already firing beam then resumes and rewards once',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',100,10);advance(2.1);local p=profile(a);local d=assignExact(a,f,r)
+ d.warmAt=now-d.stats.warmup-.1;droneStep(d,1/60);eq(d.mining,true);local beamSince=d.beamSince;updateSlots(r);p.dirty=true;local called=false
+ runtimeStore.hook=function()
+  called=true;local hp=r.hp;local cargo=Profile.cargoUnits(data(p));advance(.3)
+  eq(p.busy,true);eq(d.target,r);eq(r.slots[d.id],1);eq(d.mining,true);eq(d.beamSince,beamSince);eq(r.hp,hp);eq(Profile.cargoUnits(data(p)),cargo)
+ end
+ autosaveElapsed=29.99;advance(.05);eq(called,true);eq(p.busy,false);eq(d.target,r);eq(d.mining,true)
+ local hp=r.hp;advance(.1);assert(r.hp<hp);droneStep(d,1000);eq(r.paid,true);local earned=Profile.cargoUnits(data(p));assert(earned>0);droneStep(d,1000);eq(Profile.cargoUnits(data(p)),earned)
+end)
 print(checks..' actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested')
