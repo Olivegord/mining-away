@@ -17,3 +17,7 @@ node_modules/
 
 
 tests/generated-beam.spec.lua
+tests/generated-motion.spec.lua
+tests/generated-server-motion.spec.lua
+
+tests/generated-client-intent.spec.lua

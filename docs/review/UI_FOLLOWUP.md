@@ -1,0 +1,9 @@
+# Inspector, dispatch and pause follow-up
+
+The production fleet, installed cards, pack, prestige and HUD use larger text and measured reflow for long titles, targets and reset disclosures. Save status states NOT SAVED or LOAD FAILED. The Studio harness inspects real open production UI text bounds and touch targets, but needs a real Play client and leaves interaction steps manual. It was not run here.
+
+All primary field actions now use correlated bounded requests, with pending and authoritative feedback. Individual targeting suppresses unrelated field/station shortcuts and clears its highlight on exit. Offer focus stays on the submitted choice; only a correlated definite rejection unlocks it, uncertain saves remain locked, and retry uses the same transaction ID. A field out of range retires its own drone and field participation without recalling another field. A server-published pause holds observer rendering during saving or unreconciled save failure.
+
+The complete pinned Luau test runner passes, including 65 production-server checks, six tests executing extracted production client field handlers and receipt callbacks, five actual renderDrone checks, and integrated server/client delayed-save checks using API doubles. Binary preservation and original geometry checks pass. The split-fleet and motion regressions fail with the corresponding prior implementation. These checks are not Studio rendering, network transport or live DataStore evidence.
+
+Independent visual verdict remains NOT VERIFIED. On the exact final build inspect production screens at desktop and phone sizes and actual TextFits; test card reveal, focus, rejection, retry and reopen, mouse/touch/controller selection and confirmation. Watch movement and mining in motion at low/high graphics, with multiple players and a late join; inspect crystal shrink, both beam endpoints, particles and scenery contact. Re-review with fresh final-build evidence before approving.

@@ -149,7 +149,8 @@ function Layout.revealDelay(index,reducedMotion)
 end
 
 -- Only a matching server receipt can mark an assignment as complete.
-function Layout.assignmentReceipt(pendingId,receipt,droneName)
+function Layout.assignmentReceipt(pendingId,receipt,droneName,cancelDesired)
+ if cancelDesired then return nil end
  if type(pendingId)~='string' or type(receipt)~='table' or receipt.requestId~=pendingId then return nil end
  if receipt.status=='accepted' then
   return 'accepted',(droneName or 'Drone')..' assigned'..(receipt.slot and (' · slot '..tostring(receipt.slot)) or '')
@@ -157,6 +158,39 @@ function Layout.assignmentReceipt(pendingId,receipt,droneName)
   return 'rejected',tostring(receipt.reason or 'Assignment rejected')
  end
  return nil
+end
+
+-- Correlate fleet feedback to the exact field request; unsolicited/stale
+-- attributes cannot be mistaken for the latest command's success.
+function Layout.fieldReceipt(pendingId,receipt,expectedFieldId)
+ if type(pendingId)~='string' or type(receipt)~='table' or receipt.requestId~=pendingId then return nil end
+ if receipt.status=='accepted' and expectedFieldId~=nil and receipt.fieldId~=expectedFieldId then return nil end
+ if receipt.status=='accepted' then return 'accepted',tostring(receipt.reason or 'Fleet assigned') end
+ if receipt.status=='recalled' then return 'recalled',tostring(receipt.reason or 'Fleet recalled') end
+ if receipt.status=='rejected' then return 'rejected',tostring(receipt.reason or 'Field assignment rejected') end
+ return nil
+end
+
+-- Retrying an unresolved card must reuse the original durable idempotency key.
+function Layout.claimRetryId(offerId,index,claim)
+ if type(claim)=='table' and claim.offerId==offerId and claim.index==index then return claim.txId end
+ return nil
+end
+
+-- Ignore foreign, stale and malformed transaction results; an uncertain
+-- result stays locked until the server resolves the exact paid choice.
+function Layout.offerReceipt(claim,receipt)
+ if type(claim)~='table' or type(receipt)~='table' or receipt.txId~=claim.txId or receipt.runId~=claim.runId or receipt.offerId~=claim.offerId then return nil end
+ if receipt.status=='accepted' then return 'accepted',tostring(receipt.reason or 'Card saved') end
+ if receipt.status=='rejected' then return 'rejected',tostring(receipt.reason or 'Choice rejected') end
+ if receipt.status=='uncertain' then return 'uncertain',tostring(receipt.reason or 'Save uncertain • reconciling') end
+ return nil
+end
+
+-- Once submitted, only the same paid card may remain focused until the server
+-- confirms or rejects the transaction. An uncertain timeout is not a reroll.
+function Layout.offerFocusAllowed(offerId,index,claim)
+ return not claim or claim.offerId~=offerId or claim.index==index
 end
 
 return Layout

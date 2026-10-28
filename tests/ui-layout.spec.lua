@@ -161,4 +161,38 @@ check('reveal is brief, bounded, deterministic and immediately bypassed for redu
  assert(Layout.revealDelay(1,true)==0 and Layout.revealDelay(3,true)==0)
  assert(Layout.revealDelay(999,false)==Layout.revealDelay(3,false),'late/invalid index cannot extend the reveal')
 end)
+check('committed offer focus cannot drift during pending or uncertain confirmation',function()
+ local claim={offerId='offer-a',index=2}
+ assert(Layout.offerFocusAllowed('offer-a',2,claim))
+ assert(not Layout.offerFocusAllowed('offer-a',1,claim))
+ assert(not Layout.offerFocusAllowed('offer-a',3,claim))
+ assert(Layout.offerFocusAllowed('offer-a',1,nil),'failure clears focus lock')
+ assert(Layout.offerFocusAllowed('offer-b',1,claim),'a different saved offer owns its own focus')
+end)
+check('field acknowledgments match only the current bounded request',function()
+ assert(Layout.fieldReceipt('a',{requestId='old',status='accepted'})==nil)
+ local status,message=Layout.fieldReceipt('a',{requestId='a',status='rejected',reason='Too far from field'})
+ assert(status=='rejected' and message=='Too far from field')
+ status,message=Layout.fieldReceipt('a',{requestId='a',status='accepted',reason='Fleet assigned'})
+ assert(status=='accepted' and message=='Fleet assigned')
+ status,message=Layout.fieldReceipt('recall',{requestId='recall',status='recalled',reason='Fleet recalled'})
+ assert(status=='recalled' and message=='Fleet recalled')
+ assert(Layout.fieldReceipt('recall',{requestId='old-field',status='accepted'})==nil,'a field receipt cannot reverse later Recall feedback')
+ assert(Layout.fieldReceipt('a',{requestId='a',status='accepted',fieldId=2},1)==nil,'accepted receipt must match destination')
+ assert(Layout.fieldReceipt('a',{requestId='a',status='accepted',fieldId=1},1)=='accepted')
+ assert(Layout.assignmentReceipt('a',{requestId='a',status='accepted'},'Blue 1',true)==nil,'late assignment is ignored while cancellation remains desired')
+end)
+check('offer transaction receipts are tied to exact tx run and offer',function()
+ local claim={txId='tx',runId='run',offerId='offer',index=2}
+ assert(Layout.claimRetryId('offer',2,claim)=='tx','same card retry keeps durable idempotency key')
+ assert(Layout.claimRetryId('offer',1,claim)==nil and Layout.claimRetryId('other',2,claim)==nil)
+ local rejected={txId='tx',runId='run',offerId='offer',status='rejected',reason='Choice no longer available'}
+ local state,reason=Layout.offerReceipt(claim,rejected)
+ assert(state=='rejected' and reason=='Choice no longer available')
+ rejected.txId='old';assert(Layout.offerReceipt(claim,rejected)==nil);rejected.txId='tx'
+ rejected.runId='other';assert(Layout.offerReceipt(claim,rejected)==nil);rejected.runId='run'
+ rejected.offerId='other';assert(Layout.offerReceipt(claim,rejected)==nil);rejected.offerId='offer'
+ rejected.status='uncertain';assert(Layout.offerReceipt(claim,rejected)=='uncertain')
+ rejected.status='accepted';assert(Layout.offerReceipt(claim,rejected)=='accepted')
+end)
 print(string.format('PASS %d responsive safe-content geometry tests (rendering and native touch controls still require Studio)',passed))

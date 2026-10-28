@@ -68,3 +68,7 @@ The owner's latest audit tightens the above: target **18 px** for essential targ
 - The map source substitutes square studded parts for the faceted meadow and supplies foundation calculations. Path joins, props and landmark supports still require actual player-height traversal across terrain steps. None of these source observations supersedes the verdict below.
 
 **Verdict remains NOT VERIFIED.** No real motion from the final candidate has been provided; consequently there is no final visual approval, no claim of good appearance or successful multiplayer playtest, and no basis for declaring the owner's visual goal complete.
+
+### Follow-up inspector and input pass
+
+Independent source review found tiny text in fleet, run cards, pack, prestige and HUD, plus insufficiently visible selection outcomes. The revised source uses larger text and measured wrapping, with an expanded save-status region that explicitly says NOT SAVED or LOAD FAILED. It also replaces the obsolete synthetic-card Studio harness with an inspector of open production screens. These are source changes, not visual approval. Inspect long titles, targets, values, subtitles and status messages on desktop and narrow portrait/landscape, and exercise real tab transitions, card pending/retry and reopen, and mouse/touch/controller dispatch. The harness inspects the current screen; it does not automate or prove those interactions. No final-candidate footage exists in this cloud environment. **Verdict remains NOT VERIFIED.**

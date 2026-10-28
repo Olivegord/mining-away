@@ -75,6 +75,21 @@ end
 local function spend(d)
  for _,p in ipairs(patches) do R.spend(p.e,d.id) end
 end
+local function dropFieldIfEmpty(p: any,fieldId: any)
+ if not fieldId then return end
+ for _,d in ipairs(p.drones) do if d.hp>0 and d.field==fieldId then return end end
+ local field=patches[fieldId]
+ if field then
+  R.removeUser(field.e,p.player.UserId,data(p).run.id)
+  if not p.busy then data(p).run.entitlements[tostring(fieldId)]=nil else p.entitlementSync=true end
+ end
+end
+local function leaveDroneField(p: any,d: any)
+ local old=d.field
+ release(d);spend(d);d.field=nil;d.commandOutAt=nil
+ if d.hp>0 then d.state='Return' end
+ dropFieldIfEmpty(p,old)
+end
 local function leaveField(p,keepField)
  local runId=data(p).run.id
  for _,field in ipairs(patches) do
@@ -432,16 +447,16 @@ local function droneStep(d: any,dt: number)
   if R.finishReprint(d,now,d.stats.maxHealth) then d.field=nil;d.commandOutAt=nil end
   return
  end
- local hr=characterRoot(p)
- if not hr then if d.field then leaveField(p) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0),dt);return end
  -- Freeze the job during a yielding save; no damage or profile mutation occurs.
  -- Shift the warmup clock so storage latency cannot skip weapon startup.
  if p.busy then if d.warmAt then d.warmAt=d.warmAt+dt end;return end
  if not store:healthy(p.session) then release(d);return end
+ local hr=characterRoot(p)
+ if not hr then if d.field then leaveField(p) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0),dt);return end
  local field=d.field and patches[d.field]
  if field and (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then
   d.commandOutAt=d.commandOutAt or now
-  if now-d.commandOutAt>3 then leaveField(p);field=nil end
+  if now-d.commandOutAt>3 then leaveDroneField(p,d);field=nil end
  else d.commandOutAt=nil end
  if field then
   if field.e.phase=='Gathering' then d.state='Travel';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
@@ -485,7 +500,7 @@ local function droneStep(d: any,dt: number)
      else d.warmAt=nil;d.mining=false end
     else d.state='Follow';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt) end
    end
-  else leaveField(p) end
+  else leaveDroneField(p,d) end
  else
   d.mining=false;d.combatTarget=nil
   local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,7,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)
@@ -502,7 +517,7 @@ local function snapshotDrone(d)
  local combatTarget=d.state=='Attack' and d.mining and d.combatTarget
  local combatId=combatTarget and combatTarget.hp>0 and combatTarget.model.Parent and combatTarget.model:GetAttribute('TurretId') or ''
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,
-  Position=d.pos,Goal=d.goal,Yaw=d.yaw,MaxStep60=d.stats.maxStep60,PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
+  Position=d.pos,Goal=d.goal,Yaw=d.yaw,MotionPaused=(profiles[d.owner].busy or not store:healthy(profiles[d.owner].session)) and d.hp>0,MaxStep60=d.stats.maxStep60,PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or d.targetPosition or d.pos,Mining=d.mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.stats.warmup,
   ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
   ForkTargetPosition=d.forkTarget or d.pos,ForkTargetId=(d.forkUntil or 0)>now and (d.forkTargetId or '') or '',ForkUntil=d.forkUntil or 0,
@@ -510,32 +525,76 @@ local function snapshotDrone(d)
   GeodeMultiplier=d.stats.geodeMultiplier,FinisherMultiplier=d.stats.finisherMultiplier,SalvageFraction=d.stats.salvageFraction,ChainRange=d.stats.splashRange}
  for k,v in pairs(values) do d.model:SetAttribute(k,v) end
 end
+-- Publish pause transitions immediately, not only on the periodic snapshot.
+-- Resume position and goal are sent before the pause flag is cleared.
+local function setMotionPaused(p: any,paused: boolean)
+ for _,d in ipairs(p.drones) do
+  if d.model and d.model.Parent and d.hp>0 then
+   d.model:SetAttribute('Position',d.pos);d.model:SetAttribute('Goal',d.goal);d.model:SetAttribute('Yaw',d.yaw)
+   d.model:SetAttribute('MotionPaused',paused)
+  end
+ end
+end
 local function resolveAfter(p,result)
  local after=p.pendingAfter;p.pendingAfter=nil
- if result and result.committed~=false and after and not p.leaving then after(result) end
+ local outcome=p.pendingOutcome;p.pendingOutcome=nil
+ local committed=result and result.committed~=false
+ if committed and after and not p.leaving then after(result) end
+ if outcome and not p.leaving then outcome(committed and 'accepted' or 'rejected',committed and 'Card installed' or 'Save confirmed no change; try again') end
 end
-local function transact(p,id,mutate,after)
+local function transact(p: any,id: any,mutate: any,after: any,outcome: any)
  if p.leaving or p.busy or not store:healthy(p.session) then return false end
- p.busy=true;p.pendingAfter=after;publish(p)
+ p.busy=true;setMotionPaused(p,true);p.pendingAfter=after;p.pendingOutcome=outcome;publish(p)
  task.spawn(function()
   local ok,result=store:transaction(p.session,id,mutate)
   if ok then p.dirty=false;resolveAfter(p,result)
   else
    notice(p,tostring(result))
    if p.session.readOnly then
-    local recovered,outcome=store:reconcile(p.session)
-    if recovered then resolveAfter(p,outcome) end
-   else p.pendingAfter=nil end
+    if p.pendingOutcome then p.pendingOutcome('uncertain','Saving outcome is being checked') end
+    local recovered,reconciled=store:reconcile(p.session)
+    if recovered then resolveAfter(p,reconciled) end
+   else
+    p.pendingAfter=nil;local report=p.pendingOutcome;p.pendingOutcome=nil
+    if report then report('rejected',tostring(result)) end
+   end
   end
-  p.busy=false;settleRuntime(p);if not p.leaving then publish(p) end
+  p.busy=false;setMotionPaused(p,not store:healthy(p.session));settleRuntime(p);if not p.leaving then publish(p) end
  end)
  return true
 end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
 end
+local offerReceiptSerial=0
+local function offerReply(pl: any,payload: any,status: string,reason: string)
+ if not validPayload(payload) or type(payload.offerId)~='string' or #payload.offerId>160 then return end
+ local gui=pl:FindFirstChildOfClass('PlayerGui');if not gui then return end
+ offerReceiptSerial=offerReceiptSerial%1000000000+1
+ gui:SetAttribute('MA_OfferReceipt',Http:JSONEncode({txId=payload.txId,runId=payload.runId,offerId=payload.offerId,status=status,reason=reason,serial=offerReceiptSerial}))
+end
+local function committedOffer(p: any,payload: any): boolean
+ if not p or not validPayload(payload) then return false end
+ for _,receipt in ipairs(p.session.receipts or {}) do
+  local result=receipt.result
+  if receipt.id=='choose:'..payload.txId and type(result)=='table' and result.offerId==payload.offerId and result.runId==payload.runId then return true end
+ end
+ return false
+end
+local function offerUnavailable(p: any,pl: any,payload: any,reason: string)
+ if committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed')
+ elseif validPayload(payload) and p and p.pendingOfferTx==payload.txId then
+  offerReply(pl,payload,'uncertain','Saving outcome is being checked')
+ else offerReply(pl,payload,'rejected',reason) end
+end
 local function validCommandId(v)
  return type(v)=='string' and #v>0 and #v<=80 and v:match('^[%w%-%_%.%:]+$')~=nil
+end
+local function validDroneIntent(payload: any): boolean
+ if type(payload)~='table' or not validCommandId(payload.requestId) then return false end
+ if type(payload.runId)~='string' or #payload.runId>100 then return false end
+ if type(payload.droneId)~='string' or #payload.droneId>160 then return false end
+ return R.finite(payload.life) and payload.life%1==0
 end
 local function commandReply(pl: any,payload: any,status: any,reason: any,field: any,drone: any,resource: any,slot: any)
  if type(payload)~='table' or not validCommandId(payload.requestId) then return end
@@ -551,23 +610,37 @@ local function commandReply(pl: any,payload: any,status: any,reason: any,field: 
  local state={requestId=payload.requestId,status=status,reason=reason,fieldId=field and field.id or nil,assignedCount=count,availableSlots=available,phase=field and field.e.phase or nil,droneId=drone and drone.id or nil,life=drone and drone.life or nil,resourceId=resource and resource.id or nil,slot=slot}
  gui:SetAttribute('MA_CommandState',Http:JSONEncode(state))
 end
-local function dropFieldIfEmpty(p: any,fieldId: any)
- if not fieldId then return end
- for _,d in ipairs(p.drones) do if d.hp>0 and d.field==fieldId then return end end
- local field=patches[fieldId];if field then R.removeUser(field.e,p.player.UserId,data(p).run.id);data(p).run.entitlements[tostring(fieldId)]=nil end
+local function chooseCard(p: any,pl: any,payload: any)
+   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then offerReply(pl,payload,'rejected','Invalid choice');return end
+   p.pendingOfferTx=payload.txId
+   local started=transact(p,'choose:'..payload.txId,function(copy)
+    local ok,r=Cards.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+   end,function() refreshStats(p);notice(p,'Card installed • this run only.') end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
+   if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
+end
+local function executePrestige(p: any,pl: any,payload: any)
+ if payload.confirm~=true or not atStation(p,scene.prestigeStation,20) then return end
+ local profileRuntime: any=Profile
+ transact(p,'prestige:'..payload.txId,function(copy: any)
+  local ok,r=profileRuntime.prestige(copy,payload.txId,payload.runId,{atDepot=true,activeEncounter=activeAssault(p),confirmed=true});if ok then return r end;return nil,r
+ end,function()
+  for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
+  rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
+ end)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
- local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');return end
+ local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
+ if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
- if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands') end;return end;p.tokens=p.tokens-1
- if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');return end
+ if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
+ if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end
  if action=='Recall' then leaveField(p);notice(p,'Fleet recalled. Assault slots are retired.');commandReply(pl,payload,'recalled','Fleet recalled')
  elseif action=='Evade' then
   if now<(p.nextEvade or 0) then return end;p.nextEvade=now+2
   for _,d in ipairs(p.drones) do if d.field and R.participates(patches[d.field].e,d,data(p).run.id) then d.evade=d.evade+1 end end
  elseif action=='CancelDrone' or action=='AssignSlot' then
   local function reject(why,field,d,r) commandReply(pl,payload,'rejected',why,field,d,r) end
-  if type(payload)~='table' or not validCommandId(payload.requestId) or type(payload.runId)~='string' or #payload.runId>100 or type(payload.droneId)~='string' or #payload.droneId>160 or not R.finite(payload.life) or payload.life%1~=0 then reject('Invalid request');return end
+  if not validDroneIntent(payload) then reject('Invalid request');return end
   if payload.runId~=data(p).run.id then reject('Run changed');return end
   local d=drones[payload.droneId]
   if not d or d.owner~=pl.UserId then reject('Drone unavailable');return end
@@ -630,8 +703,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local expected=data(p).run.id;local tx='sale:'..Http:GenerateGUID(false)
   transact(p,tx,function(copy) local ok,r=Profile.sell(copy,prices,tx,expected);if ok then return r end;return nil,r end,function(r) notice(p,'Sold for '..r.credits..' credits.') end)
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
-  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
-  if not atHome(p) then notice(p,'Use the pack machine or prestige beacon at the depot.');return end
+  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end;return end
+  if not atHome(p) then notice(p,'Use the pack machine or prestige beacon at the depot.');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end;return end
   if action=='BuyPack' then
    if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return end
    if not atStation(p,scene.packStation,20) then return end
@@ -639,19 +712,9 @@ local function commandPlayer(pl: any,action: any,payload: any)
     local ok,r=Cards.buy(copy,payload.txId,payload.runId,{combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
    end,function() notice(p,'Choose one card. All three choices and targets are saved.') end)
   elseif action=='ChooseCard' then
-   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then return end
-   transact(p,'choose:'..payload.txId,function(copy)
-    local ok,r=Cards.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
-   end,function() refreshStats(p);notice(p,'Card installed • this run only.') end)
+   chooseCard(p,pl,payload)
   else
-   if payload.confirm~=true or not atStation(p,scene.prestigeStation,20) then return end
-   transact(p,'prestige:'..payload.txId,function(copy)
-    local ok,r=Profile.prestige(copy,payload.txId,payload.runId,{atDepot=true,activeEncounter=activeAssault(p),confirmed=true});if ok then return r end;return nil,r
-   end,function()
-    -- Remove exactly this player's old run; shared teammates continue untouched.
-    for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
-    rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
-   end)
+   executePrestige(p,pl,payload)
   end
  end
  p.publishDirty=true
@@ -809,7 +872,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   autosaveElapsed=0
   for _,p in pairs(profiles) do
    if not p.busy and not p.leaving then
-    p.busy=true
+    p.busy=true;setMotionPaused(p,true)
     task.spawn(function()
      if p.session.readOnly then
       local recovered,result=store:reconcile(p.session);if recovered then resolveAfter(p,result) end
@@ -819,7 +882,7 @@ RunService.Heartbeat:Connect(function(dt: number)
       notice(p,'Save delayed: '..tostring(err))
       if p.session.readOnly then local recovered,result=store:reconcile(p.session);if recovered then resolveAfter(p,result) end end
      else p.dirty=false end
-     p.busy=false;settleRuntime(p);publish(p)
+     p.busy=false;setMotionPaused(p,not store:healthy(p.session));settleRuntime(p);publish(p)
     end)
    end
   end

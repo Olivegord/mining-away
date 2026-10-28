@@ -571,4 +571,78 @@ check('routine autosave freezes an already firing beam then resumes and rewards 
  autosaveElapsed=29.99;advance(.05);eq(called,true);eq(p.busy,false);eq(d.target,r);eq(d.mining,true)
  local hp=r.hp;advance(.1);assert(r.hp<hp);droneStep(d,1000);eq(r.paid,true);local earned=Profile.cargoUnits(data(p));assert(earned>0);droneStep(d,1000);eq(Profile.cargoUnits(data(p)),earned)
 end)
+check('split fleet range disengagement preserves in-range sibling and its reservation',function()
+ local a=fixture();local p=profile(a);data(p).run.saleEarnings=2000;data(p).run.wins.Cobalt=1
+ station(a,scene.prestigeStation);input(a,'Prestige',payload(a,'split-fleet-test',{confirm=true}));eq(#p.drones,2)
+ local left,right=patches[1],patches[2];local leftRock=newResource(left,'Crystal',100,10);local rightRock=newResource(right,'Crystal',100,10);advance(2.1)
+ local d1,d2=p.drones[1],p.drones[2];local gui=Instance.new('PlayerGui');gui.Parent=a
+ teleport(a,(left.center+right.center)*.5+Vector3.new(0,3,0))
+ input(a,'AssignSlot',{requestId='left',runId=data(p).run.id,fieldId=left.id,droneId=d1.id,life=d1.life,resourceId=leftRock.id});eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'accepted')
+ input(a,'AssignSlot',{requestId='right',runId=data(p).run.id,fieldId=right.id,droneId=d2.id,life=d2.life,resourceId=rightRock.id});eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'accepted')
+ teleport(a,right.center+Vector3.new(0,3,0));assert((a.Character.HumanoidRootPart.Position-left.center).Magnitude>(C.CommandRadius or 90))
+ d2.pos=Feel.mineGoal(rightRock.position,1,false);d2.goal=d2.pos;advance(3.2)
+ eq(d1.field,nil);eq(leftRock.slots[d1.id],nil);eq(d2.field,right.id);eq(d2.target,rightRock);assert(rightRock.slots[d2.id])
+end)
+check('scoped drone withdrawal retains sibling field clearance and retires only withdrawn roster',function()
+ local a=fixture();local p=profile(a);data(p).run.saleEarnings=2000;data(p).run.wins.Cobalt=1
+ station(a,scene.prestigeStation);input(a,'Prestige',payload(a,'withdraw-scope',{confirm=true}));eq(#p.drones,2)
+ local d1,d2=p.drones[1],p.drones[2];local firstField,other=patches[1],patches[3];local run=data(p).run.id
+ d1.field=firstField.id;d2.field=other.id
+ firstField.e.users[a.UserId]={runId=run};firstField.e.roster[d1.id]={user=a.UserId,runId=run}
+ other.e.users[a.UserId]={runId=run};other.e.roster[d2.id]={user=a.UserId,runId=run}
+ local token={runId=run,encounterId='scope-token'};other.e.entitlements[a.UserId]=token;data(p).run.entitlements[tostring(other.id)]=token
+ leaveDroneField(p,d1)
+ eq(firstField.e.spent[d1.id],true);eq(firstField.e.users[a.UserId].removed,true)
+ eq(d2.field,other.id);eq(other.e.users[a.UserId].removed,nil);eq(other.e.spent[d2.id],nil);eq(other.e.entitlements[a.UserId],token);eq(data(p).run.entitlements[tostring(other.id)],token)
+end)
+check('long yielding autosave replicates pause throughout travel and clears it after save',function()
+ local a=fixture();local p=profile(a);local d=first(a);d.field=1;d.state='Travel';d.goal=patches[1].center+Vector3.new(0,10,0)
+ p.dirty=true;local called=false
+ runtimeStore.hook=function()
+  called=true;eq(p.busy,true);eq(d.model:GetAttribute('MotionPaused'),true)
+  local start=d.pos
+  advance(4);eq(d.pos,start);eq(d.model:GetAttribute('Position'),start);eq(d.model:GetAttribute('MotionPaused'),true)
+  -- The persistent snapshot is also what a late-joining observer sees.
+  snapshotDrone(d);eq(d.model:GetAttribute('MotionPaused'),true);eq(d.model:GetAttribute('Position'),start)
+ end
+ autosaveElapsed=30;advance(1/60);eq(called,true);eq(p.busy,false);eq(d.model:GetAttribute('MotionPaused'),false)
+ eq(d.model:GetAttribute('Position'),d.pos);eq(d.model:GetAttribute('Goal'),d.goal)
+end)
+check('card claim receipts correlate durable acceptance and definite rejection',function()
+ local a=fixture();local p=profile(a);funding(a,500);station(a,scene.packStation);local gui=Instance.new('PlayerGui');gui.Parent=a
+ input(a,'BuyPack',payload(a,'receipt-buy',{packIndex=0}));local offer=data(p).run.pendingOffer;local run=data(p).run.id
+ input(a,'ChooseCard',{txId='bad-claim',runId=run,offerId=offer.id,index=4});local reply=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'))
+ eq(reply.txId,'bad-claim');eq(reply.offerId,offer.id);eq(reply.runId,run);eq(reply.status,'rejected');eq(data(p).run.pendingOffer.id,offer.id)
+ input(a,'ChooseCard',{txId='good-claim',runId=run,offerId=offer.id,index=1});reply=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'))
+ eq(reply.txId,'good-claim');eq(reply.offerId,offer.id);eq(reply.status,'accepted');eq(#data(p).run.cards,1);eq(data(p).run.pendingOffer,nil)
+end)
+check('ambiguous card save emits uncertain then correlated reconciled outcome',function()
+ local a=fixture();local p=profile(a);funding(a,500);station(a,scene.packStation);local gui=Instance.new('PlayerGui');gui.Parent=a
+ input(a,'BuyPack',payload(a,'uncertain-buy',{packIndex=0}));local offer=data(p).run.pendingOffer;local run=data(p).run.id;local states={}
+ gui:GetAttributeChangedSignal('MA_OfferReceipt'):Connect(function() table.insert(states,Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt')).status) end)
+ runtimeStore.failAfter=3;input(a,'ChooseCard',{txId='ambiguous',runId=run,offerId=offer.id,index=1})
+ eq(states[1],'uncertain');eq(states[2],'accepted');local reply=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'));eq(reply.txId,'ambiguous');eq(#data(p).run.cards,1)
+end)
+check('uncommitted card save reconciles to rejected without changing offer',function()
+ local a=fixture();local p=profile(a);funding(a,500);station(a,scene.packStation);local gui=Instance.new('PlayerGui');gui.Parent=a
+ input(a,'BuyPack',payload(a,'uncommitted-buy',{packIndex=0}));local offer=data(p).run.pendingOffer;local run=data(p).run.id;local states={}
+ gui:GetAttributeChangedSignal('MA_OfferReceipt'):Connect(function() table.insert(states,Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt')).status) end)
+ runtimeStore.failBefore=3;input(a,'ChooseCard',{txId='uncommitted',runId=run,offerId=offer.id,index=1})
+ eq(states[1],'uncertain');eq(states[2],'rejected');eq(data(p).run.pendingOffer.id,offer.id);eq(#data(p).run.cards,0)
+end)
+check('duplicate in-flight card claim is uncertain until original commit resolves',function()
+ local a=fixture();local p=profile(a);funding(a,500);station(a,scene.packStation);local gui=Instance.new('PlayerGui');gui.Parent=a
+ input(a,'BuyPack',payload(a,'repeat-buy',{packIndex=0}));local offer=data(p).run.pendingOffer;local run=data(p).run.id
+ local req={txId='repeat-claim',runId=run,offerId=offer.id,index=1};local observed
+ runtimeStore.hook=function() input(a,'ChooseCard',req);observed=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt')) end
+ input(a,'ChooseCard',req);eq(observed.status,'uncertain');eq(observed.txId,req.txId)
+ local done=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'));eq(done.status,'accepted');eq(done.txId,req.txId);eq(#data(p).run.cards,1)
+end)
+check('replayed committed card receipt remains accepted after range and rate change',function()
+ local a=fixture();local p=profile(a);funding(a,500);station(a,scene.packStation);local gui=Instance.new('PlayerGui');gui.Parent=a
+ input(a,'BuyPack',payload(a,'replay-receipt-buy',{packIndex=0}));local offer=data(p).run.pendingOffer;local req={txId='replay-receipt',runId=data(p).run.id,offerId=offer.id,index=1}
+ input(a,'ChooseCard',req);local first=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'));eq(first.status,'accepted')
+ teleport(a,patches[5].center);p.tokens=0;command.OnServerEvent:Fire(a,'ChooseCard',req)
+ local second=Http:JSONDecode(gui:GetAttribute('MA_OfferReceipt'));eq(second.status,'accepted');assert(second.serial~=first.serial);eq(#data(p).run.cards,1)
+end)
 print(checks..' actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested')
