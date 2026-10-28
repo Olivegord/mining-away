@@ -19,13 +19,14 @@ subprocess.run([str(luau/'luau'),str(beam)],check=True)
 client=(ROOT/'src/Client.lua').read_text()
 # Execute the actual client dispatch and input routing with command/GUI doubles.
 select_drone=client[client.index('beginDroneSelection=function(d)'):client.index('cycleCandidate=function()',client.index('beginDroneSelection=function(d)'))]
+cycle_candidate=client[client.index('cycleCandidate=function()'):client.index('submitCandidate=function()',client.index('cycleCandidate=function()'))]
 field_name=client[client.index('local function fieldName(id)'):client.index("connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState')")]
 receipt=client[client.index("connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState')"):client.index("connect(modal:GetPropertyChangedSignal('Visible')",client.index("connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState')"))]
 dispatch=client[client.index('local function queueFieldTimeout(request)'):client.index('local mouse=player:GetMouse()',client.index('local function queueFieldTimeout(request)'))]
 input_handler=client[client.index('connect(UIS.InputBegan,function(input,processed)'):client.index('local hudClock=0',client.index('connect(UIS.InputBegan,function(input,processed)'))]
 context_line=next(line.strip().split(';contextTitle',1)[0] for line in client.splitlines() if 'contextAction=function() requestField(id) end;contextTitle' in line)
 intent=ROOT/'tests/generated-client-intent.spec.lua'
-intent.write_text(module_bundle(('UILayout',))+'\n'+(ROOT/'tests/client-intent.setup.lua').read_text()+'\n'+select_drone+'\n'+field_name+'\n'+receipt+'\n'+dispatch+'\nlocal function contextSelect(id) '+context_line+' end\n'+input_handler+'\n'+(ROOT/'tests/client-intent.integration.lua').read_text())
+intent.write_text(module_bundle(('UILayout',))+'\n'+(ROOT/'tests/client-intent.setup.lua').read_text()+'\n'+select_drone+'\n'+cycle_candidate+'\n'+field_name+'\n'+receipt+'\n'+dispatch+'\nlocal function contextSelect(id) '+context_line+' end\n'+input_handler+'\n'+(ROOT/'tests/client-intent.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(intent)],stdout=subprocess.DEVNULL,check=True)
 subprocess.run([str(luau/'luau'),str(intent)],check=True)
 render=client[client.index('local function renderDrone(d,dt,now)'):client.index('connect(RunService.RenderStepped',client.index('local function renderDrone(d,dt,now)'))]

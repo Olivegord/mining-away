@@ -35,6 +35,44 @@ local function distance(x,z,a,b)
  return math.sqrt((x-px)^2+(z-pz)^2),a[2]+(b[2]-a[2])*t
 end
 L.distance=distance
+-- A horizontal joint cap must fit BELOW every walking lane it overlaps. A
+-- full-radius cylinder at the bend's center height becomes a vertical wall
+-- across a descending lane. Include an avatar margin beyond the cap radius,
+-- so its body cannot hit the edge before its center reaches the footprint.
+function L.jointTop(routes,center,radius)
+ local top=center[2]
+ for _,route in ipairs(routes) do for i=1,#route.samples-1 do
+  local clearance=radius+1.5+route.width/2
+  local a,b=route.samples[i],route.samples[i+1]
+  local dx,dz=b[1]-a[1],b[3]-a[3]
+  local length2=dx*dx+dz*dz
+  if length2>1e-8 then
+   local ux,uz=a[1]-center[1],a[3]-center[3]
+   local midpoint=-(ux*dx+uz*dz)/length2
+   local perpendicular2=ux*ux+uz*uz-(ux*dx+uz*dz)^2/length2
+   if perpendicular2<=clearance*clearance then
+    local span=math.sqrt(math.max(0,(clearance*clearance-perpendicular2)/length2))
+    local first,last=math.max(0,midpoint-span),math.min(1,midpoint+span)
+    if first<=last then
+     top=math.min(top,a[2]+(b[2]-a[2])*first,a[2]+(b[2]-a[2])*last)
+    end
+   end
+  end
+ end end
+ return top-.25
+end
+-- The visible seam follows the incoming/outgoing grades for a short distance;
+-- it does not form a wide flat disc across an ascending or descending trail.
+function L.jointSeam(samples,index)
+ local a,b,c=samples[index-1],samples[index],samples[index+1]
+ local function toward(p,q,dist)
+  local dx,dz=q[1]-p[1],q[3]-p[3]
+  local len=math.sqrt(dx*dx+dz*dz)
+  local t=math.min(.35,dist/math.max(len,1e-6))
+  return {p[1]+(q[1]-p[1])*t,p[2]+(q[2]-p[2])*t-.12,p[3]+(q[3]-p[3])*t}
+ end
+ return toward(b,a,.35),toward(b,c,.35)
+end
 local depotRoutes={['Quartz approach']=true,['Ruby switchback']=true,['Cobalt ascent']=true,['Converter lane']=true}
 function L.depotLink(route,home)
  if not depotRoutes[route.name] then return nil end

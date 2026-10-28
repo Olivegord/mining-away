@@ -6,7 +6,7 @@ local enumKeys={'Escape','T','Return','KeypadEnter','One','Two','Three','Four','
 local Enum={KeyCode={},UserInputType={MouseButton1='mouse',Keyboard='keyboard'}}
 for _,k in ipairs(enumKeys) do Enum.KeyCode[k]=k end
 local task={};local delayed={};function task.delay(_,fn) table.insert(delayed,fn) end
-local workspace={};local player={UserId=7}
+local workspace={};function workspace:GetServerTimeNow() return 0 end;local player={UserId=7}
 local mouse={};function player:GetMouse() return mouse end
 local selectedDrone,selectedResource,assignmentPending,cancelRequest,cancelDesired,fieldPending=nil,nil,nil,nil,false,nil
 local assignmentAcknowledgedUntil=0
@@ -14,8 +14,8 @@ local marker={};local selectionDock={};local selectionTitle={};local nextTarget=
 local function clearSelectionVisuals() marker.Enabled=false;marker.Adornee=nil;selectedResource=nil end
 local notice={Text=''};local noticeUntil=0;local modal={Visible=false};local modalMode=nil
 local offerActions={};local offerConfirmAction=nil;local contextAction=nil;local requestRecall,beginDroneSelection
-local function cycleCandidate() end;local function submitCandidate() end;local function cancelSelection() end
-local function updateSelectedResource() end;local function openFleet() end
+local cycleCandidate;local function submitCandidate() end;local cancelCalls=0;local function cancelSelection() cancelCalls+=1 end
+local function updateSelectedResource(source) selectedResource=source;marker.Adornee=source;selectionTitle.Text=source and 'Selected' or 'No selection' end;local function openFleet() end
 local resources={};local calls={};local command={}
 function command:FireServer(action,payload) table.insert(calls,{action=action,payload=payload}) end
 local serial=0;local function tx() serial+=1;return 'req-'..serial end

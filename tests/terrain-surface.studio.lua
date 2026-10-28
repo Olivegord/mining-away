@@ -32,17 +32,41 @@ for _,tree in ipairs(root.Map.BiomeGroves:GetChildren()) do
   end end
  end
 end
-local joints=0
+local joints=0;local trailSupportSamples=0;local worstTrailSupportGap=0
 for _,lane in ipairs(root.Map.WindingRoutes:GetChildren()) do
+ for _,support in ipairs(lane:GetChildren()) do if support.Name=='TrailEarth' then
+  local trail=nil;local segment=support:GetAttribute('RouteSegment')
+  for _,part in ipairs(lane:GetChildren()) do if part.Name=='Trail' and part:GetAttribute('RouteSegment')==segment then trail=part;break end end
+  if not trail then table.insert(issues,{kind='trail support has no road segment',route=lane.Name,index=segment})
+  else
+   local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Include;ray.FilterDescendantsInstances={trail}
+   for _,offset in ipairs({-.45,0,.45}) do
+    local origin=support.Position+Vector3.new(0,support.Size.Y/2,0)+support.CFrame.LookVector*(offset*support.Size.Z)
+    local hit=workspace:Raycast(origin,Vector3.new(0,10,0),ray);trailSupportSamples+=1
+    if not hit then table.insert(issues,{kind='trail support does not meet road above',route=lane.Name,index=segment,offset=offset})
+    else
+     local gap=hit.Position.Y-origin.Y;worstTrailSupportGap=math.max(worstTrailSupportGap,gap)
+     if gap>.3 then table.insert(issues,{kind='trail support separated from road',route=lane.Name,index=segment,offset=offset,gap=gap}) end
+    end
+   end
+  end
+ end end
  for _,joint in ipairs(lane:GetChildren()) do if joint.Name=='RouteJoint' then
-  joints+=1;local bottom=joint.Position.Y-joint.Size.X/2
-  if bottom>.2 then
+  joints+=1;local supportLimit=joint:GetAttribute('SupportTop')
+  local trails={};for _,part in ipairs(lane:GetChildren()) do if part.Name=='Trail' then table.insert(trails,part) end end
+  local ray=RaycastParams.new();ray.FilterType=Enum.RaycastFilterType.Include;ray.FilterDescendantsInstances=trails
+  local hit=workspace:Raycast(joint.Position+Vector3.new(0,1,0),Vector3.new(0,-3,0),ray)
+  if not hit or math.abs(hit.Position.Y-joint.Position.Y)>.7 then
+   table.insert(issues,{kind='route seam detached from walking slabs',route=lane.Name,index=joint:GetAttribute('JointIndex')})
+  end
+  if type(supportLimit)~='number' then table.insert(issues,{kind='route support limit missing',route=lane.Name,index=joint:GetAttribute('JointIndex')})
+  elseif supportLimit>.2 then
    local support=nil;local index=joint:GetAttribute('JointIndex')
    for _,part in ipairs(lane:GetChildren()) do if part.Name=='JointEarth' and part:GetAttribute('JointIndex')==index then support=part;break end end
    if not support then table.insert(issues,{kind='unsupported route joint',route=lane.Name,index=index})
    else
-    local supportTop=support.Position.Y+support.Size.X/2
-    if math.abs(supportTop-bottom)>.03 then table.insert(issues,{kind='route joint detached',route=lane.Name,index=index,gap=supportTop-bottom}) end
+    local supportTop=support.Position.Y+support.Size.Y/2
+    if math.abs(supportTop-supportLimit)>.03 then table.insert(issues,{kind='route joint support exceeds planned limit',route=lane.Name,index=index,actual=supportTop,limit=supportLimit}) end
    end
   end
  end end
@@ -69,4 +93,4 @@ if landmark and landmark.PrimaryPart and plinth then
  local top=plinth.Position.Y+plinth.Size.Y/2
  if math.abs(bottom-top)>.06 then table.insert(issues,{kind='original construct detached from plinth',bottom=bottom,top=top}) end
 else table.insert(issues,{kind='original construct or plinth missing'}) end
-return game:GetService('HttpService'):JSONEncode({kind='real engine part-cap, tree-footing, landmark and route-joint contact rays; not a visual or multiplayer pass',groundSamples=samples,worstGroundError=worst,trees=treeCount,routeJoints=joints,majorSupports=supported,issues=issues})
+return game:GetService('HttpService'):JSONEncode({kind='real engine part-cap, tree-footing, landmark and route-joint contact rays; not a visual or multiplayer pass',groundSamples=samples,worstGroundError=worst,trees=treeCount,routeJoints=joints,trailSupportSamples=trailSupportSamples,worstTrailSupportGap=worstTrailSupportGap,majorSupports=supported,issues=issues})

@@ -432,25 +432,26 @@ function W.initialize(): any
    local flat=Vector3.new(b.X-a.X,0,b.Z-a.Z);local count=math.ceil(flat.Magnitude/3)
    for n=1,count do
     local t=(n-.5)/count;local at=a:Lerp(b,t)
-    local top=at.Y-math.abs(b.Y-a.Y)/(count*2)-.18
+    local top=at.Y-math.abs(b.Y-a.Y)/(count*2)-.35
     if top>.3 then
      local fill=solid(block(lane,'TrailEarth',Vector3.new(at.X,top/2,at.Z),Vector3.new(r.width-.3,top,flat.Magnitude/count+.08),P.stone))
      fill.CFrame=CFrame.lookAt(fill.Position,fill.Position+flat)
+     fill:SetAttribute('RouteSegment',i)
     end
    end
   end
-  -- Flush overlapping round caps hide exposed comb-like chord edges while
-  -- retaining walkable continuous geometry. Only the underlying Trail has
-  -- a route index, so the avatar walk test never invents extra waypoints.
+  -- A short pitched seam follows its neighboring chords. Broad horizontal
+  -- discs formerly crossed descending slopes as several-stud-high walls.
   for i=2,#r.samples-1 do
    local at=v(r.samples[i])
-   local joint=solid(block(lane,'RouteJoint',at-Vector3.new(0,.03,0),Vector3.new(.26,r.width,r.width),P.dust))
-   joint.Shape=Enum.PartType.Cylinder;joint.CFrame=CFrame.new(joint.Position)*CFrame.Angles(0,0,math.pi/2)
+   local from,to=MapLayout.jointSeam(r.samples,i);local a,b=v(from),v(to)
+   local joint=path(lane,a,b,r.width);joint.Name='RouteJoint'
    joint:SetAttribute('WalkRoute',true);joint:SetAttribute('JointIndex',i)
-   local supportTop=at.Y-.16
+   local supportTop=MapLayout.jointTop(plan.routes,r.samples[i],math.sqrt((r.width/2)^2+.25^2))
+   joint:SetAttribute('SupportTop',supportTop)
    if supportTop>.2 then
-    local support=solid(block(lane,'JointEarth',Vector3.new(at.X,supportTop/2,at.Z),Vector3.new(supportTop,r.width,r.width),P.stone))
-    support.Shape=Enum.PartType.Cylinder;support.CFrame=CFrame.new(support.Position)*CFrame.Angles(0,0,math.pi/2)
+    local support=solid(block(lane,'JointEarth',Vector3.new(at.X,supportTop/2,at.Z),Vector3.new(r.width-.3,supportTop,.5),P.stone))
+    local flat=Vector3.new(b.X-a.X,0,b.Z-a.Z);support.CFrame=CFrame.lookAt(support.Position,support.Position+flat)
     support:SetAttribute('JointIndex',i)
    end
   end

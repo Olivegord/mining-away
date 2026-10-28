@@ -5,6 +5,7 @@ local RS=game:GetService('ReplicatedStorage')
 local RunService=game:GetService('RunService')
 local Http=game:GetService('HttpService')
 local C: any,R: any=Config,Rules
+local Pro: any,Ca: any=Profile,Cards
 local scene: any=World.initialize()
 local root,home=scene.root,scene.home
 local function folder(parent,name)
@@ -33,8 +34,8 @@ if preview then adapter=Persistence.previewAdapter('MiningAwayPreview:'..instanc
 else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataStore('MiningAwayProfiles_v2')) end
 local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
- newProfile=function(uid) return Profile.new(uid,seed:NextInteger(1,2147483000)) end,
- migrate=function(data,uid) return Profile.migrate(data,uid) end,validate=Profile.validate,
+ newProfile=function(uid) return Pro.new(uid,seed:NextInteger(1,2147483000)) end,
+ migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
 })
 root:SetAttribute('PersistenceMode',preview and 'PREVIEW • isolated temporary profiles' or 'DataStore • session-locked')
 root:SetAttribute('Build','restore-feel-prestige')
@@ -45,8 +46,8 @@ local function notice(p,message)
 end
 local function publish(p)
  if not p.player.Parent then return end
- local copy=Profile.clone(data(p));copy.capacity=Cards.capacity(copy);copy.nextPackPrice=Cards.price(copy);copy.prestigePreview=Profile.prestigePreview(copy)
- copy.droneStats={};for _,owned in ipairs(copy.fleet) do copy.droneStats[owned.id]=Cards.stats(copy,owned) end
+ local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy);copy.nextPackPrice=Ca.price(copy);copy.prestigePreview=Pro.prestigePreview(copy)
+ copy.droneStats={};for _,owned in ipairs(copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned) end
  copy.seed=nil;copy.receipts=nil
  if copy.run.pendingOffer then copy.run.pendingOffer.seed=nil end
  copy.saveMode=preview and 'Preview — temporary profiles' or 'Saved profile';copy.pendingTransaction=p.busy or p.session.readOnly or false
@@ -102,7 +103,7 @@ local function leaveField(p,keepField)
 end
 local colors={Blue=Color3.fromRGB(86,190,255),Red=Color3.fromRGB(255,110,118),Green=Color3.fromRGB(116,230,157)}
 local function spawnDrone(p,owned,slot)
- local stats=Cards.stats(data(p),owned)
+ local stats=Ca.stats(data(p),owned)
  local pos=home+Vector3.new(0,7,0)+Feel.formation(slot,#data(p).fleet)
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type])
  model.Name='Drone_'..owned.id
@@ -118,7 +119,7 @@ local function rebuildFleet(p)
 end
 local function refreshStats(p)
  for _,d in ipairs(p.drones) do
-  local old=d.stats.maxHealth;local stats=Cards.stats(data(p),d.owned)
+  local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned)
   if d.hp>0 then d.hp=math.min(stats.maxHealth,math.max(1,d.hp+math.max(0,stats.maxHealth-old))) end
   d.stats=stats
  end
@@ -128,7 +129,7 @@ local function kill(d)
  release(d);spend(d);d.field=nil;R.reprint(d,now,C.Reprint+C.Assembly)
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
 end
-local function playerCanMine(p,field)
+local function playerCanMine(p: any,field: any): boolean
  if field.cfg.Turrets==0 then return true end
  local entitlement=data(p).run.entitlements[tostring(field.id)]
  return type(entitlement)=='table' and R.canMine(field.e,p.player.UserId,data(p).run.id,entitlement.encounterId)
@@ -257,7 +258,7 @@ local function award(d: any,r: any)
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
  local amount=r.ore*d.stats.yieldMultiplier+(profile.run.yieldRemainders[material] or 0)
  local units=math.floor(amount);profile.run.yieldRemainders[material]=amount-units
- Profile.addCargo(profile,material,units,Cards.capacity(profile));p.dirty=true;p.publishDirty=true
+ Pro.addCargo(profile,material,units,Ca.capacity(profile));p.dirty=true;p.publishDirty=true
 end
 local function hitResource(d: any,r: any,amount: number,secondary: boolean?)
  local p=profiles[d.owner]
@@ -303,7 +304,7 @@ end
 local function eligible(d,field)
  local p=profiles[d.owner];return p and store:healthy(p.session) and characterRoot(p) and d.hp>0 and d.field==field.id and (d.pos-field.center).Magnitude<75
 end
-local function activeAssault(p)
+local function activeAssault(p: any): boolean
  for _,field in ipairs(patches) do
   local u=field.e.users[p.player.UserId]
   if (field.e.phase=='Active' or field.e.phase=='Gathering') and u and not u.removed and u.runId==data(p).run.id then return true end
@@ -317,7 +318,7 @@ local function resetField(field)
 end
 local function grantClear(p,field,e)
  if e.runId~=data(p).run.id then return end
- if p.busy or not store:healthy(p.session) then p.pendingClears=p.pendingClears or {};p.pendingClears[e.encounterId]={field=field,entitlement=Profile.clone(e)};return end
+ if p.busy or not store:healthy(p.session) then p.pendingClears=p.pendingClears or {};p.pendingClears[e.encounterId]={field=field,entitlement=Pro.clone(e)};return end
  local run=data(p).run
  if field.e.phase=='Cleared' and field.e.id==e.encounterId and field.e.entitlements[p.player.UserId] then
   run.entitlements[tostring(field.id)]={encounterId=e.encounterId,runId=e.runId}
@@ -337,7 +338,7 @@ local function settleRuntime(p)
  local entitlements={}
  for _,field in ipairs(patches) do
   local e=field.e.entitlements[p.player.UserId]
-  if e and e.runId==data(p).run.id and field.e.phase=='Cleared' then entitlements[tostring(field.id)]=Profile.clone(e) end
+  if e and e.runId==data(p).run.id and field.e.phase=='Cleared' then entitlements[tostring(field.id)]=Pro.clone(e) end
  end
  data(p).run.entitlements=entitlements;p.entitlementSync=false
  local pending=p.pendingClears;p.pendingClears={}
@@ -474,7 +475,7 @@ local function droneStep(d: any,dt: number)
     end
    end
   elseif playerCanMine(p,field) then
-   if Profile.cargoUnits(data(p))>=Cards.capacity(data(p)) then leaveField(p)
+   if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then leaveField(p)
    else
     if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
     if not d.target then chooseResource(d,field) end
@@ -614,7 +615,7 @@ local function chooseCard(p: any,pl: any,payload: any)
    if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then offerReply(pl,payload,'rejected','Invalid choice');return end
    p.pendingOfferTx=payload.txId
    local started=transact(p,'choose:'..payload.txId,function(copy)
-    local ok,r=Cards.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+    local ok,r=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
    end,function() refreshStats(p);notice(p,'Card installed • this run only.') end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
@@ -653,7 +654,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
-  if Profile.cargoUnits(data(p))>=Cards.capacity(data(p)) then reject('Cargo is full',field,d);return end
+  if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then reject('Cargo is full',field,d);return end
   if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
   if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
   if d.target==r and d.field==field.id and r.slots[d.id] then commandReply(pl,payload,'accepted','Already assigned',field,d,r,r.slots[d.id]);return end
@@ -675,7 +676,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if already then
    -- Never add reprints to a locked muster. On a mineable field, however,
    -- dispatch idle fleet members without restarting existing drone jobs.
-   if can and not activeAssault(p) and Profile.cargoUnits(data(p))<Cards.capacity(data(p)) then
+   if can and not activeAssault(p) and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) then
     for _,d in ipairs(p.drones) do
      if d.hp>0 and d.field~=field.id and R.allowed(d.owner,pl.UserId,d.state) then
       local old=d.field;release(d);spend(d);d.field=field.id;d.state='Travel';d.shotAt=now
@@ -687,7 +688,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   end
   if not can and (field.e.phase=='Active' or field.e.phase=='Cleared' or field.e.phase=='Resetting') then notice(p,'An expedition is in progress. Join the next fresh muster.');commandReply(pl,payload,'rejected','Wait for the next muster',field);return end
   if not can and field.e.phase=='Gathering' and (field.e.users[pl.UserId] or now>=field.e.untilTime) then commandReply(pl,payload,'rejected','Muster closed',field);return end
-  if Profile.cargoUnits(data(p))>=Cards.capacity(data(p)) then commandReply(pl,payload,'rejected','Cargo is full',field);return end
+  if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then commandReply(pl,payload,'rejected','Cargo is full',field);return end
   local fleet={};for _,d in ipairs(p.drones) do if d.hp>0 and R.allowed(d.owner,pl.UserId,d.state) then table.insert(fleet,d) end end
   if #fleet==0 then commandReply(pl,payload,'rejected','Fleet unavailable',field);return end
   leaveField(p,can and field.id or nil)
@@ -701,7 +702,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if activeAssault(p) then notice(p,'Recall your assault fleet before selling.');return end
   if not atStation(p,scene.converter or scene.packStation,18) then notice(p,'Return to the Converter to sell.');return end
   local expected=data(p).run.id;local tx='sale:'..Http:GenerateGUID(false)
-  transact(p,tx,function(copy) local ok,r=Profile.sell(copy,prices,tx,expected);if ok then return r end;return nil,r end,function(r) notice(p,'Sold for '..r.credits..' credits.') end)
+  transact(p,tx,function(copy) local ok,r=Pro.sell(copy,prices,tx,expected);if ok then return r end;return nil,r end,function(r) notice(p,'Sold for '..r.credits..' credits.') end)
  elseif action=='BuyPack' or action=='ChooseCard' or action=='Prestige' then
   if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end;return end
   if not atHome(p) then notice(p,'Use the pack machine or prestige beacon at the depot.');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end;return end
@@ -709,7 +710,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return end
    if not atStation(p,scene.packStation,20) then return end
    transact(p,'buy:'..payload.txId,function(copy)
-    local ok,r=Cards.buy(copy,payload.txId,payload.runId,{combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+    local ok,r=Ca.buy(copy,payload.txId,payload.runId,{combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
    end,function() notice(p,'Choose one card. All three choices and targets are saved.') end)
   elseif action=='ChooseCard' then
    chooseCard(p,pl,payload)

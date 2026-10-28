@@ -82,6 +82,84 @@ check('no upper route foundation blocks a lower route centerline',function()
   end
  end end
 end)
+check('joint-earth supports stay below swept walking lanes',function()
+ for _,route in ipairs(plan.routes) do for i=2,#route.samples-1 do
+  local center=route.samples[i];local radius=math.sqrt((route.width/2)^2+.25^2)
+  local cap=Layout.jointTop(plan.routes,center,radius)
+  for _,other in ipairs(plan.routes) do for j=1,#other.samples-1 do
+   local a,b=other.samples[j],other.samples[j+1]
+   local length=math.sqrt((b[1]-a[1])^2+(b[3]-a[3])^2)
+   for n=0,math.ceil(length*2) do
+    local t=n/math.ceil(length*2);local x=a[1]+(b[1]-a[1])*t;local z=a[3]+(b[3]-a[3])*t
+    if (x-center[1])^2+(z-center[3])^2 <= (radius+1.5)^2 then
+     local y=a[2]+(b[2]-a[2])*t
+     assert(cap<=y-.249,route.name..' joint obstructs '..other.name..' walking lane')
+    end
+   end
+  end end
+ end end
+end)
+check('solid trail-earth footprints avoid pedestrian bands on all routes',function()
+ local supports={};local worstGap=0
+ for _,route in ipairs(plan.routes) do for i=1,#route.samples-1 do
+  local a,b=route.samples[i],route.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)
+  local count=math.ceil(len/3);local width=route.width-.3;local length=len/count+.08
+  for k=1,count do
+   local t=(k-.5)/count;local center={a[1]+dx*t,a[2]+(b[2]-a[2])*t,a[3]+dz*t}
+   local low=center[2]-math.abs(b[2]-a[2])/(count*2)
+   local top=low-.35
+   worstGap=math.max(worstGap,low-.14-top)
+   table.insert(supports,{center=center,ux=dx/len,uz=dz/len,width=width,length=length,top=top,route=route.name})
+  end
+ end end
+ for _,r in ipairs(plan.routes) do for i=1,#r.samples-1 do
+  local a,b=r.samples[i],r.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)
+  for n=0,math.ceil(len*2) do for _,offset in ipairs({-2,0,2}) do
+   local t=n/math.ceil(len*2);local x=a[1]+dx*t-dz/len*offset;local z=a[3]+dz*t+dx/len*offset;local y=a[2]+(b[2]-a[2])*t
+   for _,v in ipairs(supports) do
+    local rx,rz=x-v.center[1],z-v.center[3];local along=math.abs(rx*v.ux+rz*v.uz);local side=math.abs(rx*v.uz-rz*v.ux)
+    if along<=v.length/2+1 and side<=v.width/2+1 then
+     assert(v.top<y+.4,r.name..' raised support exceeds known sampled step allowance: '..tostring(v.top-y))
+    end
+   end
+  end end
+ end end
+ print('map worst modeled support-to-slab low-edge gap '..tostring(worstGap)..' studs')
+end)
+check('reported Grove and Fern failures cannot be raised by nearby joint supports',function()
+ for _,case in ipairs({{name='Grove loop',x=-63.275322,z=114.320717,segment=22},
+                       {name='Fern stair',x=53.873516,z=101.772247,segment=15}}) do
+  local route;for _,r in ipairs(plan.routes) do if r.name==case.name then route=r end end
+  assert(route);local _,floor=Layout.distance(case.x,case.z,route.samples[case.segment],route.samples[case.segment+1])
+  local found=0
+  for _,other in ipairs(plan.routes) do for i=2,#other.samples-1 do
+   local center=other.samples[i];local radius=other.width/2
+   if (case.x-center[1])^2+(case.z-center[3])^2<=(radius+1.5)^2 then
+    found+=1;assert(Layout.jointTop(plan.routes,center,radius)<=floor-.249,case.name..' collision cap above route')
+   end
+  end end
+  assert(found>0,'fixture must exercise a nearby joint')
+ end
+end)
+check('pitched short seams remain within step height of overlapping pedestrian lanes',function()
+ for _,r in ipairs(plan.routes) do for i=2,#r.samples-1 do
+  local a,b=Layout.jointSeam(r.samples,i)
+  local dx,dz=b[1]-a[1],b[3]-a[3];local length=math.sqrt(dx*dx+dz*dz)
+  assert(length>0 and length<1,'seam should bridge only the local joint')
+  for _,side in ipairs({-3,-2,-1,0,1,2,3}) do for _,t in ipairs({0,.5,1}) do
+   local x=a[1]+dx*t-dz/length*side;local z=a[3]+dz*t+dx/length*side
+   local y=a[2]+(b[2]-a[2])*t
+   for _,other in ipairs(plan.routes) do for j=1,#other.samples-1 do
+    local c,d=other.samples[j],other.samples[j+1];local vx,vz=d[1]-c[1],d[3]-c[3]
+    local len2=vx*vx+vz*vz;local u=((x-c[1])*vx+(z-c[3])*vz)/len2
+    local across=math.abs((x-c[1])*vz-(z-c[3])*vx)/math.sqrt(len2)
+    if u>=0 and u<=1 and across<=other.width/2 then
+     assert(y-(c[2]+(d[2]-c[2])*u)<.5,r.name..' raised seam over '..other.name)
+    end
+   end end
+  end end
+ end end
+end)
 check('curved road strips do not fold back above a walking lane',function()
  for _,r in ipairs(plan.routes) do for i=1,#r.samples-1 do
   local a,b=r.samples[i],r.samples[i+1];local dx,dz=b[1]-a[1],b[3]-a[3];local len=math.sqrt(dx*dx+dz*dz)

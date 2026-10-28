@@ -847,7 +847,7 @@ beginDroneSelection=function(d)
  selectedDrone=d;assignmentPending=nil;cancelRequest=nil;cancelDesired=false;assignmentAcknowledgedUntil=0;nextTarget.Visible=true;assignTarget.Visible=true;cancelTarget.Visible=true;updateSelectedResource(nil);modal.Visible=false;selectionDock.Visible=true
 end
 cycleCandidate=function()
- if cancelDesired then return end
+ if assignmentPending or cancelDesired then return end
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');local options={};local now=workspace:GetServerTimeNow()
  for source in pairs(resources) do if source.Parent and (source:GetAttribute('HP') or 0)>0 and (source:GetAttribute('ReadyAt') or math.huge)<=now and (source:GetAttribute('SlotsUsed') or 0)<(source:GetAttribute('SlotCapacity') or 1) and hr and (source.Position-hr.Position).Magnitude<=90 then table.insert(options,source) end end
  table.sort(options,function(a,b) return tostring(a:GetAttribute('ResourceId'))<tostring(b:GetAttribute('ResourceId')) end)
@@ -937,7 +937,7 @@ local function assignField(target)
  if modal.Visible then return end
  local node=target
  if selectedDrone then
-  if cancelDesired then return end
+  if assignmentPending or cancelDesired then return end
   while node and node~=workspace do if node:GetAttribute('ResourceId') and resources[node] then updateSelectedResource(node);submitCandidate();return end;node=node.Parent end
   selectionTitle.Text='Tap a crystal, or use Next';return
  end
