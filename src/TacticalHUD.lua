@@ -207,7 +207,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    if health>0 then
     living+=1
     local state=drone:GetAttribute('State')
-    if state=='Deliver' then delivering+=1
+    if state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then delivering+=1
     elseif state=='Mine' or state=='Travel' or state=='Attack' then working+=1 end
    end
   end

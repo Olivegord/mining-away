@@ -1,5 +1,9 @@
 # Owner requirements
 
+## October 31 latest — effects must communicate work
+
+The owner requests substantially stronger effects and anticipation: visible charge-up, holding, release and recovery. Mining needs a wider outer beam, a thinner inner beam, particles, and the old three-circle style at the beam origin. Restore available original mining particle/contact assets from preserved backups. Courier/supply work must be understandable through motion, parcel transfer and beam/particle effects rather than explanatory UI. All effects follow authoritative work phases; visuals cannot invent mining hits, completed pickups, healing or sales. Preserve the existing game and standing no-publishing/no-new-Play-session instruction. See [work effects](review/WORK_EFFECTS.md).
+
 ## October 31 latest — Toolbox sound and Roblox presentation
 
 Add varied background music and sound effects from the Toolbox to the same Drone Blower revolution game. Improve lighting and make the presentation feel more Roblox-like, preserving the original models, map identity, crystal audio and current backpack/swarm/card work. The owner authorized coordination between the audio/visual chat and “Update map, drones, and UI” to prevent overwrites; that chat owns the combined Source integration, commit, build and review PR update. No Roblox publishing or new Play/test sessions are authorized by this request. See [audio and lighting review](review/AUDIO_LIGHTING.md).

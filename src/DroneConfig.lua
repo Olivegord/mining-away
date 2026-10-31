@@ -90,6 +90,7 @@ DroneConfig.Types = {
 		AttackCooldown = 2,
 		Damage = 0,
 		HealAmount = 10,
+		ChargeWindup = 0.4,
 		Weight = 2,
 	},
 	Courier = {
@@ -138,7 +139,7 @@ DroneConfig.StudioRoles = {
  Charger = {height=2.8,base={miningDPS=30,combatDPS=14,maxHealth=135,maxStep60=.29,warmup=.8,range=16,shotInterval=2.4}},
 }
 
-DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2}
+DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
 
 -- Purely mechanical silhouettes. The mining drone keeps its authored shell;
 -- support roles use a tiny disc or a two-drum box, with no face or character cues.

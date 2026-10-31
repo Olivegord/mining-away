@@ -276,7 +276,26 @@ local function finishEditableMap(root,map,fields,home)
   end
  end
 end
+local function restoreMiningFX()
+ local rs=game:GetService('ReplicatedStorage')
+ if rs:FindFirstChild('MiningFX') then return end
+ -- The flat-map capture archived the original particles and contact glows.
+ -- Replicate a disposable visual template; leave every preserved backup intact.
+ for _,archive in ipairs(game:GetService('ServerStorage'):GetChildren()) do
+  local original=archive:FindFirstChild('MiningFX')
+  if original then
+   local copy=original:Clone()
+   for _,object in ipairs(copy:GetDescendants()) do
+    if object:IsA('LuaSourceContainer') then object:Destroy()
+    elseif object:IsA('ParticleEmitter') or object:IsA('Beam') then object.Enabled=false
+    elseif object:IsA('BasePart') then object.Anchored=true;object.CanCollide=false;object.CanTouch=false;object.CanQuery=false end
+   end
+   copy.Parent=rs;return
+  end
+ end
+end
 function W.initialize(): any
+ restoreMiningFX()
  Daylight.apply()
  -- The preserved legacy light-cycle script sets dawn once on startup. Apply
  -- again after startup so script scheduling cannot restore the old yellow cast.

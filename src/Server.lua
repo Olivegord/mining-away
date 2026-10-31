@@ -169,6 +169,8 @@ end
 local function kill(d)
  if d.hp<=0 then return end
  release(d);spend(d);d.field=nil;d.autoField=nil;R.reprint(d,now,C.Reprint+C.Assembly)
+ d.pickupAt=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
+ d.repairChargeAt=nil;d.repairTarget=nil;d.healTargetId=nil;d.healUntil=0
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
 end
 local function playerCanMine(p,field)
@@ -597,14 +599,25 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
    if rank<score then best,score=ally,rank end
   end
  end
+ if d.repairTarget then
+  if d.repairTarget.hp>0 and d.repairTarget.hp<d.repairTarget.stats.maxHealth then best=d.repairTarget
+  else d.repairTarget=nil;d.repairChargeAt=nil;d.healTargetId=nil end
+ end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
- if best and best.hp<best.stats.maxHealth and now>=(d.healAt or 0) and (best.pos-d.pos).Magnitude<=RoleConfig.Types.Medic.AttackRange and los(d.pos,best.pos,best.model,{droneFolder,p.player.Character}) then
-  best.hp=math.min(best.stats.maxHealth,best.hp+RoleConfig.Types.Medic.HealAmount)
-  d.healAt=now+RoleConfig.Types.Medic.AttackCooldown;d.healTargetId=best.id;d.healUntil=now+.45
-  best.model:SetAttribute('RepairSerial',(best.model:GetAttribute('RepairSerial') or 0)+1)
- end
- if now<(d.healUntil or 0) then d.state='Heal' else d.healTargetId=nil end
+ local inRange=best and best.hp>0 and best.hp<best.stats.maxHealth and (best.pos-d.pos).Magnitude<=RoleConfig.Types.Medic.AttackRange and los(d.pos,best.pos,best.model,{droneFolder,p.player.Character})
+ if inRange and now>=(d.healAt or 0) then
+  if not d.repairChargeAt then d.repairChargeAt=now;d.repairTarget=best;d.healTargetId=best.id end
+  if now-d.repairChargeAt>=RoleConfig.Types.Medic.ChargeWindup then
+   best.hp=math.min(best.stats.maxHealth,best.hp+RoleConfig.Types.Medic.HealAmount)
+   d.healAt=d.repairChargeAt+RoleConfig.Types.Medic.AttackCooldown;d.healTargetId=best.id;d.healUntil=now+.45
+   d.repairChargeAt=nil;d.repairTarget=nil
+   best.model:SetAttribute('RepairSerial',(best.model:GetAttribute('RepairSerial') or 0)+1)
+  end
+ else d.repairChargeAt=nil;d.repairTarget=nil end
+ if d.repairChargeAt then d.state='RepairCharge'
+ elseif now<(d.healUntil or 0) then d.state='Heal'
+ else d.healTargetId=nil end
 end
 local function attackDrone(d: any,field: any,dt: number)
    release(d,true);local target,dist=nil,math.huge
@@ -675,6 +688,10 @@ local function droneStep(d: any,dt: number)
  if p.busy then
   if d.warmAt then d.warmAt=d.warmAt+dt end
   if d.chargeAt then d.chargeAt=d.chargeAt+dt end
+  if d.pickupAt then d.pickupAt=d.pickupAt+dt end
+  if d.launchAt then d.launchAt=d.launchAt+dt end
+  if d.unloadAt then d.unloadAt=d.unloadAt+dt end
+  if d.repairChargeAt then d.repairChargeAt=d.repairChargeAt+dt end
   return
  end
  if not store:healthy(p.session) then release(d);return end
@@ -683,19 +700,30 @@ local function droneStep(d: any,dt: number)
  local manifest=data(p).run.deliveries and data(p).run.deliveries[d.id]
  if manifest then
   if d.target or d.combatTarget then release(d) end
+  if d.launchAt and now<d.launchAt+RoleConfig.Courier.LaunchHold then
+   d.state='Launch';d.goal=d.pos;return
+  end
   d.state='Deliver';d.deliveryId=manifest.id
   local depot=scene.converter or scene.packStation
   local offset=Feel.formation(d.slot,#p.drones);if offset.Magnitude>6 then offset=offset.Unit*6 end
   local goal=depot.Position+offset+Vector3.new(0,d.flightHeight,0)
-  move(d,goal,dt);d.deliveryArrived=(d.pos-goal).Magnitude<1
+  move(d,goal,dt)
+  if (d.pos-goal).Magnitude<1 then
+   d.unloadAt=d.unloadAt or now;d.state='Unload'
+   d.deliveryArrived=now-d.unloadAt>=RoleConfig.Courier.UnloadHold
+  else d.unloadAt=nil;d.deliveryArrived=false end
   return
  end
  if d.role=='Courier' then
   d.mining=false;d.field=nil
   if Pro.cargoUnits(data(p))>0 and now>=(d.collectAfter or 0) then
    d.state='Collect';move(d,hr.Position+Vector3.new(-1,d.flightHeight,1),dt)
-   if (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance then d.deliveryRequested=true end
+   if (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
+    d.pickupAt=d.pickupAt or now;d.state='Pickup'
+    d.deliveryRequested=now-d.pickupAt>=RoleConfig.Courier.PickupHold
+   else d.pickupAt=nil;d.deliveryRequested=false end
   else
+   d.pickupAt=nil;d.deliveryRequested=false
    d.state='Follow'
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
   end
@@ -746,8 +774,11 @@ local function snapshotDrone(d)
   Position=d.pos,Goal=d.goal,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,MotionPaused=(profiles[d.owner].busy or not store:healthy(profiles[d.owner].session)) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.stats.warmup,
   MiningStyle=Mining.style(d.owned.type),MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
-  DeliveryUnits=Pro.deliveryUnits(profile,d.id),AutoFieldId=d.autoField or 0,
+  DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=profile.run.deliveries[d.id] and profile.run.deliveries[d.id].id or '',AutoFieldId=d.autoField or 0,
+  CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
+  CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.converter or scene.packStation).Position,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
+  RepairChargeAt=d.repairChargeAt or 0,RepairChargeDuration=RoleConfig.Types.Medic.ChargeWindup,
   AutomationMineEnabled=d.role~='Courier' and d.role~='Medic' and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=Mining.workRole(d.role),
   MineBreakSerial=d.mineBreakSerial,MineBreakAt=breakContact and breakContact.at or 0,MineBreakUntil=breakContact and breakContact.untilTime or 0,
   MineBreakPrimaryId=breakContact and breakContact.primaryId or '',MineBreakSecondaryId=breakContact and breakContact.secondaryId or '',MineBreakBeamSince=breakContact and breakContact.beamSince or 0,
@@ -842,6 +873,8 @@ local function serviceDeliveries(p: any)
     local worker=drones[id]
     if worker and worker.owner==p.player.UserId then
      worker.deliveryArrived=false;worker.deliveryId=nil;worker.deliveryRequested=false
+     worker.pickupAt=nil;worker.launchAt=nil;worker.unloadAt=nil
+     worker.saleSerial=(worker.saleSerial or 0)+1;worker.saleAt=now
      worker.field=nil;worker.autoField=nil;worker.state='Collect';worker.collectAfter=now+RoleConfig.Courier.PickupCooldown
     end
     p.publishDirty=true
@@ -849,7 +882,7 @@ local function serviceDeliveries(p: any)
    return
   elseif d.role=='Courier' and d.hp>0 and d.deliveryRequested and not manifest and now>=(d.collectAfter or 0) then
    local hr=characterRoot(p)
-   if Pro.cargoUnits(data(p))==0 or (d.pos-hr.Position).Magnitude>RoleConfig.Courier.PickupDistance then d.deliveryRequested=false
+   if Pro.cargoUnits(data(p))==0 or (d.pos-hr.Position).Magnitude>RoleConfig.Courier.PickupDistance or not d.pickupAt or now-d.pickupAt<RoleConfig.Courier.PickupHold or not los(d.pos,hr.Position,hr.Parent,{droneFolder}) then d.deliveryRequested=false;d.pickupAt=nil
    else
     local tx,runId,id=Http:GenerateGUID(false),run.id,d.id
     p.nextDeliveryAction=now+1
@@ -858,7 +891,7 @@ local function serviceDeliveries(p: any)
     end,function(result)
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
-      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Deliver'
+      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
      end
      p.publishDirty=true
     end)

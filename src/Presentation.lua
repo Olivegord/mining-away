@@ -8,9 +8,9 @@ local HOT=Color3.fromRGB(255,179,102)
 local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local miningLooks={
- Cutter={color=Color3.fromRGB(94,190,255),core=Color3.fromRGB(223,246,255),width0=.52,width1=.42},
- Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.36,width1=.34},
- Resonance={color=Color3.fromRGB(104,224,146),core=Color3.fromRGB(221,255,227),width0=.36,width1=.32},
+ Cutter={color=Color3.fromRGB(94,190,255),core=Color3.fromRGB(223,246,255),width0=1.05,width1=.78},
+ Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.85,width1=.72},
+ Resonance={color=Color3.fromRGB(104,224,146),core=Color3.fromRGB(221,255,227),width0=.9,width1=.68},
 }
 local miningTypeColors={Dart=Color3.fromRGB(45,224,255),Striker=Color3.fromRGB(255,210,86),
  Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
@@ -62,7 +62,7 @@ local function barePart(parent,name)
 end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
- return setmetatable({parent=options.parent,audio=options.audio,drones={},turrets={},fragments={},pulses={},scanCount=0,
+ return setmetatable({parent=options.parent,audio=options.audio,work=WorkEffects.new(options.parent),drones={},turrets={},fragments={},pulses={},scanCount=0,
   maxFragments=28,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
@@ -96,7 +96,7 @@ function P:createMiningBeam(view,emitter)
  local extra=barePart(holder,'SecondaryEndpoint');extra.Size=Vector3.one*.05;extra.Transparency=1
  local extraAttachment=Instance.new('Attachment');extraAttachment.Parent=extra
  local rs=game:GetService('ReplicatedStorage');local fx=rs:FindFirstChild('MiningFX');local template=fx and fx:FindFirstChild('Beam')
- local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.94,0)
+ local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.55,0)
  local core=newBeamLayer(holder,template,'InnerBeam',WHITE,.3,.025)
  halo.Attachment0=muzzle;halo.Attachment1=target;core.Attachment0=muzzle;core.Attachment1=target
  local branch=newBeamLayer(holder,nil,'SecondaryBeam',ICE,.32,.01)
@@ -106,6 +106,7 @@ function P:createMiningBeam(view,emitter)
 end
 function P:destroyMiningBeam(beam)
  if not beam then return end
+ self.work:destroyMining(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
@@ -184,12 +185,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  -- The original inner ramp and .2s hide remain untouched. The outside shape
  -- expresses actual damage cadence, never an invented client firing timer.
  local workerScale=.58
- beam.core.Width0=.3*width*workerScale;beam.core.Width1=.3*width*workerScale
+ beam.core.Width0=.11*width*workerScale;beam.core.Width1=.09*width*workerScale
  beam.halo.Width0=(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale
  beam.halo.Width1=(look.width1+(style=='Percussion' and .45 or .06)*pulse)*width*workerScale
  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
+ self.work:mining(beam,sample,point,normal,width,pulse,now)
  if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
   self.nextMiningSoundAt=now+.12;self:_sound(point,'mining',now)
  end
@@ -396,21 +398,6 @@ end
 function P:_removeScan(record)
  if record.scan then record.scan:Destroy();record.scan=nil;self.scanCount=math.max(0,self.scanCount-1) end
 end
-function P:_deliveryCargo(drone,record,visible)
- if not visible then
-  if record.cargo then record.cargo:Destroy();record.cargo=nil end
-  return
- end
- if not record.cargo then
-  local cargo=Instance.new('Part');passive(cargo);cargo.Name='CourierParcel'
-  cargo.Material=Enum.Material.WoodPlanks;cargo.Reflectance=0
-  cargo.Size=Vector3.new(.45,.30,.40);cargo.Color=Color3.fromRGB(156,131,84)
-  cargo.TopSurface=Enum.SurfaceType.Studs;cargo.BottomSurface=Enum.SurfaceType.Smooth
-  cargo.Transparency=0;cargo.Parent=self.parent;record.cargo=cargo
- end
- local offset=.73*(drone.source:GetAttribute('ModelScale') or .58)
- record.cargo.CFrame=drone.view:GetPivot()*CFrame.new(0,-offset,0)
-end
 function P:renderDrone(drone,_dt,now)
  local record=self.drones[drone]
  if not record then self:registerDrone(drone,now);return end
@@ -472,13 +459,13 @@ function P:renderDrone(drone,_dt,now)
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
   end
  end
- -- Couriers alone carry the small parcel reserved from their owner's backpack.
- self:_deliveryCargo(drone,record,source:GetAttribute('Role')=='Courier' and state=='Deliver' and not record.events.dead and (source:GetAttribute('DeliveryUnits') or 0)>0)
+ self.work:courier(drone,record,now)
+ self.work:repair(drone,record,now)
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)
  local record=self.drones[drone]
- if record then self:_removeScan(record);self:_deliveryCargo(drone,record,false);self.drones[drone]=nil end
+ if record then self:_removeScan(record);self.work:destroyDrone(record);self.drones[drone]=nil end
 end
 function P:_sentryAudio(position,kind,now)
  if #self.pulses>=self.maxPulses then return end
@@ -782,6 +769,12 @@ end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
  local view=resource.view;local floor=self:_floor(view.Position,resource.source)
+ local contact=resource.lastContact;local point,normal=view.Position+Vector3.new(0,view.Size.Y*.5,0),Vector3.yAxis
+ if contact then
+  local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
+  if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
+ end
+ self.work:burst(point+normal*.05,normal,resource.baseColor,event=='break' and 18 or 7,now)
  local amount=event=='break' and 2 or 1
  for i=1,amount do
   local angle=i*2.4+now*.1
@@ -794,6 +787,7 @@ function P:resourceImpact(resource,event,now)
 end
 function P:update(_dt,now)
  if self.closed then return end
+ self.work:update(now)
  for i=#self.fragments,1,-1 do
   local item=self.fragments[i];local age=now-item.start
   if age>=item.duration or not item.part.Parent then
@@ -822,6 +816,7 @@ function P:destroy()
  for _,record in pairs(self.turrets) do self:destroyTurret(record) end
  for _,item in ipairs(self.fragments) do item.part:Destroy() end
  for _,item in ipairs(self.pulses) do item.part:Destroy() end
+ self.work:destroy()
  self.fragments={};self.pulses={}
 end
 return P

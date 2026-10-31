@@ -10,6 +10,10 @@ The capture remains immutable. Rebuilding backs up an existing output as `.rbxl.
 
 The owner will test this integrated candidate themselves and requested no further test runs. The latest backpack/swarm behavior is described immediately below; later historical sections retain obsolete hold/card descriptions for reference. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
 
+## Latest effects pass
+
+Mining now has three charging emitter rings, restored original particles/contact glows, a wide outer halo and thin core, cutting sparks and fracture bursts. Couriers show pickup, committed parcel transfer, loaded flight, unloading and confirmed sale; Medics visibly charge before repairing. These are runtime effects in the existing place. See [work effects and validation limits](docs/review/WORK_EFFECTS.md).
+
 ## Latest owner changes: backpack and moving swarm
 
 Toolbox audio adds a three-track APM background playlist, short action/reward cues, and Music/Effects controls inside the fleet menu. Neutral 13:30 daylight, softer shadows and reduced specular preserve clear native Roblox materials and the original sky. Existing crystal pops and crunches remain. See [audio, asset credits and validation limits](docs/review/AUDIO_LIGHTING.md). These changes join the same combined source-only review build.

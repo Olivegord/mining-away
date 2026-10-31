@@ -657,11 +657,12 @@ local function renderDrone(d,dt,now)
  local attacking=state=='Attack' and s:GetAttribute('Firing')==true
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
  local active=alive and (mining or attacking)
+ local charging=alive and state=='Mine' and not mining and (s:GetAttribute('WarmupStart') or 0)>0
  local beam=d.beam
  local kind=state=='Attack' and 'turret' or 'resource'
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
- elseif not active and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
+ elseif not active and not charging and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id)
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
@@ -688,6 +689,8 @@ local function renderDrone(d,dt,now)
  end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
+  isMining=kind=='resource',charging=charging,
+  warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),paused=s:GetAttribute('MotionPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
@@ -702,7 +705,7 @@ local function renderHealing(now)
  local candidates={}
  for _,d in pairs(drones) do
   local id=d.source:GetAttribute('HealTargetId');local target=type(id)=='string' and droneIndex[id]
-  local active=d.source:GetAttribute('Healing')==true and d.source:GetAttribute('MotionPaused')~=true
+  local active=(d.source:GetAttribute('Healing')==true or d.source:GetAttribute('State')=='RepairCharge') and d.source:GetAttribute('MotionPaused')~=true
    and (d.source:GetAttribute('HP') or 0)>0 and target and (target.source:GetAttribute('HP') or 0)>0
    and d.emitter.Parent and target.emitter.Parent
   if active then table.insert(candidates,{drone=d,target=target})
@@ -735,6 +738,10 @@ local function renderHealing(now)
    d.healTargetDrone=target;d.healBeam.Attachment1=d.healTarget
   end
   d.healBeam.Enabled=d.healVisible==true and d.healCheckedTarget==target and now-(d.healCheckedAt or 0)<.2
+  local charging=d.source:GetAttribute('State')=='RepairCharge'
+  local q=charging and math.clamp((now-(d.source:GetAttribute('RepairChargeAt') or now))/(d.source:GetAttribute('RepairChargeDuration') or .4),0,1) or 1
+  d.healBeam.Width0=charging and .025+.035*q or .13;d.healBeam.Width1=charging and .02+.02*q or .085
+  d.healBeam.Transparency=NumberSequence.new(charging and (.8-.35*q) or .12)
  end
 end
 
