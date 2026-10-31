@@ -91,8 +91,12 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now)
   for stage=p.knownStage+1,target do table.insert(p.queue,{stage=stage}) end
   p.knownStage=target
  end
- if broken and not p.knownBreak then table.insert(p.queue,{broken=true});p.knownBreak=true end
+ -- Keep an already-fractured source visible briefly so its final authoritative
+ -- hit can resolve into the neighboring crystal before the source disappears.
+ -- This is a cosmetic hold only; server rewards/slots retire immediately.
+ if broken and not p.knownBreak then table.insert(p.queue,{broken=true,notBefore=now+.12});p.knownBreak=true end
  if #p.queue==0 or now<p.nextAt then return nil end
+ if p.queue[1].broken and now<p.queue[1].notBefore then return nil end
  local event=table.remove(p.queue,1)
  if event.broken then p.broken=true;return 'break' end
  p.stage=event.stage;p.nextAt=now+.09

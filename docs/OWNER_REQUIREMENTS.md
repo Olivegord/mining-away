@@ -1,5 +1,13 @@
 # Owner requirements
 
+## October 31 mining gameplay priority
+
+The owner wants mining to be substantially more fun and asks for research into the appeal of bouncing/merging-ball videos and rock-paper-scissors particle simulations. The highest priority is the gameplay loop: understandable rules, anticipation, meaningful choices, visible consequences and satisfying progression. Sound and visual feedback should communicate those mechanics. Presentation alone does not establish that the game is enjoyable.
+
+Actively identify and fix mechanics that make play unsatisfying whenever working on this game. In particular, fields need meaningful crystal-hardness progression, including genuinely harder later resources, and permanent drone types need different mining behaviors rather than identical beams with cosmetic changes. Preserve quick early mining, the original overhead flight/mining feel and assets, server authority, permanent fleet identity, and the existing card/prestige loop. Evaluate difficulty together with rewards, travel, downtime and build choices so harder resources do not merely add waiting.
+
+See [mining satisfaction research and candidate criteria](MINING_SATISFACTION.md). Its tuning and behavioral designs are implementation proposals, not additional verbatim owner requirements or proven retention results. Research informs the work; real playtests must establish whether it is satisfying. Existing final-build visual/multiplayer gates and the prohibition on Roblox publishing remain in force.
+
 ## October 28 owner rejection — visual rework required
 
 The owner explicitly rejected actual 1c22606 screenshots: “this is so bad. bro.” This is a rejection of the presentation, not a near-finished visual pass. Preserve the existing game, source, original assets, server authority, progression and safety rules. Keep the PR draft and do not publish.

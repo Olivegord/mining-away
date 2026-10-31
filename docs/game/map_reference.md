@@ -32,7 +32,7 @@ The two loops and scenic Ruby overlook remain. The longer approaches preserve te
 | 4 | Violet Basin | 50.4, 29, −88.9 | 47.6×2×44.8 | 30 | 9 | 2 original constructs |
 | 5 | Deep Emerald | 116.9, 39, 19.4 | 47.6×2×47.6 | 40 | 12 | 2 original constructs |
 
-`Config.Fields` controls all field offsets/sizes, including the reused Ruby/Cobalt objects. Numeric IDs, mineral values, budgets and defenses remain stable. Geodes reserve five ordinary slots. Bounded random placement and separation checks may produce fewer visible objects than the budget. Crystals, damage, defense state, rewards and progression remain authoritative server logic.
+`Config.Fields` controls all field offsets/sizes, including the reused Ruby/Cobalt objects. Numeric IDs, budgets and defenses remain stable. Mineral hardness and values follow current `Config.Fields`; see the game design for the mining progression. Geodes reserve five ordinary slots. Bounded random placement and separation checks may produce fewer visible objects than the budget. Crystals, damage, defense state, rewards and progression remain authoritative server logic.
 
 ## Plan and traversal
 

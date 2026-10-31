@@ -7,8 +7,24 @@ local ICE=Color3.fromRGB(126,241,221)
 local HOT=Color3.fromRGB(255,179,102)
 local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
+local miningLooks={
+ Cutter={color=Color3.fromRGB(94,190,255),core=Color3.fromRGB(223,246,255),width0=.52,width1=.42},
+ Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.36,width1=.34},
+ Resonance={color=Color3.fromRGB(104,224,146),core=Color3.fromRGB(221,255,227),width0=.36,width1=.32},
+}
 local segmentRanks={bottemseg=0,lowerseg=1,upperseg=2,topseg=3,eye=1,eyecase=1,spawnEye=1}
 local requiredSegments={'bottemseg','lowerseg','upperseg','topseg','eye','eyecase','spawnEye'}
+local function finalContact(sample,now)
+ if sample.breakContactAt==nil then return sample,false end
+ local at,untilAt=sample.breakContactAt,sample.breakContactUntil
+ local valid=type(at)=='number' and type(untilAt)=='number' and at==at and untilAt==untilAt
+  and now>=at and now<math.min(untilAt,at+.3) and sample.alive and not sample.paused
+  and sample.part and sample.part.Parent and sample.part.Transparency<1
+ if valid then return sample,true end
+ local expired=table.clone(sample);expired.active=false;expired.key=nil;expired.part=nil
+ expired.secondaryPart=nil;expired.secondaryKey=nil
+ return expired,false
+end
 local function snapshot(source)
  return {state=source:GetAttribute('State'),life=source:GetAttribute('Life'),hp=source:GetAttribute('HP'),
   dead=source:GetAttribute('Dead'),serial=source:GetAttribute('ShotSerial') or 0}
@@ -128,6 +144,7 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuer
 end
 function P:renderMiningBeam(beam,sample,now,noQuery)
  if self.closed or not beam or not beam.origin.Parent then return end
+ local final;sample,final=finalContact(sample,now)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
   beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
@@ -141,23 +158,42 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery) end
  local valid=point~=nil and normal~=nil
+ -- A break attribute can precede its contact snapshot. Reconstruct the same
+ -- original ramp from BeamSince instead of restarting a two-second warmup.
+ if final and beam.envelope.key~=sample.key then beam.envelope=F.newBeam() end
  local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=valid,
   key=sample.key,life=sample.life,active=sample.active,since=sample.since})
  if valid then
   beam.endpoint.Position=point;beam.marker.Position=point+normal*.07
   if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
  end
+ local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
+ if beam.look~=look then
+  beam.look=look;beam.core.Color=ColorSequence.new(look.core);beam.halo.Color=ColorSequence.new(look.color);beam.marker.Color=look.color
+ end
+ beam.miningCue=beam.miningCue or {}
+ local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
+ if style=='Cutter' then pulse=0;newPulse=false end
  local visible=valid and width>.001
  beam.core.Enabled=visible;beam.halo.Enabled=visible
+ -- The original inner ramp and .2s hide remain untouched. The outside shape
+ -- expresses actual damage cadence, never an invented client firing timer.
  beam.core.Width0=.3*width;beam.core.Width1=.3*width
- beam.halo.Width0=.52*width;beam.halo.Width1=.42*width
+ beam.halo.Width0=(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width
+ beam.halo.Width1=(look.width1+(style=='Percussion' and .45 or .06)*pulse)*width
+ beam.marker.Size=Vector3.one*(.14+(style=='Percussion' and .2 or .09)*pulse)
+ if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
+ if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
+  self.nextMiningSoundAt=now+.12;self:_sound(point,'mining',now)
+ end
  beam.secondary.Enabled=false
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery)
   if secondary and secondaryNormal then
-   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or ICE)
-   beam.secondary.Width0=.085*width;beam.secondary.Width1=.055*width;beam.secondary.Enabled=true
+   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or look.color)
+   beam.secondary.Width0=(style=='Resonance' and .11+.04*pulse or .085)*width
+   beam.secondary.Width1=(style=='Resonance' and .075+.025*pulse or .055)*width;beam.secondary.Enabled=true
   end
  end
 end
@@ -167,8 +203,15 @@ end
 -- The .75s verified-cache deadline hides stale anchors during overload.
 function P:queueMiningBeam(beam,sample,now)
  if self.closed or not beam or not beam.origin.Parent then return end
+ local final;sample,final=finalContact(sample,now)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
   beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.cachedLife=sample.life;beam.cacheKey=sample.key
+ end
+ if final then
+  -- This saved hit already has a hard .3s lifetime. It may use the still-visible
+  -- fracture mesh at HP zero, but must never enter the ordinary 1.2s proc hold.
+  beam.branchHold=nil
+  table.insert(self.beamQueue,{beam=beam,sample=sample,now=now});return
  end
  -- A short-lived authoritative proc can end before its fair verification turn.
  -- Retain the observed target cosmetically for at most 1.2 s, and only until
@@ -285,7 +328,8 @@ function P:_sound(position,kind,now)
  anchor.Position=position;anchor.Transparency=1
  local sound=Instance.new('Sound');sound.Name='CosmeticImpact'
  sound.SoundId=kind=='death' and 'rbxasset://sounds/impact_explosion_03.mp3' or 'rbxasset://sounds/action_jump_land.mp3'
- sound.Volume=kind=='death' and .28 or .12;sound.PlaybackSpeed=kind=='death' and 1.1 or 1.6
+ sound.Volume=kind=='death' and .28 or (kind=='mining' and .065 or .12)
+ sound.PlaybackSpeed=kind=='death' and 1.1 or (kind=='mining' and .85 or 1.6)
  sound.RollOffMinDistance=5;sound.RollOffMaxDistance=65;sound.Parent=anchor;sound:Play()
  -- The same bounded, frame-cleaned pool owns both pulse parts and audio anchors.
  table.insert(self.pulses,{part=anchor,start=now,size=0,duration=kind=='death' and 2.5 or 1,audio=true})

@@ -1,5 +1,5 @@
 -- Server simulation, validated intent, and durable profile boundaries.
--- The builder lexically provides Config/Feel/Rules/Profile/Cards/Persistence/World.
+-- The builder lexically provides Config/Feel/Mining/Rules/Profile/Cards/Persistence/World.
 local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
 local RunService=game:GetService('RunService')
@@ -54,7 +54,7 @@ local function publish(p)
  p.player:SetAttribute('MA_Profile',Http:JSONEncode(copy))
  p.player:SetAttribute('MA_SaveStatus',p.session.lost and 'Session lost — progress paused' or (p.session.readOnly and 'Save uncertain — reconciling' or (preview and 'PREVIEW • not saved across restarts' or 'Saved • autosave active')))
 end
-local function characterRoot(p)
+local function characterRoot(p: any): any
  local ch=p.player.Character;local h=ch and ch:FindFirstChildOfClass('Humanoid');local hr=ch and ch:FindFirstChild('HumanoidRootPart')
  return h and h.Health>0 and hr or nil
 end
@@ -68,9 +68,10 @@ local function updateSlots(r)
  local count=0;for _ in pairs(r.slots) do count=count+1 end
  if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
 end
-local function release(d,keepCombatEffects)
+local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: boolean?): ()
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
- d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil
+ d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil
+ if not keepBreakContact then d.mineBreakContact=nil end
  if not keepCombatEffects then d.chainUntil=0;d.chainTargetId=nil end
 end
 local function spend(d)
@@ -91,7 +92,7 @@ local function leaveDroneField(p: any,d: any)
  if d.hp>0 then d.state='Return' end
  dropFieldIfEmpty(p,old)
 end
-local function leaveField(p,keepField)
+local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?): ()
  local runId=data(p).run.id
  for _,field in ipairs(patches) do
   if field.id~=keepField then
@@ -99,7 +100,7 @@ local function leaveField(p,keepField)
    if not p.busy then data(p).run.entitlements[tostring(field.id)]=nil else p.entitlementSync=true end
   end
  end
- for _,d in ipairs(p.drones) do release(d);spend(d);d.field=nil;d.state=d.hp>0 and 'Return' or d.state end
+ for _,d in ipairs(p.drones) do release(d,false,keepBreakContact);spend(d);d.field=nil;d.state=d.hp>0 and 'Return' or d.state end
 end
 local colors={Blue=Color3.fromRGB(86,190,255),Red=Color3.fromRGB(255,110,118),Green=Color3.fromRGB(116,230,157)}
 local function spawnDrone(p,owned,slot)
@@ -109,7 +110,8 @@ local function spawnDrone(p,owned,slot)
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,model=model,body=body,emitter=emitter,slot=slot,
   pos=pos,goal=pos,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,
-  beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0}
+  beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0,
+  mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0}
  drones[d.id]=d;table.insert(p.drones,d);return d
 end
 local function rebuildFleet(p)
@@ -143,7 +145,7 @@ local resourceSerial=0
 local function nodeUsage(field)
  local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
 end
-local function makeResource(field,position,kind,maxHealth,ore)
+local function makeResource(field,position,kind,maxHealth,ore,visualSize)
  resourceSerial=resourceSerial+1
  local template=RS:FindFirstChild('Crystal');template=template and template:FindFirstChild('Mesh',true)
  local part
@@ -153,16 +155,16 @@ local function makeResource(field,position,kind,maxHealth,ore)
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Sound') then v:Destroy()
   elseif v:IsA('ParticleEmitter') or v:IsA('Beam') or v:IsA('Trail') then v.Enabled=false end
  end
- local shell=kind=='Geode';local size=(maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
+ local shell=kind=='Geode';local size=visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
  local fullSize=Vector3.one*size
  local start=Vector3.new(position.X,field.center.Y,position.Z)
  local finish=Vector3.new(position.X,field.center.Y+2+size/2,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
  part.Color=shell and Color3.fromRGB(96,85,117) or field.color;part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=shell and 3 or 1,kind=kind,paid=false,ore=ore,spawnAt=now,readyAt=now+2,stage=0,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=shell and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  resources[r.id]=r;table.insert(field.resources,r)
- for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageSeed=r.stageSeed,SpawnAt=now,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
+ for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageSeed=r.stageSeed,SpawnAt=now,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
 end
 local function spawnResource(field,forceKind)
@@ -193,7 +195,8 @@ local function spawnResource(field,forceKind)
   if valid then spot=candidate;break end
  end
  if not spot then return false end
- makeResource(field,spot,kind,seed:NextInteger(50,100)*(kind=='Geode' and 3 or 1),field.cfg.Ore)
+ local mineral=Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
+ makeResource(field,spot,kind,mineral.maxHP,field.cfg.Ore,mineral.size)
  return true,kind=='Geode' and 5 or 1
 end
 local function seedField(field)
@@ -239,6 +242,7 @@ end
 for _,f in ipairs(scene.fields) do
  local settings=table.clone(C);settings.EncounterPrefix=instanceId..':field:'..f.id
  local field={id=f.id,cfg=f.cfg,center=f.center,part=f.part,model=f.model,color=Color3.fromRGB(unpack(f.cfg.Color)),resources={},turrets={},respawnQueue={},e=R.newEncounter(settings)}
+ field.model:SetAttribute('Hardness',f.cfg.Hardness or 1);field.model:SetAttribute('OreValue',f.cfg.Value)
  for n=1,f.cfg.Turrets do
   local pos=f.center+Vector3.new((n-(f.cfg.Turrets+1)/2)*17,f.part.Size.Y/2+.5,-f.part.Size.Z*.32)
   local model,body,emitter=World.turret(f.model,scene.turretTemplate,pos,Color3.fromRGB(210,100,145))
@@ -258,47 +262,113 @@ local function award(d: any,r: any)
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
  local amount=r.ore*d.stats.yieldMultiplier+(profile.run.yieldRemainders[material] or 0)
  local units=math.floor(amount);profile.run.yieldRemainders[material]=amount-units
- Pro.addCargo(profile,material,units,Ca.capacity(profile));p.dirty=true;p.publishDirty=true
+ Pro.addMiningCargo(profile,material,units,Ca.capacity(profile));p.dirty=true;p.publishDirty=true
 end
-local function hitResource(d: any,r: any,amount: number,secondary: boolean?)
+local hitResource: any
+local function secondaryMining(d: any,primary: any,amount: number,radius: number)
+ local candidates={}
+ for _,other in ipairs(primary.field.resources) do
+  if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
+   local distance=(other.position-primary.position).Magnitude
+   if distance<=radius then table.insert(candidates,{resource=other,distance=distance}) end
+  end
+ end
+ table.sort(candidates,function(a,b) return a.distance==b.distance and a.resource.id<b.resource.id or a.distance<b.distance end)
+ for _,candidate in ipairs(candidates) do
+  local other=candidate.resource;local used=0;for _ in pairs(other.slots) do used=used+1 end
+  if used<other.limit and not other.slots[d.id] then
+   other.slots[d.id]=1
+   local accepted=hitResource(d,other,amount,true,radius)
+   other.slots[d.id]=nil;updateSlots(other)
+   -- An obstructed first candidate must not starve a reachable second one.
+   if accepted then return other.id end
+  end
+ end
+ return false
+end
+hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?)
  local p=profiles[d.owner]
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not R.finite(amount) or amount<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt or Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then return false end
  if secondary then
   local primary=d.target
-  if not primary or primary.paid or (r.position-primary.position).Magnitude>(d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
- elseif (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode')).Magnitude>1 then return false end
+  -- The synchronous primary resolver alone can retain its contact through a
+  -- final hit. No saved state/remote can authorize an echo from a retired node.
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode')).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ local baseAmount=amount
+ amount=amount*Mining.efficiency(d.owned.type,r.kind)
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
+ if not secondary then r.processingPrimary=d.id end
  local previous=r.stage
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
  r.stage=Feel.stage(actual,r.maxHP)
  if r.stage~=previous then r.part:SetAttribute('Stage',r.stage) end
  r.part:SetAttribute('HP',actual)
+ if not secondary and d.owned.type=='Red' then
+  d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
+ end
  if broken then
   r.part:SetAttribute('BreakSerial',1);r.removeAt=now+2
-  for id in pairs(r.slots) do if drones[id] and drones[id].target==r then release(drones[id]) else r.slots[id]=nil end end
-  updateSlots(r)
   if r.kind=='Geode' then
-   makeResource(r.field,r.position,'Core',seed:NextInteger(50,100),r.ore*4)
-   for n=1,4 do local a=n*math.pi/2;makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',seed:NextInteger(50,70),r.ore) end
+   local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)
+   makeResource(r.field,r.position,'Core',core.maxHP,r.ore*4,core.size)
+   for n=1,4 do
+    local a=n*math.pi/2;local shard=Mining.resource(seed:NextInteger(50,70),'Shard',r.hardness)
+    makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',shard.maxHP,r.ore,shard.size)
+   end
   else award(d,r);table.insert(r.field.respawnQueue,now+r.field.cfg.Respawn) end
+ end
+ if not secondary then
+  local secondaryId
+  if (d.stats.forkFraction or 0)>0 then secondaryId=secondaryMining(d,r,baseAmount*d.stats.forkFraction,d.stats.forkRange or 6) end
+  if d.owned.type=='Green' and r.stage>previous then
+   local echo=Mining.resonanceDamage(r.maxHP,d.stats.miningDPS,r.stage-previous)
+   local echoed=secondaryMining(d,r,echo,Mining.RESONANCE_RANGE)
+   if echoed then
+    secondaryId=echoed
+    d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
+   end
+  end
+  if broken and (secondaryId or d.owned.type=='Red') then
+   -- This short record is presentation only: scalar IDs/timestamps, no target,
+   -- reservation, damage permission or resource reference survives retirement.
+   d.mineBreakSerial=d.mineBreakSerial+1
+   d.mineBreakContact={at=now,untilTime=now+.3,primaryId=r.id,secondaryId=secondaryId or '',beamSince=d.beamSince}
+  end
+  r.processingPrimary=nil
+ end
+ if broken then
+  for id in pairs(r.slots) do
+   local worker=drones[id]
+   if worker and worker.target==r then release(worker,false,not secondary and worker==d and d.mineBreakContact~=nil) else r.slots[id]=nil end
+  end
+  updateSlots(r)
  end
  return true
 end
-local function chooseResource(d,field)
- local best,distance=nil,math.huge
+local function chooseResource(d: any,field: any): ()
+ local best,score=nil,math.huge
  for _,r in ipairs(field.resources) do
   if not r.paid and now>=r.readyAt then
    local used=0;for _ in pairs(r.slots) do used=used+1 end
-   local n=(r.position-d.pos).Magnitude
-   if used<r.limit and n<distance then best=r;distance=n end
+   if used<r.limit then
+    local neighbors=0
+    if d.owned.type=='Green' then
+     for _,other in ipairs(field.resources) do
+      if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
+     end
+    end
+    local value=Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
+    if value<score then best=r;score=value end
+   end
   end
  end
  if best then
   local occupied={};for _,slot in pairs(best.slots) do occupied[slot]=true end
   local slot=1;while occupied[slot] do slot=slot+1 end
-  best.slots[d.id]=slot;updateSlots(best);d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mining=false
+  best.slots[d.id]=slot;updateSlots(best);d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mineCharge=0;d.mining=false
  end
 end
 local function eligible(d,field)
@@ -455,7 +525,7 @@ local function attackDrone(d: any,field: any,dt: number)
    end
 end
 local function mineDrone(d: any,p: any,field: any,dt: number)
-   if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then leaveField(p)
+   if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then leaveField(p,nil,true)
    else
     if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
     if not d.target then chooseResource(d,field) end
@@ -466,19 +536,11 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
       d.warmAt=d.warmAt or now;d.state='Mine'
       if now-d.warmAt>=d.stats.warmup then
        if not d.mining then d.beamSince=now end
-       d.mining=true;hitResource(d,r,d.stats.miningDPS*dt)
-       if d.target and (d.stats.forkFraction or 0)>0 then
-        for _,other in ipairs(field.resources) do
-         if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=(d.stats.forkRange or 6) then
-          local count=0;for _ in pairs(other.slots) do count=count+1 end
-          if count<other.limit then
-           other.slots[d.id]=1;hitResource(d,other,d.stats.miningDPS*dt*d.stats.forkFraction,true);other.slots[d.id]=nil;break
-          end
-         end
-        end
-       end
+       d.mining=true
+       local damage,charge=Mining.step(d.owned.type,d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
+       if damage>0 then hitResource(d,r,damage) end
       end
-     else d.warmAt=nil;d.mining=false end
+     else d.warmAt=nil;d.mineCharge=0;d.mining=false end
     else d.state='Follow';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt) end
    end
 end
@@ -519,6 +581,8 @@ local function droneStep(d: any,dt: number)
 end
 local function snapshotDrone(d)
  local target=d.target
+ local breakContact=d.mineBreakContact
+ if breakContact and (now>=breakContact.untilTime or not healthy(profiles[d.owner]) or d.hp<=0) then d.mineBreakContact=nil;breakContact=nil end
  if (d.forkUntil or 0)<=now then d.forkTargetId=nil end
  if (d.chainUntil or 0)<=now then d.chainTargetId=nil end
  local combatTarget=d.state=='Attack' and d.mining and d.combatTarget
@@ -526,6 +590,9 @@ local function snapshotDrone(d)
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,
   Position=d.pos,Goal=d.goal,Yaw=d.yaw,MotionPaused=(profiles[d.owner].busy or not store:healthy(profiles[d.owner].session)) and d.hp>0,MaxStep60=d.stats.maxStep60,PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or d.targetPosition or d.pos,Mining=d.mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.stats.warmup,
+  MiningStyle=Mining.style(d.owned.type),MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
+  MineBreakSerial=d.mineBreakSerial,MineBreakAt=breakContact and breakContact.at or 0,MineBreakUntil=breakContact and breakContact.untilTime or 0,
+  MineBreakPrimaryId=breakContact and breakContact.primaryId or '',MineBreakSecondaryId=breakContact and breakContact.secondaryId or '',MineBreakBeamSince=breakContact and breakContact.beamSince or 0,
   ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
   ForkTargetPosition=d.forkTarget or d.pos,ForkTargetId=(d.forkUntil or 0)>now and (d.forkTargetId or '') or '',ForkUntil=d.forkUntil or 0,
   ChainTargetPosition=d.chainTarget or d.pos,ChainTargetId=(d.chainUntil or 0)>now and (d.chainTargetId or '') or '',ChainUntil=d.chainUntil or 0,
@@ -537,6 +604,9 @@ end
 local function setMotionPaused(p: any,paused: boolean)
  for _,d in ipairs(p.drones) do
   if d.model and d.model.Parent and d.hp>0 then
+   if paused then
+    d.mineBreakContact=nil;d.model:SetAttribute('MineBreakUntil',0);d.model:SetAttribute('MineBreakPrimaryId','');d.model:SetAttribute('MineBreakSecondaryId','')
+   end
    d.model:SetAttribute('Position',d.pos);d.model:SetAttribute('Goal',d.goal);d.model:SetAttribute('Yaw',d.yaw)
    d.model:SetAttribute('MotionPaused',paused)
   end
@@ -595,7 +665,7 @@ local function offerUnavailable(p: any,pl: any,payload: any,reason: string)
  else offerReply(pl,payload,'rejected',reason) end
 end
 local function validCommandId(v)
- return type(v)=='string' and #v>0 and #v<=80 and v:match('^[%w%-%_%.%:]+$')~=nil
+ return type(v)=='string' and #v>0 and #v<=80 and v:match('^[%w_.:-]+$')~=nil
 end
 local function validDroneIntent(payload: any): boolean
  if type(payload)~='table' or not validCommandId(payload.requestId) then return false end

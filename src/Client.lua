@@ -389,18 +389,23 @@ openFleet=function()
   local panel=U.panel(body,UDim2.fromOffset(3,111),UDim2.fromOffset(width,194),tint:Lerp(palette.white,.82),10);panel.Name='FleetDrone'
   fleetPortrait(panel,tint)
   local name=selected.name or 'Drone';local nameHeight=wrappedHeight(name,width-94,20,true,25)
-  local identityHeight=wrappedHeight(selected.type or 'Blue',width-94,16,false,23)
+  local identity=(selected.type or 'Blue')..' · '..Mining.style(selected.type)
+  local identityHeight=wrappedHeight(identity,width-94,16,false,23)
   label(panel,UDim2.fromOffset(82,6),UDim2.new(1,-90,0,nameHeight),name,20,palette.ink,true)
-  label(panel,UDim2.fromOffset(82,9+nameHeight),UDim2.new(1,-90,0,identityHeight),selected.type or 'Blue',16,palette.muted)
+  label(panel,UDim2.fromOffset(82,9+nameHeight),UDim2.new(1,-90,0,identityHeight),identity,16,palette.muted)
   local statsY=math.max(75,12+nameHeight+identityHeight)
   local col=(width-28)/2
   label(panel,UDim2.fromOffset(10,statsY),UDim2.fromOffset(col,25),'Mine  '..number(stats.miningDPS or 30)..'/s',16,palette.ink,true)
   label(panel,UDim2.fromOffset(14+col,statsY),UDim2.fromOffset(col,25),'Fight  '..number(stats.combatDPS or 12)..'/s',16,palette.ink,true)
   label(panel,UDim2.fromOffset(10,statsY+28),UDim2.fromOffset(col,25),'Hull  '..number(stats.maxHealth or 80),16,palette.ink,true)
   label(panel,UDim2.fromOffset(14+col,statsY+28),UDim2.fromOffset(col,25),'Warmup  '..number(stats.warmup or .8)..'s',16,palette.ink,true)
-  local selectDrone=button(panel,UDim2.fromOffset(10,statsY+59),UDim2.fromOffset(math.min(width-20,150),44),'Select',function() beginDroneSelection(selected) end,palette.mineral);selectDrone.Name='SelectDrone';selectDrone.TextSize=16
-  panel.Size=UDim2.fromOffset(width,statsY+113)
-  local y=111+statsY+125
+  local behavior=Mining.description(selected.type)
+  local behaviorHeight=wrappedHeight(behavior,width-20,16,false,24)
+  label(panel,UDim2.fromOffset(10,statsY+58),UDim2.fromOffset(width-20,behaviorHeight),behavior,16,palette.muted)
+  local selectY=statsY+64+behaviorHeight
+  local selectDrone=button(panel,UDim2.fromOffset(10,selectY),UDim2.fromOffset(math.min(width-20,150),44),'Select',function() beginDroneSelection(selected) end,palette.mineral);selectDrone.Name='SelectDrone';selectDrone.TextSize=16
+  panel.Size=UDim2.fromOffset(width,selectY+54)
+  local y=111+selectY+66
   local nextDrone=button(body,UDim2.fromOffset(3,y),UDim2.fromOffset(math.min(width,174),44),'Next drone',openPrestige,palette.accent);nextDrone.Name='NextDrone'
   local pre=profile.prestigePreview or {}
   label(body,UDim2.fromOffset(3,y+50),UDim2.fromOffset(width,50),comma(pre.earnings or 0)..' / '..comma(pre.saleRequired or 2000)..' sold · '..(pre.field or 'Cobalt')..' '..(pre.wins or 0)..' / '..(pre.winsRequired or 1),16,palette.muted)
@@ -539,11 +544,14 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
 end)
 
 local soundCount=0
-local function safeSound(name,parent)
+local function safeSound(name,parent,stage)
  if soundCount>=16 then return end
  local template=RS:FindFirstChild(name,true)
  local sound=template and template:IsA('Sound') and template:Clone() or Instance.new('Sound')
  if not template then sound.SoundId=name=='RockBreak' and 'rbxasset://sounds/impact_explosion_03.mp3' or 'rbxasset://sounds/action_jump_land.mp3';sound.Volume=name=='RockBreak' and .18 or .1;sound.PlaybackSpeed=name=='RockBreak' and 1.7 or 1.9 end
+ -- Three increasing pitches describe real quarter fractures, then a lower break.
+ -- No free-running combo tone: interrupted mining leaves this sequence unchanged.
+ if name=='RockCrack' then sound.PlaybackSpeed=sound.PlaybackSpeed*(.92+.08*math.clamp(stage or 1,1,3)) end
  soundCount=soundCount+1;sound.TimePosition=0;sound.RollOffMinDistance=3;sound.RollOffMaxDistance=55;sound.Parent=parent;sound:Play();Debris:AddItem(sound,3)
  task.delay(3,function() soundCount=math.max(0,soundCount-1) end)
 end
@@ -702,14 +710,14 @@ local function renderResource(r,now)
   view.CFrame=CFrame.new(pos)*CFrame.Angles(ax,seed*.01,az)
   view.Color=r.baseColor:Lerp(Color3.new(.12,.12,.15),stage*.13)
  else view.Transparency=1 end
- if event=='stage' then safeSound('RockCrack',view);presentation:resourceImpact(r,event,now)
+ if event=='stage' then safeSound('RockCrack',view,stage);presentation:resourceImpact(r,event,now)
  elseif event=='break' then safeSound('RockBreak',view);presentation:resourceImpact(r,event,now) end
 end
-local function resolveRenderedTarget(kind,id)
+local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
  if kind=='resource' then
   local r=resourceById(id)
-  if r and r.source.Parent and (r.source:GetAttribute('BreakSerial') or 0)==0
+  if r and r.source.Parent and (allowBreaking or (r.source:GetAttribute('BreakSerial') or 0)==0)
    and r.view.Parent and not r.visual.broken then return r.view,r.source,r end
  elseif kind=='turret' then
   for source,t in pairs(turrets) do
@@ -772,9 +780,29 @@ local function renderDrone(d,dt,now)
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
  local extra,extraSource
  if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
+ local beamSince=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now)
+ local breakAt,breakUntil
+ -- A final hit retires the gameplay reservation immediately. Its short saved
+ -- contact may finish the local fracture sequence while the drone moves on.
+ -- A new active job wins, and no contact outlives either visible crystal.
+ local finalAt=s:GetAttribute('MineBreakAt') or 0
+ local finalUntil=s:GetAttribute('MineBreakUntil') or 0
+ if alive and not active and not motionPaused and (s:GetAttribute('MineBreakSerial') or 0)>0
+  and now>=finalAt and now<math.min(finalUntil,finalAt+.3) then
+  local primaryId=s:GetAttribute('MineBreakPrimaryId')
+  local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
+  if finalPart then
+   part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true
+   procId=s:GetAttribute('MineBreakSecondaryId')
+   extra,extraSource=resolveRenderedTarget('resource',procId,true)
+   beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil
+  end
+ end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
-  since=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now),
+  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),paused=s:GetAttribute('MotionPaused')==true,
+  pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
+  since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
   secondaryKey=procId,secondaryColor=state=='Attack' and Color3.fromRGB(255,179,102) or nil},now)
 
@@ -1137,7 +1165,8 @@ connect(RunService.Heartbeat,function(dt)
      contextAction=function() requestField(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
      local phase=nearest:GetAttribute('Phase') or 'Safe'
      local actionText=(phase=='Guarded' or phase=='Active') and 'Fight' or (phase=='Gathering' and 'Join' or 'Mine')
-     contextDetail.Text=(phase=='Active' and 'Starting crew only') or (phase=='Guarded' and 'Sentries block mining') or (phase=='Gathering' and 'Join before the fight starts') or 'Gather minerals with your fleet'
+     local hardness=nearest:GetAttribute('Hardness') or 1
+     contextDetail.Text=(phase=='Active' and 'Starting crew only') or (phase=='Guarded' and 'Sentries block mining') or (phase=='Gathering' and 'Join before the fight starts') or (number(hardness)..'× mining work · '..number(nearest:GetAttribute('OreValue') or 1)..' credits / ore')
      contextButton.Text=actionText..(touch and '' or ' [E]')
     end
     context.Visible=true

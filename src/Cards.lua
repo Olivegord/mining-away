@@ -1,5 +1,5 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=4,BASE_CAPACITY=120}
+local C={CONTENT_VERSION=5,BASE_CAPACITY=120}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true}
@@ -265,11 +265,19 @@ function C.buy(p,tx,expectedRun,context)
  -- Search the bounded catalog rather than letting a greedy first pick prevent a
  -- useful triple. Seeded weighted ordering breaks ties; repeated requests cannot reroll.
  -- Prefer both a guarded-field answer and a productive economy option, then a
- -- signature mechanic in early packs, then different categories and scopes.
+ -- useful mining fork in the first pack, an early signature and varied choices.
  -- Caps can exhaust a lane; never invent a useless card just to fill that lane.
- local pairsOK,combat,economic,special={},{},{},{}
+ local pairsOK,combat,economic,special,starterFork={},{},{},{},{}
+ local baseline=p.run.packIndex==0 and vector(p,nil) or nil
  for i,a in ipairs(pool) do
   pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
+  starterFork[i]=false
+  if baseline and (a.effects.fork or 0)>0 then
+   for _,d in ipairs(p.fleet) do
+    local damage,reach=d.id..':forkFraction',d.id..':forkRange'
+    if a._vector[damage]>baseline[damage]+1e-8 or a._vector[reach]>baseline[reach]+1e-8 then starterFork[i]=true;break end
+   end
+  end
   for j=i+1,#pool do pairsOK[i][j]=a.cardId~=pool[j].cardId and compatible(a,pool[j]) end
  end
  local chosen,bestScore={},-math.huge
@@ -280,6 +288,7 @@ function C.buy(p,tx,expectedRun,context)
     local score=0
     if context.combatVisible and (combat[i] or combat[j] or combat[k]) then score=score+1000 end
     if economic[i] or economic[j] or economic[k] then score=score+1000 end
+    if starterFork[i] or starterFork[j] or starterFork[k] then score=score+500 end
     if p.run.packIndex<3 and (special[i] or special[j] or special[k]) then score=score+100 end
     if a._category~=b._category then score=score+4 end;if a._category~=c._category then score=score+4 end;if b._category~=c._category then score=score+4 end
     if a.scope~=b.scope then score=score+1 end;if a.scope~=c.scope then score=score+1 end;if b.scope~=c.scope then score=score+1 end

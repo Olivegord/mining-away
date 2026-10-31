@@ -115,6 +115,16 @@ function P.addCargo(p,material,units,capacity)
  local accepted=math.min(units,math.max(0,math.floor(capacity)-P.cargoUnits(p)))
  p.run.cargo[material]=(p.run.cargo[material] or 0)+accepted;return accepted
 end
+-- Mining completes indivisible nodes. Keep the whole final drop, then require
+-- a sale before any further mining; never erase a hard-earned core at the cap.
+-- The caller supplies a bounded server-authored node yield, not client input.
+function P.addMiningCargo(p,material,units,capacity)
+ if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
+ local held=P.cargoUnits(p)
+ if held>=math.floor(capacity) or held+units>=1e14 then return 0 end
+ p.run.cargo[material]=(p.run.cargo[material] or 0)+units
+ return units
+end
 function P.sell(p,prices,tx,expectedRun)
  local replay=P.receipt(p,'Sell',tx);if replay then return true,replay end
  if expectedRun~=p.run.id then return false,'Stale run' end

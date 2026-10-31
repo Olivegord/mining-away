@@ -150,6 +150,114 @@ check('random field crystals use variable health scaled original union and two-s
  local old=positions[1];seedField(f);assert(f.resources[1].position.X~=old)
  for _,r in ipairs(f.resources) do assert(math.abs(r.position.X-f.center.X)<=f.part.Size.X/2);assert(math.abs(r.position.Z-f.center.Z)<=f.part.Size.Z/2) end
 end)
+check('all fields scale real mining work without enlarging original crystal geometry',function()
+ local a=fixture()
+ for _,f in ipairs(patches) do
+  eq(f.model:GetAttribute('Hardness'),f.cfg.Hardness);eq(f.model:GetAttribute('OreValue'),f.cfg.Value)
+  for _,r in ipairs(f.resources) do
+   local mass=r.fullSize.X*(r.kind=='Geode' and 37.5 or 25)
+   close(r.hp,(mass-10)*f.cfg.Hardness);close(r.maxHP,r.hp+10)
+   close(r.part:GetAttribute('Hardness'),f.cfg.Hardness)
+   if r.kind=='Crystal' then assert(r.fullSize.X>=2 and r.fullSize.X<=4) end
+  end
+ end
+ local f=patches[2];local r=newResource(f,'Geode',300,12);advance(2.01);local d=assignExact(a,f,r)
+ local before=#f.resources;hitResource(d,r,10000)
+ for i=before+1,#f.resources do
+  local child=f.resources[i];local mass=child.fullSize.X/((child.kind=='Shard') and .8 or 1)*25
+  close(child.hp,(mass-10)*f.cfg.Hardness);close(child.readyAt-now,2)
+ end
+end)
+check('percussion charges real active time, freezes across saves and resets on target change',function()
+ local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',1000,10);advance(2.01)
+ local d=assignExact(a,f,r);d.owned.type='Red';d.warmAt=now-d.stats.warmup-1
+ local before=r.hp
+ for _=1,24 do now+=1/60;realTime=now;droneStep(d,1/60) end
+ close(r.hp,before);close(d.mineCharge,.4)
+ local p=profile(a);p.busy=true
+ for _=1,120 do now+=1/60;realTime=now;droneStep(d,1/60) end
+ close(r.hp,before);close(d.mineCharge,.4);p.busy=false
+ for _=1,24 do now+=1/60;realTime=now;droneStep(d,1/60) end
+ close(before-r.hp,d.stats.miningDPS*.8);eq(d.minePulseSerial,1)
+ snapshotDrone(d);eq(d.model:GetAttribute('MiningStyle'),'Percussion');eq(d.model:GetAttribute('MinePulseTargetId'),r.id);eq(d.model:GetAttribute('MinePulseSerial'),1)
+ for _=1,24 do now+=1/60;realTime=now;droneStep(d,1/60) end
+ close(d.mineCharge,.4)
+ assignExact(a,f,r);d.warmAt=now-d.stats.warmup-1;before=r.hp
+ for _=1,24 do now+=1/60;realTime=now;droneStep(d,1/60) end
+ close(r.hp,before);eq(d.minePulseSerial,1)
+ local core=newResource(f,'Core',1000,10);core.readyAt=now;assignExact(a,f,core);before=core.hp
+ hitResource(d,core,24);close(before-core.hp,36)
+end)
+check('resonance sends a bounded nonrecursive fracture echo to one nearby node',function()
+ local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+ local r=newResource(f,'Crystal',100,10);local nearby=newResource(f,'Crystal',100,10,f.center+Vector3.new(6,0,0))
+ local beyond=newResource(f,'Crystal',100,10,f.center+Vector3.new(12,0,0));advance(2.01)
+ local d=assignExact(a,f,r);d.owned.type='Green';nearby.hp=20;nearby.stage=2
+ local before=nearby.hp;hitResource(d,r,25)
+ eq(r.stage,1);close(before-nearby.hp,8.75);eq(nearby.stage,3);close(beyond.hp,90)
+ eq(d.minePulseSerial,1);eq(d.forkTargetId,nearby.id)
+ snapshotDrone(d);eq(d.model:GetAttribute('MiningStyle'),'Resonance');eq(d.model:GetAttribute('MinePulseTargetId'),r.id)
+ local same=nearby.hp;hitResource(d,r,1);close(nearby.hp,same);eq(d.minePulseSerial,1)
+end)
+check('final primary hit can fork once but full cargo forbids further damage',function()
+ local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+ local r=newResource(f,'Crystal',100,10);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(5,0,0));advance(2.01)
+ local d=assignExact(a,f,r);d.stats.forkFraction=.2;r.hp=1;r.stage=3
+ hitResource(d,r,2);eq(r.paid,true);close(other.hp,89.6);eq(d.target,nil);eq(r.processingPrimary,nil)
+ eq(Profile.cargoUnits(data(profile(a))),10)
+ assignExact(a,f,other);Profile.addCargo(data(profile(a)),'Quartz',110,120)
+ local hp=other.hp;eq(hitResource(d,other,100),false);close(other.hp,hp)
+end)
+check('final core reward stays whole, stops same-tick secondary work and sells exactly once',function()
+ local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+ local p=profile(a);local state=data(p);state.run.saleEarnings=2000;state.run.wins.Cobalt=1
+ assert(Profile.prestige(state,'core-payout-test',state.run.id,{atDepot=true,confirmed=true}));rebuildFleet(p)
+ local core=newResource(f,'Core',100,80);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(5,0,0));advance(2.01)
+ local d=assignExact(a,f,core);d.stats.forkFraction=.2;core.hp=1
+ Profile.addCargo(data(p),'Quartz',119,120)
+ hitResource(d,core,2);eq(core.paid,true);eq(Profile.cargoUnits(data(p)),199);close(other.hp,90)
+ eq(hitResource(d,core,2),false);eq(Profile.cargoUnits(data(p)),199)
+ local sibling=p.drones[2];release(sibling);sibling.field=f.id;sibling.target=other;sibling.targetSlot=1;other.slots[sibling.id]=1
+ sibling.pos=Feel.mineGoal(other.position,1,false);sibling.warmAt=now-sibling.stats.warmup-1
+ eq(hitResource(sibling,other,999),false);close(other.hp,90)
+ station(a,scene.converter);input(a,'Sell');eq(Profile.cargoUnits(data(p)),0);eq(data(p).run.credits,199)
+ input(a,'Sell');eq(data(p).run.credits,199);eq(data(p).run.saleEarnings,199)
+end)
+check('final-hit presentation event survives automatic acquisition but owns no gameplay contact',function()
+ local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+ local r=newResource(f,'Crystal',100,10);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(5,0,0));advance(2.01)
+ local d=assignExact(a,f,r);d.stats.forkFraction=.2;r.hp=1;r.stage=3;d.mining=true;d.beamSince=now-1
+ local since=d.beamSince;hitResource(d,r,2);snapshotDrone(d)
+ eq(d.target,nil);eq(d.mining,false);eq(next(r.slots),nil);eq(d.forkTargetId,nil)
+ eq(d.model:GetAttribute('MineBreakPrimaryId'),r.id);eq(d.model:GetAttribute('MineBreakSecondaryId'),other.id)
+ close(d.model:GetAttribute('MineBreakBeamSince'),since);close(d.model:GetAttribute('MineBreakUntil')-now,.3)
+ local serial=d.model:GetAttribute('MineBreakSerial');chooseResource(d,f);snapshotDrone(d)
+ eq(d.target,other);eq(d.model:GetAttribute('MineBreakPrimaryId'),r.id);eq(d.model:GetAttribute('MineBreakSerial'),serial)
+ now+=.31;realTime=now;snapshotDrone(d);eq(d.mineBreakContact,nil);eq(d.model:GetAttribute('MineBreakPrimaryId'),'')
+end)
+check('recall, explicit reassign, death and owner pause clear retained final-hit effects',function()
+ for _,action in ipairs({'Recall','AssignSlot','death','pause'}) do
+  local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+  local r=newResource(f,'Crystal',100,10);local other=newResource(f,'Crystal',100,10,f.center+Vector3.new(5,0,0));advance(2.01)
+  local d=assignExact(a,f,r);d.stats.forkFraction=.2;r.hp=1;r.stage=3;d.beamSince=now-1
+  hitResource(d,r,2);snapshotDrone(d);assert(d.mineBreakContact)
+  if action=='Recall' then input(a,'Recall')
+  elseif action=='AssignSlot' then input(a,action,{requestId='break-reassign',runId=data(profile(a)).run.id,fieldId=f.id,droneId=d.id,life=d.life,resourceId=other.id})
+  elseif action=='death' then kill(d)
+  else setMotionPaused(profile(a),true) end
+  eq(d.mineBreakContact,nil);snapshotDrone(d);eq(d.model:GetAttribute('MineBreakUntil'),0);eq(d.model:GetAttribute('MineBreakPrimaryId'),'')
+ end
+end)
+check('blocked secondary candidate does not swallow a reachable fork or bypass slots',function()
+ local a=fixture();local f=patches[1];for _,r in ipairs(f.resources) do r.paid=true end
+ local r=newResource(f,'Crystal',100,10);local blocked=newResource(f,'Crystal',100,10,f.center+Vector3.new(4,0,0))
+ local reachable=newResource(f,'Crystal',100,10,f.center+Vector3.new(-5,0,0));advance(2.01)
+ local d=assignExact(a,f,r);d.stats.forkFraction=.2;local originalRaycast=workspace.Raycast
+ workspace.Raycast=function(_,origin,direction) if direction.X>3 then return {Instance=scene.packStation} end;return nil end
+ local ok,err=pcall(function() hitResource(d,r,10);close(blocked.hp,90);close(reachable.hp,88);eq(d.forkTargetId,reachable.id) end)
+ workspace.Raycast=originalRaycast;assert(ok,err)
+ reachable.slots.other=1;local hp=reachable.hp;hitResource(d,r,1);close(reachable.hp,hp);eq(reachable.slots[d.id],nil)
+end)
 check('ordinary mining rejects growth and any station farther than one stud',function()
  local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',80,10)
  local d=assignExact(a,f,r,Vector3.new(1.01,0,0));local hp=r.hp
@@ -188,7 +296,7 @@ check('single crystal and three-slot shell selectors honor reservations',functio
  chooseResource(da,f);chooseResource(db,f);eq(da.target,rock);eq(db.target,nil)
  release(da);rock.paid=true;local shell=newResource(f,'Geode',200,10);advance(2.01)
  local selected=0
- for i=1,4 do local d={id='selector'..i,pos=shell.position};chooseResource(d,f);if d.target then selected=selected+1 end end
+ for i=1,4 do local d={id='selector'..i,pos=shell.position,owned=da.owned,stats=da.stats};chooseResource(d,f);if d.target then selected=selected+1 end end
  eq(selected,3)
 end)
 check('sell is invoker-owned at actual Converter and advances cumulative earnings',function()

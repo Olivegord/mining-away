@@ -59,6 +59,10 @@ Ordinary mining stations are directly over the assigned crystal X/Z at `crystal 
 
 All clients render all drones smoothly from replicated authoritative goals/poses. Their local interpolation never replaces server range checks. The body stays level and yaws horizontally; its beam aims independently at the visible shrinking crystal surface.
 
+Blue drones are continuous cutters. Red drones accumulate active mining time into 0.8-second percussion hits and deal 50% extra damage to shells and cores. Green drones send one bounded, nonrecursive echo to a ready, available neighbor within ten studs when their primary hit crosses quarter-health fractures. Echo damage per quarter is the smaller of 8.75% of primary max health or 0.8 seconds of the drone's mining DPS; at most three quarters can contribute to a single hit. Secondary hits still require server range, line of sight, reservations and field entitlement. Charge is discarded on target/contact loss and frozen during saving. These permanent type behaviors do not rewrite saved base traits or retain run modifiers after prestige.
+
+The first pack prioritizes a useful split-mining choice, so the starting Blue can change its next mining expedition without waiting for prestige. Offers still contain three saved choices and require choosing one; useful combat/economy lanes remain higher priority. Content version 5 applies only to new offers; already-paid choices retain their exact payload.
+
 ## Fields and resource economy
 
 `Config.Fields` is the tuning source. Field IDs follow this order. Values below are current code values, not a measured balance recommendation.
@@ -68,12 +72,12 @@ All clients render all drones smoothly from replicated authoritative goals/poses
 | 1 Landing Quartz | 12 | 10 | 1 | 8 s | 0 | — | — | 1 |
 | 2 Ruby Grove | 16 | 12 | 2 | 14 s | 0 | — | — | 1 |
 | 3 Cobalt Ridge | 6 | 15 | 4 | 25 s | 1 | 260 | 19 | 1 |
-| 4 Violet Basin | 9 | 16 | 6 | 35 s | 2 | 390 | 24 | 3 |
-| 5 Deep Emerald | 12 | 20 | 8 | 45 s | 2 | 650 | 34 | 5 |
+| 4 Violet Basin | 9 | 16 | 7 | 35 s | 2 | 390 | 24 | 3 |
+| 5 Deep Emerald | 12 | 20 | 10 | 45 s | 2 | 650 | 34 | 5 |
 
 Replenishment delay starts on ordinary/core/shard depletion; replacement crystals then have a two-second grow-in before mining. A depleted visual remains briefly for break feedback. Placement can fail and retry when a field has no valid separated spawn candidate, so the budget is a ceiling, not a promise of every slot always being occupied.
 
-Crystals have server-random positions inside the field, with at most 18 inset/separation attempts and turret clearance. Each otherwise valid candidate also requires a clear vertical center column through the current map's solid scenery: a server ray from 64 studs above field center to just above the field surface includes only `scene.map`. Decorative non-queryable geometry is excluded. A blocked candidate consumes no node budget; exhausted attempts defer placement rather than bury a resource. This column check is not a complete volume-overlap test. Rotated field sampling uses the field transform. Ordinary max health is randomly 50–100, and original union size scales with it: roughly 2–4 studs before fracture shrink. Randomness is selected once by the server and replicated, never rolled independently by viewers.
+Crystals have server-random positions inside the field, with at most 18 inset/separation attempts and turret clearance. Each otherwise valid candidate also requires a clear vertical center column through the current map's solid scenery: a server ray from 64 studs above field center to just above the field surface includes only `scene.map`. Decorative non-queryable geometry is excluded. A blocked candidate consumes no node budget; exhausted attempts defer placement rather than bury a resource. This column check is not a complete volume-overlap test. Rotated field sampling uses the field transform. A server-random geological roll of 50–100 sets original union size at 2–4 studs. Effective mining work is `(roll − 10) × hardness`; max displayed health is that work plus ten. Hardness is 1 / 1.8 / 3.2 / 5.2 / 8 for Quartz / Ruby / Cobalt / Violet / Emerald. The same roll therefore gives identical geometry across fields and progressively greater work. Shell/core/shard work follows the same field hardness. Randomness is selected once by the server and replicated, never rolled independently by viewers.
 
 ### Ordinary mining lifecycle
 
@@ -83,21 +87,21 @@ Spawn → grow/rise for 2 seconds → ready → reserved → arrival/warmup
   → break feedback / cleanup → replenishment delay → next server-random spawn
 ```
 
-An ordinary crystal supports one reservation. Drones choose nearby ready unfilled resources; if none exist they wait near the field. Warmup restarts after losing the arrival condition or target. Damage runs on the server's fixed simulation step, not on client frame count. The original ten-health depletion cutoff is normalized into effective work: a max-health-100 crystal needs 90 work; at base 30 mining/second this is three active laser seconds after arrival and warmup.
+An ordinary crystal supports one reservation. Drones score ready available resources by estimated travel, warmup and type-specific work per payout; Blue favors ordinary cutting, Red benefits on shells/cores, and Green favors clusters and fractured targets. Explicit individual commands still choose a particular resource; if none exist they wait near the field. Warmup restarts after losing the arrival condition or target. Damage runs on the server's fixed simulation step, not on client frame count. The original ten-health depletion cutoff is normalized into effective work: a max-health-100 crystal needs 90 work; at base 30 mining/second this is three active laser seconds after arrival and warmup.
 
 Three stages mean **three changes at 75%, 50%, 25% remaining displayed health**, followed by depletion. Render scale changes from intact to `0.75 → 0.50 → 0.25`, with deterministic stage rotation, crack feedback and break. If fast damage crosses several thresholds between packets, the cosmetic queue briefly shows each stage in order; gameplay rewards do not wait for that animation. A newly joining viewer initializes from current damage, without replaying old cracks.
 
-Depletion is atomic: a resource can be paid only once. The finishing authorized drone's owner receives its mineral reward, even when multiple eligible drones helped mine it. Cargo bonuses award extra ore units and consume matching hold space. Fractional yields accumulate per mineral in saved run remainders, rather than rounding every bonus away. Cargo is truncated at available capacity; overflow is not banked as hidden ore.
+Depletion is atomic: a resource can be paid only once. The finishing authorized drone's owner receives its mineral reward, even when multiple eligible drones helped mine it. Cargo bonuses award extra ore units and consume matching hold space. Fractional yields accumulate per mineral in saved run remainders, rather than rounding every bonus away. If the hold is below capacity, the whole final node reward is accepted, including overfill shown in the actual cargo total. Once full, further primary and secondary damage is rejected and the fleet returns. This avoids destroying the payoff from a core when the hold had only a few free slots; no hidden reward bank is created.
 
 ### Geodes
 
-Fields after Quartz may generate a geode when there are at least five free budget units; the server spawn roll is 12%. A shell reserves five population units and has triple ordinary health, larger size and up to three closely bounded overhead mining stations. Breaking its shell grants no direct ore. It opens one core (four times the ordinary field ore reward) and four shards (ordinary ore each). Those children must be mined to earn cargo.
+Fields after Quartz may generate a geode when there are at least five free budget units; the server spawn roll is 12%. A shell reserves five population units and triples the geological roll before applying the field hardness to effective work, with larger size and up to three closely bounded overhead mining stations. Breaking its shell grants no direct ore. It opens one core (four times the ordinary field ore reward) and four shards (ordinary ore each). Those children must be mined to earn cargo.
 
 Shell opening is one authoritative transition, so simultaneous finishing hits cannot duplicate the children. Replenishment consumes the corresponding population tokens. Geode/core-specialized cards affect real server damage; general crystal appearance and staged mining remain in use throughout the game.
 
 ### Cargo and selling
 
-The base shared hold is 120 ore units. A fleet of three drones shares that hold rather than receiving three independent holds. Card capacity uses the same shared value. When full, the fleet releases assignments and returns; the player still visits the Converter to sell.
+The base shared hold is 120 ore units. A fleet of three drones shares that hold rather than receiving three independent holds. Card capacity uses the same shared value. When at or above capacity after a whole-node payout, the fleet releases assignments and returns; the player still visits the Converter to sell.
 
 Sale value is the sum of authoritative mineral units × field unit value. A successful sale clears cargo, adds credits and increments cumulative sale earnings for that run. Pack purchases reduce credits but do not reduce cumulative sales. This distinction lets players buy cards without erasing milestone progress. Selling is an ordered profile transaction, rejected during the owner's active assault and outside Converter range.
 

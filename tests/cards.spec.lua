@@ -139,11 +139,13 @@ test('every fresh visible pack offers combat economy and an early signature mech
   local p=funded(seed)
   for pack=1,5 do
    local ok,o=buy(p,'variety:'..pack);eq(ok,true)
-   local combat,economic,special=false,false,false
+   local combat,economic,special,fork=false,false,false,false
    for _,c in ipairs(o.choices) do for key,n in pairs(c.effects) do if n>0 then
     combat=combat or combatKeys[key] or false;economic=economic or economicKeys[key] or false;special=special or signatureKeys[key] or false
+    fork=fork or key=='fork'
    end end end
    assert(combat,'No guarded-field answer in seed '..seed..' pack '..pack);assert(economic,'No economy answer in seed '..seed..' pack '..pack)
+   if pack==1 then assert(fork,'No mining behavior choice in first pack for seed '..seed);eq(#o.choices,3);eq(#p.run.cards,0) end
    if pack<=3 then assert(special,'No signature in early pack '..pack) end
    eq(C.select(p,o.id,(pack-1)%3+1,'take:'..pack,p.run.id,{atDepot=true}),true)
   end
@@ -183,13 +185,18 @@ test('every negative effect is disclosed in the saved tradeoff field',function()
  local all={};for _,c in ipairs(C.CATALOG) do all[c.cardId]=true end
  local seen={}
  for seed=1,160 do
-  local p=funded(seed);local ok,o=buy(p,'disclosure');eq(ok,true)
-  for _,c in ipairs(o.choices) do
-   seen[c.cardId]=true
-   for _,n in pairs(c.effects) do if n<0 then assert(c.tradeoff and c.tradeoff~='No stat penalty',c.cardId..' omitted its cost');assert(string.find(c.tradeoff,tostring(-n*100)..'%%'),c.cardId..' omitted its exact cost') end end
+  local p=funded(seed)
+  for pack=1,3 do
+   local ok,o=buy(p,'disclosure:'..pack);eq(ok,true)
+   for _,c in ipairs(o.choices) do
+    seen[c.cardId]=true
+    for _,n in pairs(c.effects) do if n<0 then assert(c.tradeoff and c.tradeoff~='No stat penalty',c.cardId..' omitted its cost');assert(string.find(c.tradeoff,tostring(-n*100)..'%%'),c.cardId..' omitted its exact cost') end end
+   end
+   eq(C.select(p,o.id,(seed+pack)%3+1,'disclosure-choice:'..pack,p.run.id,{atDepot=true}),true)
   end
  end
- -- These new signatures all reach real offers, rather than remaining dead data.
+ -- First-pack mining protection narrows that pack; later paid packs must still
+ -- expose every signature with its exact disclosed costs.
  for _,id in ipairs({'F10','F11','D17','D18','D19','D20'}) do assert(all[id] and seen[id],'Never offered '..id) end
 end)
 print(passed..' UPGRADE cards tests passed')
@@ -236,7 +243,7 @@ test('rarity candidate weights materially influence an equal-priority tie',funct
  print(string.format('RARITY equal-priority fixture: Common=%d Uncommon=%d Rare=%d / 6000; not offer odds',counts.Common,counts.Uncommon,counts.Rare))
 end)
 test('new offers store honest weighted tiers through pending replay and claim',function()
- local p=funded(913);local initial=p.run.credits;local ok,offer=buy(p,'tier-pack');eq(ok,true);eq(offer.contentVersion,4)
+ local p=funded(913);local initial=p.run.credits;local ok,offer=buy(p,'tier-pack');eq(ok,true);eq(offer.contentVersion,5)
  for _,c in ipairs(offer.choices) do assert(C.RARITY_WEIGHTS[c.rarity],c.cardId..' is missing its saved server tier') end
  local snapshot=P.clone(offer);local restored=assert(P.migrate(p,44));local ok2,replay=buy(restored,'other-id');eq(ok2,true);assert(same(snapshot,replay));eq(restored.run.credits,initial-80)
  local which=2;local selected=offer.choices[which]
@@ -255,3 +262,24 @@ test('pre-tier purchased offer stays exact and is never assigned a fake tier',fu
  local selected,receipt=C.select(restored,old.id,3,'legacy-select',p.run.id,{atDepot=true});eq(selected,true);eq(receipt.card.rarity,nil);eq(restored.run.credits,920);eq(#restored.run.cards,1)
 end)
 print(passed..' RARITY cards tests passed')
+test('first-pack fork preference never offers capped non-beneficial mining cards',function()
+ local p=funded(123)
+ p.run.cards={{cardId='mining-caps',scope='Fleet',effects={fork=.2,forkRange=6,mining=3}}}
+ local ok,o=buy(p,'capped-forks');eq(ok,true);eq(#o.choices,3)
+ for _,c in ipairs(o.choices) do assert(c.cardId~='D10' and c.cardId~='F09' and c.cardId~='D20','Capped fork reached offer') end
+end)
+test('paid content v4 offer survives first-pack preference without replacement or forced selection',function()
+ local p=funded(77);p.run.packIndex=1;p.run.credits=920
+ local old={id=p.run.id..':pack:1',runId=p.run.id,contentVersion=4,packIndex=1,price=80,choices={
+  {cardId='F01',title='Sharper Beams',scope='Fleet',effects={mining=.25},rarity='Common'},
+  {cardId='F06',title='Cargo Lattice',scope='Player',effects={capacity=.35},rarity='Common'},
+  {cardId='D11',title='Entry Shield',scope='Individual',targetDroneId=p.fleet[1].id,effects={shield=.20},rarity='Uncommon'},
+ }}
+ p.run.pendingOffer=P.clone(old)
+ local restored=assert(P.migrate(p,44));local ok,replay=buy(restored,'v4-reopen');eq(ok,true);assert(same(replay,old))
+ eq(restored.run.credits,920);eq(#restored.run.cards,0)
+ local selected,result=C.select(restored,old.id,3,'v4-select',old.runId,{atDepot=true});eq(selected,true)
+ eq(#restored.run.cards,1);eq(restored.run.cards[1].cardId,'D11');assert(same(result.card.effects,old.choices[3].effects));eq(restored.run.pendingOffer,nil)
+ eq(C.select(restored,old.id,1,'v4-conflict',old.runId,{atDepot=true}),false);eq(#restored.run.cards,1)
+end)
+print(passed..' STARTER cards tests passed')

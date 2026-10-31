@@ -66,6 +66,20 @@ function F.surfaceComponents(anchor,size)
   or size.X<=0 or size.Y<=0 or size.Z<=0 then return nil end
  return anchor.x*size.X,anchor.y*size.Y,anchor.z*size.Z
 end
+-- A percussion hit/resonance discharge must correspond to this life and target.
+-- Late discovery reconstructs the short visual envelope but never replays audio.
+function F.miningCue(previous,sample,now)
+ local serial=finite(sample.pulseSerial) and sample.pulseSerial or 0
+ local changed=previous.life~=sample.life or previous.key~=sample.key
+ local fresh=previous.serial~=nil and not changed and serial>previous.serial
+ previous.serial=serial;previous.life=sample.life;previous.key=sample.key
+ local valid=sample.alive and sample.active and not sample.paused and serial>0
+  and sample.pulseKey==sample.key and sample.key~=nil
+  and finite(sample.pulseAt) and sample.pulseAt>0
+ if not valid then return 0,false end
+ local strength=F.flash(now-sample.pulseAt,.22)
+ return strength,fresh and strength>0
+end
 -- One coherent envelope; never replay a stale contact across death/life/target changes.
 function F.newBeam()
  return {key=nil,ever=false,active=false,width=0,life=nil,startAt=0,startWidth=0,hideAt=nil,hideWidth=0}

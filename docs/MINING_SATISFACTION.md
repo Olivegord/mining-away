@@ -1,0 +1,60 @@
+# Mining satisfaction
+
+October 31, 2026. The owner prioritizes a substantially more enjoyable mining loop and cites bouncing/merging-ball and rock-paper-scissors particle videos. This document distinguishes research findings from our design interpretation. It does not claim that these mechanics cause addiction or establish retention results.
+
+## What the evidence supports
+
+- **Readable consequences matter.** A preregistered action-RPG experiment (n=1,699) found curiosity the strongest enjoyment predictor. Feedback contingent on success improved the studied motives; stronger amplification reduced them in this implementation, possibly by obscuring agency. Effects should help players distinguish what succeeded and why. [Kao et al., CHI 2024](https://people.csail.mit.edu/dkao/pdf/3613904.3642656.pdf)
+- **Choice and mastery contribute to enjoyment.** Four studies associated perceived autonomy and competence with game enjoyment; the multiplayer study also supported relatedness. This supports understandable build and route choices, not a universal formula for fun. [Ryan, Rigby and Przybylski, 2006](https://www.rochester.edu/warner/lida/wp-content/uploads/2022/11/02bfe513dd59366750000000.pdf)
+- **Uncertain outcomes can sustain interest.** Two competitive-game studies found closer outcomes more enjoyable than overwhelming wins, mediated by suspense. Individual differences mattered. This does not prescribe random rewards or artificial failure in mining. [Abuhamdeh et al., 2015](https://scholar.usuhs.edu/en/publications/enjoying-the-possibility-of-defeat-outcome-uncertainty-suspense-a/)
+- **Audio helps bind events.** In an ambiguous crossing-disc experiment, a brief sound near contact increased the perception that the discs bounced. This demonstrates perceptual integration, not enjoyment or addiction. Synchronize mining sounds with real impacts and fractures. [Sekuler et al., 1997](https://people.brandeis.edu/~sekuler/papers/SekulerNature1997.pdf)
+- **Structure and surprise can work together.** Two music studies (analyzed samples 43 and 27) found preferences for intermediate predictive complexity. Applying that result to mining is a design analogy, requiring validation. [Gold et al., 2019](https://www.marcus-pearce.com/assets/papers/GoldEtAl2019JNeuro.pdf)
+- **More feedback is not always better.** An action-RPG study (n=3,018) found medium/high feedback outperformed none/extreme on its experience, motivation, play-time and performance measures. Preserve readable mining events in a busy field. [Kao, 2020](https://www.sciencedirect.com/science/article/pii/S1875952118300879)
+
+## Interpretation of the reference videos
+
+We found relevant research on underlying mechanisms, not controlled evidence establishing why these exact viral simulations retain viewers. Our working interpretation is:
+
+1. Bouncing creates a short prediction about the next collision, then promptly resolves it.
+2. Merging permanently changes the situation: fewer objects, a larger object and a new reachable threshold.
+3. RPS particles combine a simple local rule with uncertain overall fortunes. Small encounters can change the apparent winner.
+
+The common opportunity is an understandable system with frequent consequential events. Mining should let players choose a promising situation, watch a recognizable behavior resolve it, and use the result to change their next attempt. Sound should make that causality easier to perceive.
+
+## Candidate mechanics selected for this pass
+
+These are provisional design choices, not measured optimal values or a claim that the implementation is verified.
+
+| System | Selected behavior | Intended decision |
+|---|---|---|
+| Field hardness | Landing Quartz / Ruby Grove / Cobalt Ridge / Violet Basin / Deep Emerald use hardness 1 / 1.8 / 3.2 / 5.2 / 8. Retain within-field variation and starter pacing. | Quick harvesting versus committing a developed crew to harder, richer resources. |
+| Blue cutter | Preserve continuous cutting and the original beam ramp, overhead station and eased travel. | Reliable ordinary mining establishes the baseline. |
+| Red percussion | Deliver mining in 0.8-second pulses; gain 50% damage against geode shells/cores. | Commit a breaker to durable geodes; distinct rhythm reflects actual damage. |
+| Green resonance | A primary target's quarter-health fracture sends a nonrecursive hit to one eligible neighbor within 10 studs. | Choose useful clusters; observe one break setting up another. |
+| First pack | Prioritize an eligible mining-fork option alongside useful combat/economy choices; preserve all already-paid offers. | Try a visible mining interaction after the first sale, without waiting for another permanent drone. |
+| Cargo completion | Preserve the final node's earned payout and return on reaching capacity. | Finishing a rock remains rewarding; near-full cargo must have bounded, tested behavior. |
+
+Hardness alone would lengthen waiting. Evaluate effective work, value, travel and build advantages together. Preserve original crystal geometry and bounded size; higher health must not create giant crystals. All secondary damage must respect readiness, field entitlement and server authority. No unlimited chains, invented random rewards or client-authorized damage.
+
+The loop is **choose a field/target → watch the crew's behavior produce useful consequences → sell → choose one of three saved cards → try a changed build or route → earn a permanent drone through prestige**. Existing geode reveals and fork cards should amplify this loop. Early upgrades should create observable differences; later crews should visibly outperform their earlier selves on familiar resources.
+
+## Playtest criteria
+
+Record the source commit, build checksum, crew/cards, field, session duration and viewport for each comparison.
+
+- Compare equal crews across fields: arrival/warmup/break times, credits per minute including selling travel, cargo trips, and idle/travel/warmup share. Record unsuccessful guarded attempts separately.
+- Compare cutter, percussion and resonance on ordinary, geode and clustered resources. Identify situations favoring each; investigate a universally dominant route or mode.
+- Measure time to first useful card and first changed expedition. Ask players what their choice changed and why they picked the next target.
+- Repeat a short session with sound off, varying order across testers. Can players still identify mining modes, anticipate fractures and explain the cause of a neighboring hit? Restore sound and assess whether it clarifies those same events.
+- Inspect final-break rewards near capacity, target switching, recall, full cargo, blocked assignments and depleted fields for lost payoff or needless waiting.
+- Inspect busy two-player and late-join scenes for consistent consequences, clear audio/visual priority and preserved original motion. Collect player enjoyment and friction reports; session length alone does not establish satisfaction.
+
+## Verification record
+
+The full automated suite passes on pinned Luau 0.744, including 20 original-equation feel tests, 5 mining rule checks, 32 card tests, 28 persistence tests, 73 production-server tests using API doubles, 43 production renderer tests using API doubles, and server-to-client final-hit dispatch checks. The complete output is in [mining test results](review/MINING_TEST_RESULTS.txt). Pure modules use the default analyzer; the full generated dynamic bundles use Luau's supported old solver because the default solver exceeds its inference limit. This is standalone lint, not Roblox API type verification.
+
+Across ten deterministic model seeds, the first pack takes a median 63.77 seconds and first prestige 659.80 seconds; the second run takes 44.82 and 928.82 seconds respectively. These feasibility estimates share production hardness, type timing, target scoring and whole-node payout. They exclude geodes, fork/echo damage, real collision, networking and human choices, so they do not measure the benefit of the new interaction or player enjoyment. Violet and Emerald sell for 7 and 10 credits per unit, preserving increasing ordinary reward per equivalent mining work.
+
+Separate behavior/parity and pacing/presentation/multiplayer code reviews found a final-hit replication defect and an automatic-return cleanup edge. Both were repaired and covered by regressions: short cosmetic contacts survive resource retirement and automatic full-hold return without preserving a gameplay reservation; explicit recall/death/pause still clears them. Original crystal geometry, overhead stations, movement, beam ramp/fade, saved ownership and offer payloads remain covered.
+
+Build from the unchanged asset using `python3 tools/release.py`; `build/revision.json` records the exact source commit, clean-source status and place checksum. Final-build motion/audio, desktop/phone layouts, two-player/late-join presentation and player satisfaction remain **NOT VERIFIED** until actual engine evidence is recorded. Automated checks establish mechanics and bounds, not the visual gate or fun.

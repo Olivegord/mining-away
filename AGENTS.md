@@ -12,4 +12,5 @@
 - Use `codex/restore-feel-prestige` for the overnight change. Review once for behavior/parity and again for pacing, visuals, and multiplayer correctness.
 - Test the real logic where possible. Include a reproducible build and exact commit. Do not report mocks, structural checks, or lint as Studio visual/multiplayer playtests.
 - A blocked integration is not a reason to abandon productive work. Continue available implementation, simulation, model design, review, or test work; document the exact remaining blocker and don't claim it passed.
+- When working on this game, actively identify and fix unsatisfying mechanics. Prioritize the mining gameplay loop, meaningful field hardness, distinct drone mining behaviors, consequential choices and earned progression over polish. Evaluate rewards and downtime with difficulty; use `docs/MINING_SATISFACTION.md` for research and playtest criteria, and never treat automated correctness as proof of fun.
 

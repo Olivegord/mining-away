@@ -16,7 +16,7 @@ The [expanded valley and sparse hub review](docs/review/EXPANDED_MAP.md), [Alaba
 
 Use **`build/Mining Away.rbxl`** as the single working place. The old cloud/review/temporary place copies have been removed. Edit the connected place through Studio MCP; keep `assets/mining-away-base.rbxl` only as the preserved source asset. Open the working place in Studio and Play. Studio/unpublished sessions use an explicitly labeled **isolated temporary Preview adapter**, including negative local-test user IDs. Preview is not durable storage. The published-server code contains a real UpdateAsync/session-lock adapter; this cloud pass did not enable API access, touch live player data or publish to Roblox.
 
-A fresh profile owns one permanent Blue drone. Walk toward Landing Quartz or Ruby Grove, then click a field or use its contextual assignment button. Drones follow in the original radius-10 ring, ease and decelerate in flight, settle directly above a rock, warm their laser, and mine. Crystals use the original union, organic server-random positions, 50–100 base HP, two-second growth and 75/50/25% shrink/tilt stages. Cargo fills and the crew recalls. Use the original Converter to sell.
+A fresh profile owns one permanent Blue drone. Walk toward Landing Quartz or Ruby Grove, then click a field or use its contextual assignment button. Drones follow in the original radius-10 ring, ease and decelerate in flight, settle directly above a rock, warm their laser, and mine. Crystals use the original union, organic server-random positions, two-second growth and 75/50/25% shrink/tilt stages. A 50–100 geological roll keeps the original 2–4 stud size; field hardness multiplies mining work independently. Cargo fills and the crew recalls, keeping the whole final node even if it overfills the hold. Use the original Converter to sell.
 
 At the depot's card machine, buy a pack with earned credits. Three saved choices appear; pick exactly one. Type cards affect the named built-in type; individual cards name the server-selected permanent drone. Every modifier says **This run**. Closing/rejoining keeps the identical paid offer, target and price. A startup-rate card halves its named drone's warmup when alone; it does not double damage.
 
@@ -28,21 +28,25 @@ At 2,000 cumulative sale credits plus one Cobalt clear, optionally confirm prest
 
 The review build uses an alabaster/teal alien landscape and a compact cream HUD with original native icons, rounded headings, tactile controls, and one focused menu at a time. Cards show their exact target, effect, drawback, stacking and before/after values; adaptive desktop cards keep all three actions visible, while phone choices scroll vertically. Fleet inspection separates permanent crew from run upgrades, and prestige shows what stays and resets. See the [UI references](docs/review/UI_REFERENCES.md) and [UI validation](docs/review/UI_OVERHAUL.md). Drones retain their original shell with type trim. Client-only effects include original crystal fractures, beam/impact effects, reconstruction, and segmented sentry motion; all gameplay remains server-owned. See the [sentry review](docs/review/SENTRY_ANIMATION.md) for current motion evidence.
 
+## Mining satisfaction
+
+The [research and design rationale](docs/MINING_SATISFACTION.md) prioritizes readable consequences and useful build choices. Blue drones cut continuously; Red drones deliver charged 0.8-second impacts with 50% extra shell/core damage; Green drones echo primary fractures into one eligible nearby resource. Automatic target selection considers travel, work, payout and type strengths. Original motion, overhead mining, assets and server authority remain intact. Final engine motion/audio and multiplayer validation remain required.
+
 ## Economy and tuning
 
-| Field | Maximum node budget | Units / ordinary node | Credits / unit | Regrowth delay | Defense |
-|---|---:|---:|---:|---:|---|
-| Landing Quartz | 12 | 10 | 1 | 8 s | Safe |
-| Ruby Grove | 16 | 12 | 2 | 14 s | Safe |
-| Cobalt Ridge | 6 | 15 | 4 | 25 s | One original pyramid, 260 HP |
-| Violet Basin | 9 | 16 | 6 | 35 s | Two pyramids, 390 HP each |
-| Deep Emerald | 12 | 20 | 8 | 45 s | Two pyramids, 650 HP each |
+| Field | Mining work | Maximum node budget | Units / ordinary node | Credits / unit | Regrowth delay | Defense |
+|---|---:|---:|---:|---:|---:|---|
+| Landing Quartz | 1× | 12 | 10 | 1 | 8 s | Safe |
+| Ruby Grove | 1.8× | 16 | 12 | 2 | 14 s | Safe |
+| Cobalt Ridge | 3.2× | 6 | 15 | 4 | 25 s | One original pyramid, 260 HP |
+| Violet Basin | 5.2× | 9 | 16 | 7 | 35 s | Two pyramids, 390 HP each |
+| Deep Emerald | 8× | 12 | 20 | 10 | 45 s | Two pyramids, 650 HP each |
 
 A shell reserves five node-budget slots, then reveals one core and four smaller crystals. The core pays four ordinary-node yields; each shard pays one. Shell destruction pays nothing directly. Spawn separation, field insets and turret-footprint exclusion use bounded attempts; crowded fields retry rather than overlap. Ordinary growth is separate from regrowth delay. A growing resource cannot be reserved/mined.
 
 Packs cost 80, 110, 150, 210, 290, 400 credits, then grow by rounded ×1.30. Cargo starts at 120 units. The first five prestige sale targets are 2,000 / 5,000 / 11,000 / 22,000 / 42,000 with Cobalt×1 / Cobalt×2 / Violet×1 / Violet×2 / Emerald×1 respectively; later targets scale ×1.75 with increasing Emerald wins. These are provisional curves, not measured retention targets.
 
-Authoritative tuning lives in `src/Config.lua` for fields/encounters/timing, `Profile.BASE`, `Profile.TYPE_SCALES` and `Profile.MILESTONES` for permanent traits/milestones, and `Cards.lua` for catalog, pack prices, capacity and caps. All 41 standard and 3 reserve catalog entries are implemented, including bounded critical hits, split mining, chained shots, once-per-attempt shields, geode drilling, finishing damage, kill repair and shot-rate changes. Eligible packs prioritize useful combat and economy choices; the first three also prefer a behavior-changing option. Six combo builds and stronger baseline upgrades give each pick more impact. Future packs use content version 3; paid older offers preserve their exact payload. Pending paid offers keep their original payload across this catalog revision. Contributions add against immutable type-adjusted bases; the direct combat DPS cap applies **after** shot damage × shot rate. Crit and one-target splash are separately bounded, not unlimited chain effects. See the design and simulation reports before tuning.
+Authoritative tuning lives in `src/Config.lua` for fields/encounters/timing, `Profile.BASE`, `Profile.TYPE_SCALES` and `Profile.MILESTONES` for permanent traits/milestones, and `Cards.lua` for catalog, pack prices, capacity and caps. All 41 standard and 3 reserve catalog entries are implemented, including bounded critical hits, split mining, chained shots, once-per-attempt shields, geode drilling, finishing damage, kill repair and shot-rate changes. Eligible packs prioritize useful combat and economy choices; the first three also prefer a behavior-changing option, and the first pack prioritizes a useful mining-fork choice alongside the combat/economy options. Six combo builds and stronger baseline upgrades give each pick more impact. Future packs use content version 5; paid older offers preserve their exact payload. Pending paid offers keep their original payload across this catalog revision. Contributions add against immutable type-adjusted bases; the direct combat DPS cap applies **after** shot damage × shot rate. Crit and one-target splash are separately bounded, not unlimited chain effects. See the design and simulation reports before tuning.
 
 ## Shared expedition rules
 

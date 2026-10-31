@@ -4,6 +4,7 @@ local P=require('../src/Profile')
 local Cards=require('../src/Cards')
 local R=require('../src/Rules')
 local Feel=require('../src/Feel')
+local Mining=require('../src/Mining')
 local Config=require('../src/Config')
 local passed=0
 local function test(name,f) local ok,err=pcall(f);assert(ok,name..': '..tostring(err));passed+=1;print('PASS progression '..name) end
@@ -23,9 +24,10 @@ local function length(a,b)
 end
 local home={x=0,y=7,z=0}
 local function point(field,random)
- local hp=math.floor(random(50,101));local x=field.Offset[1]+random(-field.Size[1]/2+3,field.Size[1]/2-3)
+ local roll=math.floor(random(50,101));local mineral=Mining.resource(roll,'Crystal',field.Hardness)
+ local x=field.Offset[1]+random(-field.Size[1]/2+3,field.Size[1]/2-3)
  local z=field.Offset[3]+random(-field.Size[3]/2+3,field.Size[3]/2-3)
- return {x=x,y=field.Offset[2]+2+hp/50+10,z=z},hp
+ return {x=x,y=field.Offset[2]+2+mineral.size/2+10,z=z},mineral.maxHP
 end
 local function encounter(p,field,seed)
  local e=R.newEncounter(Config);local fleet={};local random=rand(seed)
@@ -114,15 +116,20 @@ local function mineHold(p,world,key)
  time+=math.sqrt(field.Offset[1]^2+field.Offset[3]^2)/16
  for _,owned in ipairs(p.fleet) do table.insert(workers,{owned=owned,stats=Cards.stats(p,owned),pos=home,at=time,target=nil}) end
  local function schedule(w)
-  local best,score
+  local best,score,completion;local readyAt=math.huge
+  for _,n in ipairs(wf.nodes) do if not n.reserved then readyAt=math.min(readyAt,n.ready) end end
+  local start=math.max(time,readyAt)
   for _,n in ipairs(wf.nodes) do
-   if not n.reserved then
-    local arrival=time+travel(length(w.pos,n.pos),w.stats.maxStep60)
-    local finish=math.max(arrival,n.ready)+w.stats.warmup+(n.hp-Config.BreakCutoff)/w.stats.miningDPS
-    if not score or finish<score then best=n;score=finish end
+   if not n.reserved and n.ready<=start then
+    local distance=length(w.pos,n.pos);local neighbors=0
+    if w.owned.type=='Green' then for _,other in ipairs(wf.nodes) do if other~=n and other.ready<=start and length(n.pos,other.pos)<=Mining.RESONANCE_RANGE then neighbors+=1 end end end
+    local node={kind='Crystal',hp=n.hp-Config.BreakCutoff,ore=field.Ore,hardness=field.Hardness,stage=0}
+    local preference=Mining.targetScore(w.owned.type,w.stats,node,distance,neighbors)
+    local finish=start+travel(distance,w.stats.maxStep60)+w.stats.warmup+Mining.duration(w.owned.type,'Crystal',node.hp,w.stats.miningDPS,w.stats.geodeMultiplier)
+    if not score or preference<score then best=n;score=preference;completion=finish end
    end
   end
-  if best then best.reserved=true;w.target=best;w.at=score end
+  if best then best.reserved=true;w.target=best;w.at=completion end
  end
  for _,w in ipairs(workers) do schedule(w) end
  local completions=0
@@ -133,13 +140,14 @@ local function mineHold(p,world,key)
   time=w.at;local node=w.target;w.pos=node.pos;node.reserved=false
   local raw=field.Ore*w.stats.yieldMultiplier+(p.run.yieldRemainders[key] or 0)
   local units=math.floor(raw+.0000001);p.run.yieldRemainders[key]=raw-units
-  P.addCargo(p,key,units,capacity);completions+=1
+  P.addMiningCargo(p,key,units,capacity);completions+=1
   -- A broken ordinary node is unavailable for configured delay + 2s growth.
   node.pos,node.hp=point(field,random);node.ready=time+field.Respawn+Config.Grow
   w.target=nil
   if P.cargoUnits(p)<capacity then schedule(w) end
  end
- -- Cancel all in-flight targets on full hold; no overflow/reward bank.
+ -- Cancel in-flight targets on a full hold; the last completed node is kept
+ -- whole, including overfill, exactly as the production mining award rule.
  local returnTime=0
  for _,w in ipairs(workers) do
   if w.target then w.target.reserved=false;w.target=nil end
@@ -156,7 +164,7 @@ local function economicScore(p,choice)
  for _,owned in ipairs(p.fleet) do
   local stats=Cards.stats(p,owned,choice)
   -- Nearby 12-stud target metric uses original capped easing, not distance/speed.
-  total+=1/(travel(12,stats.maxStep60)+stats.warmup+65/stats.miningDPS)*stats.yieldMultiplier
+  total+=1/(travel(12,stats.maxStep60)+stats.warmup+Mining.duration(owned.type,'Crystal',65,stats.miningDPS,stats.geodeMultiplier))*stats.yieldMultiplier
  end
  return total*(Cards.capacity(p,choice)/Cards.capacity(p))^.12
 end
@@ -284,4 +292,4 @@ for n=1,6 do
   print(string.format('MODEL NAKED_COMBAT FLEET=%d FIELD=%s WIN=%s SECONDS=%.2f HULL_LEFT=%.2f TURRET_HP_LEFT=%.2f',n,field.Key,tostring(win),time,hp,remaining))
  end
 end
-print(passed..' progression model checks passed; not Studio results')
+print(passed..' progression model checks passed; shared hardness, type timing, selection estimate and whole-node cargo; no geodes, fork/echo damage, real collision, networking or Studio results')

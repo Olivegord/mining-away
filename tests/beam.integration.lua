@@ -98,6 +98,34 @@ check('an unavailable target or wall never displays a stale beam',function()
  assert(not b.core.Enabled and not b.halo.Enabled and not b.secondary.Enabled);near(b.marker.Transparency,1);mode='hit'
  q.part=nil;presentation:renderMiningBeam(b,q,2.3);assert(not b.core.Enabled)
 end)
+check('mining types retain original inner ramp but show distinct outer geometry',function()
+ local tipWidths={}
+ for _,style in ipairs({'Cutter','Percussion','Resonance'}) do
+  local p=Presentation.new({parent=localFx});local b=anchor()
+  local q=sample({style=style,contact=true,pulseSerial=1,pulseAt=2,pulseKey='resource-1'})
+  p:beginFrame();p:renderMiningBeam(b,q,0);near(b.core.Width0,0)
+  p:beginFrame();p:renderMiningBeam(b,q,1);near(b.core.Width0,.225)
+  p:beginFrame();p:renderMiningBeam(b,q,2);near(b.core.Width0,.3)
+  tipWidths[style]=b.halo.Width1
+  q.active=false;p:beginFrame();p:renderMiningBeam(b,q,2.01)
+  p:beginFrame();p:renderMiningBeam(b,q,2.21);near(b.core.Width0,0);assert(not b.core.Enabled)
+ end
+ assert(tipWidths.Percussion>tipWidths.Cutter and tipWidths.Cutter>tipWidths.Resonance)
+end)
+check('percussion accents require a real matching hit and never replay on late join',function()
+ local p=Presentation.new({parent=localFx});local b=anchor();local sounds=0
+ p._sound=function(_,_,kind) assert(kind=='mining');sounds+=1 end
+ local q=sample({style='Percussion',contact=true,pulseSerial=7,pulseAt=2,pulseKey='resource-1'})
+ p:beginFrame();p:renderMiningBeam(b,q,2);near(b.halo.Width1,.79);near(b.marker.Size.X,.34);assert(sounds==0)
+ q.pulseSerial=8;q.pulseAt=2.8;p:beginFrame();p:renderMiningBeam(b,q,2.8);assert(sounds==1)
+ p:renderMiningBeam(b,q,2.81);assert(sounds==1)
+ q.pulseKey='old-resource';q.pulseSerial=9;q.pulseAt=3.6;p:beginFrame();p:renderMiningBeam(b,q,3.6)
+ near(b.halo.Width1,.34);near(b.marker.Size.X,.14);assert(sounds==1)
+ q.pulseKey=q.key;q.paused=true;q.pulseSerial=10;q.pulseAt=4.4;p:beginFrame();p:renderMiningBeam(b,q,4.4)
+ near(b.halo.Width1,.34);assert(sounds==1)
+ q.paused=false;q.pulseSerial=11;q.pulseAt=5.2;mode='blocked';p:beginFrame();p:renderMiningBeam(b,q,5.2)
+ assert(not b.core.Enabled and sounds==1);mode='hit'
+end)
 -- Load tests execute the actual frame queue and ray scheduler against a
 -- deterministic collision double. This is not Roblox rendering evidence.
 local blockedAll=false
@@ -115,7 +143,7 @@ local function population(n,branches)
  for i=1,n do
   local part=Instance.new('Part');part.Position=Vector3.new(i,0,0);part.Size=Vector3.new(2,2,2);part.Parent=localFx
   local b=anchor();b.origin.WorldPosition=Vector3.new(i,10,0)
-  local q={alive=true,active=true,key='rock-'..i,life=1,since=0,part=part}
+  local q={alive=true,active=true,key='rock-'..i,life=1,since=0,part=part,style=({'Cutter','Percussion','Resonance'})[(i-1)%3+1]}
   if branches then q.secondaryPart=part;q.secondaryKey='branch-'..i end
   rows[i]={b=b,q=q}
  end
@@ -127,6 +155,57 @@ local function frame(p,rows,now,reverse)
  else for _,r in ipairs(rows) do p:queueMiningBeam(r.b,r.q,now) end end
  p:flushMiningBeams();assert(p.beamRays<=12 and rayCount<=12,'frame exceeded ray budget')
 end
+check('final-hit branch uses still-visible breaking meshes and original beam age',function()
+ local p=Presentation.new({parent=localFx});local rows=population(1,true);local r=rows[1]
+ local primarySource=Instance.new('Part');primarySource.Parent=workspace;primarySource:SetAttribute('HP',0)
+ local secondarySource=Instance.new('Part');secondarySource.Parent=workspace;secondarySource:SetAttribute('HP',0)
+ r.q.serverSource=primarySource;r.q.secondarySource=secondarySource;r.q.style='Resonance'
+ -- HP can retire the ordinary endpoint before its final contact arrives.
+ frame(p,rows,1.9);r.q.part=nil;r.q.active=false;frame(p,rows,2)
+ assert(not r.b.core.Enabled)
+ r.q.part=r.q.secondaryPart;r.q.active=true;r.q.breakContactAt=2;r.q.breakContactUntil=2.3
+ frame(p,rows,2.05)
+ near(r.b.core.Width0,.3);assert(r.b.secondary.Enabled and r.b.branchHold==nil)
+ frame(p,rows,2.31);assert(not r.b.core.Enabled and not r.b.secondary.Enabled)
+ assert(rayCount==0,'expired final contact consumed surface queries')
+end)
+check('final contact expires without an ordinary branch hold or late-join audio replay',function()
+ local p=Presentation.new({parent=localFx});local rows=population(1,true);local r=rows[1];local sounds=0
+ p._sound=function() sounds+=1 end
+ r.q.style='Percussion';r.q.breakContactAt=2;r.q.breakContactUntil=20
+ r.q.pulseSerial=12;r.q.pulseAt=2;r.q.pulseKey=r.q.key
+ frame(p,rows,2.01);assert(r.b.core.Enabled and r.b.secondary.Enabled and sounds==0)
+ frame(p,rows,2.3);assert(not r.b.core.Enabled and not r.b.secondary.Enabled and r.b.branchHold==nil)
+ assert(sounds==0,'a late contact replayed impact audio')
+end)
+check('final contact obeys pause death and disappearing fracture geometry',function()
+ for _,cause in ipairs({'paused','dead','hidden','removed'}) do
+  local p=Presentation.new({parent=localFx});local rows=population(1,true);local r=rows[1]
+  r.q.breakContactAt=2;r.q.breakContactUntil=2.3;frame(p,rows,2.01);assert(r.b.secondary.Enabled)
+  if cause=='paused' then r.q.paused=true elseif cause=='dead' then r.q.alive=false
+  elseif cause=='hidden' then r.q.part.Transparency=1 else r.q.part:Destroy() end
+  frame(p,rows,2.02);assert(not r.b.core.Enabled and not r.b.secondary.Enabled and rayCount==0,cause)
+ end
+end)
+check('final-hit contacts share the existing ray budget and cannot persist under overload',function()
+ local p=Presentation.new({parent=localFx});local rows=population(48,true)
+ for _,r in ipairs(rows) do r.q.breakContactAt=2;r.q.breakContactUntil=2.3 end
+ for n=1,12 do frame(p,rows,2+n/30) end
+ for _,r in ipairs(rows) do assert(not r.b.core.Enabled and not r.b.secondary.Enabled and r.b.branchHold==nil) end
+end)
+check('simultaneous percussion audio is globally throttled and pool bounded',function()
+ local p=Presentation.new({parent=localFx});local rows=population(48,false)
+ for _,r in ipairs(rows) do r.q.style='Percussion';r.q.pulseSerial=1;r.q.pulseAt=1;r.q.pulseKey=r.q.key end
+ for i=1,30 do frame(p,rows,i/30) end
+ assert(#p.pulses==0,'late discovery sounded old impacts')
+ for _,r in ipairs(rows) do r.q.pulseSerial=2;r.q.pulseAt=1.8 end
+ frame(p,rows,1.8);assert(#p.pulses==1,'simultaneous fleet hits produced audio spam')
+ frame(p,rows,1.81);assert(#p.pulses==1,'same hit replayed audio')
+ for n=3,25 do
+  for _,r in ipairs(rows) do r.q.pulseSerial=n;r.q.pulseAt=n*.8 end
+  frame(p,rows,n*.8);assert(#p.pulses<=p.maxPulses,'audio exceeded existing effect pool')
+ end
+end)
 for _,fps in ipairs({30,60,144}) do
  for _,branches in ipairs({false,true}) do
   check(('fair %d fps with 48 primary beams, branches %s'):format(fps,tostring(branches)),function()

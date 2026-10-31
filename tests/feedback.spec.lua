@@ -140,4 +140,28 @@ check('warmup interruption and long inactive pause never advance beam rise',func
  q.alive=false;near(F.beamStep(beam,q),0)
  q.alive=true;q.valid=false;near(F.beamStep(beam,q),0)
 end)
+check('mining pulse follows authoritative timestamp and never invents a rhythm',function()
+ local record={};local q={alive=true,active=true,key='a',life=1,pulseKey='a',pulseSerial=1,pulseAt=5}
+ local strength,fresh=F.miningCue(record,q,5);near(strength,1);assert(not fresh,'late join replayed sound')
+ strength,fresh=F.miningCue(record,q,5.3);near(strength,0);assert(not fresh)
+ q.pulseSerial=2;q.pulseAt=6
+ strength,fresh=F.miningCue(record,q,6.1);assert(strength>0 and strength<1 and fresh)
+ strength,fresh=F.miningCue(record,q,6.11);assert(strength>0 and not fresh,'same hit sounded twice')
+ strength,fresh=F.miningCue(record,q,600);near(strength,0);assert(not fresh)
+end)
+check('mining pulse rejects stale targets paused jobs and new lives',function()
+ local record={};local q={alive=true,active=true,key='a',life=1,pulseKey='a',pulseSerial=1,pulseAt=5}
+ F.miningCue(record,q,5)
+ q.key='b';q.pulseSerial=2;local strength,fresh=F.miningCue(record,q,5.01);near(strength,0);assert(not fresh)
+ q.pulseKey='b';q.life=2;q.pulseSerial=3;strength,fresh=F.miningCue(record,q,5.02);assert(not fresh)
+ q.paused=true;q.pulseSerial=4;strength,fresh=F.miningCue(record,q,5.03);near(strength,0);assert(not fresh)
+ q.paused=false;strength,fresh=F.miningCue(record,q,5.04);assert(not fresh,'resume replayed an old hit')
+ q.alive=false;q.pulseSerial=5;strength,fresh=F.miningCue(record,q,5.05);near(strength,0);assert(not fresh)
+end)
+check('mining pulse rejects invalid and future server timestamps',function()
+ local q={alive=true,active=true,key='a',life=1,pulseKey='a',pulseSerial=1,pulseAt=6}
+ near(F.miningCue({},q,5),0)
+ q.pulseAt=0/0;near(F.miningCue({},q,5),0)
+ q.pulseAt=0;near(F.miningCue({},q,5),0)
+end)
 print(string.format('PASS %d cosmetic lifecycle/envelope tests (engine rendering still requires Studio)',passed))
