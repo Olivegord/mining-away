@@ -82,10 +82,11 @@ function HUD.styleWorldLabel(gui: BillboardGui)
  local field=anchor:GetAttribute('FieldId')
  local accent=field and anchor.Color or C.gold
  gui.Size=UDim2.fromOffset(field and 154 or 142,36)
- gui.MaxDistance=field and 230 or 100
+ gui.Enabled=field==nil
+ gui.MaxDistance=38
  gui.AlwaysOnTop=false; gui.LightInfluence=0; gui.Adornee=anchor; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
  gui.StudsOffset=Vector3.zero; gui.ExtentsOffset=Vector3.zero
- gui.StudsOffsetWorldSpace=Vector3.new(0,anchor.Size.Y*.5+(field and 19 or 6),0)
+ gui.StudsOffsetWorldSpace=Vector3.new(0,anchor.Size.Y*.5+3,0)
  local names={PackStation='UPGRADE PACKS',PrestigeStation='FLEET UPLINK',Printer='DRONE PRINTER',Converter='SELL ORE'}
  for _,label in gui:GetChildren() do
   if not label:IsA('TextLabel') then continue end
@@ -138,17 +139,10 @@ function HUD.new(refs: any)
  local track=frame(self.status,'HealthTrack',C.track);track.Position=UDim2.fromScale(0,0);track.Size=UDim2.fromScale(1,1);track.ClipsDescendants=true
  self.fill=frame(track,'Fill',Color3.fromRGB(48,86,57));self.fill.Size=UDim2.fromScale(1,1)
  self.order.ZIndex=track.ZIndex+3;self.living.ZIndex=track.ZIndex+3
- self.roles={}; self.roleOrder={'Starter','Dart','Striker','Medic','Charger'}
- for _,name in self.roleOrder do
-  local color=Config.Types[name] and Config.Types[name].Color or C.blue
-  local slot=card(self.dock,name,C.panel);slot.BackgroundTransparency=.3;portrait(slot,color)
-  local count=text(slot,'Count',0,0,50,20,15,C.text);count.TextXAlignment=Enum.TextXAlignment.Right
-  count.TextStrokeColor3=Color3.new(0,0,0);count.TextStrokeTransparency=.2;count.ZIndex=slot.ZIndex+3
-  local title=text(slot,'Role',2,0,50,14,9,C.text);title.AnchorPoint=Vector2.new(0,1);title.Position=UDim2.new(0,2,1,-4);title.Text=name;title.TextXAlignment=Enum.TextXAlignment.Center
-  self.roles[name]={frame=slot,count=count,title=title}
- end
- for _,b in {refs.recall,refs.test,refs.evade} do
-  b.Parent=self.dock;b.Font=Enum.Font.GothamBold;b.TextSize=12;skin(b,C.panel);b.TextColor3=C.text;b.TextStrokeTransparency=1
+ -- The fleet roster lives in its menu; the work stays visible.
+ self.roles={}
+ for _,b in {refs.recall,refs.test,refs.evade,refs.unload} do
+  b.Parent=self.dock;b.Font=Enum.Font.GothamBold;b.TextSize=16;skin(b,C.panel);b.TextColor3=C.text;b.TextStrokeTransparency=1
  end
  refs.evade.Name='Evade'
  self.hint=text(refs.root,'Controls',0,0,500,16,10,C.text);self.hint.TextXAlignment=Enum.TextXAlignment.Center;self.hint.TextStrokeColor3=Color3.new(0,0,0);self.hint.TextStrokeTransparency=.3
@@ -197,122 +191,110 @@ end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs
  local w,h=view.X,view.Y
- local short=h<480
- local wide=w>=700
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
- local pad=string.find(self.input.Name,'Gamepad')~=nil
- local total,living,hp,maximum=0,0,0,0
- local counts: {[string]: number}={}
- local order,priority='FOLLOWING',0
- local priorities={Follow=1,Return=2,Travel=3,Mine=4,Attack=5}
- local labels={Follow='FOLLOWING',Return='RECALLING',Travel='MOVING',Mine='MINING',Attack='ATTACKING'}
+ local total,living,working,full,loaded,delivering,manualLoads=0,0,0,0,0,0,0
+ local hp,maximum=0,0
  local folder=world:FindFirstChild('Drones')
  if folder then for _,drone in folder:GetChildren() do
   if drone:GetAttribute('Owner')==Players.LocalPlayer.UserId then
-   total+=1; local health=drone:GetAttribute('HP') or 0
-   hp+=math.max(0,health); maximum+=drone:GetAttribute('MaxHP') or 0
-   local role=drone:GetAttribute('Role') or drone:GetAttribute('Type')
-   local key=Config.Types[role] and role or 'Starter'
-   -- Keep a lost role visible while it reprints, with a zero active count.
-   counts[key]=counts[key] or 0
+   total+=1
+   local health=drone:GetAttribute('HP') or 0
+   hp+=math.max(0,health);maximum+=drone:GetAttribute('MaxHP') or 0
    if health>0 then
-    living+=1; counts[key]+=1
-    local state=drone:GetAttribute('State'); local rank=priorities[state] or 0
-    if rank>priority then order=labels[state]; priority=rank end
+    living+=1
+    local state=drone:GetAttribute('State')
+    local units=drone:GetAttribute('CargoUnits') or 0
+    local capacity=drone:GetAttribute('CargoCapacity') or math.huge
+    if units>0 then loaded+=1 end
+    if units>=capacity then full+=1 end
+    if units>0 and (state=='Full' or state=='Idle' or state=='Follow') and drone:GetAttribute('AutomationHaulEnabled')~=true then manualLoads+=1 end
+    if state=='Deliver' or state=='Unload' then delivering+=1
+    elseif state=='Mine' or state=='Travel' or state=='Attack' then working+=1 end
    end
   end
  end end
- if total==0 then order='CONNECTING' elseif living==0 then order='REPRINTING' end
- self.order.Text=order;self.order.TextColor3=C.text
- self.living.Text=string.format('%d / %d DRONES   •   %d%%',living,total,math.floor(hp/math.max(1,maximum)*100+.5))
- local ratio=math.clamp(hp/math.max(1,maximum),0,1)
- if math.abs(ratio-self.health)>.001 then
-  if self.tween then self.tween:Cancel() end
-  self.health=ratio;self.fill.BackgroundColor3=ratio<.3 and Color3.fromRGB(104,45,51) or Color3.fromRGB(48,86,57)
-  self.tween=TweenService:Create(self.fill,TweenInfo.new(.18),{Size=UDim2.fromScale(ratio,1)}); self.tween:Play()
+ local hidden=r.modal.Visible
+ local busy=working>0 or delivering>0 or full>0 or living<total
+ if working>0 or delivering>0 then self.hasWorked=true end
+ local status
+ local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
+ if delivering>0 then status=string.format('%d mining · %d hauling',working,delivering)
+ elseif full>0 then status=string.format('%d working · %d full',working,full)
+ elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
+ elseif working>0 then status=string.format('%d / %d working',working,living)
+ elseif living<total then status=string.format('%d / %d ready',living,total)
+ else status=string.format('%d drones ready',living) end
+ self.order.Text=status;self.order.TextSize=16;self.order.TextColor3=C.text
+ self.living.Visible=false
+ self.fill.Visible=fighting
+ self.fill.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maximum),0,1),1)
+ local canUnload=manualLoads>0 and not fighting
+ local showRecall=working>0 or delivering>0
+ local actions=(showRecall and 1 or 0)+(fighting and 1 or 0)+(canUnload and 1 or 0)
+ local bw=touch and 90 or 100
+ local width=math.min(w-24,196+actions*(bw+6))
+ local reserve=touch and 108 or 12
+ local stacked=w<600 and actions>1
+ local dockHeight=stacked and 76 or 40
+ local dockY=h-reserve-dockHeight
+ self.dockScale.Scale=1
+ self.dock.Size=UDim2.fromOffset(width,dockHeight)
+ self.dock.Position=UDim2.fromOffset((w-width)/2,dockY)
+ self.dock.Visible=not hidden and (busy or canUnload)
+ self.status.Position=UDim2.fromOffset(0,0)
+ self.status.Size=UDim2.fromOffset(stacked and width or math.max(100,width-actions*(bw+6)),stacked and 28 or 40)
+ self.order.Position=UDim2.fromOffset(10,0);self.order.Size=UDim2.new(1,-20,1,0)
+ if stacked then bw=(width-(actions-1)*6)/math.max(1,actions) end
+ local x=stacked and 0 or width-actions*(bw+6)+6
+ for _,entry in {{r.unload,canUnload},{r.recall,showRecall},{r.evade,fighting}} do
+  local button,visible=entry[1],entry[2]
+  if button then
+   button.Visible=visible
+   if visible then
+    button.Position=UDim2.fromOffset(x,stacked and 32 or 0);button.Size=UDim2.fromOffset(bw,stacked and 44 or 40);x+=bw+6
+   end
+  end
  end
- local visibleRoles={}
- for _,name in self.roleOrder do
-  local slot=self.roles[name]; slot.frame.Visible=counts[name]~=nil and (not short or wide)
-  slot.count.Text='×'..(counts[name] or 0)
-  if counts[name]~=nil then table.insert(visibleRoles,name) end
+ r.test.Visible=false
+ r.recall.Text=touch and 'Recall' or 'Recall [R]'
+ r.evade.Text=touch and 'Evade' or 'Evade [Q]'
+ if r.unload then r.unload.Text=manualLoads>0 and ('Unload '..manualLoads) or 'Unload' end
+ self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
+ self.hint.Text=Players.LocalPlayer:GetAttribute('AutomationMineEnabled') and 'Click a plot to assign your fleet' or 'Click an ore to assign a drone'
+ self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
+ self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
+ -- One small counter row. No permanent objectives, test banner or portraits.
+ local rw=math.min(350,w-124)
+ r.resources.Size=UDim2.fromOffset(rw,30);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
+ local cw=math.floor((rw-6)*.5)
+ self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,30)
+ self.cargo.Position=UDim2.fromOffset(cw+6,0);self.cargo.Size=UDim2.fromOffset(rw-cw-6,30)
+ self.creditCaption.Visible=false;self.cargoCaption.Visible=false
+ r.credits.Position=UDim2.fromOffset(9,0);r.credits.Size=UDim2.new(1,-18,1,0);r.credits.TextSize=16
+ r.cargoText.Position=UDim2.fromOffset(9,0);r.cargoText.Size=UDim2.new(1,-18,1,0);r.cargoText.TextSize=16
+ if w<500 then r.cargoText.Text=r.cargoText.Text:gsub('^Cargo ',''):gsub(' / ','/') end
+ r.cargoTrack.Position=UDim2.new(0,0,1,-3);r.cargoTrack.Size=UDim2.new(1,0,0,3)
+ self.testMode.Visible=false;r.objective.Visible=false
+ for i,button in {r.fleet,r.cards} do
+  button.Position=UDim2.fromOffset(w-102+(i-1)*48,6);button.Size=UDim2.fromOffset(44,44);button.Visible=not hidden
+  local caption=i==1 and r.fleetText or r.cardsText
+  caption.TextSize=12;caption.Position=UDim2.fromOffset(0,28);caption.Size=UDim2.new(1,0,0,16)
+  for _,icon in button:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then
+   icon.Position=UDim2.fromOffset(10,0);icon.Size=UDim2.fromOffset(24,24)
+  end end
  end
- local testing=Players.LocalPlayer:GetAttribute('MA_TestingEnabled')==true
- local actions=1+(testing and 1 or 0)+(fighting and 1 or 0)
- local count=math.max(1,#visibleRoles)
- local slotWidth=wide and (short and 44 or 52) or 58
- local portraitWidth=count*slotWidth+(count-1)*6
- local actionWidth=wide and (short and 76 or 88) or 0
- local baseWidth=wide and math.max(300,portraitWidth+12+actions*(actionWidth+6)-6) or 366
- local available=w-((touch and short and w>=700) and 260 or 24)
- local scale=math.min(1,available/baseWidth)
- self.dockScale.Scale=scale
- local buttonHeight=math.ceil(46/scale)
- local portraitHeight=wide and 54 or 58
- local actionY=wide and 26 or (short and 26 or 90)
- local dockHeight=wide and (26+math.max(portraitHeight,buttonHeight)) or actionY+buttonHeight
- local reserve=touch and (short and (w>=700 and 12 or 76) or 112) or 12
- local dockY=h-reserve-dockHeight*scale
- self.dock.Position=UDim2.fromOffset((w-baseWidth*scale)/2,dockY);self.dock.Size=UDim2.fromOffset(baseWidth,dockHeight);self.dock.Visible=not r.modal.Visible
- self.status.Size=UDim2.fromOffset(baseWidth,22);self.order.Size=UDim2.fromOffset(baseWidth-163,20)
- self.living.Position=UDim2.new(1,-152,0,0);self.living.Size=UDim2.fromOffset(144,20)
- self.living.Text=string.format('%d/%d drones  •  %d%%',living,total,math.floor(ratio*100+.5))
- local left=wide and 0 or (baseWidth-portraitWidth)/2
- for i,name in visibleRoles do
-  local slot=self.roles[name]
-  slot.frame.Position=UDim2.fromOffset(left+(i-1)*(slotWidth+6),26);slot.frame.Size=UDim2.fromOffset(slotWidth,portraitHeight)
-  slot.count.Size=UDim2.new(1,-4,0,20);slot.title.Size=UDim2.new(1,-4,0,14)
- end
- if not wide then actionWidth=(baseWidth-(actions-1)*6)/actions end
- local x=wide and (baseWidth-actions*(actionWidth+6)+6) or 0
- local index=0
- for _,entry in {{r.recall,true},{r.test,testing},{r.evade,fighting}} do
-  local b,visible=entry[1],entry[2];b.Visible=visible
-  if visible then b.Position=UDim2.fromOffset(x+index*(actionWidth+6),actionY);b.Size=UDim2.fromOffset(actionWidth,buttonHeight);index+=1 end
- end
- r.recall.Text='Recall'..(touch and '' or (pad and '  [B]' or '  [R]'))
- local remaining=math.max(0,(Players.LocalPlayer:GetAttribute('MA_TestReadyAt') or 0)-workspace:GetServerTimeNow())
- r.test.Text=remaining>0 and string.format('%.1fs',remaining) or ('Reroll'..(touch and '' or (pad and '  [Y]' or '  [T]')))
- r.test.Active=remaining==0; r.test.Selectable=r.test.Active
- r.evade.Text='Evade'..(touch and '' or (pad and '  [X]' or '  [Q]'))
- self.hint.Position=UDim2.fromOffset((w-500)/2,dockY-24); self.hint.Visible=not touch and not r.modal.Visible and not short and not r.context.Visible
- self.hint.Text=pad and 'RT INTERACT    RB COMMAND FIELD' or 'CLICK A FIELD TO SEND YOUR FLEET  •  1–5 SELECT FIELD'
- -- Match the reference's compact rectangular meters rather than tall cards.
- local rw=math.min(470,w-24)
- local resourceHeight=26
- r.resources.Size=UDim2.fromOffset(rw,resourceHeight);r.resources.Position=UDim2.fromOffset((w-rw)/2,8);r.resources.Visible=not r.modal.Visible
- local coinWidth=math.floor((rw-6)*.46)
- self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(coinWidth,resourceHeight)
- self.cargo.Position=UDim2.fromOffset(coinWidth+6,0);self.cargo.Size=UDim2.fromOffset(rw-coinWidth-6,resourceHeight)
- r.credits.Position=UDim2.fromOffset(65,0);r.credits.Size=UDim2.new(1,-69,1,0);r.credits.TextSize=w<360 and 12 or 14
- self.creditCaption.Size=UDim2.fromOffset(58,resourceHeight);self.cargoCaption.Size=UDim2.fromOffset(52,resourceHeight)
- r.cargoText.Position=UDim2.fromOffset(58,0);r.cargoText.Size=UDim2.new(1,-62,1,0);r.cargoText.TextSize=w<360 and 11 or 13;r.cargoText.Text=r.cargoText.Text:gsub('^Cargo ','')
- r.cargoTrack.Position=UDim2.fromOffset(52,0);r.cargoTrack.Size=UDim2.new(1,-52,1,0)
- local noRestock=Players.LocalPlayer:GetAttribute('MA_NoRestock')==true
- self.testMode.Visible=noRestock and not r.modal.Visible;self.testMode.Size=UDim2.fromOffset(rw,16);self.testMode.Position=UDim2.fromOffset((w-rw)/2,37)
- for i,b in {r.fleet,r.cards} do
-  b.Position=UDim2.fromOffset(12+(i-1)*52,54);b.Size=UDim2.fromOffset(46,46);b.Visible=not r.modal.Visible
-  local label=i==1 and r.fleetText or r.cardsText;label.Position=UDim2.fromOffset(0,32);label.Size=UDim2.new(1,0,0,14)
-  for _,icon in b:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then icon.Position=UDim2.fromOffset(8,1);icon.Size=UDim2.fromOffset(30,30) end end
- end
- r.objective.Size=UDim2.fromOffset(248,48);r.objective.Position=UDim2.fromOffset(w-260,54);r.objective.Visible=not r.modal.Visible and w>=1000 and not fighting and not short
- r.objectiveText.Position=UDim2.fromOffset(0,0);r.objectiveText.Size=UDim2.fromScale(1,1);r.objectiveText.TextSize=11
- for _,icon in r.objective:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then icon.Visible=false end end
- local contextWidth=math.min(wide and 390 or baseWidth,w-24)
- local contextHeight=h<300 and 50 or 56
- r.context.Size=UDim2.fromOffset(contextWidth,contextHeight); r.context.Position=UDim2.fromOffset((w-contextWidth)/2,dockY-contextHeight-10)
- local showContextIcon=contextWidth>=350
- local contextTextX=showContextIcon and 43 or 10
- r.contextTitle.Position=UDim2.fromOffset(contextTextX,2); r.contextTitle.Size=UDim2.new(1,-contextTextX-117,0,24); r.contextTitle.TextSize=16
- r.contextDetail.Position=UDim2.fromOffset(contextTextX,26); r.contextDetail.Size=UDim2.new(1,-contextTextX-117,0,22); r.contextDetail.TextSize=16; r.contextDetail.TextWrapped=false; r.contextDetail.TextTruncate=Enum.TextTruncate.AtEnd
- r.contextButton.Position=UDim2.new(1,-108,0,(contextHeight-46)/2); r.contextButton.Size=UDim2.fromOffset(102,46); r.contextButton.TextSize=16
- for _,icon in r.context:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then icon.Visible=showContextIcon;icon.Position=UDim2.fromOffset(8,15); icon.Size=UDim2.fromOffset(28,28) end end
- if short and dockY-contextHeight-10<52 then r.context.Position=UDim2.fromOffset((w-contextWidth)/2,52) end
- r.enemy.Position=UDim2.fromOffset((w-300)/2,w<700 and 132 or 82); r.enemy.Size=UDim2.fromOffset(math.min(300,w-24),50)
- r.toast.Size=UDim2.fromOffset(math.min(390,w-24),44); r.toast.Position=UDim2.fromOffset((w-math.min(390,w-24))/2,r.enemy.Visible and 190 or (w<700 and 138 or 82))
- -- Limited vertical room: retain commands, counters and the immediate interaction.
- if short or (r.context.Visible and r.context.Position.Y.Offset<130) then r.toast.Visible=false end
- if short and r.context.Visible then r.enemy.Visible=false end
+ local contextWidth=math.min(w-24,360)
+ local contextY=self.dock.Visible and dockY-64 or h-reserve-56
+ r.context.Size=UDim2.fromOffset(contextWidth,56);r.context.Position=UDim2.fromOffset((w-contextWidth)/2,contextY)
+ r.contextTitle.Position=UDim2.fromOffset(10,3);r.contextTitle.Size=UDim2.new(1,-116,0,24);r.contextTitle.TextSize=16
+ r.contextDetail.Position=UDim2.fromOffset(10,27);r.contextDetail.Size=UDim2.new(1,-116,0,23);r.contextDetail.TextSize=14
+ r.contextDetail.TextWrapped=false;r.contextDetail.TextTruncate=Enum.TextTruncate.AtEnd
+ r.contextButton.Position=UDim2.new(1,-100,0,6);r.contextButton.Size=UDim2.fromOffset(94,44);r.contextButton.TextSize=16
+ for _,icon in r.context:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then icon.Visible=false end end
+ r.enemy.Position=UDim2.fromOffset((w-280)/2,52);r.enemy.Size=UDim2.fromOffset(math.min(280,w-24),36)
+ local toastWidth=math.min(350,w-24)
+ r.toast.Size=UDim2.fromOffset(toastWidth,38);r.toast.Position=UDim2.fromOffset((w-toastWidth)/2,r.enemy.Visible and 94 or 52)
+ if h<400 then r.toast.Visible=false end
 end
 
 function HUD:destroy()

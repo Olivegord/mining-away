@@ -47,7 +47,7 @@ local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud
 U.icon(hud,'coin',UDim2.fromOffset(9,10),UDim2.fromOffset(34,34),Color3.fromRGB(255,208,70))
 local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'0',24,palette.ink,true);creditsLabel.Name='Credits'
 local saveLabel=label(hud,UDim2.fromOffset(50,31),UDim2.new(1,-158,0,13),'',10,palette.muted);saveLabel.Name='SaveStatus';saveLabel.Visible=false
-local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Cargo 0 / 120',11,palette.muted,true)
+local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Cargo 0 / 40',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local fleetButton=button(hud,UDim2.new(1,-104,0,10),UDim2.fromOffset(46,44),'',function() if openFleet then openFleet() end end,Color3.fromRGB(48,145,221));fleetButton.Name='OpenFleet'
@@ -88,8 +88,19 @@ local function send(action,data)
  command:FireServer(action,data);return true
 end
 local function comma(n) local s=tostring(math.floor(tonumber(n) or 0));local r=s:reverse():gsub('(%d%d%d)','%1,'):reverse();return (r:gsub('^,','')) end
-local function cargoUnits(p) local n=0;for _,v in pairs((p.run and p.run.cargo) or {}) do if type(v)=='number' then n=n+v end end;return n end
+local function cargoUnits(p)
+ local published=tonumber(p.cargoUnits);if published then return math.max(0,published) end
+ local n=0;local run=p.run or {}
+ local function add(cargo) for _,v in pairs(cargo or {}) do if type(v)=='number' then n=n+v end end end
+ add(run.cargo)
+ for _,cargo in pairs(run.droneCargo or {}) do add(cargo) end
+ for _,delivery in pairs(run.deliveries or {}) do if type(delivery)=='table' then add(delivery.cargo) end end
+ return n
+end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
+local function fieldUnlocked(field)
+ return profile and type(profile.clearedFields)=='table' and field and profile.clearedFields[field.Name]==true or false
+end
 local function viewport()
  local size=safeRoot.AbsoluteSize
  if size.X>1 and size.Y>1 then return size end
@@ -134,7 +145,7 @@ end
 local function availability(action)
  if not profile then return false,'Connecting…' end
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
- if player:GetAttribute('MA_InAssault') then return false,'Recall your assault fleet first' end
+ if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
  if not atHomeUI() then return false,'Return to the depot' end
  local stationName=action=='BuyPack' and 'PackStation' or action=='Prestige' and 'PrestigeStation' or nil
  if stationName then
@@ -161,7 +172,9 @@ local function previewRows(choice)
     if unit~='%' and (title=='Turret resistance' or title=='Critical chance' or title=='Combat splash' or title=='Mining fork') then before=before*100;after=after*100;unit='%' end
     if title=='Shared cargo' then title='Cargo';unit='ore' end
     local separator=(unit=='' or unit=='%' or unit=='×') and '' or ' '
-    table.insert(result,title..'  '..number(before)..' → '..number(after)..separator..unit)
+    if title=='Plot targeting' or title=='Auto empty' then
+     table.insert(result,title..'  '..(before>0 and 'Automatic' or 'Manual')..' → '..(after>0 and 'Automatic' or 'Manual'))
+    else table.insert(result,title..'  '..number(before)..' → '..number(after)..separator..unit) end
     if #result==4 then break end
    end
   end
@@ -252,10 +265,15 @@ openFleet=function()
  if not profile then return end
  local l=menu('fleet','Meet your crew','Your drones stay with you. Run upgrades change the stats below.','drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
+ local rosterY=64
+ if player:GetAttribute('MA_TestingEnabled')==true then
+  local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(math.min(width,220),44),'Reroll test crew [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
+  reroll.Name='RerollTestCrew';rosterY=114
+ end
  local columns=width>=650 and 2 or 1;local gap=14;local rowWidth=(width-gap*(columns-1))/columns
  for index,d in ipairs(profile.fleet or {}) do
   local stats=(profile.droneStats and profile.droneStats[d.id]) or d.effective or d.base or {}
-  local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*276
+  local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
   local tint=colors[d.type] or palette.mineral
   local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
   U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
@@ -270,7 +288,7 @@ openFleet=function()
   statTile(row,tileWidth+28,153,tileWidth,'LASER START',number(stats.warmup or .8)..' sec')
   label(row,UDim2.fromOffset(15,211),UDim2.new(1,-30,0,40),Mining.description(d.type),16,palette.muted)
  end
- local index=#profile.fleet+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=64+math.floor((index-1)/columns)*276
+ local index=#profile.fleet+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
  local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),palette.accent:Lerp(palette.white,.76),14)
  local narrowTile=rowWidth<330;local tileTextX=narrowTile and 70 or 81
  U.icon(nextDrone,'prestige',UDim2.fromOffset(14,16),UDim2.fromOffset(narrowTile and 45 or 55,narrowTile and 45 or 55),palette.accent)
@@ -278,7 +296,8 @@ openFleet=function()
  label(nextDrone,UDim2.fromOffset(tileTextX,54),UDim2.new(1,-tileTextX-15,0,20),'+1 PERMANENT DRONE',10,palette.muted,true)
  local pre=profile.prestigePreview or {};local earned=pre.earnings or 0;local required=pre.saleRequired or 2000
  label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' credits sold',13,palette.ink,true)
- label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),(pre.field or 'Cobalt')..' clears '..(pre.wins or 0)..' / '..(pre.winsRequired or 1),12,palette.muted)
+ local guardRequirement=(pre.winsRequired or 1)>0 and ((pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' · Unlocked' or ' · Defeat guards once')) or 'No sentry clear required'
+ label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),guardRequirement,16,palette.muted)
  local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
 end
 openRunCards=function()
@@ -303,7 +322,7 @@ openRunCards=function()
 end
 openPrestige=function()
  if not profile then return end
- local l=menu('prestige','One more drone. A new run.','Review what stays with you before starting your next expedition.','prestige');local width=l.bodyWidth-6
+ local l=menu('prestige','One more drone. A new run.','Your drones and unlocked plots stay with you when you prestige.','prestige');local width=l.bodyWidth-6
  local narrow=width<400
  local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.white,.63),16)
@@ -313,17 +332,18 @@ openPrestige=function()
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.white,.68),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.ink,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone\nBuilt-in types, IDs and base traits\nFree reprinting',12,palette.ink)
+ label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone\nBuilt-in types and base traits\nUnlocked plots and free reprinting',12,palette.ink)
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.white,.83),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.ink,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),#profile.run.cards..' cards · '..comma(profile.run.credits)..' credits · '..cargoUnits(profile)..' ore\nPack prices and sale progress\nYour run’s field clearances',12,palette.ink)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),#profile.run.cards..' cards · '..comma(profile.run.credits)..' credits · '..cargoUnits(profile)..' ore\nPack prices and sale progress',12,palette.ink)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
- progress(body,y,width,'Your permanent fleet milestone',comma(earnings)..' / '..comma(required)..' credits sold · '..(pre.field or 'Cobalt')..' clears '..(pre.wins or 0)..' / '..(pre.winsRequired or 1),earnings/math.max(1,required),palette.accent)
+ local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
+ progress(body,y,width,'Your permanent fleet milestone',comma(earnings)..' / '..comma(required)..' credits sold'..guardRequirement,earnings/math.max(1,required),palette.accent)
  local allowed,blocked=availability('Prestige')
  local can=pre.eligible==true and not pending() and allowed
- local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Start new run · +1 permanent drone' or 'Complete both milestone requirements'))
+ local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Start new run · +1 permanent drone' or 'Complete the fleet milestone'))
  local confirm
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
   if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
@@ -377,21 +397,12 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
 end)
 
-local sparkCount=0
-local function sparkBurst(pos,color,amount)
- for _=1,math.min(amount,math.max(0,48-sparkCount)) do
-  sparkCount=sparkCount+1
-  local p=Instance.new('Part');p.Name='MineralChip';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Size=Vector3.new(.14,.14,.3);p.Material=Enum.Material.Neon;p.Color=color;p.Position=pos;p.Parent=localFX
-  TweenService:Create(p,TweenInfo.new(.35),{Position=pos+Vector3.new(math.random(-4,4),math.random(2,5),math.random(-4,4)),Transparency=1,Size=Vector3.new(.03,.03,.03)}):Play()
-  task.delay(.4,function() p:Destroy();sparkCount=sparkCount-1 end)
- end
-end
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('SurfaceGui') then v:Destroy()
   elseif v:IsA('BasePart') then v.Anchored=true;v.CanCollide=false;v.CanTouch=false;v.CanQuery=false
-  elseif v:IsA('Beam') or v:IsA('Trail') or v:IsA('ParticleEmitter') then v.Enabled=false end
+  elseif v:IsA('Beam') or v:IsA('Trail') or v:IsA('ParticleEmitter') or v:IsA('Light') then v.Enabled=false end
  end
 end
 local function hidePart(part)
@@ -426,20 +437,24 @@ local function registerDrone(source)
   return false
  end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
+ clone:ScaleTo(clone:GetScale()*(source:GetAttribute('ModelScale') or DroneConfig.Swarm.ModelScale))
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
+ for _,part in ipairs(clone:GetDescendants()) do
+  if part:IsA('BasePart') then part.Material=Enum.Material.SmoothPlastic;part.Reflectance=0 end
+ end
  local typeColor=colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if typeColor then
-  pivot.Color=pivot.Color:Lerp(typeColor,.55)
+  pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
-  local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.12,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
+  local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.055,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
   for _,side in ipairs({-1,1}) do
-   local optic=localPart(clone,'TypeOptic',pivot.Position);optic.Size=Vector3.new(pivot.Size.X*.52,.055,.025);optic.Transparency=0;optic.Color=typeColor;optic.Material=Enum.Material.Neon;optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.24,side*(pivot.Size.Z*.5+.015))
+   local optic=localPart(clone,'TypeOptic',pivot.Position);optic.Size=Vector3.new(pivot.Size.X*.52,.035,.015);optic.Transparency=0;optic.Color=typeColor;optic.Material=Enum.Material.SmoothPlastic;optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.24,side*(pivot.Size.Z*.5+.01))
   end
  end
  hideModel(source)
@@ -460,8 +475,9 @@ local function registerResource(source)
   if source:GetAttribute(attribute)==nil then return end
  end
  local view=source:Clone();view.Name='View_Resource_'..tostring(id)
- for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') then v:Destroy() end end
- view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0;view.Parent=localFX;hidePart(source)
+ for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
+ view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
+ view.Material=Enum.Material.SmoothPlastic;view.Reflectance=0;view.Parent=localFX;hidePart(source)
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow())}
  resourceIndex[tostring(id)]=resources[source]
 end
@@ -546,8 +562,8 @@ local function renderResource(r,now)
   view.CFrame=CFrame.new(pos)*CFrame.Angles(ax,seed*.01,az)
   view.Color=r.baseColor:Lerp(Color3.new(.12,.12,.15),stage*.13)
  else view.Transparency=1 end
- if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');sparkBurst(view.Position,r.baseColor,2);presentation:resourceImpact(r,event,now)
- elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');sparkBurst(view.Position,r.baseColor,8);presentation:resourceImpact(r,event,now) end
+ if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
+ elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now) end
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -579,11 +595,12 @@ local function renderDrone(d,dt,now)
   local owner=Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
   local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
-  if hr and slot and count then goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)+Vector3.new(0,(s:GetAttribute('FlightHeight') or 7)-7,0) end
+  if hr and slot and count then goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0) end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical
  elseif not motionPaused then
-  d.pos=Feel.approach(d.pos,goal,maxStep,math.min(dt,.1))
+  local workTravel=state=='Deliver' or (state=='Travel' and (s:GetAttribute('TargetId') or '')~='')
+  d.pos=(workTravel and Feel.approachWork or Feel.approach)(d.pos,goal,maxStep,math.min(dt,.1))
   local error=logical-d.pos
   -- Correct drift gradually, including after a delayed pause packet; never snap.
   if error.Magnitude>5 then d.pos=d.pos+error.Unit*math.min(error.Magnitude-5,maxStep*60*math.min(dt,.1)*.25) end
@@ -647,7 +664,14 @@ connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  presentation:beginFrame()
  for _,r in pairs(resources) do renderResource(r,now) end
- for _,t in pairs(turrets) do presentation:renderTurret(t,dt,now) end
+ for _,t in pairs(turrets) do
+  if fieldUnlocked(t.source.Parent) and (t.source:GetAttribute('HP') or 0)>0 then
+   t.view.Parent=nil;t.cue.Transparency=1;t.beam.Enabled=false;t.flare.Enabled=false;t.light.Brightness=0
+  else
+   if not t.view.Parent then t.view.Parent=localFX end
+   presentation:renderTurret(t,dt,now)
+  end
+ end
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
  presentation:flushMiningBeams()
  presentation:update(dt,now)
@@ -656,12 +680,14 @@ end)
 local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'Evade  [Q]',function() command:FireServer('Evade') end,palette.accent);evade.Visible=false
 local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'RANDOM DRONES · TEST [T]',function() command:FireServer('TestLoadout') end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
+local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Unload [U]',function() command:FireServer('ReturnCargo') end,palette.paper)
+unload.Name='ReturnCargo';unload.Visible=false
 local enemyHUD=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(300,58),palette.panel,12);enemyHUD.Name='SentryHealth';enemyHUD.Visible=false
 local enemyTitle=label(enemyHUD,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),'PYRAMID SENTRY',12,palette.white,true)
 local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(53,55,57));enemyHealth.Name='HealthTrack';enemyHealth.ClipsDescendants=true;corner(enemyHealth,3)
 local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(104,45,51));enemyFill.Name='Fill';corner(enemyFill,3)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
-local tacticalHUD=TacticalHUD.new({root=safeRoot,gui=gui,modal=modal,recall=recall,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
+local tacticalHUD=TacticalHUD.new({root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
  credits=creditsLabel,cargoText=cargoText,cargoTrack=cargoTrack,fleet=fleetButton,cards=runButton,fleetText=fleetCount,cardsText=runCount,
  objectiveText=objective,contextTitle=contextTitle,contextDetail=contextDetail,contextButton=contextButton})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
@@ -686,7 +712,7 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' credits'),pending() and 'Choose' or 'Pack'
  elseif kind=='Prestige' then return openPrestige,'Grow your fleet','Review the milestone and your next permanent drone','Review'
- elseif kind=='Sell' then return function() command:FireServer('Sell') end,'Mineral converter',profile and (comma(cargoUnits(profile))..' ore on board  /  sell for credits') or 'Bring minerals home to sell','Sell'
+ elseif kind=='Sell' then return function() command:FireServer('Sell') end,'Unload drones','Call loaded drones to depot','Unload'
  end
  return nil
 end
@@ -699,14 +725,41 @@ end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
  if (not who or who==player) and prompt.Parent and prompt.Parent:IsA('BasePart') then performStation(prompt.Parent) end
 end)
+local function availableAutomaticWorker()
+ for source in pairs(drones) do
+  if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutomationMineEnabled')==true
+   and (source:GetAttribute('HP') or 0)>0 and source:GetAttribute('State')~='Reprinting' and source:GetAttribute('State')~='Deliver'
+   and (source:GetAttribute('CargoUnits') or 0)<(source:GetAttribute('CargoCapacity') or 40) then return true end
+ end
+ return false
+end
+local function requestPlot(id)
+ local fields=world:FindFirstChild('Fields');local guarded=false
+ if fields then for _,field in ipairs(fields:GetChildren()) do
+  if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
+   local phase=field:GetAttribute('Phase');guarded=not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active');break
+  end
+ end end
+ if not guarded and player:GetAttribute('AutomationMineEnabled')~=true then
+  notice.Text='Click an ore. Plot Scanner unlocks automatic stone selection.';noticeUntil=os.clock()+4;return
+ end
+ if not guarded and not availableAutomaticWorker() then
+  notice.Text='No automatic worker is ready. Unload a full drone first.';noticeUntil=os.clock()+4;return
+ end
+ command:FireServer('Patch',id)
+end
 local function assignField(target)
  if modal.Visible then return end
  local node=target
  while node and node~=workspace do
-  local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
-  if type(field)=='number' then command:FireServer('Patch',field);return end
+  local resourceId=node:GetAttribute('ResourceId')
+  if type(resourceId)=='string' and resourceId~='' then
+   command:FireServer('MineOre',resourceId);return
+  end
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then openFleet();return end
+  local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
+  if type(field)=='number' then requestPlot(field);return end
   node=node.Parent
  end
 end
@@ -726,6 +779,7 @@ connect(UIS.InputBegan,function(input,processed)
  local key=input.KeyCode
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then command:FireServer('Recall')
+ elseif not modal.Visible and key==Enum.KeyCode.U then command:FireServer('ReturnCargo')
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonR2) and not modal.Visible then if contextAction then contextAction() end
@@ -734,7 +788,7 @@ connect(UIS.InputBegan,function(input,processed)
   if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
   local fields={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5}
-  if fields[key] then command:FireServer('Patch',fields[key]) end
+  if fields[key] then requestPlot(fields[key]) end
  end
 end)
 local hudClock=0
@@ -783,24 +837,24 @@ connect(RunService.Heartbeat,function(dt)
  if l.hudWidth<310 then saveLabel.TextSize=8 else saveLabel.TextSize=9.5 end
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(137,91,37) or palette.muted
  if profile and profile.run then
-  local amount=cargoUnits(profile);local capacity=profile.capacity or 120
+  local amount=cargoUnits(profile);local capacity=profile.capacity or 40
   local credits=profile.run.credits or 0;local creditText=comma(credits)
   if credits>=1e9 then creditText=string.format('%.1fB',credits/1e9) elseif credits>=1e6 then creditText=string.format('%.1fM',credits/1e6) elseif credits>=10000 then creditText=string.format('%.1fk',credits/1000) end
   creditsLabel.Text=creditText
   fleetCount.Text='Fleet';runCount.Text=pending() and 'Pick' or 'Cards'
-  local noRestock=player:GetAttribute('MA_NoRestock')==true
-  cargoText.Text=string.format('Cargo %s / %s',comma(amount),noRestock and '∞' or comma(capacity))
-  cargoFill.Size=UDim2.fromScale(noRestock and 0 or math.clamp(amount/math.max(1,capacity),0,1),1)
+  cargoText.Text=string.format('Cargo %s / %s',comma(amount),comma(capacity))
+  cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
-  local pre=profile.prestigePreview;local price=profile.nextPackPrice or 80
+  local pre=profile.prestigePreview;local price=profile.nextPackPrice or 40
   if pending() then objective.Text='Your paid pack is waiting.\nChoose your card at the depot.'
-  elseif not noRestock and amount>=capacity then objective.Text='Cargo full! Recall your fleet,\nthen sell at the Converter.'
+  elseif amount>=capacity then objective.Text='Cargo full · unload your workers.\nHauling cards automate this trip.'
   elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
   elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' credits.\nOpen your next pack at the depot.'
-  elseif (profile.run.packIndex or 0)==0 then objective.Text='Send your drone to a mineral field.\nMine → sell → choose your first upgrade.'
-  elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Defeat %s to grow your crew.\nSentry clears: %d / %d.',pre.field or 'Cobalt',pre.wins or 0,pre.winsRequired or 1)
-  elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s clears: %d / %d.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',pre.wins or 0,pre.winsRequired or 1)
-  else objective.Text='Mine, sell and build a stronger crew.\nSentries guard the richest minerals.' end
+  elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click an ore to assign a drone.\nUnload, buy a pack, unlock automation.'
+  elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Unlock %s to grow your crew.\nDefeat its guards once.',pre.field or 'Cobalt')
+  elseif pre and (pre.winsRequired or 1)>0 then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s: %s.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',(pre.wins or 0)>0 and 'Unlocked' or 'Defeat guards once')
+  elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.',comma(pre.earnings or 0),comma(pre.saleRequired or 160))
+  else objective.Text='Click a plot to automate mining.\nHauling upgrades automate unloading.' end
  end
  local ownActive=false;local reprints={};local now=workspace:GetServerTimeNow()
  for source in pairs(drones) do
@@ -824,7 +878,7 @@ connect(RunService.Heartbeat,function(dt)
    local kind=station:GetAttribute('Interaction')
    if kind=='Pack' then title='Upgrade pack';detail=pending() and 'Your saved cards are ready' or '3 cards · choose 1'
    elseif kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
-   elseif kind=='Sell' then title='Sell minerals';detail=profile and (comma(cargoUnits(profile))..' ore · convert to credits') or 'Bring your minerals home' end
+   elseif kind=='Sell' then title='Unload drones';detail='Call loaded drones to depot' end
   end
   if action then contextAction=function() performStation(station) end;contextTitle.Text=title;contextDetail.Text=detail;contextButton.Text=(actionText or 'Use')..(touch and '' or ' [E]');context.Visible=true end
  elseif not modal.Visible then
@@ -836,17 +890,20 @@ connect(RunService.Heartbeat,function(dt)
   if nearest then
    local id=nearest:GetAttribute('FieldId') or nearest:GetAttribute('Tier')
    if id then
-    if profile and profile.run and cargoUnits(profile)>=(profile.capacity or 120) then
-     contextAction=function() command:FireServer('Recall') end;contextTitle.Text='Cargo full'
-     contextDetail.Text='Sell at converter';contextButton.Text=touch and 'Recall' or 'Recall [R]'
-    else
-    contextAction=function() command:FireServer('Patch',id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
     local phase=nearest:GetAttribute('Phase') or 'Safe'
-    local actionText=(phase=='Guarded' or phase=='Active') and 'Fight' or (phase=='Gathering' and 'Join' or 'Mine')
-    contextDetail.Text=(phase=='Active' and 'Starting crew only') or (phase=='Guarded' and 'Sentries block mining') or (phase=='Gathering' and 'Join before the fight starts') or (number(nearest:GetAttribute('Hardness') or 1)..'× work · '..number(nearest:GetAttribute('OreValue') or 1)..'/ore')
-    contextButton.Text=actionText..(touch and '' or ' [E]')
+    local guarded=not fieldUnlocked(nearest) and (phase=='Guarded' or phase=='Active')
+    local assigned=false
+    for source in pairs(drones) do
+     local state=source:GetAttribute('State')
+     if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutoFieldId')==id
+      and (state=='Mine' or state=='Travel' or state=='Deliver' or state=='Full' or state=='Attack') then assigned=true;break end
     end
-    context.Visible=true
+    if not assigned and (guarded or availableAutomaticWorker()) then
+     contextAction=function() requestPlot(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
+     local actionText=guarded and 'Fight' or 'Automate'
+     contextDetail.Text=guarded and 'Defeat guards once to unlock' or (number(nearest:GetAttribute('Hardness') or 1)..'× work · crystals replenish')
+     contextButton.Text=actionText..(touch and '' or ' [E]');context.Visible=true
+    end
    end
   end
  end
@@ -855,7 +912,7 @@ connect(RunService.Heartbeat,function(dt)
  if hr then for turret in pairs(turrets) do if turret.Parent then
   local hp=turret:GetAttribute('HP') or 0;local rootPart=turret.PrimaryPart or turret:FindFirstChildWhichIsA('BasePart',true)
   local n=rootPart and (rootPart.Position-hr.Position).Magnitude or math.huge
-  if hp>0 and n<dist then nearestEnemy=turret;dist=n end
+  if not fieldUnlocked(turret.Parent) and hp>0 and n<dist then nearestEnemy=turret;dist=n end
  end end end
  enemyHUD.Visible=nearestEnemy~=nil and ownActive and not modal.Visible
  local enemyWidth=math.min(300,view.X-24)

@@ -24,11 +24,15 @@ function W.drone(parent,template,pos,color)
  local model=template and template:Clone() or Instance.new('Model');model.Name='Drone';sanitize(model,false)
  local part=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
  if not part or not part:IsA('BasePart') then part=W.part(model,'Hull',pos,Vector3.new(2,2,2),Color3.fromRGB(229,235,230)) end
- part.Color=part.Color:Lerp(color,.25)
+ part.Color=Color3.fromRGB(111,120,123):Lerp(color,.18)
+ for _,v in ipairs(model:GetDescendants()) do
+  if v:IsA('BasePart') then v.Material=Enum.Material.SmoothPlastic;v.Reflectance=0 end
+ end
  model.PrimaryPart=part;model.Parent=parent;model:PivotTo(CFrame.new(pos))
  local emitter=model:FindFirstChild('Emmiter',true)
  if not emitter or not emitter:IsA('BasePart') then emitter=W.part(model,'Emmiter',pos,Vector3.new(.24,.24,.24),color,Enum.Material.Neon) end
- emitter.Color=color;emitter.CanQuery=false
+ emitter.Color=color;emitter.CanQuery=false;emitter.Material=Enum.Material.SmoothPlastic
+ model:ScaleTo(model:GetScale()*.58);model:SetAttribute('ModelScale',.58)
  model:SetAttribute('OriginalDrone',template~=nil)
  return model,part,emitter
 end
@@ -197,7 +201,7 @@ local function stone(parent,at,size,tilt,color,name)
  return solid(block(parent,name or 'WeatheredStone',at,size,color or P.stone,Enum.Material.SmoothPlastic,{math.rad(tilt[1] or 0),math.rad(tilt[2] or 0),math.rad(tilt[3] or 0)}))
 end
 local function surveyGate(parent,at,color)
- local m=Instance.new('Model');m.Name='ExpeditionGate';m.Parent=parent
+ local m=Instance.new('Model');m.Name='PlotEntrance';m.Parent=parent
  for _,s in ipairs({-1,1}) do
   stone(m,at+Vector3.new(s*8,3.5,0),Vector3.new(2,7,3),{0,0,s*-5},P.ledge,'ChalkPylon')
   block(m,'GateMarker',at+Vector3.new(s*7.9,5.6,-1.53),Vector3.new(.3,2,.12),color,Enum.Material.Neon)
@@ -209,6 +213,14 @@ local function cleanSurface(part,archive)
  for _,v in ipairs(part:GetChildren()) do if v:IsA('Texture') or v:IsA('Decal') then v.Parent=archive end end
 end
 function W.initialize(): any
+ -- Small workers and readable ore need a sharp, neutral view of the operation.
+ -- Preserve the authored sky/map; disable only post effects that wash them out.
+ local lighting=game:GetService('Lighting')
+ lighting.ExposureCompensation=0
+ for _,effect in ipairs(lighting:GetChildren()) do
+  if effect:IsA('BloomEffect') or effect:IsA('DepthOfFieldEffect') or effect:IsA('SunRaysEffect') or effect:IsA('BlurEffect') then effect.Enabled=false end
+  if effect:IsA('ColorCorrectionEffect') then effect.Saturation=-.12;effect.Contrast=.02;effect.Brightness=0 end
+ end
  local existing=workspace:FindFirstChild('MiningAway')
  if existing and existing:GetAttribute('EditableMap') then
   local map=existing:FindFirstChild('Map')
@@ -221,6 +233,8 @@ function W.initialize(): any
    local model=fields:FindFirstChild(cfg.Key)
    local part=model and model:FindFirstChild('Field')
    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
+   local beds={Color3.fromRGB(114,133,124),Color3.fromRGB(139,112,116),Color3.fromRGB(111,127,145),Color3.fromRGB(129,117,143),Color3.fromRGB(106,131,117)}
+   part.Material=Enum.Material.SmoothPlastic;part.Color=beds[id];part.Reflectance=0
    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
   end
   return {

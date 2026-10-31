@@ -11,7 +11,6 @@ return {
  Tick=1/60, Snapshot=.1, MaxCatchup=6, Fleet=1, Capacity=120,
  MiningDPS=30, DroneDPS=12, Hull=80, Warmup=.8, Range=18,
  Reprint=10, Assembly=2, Grow=2, BreakCutoff=10,
- Gather=4, Disengage=8, AssaultLimit=90, Reset=6, ExpeditionGrace=8,
  CommandRadius=95, CommandGrace=3, TurretRange=42, Telegraph=.8,
  Fields=fields,Tiers=fields,
  -- Preview is permitted only in Studio; the production adapter never falls back after failure.

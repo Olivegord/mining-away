@@ -1,5 +1,13 @@
 # Owner requirements
 
+## October 31 latest direction — earn the automation
+
+The owner rejected cosmetic mining changes and clarified the actual loop: start by clicking individual ores for drones to mine. Upgrade cards then remove specific chores: first permit drones to choose stones after a plot command, then automatically return each individually full drone to unload. Automation is earned progression, not the starting behavior. Keep individual drone cargo and make manual delivery available before the automation upgrade. These instructions supersede older unconditional plot selection/shared-cargo behavior.
+
+The swarm should use smaller original drones working closer to the minerals, with the world visible behind a much smaller HUD. Reduce neon without treating effects as the gameplay fix. No test runs or new Studio play sessions; the owner will test.
+
+Integration must also preserve the newer active Studio permanent plot-unlock implementation. Clearing guards unlocks that plot across prestige; the older timed-expedition and closed-roster descriptions below are historical.
+
 ## October 31 target correction — Drone Blower revolution
 
 The owner clarified that the game is the existing **Drone Blower revolution**, Roblox place **136098934779395**. The older local Mining Away build was the wrong artifact. Continue in this same repository and existing experience; preserve the live map, assets, card UI, tactical HUD, role drones, crystal audio and discovery systems. The active Studio capture takes precedence over conflicting historical presentation/build instructions below.

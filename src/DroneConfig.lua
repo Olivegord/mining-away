@@ -23,6 +23,10 @@ export type DroneDefinition = {
 
 local DroneConfig = {}
 
+-- Both the authoritative model and its client view clone use this same ratio.
+-- The original mesh, emitter and identity remain intact at worker scale.
+DroneConfig.Swarm = {ModelScale=.58}
+
 DroneConfig.Settings = {
 	SquadSize = 10,
 	FormationSpacing = 5.5,
@@ -49,7 +53,7 @@ DroneConfig.Types = {
 		Scale = 0.72,
 		MaxHealth = 48,
 		Speed = 35,
-		FlightHeight = 9,
+		FlightHeight = 3.2,
 		AttackStyle = "Bolt",
 		AttackRange = 26,
 		AttackCooldown = 0.38,
@@ -64,7 +68,7 @@ DroneConfig.Types = {
 		Scale = 0.9,
 		MaxHealth = 78,
 		Speed = 24,
-		FlightHeight = 6,
+		FlightHeight = 3.4,
 		AttackStyle = "Bolt",
 		AttackRange = 38,
 		AttackCooldown = 0.9,
@@ -73,13 +77,13 @@ DroneConfig.Types = {
 	},
 	Medic = {
 		DisplayName = "Medic",
-		Description = "High-flying support drone that repairs nearby allies.",
+		Description = "Support worker that repairs nearby allies.",
 		Color = Color3.fromRGB(76, 255, 149),
 		Accent = Color3.fromRGB(225, 255, 235),
 		Scale = 0.84,
 		MaxHealth = 64,
 		Speed = 21,
-		FlightHeight = 12,
+		FlightHeight = 3.8,
 		AttackStyle = "Heal",
 		AttackRange = 34,
 		AttackCooldown = 0.8,
@@ -95,7 +99,7 @@ DroneConfig.Types = {
 		Scale = 1.12,
 		MaxHealth = 132,
 		Speed = 18,
-		FlightHeight = 4,
+		FlightHeight = 2.8,
 		AttackStyle = "Charge",
 		AttackRange = 11,
 		AttackCooldown = 2.6,
@@ -111,10 +115,10 @@ DroneConfig.TypeOrder = { "Dart", "Striker", "Medic", "Charger" }
 -- The active place retains its original elapsed-time motion and mining equations.
 -- These runtime traits preserve the prior Studio role tuning and never enter saved fleets.
 DroneConfig.StudioRoles = {
- Dart = {height=10,base={miningDPS=30,combatDPS=9,maxHealth=50,maxStep60=.48,warmup=.8,range=20,shotInterval=.42}},
- Striker = {height=7,base={miningDPS=30,combatDPS=18,maxHealth=85,maxStep60=.35,warmup=.8,range=24,shotInterval=.8}},
- Medic = {height=12,base={miningDPS=30,combatDPS=6,maxHealth=72,maxStep60=.35,warmup=.8,range=18,shotInterval=1}},
- Charger = {height=4,base={miningDPS=30,combatDPS=14,maxHealth=135,maxStep60=.29,warmup=.8,range=16,shotInterval=2.4}},
+ Dart = {height=3.2,base={miningDPS=30,combatDPS=9,maxHealth=50,maxStep60=.48,warmup=.8,range=20,shotInterval=.42}},
+ Striker = {height=3.4,base={miningDPS=30,combatDPS=18,maxHealth=85,maxStep60=.35,warmup=.8,range=24,shotInterval=.8}},
+ Medic = {height=3.8,base={miningDPS=30,combatDPS=6,maxHealth=72,maxStep60=.35,warmup=.8,range=18,shotInterval=1}},
+ Charger = {height=2.8,base={miningDPS=30,combatDPS=14,maxHealth=135,maxStep60=.29,warmup=.8,range=16,shotInterval=2.4}},
 }
 
 -- Optional discoveries reward active collection without interrupting autonomous mining.

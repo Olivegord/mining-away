@@ -63,7 +63,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=64,maxPulses=12,maxScans=16,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
+  maxFragments=28,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -74,7 +74,7 @@ local function newBeamLayer(parent,template,name,color,opacity,z)
  local beam=template and template:FindFirstChild(name,true)
  beam=beam and beam:IsA('Beam') and beam:Clone() or Instance.new('Beam')
  beam.Name=name;beam.Texture='';beam.CurveSize0=0;beam.CurveSize1=0
- beam.Segments=1;beam.FaceCamera=true;beam.LightEmission=.55;beam.LightInfluence=0
+ beam.Segments=1;beam.FaceCamera=true;beam.LightEmission=.12;beam.LightInfluence=0
  beam.Color=ColorSequence.new(color);beam.Transparency=NumberSequence.new(opacity)
  beam.ZOffset=z;beam.Width0=0;beam.Width1=0;beam.Enabled=false;beam.Parent=parent
  return beam
@@ -96,8 +96,8 @@ function P:createMiningBeam(view,emitter)
  local extra=barePart(holder,'SecondaryEndpoint');extra.Size=Vector3.one*.05;extra.Transparency=1
  local extraAttachment=Instance.new('Attachment');extraAttachment.Parent=extra
  local rs=game:GetService('ReplicatedStorage');local fx=rs:FindFirstChild('MiningFX');local template=fx and fx:FindFirstChild('Beam')
- local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.84,0)
- local core=newBeamLayer(holder,template,'InnerBeam',WHITE,.08,.025)
+ local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.94,0)
+ local core=newBeamLayer(holder,template,'InnerBeam',WHITE,.3,.025)
  halo.Attachment0=muzzle;halo.Attachment1=target;core.Attachment0=muzzle;core.Attachment1=target
  local branch=newBeamLayer(holder,nil,'SecondaryBeam',ICE,.32,.01)
  branch.Attachment0=target;branch.Attachment1=extraAttachment
@@ -183,10 +183,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.core.Enabled=visible;beam.halo.Enabled=visible
  -- The original inner ramp and .2s hide remain untouched. The outside shape
  -- expresses actual damage cadence, never an invented client firing timer.
- beam.core.Width0=.3*width;beam.core.Width1=.3*width
- beam.halo.Width0=(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width
- beam.halo.Width1=(look.width1+(style=='Percussion' and .45 or .06)*pulse)*width
- beam.marker.Size=Vector3.one*(.14+(style=='Percussion' and .2 or .09)*pulse)
+ local workerScale=.58
+ beam.core.Width0=.3*width*workerScale;beam.core.Width1=.3*width*workerScale
+ beam.halo.Width0=(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale
+ beam.halo.Width1=(look.width1+(style=='Percussion' and .45 or .06)*pulse)*width*workerScale
+ beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
  if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
@@ -197,8 +198,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery)
   if secondary and secondaryNormal then
    beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or tint)
-   beam.secondary.Width0=(style=='Resonance' and .11+.04*pulse or .085)*width
-   beam.secondary.Width1=(style=='Resonance' and .075+.025*pulse or .055)*width;beam.secondary.Enabled=true
+   beam.secondary.Width0=(style=='Resonance' and .11+.04*pulse or .085)*width*workerScale
+   beam.secondary.Width1=(style=='Resonance' and .075+.025*pulse or .055)*width*workerScale;beam.secondary.Enabled=true
   end
  end
 end
@@ -323,8 +324,8 @@ end
 function P:_pulse(position,color,size,now,duration)
  if self.closed or #self.pulses>=self.maxPulses then return end
  local part=barePart(self.parent,'ImpactPulse');part.Shape=Enum.PartType.Ball
- part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.4
- table.insert(self.pulses,{part=part,start=now,size=size,duration=duration or .2})
+ part.Material=Enum.Material.SmoothPlastic;part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.82
+ table.insert(self.pulses,{part=part,start=now,size=math.min(size,.8),duration=duration or .2})
 end
 function P:_sound(position,kind,now)
  -- Roblox Studio's shipped sounds were verified locally; no external asset IDs.
@@ -394,6 +395,25 @@ end
 function P:_removeScan(record)
  if record.scan then record.scan:Destroy();record.scan=nil;self.scanCount=math.max(0,self.scanCount-1) end
 end
+function P:_deliveryCargo(drone,record,visible)
+ if not visible then
+  if record.cargo then record.cargo:Destroy();record.cargo=nil end
+  return
+ end
+ if not record.cargo then
+  local original=game:GetService('ReplicatedStorage'):FindFirstChild('Crystal')
+  local template=original and original:FindFirstChild('Mesh')
+  if not template or not template:IsA('BasePart') then return end
+  local cargo=template:Clone();if not cargo then return end
+  for _,child in ipairs(cargo:GetChildren()) do child:Destroy() end
+  passive(cargo);cargo.Name='CarriedMineral';cargo.Material=Enum.Material.SmoothPlastic;cargo.Reflectance=0
+  cargo.Size=Vector3.one*.42;cargo.Color=Color3.fromRGB(111,135,145);cargo.Transparency=0;cargo.Parent=self.parent
+  record.cargo=cargo
+ end
+ local body=drone.view.PrimaryPart
+ local offset=(body and body.Size.Y*.5 or .58)+.23
+ record.cargo.CFrame=drone.view:GetPivot()*CFrame.new(0,-offset,0)
+end
 function P:renderDrone(drone,_dt,now)
  local record=self.drones[drone]
  if not record then self:registerDrone(drone,now);return end
@@ -420,12 +440,12 @@ function P:renderDrone(drone,_dt,now)
   local ready=source:GetAttribute('ReprintAt') or now
   local progress,reveal=F.assembly(now,ready,2)
   if not record.scan and self.scanCount<self.maxScans then
-   record.scan=barePart(self.parent,'ReconstructionScan');record.scan.Color=ICE
-   record.scan.Size=Vector3.new(2.55,.045,2.55);self.scanCount=self.scanCount+1
+   record.scan=barePart(self.parent,'ReconstructionScan');record.scan.Color=ICE;record.scan.Material=Enum.Material.SmoothPlastic
+   record.scan.Size=Vector3.new(1.48,.025,1.48);self.scanCount=self.scanCount+1
   end
   if record.scan then
-   record.scan.CFrame=CFrame.new(pose.Position+Vector3.new(0,-1.25+progress*2.5,0))*CFrame.Angles(0,progress*math.pi*.5,0)
-   record.scan.Transparency=.45+reveal*.35
+   record.scan.CFrame=CFrame.new(pose.Position+Vector3.new(0,-.73+progress*1.46,0))*CFrame.Angles(0,progress*math.pi*.5,0)
+   record.scan.Transparency=.8+reveal*.15
   end
   for _,item in ipairs(record.parts) do
    if item.part.Parent then
@@ -455,11 +475,14 @@ function P:renderDrone(drone,_dt,now)
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
   end
  end
+ -- A loaded flight is an actual job, visible as one small piece of the original
+ -- crystal held under its worker. It has no light, particle trail or label.
+ self:_deliveryCargo(drone,record,state=='Deliver' and not record.events.dead and (source:GetAttribute('CargoUnits') or 0)>0)
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)
  local record=self.drones[drone]
- if record then self:_removeScan(record);self.drones[drone]=nil end
+ if record then self:_removeScan(record);self:_deliveryCargo(drone,record,false);self.drones[drone]=nil end
 end
 function P:_sentryAudio(position,kind,now)
  if #self.pulses>=self.maxPulses then return end
@@ -728,11 +751,9 @@ function P:renderTurret(record,dt,now)
    part.CFrame=frame;part.Color=color;part.Transparency=transparency;item.lastFrame=frame
   end
  end
- record.light.Color=eyeColor;record.light.Range=12+ignite*16
- record.light.Brightness=awake and (1+warm*2.5+ignite*8+shotFlash*3) or 0
- local flare=awake and math.max(ignite,shotFlash*.3) or 0
- record.flare.Enabled=flare>.005;record.flare.Size=UDim2.fromScale(12+flare*20,6+flare*10)
- record.glow.ImageTransparency=1-flare;record.streak.BackgroundTransparency=1-flare*.95
+ record.light.Color=eyeColor;record.light.Range=5+ignite*2
+ record.light.Brightness=awake and (.15+warm*.35+ignite*.45+shotFlash*.3) or 0
+ record.flare.Enabled=false
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)
  record.beam.Width0=.035+warm*.07+shotFlash*.32;record.beam.Width1=.035+warm*.07+shotFlash*.22
@@ -762,14 +783,14 @@ end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
  local view=resource.view;local floor=self:_floor(view.Position,resource.source)
- local amount=event=='break' and 5 or 2
+ local amount=event=='break' and 2 or 1
  for i=1,amount do
   local angle=i*2.4+now*.1
   local full=resource.source:GetAttribute('FullSize') or view.Size
-  local scale=(event=='break' and .16 or .07)*full.X/math.max(.01,view.Size.X)
+  local scale=(event=='break' and .10 or .045)*full.X/math.max(.01,view.Size.X)
   self:_fragment(view,view.CFrame,resource.baseColor,0,scale,
-   Vector3.new(math.cos(angle)*(event=='break' and 4 or 2),2+i*.45,math.sin(angle)*3),
-   Vector3.new(i*1.5,1,-i),floor,now,event=='break' and .9 or .55)
+   Vector3.new(math.cos(angle)*(event=='break' and 2 or 1),1+i*.3,math.sin(angle)*1.5),
+   Vector3.new(i,1,-i),floor,now,event=='break' and .65 or .4)
  end
 end
 function P:update(_dt,now)
@@ -791,7 +812,7 @@ function P:update(_dt,now)
   local item=self.pulses[i];local progress=F.progress(now,item.start,item.duration)
   if progress>=1 or not item.part.Parent then item.part:Destroy();table.remove(self.pulses,i)
   elseif not item.audio then
-   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.45+.55*progress
+   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.82+.18*progress
   end
  end
 end

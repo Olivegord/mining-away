@@ -2,6 +2,12 @@
 
 October 31, 2026. The owner prioritizes a substantially more enjoyable mining loop and cites bouncing/merging-ball and rock-paper-scissors particle videos. This document distinguishes research findings from our design interpretation. It does not claim that these mechanics cause addiction or establish retention results.
 
+## Owner correction: automation is the progression
+
+The owner rejected the earlier candidate: differentiating beams and numeric target scoring did not make the swarm feel fun. The current implementation follows their explicit direction: click individual ores first; earn Plot Scanner to select a plot and let drones choose stones; earn Auto Hauler for a named drone to empty its own full hold and resume work. Cargo belongs to individual workers. Manual delivery remains available before the card. This replaces unconditional starting auto-targeting and preview infinite cargo.
+
+The two early fleet milestones move to 160 and 400 sold credits without combat prerequisites, so the permanent swarm grows earlier while retaining exactly one starting drone and one added drone per prestige. These values are provisional. Original drones shrink to 58% scale and work close to real crystal surfaces; the permanent portrait/objective/test overlays are removed. No test runs were performed for this pass, at the owner's instruction. Historical results below do not validate the new progression or persistence changes.
+
 ## What the evidence supports
 
 - **Readable consequences matter.** A preregistered action-RPG experiment (n=1,699) found curiosity the strongest enjoyment predictor. Feedback contingent on success improved the studied motives; stronger amplification reduced them in this implementation, possibly by obscuring agency. Effects should help players distinguish what succeeded and why. [Kao et al., CHI 2024](https://people.csail.mit.edu/dkao/pdf/3613904.3642656.pdf)

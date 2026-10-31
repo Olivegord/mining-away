@@ -10,7 +10,13 @@ local descriptions={
  Green='Resonance · fractures echo into a nearby crystal',
 }
 function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
-function M.description(kind: string): string return descriptions[M.kind(kind)] or descriptions.Blue end
+function M.description(kind: string): string
+ local roles={Dart='Runner · quick ore trips; 35% faster loaded delivery',Striker='Cutter · steady work on ordinary stones',Medic='Resonance · finish fractures and assist adjacent teammates',Charger='Breaker · charged hits; +50% shell/core damage'}
+ return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
+end
+function M.workRole(kind: string): string
+ return ({Dart='Runner',Striker='Cutter',Medic='Resonance',Charger='Breaker',Blue='Cutter',Red='Breaker',Green='Resonance'})[kind] or 'Cutter'
+end
 function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never
  -- the footprint, height or station of an otherwise identical mineral.
@@ -43,6 +49,7 @@ function M.resonanceDamage(maxHP: number,dps: number,crossed: number): number
  return math.min(maxHP*.25*.35,dps*.8)*math.clamp(crossed,0,3)
 end
 function M.targetScore(kind: string,stats: any,node: any,distance: number,neighbors: number?): number
+ local role=kind
  kind=M.kind(kind)
  -- An estimate for autonomous selection, not an authority/reach test. Actual
  -- movement remains the original eased/capped flight and exact arrival gate.
@@ -58,6 +65,8 @@ function M.targetScore(kind: string,stats: any,node: any,distance: number,neighb
  elseif kind=='Green' then
   seconds=seconds/(1+math.min(neighbors or 0,3)*.10+math.min(node.stage or 0,3)*.08)
  end
+ if role=='Dart' then seconds=seconds*(node.kind=='Shard' and .75 or 1)+distance*.035 end
+ if role=='Medic' and node.kind=='Shard' then seconds=seconds*.7 end
  return seconds/yield
 end
 return M

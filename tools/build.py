@@ -40,7 +40,7 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
- s='-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
+ s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
   boundary=': any' if name=='World' else ''

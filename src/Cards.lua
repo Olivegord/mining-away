@@ -1,8 +1,8 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=5,BASE_CAPACITY=120}
+local C={CONTENT_VERSION=6,BASE_CAPACITY=40}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
-local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true}
+local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
 local uncommon={C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
@@ -12,12 +12,14 @@ local function card(id,title,scope,effects,description,kind)
  return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,rarity=rarity,expires='This run'}
 end
 C.CATALOG={
+ card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let your drones choose the next stone; empty each full drone manually'),
+ card('A02','Auto Hauler','Individual',{fullAuto=1},'This named drone empties its own full hold at the depot, then resumes its assigned plot'),
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
  card('F02','Fast Rotors','Fleet',{speed=.30},'+30% flight speed across your fleet'),
  card('F03','Combat Calibration','Fleet',{combat=.30},'+30% combat shot damage across your fleet'),
  card('F04','Reinforced Frames','Fleet',{health=.35},'+35% maximum hull; restore only the added hull'),
  card('F05','Ceramic Plating','Fleet',{reduction=.15},'Block 15 percentage points of incoming turret damage'),
- card('F06','Cargo Lattice','Player',{capacity=.35},'+35% shared cargo: 120 → 162 ore alone'),
+ card('F06','Cargo Lattice','Player',{capacity=.35},'+35% hold capacity for each drone: 40 → 54 ore alone'),
  card('F07','Warm Emitters','Fleet',{startup=.50},'+50% startup rate: one-third less laser warmup alone'),
  card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills cargo faster'),
  card('C01','Blue Afterburners','Color',{speed=1},'+100% Blue flight speed: 2× alone','Blue'),
@@ -36,7 +38,7 @@ C.CATALOG={
  card('D08','Critical Optics','Individual',{crit=.15},'15% server-rolled chance of a double combat hit'),
  card('D09','Burst Splash','Individual',{combat=.20,splash=.15,chain=16},'+20% shot damage; arc 15% hit damage to one other sentry within 22 studs'),
  card('D10','Fracture Fork','Individual',{fork=.20},'Mining tick forks 20% to one eligible nearby crystal'),
- card('D11','Entry Shield','Individual',{shield=.20},'Absorb 20% built-in hull once per fresh assault'),
+ card('D11','Entry Shield','Individual',{shield=.20},'Absorb 20% built-in hull once per life on each guarded plot'),
  card('D12','Rapid Cycling','Individual',{rate=.35},'+35% combat firing rate; final DPS remains capped'),
  card('D13','Execution Lens','Individual',{finisher=.75},'+75% shot damage against sentries below 35% hull'),
  card('D14','Core Drill','Individual',{geode=.80,speed=-.15},'+80% mining damage to geode shells and cores; −15% flight speed'),
@@ -44,14 +46,14 @@ C.CATALOG={
  card('D16','Arc Relay','Individual',{splash=.25,chain=16},'Arc 25% shot damage to one other sentry within 22 studs'),
  card('F09','Prism Splitter','Fleet',{fork=.20,forkRange=6},'Split 20% mining damage into one other crystal within 12 studs'),
  card('F10','Bulwark Network','Fleet',{health=.25,reduction=.10},'+25% hull and block 10 percentage points of turret damage'),
- card('F11','Courier Network','Fleet',{yield=.15,speed=.20,capacity=.20},'+15% ore, +20% flight speed and +20% shared cargo'),
+ card('F11','Courier Network','Fleet',{yield=.15,speed=.20,capacity=.20},'+15% ore, +20% flight speed and +20% capacity per drone'),
  card('D17','Siege Focus','Individual',{combat=.45,finisher=.50,speed=-.15},'+45% shot damage; +50% finishing damage below 35% sentry hull; −15% flight speed'),
  card('D18','Pulse Cannon','Individual',{rate=.50,combat=.15,mining=-.20},'+50% fire rate and +15% shot damage; −20% mining output'),
  card('D19','Prospector Rig','Individual',{geode=.60,yield=.20,speed=-.15},'+60% geode damage and +20% ore; −15% flight speed'),
  card('D20','Shard Harvester','Individual',{fork=.20,forkRange=6,mining=.25,health=-.15},'Split 20% mining damage within 12 studs; +25% mining output; −15% hull'),
  card('T01','Glass Cutter','Tradeoff',{mining=.60,health=-.20},'+60% fleet mining output; −20% maximum hull'),
  card('T02','Battle Formation','Tradeoff',{combat=.60,mining=-.20},'+60% fleet combat shot damage; −20% mining output'),
- card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% shared cargo; −15% fleet flight speed'),
+ card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% capacity per drone; −15% fleet flight speed'),
  card('T04','Hot Emitters','Tradeoff',{startup=1,health=-.20},'Double fleet startup rate alone; −20% maximum hull'),
 }
 C.FALLBACK={
@@ -63,13 +65,13 @@ local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=tru
 local function isCombat(c)
  for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
 end
-local economicEffects={mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true}
+local economicEffects={mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
 local function isEconomic(c)
  for stat,n in pairs(c.effects) do if economicEffects[stat] and n>0 then return true end end;return false
 end
 local function signature(c)
  local e=c.effects
- return (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0
+ return (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
 end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
@@ -89,6 +91,7 @@ function C.capacity(p,extra)
  if extra then n=n+(extra.effects.capacity or 0) end
  return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)
 end
+function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
  local speed=clamp(1+(s.speed or 0),.1,3)
@@ -102,12 +105,13 @@ function C.stats(p,d,extra)
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=clamp(s.fork or 0,0,.2),forkRange=6+clamp(s.forkRange or 0,0,6),
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
-  entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.capacity(p,extra)}
+  entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
+  plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=(s.fullAuto or 0)>0 and (s.plotAuto or 0)>0 and 1 or 0}
 end
 function C.price(p)
- local n=p.run.packIndex;local prices={80,110,150,210,290,400}
- if n<6 then return prices[n+1] end
- local price=400;for _=7,n+1 do price=math.floor(price*1.3+.5);if price>1e12 then return 1e12 end end;return price
+ local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
+ if n<7 then return prices[n+1] end
+ local price=400;for _=8,n+1 do price=math.floor(price*1.3+.5);if price>1e12 then return 1e12 end end;return price
 end
 local function hash(s)
  local h=104729
@@ -136,7 +140,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval'}
+local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Auto empty'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c)}
  for _,d in ipairs(p.fleet) do
@@ -157,7 +161,7 @@ local function countOwned(p,c)
  return n
 end
 local function stackLimit(c)
- if c.cardId=='F09' then return 1 end
+ if c.cardId=='F09' or c.cardId=='A01' or c.cardId=='A02' then return 1 end
  if string.sub(c.cardId,1,1)=='R' then return 500 end
  if c.scope=='Fleet' or c.scope=='Player' then return 2 end
  return 1
@@ -178,7 +182,9 @@ local function compatible(a,b)
  return not ((age and agt) or (bge and bgt) or (age and bge))
 end
 local function category(c)
- if c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
+ if c.effects.plotAuto then return 'mining'
+ elseif c.effects.fullAuto then return 'cargo'
+ elseif c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
  elseif c.effects.health or c.effects.reduction or c.effects.shield or c.effects.salvage then return 'survival'
  elseif c.effects.capacity or c.effects.yield then return 'cargo'
  elseif c.effects.mining or c.effects.fork or c.effects.geode then return 'mining'
@@ -186,7 +192,7 @@ local function category(c)
 end
 local function preview(p,c)
  local lines={}
- if c.effects.capacity then table.insert(lines,{label='Shared cargo',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
+ if c.effects.capacity then table.insert(lines,{label='Hold per drone',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
@@ -197,7 +203,7 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval'}) do
+  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
@@ -211,12 +217,16 @@ local function preview(p,c)
 end
 local function resolve(p,entry,seed,combatVisible)
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
+ if entry.effects.fullAuto and p.run.packIndex<1 then return nil end
  local c=clone(entry)
  if c.scope=='Color' then
   local exists=false;for _,d in ipairs(p.fleet) do if d.type==c.type then exists=true;break end end;if not exists then return nil end
  elseif c.scope=='Individual' then
   local eligible={}
-  for _,d in ipairs(p.fleet) do c.targetDroneId=d.id;if beneficial(p,c) then table.insert(eligible,d) end end
+  for _,d in ipairs(p.fleet) do
+   c.targetDroneId=d.id
+   if (not c.effects.fullAuto or C.stats(p,d).plotAuto>0) and beneficial(p,c) then table.insert(eligible,d) end
+  end
   if #eligible==0 then return nil end
   table.sort(eligible,function(a,b) return a.id<b.id end)
   local d=eligible[rng(hash(tostring(seed)..':'..c.cardId..':target'))(#eligible)]
@@ -224,9 +234,11 @@ local function resolve(p,entry,seed,combatVisible)
  end
  if not beneficial(p,c) then return nil end
  c.preview,c.previewTargetName=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
- local purposes={combat='Break through guarded fields',survival='Keep your assault alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
- local headlines={D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
+ local purposes={combat='Break through guarded fields',survival='Keep your fighting drones alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
+ local headlines={A01='CHOOSE A PLOT, KEEP MINING',A02='THIS DRONE EMPTIES ITSELF',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
  c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
+ if c.cardId=='A01' then c.purpose='Choose a plot instead of every stone'
+ elseif c.cardId=='A02' then c.purpose='Automate this drone’s delivery and return' end
  local drawbacks={}
  for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','cargo capacity'}}) do
   local n=c.effects[loss[1]]
@@ -265,12 +277,15 @@ function C.buy(p,tx,expectedRun,context)
  -- Search the bounded catalog rather than letting a greedy first pick prevent a
  -- useful triple. Seeded weighted ordering breaks ties; repeated requests cannot reroll.
  -- Prefer both a guarded-field answer and a productive economy option, then a
- -- useful mining fork in the first pack, an early signature and varied choices.
+ -- an earned automation step, a useful first-pack mining fork, and varied choices.
  -- Caps can exhaust a lane; never invent a useless card just to fill that lane.
- local pairsOK,combat,economic,special,starterFork={},{},{},{},{}
+ local pairsOK,combat,economic,special,starterFork,automation={},{},{},{},{},{}
  local baseline=p.run.packIndex==0 and vector(p,nil) or nil
  for i,a in ipairs(pool) do
   pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
+  -- Keep a useful next automation step available without selecting it for the
+  -- player. Resolve excludes owned unlocks and enforces the scanner prerequisite.
+  automation[i]=(a.effects.plotAuto or 0)>0 or (a.effects.fullAuto or 0)>0
   starterFork[i]=false
   if baseline and (a.effects.fork or 0)>0 then
    for _,d in ipairs(p.fleet) do
@@ -288,6 +303,7 @@ function C.buy(p,tx,expectedRun,context)
     local score=0
     if context.combatVisible and (combat[i] or combat[j] or combat[k]) then score=score+1000 end
     if economic[i] or economic[j] or economic[k] then score=score+1000 end
+    if automation[i] or automation[j] or automation[k] then score=score+750 end
     if starterFork[i] or starterFork[j] or starterFork[k] then score=score+500 end
     if p.run.packIndex<3 and (special[i] or special[j] or special[k]) then score=score+100 end
     if a._category~=b._category then score=score+4 end;if a._category~=c._category then score=score+4 end;if b._category~=c._category then score=score+4 end
