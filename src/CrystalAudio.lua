@@ -15,11 +15,11 @@ local MAX_DISTANCE = 85
 local FALLBACK_CRUNCH = 'rbxasset://sounds/action_jump_land.mp3'
 local FALLBACK_POP = 'rbxasset://sounds/impact_explosion_03.mp3'
 
-function CrystalAudio.new(parent: Instance)
+function CrystalAudio.new(parent: Instance, soundGroup: SoundGroup?)
 	local folder = Instance.new('Folder')
 	folder.Name = 'CrystalAudio'; folder.Parent = parent
 	local bank = ReplicatedStorage:FindFirstChild('CrystalSounds')
-	local self = setmetatable({folder = folder, bank = bank, voices = 0, closed = false,
+	local self = setmetatable({folder = folder, bank = bank, soundGroup = soundGroup, voices = 0, closed = false,
 		random = Random.new(), lastStage = -math.huge, lastBreak = -math.huge, variant = 0}, CrystalAudio)
 	if bank then task.spawn(function()
 		pcall(function() ContentProvider:PreloadAsync(bank:GetChildren()) end)
@@ -33,6 +33,7 @@ function CrystalAudio:_layer(anchor: BasePart, name: string, volume: number, pit
 	local ready = template and template:IsA('Sound') and template.IsLoaded
 	local sound = if ready then (template :: Sound):Clone() else Instance.new('Sound')
 	sound.Name = name
+	sound.SoundGroup = self.soundGroup
 	if not ready then sound.SoundId = name == 'Pop' and FALLBACK_POP or FALLBACK_CRUNCH end
 	sound.Looped = false; sound.PlayOnRemove = false
 	local density = 1 / math.sqrt(1 + self.voices * .12)
@@ -66,6 +67,7 @@ function CrystalAudio:_importedPop(anchor: BasePart, volume: number, pitch: numb
 	if not template or not template:IsA('Sound') then return end
 	local sound = template:Clone()
 	sound.Name = 'StagePop'; sound.Looped = false; sound.PlayOnRemove = false
+	sound.SoundGroup = self.soundGroup
 	sound.TimePosition = 0
 	sound.Volume = volume * self.random:NextNumber(.94, 1.04) / math.sqrt(1 + self.voices * .12)
 	sound.PlaybackSpeed = pitch

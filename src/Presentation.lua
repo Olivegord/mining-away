@@ -62,7 +62,7 @@ local function barePart(parent,name)
 end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
- return setmetatable({parent=options.parent,drones={},turrets={},fragments={},pulses={},scanCount=0,
+ return setmetatable({parent=options.parent,audio=options.audio,drones={},turrets={},fragments={},pulses={},scanCount=0,
   maxFragments=28,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
@@ -328,6 +328,7 @@ function P:_pulse(position,color,size,now,duration)
  table.insert(self.pulses,{part=part,start=now,size=math.min(size,.8),duration=duration or .2})
 end
 function P:_sound(position,kind,now)
+ if self.audio then self.audio:play(kind,position);return end
  -- Roblox Studio's shipped sounds were verified locally; no external asset IDs.
  if #self.pulses>=self.maxPulses then return end
  local anchor=barePart(self.parent,'ImpactAudio');anchor.Size=Vector3.one*.05
@@ -401,17 +402,13 @@ function P:_deliveryCargo(drone,record,visible)
   return
  end
  if not record.cargo then
-  local original=game:GetService('ReplicatedStorage'):FindFirstChild('Crystal')
-  local template=original and original:FindFirstChild('Mesh')
-  if not template or not template:IsA('BasePart') then return end
-  local cargo=template:Clone();if not cargo then return end
-  for _,child in ipairs(cargo:GetChildren()) do child:Destroy() end
-  passive(cargo);cargo.Name='CarriedMineral';cargo.Material=Enum.Material.SmoothPlastic;cargo.Reflectance=0
-  cargo.Size=Vector3.one*.42;cargo.Color=Color3.fromRGB(111,135,145);cargo.Transparency=0;cargo.Parent=self.parent
-  record.cargo=cargo
+  local cargo=Instance.new('Part');passive(cargo);cargo.Name='CourierParcel'
+  cargo.Material=Enum.Material.WoodPlanks;cargo.Reflectance=0
+  cargo.Size=Vector3.new(.45,.30,.40);cargo.Color=Color3.fromRGB(156,131,84)
+  cargo.TopSurface=Enum.SurfaceType.Studs;cargo.BottomSurface=Enum.SurfaceType.Smooth
+  cargo.Transparency=0;cargo.Parent=self.parent;record.cargo=cargo
  end
- local body=drone.view.PrimaryPart
- local offset=(body and body.Size.Y*.5 or .58)+.23
+ local offset=.73*(drone.source:GetAttribute('ModelScale') or .58)
  record.cargo.CFrame=drone.view:GetPivot()*CFrame.new(0,-offset,0)
 end
 function P:renderDrone(drone,_dt,now)
@@ -475,9 +472,8 @@ function P:renderDrone(drone,_dt,now)
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
   end
  end
- -- A loaded flight is an actual job, visible as one small piece of the original
- -- crystal held under its worker. It has no light, particle trail or label.
- self:_deliveryCargo(drone,record,state=='Deliver' and not record.events.dead and (source:GetAttribute('CargoUnits') or 0)>0)
+ -- Couriers alone carry the small parcel reserved from their owner's backpack.
+ self:_deliveryCargo(drone,record,source:GetAttribute('Role')=='Courier' and state=='Deliver' and not record.events.dead and (source:GetAttribute('DeliveryUnits') or 0)>0)
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)
@@ -487,11 +483,14 @@ end
 function P:_sentryAudio(position,kind,now)
  if #self.pulses>=self.maxPulses then return end
  local anchor=barePart(self.parent,'SentryAudio');anchor.Transparency=1;anchor.Position=position
- local sound=Instance.new('Sound');sound.Name=kind=='impact' and 'StoneSlabThud' or 'SentryIgnition'
- sound.SoundId=kind=='wake' and 'rbxasset://sounds/action_get_up.mp3' or 'rbxasset://sounds/impact_explosion_03.mp3'
- sound.Volume=kind=='impact' and .65 or .5
- sound.PlaybackSpeed=kind=='impact' and .48 or (kind=='wake' and .65 or 1.65)
- sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
+ if self.audio then self.audio:play(kind,position)
+ else
+  local sound=Instance.new('Sound');sound.Name=kind=='impact' and 'StoneSlabThud' or 'SentryIgnition'
+  sound.SoundId=kind=='wake' and 'rbxasset://sounds/action_get_up.mp3' or 'rbxasset://sounds/impact_explosion_03.mp3'
+  sound.Volume=kind=='impact' and .65 or .5
+  sound.PlaybackSpeed=kind=='impact' and .48 or (kind=='wake' and .65 or 1.65)
+  sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
+ end
  if kind=='impact' then
   local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
   dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))

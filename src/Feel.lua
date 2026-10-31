@@ -1,6 +1,6 @@
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=3,WorkClearance=.9}
+local F = {FollowHeight=3.2,WorkHeight=3,WorkClearance=.9,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -31,16 +31,43 @@ function F.approachWork(position,goal,maxStep60,dt)
  local step=math.min(distance*F.alpha(.065,dt),math.max(0,maxStep60)*1.45*60*dt,distance)
  return position+delta/distance*step
 end
+local hexDirections={{0,-1},{-1,0},{-1,1},{0,1},{1,0},{1,-1}}
+local function hexRing(slot)
+ return math.ceil((math.sqrt(12*(slot-1)+9)-3)/6)
+end
+local function hexPoint(slot)
+ if slot<=1 then return 0,0 end
+ local ring=hexRing(slot);local index=slot-2-3*ring*(ring-1)
+ local q,r=ring,0
+ for side,direction in ipairs(hexDirections) do
+  local steps=math.min(ring,math.max(0,index-(side-1)*ring))
+  q+=direction[1]*steps;r+=direction[2]*steps
+ end
+ return q,r
+end
 function F.formationXZ(slot,count)
- local angle=2*math.pi*slot/math.max(1,count)
- local radius=4.2+math.min(1.8,math.max(0,count-6)*.18)
- return math.cos(angle)*radius,math.sin(angle)*radius
+ count=math.max(1,math.floor(count or 1));slot=math.clamp(math.floor(slot or 1),1,count)
+ -- Hexagonal cells keep uniform spacing as a permanent fleet grows. Full
+ -- inner rings sum to zero; sum only the partial outer ring to center the crew.
+ -- Both lookups cost at most six sides, regardless of the fleet population.
+ local cq,cr=0,0
+ if count>1 then
+  local ring=hexRing(count);local remaining=count-1-3*ring*(ring-1)
+  local q,r=ring,0
+  for _,direction in ipairs(hexDirections) do
+   local n=math.min(ring,remaining)
+   cq+=n*q+direction[1]*n*(n-1)/2;cr+=n*r+direction[2]*n*(n-1)/2
+   q+=direction[1]*ring;r+=direction[2]*ring;remaining-=n
+  end
+ end
+ local q,r=hexPoint(slot);q-=cq/count;r-=cr/count
+ return (q+r*.5)*F.SwarmSpacing,r*(math.sqrt(3)/2)*F.SwarmSpacing
 end
 function F.formation(slot,count)
  local x,z=F.formationXZ(slot,count)
  return Vector3.new(x,0,z)
 end
-function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)*.14 end
+function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)*.2 end
 function F.followOffset(slot,count,time,maxStep60)
  local x,z=F.formationXZ(slot,count)
  return x,F.FollowHeight+F.hover(time,maxStep60),z
@@ -48,6 +75,85 @@ end
 function F.followGoal(ownerPosition,slot,count,time,maxStep60)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
  return ownerPosition+Vector3.new(x,y,z)
+end
+local function swarmHash(id)
+ local value=0
+ for i=1,#id do value=(value*131+string.byte(id,i))%2147483647 end
+ return value
+end
+local function swarmCell(x,y,z) return x..':'..y..':'..z end
+function F.swarmGrid(records)
+ -- Snapshot once before moving any worker, so update order cannot make the
+ -- first drone push the last one differently. Buckets hold immutable poses.
+ local grid={buckets={}};local cell=F.SwarmRadius
+ for _,record in pairs(records) do
+  if record.id and record.pos and (record.hp==nil or record.hp>0) then
+   local pos=record.pos;local key=swarmCell(math.floor(pos.X/cell),math.floor(pos.Y/cell),math.floor(pos.Z/cell))
+   local bucket=grid.buckets[key]
+   if not bucket then bucket={};grid.buckets[key]=bucket end
+   table.insert(bucket,{id=tostring(record.id),pos=pos})
+  end
+ end
+ -- Stable sampling in crowded cells must not depend on table iteration order.
+ for _,bucket in pairs(grid.buckets) do table.sort(bucket,function(a,b) return a.id<b.id end) end
+ return grid
+end
+function F.swarmOffset(position,id,grid,weight)
+ weight=math.clamp(weight or 1,0,1)
+ if weight==0 or not grid then return Vector3.zero end
+ id=tostring(id)
+ local cell=F.SwarmRadius;local x,y,z=math.floor(position.X/cell),math.floor(position.Y/cell),math.floor(position.Z/cell)
+ local neighbors={}
+ -- Read only 27 local bins, at most 12 samples per bin and 12 final contacts.
+ -- Even a crowd stacked at exactly one pose cannot cause a fleet-wide scan for
+ -- each worker. Samples spread through the stable bucket using the caller ID.
+ for dx=-1,1 do for dy=-1,1 do for dz=-1,1 do
+  local key=swarmCell(x+dx,y+dy,z+dz);local bucket=grid.buckets[key]
+  if bucket then
+   local n=#bucket;local samples=math.min(12,n);local start=swarmHash(id..key)%n
+   for i=0,samples-1 do
+    local other=bucket[(start+math.floor(i*n/samples))%n+1]
+    if other.id~=id then
+     local delta=position-other.pos;local square=delta:Dot(delta)
+     if square<cell*cell then
+      local candidate={id=other.id,delta=delta,square=square}
+      if #neighbors<12 then table.insert(neighbors,candidate)
+      else
+       local worst=1
+       for j=2,#neighbors do
+        if neighbors[j].square>neighbors[worst].square or (neighbors[j].square==neighbors[worst].square and neighbors[j].id>neighbors[worst].id) then worst=j end
+       end
+       if square<neighbors[worst].square or (square==neighbors[worst].square and other.id<neighbors[worst].id) then neighbors[worst]=candidate end
+      end
+     end
+    end
+   end
+  end
+ end end end
+ table.sort(neighbors,function(a,b) return a.id<b.id end)
+ local force=Vector3.zero
+ for _,other in ipairs(neighbors) do
+  local first=id<other.id;local pair=swarmHash(first and (id..'/'..other.id) or (other.id..'/'..id))
+  local side=first and 1 or -1;local delta=other.delta
+  local flat=Vector3.new(delta.X,0,delta.Z);local distance=math.sqrt(other.square)
+  local normal
+  if flat.Magnitude>.001 then normal=flat/flat.Magnitude
+  else
+   -- Exact overlaps still produce equal and opposite, reproducible escape
+   -- directions. No random rerolls or unstable zero-vector normalization.
+   local angle=(pair%6283)/1000
+   normal=Vector3.new(math.cos(angle)*side,0,math.sin(angle)*side)
+  end
+  local pressure=(1-distance/cell)^2
+  local tangent=Vector3.new(-normal.Z,0,normal.X)*(pair%2==0 and 1 or -1)
+  local lane=side*((pair%3)-1)*.12
+  force+=(normal*1.8+tangent*.48+Vector3.new(0,lane,0))*pressure
+ end
+ force=Vector3.new(force.X,math.clamp(force.Y,-.24,.24),force.Z)
+ if force.Magnitude>F.SwarmMaxOffset then force=force.Unit*F.SwarmMaxOffset end
+ -- Add to the movement GOAL and pass through original capped easing. Settled
+ -- mining passes zero weight so its exact overhead station/arrival gate wins.
+ return force*weight
 end
 function F.stationOffset(slot,geode,height)
  height=height or (geode and 5 or F.WorkHeight)

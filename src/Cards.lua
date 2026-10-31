@@ -1,5 +1,5 @@
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=6,BASE_CAPACITY=40}
+local C={CONTENT_VERSION=7,BASE_CAPACITY=40}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -12,16 +12,16 @@ local function card(id,title,scope,effects,description,kind)
  return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,rarity=rarity,expires='This run'}
 end
 C.CATALOG={
- card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let your drones choose the next stone; empty each full drone manually'),
- card('A02','Auto Hauler','Individual',{fullAuto=1},'This named drone empties its own full hold at the depot, then resumes its assigned plot'),
+ card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let mining drones choose stones for you'),
+ card('A02','Fast Couriers','Player',{fullAuto=1},'+100% courier delivery speed; couriers carry small batches from your backpack'),
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
  card('F02','Fast Rotors','Fleet',{speed=.30},'+30% flight speed across your fleet'),
  card('F03','Combat Calibration','Fleet',{combat=.30},'+30% combat shot damage across your fleet'),
  card('F04','Reinforced Frames','Fleet',{health=.35},'+35% maximum hull; restore only the added hull'),
  card('F05','Ceramic Plating','Fleet',{reduction=.15},'Block 15 percentage points of incoming turret damage'),
- card('F06','Cargo Lattice','Player',{capacity=.35},'+35% hold capacity for each drone: 40 → 54 ore alone'),
+ card('F06','Bigger Backpack','Player',{capacity=.35},'+35% player backpack space: 40 → 54 ore alone'),
  card('F07','Warm Emitters','Fleet',{startup=.50},'+50% startup rate: one-third less laser warmup alone'),
- card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills cargo faster'),
+ card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills your backpack faster'),
  card('C01','Blue Afterburners','Color',{speed=1},'+100% Blue flight speed: 2× alone','Blue'),
  card('C02','Blue Lenses','Color',{mining=.50},'+50% mining output for every Blue drone','Blue'),
  card('C03','Red Targeting','Color',{combat=.65},'+65% combat shot damage for every Red drone','Red'),
@@ -46,20 +46,20 @@ C.CATALOG={
  card('D16','Arc Relay','Individual',{splash=.25,chain=16},'Arc 25% shot damage to one other sentry within 22 studs'),
  card('F09','Prism Splitter','Fleet',{fork=.20,forkRange=6},'Split 20% mining damage into one other crystal within 12 studs'),
  card('F10','Bulwark Network','Fleet',{health=.25,reduction=.10},'+25% hull and block 10 percentage points of turret damage'),
- card('F11','Courier Network','Fleet',{yield=.15,speed=.20,capacity=.20},'+15% ore, +20% flight speed and +20% capacity per drone'),
+ card('F11','Courier Network','Fleet',{yield=.15,speed=.20,capacity=.20},'+15% ore, +20% drone speed and +20% player backpack space'),
  card('D17','Siege Focus','Individual',{combat=.45,finisher=.50,speed=-.15},'+45% shot damage; +50% finishing damage below 35% sentry hull; −15% flight speed'),
  card('D18','Pulse Cannon','Individual',{rate=.50,combat=.15,mining=-.20},'+50% fire rate and +15% shot damage; −20% mining output'),
  card('D19','Prospector Rig','Individual',{geode=.60,yield=.20,speed=-.15},'+60% geode damage and +20% ore; −15% flight speed'),
  card('D20','Shard Harvester','Individual',{fork=.20,forkRange=6,mining=.25,health=-.15},'Split 20% mining damage within 12 studs; +25% mining output; −15% hull'),
  card('T01','Glass Cutter','Tradeoff',{mining=.60,health=-.20},'+60% fleet mining output; −20% maximum hull'),
  card('T02','Battle Formation','Tradeoff',{combat=.60,mining=-.20},'+60% fleet combat shot damage; −20% mining output'),
- card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% capacity per drone; −15% fleet flight speed'),
+ card('T03','Heavy Cargo','Tradeoff',{capacity=.60,speed=-.15},'+60% player backpack space; −15% drone speed'),
  card('T04','Hot Emitters','Tradeoff',{startup=1,health=-.20},'Double fleet startup rate alone; −20% maximum hull'),
 }
 C.FALLBACK={
  card('R01','Mining Reserve','Fleet',{mining=.10},'+10% mining output; repeatable until cap'),
  card('R02','Combat Reserve','Fleet',{combat=.10},'+10% combat shot damage; repeatable until cap'),
- card('R03','Cargo Reserve','Player',{capacity=.10},'+10% cargo capacity; repeatable until cap'),
+ card('R03','Cargo Reserve','Player',{capacity=.10},'+10% player backpack space; repeatable until cap'),
 }
 local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true,finisher=true,salvage=true,chain=true}
 local function isCombat(c)
@@ -76,10 +76,24 @@ end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
 end
+local function support(d)
+ local role=d.role or d.type
+ return role=='Medic' or role=='Courier' or (d.role==nil and d.type=='Green')
+end
+local function courier(d) return (d.role or d.type)=='Courier' end
+local workEffects={mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true}
+local combatOnly={combat=true,rate=true,crit=true,splash=true,chain=true,range=true,finisher=true,salvage=true}
 local function sums(p,d,extra)
  local s={}
  local function add(c)
-  if affects(c,d) then for k,n in pairs(c.effects) do s[k]=(s[k] or 0)+n end end
+  local applies=affects(c,d)
+  if applies then
+   for k,n in pairs(c.effects) do
+    if not (support(d) and (workEffects[k] or combatOnly[k])) then s[k]=(s[k] or 0)+n end
+   end
+  end
+  -- Transport upgrades are the one Player modifier that changes a drone.
+  if c.scope=='Player' and courier(d) then s.fullAuto=(s.fullAuto or 0)+(c.effects.fullAuto or 0) end
  end
  for _,c in ipairs(p.run.cards) do add(c) end
  if extra then add(extra) end
@@ -106,7 +120,7 @@ function C.stats(p,d,extra)
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=clamp(s.fork or 0,0,.2),forkRange=6+clamp(s.forkRange or 0,0,6),
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
-  plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=(s.fullAuto or 0)>0 and (s.plotAuto or 0)>0 and 1 or 0}
+  plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
 end
 function C.price(p)
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
@@ -140,7 +154,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Auto empty'}
+local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c)}
  for _,d in ipairs(p.fleet) do
@@ -192,11 +206,11 @@ local function category(c)
 end
 local function preview(p,c)
  local lines={}
- if c.effects.capacity then table.insert(lines,{label='Hold per drone',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
+ if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
- for _,d in ipairs(p.fleet) do if affects(c,d) then
+ for _,d in ipairs(p.fleet) do if affects(c,d) or (c.scope=='Player' and c.effects.fullAuto and courier(d)) then
   local before,after=C.stats(p,d),C.stats(p,d,c)
   for k in pairs(statLabels) do if math.abs(before[k]-after[k])>1e-8 then target=d;break end end
   if target then break end
@@ -217,7 +231,10 @@ local function preview(p,c)
 end
 local function resolve(p,entry,seed,combatVisible)
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
- if entry.effects.fullAuto and p.run.packIndex<1 then return nil end
+ if entry.effects.fullAuto then
+  local exists=false;for _,d in ipairs(p.fleet) do if courier(d) then exists=true;break end end
+  if not exists then return nil end
+ end
  local c=clone(entry)
  if c.scope=='Color' then
   local exists=false;for _,d in ipairs(p.fleet) do if d.type==c.type then exists=true;break end end;if not exists then return nil end
@@ -225,7 +242,11 @@ local function resolve(p,entry,seed,combatVisible)
   local eligible={}
   for _,d in ipairs(p.fleet) do
    c.targetDroneId=d.id
-   if (not c.effects.fullAuto or C.stats(p,d).plotAuto>0) and beneficial(p,c) then table.insert(eligible,d) end
+   local eligibleRole=true
+   for k,n in pairs(c.effects) do
+    if n>0 and ((workEffects[k] or combatOnly[k]) and support(d) or k=='fullAuto' and not courier(d)) then eligibleRole=false end
+   end
+   if eligibleRole and beneficial(p,c) then table.insert(eligible,d) end
   end
   if #eligible==0 then return nil end
   table.sort(eligible,function(a,b) return a.id<b.id end)
@@ -235,12 +256,12 @@ local function resolve(p,entry,seed,combatVisible)
  if not beneficial(p,c) then return nil end
  c.preview,c.previewTargetName=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
  local purposes={combat='Break through guarded fields',survival='Keep your fighting drones alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
- local headlines={A01='CHOOSE A PLOT, KEEP MINING',A02='THIS DRONE EMPTIES ITSELF',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
+ local headlines={A01='CHOOSE A PLOT, KEEP MINING',A02='COURIERS DELIVER FASTER',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
  c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
  if c.cardId=='A01' then c.purpose='Choose a plot instead of every stone'
- elseif c.cardId=='A02' then c.purpose='Automate this drone’s delivery and return' end
+ elseif c.cardId=='A02' then c.purpose='Couriers sell small batches from your backpack faster' end
  local drawbacks={}
- for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','cargo capacity'}}) do
+ for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','backpack space'}}) do
   local n=c.effects[loss[1]]
   if n and n<0 then table.insert(drawbacks,string.format('%g%% less %s',-n*100,loss[2])) end
  end
@@ -284,7 +305,7 @@ function C.buy(p,tx,expectedRun,context)
  for i,a in ipairs(pool) do
   pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
   -- Keep a useful next automation step available without selecting it for the
-  -- player. Resolve excludes owned unlocks and enforces the scanner prerequisite.
+  -- player. Resolve excludes owned unlocks and requires an owned courier for transport.
   automation[i]=(a.effects.plotAuto or 0)>0 or (a.effects.fullAuto or 0)>0
   starterFork[i]=false
   if baseline and (a.effects.fork or 0)>0 then

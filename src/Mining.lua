@@ -7,15 +7,15 @@ local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
 local descriptions={
  Blue='Cutter · steady single-crystal mining',
  Red='Percussion · charged hits; +50% shell/core damage',
- Green='Resonance · fractures echo into a nearby crystal',
+ Green='Healer · repairs nearby drones for 10 health every 2 seconds',
 }
 function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
 function M.description(kind: string): string
- local roles={Dart='Runner · quick ore trips; 35% faster loaded delivery',Striker='Cutter · steady work on ordinary stones',Medic='Resonance · finish fractures and assist adjacent teammates',Charger='Breaker · charged hits; +50% shell/core damage'}
+ local roles={Dart='Scout · fast, light mining and combat',Striker='Miner · steady work on ordinary stones',Medic='Healer · slowly follows drones; 10 health every 2 seconds',Courier='Courier · sells 8 ore from your backpack per trip',Charger='Breaker · charged hits; +50% shell/core damage'}
  return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
 end
 function M.workRole(kind: string): string
- return ({Dart='Runner',Striker='Cutter',Medic='Resonance',Charger='Breaker',Blue='Cutter',Red='Breaker',Green='Resonance'})[kind] or 'Cutter'
+ return ({Dart='Scout',Striker='Miner',Medic='Healer',Courier='Courier',Charger='Breaker',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
 end
 function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never

@@ -1,5 +1,22 @@
 # Owner requirements
 
+## October 31 latest — Toolbox sound and Roblox presentation
+
+Add varied background music and sound effects from the Toolbox to the same Drone Blower revolution game. Improve lighting and make the presentation feel more Roblox-like, preserving the original models, map identity, crystal audio and current backpack/swarm/card work. The owner authorized coordination between the audio/visual chat and “Update map, drones, and UI” to prevent overwrites; that chat owns the combined Source integration, commit, build and review PR update. No Roblox publishing or new Play/test sessions are authorized by this request. See [audio and lighting review](review/AUDIO_LIGHTING.md).
+
+## October 31 latest — backpack, moving swarm and simple 3D cards
+
+The owner's newest request supersedes the individual-drone cargo and elaborate card directions below. Apply this to **Drone Blower revolution**, place **136098934779395**, in the existing connected Studio instance and the source-only review build.
+
+- Easiest plots are closest to spawn and selling, with increasing distance as difficulty rises.
+- Reduce shine and use native Roblox material/surface variety, including metal and studs.
+- Miners have no storage. Ore enters a backpack carried by the player, who brings it back to sell. A dedicated courier takes a small batch from the backpack, physically flies to sell it, and returns. A tiny slow healer follows and repairs other drones with an attached beam. Keep the designs simple, mechanical and unpersonified.
+- Restore the preview random-loadout button with **2–5 drones**. It must not replace permanent saved ownership.
+- Movement is central: uniformly regroup around the owner; jobs produce visible interactions, separation, passing and floating swarm behavior. Idle workers follow the player. Keep damage, healing, ore and sales authoritative.
+- Cards have **two visible text elements maximum**, native Roblox-like fonts, and lead with the actual effect. The owner requested 3D SurfaceGui/ViewportFrame cards. Roblox does not render nested GUI objects inside a ViewportFrame, so use supported camera-local card Parts with SurfaceGui faces containing ViewportFrame visuals.
+
+The prior instruction against test runs and starting Studio play sessions still applies. Edit-time integration, static source review, syntax compilation and reproducible builds do not establish visual or multiplayer acceptance. See [backpack and swarm review](review/BACKPACK_SWARM.md).
+
 ## October 31 latest direction — earn the automation
 
 The owner rejected cosmetic mining changes and clarified the actual loop: start by clicking individual ores for drones to mine. Upgrade cards then remove specific chores: first permit drones to choose stones after a plot command, then automatically return each individually full drone to unload. Automation is earned progression, not the starting behavior. Keep individual drone cargo and make manual delivery available before the automation upgrade. These instructions supersede older unconditional plot selection/shared-cargo behavior.

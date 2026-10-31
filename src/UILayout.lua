@@ -61,7 +61,7 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  local cardGap = 14
  local cardColumns = width >= 800 and bodyWidth >= 240 * 3 + cardGap * 2 and 3 or 1
  local cardWidth = (bodyWidth - cardGap * (cardColumns - 1)) / cardColumns
- local cardHeight = cardColumns == 3 and math.max(430, math.min(520, bodyHeight - 6)) or 520
+ local cardHeight = 320
 
  return {
   mobile = mobile,

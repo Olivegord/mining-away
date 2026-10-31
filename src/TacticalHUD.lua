@@ -22,7 +22,7 @@ local function frame(parent: Instance, name: string, color: Color3): Frame
 end
 local function text(parent: Instance, name: string, x: number, y: number, w: number, h: number, size: number, color: Color3): TextLabel
  local t=Instance.new('TextLabel'); t.Name=name; t.Position=UDim2.fromOffset(x,y); t.Size=UDim2.fromOffset(w,h)
- t.BackgroundTransparency=1; t.TextColor3=color; t.TextSize=size; t.Font=Enum.Font.GothamBold
+ t.BackgroundTransparency=1; t.TextColor3=color; t.TextSize=size; t.Font=Enum.Font.SourceSansBold
  t.TextXAlignment=Enum.TextXAlignment.Left; t.TextTruncate=Enum.TextTruncate.AtEnd; t.Text=''
  t.ZIndex=parent:IsA('GuiObject') and parent.ZIndex+1 or 2; t.Parent=parent
  return t
@@ -94,7 +94,7 @@ function HUD.styleWorldLabel(gui: BillboardGui)
   elseif names[anchor.Name] then label.Text=names[anchor.Name] end
   label.AnchorPoint=Vector2.new(.5,.5); label.Position=UDim2.fromScale(.5,.5); label.Size=UDim2.fromScale(1,1)
   label.BackgroundColor3=C.panel; label.BackgroundTransparency=.12
-  label.TextColor3=C.text; label.Font=Enum.Font.GothamBold
+  label.TextColor3=C.text; label.Font=Enum.Font.SourceSansBold
   label.TextScaled=false; label.TextSize=14; label.TextWrapped=false; label.TextStrokeTransparency=1
   label.BorderSizePixel=0
   for _,v in label:GetChildren() do if v:IsA('UISizeConstraint') or v:IsA('UITextSizeConstraint') or v:IsA('UIPadding') then v:Destroy() end end
@@ -141,25 +141,26 @@ function HUD.new(refs: any)
  self.order.ZIndex=track.ZIndex+3;self.living.ZIndex=track.ZIndex+3
  -- The fleet roster lives in its menu; the work stays visible.
  self.roles={}
- for _,b in {refs.recall,refs.test,refs.evade,refs.unload} do
-  b.Parent=self.dock;b.Font=Enum.Font.GothamBold;b.TextSize=16;skin(b,C.panel);b.TextColor3=C.text;b.TextStrokeTransparency=1
+ for _,b in {refs.recall,refs.evade,refs.unload} do
+  b.Parent=self.dock;b.Font=Enum.Font.SourceSansBold;b.TextSize=16;skin(b,C.panel);b.TextColor3=C.text;b.TextStrokeTransparency=1
  end
  refs.evade.Name='Evade'
+ refs.test.Parent=refs.root;refs.test.Font=Enum.Font.SourceSansBold;refs.test.TextSize=16;skin(refs.test,C.panel);refs.test.TextColor3=C.text
  self.hint=text(refs.root,'Controls',0,0,500,16,10,C.text);self.hint.TextXAlignment=Enum.TextXAlignment.Center;self.hint.TextStrokeColor3=Color3.new(0,0,0);self.hint.TextStrokeTransparency=.3
  -- Two short, flat label/value meters closely follow the Bee Swarm reference.
  plain(refs.resources)
  self.coins=card(refs.resources,'CreditsCounter');self.coins.BackgroundTransparency=0
  self.cargo=card(refs.resources,'CargoCounter');self.cargo.BackgroundTransparency=0
- refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.GothamBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
+ refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.SourceSansBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
  local coin=refs.resources:FindFirstChild('Icon_coin');if coin then coin.Visible=false end
  self.creditCaption=text(self.coins,'Caption',0,0,58,26,11,Color3.fromRGB(35,38,40));self.creditCaption.BackgroundTransparency=0;self.creditCaption.BackgroundColor3=C.line;self.creditCaption.Text='Credits';self.creditCaption.TextXAlignment=Enum.TextXAlignment.Center
- self.cargoCaption=text(self.cargo,'Caption',0,0,52,26,11,Color3.fromRGB(35,38,40));self.cargoCaption.BackgroundTransparency=0;self.cargoCaption.BackgroundColor3=C.line;self.cargoCaption.Text='Cargo';self.cargoCaption.TextXAlignment=Enum.TextXAlignment.Center
+ self.cargoCaption=text(self.cargo,'Caption',0,0,52,26,11,Color3.fromRGB(35,38,40));self.cargoCaption.BackgroundTransparency=0;self.cargoCaption.BackgroundColor3=C.line;self.cargoCaption.Text='Backpack';self.cargoCaption.TextXAlignment=Enum.TextXAlignment.Center
  refs.cargoTrack.Parent=self.cargo;refs.cargoTrack.BackgroundColor3=C.track;refs.cargoTrack.ClipsDescendants=true
  local cargoRound=refs.cargoTrack:FindFirstChildOfClass('UICorner');if cargoRound then cargoRound.CornerRadius=UDim.new(0,0) end
  for _,fill in refs.cargoTrack:GetChildren() do if fill:IsA('Frame') then
   fill.Position=UDim2.fromScale(0,0);local round=fill:FindFirstChildOfClass('UICorner');if round then round.CornerRadius=UDim.new(0,0) end
  end end
- refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.gold;refs.cargoText.Font=Enum.Font.GothamBold;refs.cargoText.TextWrapped=false;refs.cargoText.TextTruncate=Enum.TextTruncate.AtEnd;refs.cargoText.ZIndex=refs.cargoTrack.ZIndex+2
+ refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.gold;refs.cargoText.Font=Enum.Font.SourceSansBold;refs.cargoText.TextWrapped=false;refs.cargoText.TextTruncate=Enum.TextTruncate.AtEnd;refs.cargoText.ZIndex=refs.cargoTrack.ZIndex+2
  self.testMode=text(refs.root,'TestMode',0,0,420,16,10,C.gold);self.testMode.Text='TESTING  •  NO RESTOCK';self.testMode.TextXAlignment=Enum.TextXAlignment.Center;self.testMode.TextStrokeColor3=Color3.new(0,0,0);self.testMode.TextStrokeTransparency=.35
  refs.fleet.Parent=refs.root;refs.cards.Parent=refs.root
  for _,b in {refs.fleet,refs.cards} do
@@ -167,7 +168,7 @@ function HUD.new(refs: any)
   local round=b:FindFirstChildOfClass('UICorner');if round then round:Destroy() end
   for _,v in b:GetChildren() do if v:IsA('Frame') and v.Name:sub(1,5)~='Icon_' then v.Visible=false end end
  end
- for _,label in {refs.fleetText,refs.cardsText} do label.TextSize=10;label.Font=Enum.Font.GothamBold;label.TextColor3=C.text;label.TextStrokeColor3=Color3.new(0,0,0);label.TextStrokeTransparency=.2 end
+ for _,label in {refs.fleetText,refs.cardsText} do label.TextSize=10;label.Font=Enum.Font.SourceSansBold;label.TextColor3=C.text;label.TextStrokeColor3=Color3.new(0,0,0);label.TextStrokeTransparency=.2 end
  skin(refs.context,C.panel);skin(refs.enemy,C.panel);skin(refs.toast,C.panel)
  for _,panel in {refs.context,refs.enemy,refs.toast} do
   for _,label in panel:GetDescendants() do if label:IsA('TextLabel') then label.TextColor3=C.text end end
@@ -192,7 +193,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs
  local w,h=view.X,view.Y
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
- local total,living,working,full,loaded,delivering,manualLoads=0,0,0,0,0,0,0
+ local total,living,working,delivering=0,0,0,0
+ local backpackUnits=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
+ local backpackCapacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
+ local full=backpackUnits>=backpackCapacity
  local hp,maximum=0,0
  local folder=world:FindFirstChild('Drones')
  if folder then for _,drone in folder:GetChildren() do
@@ -203,23 +207,18 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    if health>0 then
     living+=1
     local state=drone:GetAttribute('State')
-    local units=drone:GetAttribute('CargoUnits') or 0
-    local capacity=drone:GetAttribute('CargoCapacity') or math.huge
-    if units>0 then loaded+=1 end
-    if units>=capacity then full+=1 end
-    if units>0 and (state=='Full' or state=='Idle' or state=='Follow') and drone:GetAttribute('AutomationHaulEnabled')~=true then manualLoads+=1 end
-    if state=='Deliver' or state=='Unload' then delivering+=1
+    if state=='Deliver' then delivering+=1
     elseif state=='Mine' or state=='Travel' or state=='Attack' then working+=1 end
    end
   end
  end end
  local hidden=r.modal.Visible
- local busy=working>0 or delivering>0 or full>0 or living<total
+ local busy=working>0 or delivering>0 or full or living<total
  if working>0 or delivering>0 then self.hasWorked=true end
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
  if delivering>0 then status=string.format('%d mining · %d hauling',working,delivering)
- elseif full>0 then status=string.format('%d working · %d full',working,full)
+ elseif full then status='Backpack full · return to sell'
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
  elseif working>0 then status=string.format('%d / %d working',working,living)
  elseif living<total then status=string.format('%d / %d ready',living,total)
@@ -228,7 +227,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.living.Visible=false
  self.fill.Visible=fighting
  self.fill.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maximum),0,1),1)
- local canUnload=manualLoads>0 and not fighting
+ local character=Players.LocalPlayer.Character;local root=character and character:FindFirstChild('HumanoidRootPart')
+ local converter=workspace:FindFirstChild('Converter')
+ local atDepot=root and converter and converter:IsA('BasePart') and (root.Position-converter.Position).Magnitude<18
+ local canUnload=backpackUnits>0 and atDepot and not fighting
  local showRecall=working>0 or delivering>0
  local actions=(showRecall and 1 or 0)+(fighting and 1 or 0)+(canUnload and 1 or 0)
  local bw=touch and 90 or 100
@@ -255,24 +257,26 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    end
   end
  end
- r.test.Visible=false
+ r.test.Visible=Players.LocalPlayer:GetAttribute('MA_TestingEnabled')==true and not hidden
+ r.test.Size=UDim2.fromOffset(math.min(208,w-24),32);r.test.Position=UDim2.fromOffset(w-math.min(208,w-24)-12,56)
+ r.test.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  r.recall.Text=touch and 'Recall' or 'Recall [R]'
  r.evade.Text=touch and 'Evade' or 'Evade [Q]'
- if r.unload then r.unload.Text=manualLoads>0 and ('Unload '..manualLoads) or 'Unload' end
+ if r.unload then r.unload.Text=touch and 'Sell' or 'Sell [U]' end
  self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
  self.hint.Text=Players.LocalPlayer:GetAttribute('AutomationMineEnabled') and 'Click a plot to assign your fleet' or 'Click an ore to assign a drone'
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
  -- One small counter row. No permanent objectives, test banner or portraits.
- local rw=math.min(350,w-124)
+ local rw=math.min(390,w-116)
  r.resources.Size=UDim2.fromOffset(rw,30);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
- local cw=math.floor((rw-6)*.5)
+ local cw=math.floor((rw-6)*.38)
  self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,30)
  self.cargo.Position=UDim2.fromOffset(cw+6,0);self.cargo.Size=UDim2.fromOffset(rw-cw-6,30)
  self.creditCaption.Visible=false;self.cargoCaption.Visible=false
  r.credits.Position=UDim2.fromOffset(9,0);r.credits.Size=UDim2.new(1,-18,1,0);r.credits.TextSize=16
  r.cargoText.Position=UDim2.fromOffset(9,0);r.cargoText.Size=UDim2.new(1,-18,1,0);r.cargoText.TextSize=16
- if w<500 then r.cargoText.Text=r.cargoText.Text:gsub('^Cargo ',''):gsub(' / ','/') end
+ if w<500 then r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Pack '):gsub(' / ','/') end
  r.cargoTrack.Position=UDim2.new(0,0,1,-3);r.cargoTrack.Size=UDim2.new(1,0,0,3)
  self.testMode.Visible=false;r.objective.Visible=false
  for i,button in {r.fleet,r.cards} do

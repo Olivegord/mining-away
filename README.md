@@ -8,9 +8,21 @@ For reproduction, use Python 3.9+ and the `zstd` command (verified installed ver
 
 The capture remains immutable. Rebuilding backs up an existing output as `.rbxl.previous` and atomically replaces the generated file. The historical asset and builder remain available only as explicit reference fixtures (`--legacy-reference`), with a separate reference output path; they must not replace the active game.
 
-The owner will test this integrated candidate themselves and requested no further test runs. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
+The owner will test this integrated candidate themselves and requested no further test runs. The latest backpack/swarm behavior is described immediately below; later historical sections retain obsolete hold/card descriptions for reference. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
 
-## Historical project notes — superseded where they conflict with the active target above
+## Latest owner changes: backpack and moving swarm
+
+Toolbox audio adds a three-track APM background playlist, short action/reward cues, and Music/Effects controls inside the fleet menu. Neutral 13:30 daylight, softer shadows and reduced specular preserve clear native Roblox materials and the original sky. Existing crystal pops and crunches remain. See [audio, asset credits and validation limits](docs/review/AUDIO_LIGHTING.md). These changes join the same combined source-only review build.
+
+Miners fill the player's 40-unit backpack, with no individual holds. Carry it to the Converter and use **Sell / U**. Finished miners regroup around you; leaving a plot brings your working swarm along, with orders resuming on return. Couriers collect at most eight units beside you, fly to the converter, sell after arrival, and return. Medics follow other drones and repair 10 health every two seconds through an attached beam. These support roles do not mine or attack.
+
+The preview **Random loadout / T** button gives 2–5 drones with at least one miner. It changes no permanent saved ownership. Permanent types/IDs/base traits stay intact; a separate role distinguishes miners, breakers, healers and couriers. The first Blue remains the original mining drone, Red is a breaker, Green is a Medic, and alternating later Blues become Couriers.
+
+The existing plot models are ordered by increasing distance from spawn and sell: Quartz, Ruby, Cobalt, Violet, Emerald. Native Concrete, Pavement, DiamondPlate, Metal, rough mineral beds and studded Plastic add variety with reduced specular shine.
+
+The fleet uses centered uniform formations and bounded, neighbor-driven separation/passing through the original capped movement equations. Cards have two visible text elements and native SourceSans fonts. Supported 3D hierarchy: camera-local Part → SurfaceGui → ViewportFrame visual, with normal touch/controller hitboxes. See [current implementation and validation limits](docs/review/BACKPACK_SWARM.md).
+
+## Historical project notes — superseded by the latest changes above
 
 This branch originally restored the drone/mining presentation and implemented the one-drone → run cards → permanent fleet prestige loop. The following history is retained as reference; active builds use the captured Drone Blower revolution place described above.
 

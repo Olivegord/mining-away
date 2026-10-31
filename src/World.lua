@@ -212,15 +212,75 @@ local function cleanSurface(part,archive)
  part.MaterialVariant='';part.Reflectance=0;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  for _,v in ipairs(part:GetChildren()) do if v:IsA('Texture') or v:IsA('Decal') then v.Parent=archive end end
 end
-function W.initialize(): any
- -- Small workers and readable ore need a sharp, neutral view of the operation.
- -- Preserve the authored sky/map; disable only post effects that wash them out.
- local lighting=game:GetService('Lighting')
- lighting.ExposureCompensation=0
- for _,effect in ipairs(lighting:GetChildren()) do
-  if effect:IsA('BloomEffect') or effect:IsA('DepthOfFieldEffect') or effect:IsA('SunRaysEffect') or effect:IsA('BlurEffect') then effect.Enabled=false end
-  if effect:IsA('ColorCorrectionEffect') then effect.Saturation=-.12;effect.Contrast=.02;effect.Brightness=0 end
+local function nativeFinish(part,material,studs)
+ part.Material=material;part.MaterialVariant='';part.Reflectance=0
+ part.TopSurface=studs and Enum.SurfaceType.Studs or Enum.SurfaceType.Smooth
+ part.BottomSurface=Enum.SurfaceType.Smooth
+end
+local function finishEditableMap(root,map,fields,home)
+ -- Preserve the captured parts, machines and field identities. The former
+ -- straight-line order placed Cobalt in front of spawn and Quartz at the end.
+ -- Reuse the existing plot footprints, ordered by distance, then stagger the
+ -- two right-hand plots so every later tier is farther from both depot and sell.
+ if root:GetAttribute('PlotOrderVersion')~=1 then
+  local slots={};local plots={}
+  for id,cfg in ipairs(Config.Fields) do
+   local model=fields:FindFirstChild(cfg.Key);local part=model and model:FindFirstChild('Field')
+   assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
+   plots[id]={model=model,part=part};table.insert(slots,part.CFrame)
+  end
+  table.sort(slots,function(a,b)
+   local ad=(a.Position-home).Magnitude;local bd=(b.Position-home).Magnitude
+   if math.abs(ad-bd)<.01 then return a.Position.X<b.Position.X end
+   return ad<bd
+  end)
+  for id,plot in ipairs(plots) do
+   local target=slots[id]+Vector3.new(0,0,id==3 and 20 or id==5 and 40 or 0)
+   local transform=target*plot.part.CFrame:Inverse()
+   plot.model:PivotTo(transform*plot.model:GetPivot())
+   plot.model:SetAttribute('Tier',id)
+  end
+  root:SetAttribute('PlotOrderVersion',1)
  end
+ -- Native Roblox surfaces provide readable material changes without global
+ -- gloss: studded plastic trim, rough ore beds, paved lanes and metal machines.
+ for _,part in ipairs(map:GetDescendants()) do if part:IsA('BasePart') then
+  if part.Name=='HubPad' then nativeFinish(part,Enum.Material.Concrete)
+  elseif part.Name=='MainTestLane' or part.Name=='FieldTestLane' then nativeFinish(part,Enum.Material.Pavement)
+  elseif part.Name:match('Pad$') then nativeFinish(part,Enum.Material.DiamondPlate)
+  elseif part.Name=='Printer' or part.Name=='PackStation' or part.Name=='PrestigeStation' then nativeFinish(part,Enum.Material.Metal)
+  else part.Reflectance=0 end
+ end end
+ local baseplate=workspace:FindFirstChild('Baseplate')
+ if baseplate and baseplate:IsA('BasePart') then nativeFinish(baseplate,Enum.Material.Plastic,true) end
+ local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+ if spawn then nativeFinish(spawn,Enum.Material.Plastic,true) end
+ local converter=workspace:FindFirstChild('Converter')
+ if converter and converter:IsA('BasePart') then nativeFinish(converter,Enum.Material.DiamondPlate) end
+ local lane=map:FindFirstChild('FieldTestLane',true)
+ local finishes={Enum.Material.Sandstone,Enum.Material.Ground,Enum.Material.Slate,Enum.Material.Rock,Enum.Material.Grass}
+ local beds={Color3.fromRGB(164,157,133),Color3.fromRGB(139,112,116),Color3.fromRGB(111,127,145),Color3.fromRGB(129,117,143),Color3.fromRGB(106,131,117)}
+ for id,cfg in ipairs(Config.Fields) do
+  local model=fields:FindFirstChild(cfg.Key);local part=model:FindFirstChild('Field')
+  nativeFinish(part,finishes[id]);part.Color=beds[id]
+  local border=model:FindFirstChild('Border')
+  if border and border:IsA('BasePart') then nativeFinish(border,Enum.Material.Plastic,true) end
+  if lane and lane:IsA('BasePart') and not model:FindFirstChild('DepotApproach') then
+   local nearEdge=part.Position.Z-part.Size.Z/2
+   local laneEdge=lane.Position.Z+lane.Size.Z/2
+   if nearEdge>laneEdge then
+    local length=nearEdge-laneEdge+1
+    local link=W.part(model,'DepotApproach',Vector3.new(part.Position.X,lane.Position.Y,laneEdge+length/2),Vector3.new(12,lane.Size.Y,length),lane.Color,Enum.Material.Pavement)
+    nativeFinish(link,Enum.Material.Pavement);solid(link)
+   end
+  end
+ end
+end
+function W.initialize(): any
+ Daylight.apply()
+ -- The preserved legacy light-cycle script sets dawn once on startup. Apply
+ -- again after startup so script scheduling cannot restore the old yellow cast.
+ task.defer(Daylight.apply)
  local existing=workspace:FindFirstChild('MiningAway')
  if existing and existing:GetAttribute('EditableMap') then
   local map=existing:FindFirstChild('Map')
@@ -228,13 +288,12 @@ function W.initialize(): any
   local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
   local home=spawn and spawn.Position or Vector3.new(-56,.5,-11)
   assert(map and fields,'Editable map is missing required folders')
+  finishEditableMap(existing,map,fields,home)
   local fieldMetadata={}
   for id,cfg in ipairs(Config.Fields) do
    local model=fields:FindFirstChild(cfg.Key)
    local part=model and model:FindFirstChild('Field')
    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
-   local beds={Color3.fromRGB(114,133,124),Color3.fromRGB(139,112,116),Color3.fromRGB(111,127,145),Color3.fromRGB(129,117,143),Color3.fromRGB(106,131,117)}
-   part.Material=Enum.Material.SmoothPlastic;part.Color=beds[id];part.Reflectance=0
    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
   end
   return {
@@ -297,6 +356,7 @@ function W.initialize(): any
   end
  end
  HarborLighting.apply()
+ Daylight.apply()
  local depot=solid(block(map,'DepotApron',Vector3.new(home.X,.1,home.Z),Vector3.new(40,.2,34),P.ivory:Lerp(P.ledge,.2),Enum.Material.SmoothPlastic));depot:SetAttribute('SafeDepot',true)
  -- Flush panel joints and painted corner brackets make one deliberate working yard.
  for _,x in ipairs({-10,0,10}) do block(map,'ApronJoint',Vector3.new(home.X+x,.215,home.Z),Vector3.new(.1,.02,32),P.stone) end

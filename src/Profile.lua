@@ -1,5 +1,5 @@
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=3,CONTENT=1}
+local P={SCHEMA=4,CONTENT=1}
 local types={'Blue','Red','Green'}
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
@@ -19,7 +19,8 @@ local function run(uid,index)
 end
 local function cargoId(p,id)
  if type(id)~='string' or #id>160 then return false end
- for _,d in ipairs(p.fleet) do if d.id==id then return true end end
+ if type(p.fleet)~='table' then return false end
+ for _,d in ipairs(p.fleet) do if type(d)=='table' and d.id==id then return true end end
  -- Studio roles have separate own-player bags; they never become permanent units.
  local prefix='test:'..tostring(p.userId)..':'
  return string.sub(id,1,#prefix)==prefix and string.match(string.sub(id,#prefix+1),'^%d+:%d+$')~=nil
@@ -40,7 +41,8 @@ local function drone(uid,serial,kind,seed)
  local step=(20+((seed+serial*17)%31))/100
  local base=clone(P.BASE);local scale=P.TYPE_SCALES[kind]
  base.maxStep60=step*scale.speed;base.miningDPS=base.miningDPS*scale.mining;base.combatDPS=base.combatDPS*scale.combat
- return {id=tostring(uid)..':drone:'..serial,name=kind..' '..serial,type=kind,base=base}
+ local role=kind=='Green' and 'Medic' or (kind=='Red' and 'Charger' or (math.floor((serial-1)/3)%2==1 and 'Courier' or 'Striker'))
+ return {id=tostring(uid)..':drone:'..serial,name=kind..' '..serial,type=kind,role=role,base=base}
 end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
@@ -56,6 +58,7 @@ function P.validate(p,uid)
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or not table.find(types,d.type) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=true
+  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end
@@ -72,7 +75,7 @@ function P.validate(p,uid)
  end
  local manifests={}
  for id,manifest in pairs(r.deliveries) do
-  if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=r.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 then return false,'Invalid delivery manifest' end
+  if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=r.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 or bagUnits(manifest.cargo)>8 then return false,'Invalid delivery manifest' end
   manifests[manifest.id]=true;cargoTotal=cargoTotal+bagUnits(manifest.cargo)
  end
  if not integer(cargoTotal) then return false,'Cargo total limit exceeded' end
@@ -123,6 +126,49 @@ function P.migrate(raw,uid,seed)
   p.run.droneCargo=p.run.droneCargo or {};p.run.deliveries=p.run.deliveries or {}
   p.schemaVersion=3
  end
+ if p.schemaVersion==3 then
+  -- Old worker holds move into the player's backpack without dropping ore.
+  -- Legacy manifests were entire worker holds, not eight-unit courier parcels.
+  -- Recover their unsold ore too, including IDs now assigned a courier role.
+  if type(p.run)~='table' or not validBag(p.run.cargo) or type(p.run.droneCargo)~='table' or type(p.run.deliveries)~='table' or type(p.fleet)~='table' then return nil,'Unsupported v3 cargo' end
+  for id,bag in pairs(p.run.droneCargo) do
+   if not cargoId(p,id) or not validBag(bag) then return nil,'Invalid v3 worker hold' end
+   for material,units in pairs(bag) do p.run.cargo[material]=(p.run.cargo[material] or 0)+units end
+  end
+  p.run.droneCargo={}
+  local manifests={}
+  for id,manifest in pairs(p.run.deliveries) do
+   if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=p.run.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 then return nil,'Invalid v3 delivery manifest' end
+   manifests[manifest.id]=true
+   for material,units in pairs(manifest.cargo) do p.run.cargo[material]=(p.run.cargo[material] or 0)+units end
+  end
+  p.run.deliveries={}
+  for serial,d in ipairs(p.fleet) do
+   if type(d)~='table' then return nil,'Invalid v3 permanent drone' end
+   d.role=d.role or (d.type=='Green' and 'Medic' or (d.type=='Red' and 'Charger' or (math.floor((serial-1)/3)%2==1 and 'Courier' or 'Striker')))
+  end
+  -- The old named-worker Auto Hauler cannot operate after worker holds are
+  -- removed. Preserve selected purchases as a useful backpack/travel retrofit;
+  -- refund an unchosen affected pack at its exact paid price, without a reroll.
+  if type(p.run.cards)~='table' then return nil,'Invalid v3 cards' end
+  for _,card in ipairs(p.run.cards) do
+   if type(card)=='table' and card.cardId=='A02' and type(card.effects)=='table' and finite(card.effects.fullAuto) and card.effects.fullAuto>0 then
+    card.legacyCard=clone(card);card.title='Backpack Retrofit';card.scope='Fleet';card.targetDroneId=nil;card.targetName=nil
+    card.effects={capacity=.35,speed=.30};card.description='+35% backpack space and +30% drone speed';card.preview=nil
+    p.lastMigration='Converted selected Auto Hauler to Backpack Retrofit'
+   end
+  end
+  local offer=p.run.pendingOffer
+  if type(offer)=='table' and type(offer.choices)=='table' then
+   for _,choice in ipairs(offer.choices) do
+    if type(choice)=='table' and choice.cardId=='A02' and type(choice.effects)=='table' and finite(choice.effects.fullAuto) and choice.effects.fullAuto>0 then
+     if not integer(offer.price) or not integer(p.run.credits) or p.run.credits+offer.price>=1e14 then return nil,'Cannot refund obsolete Auto Hauler offer' end
+     p.run.credits=p.run.credits+offer.price;p.run.pendingOffer=nil;p.lastMigration='Refunded obsolete Auto Hauler pack at full saved price';break
+    end
+   end
+  end
+  p.schemaVersion=4
+ end
  -- Preserve live permanent plot clearances. Only the old progression required
  -- guarded plots before its first prestige; the new first two prestiges do not.
  if p.clearedFields==nil then p.clearedFields={} end
@@ -160,10 +206,7 @@ function P.record(p,operation,tx,result)
  return true
 end
 function P.cargoUnits(p)
- local total=bagUnits(p.run.cargo)
- for _,bag in pairs(p.run.droneCargo or {}) do total=total+bagUnits(bag) end
- for _,manifest in pairs(p.run.deliveries or {}) do total=total+bagUnits(manifest.cargo) end
- return total
+ return bagUnits(p.run.cargo)
 end
 function P.deliveryUnits(p,id)
  local manifest=p.run.deliveries[id];return manifest and bagUnits(manifest.cargo) or 0
@@ -172,20 +215,16 @@ function P.droneCargoUnits(p,id)
  return bagUnits(p.run.droneCargo[id])+P.deliveryUnits(p,id)
 end
 function P.reconcileCargo(p,eligibleDroneIds)
- local eligible={};local order={};local changed=false
+ local eligible={};local changed=false
  for key,value in pairs(eligibleDroneIds or {}) do
   local id=type(key)=='string' and value==true and key or value
-  if cargoId(p,id) and not eligible[id] then eligible[id]=true;table.insert(order,id) end
+  if cargoId(p,id) then eligible[id]=true end
  end
- table.sort(order);local first=order[1]
  local function retain(bag)
-  local target=p.run.cargo
-  if first then p.run.droneCargo[first]=p.run.droneCargo[first] or {};target=p.run.droneCargo[first] end
-  for material,units in pairs(bag) do target[material]=(target[material] or 0)+units end
+  for material,units in pairs(bag) do p.run.cargo[material]=(p.run.cargo[material] or 0)+units end
  end
- if first and next(p.run.cargo) then local legacy=p.run.cargo;p.run.cargo={};retain(legacy);changed=true end
  local retired={}
- for id in pairs(p.run.droneCargo) do if not eligible[id] then table.insert(retired,id) end end
+ for id in pairs(p.run.droneCargo) do table.insert(retired,id) end
  for _,id in ipairs(retired) do
   local bag=p.run.droneCargo[id];p.run.droneCargo[id]=nil;retain(bag);changed=true
  end
@@ -204,15 +243,14 @@ end
 -- The caller supplies a bounded server-authored node yield, not client input.
 function P.addMiningCargo(p,material,units,capacity,droneId)
  if type(material)~='string' or #material>40 or not integer(units) or not finite(capacity) or capacity<1 then return 0 end
- if droneId~=nil and (not cargoId(p,droneId) or p.run.deliveries[droneId]) then return 0 end
- local held=droneId and P.droneCargoUnits(p,droneId) or bagUnits(p.run.cargo)
+ if droneId~=nil and not cargoId(p,droneId) then return 0 end
+ local held=bagUnits(p.run.cargo)
  if held>=math.floor(capacity) or P.cargoUnits(p)+units>=1e14 then return 0 end
  local bag=p.run.cargo
- if droneId then p.run.droneCargo[droneId]=p.run.droneCargo[droneId] or {};bag=p.run.droneCargo[droneId] end
  bag[material]=(bag[material] or 0)+units
  return units
 end
-function P.beginDelivery(p,droneId,tx,expectedRun)
+function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid delivery ID' end
  local replay=P.receipt(p,'BeginDelivery',tx)
@@ -220,9 +258,17 @@ function P.beginDelivery(p,droneId,tx,expectedRun)
  local existing=p.run.deliveries[droneId]
  if existing then return true,{id=existing.id,droneId=droneId,runId=p.run.id,units=bagUnits(existing.cargo)} end
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
- local bag=p.run.droneCargo[droneId]
- if not bag or bagUnits(bag)<=0 then return false,'Carrier is empty' end
- p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=clone(bag)};p.run.droneCargo[droneId]={}
+ if not integer(batchSize) or batchSize<1 or batchSize>8 then return false,'Invalid courier batch' end
+ if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
+ local bag,remaining={},batchSize
+ local materials={};for material in pairs(p.run.cargo) do table.insert(materials,material) end;table.sort(materials)
+ for _,material in ipairs(materials) do
+  local units=math.min(remaining,p.run.cargo[material]);remaining=remaining-units
+  if units>0 then bag[material]=units;p.run.cargo[material]=p.run.cargo[material]-units end
+  if p.run.cargo[material]==0 then p.run.cargo[material]=nil end
+  if remaining==0 then break end
+ end
+ p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=bag}
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(bag)}
  P.record(p,'BeginDelivery',tx,result);return true,result
 end

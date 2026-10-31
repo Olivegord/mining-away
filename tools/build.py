@@ -47,9 +47,9 @@ def module_bundle(names):
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Feel','Mining','Feedback','SentryMotion','Presentation','UILayout','Interface','CardView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Feel','Mining','Feedback','SentryMotion','Soundscape','Presentation','UILayout','Interface','CardView'))+(ROOT/'src/Client.lua').read_text()
 LIVE_SOURCES={
  'ServerScriptService.GlobalDroneControl':('Script','Server'),
  'StarterPlayer.StarterPlayerScripts.ClientDroneControl':('LocalScript','Client'),

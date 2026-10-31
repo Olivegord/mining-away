@@ -20,7 +20,7 @@ function U.frame(parent,pos,size,color)
  local f=Instance.new('Frame');f.Position=pos;f.Size=size;f.BackgroundColor3=color or C.panel;f.BorderSizePixel=0;f.ZIndex=layer(parent);f.Parent=parent;return f
 end
 function U.gradient(parent,color)
- local g=Instance.new('UIGradient');g.Color=ColorSequence.new(Color3.new(1,1,1),Color3.new(.92,.95,1));g.Rotation=90;g.Parent=parent;return g
+ local g=Instance.new('UIGradient');g.Color=ColorSequence.new(Color3.new(1,1,1));g.Enabled=false;g.Parent=parent;return g
 end
 function U.panel(parent,pos,size,color,radius)
  local f=U.frame(parent,pos,size,(color and C.panel:Lerp(color,.12)) or C.panel);U.corner(f,4);U.stroke(f,C.line,1);f.Active=true
@@ -29,7 +29,7 @@ end
 function U.text(parent,pos,size,text,sizePx,color,bold)
  local t=Instance.new('TextLabel');t.Position=pos;t.Size=size;t.BackgroundTransparency=1;t.BorderSizePixel=0
  t.Text=text or '';t.TextColor3=color or C.text;t.TextSize=sizePx or 14;t.TextXAlignment=Enum.TextXAlignment.Left
- t.TextYAlignment=Enum.TextYAlignment.Center;t.Font=bold and Enum.Font.GothamBold or Enum.Font.GothamMedium
+ t.TextYAlignment=Enum.TextYAlignment.Center;t.Font=bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
  t.TextWrapped=true;t.ZIndex=layer(parent);t.Parent=parent;return t
 end
 function U.badge(parent,pos,size,text,color)
@@ -46,7 +46,7 @@ local function paint(button,color,scale)
 end
 function U.button(parent,pos,size,text,callback,color)
  local b=Instance.new('TextButton');b.Position=pos;b.Size=size;b.BackgroundColor3=color or C.mineral;b.BorderSizePixel=0
- b.Text=text;b.TextColor3=buttonText(b.BackgroundColor3);b.TextSize=14;b.Font=Enum.Font.GothamBold;b.TextWrapped=true;b.AutoButtonColor=false
+ b.Text=text;b.TextColor3=buttonText(b.BackgroundColor3);b.TextSize=14;b.Font=Enum.Font.SourceSansBold;b.TextWrapped=true;b.AutoButtonColor=false
  b.TextStrokeColor3=C.ink;b.TextStrokeTransparency=1;b.ZIndex=layer(parent);b.Parent=parent;U.corner(b,4);U.stroke(b,C.line,1)
  U.gradient(b,b.BackgroundColor3)
  local scale=Instance.new('UIScale');scale.Name='ButtonScale';scale.Parent=b
