@@ -1,5 +1,9 @@
 # Owner requirements
 
+## October 31 latest — spheres, Part lasers and flight
+
+The owner corrected the effect design: **three spheres of different sizes, oscillating in size with sine waves**, not rings. Mining lasers must be **transparent cylinder Parts**, always straight down, with smooth transitions. Every drone needs trails and a flying effect. The owner explicitly authorized one Play verification session after a renderer crash; this permits inspecting and replacing the client renderer within that same session, not publishing or claiming multiplayer/visual approval.
+
 ## October 31 latest — effects must communicate work
 
 The owner requests substantially stronger effects and anticipation: visible charge-up, holding, release and recovery. Mining needs a wider outer beam, a thinner inner beam, particles, and the old three-circle style at the beam origin. Restore available original mining particle/contact assets from preserved backups. Courier/supply work must be understandable through motion, parcel transfer and beam/particle effects rather than explanatory UI. All effects follow authoritative work phases; visuals cannot invent mining hits, completed pickups, healing or sales. Preserve the existing game and standing no-publishing/no-new-Play-session instruction. See [work effects](review/WORK_EFFECTS.md).

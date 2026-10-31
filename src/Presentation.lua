@@ -70,14 +70,14 @@ end
 function P:beginFrame()
  self.beamRays=0;self.beamQueue={}
 end
-local function newBeamLayer(parent,template,name,color,opacity,z)
- local beam=template and template:FindFirstChild(name,true)
- beam=beam and beam:IsA('Beam') and beam:Clone() or Instance.new('Beam')
- beam.Name=name;beam.Texture='';beam.CurveSize0=0;beam.CurveSize1=0
- beam.Segments=1;beam.FaceCamera=true;beam.LightEmission=.12;beam.LightInfluence=0
- beam.Color=ColorSequence.new(color);beam.Transparency=NumberSequence.new(opacity)
- beam.ZOffset=z;beam.Width0=0;beam.Width1=0;beam.Enabled=false;beam.Parent=parent
- return beam
+local function newLaserLayer(parent,name,color)
+ return WorkEffects.newCylinder(parent,name,color)
+end
+local function branchOrigin(beam,part,point,normal)
+ if beam.vertical then
+  return Vector3.new(part.Position.X,math.max(beam.origin.WorldPosition.Y,part.Position.Y+part.Size.Magnitude*.5+.3),part.Position.Z)
+ end
+ return point+normal*.08
 end
 function P:createMiningBeam(view,emitter)
  local holder=Instance.new('Folder');holder.Name='MiningBeam';holder.Parent=self.parent
@@ -90,17 +90,12 @@ function P:createMiningBeam(view,emitter)
   muzzle.Position=emitter.CFrame:PointToObjectSpace(bottom)
  end
  local endpoint=barePart(holder,'MiningEndpoint');endpoint.Size=Vector3.one*.05;endpoint.Transparency=1
- local target=Instance.new('Attachment');target.Parent=endpoint
  local impact=barePart(holder,'ContactLight');impact.Shape=Enum.PartType.Ball
  impact.Size=Vector3.one*.14;impact.Transparency=1;impact.Color=ICE
  local extra=barePart(holder,'SecondaryEndpoint');extra.Size=Vector3.one*.05;extra.Transparency=1
- local extraAttachment=Instance.new('Attachment');extraAttachment.Parent=extra
- local rs=game:GetService('ReplicatedStorage');local fx=rs:FindFirstChild('MiningFX');local template=fx and fx:FindFirstChild('Beam')
- local halo=newBeamLayer(holder,template,'OuterBeam',ICE,.55,0)
- local core=newBeamLayer(holder,template,'InnerBeam',WHITE,.3,.025)
- halo.Attachment0=muzzle;halo.Attachment1=target;core.Attachment0=muzzle;core.Attachment1=target
- local branch=newBeamLayer(holder,nil,'SecondaryBeam',ICE,.32,.01)
- branch.Attachment0=target;branch.Attachment1=extraAttachment
+ local halo=newLaserLayer(holder,'OuterBeam',ICE)
+ local core=newLaserLayer(holder,'InnerBeam',WHITE)
+ local branch=newLaserLayer(holder,'SecondaryBeam',ICE)
  return {holder=holder,origin=muzzle,endpoint=endpoint,marker=impact,secondaryPoint=extra,
   core=core,halo=halo,secondary=branch,envelope=F.newBeam(),surface={},secondarySurface={},lastKey=nil,lastKind=nil}
 end
@@ -110,12 +105,12 @@ function P:destroyMiningBeam(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
-function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery)
+function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery,vertical)
  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
  if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
  if not noQuery and now>=(cache.nextSample or 0) and self.beamRays+2<=self.maxBeamRays then
   self.beamRays+=2;cache.nextSample=now+.08;cache.dueSince=cache.nextSample;cache.lastSample=now
-  local direction=part.Position-origin
+  local direction=vertical and Vector3.new(0,-math.max(.1,origin.Y-part.Position.Y+part.Size.Magnitude),0) or part.Position-origin
   if direction.Magnitude<.01 then cache.anchor=nil;return nil end
   local include=RaycastParams.new();include.FilterType=Enum.RaycastFilterType.Include;include.FilterDescendantsInstances={part}
   -- Query the local rendered union/mesh, not the untouched server collider. The
@@ -143,14 +138,26 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuer
  local point=part.CFrame:PointToWorldSpace(Vector3.new(x,y,z))
  local normal=part.CFrame:VectorToWorldSpace(cache.normal)
  if normal.Magnitude<.001 then return nil end
- return point,normal.Unit
+ normal=normal.Unit
+ if vertical then
+  -- Reproject the verified surface plane onto the current emitter's vertical
+  -- line. Shrink/rotation cannot steer the laser sideways between ray samples.
+  if normal.Y<.1 then return nil end
+  local y=point.Y+(normal.X*(point.X-origin.X)+normal.Z*(point.Z-origin.Z))/normal.Y
+  point=Vector3.new(origin.X,y,origin.Z)
+  local localPoint=part.CFrame:PointToObjectSpace(point)
+  if y>=origin.Y or math.abs(localPoint.X)>part.Size.X*.5+.02 or math.abs(localPoint.Y)>part.Size.Y*.5+.02 or math.abs(localPoint.Z)>part.Size.Z*.5+.02 then return nil end
+ end
+ return point,normal
 end
 function P:renderMiningBeam(beam,sample,now,noQuery)
  if self.closed or not beam or not beam.origin.Parent then return end
  local final;sample,final=finalContact(sample,now)
+ beam.vertical=sample.isMining==true
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  beam.surface={};beam.secondarySurface={};beam.cachedLife=sample.life;beam.cacheKey=sample.key
+  beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
+ local dt=beam.renderAt and math.clamp(now-beam.renderAt,0,.1) or 1/60;beam.renderAt=now
  local part=sample.part
  local point,normal
  -- A recall starting with a still-valid contact may finish its authored fade,
@@ -159,12 +166,12 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif sample.alive and beam.envelope.active and beam.surface.verifiedAt and now-beam.surface.verifiedAt<=.75 then
   beam.surface.fadeUntil=now+.2
  end
- if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery) end
+ if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery,beam.vertical) end
  local valid=point~=nil and normal~=nil
  -- A break attribute can precede its contact snapshot. Reconstruct the same
  -- original ramp from BeamSince instead of restarting a two-second warmup.
  if final and beam.envelope.key~=sample.key then beam.envelope=F.newBeam() end
- local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=valid,
+ local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=part~=nil and part.Parent~=nil and part.Transparency<1,
   key=sample.key,life=sample.life,active=sample.active,since=sample.since})
  if valid then
   beam.endpoint.Position=point;beam.marker.Position=point+normal*.07
@@ -174,20 +181,27 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local tint=miningTypeColors[sample.droneType] or look.color
  if beam.look~=look or beam.tint~=tint then
   beam.look=look;beam.tint=tint
-  beam.core.Color=ColorSequence.new(miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.78) or look.core)
-  beam.halo.Color=ColorSequence.new(tint);beam.marker.Color=tint
+  beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.78) or look.core
+  beam.halo.Color=tint;beam.marker.Color=tint
  end
  beam.miningCue=beam.miningCue or {}
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
  local visible=valid and width>.001
- beam.core.Enabled=visible;beam.halo.Enabled=visible
- -- The original inner ramp and .2s hide remain untouched. The outside shape
- -- expresses actual damage cadence, never an invented client firing timer.
- local workerScale=.58
- beam.core.Width0=.11*width*workerScale;beam.core.Width1=.09*width*workerScale
- beam.halo.Width0=(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale
- beam.halo.Width1=(look.width1+(style=='Percussion' and .45 or .06)*pulse)*width*workerScale
+ beam.visibility=(beam.visibility or 0)+((visible and 1 or 0)-(beam.visibility or 0))*(1-math.exp(-dt*24))
+ beam.core.Transparency=1;beam.halo.Transparency=1
+ if visible then
+  local origin=beam.origin.WorldPosition
+  if beam.vertical then
+   -- Only the downward endpoint eases. Both X/Z coordinates are always the
+   -- emitter's, and the endpoint can never ease inside the verified surface.
+   beam.endY=beam.endY and math.max(point.Y,beam.endY+(point.Y-beam.endY)*(1-math.exp(-dt*20))) or point.Y
+  end
+  local tip=beam.vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
+  local workerScale=.58;local alpha=beam.visibility
+  WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.80*alpha)
+  WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.43*alpha)
+ end
  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
@@ -195,13 +209,12 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
   self.nextMiningSoundAt=now+.12;self:_sound(point,'mining',now)
  end
- beam.secondary.Enabled=false
+ beam.secondary.Transparency=1
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
-  local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery)
+  local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,branchOrigin(beam,sample.secondaryPart,point,normal),sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery,beam.vertical)
   if secondary and secondaryNormal then
-   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or tint)
-   beam.secondary.Width0=(style=='Resonance' and .11+.04*pulse or .085)*width*workerScale
-   beam.secondary.Width1=(style=='Resonance' and .075+.025*pulse or .055)*width*workerScale;beam.secondary.Enabled=true
+   beam.secondaryPoint.Position=secondary;beam.secondary.Color=sample.secondaryColor or tint
+   WorkEffects.drawCylinder(beam.secondary,branchOrigin(beam,sample.secondaryPart,point,normal),secondary,(style=='Resonance' and .11+.04*pulse or .085)*width*.58,.35)
   end
  end
 end
@@ -212,8 +225,9 @@ end
 function P:queueMiningBeam(beam,sample,now)
  if self.closed or not beam or not beam.origin.Parent then return end
  local final;sample,final=finalContact(sample,now)
+ beam.vertical=sample.isMining==true
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
-  beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.cachedLife=sample.life;beam.cacheKey=sample.key
+  beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
  if final then
   -- This saved hit already has a hard .3s lifetime. It may use the still-visible
@@ -262,7 +276,7 @@ function P:flushMiningBeams()
   if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=entry.now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
   if not cache.order then self.beamOrder+=1;cache.order=self.beamOrder end
   if entry.now>=(cache.nextSample or 0) then
-   table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored})
+   table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored,vertical=entry.beam.vertical})
   end
  end
  local function run(list,limit)
@@ -274,7 +288,7 @@ function P:flushMiningBeams()
   for _,v in ipairs(list) do
    if used>=limit or self.beamRays+2>self.maxBeamRays then break end
    if not v.served then
-    self:_surface(v.entry.beam,v.cache,v.origin,v.part,v.source,v.entry.now,v.ignored)
+    self:_surface(v.entry.beam,v.cache,v.origin,v.part,v.source,v.entry.now,v.ignored,false,v.vertical)
     v.served=true;used+=1
    end
   end
@@ -306,8 +320,8 @@ function P:flushMiningBeams()
  for _,e in ipairs(self.beamQueue) do
   local b,s=e.beam,e.sample
   if s.alive and s.active and s.secondaryPart and s.secondaryKey then
-   local point,normal=self:_surface(b,b.surface,b.origin.WorldPosition,s.part,s.serverSource,e.now,nil,true)
-   if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,point+normal*.08,s.secondarySource,s.serverSource) end
+   local point,normal=self:_surface(b,b.surface,b.origin.WorldPosition,s.part,s.serverSource,e.now,nil,true,b.vertical)
+   if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,branchOrigin(b,s.secondaryPart,point,normal),s.secondarySource,s.serverSource) end
   end
  end
  run(secondary,reserved)
@@ -461,6 +475,7 @@ function P:renderDrone(drone,_dt,now)
  end
  self.work:courier(drone,record,now)
  self.work:repair(drone,record,now)
+ self.work:flight(drone,record,_dt,now)
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)

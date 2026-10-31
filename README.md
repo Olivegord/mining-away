@@ -12,7 +12,7 @@ The owner will test this integrated candidate themselves and requested no furthe
 
 ## Latest effects pass
 
-Mining now has three charging emitter rings, restored original particles/contact glows, a wide outer halo and thin core, cutting sparks and fracture bursts. Couriers show pickup, committed parcel transfer, loaded flight, unloading and confirmed sale; Medics visibly charge before repairing. These are runtime effects in the existing place. See [work effects and validation limits](docs/review/WORK_EFFECTS.md).
+Mining now has three differently sized sphere Parts pulsing with sine waves, transparent cylinder Part lasers with a wide halo/thin core, restored original particles/contact glows, cutting sparks and fracture bursts. Every drone has flight trails and exhaust. Couriers show pickup, committed parcel transfer, loaded flight, unloading and confirmed sale; Medics visibly charge before repairing. These are runtime effects in the existing place. See [work effects and validation limits](docs/review/WORK_EFFECTS.md).
 
 ## Latest owner changes: backpack and moving swarm
 

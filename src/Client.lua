@@ -644,7 +644,7 @@ local function renderDrone(d,dt,now)
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(state=='Mine' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=(d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local drift=state=='Mine' and math.sin(now*1.2+(s:GetAttribute('PhaseSeed') or 0))*.05 or 0
+ local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*(state=='Mine' and .05 or .10)
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(0,0,d.bank))
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  for part,original in pairs(d.parts) do
@@ -709,7 +709,7 @@ local function renderHealing(now)
    and (d.source:GetAttribute('HP') or 0)>0 and target and (target.source:GetAttribute('HP') or 0)>0
    and d.emitter.Parent and target.emitter.Parent
   if active then table.insert(candidates,{drone=d,target=target})
-  elseif d.healBeam then d.healBeam.Enabled=false end
+  elseif d.healBeam then d.healBeam.Transparency=1 end
  end
  table.sort(candidates,function(a,b) return tostring(a.drone.source:GetAttribute('DroneId'))<tostring(b.drone.source:GetAttribute('DroneId')) end)
  local count=#candidates
@@ -726,22 +726,12 @@ local function renderHealing(now)
  if count>0 then healCursor=(healCursor+math.min(4,count))%count end
  for _,item in ipairs(candidates) do
   local d,target=item.drone,item.target
-  if not d.healBeam then
-   d.healMuzzle=Instance.new('Attachment');d.healMuzzle.Name='RepairMuzzle';d.healMuzzle.Parent=d.emitter
-   local beam=Instance.new('Beam');beam.Name='RepairBeam';beam.Attachment0=d.healMuzzle
-   beam.Width0=.09;beam.Width1=.09;beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=0
-   beam.Color=ColorSequence.new(Color3.fromRGB(141,209,151));beam.Transparency=NumberSequence.new(.15);beam.Parent=d.view;d.healBeam=beam
-  end
-  if d.healTargetDrone~=target then
-   if d.healTarget then d.healTarget:Destroy() end
-   d.healTarget=Instance.new('Attachment');d.healTarget.Name='RepairContact';d.healTarget.Parent=target.emitter
-   d.healTargetDrone=target;d.healBeam.Attachment1=d.healTarget
-  end
-  d.healBeam.Enabled=d.healVisible==true and d.healCheckedTarget==target and now-(d.healCheckedAt or 0)<.2
+  if not d.healBeam then d.healBeam=WorkEffects.newCylinder(d.view,'RepairBeam',Color3.fromRGB(141,209,151)) end
+  local visible=d.healVisible==true and d.healCheckedTarget==target and now-(d.healCheckedAt or 0)<.2
   local charging=d.source:GetAttribute('State')=='RepairCharge'
   local q=charging and math.clamp((now-(d.source:GetAttribute('RepairChargeAt') or now))/(d.source:GetAttribute('RepairChargeDuration') or .4),0,1) or 1
-  d.healBeam.Width0=charging and .025+.035*q or .13;d.healBeam.Width1=charging and .02+.02*q or .085
-  d.healBeam.Transparency=NumberSequence.new(charging and (.8-.35*q) or .12)
+  if visible then WorkEffects.drawCylinder(d.healBeam,d.emitter.Position,target.emitter.Position,charging and .025+.035*q or .13,charging and (.8-.35*q) or .12)
+  else d.healBeam.Transparency=1 end
  end
 end
 
