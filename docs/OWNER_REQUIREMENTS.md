@@ -1,5 +1,13 @@
 # Owner requirements
 
+## October 31 target correction — Drone Blower revolution
+
+The owner clarified that the game is the existing **Drone Blower revolution**, Roblox place **136098934779395**. The older local Mining Away build was the wrong artifact. Continue in this same repository and existing experience; preserve the live map, assets, card UI, tactical HUD, role drones, crystal audio and discovery systems. The active Studio capture takes precedence over conflicting historical presentation/build instructions below.
+
+The immutable native backup is `assets/drone-blower-revolution-base.rbxl`, SHA-256 `b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd`. Build it to `build/Drone Blower revolution.rbxl` by changing only the exact live controller/module Source allowlist. Preserve all other binary chunks, script enablement, backup copies, geometry, terrain, lighting and assets. Never rebuild the active game from the old `assets/mining-away-base.rbxl`; retain that file as historical reference. Do not create or publish another experience.
+
+The owner's latest direction is to finish the implementation and let them test it themselves: stop additional test runs and Studio play sessions for this pass. Describe the resulting validation limits honestly; historical test results do not validate the newly integrated live-target build.
+
 ## October 31 mining gameplay priority
 
 The owner wants mining to be substantially more fun and asks for research into the appeal of bouncing/merging-ball videos and rock-paper-scissors particle simulations. The highest priority is the gameplay loop: understandable rules, anticipation, meaningful choices, visible consequences and satisfying progression. Sound and visual feedback should communicate those mechanics. Presentation alone does not establish that the game is enjoyable.

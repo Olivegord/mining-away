@@ -12,6 +12,8 @@ local miningLooks={
  Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.36,width1=.34},
  Resonance={color=Color3.fromRGB(104,224,146),core=Color3.fromRGB(221,255,227),width0=.36,width1=.32},
 }
+local miningTypeColors={Dart=Color3.fromRGB(45,224,255),Striker=Color3.fromRGB(255,210,86),
+ Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
 local segmentRanks={bottemseg=0,lowerseg=1,upperseg=2,topseg=3,eye=1,eyecase=1,spawnEye=1}
 local requiredSegments={'bottemseg','lowerseg','upperseg','topseg','eye','eyecase','spawnEye'}
 local function finalContact(sample,now)
@@ -61,7 +63,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=48,maxPulses=10,maxScans=12,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
+  maxFragments=64,maxPulses=12,maxScans=16,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -168,8 +170,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
  end
  local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
- if beam.look~=look then
-  beam.look=look;beam.core.Color=ColorSequence.new(look.core);beam.halo.Color=ColorSequence.new(look.color);beam.marker.Color=look.color
+ local tint=miningTypeColors[sample.droneType] or look.color
+ if beam.look~=look or beam.tint~=tint then
+  beam.look=look;beam.tint=tint
+  beam.core.Color=ColorSequence.new(miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.78) or look.core)
+  beam.halo.Color=ColorSequence.new(tint);beam.marker.Color=tint
  end
  beam.miningCue=beam.miningCue or {}
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
@@ -191,7 +196,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,point+normal*.08,sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery)
   if secondary and secondaryNormal then
-   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or look.color)
+   beam.secondaryPoint.Position=secondary;beam.secondary.Color=ColorSequence.new(sample.secondaryColor or tint)
    beam.secondary.Width0=(style=='Resonance' and .11+.04*pulse or .085)*width
    beam.secondary.Width1=(style=='Resonance' and .075+.025*pulse or .055)*width;beam.secondary.Enabled=true
   end
@@ -318,8 +323,8 @@ end
 function P:_pulse(position,color,size,now,duration)
  if self.closed or #self.pulses>=self.maxPulses then return end
  local part=barePart(self.parent,'ImpactPulse');part.Shape=Enum.PartType.Ball
- part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.72
- table.insert(self.pulses,{part=part,start=now,size=math.min(size,1.1),duration=duration or .2})
+ part.Size=Vector3.one*.1;part.Position=position;part.Color=color;part.Transparency=.4
+ table.insert(self.pulses,{part=part,start=now,size=size,duration=duration or .2})
 end
 function P:_sound(position,kind,now)
  -- Roblox Studio's shipped sounds were verified locally; no external asset IDs.
@@ -464,8 +469,27 @@ function P:_sentryAudio(position,kind,now)
  sound.Volume=kind=='impact' and .65 or .5
  sound.PlaybackSpeed=kind=='impact' and .48 or (kind=='wake' and .65 or 1.65)
  sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
-
+ if kind=='impact' then
+  local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
+  dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))
+  dust.Lifetime=NumberRange.new(.45,.85);dust.Speed=NumberRange.new(3,8);dust.Drag=5
+  dust.SpreadAngle=Vector2.new(75,75);dust.Acceleration=Vector3.new(0,-4,0)
+  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(.3,2.5),NumberSequenceKeypoint.new(1,4)})
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.4,.6),NumberSequenceKeypoint.new(1,1)})
+  dust.Parent=anchor;dust:Emit(12)
+ end
  table.insert(self.pulses,{part=anchor,start=now,duration=4,size=0,audio=true})
+end
+local function sentryFlare(eye)
+ local flare=Instance.new('BillboardGui');flare.Name='SentryLensFlare';flare.Adornee=eye
+ flare.Size=UDim2.fromScale(28,14);flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.MaxDistance=160;flare.Enabled=false;flare.Parent=eye
+ local glow=Instance.new('ImageLabel');glow.Name='Starburst';glow.BackgroundTransparency=1
+ glow.Image='rbxasset://textures/sparkle.png';glow.ImageColor3=WHITE
+ glow.Size=UDim2.fromScale(.5,1);glow.Position=UDim2.fromScale(.25,0);glow.Parent=flare
+ local streak=Instance.new('Frame');streak.Name='AnamorphicStreak';streak.AnchorPoint=Vector2.new(.5,.5)
+ streak.Position=UDim2.fromScale(.5,.5);streak.Size=UDim2.fromScale(1,.025);streak.BorderSizePixel=0;streak.BackgroundColor3=ICE;streak.Parent=flare
+ local fade=Instance.new('UIGradient');fade.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.4,.15),NumberSequenceKeypoint.new(.5,0),NumberSequenceKeypoint.new(.6,.15),NumberSequenceKeypoint.new(1,1)});fade.Parent=streak
+ return flare,glow,streak
 end
 function P:_prepareSentryFall(record,now,late)
  record.fallGroups={}
@@ -539,13 +563,15 @@ function P:registerTurret(source,now)
  local b=Instance.new('Attachment');b.Parent=endpoint
  local beam=Instance.new('Beam');beam.Name='SentryTelegraph';beam.Attachment0=a;beam.Attachment1=b
  beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=1;beam.LightInfluence=0
- beam.Transparency=NumberSequence.new(.82);beam.Segments=1;beam.Texture='';beam.ZOffset=0;beam.Enabled=false;beam.Parent=view
+ beam.Transparency=NumberSequence.new(.7);beam.Segments=1;beam.Enabled=false;beam.Parent=view
  local core=beam:Clone();core.Name='SentryBeamCore';core.Color=ColorSequence.new(WHITE)
- core.Transparency=NumberSequence.new(.08);core.Texture='';core.ZOffset=.025;core.Parent=view
+ core.Transparency=NumberSequence.new(.15);core.Parent=view
  local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=ICE;light.Range=7
  light.Shadows=false;light.Brightness=0;light.Parent=eye
  local initial=F.new(snapshot(source))
+ local flare,glow,streak=sentryFlare(eye)
  local record={source=source,view=view,eye=eye,endpoint=endpoint,cue=cue,attachment=a,beam=beam,core=core,light=light,
+  flare=flare,glow=glow,streak=streak,
   parts={},pieces=partsOf(view),hidden={},accents={},events=initial,yaw=0,hitAt=-100,shotAt=-100,
   deathAt=initial.dead and now-10 or nil,restoreAt=nil,floor=base.Position.Y+base.Size.Y*.5,
   baseCenter=base.Position,eyeCenter=eye.Position,phase=base.Position.X*.17+base.Position.Z*.23}
@@ -702,13 +728,16 @@ function P:renderTurret(record,dt,now)
    part.CFrame=frame;part.Color=color;part.Transparency=transparency;item.lastFrame=frame
   end
  end
- record.light.Color=eyeColor;record.light.Range=7+ignite*3
- record.light.Brightness=awake and (.3+warm*.55+ignite*.8+shotFlash*.55) or 0
+ record.light.Color=eyeColor;record.light.Range=12+ignite*16
+ record.light.Brightness=awake and (1+warm*2.5+ignite*8+shotFlash*3) or 0
+ local flare=awake and math.max(ignite,shotFlash*.3) or 0
+ record.flare.Enabled=flare>.005;record.flare.Size=UDim2.fromScale(12+flare*20,6+flare*10)
+ record.glow.ImageTransparency=1-flare;record.streak.BackgroundTransparency=1-flare*.95
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)
- record.beam.Width0=.028+warm*.04+shotFlash*.18;record.beam.Width1=.028+warm*.04+shotFlash*.14
- record.core.Enabled=record.beam.Enabled;record.core.Width0=.01+warm*.015+shotFlash*.065
- record.core.Width1=.01+warm*.015+shotFlash*.05
+ record.beam.Width0=.035+warm*.07+shotFlash*.32;record.beam.Width1=.035+warm*.07+shotFlash*.22
+ record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.02+shotFlash*.1
+ record.core.Width1=.012+warm*.02+shotFlash*.07
  if aiming then record.endpoint.Position=aim end
  if charging and aiming then
   if record.markAim~=aim then
@@ -732,29 +761,15 @@ function P:destroyTurret(record)
 end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
- local view=resource.view;local contact=resource.lastContact
- if not view or not view.Parent or not contact or not contact.anchor or not contact.normal then return end
- local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
- if not x then return end
- local normal=view.CFrame:VectorToWorldSpace(contact.normal)
- if normal.Magnitude<.001 then return end
- normal=normal.Unit
- local point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z))
- local floor=self:_floor(point,resource.source)
- -- Use a couple of small pieces of the actual crystal. Their centres and initial
- -- velocities are outside and away from the struck surface. No textured quads.
- local amount=event=='break' and 3 or 1
+ local view=resource.view;local floor=self:_floor(view.Position,resource.source)
+ local amount=event=='break' and 5 or 2
  for i=1,amount do
+  local angle=i*2.4+now*.1
   local full=resource.source:GetAttribute('FullSize') or view.Size
-  local scale=(event=='break' and .11 or .065)*full.X/math.max(.01,view.Size.X)
-  local radius=math.sqrt(view.Size.X^2+view.Size.Y^2+view.Size.Z^2)*scale*.5
-  local frame=CFrame.new(point+normal*(radius+.04))*view.CFrame.Rotation
-  local tangent=normal:Cross(Vector3.new(0,1,0))
-  if tangent.Magnitude<.01 then tangent=normal:Cross(Vector3.new(1,0,0)) end
-  tangent=tangent.Unit
-  local offset=(i-(amount+1)/2)*.8
-  self:_fragment(view,frame,resource.baseColor,0,scale,normal*(1.2+i*.45)+tangent*offset,
-   Vector3.new(i*.75,.7,-i*.5),floor,now,event=='break' and .65 or .42)
+  local scale=(event=='break' and .16 or .07)*full.X/math.max(.01,view.Size.X)
+  self:_fragment(view,view.CFrame,resource.baseColor,0,scale,
+   Vector3.new(math.cos(angle)*(event=='break' and 4 or 2),2+i*.45,math.sin(angle)*3),
+   Vector3.new(i*1.5,1,-i),floor,now,event=='break' and .9 or .55)
  end
 end
 function P:update(_dt,now)
@@ -776,7 +791,7 @@ function P:update(_dt,now)
   local item=self.pulses[i];local progress=F.progress(now,item.start,item.duration)
   if progress>=1 or not item.part.Parent then item.part:Destroy();table.remove(self.pulses,i)
   elseif not item.audio then
-   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.72+.28*progress
+   item.part.Size=Vector3.one*(.1+item.size*(1-(1-progress)^2));item.part.Transparency=.45+.55*progress
   end
  end
 end
@@ -790,3 +805,4 @@ function P:destroy()
  self.fragments={};self.pulses={}
 end
 return P
+

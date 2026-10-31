@@ -17,8 +17,8 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  local margin = width < 900 and 12 or 16
  local availableWidth = math.max(1, width - margin * 2)
 
- local hudWidth = math.min(290, availableWidth)
- local hudHeight = short and 76 or 88
+ local hudWidth = math.min(300, availableWidth)
+ local hudHeight = short and 64 or 68
  local hudX, hudY = margin, 12
  local objectiveHeight = short and 28 or 42
  local objectiveY = hudY + hudHeight + 8
@@ -28,7 +28,7 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
  -- when a station prompt becomes visible while the player is moving.
  local bottomReserve = touch == true and 130 or 16
  local contextWidth = math.min(short and 360 or 420, availableWidth)
- local contextHeight = short and 64 or 88
+ local contextHeight = short and 64 or 72
  local contextX = (width - contextWidth) / 2
  local contextY = math.max(margin, height - bottomReserve - contextHeight)
 
@@ -101,140 +101,12 @@ function Layout.calculate(viewportWidth, viewportHeight, touch)
   recallY = actionY,
   evadeX = actionX + actionButtonWidth + actionGap,
   evadeY = actionY,
-  objectiveWidth = math.min(290, availableWidth),
+  objectiveWidth = math.min(360, availableWidth),
   objectiveHeight = objectiveHeight,
   objectiveY = objectiveY,
   bottomReserve = bottomReserve,
  }
 end
 
-
-function Layout.compactMenuTitles(panelWidth)
- return panelWidth < 500
-end
-
--- Reserve separate readable text and action areas in the context dock. Narrow
--- screens trade the icon for more text width; a wrapped title takes priority
--- over helper copy if a short landscape dock cannot contain both.
-function Layout.contextText(contextWidth, contextHeight, titleHeight)
- local icon = contextWidth >= 380
- local x = icon and 55 or 12
- local width = math.max(1, contextWidth-x-120)
- local title = math.max(22, math.ceil(titleHeight or 22))
- local maxTitle = contextHeight-8
- title = math.min(title,maxTitle)
- local detailY = 4+title
- local detailHeight = math.max(0,contextHeight-detailY-4)
- return {textX=x,textWidth=width,titleY=4,titleHeight=title,detailY=detailY,detailHeight=detailHeight,showDetail=detailHeight>=32,showIcon=icon}
-end
-
-function Layout.objectiveHeightFor(textHeight)
- return math.max(42,math.ceil(tonumber(textHeight) or 32)+10)
-end
-
--- Compact fleet/run inspector. Keep the world visible while preserving native
--- text and 44px interaction targets; short screens scroll within the sheet.
-function Layout.inspector(viewportWidth,viewportHeight,touch)
- local l=Layout.calculate(viewportWidth,viewportHeight,touch)
- local width=dimension(viewportWidth,1280);local height=dimension(viewportHeight,720)
- l.panelWidth=math.min(440,math.max(1,width-24))
- l.panelHeight=math.min(468,math.max(1,height-24))
- l.panelX=(width-l.panelWidth)/2;l.panelY=math.max(12,(height-l.panelHeight)/2)
- l.panelPadding=12;l.headerHeight=94
- l.bodyWidth=math.max(1,l.panelWidth-24);l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-12)
- return l
-end
-
--- Resolve focus by permanent drone identity across reprints and reordering.
-function Layout.focusFleet(fleet,id)
- if type(fleet)~='table' then return nil end
- for _,drone in ipairs(fleet) do if drone.id==id then return drone end end
- return fleet[1]
-end
-
--- Card offers use a smaller, world-visible sheet. Other menus retain their
--- existing larger scrolling layout. The source offer is already committed;
--- this function changes presentation geometry only.
-function Layout.offer(viewportWidth, viewportHeight, touch)
- local l=Layout.calculate(viewportWidth,viewportHeight,touch)
- local width=dimension(viewportWidth,1280)
- local height=dimension(viewportHeight,720)
- l.panelWidth=math.min(500,math.max(1,width-24))
- l.panelHeight=math.min(520,math.max(1,height-24))
- l.panelX=(width-l.panelWidth)/2
- l.panelY=math.max(12,height-l.panelHeight-20)
- l.panelPadding=0
- l.shortOffer=height<550
- l.cardGap=10;l.cardColumns=3;l.cardWidth=150;l.cardHeight=200
- if l.shortOffer then
-  -- In landscape the detail/controls sit beside a horizontally scrolling hand.
-  l.detailWidth=math.min(220,math.max(150,math.floor(l.panelWidth*.4)))
-  l.detailHeight=math.max(1,l.panelHeight-60);l.detailX=0;l.detailY=0
-  l.bodyX=l.detailWidth+8;l.bodyY=0;l.bodyWidth=math.max(1,l.panelWidth-l.bodyX);l.bodyHeight=math.min(214,l.panelHeight-8)
-  l.actionX=0;l.actionY=l.panelHeight-48;l.actionWidth=math.max(90,l.detailWidth-72)
-  l.closeX=l.actionWidth+6;l.closeY=l.actionY;l.closeWidth=math.max(56,l.detailWidth-l.actionWidth-6)
- else
-  l.detailWidth=math.min(300,l.panelWidth);l.detailHeight=246
-  l.detailX=(l.panelWidth-l.detailWidth)/2;l.detailY=0
-  l.bodyX=0;l.bodyY=252;l.bodyWidth=l.panelWidth;l.bodyHeight=212
-  l.actionWidth=146;l.actionX=(l.panelWidth-l.actionWidth-70)/2;l.actionY=470
-  l.closeWidth=64;l.closeX=l.actionX+l.actionWidth+6;l.closeY=l.actionY
- end
- l.cardWidth=math.max(56,math.min(150,math.floor((l.bodyWidth-2*l.cardGap)/3)-6))
- l.headerHeight=0
- return l
-end
-
--- A fixed reveal rhythm for already-saved choices. This is cosmetic timing,
--- never a roll, selection, timer, or condition for a server transaction.
-function Layout.revealDelay(index,reducedMotion)
- if reducedMotion then return 0 end
- return math.clamp((tonumber(index) or 1)-1,0,2)*.12
-end
-
--- Only a matching server receipt can mark an assignment as complete.
-function Layout.assignmentReceipt(pendingId,receipt,droneName,cancelDesired)
- if cancelDesired then return nil end
- if type(pendingId)~='string' or type(receipt)~='table' or receipt.requestId~=pendingId then return nil end
- if receipt.status=='accepted' then
-  return 'accepted',(droneName or 'Drone')..' assigned'..(receipt.slot and (' · slot '..tostring(receipt.slot)) or '')
- elseif receipt.status=='rejected' then
-  return 'rejected',tostring(receipt.reason or 'Assignment rejected')
- end
- return nil
-end
-
--- Correlate fleet feedback to the exact field request; unsolicited/stale
--- attributes cannot be mistaken for the latest command's success.
-function Layout.fieldReceipt(pendingId,receipt,expectedFieldId)
- if type(pendingId)~='string' or type(receipt)~='table' or receipt.requestId~=pendingId then return nil end
- if receipt.status=='accepted' and expectedFieldId~=nil and receipt.fieldId~=expectedFieldId then return nil end
- if receipt.status=='accepted' then return 'accepted',tostring(receipt.reason or 'Fleet assigned') end
- if receipt.status=='recalled' then return 'recalled',tostring(receipt.reason or 'Fleet recalled') end
- if receipt.status=='rejected' then return 'rejected',tostring(receipt.reason or 'Field assignment rejected') end
- return nil
-end
-
--- Retrying an unresolved card must reuse the original durable idempotency key.
-function Layout.claimRetryId(offerId,index,claim)
- if type(claim)=='table' and claim.offerId==offerId and claim.index==index then return claim.txId end
- return nil
-end
-
--- Ignore foreign, stale and malformed transaction results; an uncertain
--- result stays locked until the server resolves the exact paid choice.
-function Layout.offerReceipt(claim,receipt)
- if type(claim)~='table' or type(receipt)~='table' or receipt.txId~=claim.txId or receipt.runId~=claim.runId or receipt.offerId~=claim.offerId then return nil end
- if receipt.status=='accepted' then return 'accepted',tostring(receipt.reason or 'Card saved') end
- if receipt.status=='rejected' then return 'rejected',tostring(receipt.reason or 'Choice rejected') end
- if receipt.status=='uncertain' then return 'uncertain',tostring(receipt.reason or 'Save uncertain • reconciling') end
- return nil
-end
-
--- Once submitted, only the same paid card may remain focused until the server
--- confirms or rejects the transaction. An uncertain timeout is not a reroll.
-function Layout.offerFocusAllowed(offerId,index,claim)
- return not claim or claim.offerId~=offerId or claim.index==index
-end
-
 return Layout
+

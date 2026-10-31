@@ -35,110 +35,11 @@ local function distance(x,z,a,b)
  return math.sqrt((x-px)^2+(z-pz)^2),a[2]+(b[2]-a[2])*t
 end
 L.distance=distance
--- Slope-fitting cap for one yaw-only support. Its bottom is level with the
--- column, and its top rises toward the high end of this road chord. The cap
--- seats against the underside of the pitched road rather than crossing it.
-function L.supportCap(a: any,b: any,count: number,index: number,trim: number?): any
- local dx,dz=b[1]-a[1],b[3]-a[3]
- local run=math.sqrt(dx*dx+dz*dz)
- local t=(index-.5)/count
- local center={a[1]+dx*t,a[2]+(b[2]-a[2])*t,a[3]+dz*t}
- local length=run/count+.08
- local grade=math.abs(b[2]-a[2])/run
- -- The underside of the pitched .28-stud trail is .14/cos(angle)
- -- below its center plane at any vertical ray. Seat the wedge's low end
- -- 0.002 studs into that underside to remove the visible air gap.
- local top=center[2]-grade*length/2-.14*math.sqrt(1+grade*grade)+.002
- -- At the one native-reported body overlap, lower the whole support a tiny
- -- amount as well as trimming the cap. All other supports stay flush.
- if trim and trim>0 then top-=.03 end
- -- The native avatar-volume probe found a tiny overlap at this one bend.
- -- Trim only that cap's high end; its low end stays seated on the column.
- local rise=math.max(0,grade*length-(trim or 0))
- return {center=center,length=length,base=top,rise=rise,highTowardB=b[2]>a[2],ux=dx/run,uz=dz/run}
-end
-function L.supportTrim(routeName: string,index: number): number
- return routeName=='Ruby overlook' and index==6 and .19 or 0
-end
--- A horizontal joint cap must fit BELOW every walking lane it overlaps. A
--- full-radius cylinder at the bend's center height becomes a vertical wall
--- across a descending lane. Include an avatar margin beyond the cap radius,
--- so its body cannot hit the edge before its center reaches the footprint.
-function L.jointTop(routes,center,radius)
- local top=center[2]
- for _,route in ipairs(routes) do for i=1,#route.samples-1 do
-  local clearance=radius+1.5+route.width/2
-  local a,b=route.samples[i],route.samples[i+1]
-  local dx,dz=b[1]-a[1],b[3]-a[3]
-  local length2=dx*dx+dz*dz
-  if length2>1e-8 then
-   local ux,uz=a[1]-center[1],a[3]-center[3]
-   local midpoint=-(ux*dx+uz*dz)/length2
-   local perpendicular2=ux*ux+uz*uz-(ux*dx+uz*dz)^2/length2
-   if perpendicular2<=clearance*clearance then
-    local span=math.sqrt(math.max(0,(clearance*clearance-perpendicular2)/length2))
-    local first,last=math.max(0,midpoint-span),math.min(1,midpoint+span)
-    if first<=last then
-     top=math.min(top,a[2]+(b[2]-a[2])*first,a[2]+(b[2]-a[2])*last)
-    end
-   end
-  end
- end end
- return top-.25
-end
--- The visible seam follows the incoming/outgoing grades for a short distance;
--- it does not form a wide flat disc across an ascending or descending trail.
-function L.jointSeam(samples,index)
- local a,b,c=samples[index-1],samples[index],samples[index+1]
- local function toward(p,q,dist)
-  local dx,dz=q[1]-p[1],q[3]-p[3]
-  local len=math.sqrt(dx*dx+dz*dz)
-  local t=math.min(.35,dist/math.max(len,1e-6))
-  return {p[1]+(q[1]-p[1])*t,p[2]+(q[2]-p[2])*t-.12,p[3]+(q[3]-p[3])*t}
- end
- return toward(b,a,.35),toward(b,c,.35)
-end
-local depotRoutes={['Quartz approach']=true,['Ruby switchback']=true,['Cobalt ascent']=true,['Converter lane']=true}
-function L.depotLink(route,home)
- if not depotRoutes[route.name] then return nil end
- local b=route.samples[1];local dx,dz=b[1]-home[1],b[3]-home[3]
- local distance=math.sqrt(dx*dx+dz*dz)
- if distance<=21 then return nil end
- return {home[1]+dx/distance*20,b[2],home[3]+dz/distance*20},b
-end
--- A narrow pitched bridge at a link-to-road bend closes the exterior miter
--- without a broad raised disc across the sloped walking lane.
-function L.depotSeam(route,home)
- local a,b=L.depotLink(route,home)
- local c=route.samples[2]
- if not a or not c then return nil end
- local ix,iz=b[1]-a[1],b[3]-a[3]
- local ox,oz=c[1]-b[1],c[3]-b[3]
- local il=math.sqrt(ix*ix+iz*iz);local ol=math.sqrt(ox*ox+oz*oz)
- if il<1e-6 or ol<1e-6 then return nil end
- local cosine=math.clamp((ix*ox+iz*oz)/(il*ol),-.95,1)
- local setback=math.min(3,math.max(1.2,(route.width/2)*math.sqrt((1-cosine)/(1+cosine))+.25))
- local function along(from,to,dist)
-  local dx,dz=to[1]-from[1],to[3]-from[3]
-  local len=math.sqrt(dx*dx+dz*dz)
-  local t=math.min(1,dist/math.max(len,1e-6))
-  return {from[1]+dx*t,from[2]+(to[2]-from[2])*t-.12,from[3]+dz*t}
- end
- local remaining=setback;local previous=b;local endPoint
- for i=2,#route.samples do
-  local nextPoint=route.samples[i]
-  local dx,dz=nextPoint[1]-previous[1],nextPoint[3]-previous[3]
-  local len=math.sqrt(dx*dx+dz*dz)
-  if len>=remaining then endPoint=along(previous,nextPoint,remaining);break end
-  remaining-=len;previous=nextPoint
- end
- return along(b,a,setback),endPoint or {previous[1],previous[2]-.12,previous[3]}
-end
 -- Round the horizontal AND vertical bend together. Straight overlapping slabs
 -- and large flat joint discs create a raised lip; these short smooth chords do not.
-function L.rounded(route: any): {{number}}
- local result: {{number}}={route.points[1]}
- local function mix(a: {number},b: {number},t: number): {number} return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t} end
+function L.rounded(route)
+ local result={route.points[1]}
+ local function mix(a,b,t) return {a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t} end
  for i=2,#route.points-1 do
   local a,b,c=route.points[i-1],route.points[i],route.points[i+1]
   local la=math.sqrt((a[1]-b[1])^2+(a[3]-b[3])^2)
@@ -210,8 +111,8 @@ function L.plan(config: any,home: any): any
  end
  local step=L.Cell*L.Scale
  local radius=step*math.sqrt(2)
- local vertices: {{number}}={}
- local function vertex(ix: number,iz: number): {number} return vertices[iz*(L.Columns+1)+ix+1] end
+ local vertices={}
+ local function vertex(ix,iz) return vertices[iz*(L.Columns+1)+ix+1] end
  for iz=0,L.Rows do for ix=0,L.Columns do
   local rawX,rawZ=L.Origin[1]+ix*L.Cell,L.Origin[2]+iz*L.Cell
   local x,z=p:point(rawX,rawZ);local h=height(rawX,rawZ)+dy
@@ -245,13 +146,10 @@ function L.plan(config: any,home: any): any
  p.vertices=vertices
  for iz=0,L.Rows-1 do for ix=0,L.Columns-1 do
   local a,b,c,d=vertex(ix,iz),vertex(ix+1,iz),vertex(ix+1,iz+1),vertex(ix,iz+1)
-  -- The play surface is a stack of deliberately square retro parts. Use the
-  -- *lowest* height of the old route-clearance vertices so the new flat top
-  -- never rises above a former slope into a path, field, or flight corridor.
-  local h=math.max(0,math.floor(math.min(a[2],b[2],c[2],d[2])*2)/2)
-  local cell={a=a,b=b,c=c,d=d,ix=ix,iz=iz,h=h,biome=a[4]}
+  local cell={a=a,b=b,c=c,d=d,alternate=(ix+iz)%2==1,h=math.max(a[2],b[2],c[2],d[2]),biome=a[4]}
   p.cells[iz*L.Columns+ix+1]=cell
   if cell.h>.05 then
+   cell.faces=cell.alternate and {{a,b,c},{a,c,d}} or {{a,b,d},{b,c,d}}
    table.insert(p.terrain,cell)
   end
  end end
@@ -260,18 +158,14 @@ function L.plan(config: any,home: any): any
   local ix,iz=math.floor((x-ox)/step),math.floor((z-oz)/step)
   if ix<0 or ix>=L.Columns or iz<0 or iz>=L.Rows then return 0 end
   local c=self.cells[iz*L.Columns+ix+1]
-  -- World.lua places a .08-stud part centered at this cell height.
-  return c.h+.04
- end
- -- A root footing spans every touched block surface. This prevents sloping
- -- terrain / step boundaries from leaving tree roots hovering or buried.
- function p:foundation(x,z,radius)
-  local high,low=-math.huge,math.huge
-  for ix=-2,2 do for iz=-2,2 do
-   local h=self:surface(x+radius*ix/2,z+radius*iz/2)
-   high=math.max(high,h);low=math.min(low,h)
-  end end
-  return high,low
+  local u,v=(x-ox)/step-ix,(z-oz)/step-iz
+  local a,b,d,e=c.a[2],c.b[2],c.c[2],c.d[2]
+  if c.alternate then
+   if v<=u then return a+(b-a)*(u-v)+(d-a)*v end
+   return a+(d-a)*u+(e-a)*(v-u)
+  end
+  if u+v<=1 then return a+(b-a)*u+(e-a)*v end
+  return d+(e-d)*(1-u)+(b-d)*(1-v)
  end
  -- Rock faces are short irregular clusters, never global horizontal bands.
  p.rocks={}
@@ -283,19 +177,40 @@ function L.plan(config: any,home: any): any
    table.insert(p.rocks,{x=x,z=z,y=p:surface(x,z),w=r[3],h=r[4],d=r[5],yaw=r[6],biome=i<=3 and 2 or 3})
   end
  end
- -- The retro world is made of parts. Do not generate native grass or a per-blade
- -- meadow: the original continuous landscape remains part of the asset base.
+ -- One continuous native meadow. A 4-stud terrain raster follows the same
+ -- open-land mask as the dense mesh version, with no isolated lawn squares.
  p.grass={}
+ local function grassHeight(x,z)
+  if math.abs(x-home[1])<24 and math.abs(z-home[3])<21 then return nil end
+  if not p:fieldClear(x,z,4) or not p:routeClear(x,z,3) then return nil end
+  local near=(x-home[1])^2+(z-home[3])^2<90^2
+  for _,f in ipairs(p.fields) do
+   if math.abs(x-f.x)<f.w/2+38 and math.abs(z-f.z)<f.d/2+38 then near=true;break end
+  end
+  if not near then return nil end
+  local h=p:surface(x,z)
+  local slope=math.max(math.abs(p:surface(x+.75,z)-h),math.abs(p:surface(x-.75,z)-h),math.abs(p:surface(x,z+.75)-h),math.abs(p:surface(x,z-.75)-h))
+  if slope>.55 then return nil end
+  return h
+ end
+ local ox,oz=p:point(L.Origin[1],L.Origin[2]);local edge=L.Columns*L.Cell*L.Scale
+ for x=math.floor(ox/4)*4,ox+edge-4,4 do for z=math.floor(oz/4)*4,oz+edge-4,4 do
+  local bx,bz=x+2,z+2;local h=grassHeight(bx,bz)
+  if h then
+   local tone=math.clamp(.45+.32*(math.sin(bx*.019+math.cos(bz*.011)*1.8)+math.cos(bz*.024-bx*.007)),0,1)
+   local scatter=(math.sin(bx*17.13+bz*7.91)*43758.5453)%1
+   -- Dry soil blends into grass, with grass blades retained across each band.
+   local dry=scatter<math.max(0,tone-.55)*1.2
+   table.insert(p.grass,{x=bx,z=bz,y=h,w=4,d=4,tone=tone,dry=dry})
+  end
+ end end
  for i,t in ipairs(L.Trees) do
   local x,z=p:biomePoint(t[4],t[1],t[2])
-  if p:hubClear(x,z,t[3]*.3) and p:routeClear(x,z,3.4) and p:fieldClear(x,z,t[3]*.27) then
-   local ground,low=p:foundation(x,z,3.2)
-   -- Do not place a planter across a sheer multi-stud cliff edge.
-   if ground-low<=4.5 then
-    table.insert(p.trees,{x=x,z=z,h=t[3],biome=t[4],ground=ground,foundationBottom=low,yaw=i*.73})
-   end
+  if p:hubClear(x,z,t[3]*.3) and p:routeClear(x,z,3) and p:fieldClear(x,z,t[3]*.27) then
+   table.insert(p.trees,{x=x,z=z,h=t[3],biome=t[4],ground=p:surface(x,z),yaw=i*.73})
   end
  end
  return p
 end
 return L
+

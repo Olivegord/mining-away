@@ -58,3 +58,4 @@ function N.build(plan,root)
  root:SetAttribute('SkinnedGrassPatches',0)
 end
 return N
+

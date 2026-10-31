@@ -1,6 +1,18 @@
-# Mining Away
+# Drone Blower revolution
 
-The single source project is [Olivegord/mining-away](https://github.com/Olivegord/mining-away). This branch restores the original drone/mining presentation and implements the one-drone → run cards → permanent fleet prestige loop. It builds the same game from its preserved original assets. It does not create or publish another Roblox experience.
+The active game is the existing Roblox place **136098934779395**, in this same [Olivegord/mining-away repository](https://github.com/Olivegord/mining-away). The owner corrected the target on October 31: the older local Mining Away build is historical, not the current playable artifact. Preserve the captured live map, assets, card UI, tactical HUD, role drones, audio and discoveries.
+
+The verified native capture is `assets/drone-blower-revolution-base.rbxl` (SHA-256 `b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd`). `python3 tools/build.py` builds `build/Drone Blower revolution.rbxl`. The builder changes only Source for the two live controllers and five exact-path live modules; all other raw chunks and untouched Source values remain byte-identical, including script enablement, geometry, terrain, lighting and ServerStorage backups. Names alone are unsafe because the capture contains same-name backup scripts.
+
+For reproduction, use Python 3.9+ and the `zstd` command (verified installed version 1.5.7; alternatively the Python `zstandard` package). After committing the final source, `python3 tools/release.py` writes the same active place, `build/drone-blower-revolution-review.zip`, and `build/revision.json` with the source commit, capture checksum, output checksum and place ID. It refuses dirty releases unless `--allow-dirty` explicitly labels an unfinished review build. `python3 tools/build.py --source-payload /absolute/path/payload.json` exports the same seven exact-path sources for controlled edits to the existing Studio place. Neither command publishes or creates an experience.
+
+The capture remains immutable. Rebuilding backs up an existing output as `.rbxl.previous` and atomically replaces the generated file. The historical asset and builder remain available only as explicit reference fixtures (`--legacy-reference`), with a separate reference output path; they must not replace the active game.
+
+The owner will test this integrated candidate themselves and requested no further test runs. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
+
+## Historical project notes — superseded where they conflict with the active target above
+
+This branch originally restored the drone/mining presentation and implemented the one-drone → run cards → permanent fleet prestige loop. The following history is retained as reference; active builds use the captured Drone Blower revolution place described above.
 
 [Draft review PR #1](https://github.com/Olivegord/mining-away/pull/1) remains unmerged pending owner/Studio review.
 

@@ -112,6 +112,15 @@ check('mining types retain original inner ramp but show distinct outer geometry'
  end
  assert(tipWidths.Percussion>tipWidths.Cutter and tipWidths.Cutter>tipWidths.Resonance)
 end)
+check('live Dart and Striker retain distinct colors with the same cutter behavior',function()
+ local tints={}
+ for _,kind in ipairs({'Dart','Striker'}) do
+  local p=Presentation.new({parent=localFx});local b=anchor()
+  p:beginFrame();p:renderMiningBeam(b,sample({style='Cutter',droneType=kind}),2)
+  near(b.core.Width0,.3);near(b.halo.Width1,.42);tints[kind]=b.halo.Color
+ end
+ assert(tints.Dart.B>tints.Dart.R and tints.Striker.R>tints.Striker.B)
+end)
 check('percussion accents require a real matching hit and never replay on late join',function()
  local p=Presentation.new({parent=localFx});local b=anchor();local sounds=0
  p._sound=function(_,_,kind) assert(kind=='mining');sounds+=1 end

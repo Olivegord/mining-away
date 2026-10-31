@@ -1,14 +1,16 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10}
+local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red'}
+function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
 local descriptions={
  Blue='Cutter · steady single-crystal mining',
  Red='Percussion · charged hits; +50% shell/core damage',
  Green='Resonance · fractures echo into a nearby crystal',
 }
-function M.style(kind: string): string return styles[kind] or 'Cutter' end
-function M.description(kind: string): string return descriptions[kind] or descriptions.Blue end
+function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
+function M.description(kind: string): string return descriptions[M.kind(kind)] or descriptions.Blue end
 function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never
  -- the footprint, height or station of an otherwise identical mineral.
@@ -18,11 +20,11 @@ function M.resource(roll: number,kind: string,hardness: number?)
  return {maxHP=work+10,work=work,size=size,mass=mass}
 end
 function M.efficiency(kind: string,nodeKind: string): number
- return kind=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1
+ return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1
 end
 function M.step(kind: string,charge: number?,dt: number,dps: number): (number,number,number)
  if dt<=0 then return 0,charge or 0,0 end
- if kind~='Red' then return dps*dt,0,0 end
+ if M.kind(kind)~='Red' then return dps*dt,0,0 end
  local elapsed=(charge or 0)+dt
  local count=math.floor((elapsed+1e-9)/M.PULSE_INTERVAL)
  return count*M.PULSE_INTERVAL*dps,math.max(0,elapsed-count*M.PULSE_INTERVAL),count
@@ -32,7 +34,7 @@ function M.duration(kind: string,nodeKind: string,work: number,dps: number,geode
  local rate=dps*M.efficiency(kind,nodeKind)
  if nodeKind=='Geode' or nodeKind=='Core' then rate=rate*(geodeMultiplier or 1) end
  local seconds=work/math.max(.001,rate)
- if kind=='Red' then seconds=math.ceil(seconds/M.PULSE_INTERVAL-1e-9)*M.PULSE_INTERVAL end
+ if M.kind(kind)=='Red' then seconds=math.ceil(seconds/M.PULSE_INTERVAL-1e-9)*M.PULSE_INTERVAL end
  return seconds
 end
 function M.resonanceDamage(maxHP: number,dps: number,crossed: number): number
@@ -41,6 +43,7 @@ function M.resonanceDamage(maxHP: number,dps: number,crossed: number): number
  return math.min(maxHP*.25*.35,dps*.8)*math.clamp(crossed,0,3)
 end
 function M.targetScore(kind: string,stats: any,node: any,distance: number,neighbors: number?): number
+ kind=M.kind(kind)
  -- An estimate for autonomous selection, not an authority/reach test. Actual
  -- movement remains the original eased/capped flight and exact arrival gate.
  local travel=distance/math.max(1,stats.maxStep60*60)+math.log(1+distance)*.35

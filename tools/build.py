@@ -1,12 +1,34 @@
 #!/usr/bin/env python3
-"""Lossless chunk-preserving Roblox binary source patcher for the supplied autosave.
-Never imports or executes scripts embedded in the place. No network access.
+"""Source-only builds of the captured Drone Blower revolution place.
+Keep the historical autosave builder only for explicit reference-fixture tests.
+Never import or execute embedded scripts, or publish a Roblox place.
 """
-import argparse,hashlib,json,pathlib,struct,shutil
+import argparse,hashlib,json,pathlib,struct,shutil,subprocess,tempfile
+from functools import lru_cache
 from inspect_original import lz4,string,u32
 from import_lighting import append_model,refs
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 EXPECTED='480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b'
+ACTIVE_PLACE_ID=136098934779395
+ACTIVE_EXPECTED='b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd'
+ACTIVE_BASE=ROOT/'assets/drone-blower-revolution-base.rbxl'
+ACTIVE_OUTPUT=ROOT/'build/Drone Blower revolution.rbxl'
+@lru_cache(maxsize=1024)
+def decompress(raw,size):
+ if raw.startswith(b'\x28\xb5\x2f\xfd'):
+  # Studio now writes Zstandard frames. A standard zstd CLI (tested 1.5.7)
+  # suffices; the Python zstandard package is an optional equivalent decoder.
+  try:
+   import zstandard
+  except ImportError:
+   executable=shutil.which('zstd')
+   if not executable: raise RuntimeError('Zstandard decoder missing: install zstd (tested 1.5.7) or Python zstandard')
+   result=subprocess.run([executable,'--decompress','--stdout','--quiet'],input=raw,capture_output=True,check=True)
+   decoded=result.stdout
+  else: decoded=zstandard.ZstdDecompressor().decompress(raw,max_output_size=size)
+  assert len(decoded)==size,'Zstandard chunk length mismatch'
+  return decoded
+ return lz4(raw,size)
 def packstr(s):
  b=s.encode();return struct.pack('<I',len(b))+b
 def chunks(b):
@@ -14,20 +36,116 @@ def chunks(b):
  while i<len(b):
   start=i;kind=b[i:i+4];cl,ul,res=struct.unpack_from('<III',b,i+4);i+=16
   raw=b[i:i+(cl or ul)];i+=cl or ul
-  yield kind,(lz4(raw,ul) if cl else raw),b[start:i]
+  assert len(raw)==(cl or ul),'Truncated place chunk'
+  yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
- s='-- Mining Away • Olivegord/mining-away • generated from editable source.\n'
+ s='-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
   boundary=': any' if name=='World' else ''
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Config','Feel','Mining','Rules','Profile','Cards','Persistence','MapLayout','HarborLighting','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
  return module_bundle(('Feel','Mining','Feedback','SentryMotion','Presentation','UILayout','Interface','CardView'))+(ROOT/'src/Client.lua').read_text()
+LIVE_SOURCES={
+ 'ServerScriptService.GlobalDroneControl':('Script','Server'),
+ 'StarterPlayer.StarterPlayerScripts.ClientDroneControl':('LocalScript','Client'),
+ 'ReplicatedStorage.Shared.DroneConfig':('ModuleScript','DroneConfig'),
+ 'ReplicatedStorage.Shared.TacticalHUD':('ModuleScript','TacticalHUD'),
+ 'ReplicatedStorage.Shared.CrystalAudio':('ModuleScript','CrystalAudio'),
+ 'ServerScriptService.DroneRoleEffects':('ModuleScript','DroneRoleEffects'),
+ 'ServerScriptService.MiningDiscoveries':('ModuleScript','MiningDiscoveries'),
+}
+def live_source_payload():
+ """Exact-path payload for the existing place, also usable by Studio integration."""
+ sources={}
+ for path,(cls,module) in LIVE_SOURCES.items():
+  source=bundle() if module=='Server' else client_bundle() if module=='Client' else (ROOT/'src'/f'{module}.lua').read_text()
+  sources[path]={'class':cls,'source':source,'sha256':hashlib.sha256(source.encode()).hexdigest()}
+ return {'place_id':ACTIVE_PLACE_ID,'captured_base_sha256':ACTIVE_EXPECTED,'sources':sources}
+def string_values(d,p,count):
+ values=[]
+ for _ in range(count):
+  length=u32(d,p);p+=4;value=d[p:p+length]
+  assert len(value)==length,'Truncated property string'
+  values.append(value);p+=length
+ assert p==len(d),'Unexpected property string suffix'
+ return values
+def script_inventory(cs):
+ """Resolve actual hierarchy paths; backup scripts often share live names."""
+ classes={};names={};sources={};parents={};instances={}
+ for kind,d,_ in cs:
+  if kind==b'INST':
+   cid=u32(d);cls,p=string(d,4);count=u32(d,p+1)
+   classes[cid]=(cls,refs(d[p+5:p+5+count*4],count))
+  elif kind==b'PRNT':
+   count=u32(d,1)
+   parents=dict(zip(refs(d[5:5+count*4],count),refs(d[5+count*4:],count)))
+ for kind,d,_ in cs:
+  if kind!=b'PROP':continue
+  cid=u32(d);prop,p=string(d,4)
+  if prop in ('Name','Source'):
+   assert d[p]==1,'Unsupported '+prop+' property encoding'
+   values=string_values(d,p+1,len(classes[cid][1]))
+   if prop=='Name':names[cid]=[value.decode('utf8') for value in values]
+   else:sources[cid]=values
+ for cid,(cls,ids) in classes.items():
+  for index,ref in enumerate(ids):instances[ref]=(names[cid][index],cls,cid,index)
+ def full_path(ref):
+  pieces=[];seen=set()
+  while ref>=0:
+   assert ref not in seen,'Cyclic place hierarchy'
+   seen.add(ref);pieces.append(instances[ref][0]);ref=parents[ref]
+  return '.'.join(reversed(pieces))
+ result=[]
+ for ref,(_,cls,cid,index) in instances.items():
+  if cls in ('Script','LocalScript','ModuleScript'):
+   result.append({'path':full_path(ref),'class':cls,'cid':cid,'index':index,'ref':ref,'source':sources[cid][index]})
+ return result
+def build_live(original=ACTIVE_BASE,out=ACTIVE_OUTPUT):
+ """Patch seven exact Source values; every other chunk remains byte-identical."""
+ original=pathlib.Path(original);out=pathlib.Path(out)
+ assert original.resolve()!=out.resolve(),'Input and output must differ'
+ assert out.resolve()!=(ROOT/'assets/mining-away-base.rbxl').resolve(),'Cannot overwrite historical source'
+ data=original.read_bytes()
+ assert hashlib.sha256(data).hexdigest()==ACTIVE_EXPECTED,'Wrong active capture; refusing to alter an unverified place'
+ cs=list(chunks(data));inventory=script_inventory(cs);payload=live_source_payload();edits={};changed=[]
+ for path,entry in payload['sources'].items():
+  matches=[item for item in inventory if item['path']==path]
+  assert len(matches)==1 and matches[0]['class']==entry['class'],'Missing or ambiguous active script: '+path
+  item=matches[0];replacement=entry['source'].encode()
+  edits[(item['cid'],item['index'])]=replacement
+  if replacement!=item['source']:
+   changed.append({'path':path,'class':item['class'],'before_sha256':hashlib.sha256(item['source']).hexdigest(),'after_sha256':entry['sha256']})
+ output=[data[:32]];changed_chunks=0
+ for kind,d,raw in cs:
+  if kind==b'PROP':
+   cid=u32(d);prop,p=string(d,4)
+   if prop=='Source' and any(key[0]==cid for key in edits):
+    assert d[p]==1
+    count=sum(1 for item in inventory if item['cid']==cid)
+    values=string_values(d,p+1,count)
+    replacement=[edits.get((cid,index),value) for index,value in enumerate(values)]
+    if replacement!=values:
+     encoded=d[:p+1]+b''.join(struct.pack('<I',len(value))+value for value in replacement)
+     output.append(chunk(kind,encoded));changed_chunks+=1;continue
+  output.append(raw)
+ built=b''.join(output);out.parent.mkdir(parents=True,exist_ok=True)
+ if out.exists():shutil.copy2(out,out.with_suffix(out.suffix+'.previous'))
+ with tempfile.NamedTemporaryFile(dir=out.parent,prefix='.live-build-',delete=False) as temporary:
+  temporary.write(built);temporary_path=pathlib.Path(temporary.name)
+ temporary_path.replace(out)
+ report={'place_id':ACTIVE_PLACE_ID,'original_sha256':ACTIVE_EXPECTED,'output_sha256':hashlib.sha256(built).hexdigest(),
+  'original_bytes':len(data),'output_bytes':len(built),'source_allowlist':list(LIVE_SOURCES),'changed_sources':changed,'changed_source_chunks':changed_chunks,
+  'policy':'Only seven explicitly identified live script Source values may change. All other raw chunks, script sources, Disabled values, hierarchy, terrain, assets, lighting and backup copies remain byte-identical. No publishing or new experience.'}
+ (out.parent/'build-report.json').write_text(json.dumps(report,indent=2)+'\n')
+ return report
 def build(original,out):
+ """Historical reference fixture only. The active release uses build_live()."""
+ assert out.resolve()!=ACTIVE_OUTPUT.resolve(),'Historical builder cannot overwrite the active review place'
  assert original.resolve()!=out.resolve(),'Input and output must differ'
  out.parent.mkdir(parents=True,exist_ok=True)
  b=original.read_bytes();assert hashlib.sha256(b).hexdigest()==EXPECTED,'Wrong source; refusing to alter an unverified place'
@@ -89,6 +207,13 @@ def build(original,out):
  report={'original_sha256':EXPECTED,'output_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'original_bytes':len(b),'output_bytes':out.stat().st_size,'changed_sources':changed,'lighting_template_sha256':hashlib.sha256(native.read_bytes()).hexdigest(),'policy':'Original instance referents, parents, assets and property payloads are preserved except controller Source/Disabled. A native Harbor Lighting template and two render settings are appended; native grass uses the preserved Terrain decoration settings; SSTR/PRNT/header totals are rebased. Original source asset is unchanged.'}
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2));return report
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('original',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path,default=ROOT/'build/Mining Away.rbxl');a=p.parse_args()
- assert a.original.resolve()!=a.output.resolve(),'Use a NEW output path'
- print(json.dumps(build(a.original,a.output),indent=2))
+ p=argparse.ArgumentParser();p.add_argument('original',nargs='?',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path)
+ p.add_argument('--legacy-reference',action='store_true',help='Build the historical reference fixture, never the active game')
+ p.add_argument('--source-payload',type=pathlib.Path,help='Write a source-only exact-path JSON payload for the existing active place')
+ a=p.parse_args()
+ if a.source_payload:
+  a.source_payload.parent.mkdir(parents=True,exist_ok=True);a.source_payload.write_text(json.dumps(live_source_payload(),ensure_ascii=False))
+  print(str(a.source_payload))
+ elif a.legacy_reference:
+  print(json.dumps(build(a.original or ROOT/'assets/mining-away-base.rbxl',a.output or ROOT/'build/reference/historical-mining-away.rbxl'),indent=2))
+ else:print(json.dumps(build_live(a.original or ACTIVE_BASE,a.output or ACTIVE_OUTPUT),indent=2))

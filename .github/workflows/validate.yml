@@ -38,8 +38,8 @@ jobs:
         with:
           name: mining-away-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            build/Mining Away.rbxl
-            build/mining-away-review.zip
+            build/Drone Blower revolution.rbxl
+            build/drone-blower-revolution-review.zip
             build/revision.json
           if-no-files-found: error
 

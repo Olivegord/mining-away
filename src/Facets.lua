@@ -22,3 +22,4 @@ function F.triangle(parent: any,a: any,b: any,c: any,color: any)
  wedge((a+c)/2,-right,-back,math.abs(ac:Dot(back)))
 end
 return F
+
