@@ -81,10 +81,10 @@ test('guaranteed shop upgrades refuse redundant card automation and capped backp
  table.insert(p.run.cards,{scope='Fleet',effects={plotAuto=1}});eq(buy(p,'quartz_scanner'),false)
  table.insert(p.run.cards,{scope='Player',effects={capacity=2}});eq(buy(p,'quartz_backpack'),false);eq(S.balance(p,'Quartz'),1000)
 end)
-test('pack reveal speed is real progression with a prerequisite and hard cap',function()
+test('Emerald pack press works on its own and never requires another upgrade',function()
  local p=fresh();access(p,5);p.run.wallet.Emerald=1000;eq(S.packSpeed(p),1)
- eq(buy(p,'emerald_pack_speed'),false);assert(buy(p,'ruby_pack_speed'));eq(S.packSpeed(p),2)
- assert(buy(p,'emerald_pack_speed'));eq(S.packSpeed(p),4)
+ assert(buy(p,'emerald_pack_speed'));eq(S.packSpeed(p),4);eq(buy(p,'ruby_pack_speed'),false)
+ local other=fresh();access(other,2);assert(buy(other,'ruby_pack_speed'));eq(S.packSpeed(other),2)
 end)
 test('pack discount affects future Quartz price, never paid offer or choices',function()
  local p=fresh();access(p,3);p.run.wallet.Quartz=1000
@@ -96,11 +96,11 @@ end)
 test('legacy universal counter cannot buy packs without Quartz',function()
  local p=fresh();p.run.credits=100000;eq(C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true}),false)
 end)
-test('fork relay and its range modify existing mining behavior within caps',function()
- local p=fresh();access(p,5);p.run.wallet.Cobalt=1000;p.run.wallet.Emerald=1000
- eq(buy(p,'emerald_relay'),false);assert(buy(p,'cobalt_relay'));assert(buy(p,'emerald_relay'))
- local st=C.stats(p,p.fleet[1]);eq(st.forkFraction,.15);eq(st.forkRange,12)
- table.insert(p.run.cards,{scope='Fleet',effects={fork=.2}});eq(C.stats(p,p.fleet[1]).forkFraction,.2)
+test('wide relay and rapid orbital work without prerequisite upgrades',function()
+ local p=fresh();access(p,5);p.run.wallet.Emerald=1000
+ assert(buy(p,'emerald_relay'));local st=C.stats(p,p.fleet[1]);eq(st.forkFraction,.2);eq(st.forkRange,12)
+ assert(buy(p,'emerald_orbital_cycle'));eq(S.abilityUnlocked(p,'Orbital'),true);eq(C.abilityPerks(p).orbitalCycle,true)
+ eq(p.run.shopLevels.cobalt_orbital,nil);eq(p.run.shopLevels.cobalt_relay,nil)
 end)
 test('cooldowns and shop state survive a valid profile reload',function()
  local p=fresh();access(p,3);p.run.abilityCooldowns.Orbital=1800000045.25
@@ -109,7 +109,7 @@ end)
 test('v4 migration preserves fleet, cargo and credits without inventing Ruby',function()
  local p=fresh();p.schemaVersion=4;p.run.wallet=nil;p.run.shopLevels=nil;p.run.shops=nil;p.run.abilityCooldowns=nil
  p.run.credits=123;p.run.cargo={Ruby=12};p.clearedFields.Cobalt=true;local base=P.clone(p.fleet[1])
- local r=assert(P.migrate(p,44));eq(r.schemaVersion,5);eq(r.run.wallet.Quartz,123);eq(r.run.wallet.Ruby,0);eq(r.run.cargo.Ruby,12);eq(S.unlocked(r,'Cobalt'),true);eq(r.fleet[1].id,base.id);eq(r.fleet[1].base.maxStep60,base.base.maxStep60)
+ local r=assert(P.migrate(p,44));eq(r.schemaVersion,6);eq(r.run.wallet.Quartz,123);eq(r.run.wallet.Ruby,0);eq(r.run.cargo.Ruby,12);eq(S.unlocked(r,'Cobalt'),true);eq(r.fleet[1].id,base.id);eq(r.fleet[1].base.maxStep60,base.base.maxStep60)
 end)
 test('corrupt future wallet, unlock chain and cooldown fail closed',function()
  for _,corrupt in ipairs({function(p) p.run.wallet.Ruby=-1 end,function(p) p.run.wallet.Quartz=nil end,function(p) p.run.wallet.Fake=0 end,function(p) p.run.shops.Emerald=true end,function(p) p.run.abilityCooldowns.Orbital=0/0 end}) do
@@ -126,12 +126,29 @@ test('new specialized permanent roles are awarded without rerolling existing dro
  for n=1,5 do p.run.saleEarnings=P.milestone(p).earnings;p.clearedFields.Cobalt=true;p.clearedFields.Violet=true;assert(P.prestige(p,'p'..n,p.run.id,{atDepot=true,confirmed=true})) end
  eq(p.fleet[4].role,'Orbiter');eq(p.fleet[5].role,'Scrapper');eq(p.fleet[6].role,'Courier');eq(p.fleet[1].base.maxStep60,first);eq(P.validate(p,44),true)
 end)
-test('N-gon style ability cards are excluded before their ability is earned',function()
- for seed=1,12 do local p=P.new(44,seed);p.run.wallet.Quartz=1000
-  local ok,o=C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true,combatVisible=true});assert(ok)
-  for _,card in ipairs(o.choices) do assert(card.cardId~='A03' and card.cardId~='A04') end
+test('packs grant standalone abilities without any combo prerequisite',function()
+ local catalog,fallback=C.CATALOG,C.FALLBACK;local chosen={}
+ for _,entry in ipairs(catalog) do if entry.cardId=='G01' or entry.cardId=='G02' or entry.cardId=='F03' then table.insert(chosen,entry) end end
+ C.CATALOG=chosen;C.FALLBACK={}
+ local p=fresh();p.run.wallet.Quartz=1000
+ local ok,offer=C.buy(p,'standalone',p.run.id,{expectedPackIndex=0,atDepot=true,combatVisible=true});assert(ok)
+ local index
+ for i,card in ipairs(offer.choices) do
+  assert(card.cardId~='A03' and card.cardId~='A04')
+  if card.cardId=='G01' then index=i;eq(card.effects.orbitalLaser,1) end
  end
- local p=fresh();table.insert(p.run.cards,{cardId='A03',scope='Player',effects={orbitalRelay=1}});table.insert(p.run.cards,{cardId='A04',scope='Player',effects={scrapRecycle=1}})
- local perks=C.abilityPerks(p);eq(perks.orbitalRelay,true);eq(perks.scrapRecycle,true);eq(P.validate(p,44),true)
+ assert(index);assert(C.select(p,offer.id,index,'pick',p.run.id,{atDepot=true}));eq(S.abilityUnlocked(p,'Orbital'),true);eq(S.unlocked(p,'Cobalt'),false)
+ C.CATALOG=catalog;C.FALLBACK=fallback
+end)
+test('retired paid combo offers refund exactly once and selected combos become standalone',function()
+ local p=fresh();p.run.wallet.Quartz=200
+ local ok,offer=C.buy(p,'old-pack',p.run.id,{expectedPackIndex=0,atDepot=true,combatVisible=true});assert(ok)
+ p.schemaVersion=5;p.run.pendingOffer.choices[1]={cardId='A03',scope='Player',effects={orbitalRelay=1}}
+ local restored=assert(P.migrate(p,44));eq(restored.run.pendingOffer,nil);eq(restored.run.wallet.Quartz,200)
+ restored=assert(P.migrate(restored,44));eq(restored.run.wallet.Quartz,200)
+ local selected=fresh();selected.schemaVersion=5;selected.run.cards={{cardId='A03',scope='Player',effects={orbitalRelay=1}},{cardId='A04',scope='Player',effects={scrapRecycle=1}}}
+ selected=assert(P.migrate(selected,44));eq(selected.run.cards[1].cardId,'G01');eq(selected.run.cards[2].cardId,'G02')
+ eq(S.abilityUnlocked(selected,'Orbital'),true);eq(S.abilityUnlocked(selected,'Scrap'),true)
+ eq(selected.run.cards[1].effects.orbitalRelay,nil);eq(selected.run.cards[2].effects.scrapRecycle,nil)
 end)
 print(passed..' production shop/profile/card checks passed (not Studio visual/multiplayer evidence)')

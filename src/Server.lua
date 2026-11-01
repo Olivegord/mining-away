@@ -319,21 +319,8 @@ for _,f in ipairs(scene.fields) do
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
  table.insert(patches,field);restoreTurrets(field);seedField(field)
 end
--- Shops are runtime additions; the immutable live-capture geometry is untouched.
-local shopStations={}
-for _,field in ipairs(patches) do
- local station=scene.packStation:Clone();station.Name=field.cfg.Key..'Shop'
- for _,child in ipairs(station:GetChildren()) do child:Destroy() end
- station.Size=Vector3.new(5,3,4);station.Anchored=true;station.Material=Enum.Material.Metal;station.Reflectance=0
- station.Color=Color3.fromRGB(unpack(Shops.COLORS[field.cfg.Key]));station:SetAttribute('Interaction','Shop');station:SetAttribute('ShopKey',field.cfg.Key)
- local pos=field.part.CFrame:PointToWorldSpace(Vector3.new(0,field.part.Size.Y/2+1.5,field.part.Size.Z/2+3))
- station.CFrame=CFrame.lookAt(pos,Vector3.new(home.X,pos.Y,home.Z));station.Parent=scene.map
- local face=Instance.new('SurfaceGui');face.Face=Enum.NormalId.Front;face.CanvasSize=Vector2.new(400,180);face.Parent=station
- local title=Instance.new('TextLabel');title.Size=UDim2.fromScale(1,1);title.BackgroundColor3=Color3.fromRGB(30,30,60);title.TextColor3=Color3.new(1,1,1)
- title.Font=Enum.Font.SourceSansBold;title.TextSize=48;title.Text=field.cfg.Key..' SHOP';title.Parent=face
- local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Upgrades';prompt.ObjectText=field.cfg.Key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=station
- shopStations[field.cfg.Key]=station
-end
+-- Visible depot counters, shared with edit-time and in-session repair tooling.
+local shopStations=ShopStands.mount(scene.map,home,scene.packStation)
 local prices={};for _,field in ipairs(patches) do prices[field.cfg.Material or field.cfg.Key or field.cfg.Name]=field.cfg.Value end
 local discoveries=DiscoveryService.new(root,RoleConfig.Discoveries,function(player)
  local p=profiles[player.UserId];if not healthy(p) then return nil end
@@ -1032,12 +1019,7 @@ local function abilityContext(p,fieldId)
  local miner
  for _,d in ipairs(p.drones) do if d.hp>0 and d.role~='Medic' and d.role~='Courier' then miner=d;break end end
  local hr=characterRoot(p);local origin=hr and hr.Position or home
- local function unlocked(kind)
-  local profile=data(p);local key=kind=='Orbital' and 'cobalt_orbital' or 'violet_scrap'
-  if (profile.run.shopLevels[key] or 0)>0 then return true end
-  for _,owned in ipairs(profile.fleet) do if owned.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end end
-  return false
- end
+ local function unlocked(kind) return Shops.abilityUnlocked(data(p),kind) end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return miner~=nil and valid(id) end,
   full=function() return Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) end,

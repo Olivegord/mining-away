@@ -73,7 +73,7 @@ function A.confirm(state,token,now,ctx)
   local accepted=ctx.hit(target.id,target.hp+10,'Orbital',{x=target.x,y=target.y+34,z=target.z})
   if accepted then
    event(ctx,'orbital',{target=target,precise=precise})
-   local relays=precise and (perks.orbitalRelay and 3 or 1) or 0
+   local relays=precise and 1 or 0
    for _,r in ipairs(list) do
     if relays>0 and r.id~=target.id and distance(target,r)<=14 and not ctx.full() then
      if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});relays-=1 end
@@ -90,7 +90,7 @@ function A.confirm(state,token,now,ctx)
    table.insert(bots,{id=i,x=origin.x+math.cos(angle)*1.1,y=origin.y+.5,z=origin.z+math.sin(angle)*1.1,
     targetId=nil,charge=0,pulse=0,active=false})
   end
-  state.swarm={fieldId=charge.fieldId,started=now,expires=now+10,bots=bots,nextPose=0,recycled=false}
+  state.swarm={fieldId=charge.fieldId,started=now,expires=now+10,bots=bots,nextPose=0}
   event(ctx,'scrapStart',{expires=now+10,count=#bots,precise=precise})
  end
  return true,precise and 'Precision! Gadget deployed' or 'Gadget deployed'
@@ -138,14 +138,10 @@ function A.step(state,now,dt,ctx)
      -- in later fields. Paired bots cooperate rather than polishing many rocks
      -- for ten seconds without finishing one. Hardness still matters at the cap.
      local chip=math.max(2,math.min(8,target.maxHP/48))
-     local accepted,broken=ctx.hit(target.id,chip,'Scrap',point(bot))
+     local accepted=ctx.hit(target.id,chip,'Scrap',point(bot))
      if accepted then
       bot.pulse+=1
-      -- One salvage hop per deployment extends the original ten-second swarm
-      -- by two seconds when a bot finishes a rock. Bounded, never self-replicating.
-      if broken==true and (ctx.perks or {}).scrapRecycle and not swarm.recycled then
-       swarm.recycled=true;swarm.expires+=2;event(ctx,'recycle',{target=target,expires=swarm.expires})
-      end
+
      end
     end
    else bot.charge=0 end

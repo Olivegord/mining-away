@@ -1,9 +1,9 @@
 local Shops=require('./Shops')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=5,CONTENT=1}
+local P={SCHEMA=6,CONTENT=1}
 local types={'Blue','Red','Green'}
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -210,6 +210,26 @@ function P.migrate(raw,uid,seed)
    if p.run.wallet and not integer(p.run.wallet.Quartz+pending.price) then return nil,'Refund exceeds wallet limit' end
    p.run.credits=p.run.credits+pending.price;if p.run.wallet then p.run.wallet.Quartz=p.run.wallet.Quartz+pending.price end;p.run.pendingOffer=nil;p.lastMigration='Refunded missing-target paid offer at full saved price'
   end
+ end
+ if p.schemaVersion==5 then
+  if type(p.run)~='table' or type(p.run.cards)~='table' or type(p.run.wallet)~='table' then return nil,'Invalid standalone upgrade migration' end
+  local offer=p.run.pendingOffer
+  if offer and type(offer.choices)=='table' then
+   local retired=false
+   for _,c in ipairs(offer.choices) do if type(c)=='table' and (c.cardId=='A03' or c.cardId=='A04') then retired=true end end
+   if retired then
+    if not integer(offer.price) or not integer(p.run.wallet.Quartz) or not integer(p.run.wallet.Quartz+offer.price) then return nil,'Cannot refund retired combo offer' end
+    p.run.wallet.Quartz=p.run.wallet.Quartz+offer.price;p.run.pendingOffer=nil;p.lastMigration='Refunded retired combo pack at its full saved price'
+   end
+  end
+  for _,c in ipairs(p.run.cards) do
+   if type(c)=='table' and (c.cardId=='A03' or c.cardId=='A04') then
+    local orbital=c.cardId=='A03';c.legacyCard=clone(c);c.cardId=orbital and 'G01' or 'G02';c.title=orbital and 'Orbital Laser' or 'Scrap-bot Swarm'
+    c.scope='Player';c.effects=orbital and {orbitalLaser=1} or {scrapSwarm=1};c.preview=nil;c.targetDroneId=nil;c.targetName=nil
+    c.description=orbital and 'Unlock timed orbital strikes on the biggest ready rock' or 'Unlock a ten-second swarm of tiny mining bots'
+   end
+  end
+  p.schemaVersion=6
  end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  return p

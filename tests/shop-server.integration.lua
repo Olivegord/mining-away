@@ -9,6 +9,25 @@ local function shopInput(pl,p,id,tx,level)
  p.tokens=7;p.bucketAt=now
  command.OnServerEvent:Fire(pl,'BuyUpgrade',{upgradeId=id,txId=tx,level=level or 0,runId=data(p).run.id})
 end
+shopCheck('all five named counters are grounded and visible near the original depot',function()
+ local ground=scene.packStation.Position.Y-scene.packStation.Size.Y/2
+ for index,key in ipairs(Shops.ORDER) do
+  local stand=assert(shopStations[key]);assert((stand.Position-home).Magnitude<55)
+  assert(math.abs(stand.Position.Y-stand.Size.Y/2-ground)<1e-8)
+  assert(stand.ShopSign.Front.ShopName.Text==key:upper()..' SHOP')
+  assert(stand.ShopSign.Back.ShopName.Text==key:upper()..' SHOP')
+  assert(math.abs(stand.Position.X-home.X)-stand.ShopSign.Size.X/2>=10,'leave the central approach clear')
+  if index>1 then assert((stand.Position-shopStations[Shops.ORDER[index-1]].Position).Magnitude>=12) end
+ end
+end)
+shopCheck('mounting counters again preserves live handler references and original assets',function()
+ local original=scene.packStation.CFrame;local size=scene.packStation.Size
+ local again=ShopStands.mount(scene.map,home,scene.packStation)
+ for _,key in ipairs(Shops.ORDER) do assert(again[key]==shopStations[key]) end
+ assert((scene.packStation.Position-original.Position).Magnitude==0 and (scene.packStation.Size-size).Magnitude==0)
+ local count=0;for _,child in ipairs(scene.map:GetChildren()) do if child:GetAttribute('ShopKey') then count+=1 end end
+ assert(count==5)
+end)
 shopCheck('remote cannot purchase away from its actual kiosk',function()
  local pl,p=shopPlayer();data(p).run.wallet.Quartz=1000;pl.Character:PivotTo(CFrame.new(home))
  shopInput(pl,p,'quartz_scanner','far');assert(data(p).run.wallet.Quartz==1000 and not data(p).run.shopLevels.quartz_scanner)

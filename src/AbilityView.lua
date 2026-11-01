@@ -6,14 +6,9 @@ local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
 local function enabled(profile,kind)
- if not profile or not profile.run then return false end
- local levels=profile.run.shopLevels or {}
- if (levels[kind=='Orbital' and 'cobalt_orbital' or 'violet_scrap'] or 0)>0 then return true end
- for _,drone in ipairs(profile.fleet or {}) do
-  if drone.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end
- end
- return false
+ return profile and profile.run and Shops.abilityUnlocked(profile,kind) or false
 end
+
 function View.start(options)
  local player=Players.LocalPlayer
  local U=options.interface;local root=options.parent

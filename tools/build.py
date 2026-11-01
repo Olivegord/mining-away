@@ -48,7 +48,7 @@ def module_bundle(names):
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','DroneAbilities','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
  return module_bundle(('Shops','Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView'))+(ROOT/'src/Client.lua').read_text()
 LIVE_SOURCES={

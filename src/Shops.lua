@@ -19,9 +19,9 @@ S.CATALOG={
  item('violet_emerald','Violet','Emerald expedition','Unlock Emerald field + shop.','Opens the deepest field this run. Its guards and harder crystals require a developed fleet.',240,1,nil,'Emerald'),
  item('violet_scrap','Violet','Scrap-bot swarm','Launch tiny mining bots for 10s.','Unlocks a short-lived mining ability. A miniature swarm works on ready rocks in your cleared field for ten seconds, then disappears. No permanent drones are consumed.',80,1,{scrapSwarm=1}),
  item('violet_courier','Violet','Courier express','Couriers fly delivery trips twice as fast.','Adds 100% courier travel speed, capped with courier cards. Requires a permanent Courier. Couriers still collect small real parcels, fly to sell and return.',48,1,{fullAuto=1}),
- item('emerald_orbital_cycle','Emerald','Orbital capacitor','Charge the next strike sooner.','Shortens the orbital ability cooldown. Requires Orbital laser. Timing, cleared-field and backpack gates still apply.',80,1,{orbitalCycle=1}),
- item('emerald_relay','Emerald','Long-range relay','Nearby beam jumps reach 6 studs farther.','Extends the beam relay/fork search up to the existing 12-stud range cap. Requires Beam relay; this does not increase the primary command radius.',60,1,{forkRange=6}),
- item('emerald_pack_speed','Emerald','Instant pack press','Halve pack reveal time again.','Requires Fast pack reveal. Four times the original reveal speed when combined. Every offer still has three saved choices and explicit selection.',100,1,{packSpeed=1}),
+ item('emerald_orbital_cycle','Emerald','Rapid orbital laser','Orbital strikes with a 30s cooldown.','A complete orbital ability, usable without another upgrade. Charge and time a strike on the biggest ready rock. Cleared-field and backpack gates still apply.',80,1,{orbitalLaser=1,orbitalCycle=1}),
+ item('emerald_relay','Emerald','Wide beam relay','Split a beam into a rock within 12 studs.','A complete mining behavior: split 20% damage into one eligible nearby crystal within 12 studs. Works without Beam relay. Does not increase command radius or recurse.',60,1,{fork=.20,forkRange=6}),
+ item('emerald_pack_speed','Emerald','Instant pack press','Pack opening animation is 4× faster.','Four times the original reveal speed on its own. Does not require the Ruby upgrade. Every offer still has three saved choices and explicit selection; reveal speed caps at 4×.',100,1,{packSpeed=2}),
 }
 S.BY_ID={};for _,entry in ipairs(S.CATALOG) do S.BY_ID[entry.id]=entry end
 local function integer(n) return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
@@ -52,25 +52,28 @@ function S.effects(p)
  end
  return effects
 end
+function S.abilityUnlocked(p,kind,extra)
+ local key=kind=='Orbital' and 'orbitalLaser' or 'scrapSwarm'
+ if (S.effects(p)[key] or 0)>0 or (extra and (extra.effects[key] or 0)>0) then return true end
+ for _,c in ipairs(p.run.cards) do if (c.effects[key] or 0)>0 then return true end end
+ for _,d in ipairs(p.fleet) do if d.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end end
+ return false
+end
 function S.packSpeed(p) return 2^math.min(2,S.effects(p).packSpeed or 0) end
 function S.cost(entry,level) return math.floor(entry.cost*2^(level or 0)) end
 function S.balance(p,key) return (p.run.wallet or {})[key] or 0 end
 function S.unlocked(p,key) return p.run.shops and p.run.shops[key]==true end
 function S.reason(p,entry)
  if not S.unlocked(p,entry.shop) then return 'Unlock '..entry.shop..' first' end
- local orbiter,scrapper=false,false
- for _,d in ipairs(p.fleet) do orbiter=orbiter or d.role=='Orbiter';scrapper=scrapper or d.role=='Scrapper' end
- if entry.id=='cobalt_orbital' and orbiter then return 'Included with your Orbiter' end
- if entry.id=='violet_scrap' and scrapper then return 'Included with your Scrapper' end
+ if entry.id=='cobalt_orbital' and S.abilityUnlocked(p,'Orbital') then return 'Orbital laser already installed' end
+ if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
+ if entry.id=='ruby_pack_speed' and S.packSpeed(p)>=2 then return 'Pack reveal already accelerated' end
  if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Plot targeting already installed' end end end
  if entry.id=='quartz_backpack' then
   local capacity=S.effects(p).capacity or 0
   for _,c in ipairs(p.run.cards) do capacity=capacity+(c.effects.capacity or 0) end
   if capacity>=2 then return 'Backpack already at 120 ore' end
  end
- if entry.id=='emerald_orbital_cycle' and not orbiter and (p.run.shopLevels.cobalt_orbital or 0)==0 then return 'Requires Orbital laser' end
- if entry.id=='emerald_relay' and (p.run.shopLevels.cobalt_relay or 0)==0 then return 'Requires Beam relay' end
- if entry.id=='emerald_pack_speed' and (p.run.shopLevels.ruby_pack_speed or 0)==0 then return 'Requires Fast pack reveal' end
  if entry.id=='violet_courier' then
   local found=false;for _,d in ipairs(p.fleet) do if d.role=='Courier' then found=true end end
   if not found then return 'Requires a Courier drone' end

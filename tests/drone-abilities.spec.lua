@@ -53,9 +53,9 @@ test('ordinary orbital vaporizes one biggest rock and starts cooldown',function(
  local s,c,r,h=setup();local token=begin(s,c);assert(A.confirm(s,token,10.5,c));assert(r[1].hp==0 and #h==1 and h[1].id=='big')
  assert(h[1].origin.y==34 and s.cooldowns.Orbital==55.5);assert(not A.begin(s,'Orbital',11,c))
 end)
-test('precision strike fractures one neighbor and relay card allows three bounded contacts',function()
+test('precision strike has one intrinsic neighbor fracture and ignores retired combo perks',function()
  local s,c,_,h=setup();local token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==2)
- s,c,_,h=setup();c.perks.orbitalRelay=true;token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==3)
+ s,c,_,h=setup();c.perks.orbitalRelay=true;token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==2)
  for _,hit in ipairs(h) do assert(hit.id~='far') end
 end)
 test('lost original target or blocked authoritative contact refunds cooldown',function()
@@ -113,13 +113,12 @@ test('leaving field, filling backpack and expiry tear down bots without further 
   assert(not s.swarm and #h==0 and e[#e].kind=='clearScrap')
  end
 end)
-test('salvage recycle extends a deployment once and remains bounded',function()
- local s,c,r=setup();c.perks.scrapRecycle=true
- for _,rock in ipairs(r) do rock.hp=1;rock.x=0;rock.z=0 end
- local token=begin(s,c,'Scrap');A.confirm(s,token,10.9,c)
- for _,bot in ipairs(s.swarm.bots) do bot.x=0;bot.y=3;bot.z=0 end
- for n=1,30 do A.step(s,10.9+n/60,1/60,c) end
- assert(s.swarm.recycled and s.swarm.expires==22.9)
+test('scrap duration stays ten seconds even with a retired combo flag',function()
+ local s,c,r=setup();c.perks.scrapRecycle=true;r[2].hp=1
+ local token=begin(s,c,'Scrap');A.confirm(s,token,10.5,c)
+ for n=1,500 do A.step(s,10.5+n/60,1/60,c) end
+ assert(s.swarm and s.swarm.expires==20.5)
+ A.step(s,20.6,1/60,c);assert(not s.swarm)
 end)
 test('run changes clear charges, swarms and runtime cooldowns',function()
  local s,c=setup();local token=begin(s,c,'Scrap');A.confirm(s,token,10.9,c);c.runId='run:2';A.step(s,11,1/60,c)

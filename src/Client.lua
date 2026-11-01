@@ -49,7 +49,7 @@ local activeShop,shopInfo='Quartz',nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 U.icon(hud,'crystal',UDim2.fromOffset(9,10),UDim2.fromOffset(34,34),Color3.fromRGB(255,208,70))
 local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'Quartz 0',18,palette.ink,true);creditsLabel.Name='Credits'
-local shopShortcut=button(hud,UDim2.fromOffset(48,3),UDim2.new(1,-156,0,28),'',function() if openShop then openShop(activeShop) end end,palette.panel);shopShortcut.Name='OpenShops';shopShortcut.BackgroundTransparency=1;shopShortcut.TextTransparency=1;local shortcutBorder=shopShortcut:FindFirstChildOfClass('UIStroke');if shortcutBorder then shortcutBorder.Enabled=false end
+local shopButton=button(safeRoot,UDim2.new(1,-150,0,6),UDim2.fromOffset(44,44),'Shops',function() if openShop then openShop(activeShop) end end,palette.mineral);shopButton.Name='OpenShops';shopButton.TextSize=16
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
 local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 40',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
@@ -162,10 +162,13 @@ local function availability(action)
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
  if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
  if action=='BuyUpgrade' then
+  if not Shops.unlocked(profile,activeShop) then
+   local index=table.find(Shops.ORDER,activeShop) or 1
+   return false,'Unlock '..activeShop..' in the '..Shops.ORDER[math.max(1,index-1)]..' shop'
+  end
   local station=world.Map:FindFirstChild(activeShop..'Shop',true)
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
   if not station or not hr or (station.Position-hr.Position).Magnitude>=20 then return false,'Visit the '..activeShop..' shop to buy' end
-  if not Shops.unlocked(profile,activeShop) then return false,'Unlock this mineral first' end
   return true,''
  end
  if not atHomeUI() then return false,'Return to the depot' end
@@ -276,7 +279,7 @@ openPack=function()
 end
 openShop=function(key,info)
  if not profile or not profile.run.wallet then return end
- activeShop=Shops.unlocked(profile,key or activeShop) and (key or activeShop) or 'Quartz';shopInfo=info
+ activeShop=Shops.COLORS[key or activeShop] and (key or activeShop) or 'Quartz';shopInfo=info
  local allowed,reason=availability('BuyUpgrade')
  local l=menu('shop',activeShop..' shop',allowed and 'Pick an upgrade. Info explains the full effect.' or reason,'crystal')
  ShopView.render(U,body,{profile=profile,shop=activeShop,width=l.bodyWidth-4,info=shopInfo,canBuy=allowed,
@@ -854,7 +857,7 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if profile and Shops.unlocked(profile,key) then return function() openShop(key) end,key..' shop','Spend '..key..' on upgrades','Shop' end
+  if profile then return function() openShop(key) end,key..' shop',Shops.unlocked(profile,key) and ('Spend '..key..' on upgrades') or 'Locked · buy access in the previous shop','Shop' end
   return nil
  elseif kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' Quartz'),pending() and 'Choose' or 'Pack'
  elseif kind=='Prestige' then return openPrestige,'Grow your fleet','Review the milestone and your next permanent drone','Review'
@@ -925,6 +928,7 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then if not tacticalHUD:blocksPoint(UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()) then assignField(mouse.Target) end;return end
  local key=input.KeyCode
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
+ elseif not modal.Visible and key==Enum.KeyCode.M then openShop(activeShop)
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then command:FireServer('Recall')
  elseif not modal.Visible and key==Enum.KeyCode.U then command:FireServer('Sell')
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
@@ -981,7 +985,8 @@ connect(RunService.Heartbeat,function(dt)
  elseif status:find('unavailable') then saveLabel.Text='PROFILE UNAVAILABLE'
  elseif status:find('saved') then saveLabel.Text='CREDITS · AUTOSAVED'
  else saveLabel.Text='SAVE PAUSED' end
- saveLabel.TextSize=16;saveLabel.Position=UDim2.fromOffset(view.X<600 and l.hudX or math.max(0,view.X-188),view.X<600 and (l.objectiveY+l.objectiveHeight+4) or (l.actionAtTop and 64 or 12));saveLabel.TextXAlignment=view.X<600 and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
+ saveLabel.TextSize=16;saveLabel.Position=UDim2.fromOffset(12,42);saveLabel.TextXAlignment=Enum.TextXAlignment.Left
+ shopButton.Position=UDim2.new(1,-150,0,6);shopButton.Visible=not modal.Visible
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(137,91,37) or palette.muted
  if profile and profile.run then

@@ -12,8 +12,8 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
- add('orbitalRelay','Precision orbital strikes crack 3 nearby rocks')
- add('scrapRecycle','First scrap-bot break adds 2 seconds of swarm time')
+ add('orbitalLaser','Unlock orbital strikes on the biggest rock')
+ add('scrapSwarm','Unlock a 10-second swarm of tiny miners')
  add('plotAuto','Drones choose stones for you')
  add('fullAuto',amount(e.fullAuto or 0,'courier speed'))
  add('mining',amount(e.mining or 0,'mining speed'))
@@ -40,8 +40,8 @@ function CardView.terms(choice,_targetOverride)
  local e=choice.effects or {};local target
  local work=(e.mining or 0)>0 or (e.startup or 0)>0 or (e.yield or 0)>0 or (e.fork or 0)>0 or (e.geode or 0)>0 or (e.plotAuto or 0)>0
  local allRoles=(e.speed or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0
- if (e.orbitalRelay or 0)>0 then target='Your orbital laser'
- elseif (e.scrapRecycle or 0)>0 then target='Your scrap bots'
+ if (e.orbitalLaser or 0)>0 then target='Your orbital laser'
+ elseif (e.scrapSwarm or 0)>0 then target='Your scrap bots'
  elseif e.fullAuto and e.fullAuto>0 and choice.scope=='Player' then target='Your couriers'
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
@@ -84,11 +84,11 @@ local function mechanicVisual(parent,choice)
  local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
  local e=choice.effects or {};local gray=Color3.fromRGB(95,107,114);local blue=Color3.fromRGB(77,144,177);local green=Color3.fromRGB(102,159,114)
  local function gain(key) return type(e[key])=='number' and e[key]>0 end
- if gain('orbitalRelay') then
+ if gain('orbitalLaser') then
   local lens=visualPart(world,Vector3.new(.35,1.8,1.8),Vector3.new(0,1.1,0),gray,Enum.PartType.Cylinder)
   lens.CFrame=CFrame.new(0,1.1,0)*CFrame.Angles(0,0,math.pi/2)
   for i=-1,1 do visualPart(world,Vector3.new(.12,1.6,.12),Vector3.new(i*.7,-.2,0),Color3.fromRGB(231,173,84)) end
- elseif gain('scrapRecycle') then
+ elseif gain('scrapSwarm') then
   local template=workspace:FindFirstChild('Drone') or game:GetService('ReplicatedStorage'):FindFirstChild('Drone')
   if template and template:IsA('Model') then
    for i=1,3 do

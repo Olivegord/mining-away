@@ -152,7 +152,7 @@ function HUD.new(refs: any)
  self.coins=card(refs.resources,'CreditsCounter');self.coins.BackgroundTransparency=0
  self.cargo=card(refs.resources,'CargoCounter');self.cargo.BackgroundTransparency=0
  refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.SourceSansBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
- local coin=refs.resources:FindFirstChild('Icon_coin');if coin then coin.Visible=false end
+ for _,name in ipairs({'Icon_coin','Icon_crystal'}) do local icon=refs.resources:FindFirstChild(name);if icon then icon.Visible=false end end
  self.creditCaption=text(self.coins,'Caption',0,0,58,26,11,Color3.fromRGB(35,38,40));self.creditCaption.BackgroundTransparency=0;self.creditCaption.BackgroundColor3=C.line;self.creditCaption.Text='Credits';self.creditCaption.TextXAlignment=Enum.TextXAlignment.Center
  self.cargoCaption=text(self.cargo,'Caption',0,0,52,26,11,Color3.fromRGB(35,38,40));self.cargoCaption.BackgroundTransparency=0;self.cargoCaption.BackgroundColor3=C.line;self.cargoCaption.Text='Backpack';self.cargoCaption.TextXAlignment=Enum.TextXAlignment.Center
  refs.cargoTrack.Parent=self.cargo;refs.cargoTrack.BackgroundColor3=C.track;refs.cargoTrack.ClipsDescendants=true
@@ -268,7 +268,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
  -- One small counter row. No permanent objectives, test banner or portraits.
- local rw=math.min(390,w-116)
+ local rw=math.min(390,w-164)
  r.resources.Size=UDim2.fromOffset(rw,30);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
  local cw=math.floor((rw-6)*.38)
  self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,30)
@@ -276,7 +276,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.creditCaption.Visible=false;self.cargoCaption.Visible=false
  r.credits.Position=UDim2.fromOffset(9,0);r.credits.Size=UDim2.new(1,-18,1,0);r.credits.TextSize=16
  r.cargoText.Position=UDim2.fromOffset(9,0);r.cargoText.Size=UDim2.new(1,-18,1,0);r.cargoText.TextSize=16
- if w<500 then r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Pack '):gsub(' / ','/') end
+ if w<500 then r.credits.Text=r.credits.Text:gsub('^Quartz ','Q ');r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Pack '):gsub(' / ','/') end
  r.cargoTrack.Position=UDim2.new(0,0,1,-3);r.cargoTrack.Size=UDim2.new(1,0,0,3)
  self.testMode.Visible=false;r.objective.Visible=false
  for i,button in {r.fleet,r.cards} do

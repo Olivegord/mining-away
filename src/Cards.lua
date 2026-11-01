@@ -1,10 +1,10 @@
 local Shops=require('./Shops')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=8,BASE_CAPACITY=40}
+local C={CONTENT_VERSION=9,BASE_CAPACITY=40}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
-local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
-local uncommon={A03=true,A04=true,C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
+local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
+local uncommon={C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function finite(x) return type(x)=='number' and x==x and x>-math.huge and x<math.huge end
@@ -14,8 +14,8 @@ local function card(id,title,scope,effects,description,kind)
 end
 C.CATALOG={
  card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let mining drones choose stones for you'),
- card('A03','Orbital Fracture Relay','Player',{orbitalRelay=1},'Precision orbital strikes crack three nearby rocks instead of one'),
- card('A04','Scrap Reclamation','Player',{scrapRecycle=1},'The first rock finished by scrap bots extends their swarm by two seconds'),
+ card('G01','Orbital Laser','Player',{orbitalLaser=1},'Unlock timed orbital strikes that instantly break the biggest ready rock'),
+ card('G02','Scrap-bot Swarm','Player',{scrapSwarm=1},'Unlock a ten-second swarm of tiny mining bots'),
  card('A02','Fast Couriers','Player',{fullAuto=1},'+100% courier delivery speed; couriers carry small batches from your backpack'),
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
  card('F02','Fast Rotors','Fleet',{speed=.30},'+30% flight speed across your fleet'),
@@ -68,13 +68,13 @@ local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=tru
 local function isCombat(c)
  for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
 end
-local economicEffects={orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
+local economicEffects={orbitalLaser=true,scrapSwarm=true,mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
 local function isEconomic(c)
  for stat,n in pairs(c.effects) do if economicEffects[stat] and n>0 then return true end end;return false
 end
 local function signature(c)
  local e=c.effects
- return (e.orbitalRelay or 0)>0 or (e.scrapRecycle or 0)>0 or (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
+ return (e.orbitalLaser or 0)>0 or (e.scrapSwarm or 0)>0 or (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
 end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
@@ -126,11 +126,8 @@ function C.stats(p,d,extra)
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
 end
-function C.abilityPerks(p,extra)
- local effects=Shops.effects(p);local relay,recycle=0,0
- for _,c in ipairs(p.run.cards) do relay=relay+(c.effects.orbitalRelay or 0);recycle=recycle+(c.effects.scrapRecycle or 0) end
- if extra then relay=relay+(extra.effects.orbitalRelay or 0);recycle=recycle+(extra.effects.scrapRecycle or 0) end
- return {orbitalCycle=(effects.orbitalCycle or 0)>0,orbitalRelay=relay>0,scrapRecycle=recycle>0}
+function C.abilityPerks(p)
+ return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0}
 end
 function C.price(p)
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
@@ -167,8 +164,7 @@ function C.weightedOrder(items,random)
 end
 local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
- local perks=C.abilityPerks(p,c)
- local out={capacity=C.capacity(p,c),orbitalRelay=perks.orbitalRelay and 1 or 0,scrapRecycle=perks.scrapRecycle and 1 or 0}
+ local out={capacity=C.capacity(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
   for k in pairs(statLabels) do if k~='shotInterval' then
@@ -187,7 +183,7 @@ local function countOwned(p,c)
  return n
 end
 local function stackLimit(c)
- if c.cardId=='A03' or c.cardId=='A04' or c.cardId=='F09' or c.cardId=='A01' or c.cardId=='A02' then return 1 end
+ if c.cardId=='G01' or c.cardId=='G02' or c.cardId=='F09' or c.cardId=='A01' or c.cardId=='A02' then return 1 end
  if string.sub(c.cardId,1,1)=='R' then return 500 end
  if c.scope=='Fleet' or c.scope=='Player' then return 2 end
  return 1
@@ -208,7 +204,7 @@ local function compatible(a,b)
  return not ((age and agt) or (bge and bgt) or (age and bge))
 end
 local function category(c)
- if c.effects.plotAuto or c.effects.orbitalRelay or c.effects.scrapRecycle then return 'mining'
+ if c.effects.plotAuto or c.effects.orbitalLaser or c.effects.scrapSwarm then return 'mining'
  elseif c.effects.fullAuto then return 'cargo'
  elseif c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
  elseif c.effects.health or c.effects.reduction or c.effects.shield or c.effects.salvage then return 'survival'
@@ -242,13 +238,6 @@ local function preview(p,c)
  return lines,target and target.name
 end
 local function resolve(p,entry,seed,combatVisible)
- if entry.effects.orbitalRelay or entry.effects.scrapRecycle then
-  local key=entry.effects.orbitalRelay and 'cobalt_orbital' or 'violet_scrap'
-  local role=entry.effects.orbitalRelay and 'Orbiter' or 'Scrapper'
-  local available=(p.run.shopLevels[key] or 0)>0
-  for _,owned in ipairs(p.fleet) do if owned.role==role then available=true end end
-  if not available then return nil end
- end
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
  if entry.effects.fullAuto then
   local exists=false;for _,d in ipairs(p.fleet) do if courier(d) then exists=true;break end end

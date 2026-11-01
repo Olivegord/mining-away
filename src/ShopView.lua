@@ -27,11 +27,11 @@ function V.render(U,parent,options)
  tabs.CanvasSize=UDim2.fromOffset(0,0);tabs.ZIndex=parent.ZIndex+1;tabs.Parent=parent
  local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal;row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,6);row.Parent=tabs
  for index,shop in ipairs(Shops.ORDER) do
-  if Shops.unlocked(p,shop) then
-   local b=button(tabs,0,0,100,shop,function() options.onShop(shop) end,shop==key and color or U.palette.paper);b.LayoutOrder=index;b.Name='ShopTab_'..shop
-  end
+  local unlocked=Shops.unlocked(p,shop)
+  local b=button(tabs,0,0,unlocked and 100 or 138,shop..(unlocked and '' or ' · locked'),function() options.onShop(shop) end,shop==key and color or U.palette.paper);b.LayoutOrder=index;b.Name='ShopTab_'..shop
  end
- text(parent,2,58,width-4,30,tostring(Shops.balance(p,key))..' '..key..'  ·  spend '..key..' here',18,true)
+ local unlocked=Shops.unlocked(p,key);local index=table.find(Shops.ORDER,key) or 1
+ text(parent,2,58,width-4,30,unlocked and (tostring(Shops.balance(p,key))..' '..key..'  ·  spend '..key..' here') or ('Locked · unlock in the '..Shops.ORDER[math.max(1,index-1)]..' shop'),18,true)
  local grid=U.frame(parent,UDim2.fromOffset(2,100),UDim2.fromOffset(width-4,0));grid.BackgroundTransparency=1;grid.Name='UpgradeGrid';grid.AutomaticSize=Enum.AutomaticSize.Y
  local columns=width>=560 and 2 or 1;local gap=10
  local layout=Instance.new('UIGridLayout');layout.SortOrder=Enum.SortOrder.LayoutOrder;layout.FillDirectionMaxCells=columns

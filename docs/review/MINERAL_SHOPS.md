@@ -1,12 +1,14 @@
 # Mineral shops — November 1, 2026
 
+See [the owner’s correction and current shop visibility fix](SHOP_VISIBILITY_CORRECTION.md). The separate shop stands now sit near the depot, and upgrades work independently. Explicit combo cards were removed.
+
 Implemented in the existing Drone Blower revolution, place 136098934779395, on `codex/restore-feel-prestige`. This is a source-only update of the verified live capture. Original map/drone/crystal/pyramid assets, saved fleet identity, tactical HUD, audio and discoveries remain. No new experience, publishing or Studio Play session.
 
 ## Concrete tutorial references
 
 The shop follows Roblox Creator Hub's [Grid and table layouts](https://create.roblox.com/docs/ui/grid-table-layouts): equal-sized cells, native UIGridLayout, explicit LayoutOrder and a scrollable inventory. The [Create interactive UI tutorial](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/interactive-ui) supplies the on-demand menu, Frame containment, constrained sizing and multi-platform Activated-button pattern. These structures are adapted to upgrades; the tutorial's settings sliders are not imported as pretend shop controls. Shop text uses native SourceSans at 16–18 px, 44 px Buy/Info targets, two columns when space permits and one column on narrow screens. Long terms open a separate scrollable Info view. This is a source implementation, not native rendering acceptance.
 
-N-Gon's [original tech catalog](https://github.com/landgreen/n-gon/blob/master/js/tech.js) and [source project](https://github.com/landgreen/n-gon) inform conditional unlocks and interactions between upgrades. We wrote the Roblox implementation independently; no N-Gon code, art or branding was imported. Ability cards enter the pool only when their orbital/scrap ability is available. Paid offers retain their complete saved effect payload across catalog changes.
+N-Gon's [original tech catalog](https://github.com/landgreen/n-gon/blob/master/js/tech.js) and [source project](https://github.com/landgreen/n-gon) inform conditional unlocks and interactions between upgrades. We wrote the Roblox implementation independently; no N-Gon code, art or branding was imported. Standalone orbital/scrap ability cards can grant the ability themselves; there are no combo-card prerequisites. Paid offers retain their complete saved effect payload across catalog changes.
 
 ## Actual progression and economy
 
@@ -22,7 +24,7 @@ Selling deposits each ore unit into its matching wallet: Ruby never becomes Quar
 
 Upgrades use server-authored costs, expected levels, run IDs and receipt IDs. A repeated request cannot charge another level; a stale level/run or wrong shop is rejected. Mixed deposits validate every balance before clearing cargo. Full final crystal drops remain intact, and couriers deposit their actual eight-unit manifest only after delivery. Capacity stays capped at 120. Already-owned card automation and a full capacity cap prevent redundant scanner/backpack purchases. Permanent Orbiter/Scrapper ownership includes its gadget, so its duplicate shop unlock is disabled.
 
-Pack reveal purchases change actual card entrance/stagger duration (1× → 2× → 4×), without pretending to accelerate persistence/network time or changing saved outcomes. Reduced motion bypasses entrance motion. The discount affects future prices only. New Player-scope pack cards add three-neighbor precision orbital fractures or a single two-second scrap reclamation extension, with explicit ability targets on their card faces.
+Pack reveal purchases change actual card entrance/stagger duration (1× → 2× → 4×), without pretending to accelerate persistence/network time or changing saved outcomes. Reduced motion bypasses entrance motion. The discount affects future prices only. New Player-scope pack cards unlock the orbital laser or ten-second scrap swarm directly, with explicit ability targets on their card faces. The retired combo cards are no longer offered.
 
 Prestige explicitly resets cards, shop upgrades/access, mineral balances, backpack and ability cooldowns. Permanent drones, built-in traits and permanent guard clearances remain. New fleets include Orbiter and Scrapper as the fourth/fifth earned drones and a Courier as the sixth; existing saved drones are never reassigned or rerolled. Schema 5 migration converts old unspent universal credits to Quartz, preserves unsold ore/paid offers and grants access through already reached legacy fields. Corrupt state fails closed rather than creating default progress.
 
