@@ -177,14 +177,14 @@ local function realOptions(owner,c)
  local o=options(owner,c);o.newProfile=function(uid) return Profile.new(uid,42) end;o.migrate=Profile.migrate;o.validate=Profile.validate;return o
 end
 check('actual Profile missing-target migration refund is durable before presentation',function()
- local b=backend();local c={now=100,waits={}};local profile=Profile.new(1,42);profile.run.credits=200
+ local b=backend();local c={now=100,waits={}};local profile=Profile.new(1,42);profile.run.wallet.Quartz=200
  local ok,offer=Cards.buy(profile,'migration-buy',profile.run.id,{atDepot=true,activeEncounter=false,combatVisible=true,expectedPackIndex=0});eq(ok,true)
  offer.choices[1]={cardId='D05',scope='Individual',targetDroneId='removed-drone',effects={startup=1},title='Lost target'}
- profile.run.pendingOffer=offer;local afterDebit=profile.run.credits;b.values['player:1']=clone(profile)
+ profile.run.pendingOffer=offer;local afterDebit=profile.run.wallet.Quartz;b.values['player:1']=clone(profile)
  local m=Persistence.new(b,realOptions('real-A',c));local s=assert(m:load(1))
- eq(s.data.run.pendingOffer,nil);eq(s.data.run.credits,afterDebit+offer.price);eq(b.values['player:1'].data.run.pendingOffer,nil)
- eq(b.values['player:1'].data.run.credits,s.data.run.credits);eq(s.data.run.packIndex,1)
- eq(m:release(s),true);local again=Persistence.new(b,realOptions('real-B',c));eq(assert(again:load(1)).data.run.credits,afterDebit+offer.price)
+ eq(s.data.run.pendingOffer,nil);eq(s.data.run.wallet.Quartz,afterDebit+offer.price);eq(b.values['player:1'].data.run.pendingOffer,nil)
+ eq(b.values['player:1'].data.run.wallet.Quartz,s.data.run.wallet.Quartz);eq(s.data.run.packIndex,1)
+ eq(m:release(s),true);local again=Persistence.new(b,realOptions('real-B',c));eq(assert(again:load(1)).data.run.wallet.Quartz,afterDebit+offer.price)
 end)
 check('actual Profile prestige crash retains identities and exactly one permanent grant',function()
  local b=backend();local c={now=100,waits={}};local m=Persistence.new(b,realOptions('real-A',c));local s=assert(m:load(1))

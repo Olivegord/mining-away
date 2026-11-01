@@ -12,6 +12,8 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
+ add('orbitalRelay','Precision orbital strikes crack 3 nearby rocks')
+ add('scrapRecycle','First scrap-bot break adds 2 seconds of swarm time')
  add('plotAuto','Drones choose stones for you')
  add('fullAuto',amount(e.fullAuto or 0,'courier speed'))
  add('mining',amount(e.mining or 0,'mining speed'))
@@ -38,7 +40,9 @@ function CardView.terms(choice,_targetOverride)
  local e=choice.effects or {};local target
  local work=(e.mining or 0)>0 or (e.startup or 0)>0 or (e.yield or 0)>0 or (e.fork or 0)>0 or (e.geode or 0)>0 or (e.plotAuto or 0)>0
  local allRoles=(e.speed or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0
- if e.fullAuto and e.fullAuto>0 and choice.scope=='Player' then target='Your couriers'
+ if (e.orbitalRelay or 0)>0 then target='Your orbital laser'
+ elseif (e.scrapRecycle or 0)>0 then target='Your scrap bots'
+ elseif e.fullAuto and e.fullAuto>0 and choice.scope=='Player' then target='Your couriers'
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif choice.scope=='Player' then target='Your backpack'
@@ -80,7 +84,25 @@ local function mechanicVisual(parent,choice)
  local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
  local e=choice.effects or {};local gray=Color3.fromRGB(95,107,114);local blue=Color3.fromRGB(77,144,177);local green=Color3.fromRGB(102,159,114)
  local function gain(key) return type(e[key])=='number' and e[key]>0 end
- if gain('capacity') or gain('fullAuto') then
+ if gain('orbitalRelay') then
+  local lens=visualPart(world,Vector3.new(.35,1.8,1.8),Vector3.new(0,1.1,0),gray,Enum.PartType.Cylinder)
+  lens.CFrame=CFrame.new(0,1.1,0)*CFrame.Angles(0,0,math.pi/2)
+  for i=-1,1 do visualPart(world,Vector3.new(.12,1.6,.12),Vector3.new(i*.7,-.2,0),Color3.fromRGB(231,173,84)) end
+ elseif gain('scrapRecycle') then
+  local template=workspace:FindFirstChild('Drone') or game:GetService('ReplicatedStorage'):FindFirstChild('Drone')
+  if template and template:IsA('Model') then
+   for i=1,3 do
+    local drone=template:Clone()
+    for _,child in ipairs(drone:GetDescendants()) do
+     if child:IsA('LuaSourceContainer') or child:IsA('Sound') or child:IsA('BillboardGui') or child:IsA('SurfaceGui') then child:Destroy()
+     elseif child:IsA('BasePart') then child.Anchored=true;child.CanCollide=false;child.CanTouch=false;child.CanQuery=false
+     elseif child:IsA('Trail') or child:IsA('Beam') or child:IsA('ParticleEmitter') then child.Enabled=false end
+    end
+    drone:ScaleTo(drone:GetScale()*.14);drone:PivotTo(CFrame.new((i-2)*1.1,i==2 and .5 or -.4,0));drone.Parent=world
+    visualPart(world,Vector3.new(.05,.8,.05),Vector3.new((i-2)*1.1,-1.1,0),green)
+   end
+  end
+ elseif gain('capacity') or gain('fullAuto') then
   visualPart(world,Vector3.new(1.8,1.9,.7),Vector3.zero,gray)
   visualPart(world,Vector3.new(1.3,.7,.25),Vector3.new(0,-.45,.5),blue)
   visualPart(world,Vector3.new(.25,1.5,.3),Vector3.new(-.55,.1,-.5),gray)
@@ -152,6 +174,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local terms=U.text(canvas,UDim2.new(0,24,1,-198),UDim2.new(1,-48,0,176),CardView.terms(choice,options.target),32,p.muted,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  local focused,pressed,blend=false,false,0
+ local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+((index-1)*.14)/revealSpeed
  local reducedMotion=false
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
  local signals={}
@@ -172,15 +195,19 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if dead then return end
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
+  local age=os.clock()-revealStart
+  if not reducedMotion and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
+  choose.Visible=true
+  local reveal=reducedMotion and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=focused and choose.Active and 1 or 0
   blend=reducedMotion and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local lift=full and not reducedMotion and blend*3 or 0
+  local lift=(full and not reducedMotion and blend*3 or 0)-(1-reveal)*18
   local depth=5;local center=onPlane(camera,(left+right)/2,(top+bottom)/2-lift,depth+.025)
   local w=(onPlane(camera,right,(top+bottom)/2,depth)-onPlane(camera,left,(top+bottom)/2,depth)).Magnitude
   local h=(onPlane(camera,(left+right)/2,top,depth)-onPlane(camera,(left+right)/2,bottom,depth)).Magnitude
-  local tilt=full and not reducedMotion and math.rad((index-2)*2+blend*2) or 0
+  local tilt=full and not reducedMotion and math.rad((index-2)*2+blend*2+(1-reveal)*25) or 0
   part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.05)
   part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(0,math.pi+tilt,0)
   part.Transparency=0;surface.Enabled=true;surface.CanvasSize=Vector2.new((right-left)*2,(bottom-top)*2)

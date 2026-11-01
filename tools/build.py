@@ -43,13 +43,14 @@ def module_bundle(names):
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
   boundary=': any' if name=='World' else ''
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','DroneAbilities','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView'))+(ROOT/'src/Client.lua').read_text()
 LIVE_SOURCES={
  'ServerScriptService.GlobalDroneControl':('Script','Server'),
  'StarterPlayer.StarterPlayerScripts.ClientDroneControl':('LocalScript','Client'),

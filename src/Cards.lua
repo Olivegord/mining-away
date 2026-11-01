@@ -1,9 +1,10 @@
+local Shops=require('./Shops')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=7,BASE_CAPACITY=40}
+local C={CONTENT_VERSION=8,BASE_CAPACITY=40}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
-local uncommon={C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
+local uncommon={A03=true,A04=true,C01=true,C02=true,C03=true,C04=true,C05=true,C06=true,D09=true,D10=true,D11=true,D12=true,T01=true,T02=true,T03=true,T04=true}
 local function clone(v) if type(v)~='table' then return v end;local o={};for k,x in pairs(v) do o[k]=clone(x) end;return o end
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function finite(x) return type(x)=='number' and x==x and x>-math.huge and x<math.huge end
@@ -13,6 +14,8 @@ local function card(id,title,scope,effects,description,kind)
 end
 C.CATALOG={
  card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let mining drones choose stones for you'),
+ card('A03','Orbital Fracture Relay','Player',{orbitalRelay=1},'Precision orbital strikes crack three nearby rocks instead of one'),
+ card('A04','Scrap Reclamation','Player',{scrapRecycle=1},'The first rock finished by scrap bots extends their swarm by two seconds'),
  card('A02','Fast Couriers','Player',{fullAuto=1},'+100% courier delivery speed; couriers carry small batches from your backpack'),
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),
  card('F02','Fast Rotors','Fleet',{speed=.30},'+30% flight speed across your fleet'),
@@ -65,13 +68,13 @@ local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=tru
 local function isCombat(c)
  for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
 end
-local economicEffects={mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
+local economicEffects={orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
 local function isEconomic(c)
  for stat,n in pairs(c.effects) do if economicEffects[stat] and n>0 then return true end end;return false
 end
 local function signature(c)
  local e=c.effects
- return (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
+ return (e.orbitalRelay or 0)>0 or (e.scrapRecycle or 0)>0 or (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
 end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
@@ -95,12 +98,13 @@ local function sums(p,d,extra)
   -- Transport upgrades are the one Player modifier that changes a drone.
   if c.scope=='Player' and courier(d) then s.fullAuto=(s.fullAuto or 0)+(c.effects.fullAuto or 0) end
  end
+ add({scope='Fleet',effects=Shops.effects(p)})
  for _,c in ipairs(p.run.cards) do add(c) end
  if extra then add(extra) end
  return s
 end
 function C.capacity(p,extra)
- local n=0
+ local n=Shops.effects(p).capacity or 0
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
  return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)
@@ -122,10 +126,17 @@ function C.stats(p,d,extra)
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
 end
+function C.abilityPerks(p,extra)
+ local effects=Shops.effects(p);local relay,recycle=0,0
+ for _,c in ipairs(p.run.cards) do relay=relay+(c.effects.orbitalRelay or 0);recycle=recycle+(c.effects.scrapRecycle or 0) end
+ if extra then relay=relay+(extra.effects.orbitalRelay or 0);recycle=recycle+(extra.effects.scrapRecycle or 0) end
+ return {orbitalCycle=(effects.orbitalCycle or 0)>0,orbitalRelay=relay>0,scrapRecycle=recycle>0}
+end
 function C.price(p)
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
- if n<7 then return prices[n+1] end
- local price=400;for _=8,n+1 do price=math.floor(price*1.3+.5);if price>1e12 then return 1e12 end end;return price
+ local price=prices[n+1] or 400
+ if n>=7 then for _=8,n+1 do price=math.min(1e12,math.floor(price*1.3+.5));if price==1e12 then break end end end
+ return math.max(1,math.floor(price*(1-clamp(Shops.effects(p).packDiscount or 0,0,.30))+.5))
 end
 local function hash(s)
  local h=104729
@@ -156,7 +167,8 @@ function C.weightedOrder(items,random)
 end
 local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
- local out={capacity=C.capacity(p,c)}
+ local perks=C.abilityPerks(p,c)
+ local out={capacity=C.capacity(p,c),orbitalRelay=perks.orbitalRelay and 1 or 0,scrapRecycle=perks.scrapRecycle and 1 or 0}
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
   for k in pairs(statLabels) do if k~='shotInterval' then
@@ -175,7 +187,7 @@ local function countOwned(p,c)
  return n
 end
 local function stackLimit(c)
- if c.cardId=='F09' or c.cardId=='A01' or c.cardId=='A02' then return 1 end
+ if c.cardId=='A03' or c.cardId=='A04' or c.cardId=='F09' or c.cardId=='A01' or c.cardId=='A02' then return 1 end
  if string.sub(c.cardId,1,1)=='R' then return 500 end
  if c.scope=='Fleet' or c.scope=='Player' then return 2 end
  return 1
@@ -196,7 +208,7 @@ local function compatible(a,b)
  return not ((age and agt) or (bge and bgt) or (age and bge))
 end
 local function category(c)
- if c.effects.plotAuto then return 'mining'
+ if c.effects.plotAuto or c.effects.orbitalRelay or c.effects.scrapRecycle then return 'mining'
  elseif c.effects.fullAuto then return 'cargo'
  elseif c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
  elseif c.effects.health or c.effects.reduction or c.effects.shield or c.effects.salvage then return 'survival'
@@ -230,6 +242,13 @@ local function preview(p,c)
  return lines,target and target.name
 end
 local function resolve(p,entry,seed,combatVisible)
+ if entry.effects.orbitalRelay or entry.effects.scrapRecycle then
+  local key=entry.effects.orbitalRelay and 'cobalt_orbital' or 'violet_scrap'
+  local role=entry.effects.orbitalRelay and 'Orbiter' or 'Scrapper'
+  local available=(p.run.shopLevels[key] or 0)>0
+  for _,owned in ipairs(p.fleet) do if owned.role==role then available=true end end
+  if not available then return nil end
+ end
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
  if entry.effects.fullAuto then
   local exists=false;for _,d in ipairs(p.fleet) do if courier(d) then exists=true;break end end
@@ -286,7 +305,7 @@ function C.buy(p,tx,expectedRun,context)
  context=context or {}
  if context.expectedPackIndex~=p.run.packIndex then return false,'Stale pack index' end
  if context.atDepot~=true or context.activeEncounter then return false,'Resolve packs at the depot outside combat' end
- local price=C.price(p);if p.run.credits<price then return false,'Not enough credits' end
+ local price=C.price(p);if Shops.balance(p,Shops.PACK_CURRENCY)<price then return false,'Not enough Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
  local random=rng(seed);local pool={}
  for _,entry in ipairs(C.CATALOG) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
@@ -336,8 +355,8 @@ function C.buy(p,tx,expectedRun,context)
  if #chosen~=3 then return false,'No three useful distinct choices remain; pursue your prestige objective' end
  local hasCombat=false
  for _,c in ipairs(chosen) do hasCombat=hasCombat or isCombat(c);c._vector=nil;c._category=nil end
- local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,packIndex=p.run.packIndex+1,price=price,choices=chosen,expires='This run'}
- p.run.credits=p.run.credits-price;p.run.packIndex=p.run.packIndex+1;p.run.pendingOffer=clone(offer)
+ local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,packIndex=p.run.packIndex+1,price=price,currency=Shops.PACK_CURRENCY,choices=chosen,expires='This run'}
+ p.run.wallet[Shops.PACK_CURRENCY]=p.run.wallet[Shops.PACK_CURRENCY]-price;p.run.packIndex=p.run.packIndex+1;p.run.pendingOffer=clone(offer)
  if context.combatVisible then p.run.offersWithoutCombat=hasCombat and 0 or p.run.offersWithoutCombat+1 end
  record(p,'Buy',tx,offer);return true,clone(offer)
 end
@@ -370,7 +389,9 @@ function C.refundInvalidOffer(p)
  end
  if valid then return false end
  if not finite(o.price) or o.price<0 then return false,'Corrupt paid offer; require recovery' end
- p.run.credits=p.run.credits+math.floor(o.price);p.run.pendingOffer=nil
+ local balance=Shops.balance(p,Shops.PACK_CURRENCY)
+ if balance+math.floor(o.price)>=1e14 then return false,'Refund exceeds wallet limit' end
+ p.run.wallet[Shops.PACK_CURRENCY]=balance+math.floor(o.price);p.run.pendingOffer=nil
  return true,'Full saved pack price refunded; no reroll'
 end
 return C

@@ -125,9 +125,39 @@ DroneConfig.Types = {
 		ChargeSpeed = 72,
 		Weight = 2,
 	},
+	Orbiter = {
+		DisplayName = "Orbiter",
+		Description = "Survey drone with an orbital focusing mast. Unlocks the timed orbital gadget.",
+		Color = Color3.fromRGB(221, 165, 78),
+		Accent = Color3.fromRGB(245, 223, 162),
+		Scale = 0.84,
+		MaxHealth = 80,
+		Speed = 22,
+		FlightHeight = 3.6,
+		AttackStyle = "Bolt",
+		AttackRange = 24,
+		AttackCooldown = 0.8,
+		Damage = 10,
+		Weight = 2,
+	},
+	Scrapper = {
+		DisplayName = "Scrapper",
+		Description = "Workshop drone carrying disposable mini-drone bays. Unlocks the 10-second scrap swarm.",
+		Color = Color3.fromRGB(155, 181, 110),
+		Accent = Color3.fromRGB(219, 230, 181),
+		Scale = 0.82,
+		MaxHealth = 84,
+		Speed = 21,
+		FlightHeight = 3.2,
+		AttackStyle = "Bolt",
+		AttackRange = 20,
+		AttackCooldown = 0.9,
+		Damage = 11,
+		Weight = 2,
+	},
 } :: { [string]: DroneDefinition }
 
-DroneConfig.TypeOrder = { "Dart", "Striker", "Medic", "Charger", "Courier" }
+DroneConfig.TypeOrder = { "Dart", "Striker", "Medic", "Charger", "Courier", "Orbiter", "Scrapper" }
 
 -- The active place retains its original elapsed-time motion and mining equations.
 -- These runtime traits preserve the prior Studio role tuning and never enter saved fleets.
@@ -137,6 +167,8 @@ DroneConfig.StudioRoles = {
  Medic = {height=3.8,base={miningDPS=30,combatDPS=6,maxHealth=72,maxStep60=.24,warmup=.8,range=12,shotInterval=2}},
  Courier = {height=3.2,base={miningDPS=30,combatDPS=6,maxHealth=58,maxStep60=.40,warmup=.8,range=12,shotInterval=2}},
  Charger = {height=2.8,base={miningDPS=30,combatDPS=14,maxHealth=135,maxStep60=.29,warmup=.8,range=16,shotInterval=2.4}},
+ Orbiter = {height=3.6,base={miningDPS=30,combatDPS=12,maxHealth=80,maxStep60=.36,warmup=.8,range=24,shotInterval=.8}},
+ Scrapper = {height=3.2,base={miningDPS=30,combatDPS=12,maxHealth=84,maxStep60=.35,warmup=.8,range=20,shotInterval=.9}},
 }
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
@@ -148,6 +180,30 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
  if model:GetAttribute('RoleGeometry')==role then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
+ if role=='Orbiter' or role=='Scrapper' then
+  -- Append working hardware to the authored drone; never replace its shell.
+  local pose=model:GetPivot();local scale=model:GetScale()
+  local function hardware(name: string,size: Vector3,offset: CFrame,color: Color3): Part
+   local part=Instance.new('Part');part.Name=name;part.Anchored=true
+   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.Material=Enum.Material.Metal
+   part.MaterialVariant='';part.Color=color;part.Reflectance=0;part.Size=size*scale
+   part.TopSurface=Enum.SurfaceType.Studs;part.BottomSurface=Enum.SurfaceType.Smooth
+   part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation;part.Parent=model;return part
+  end
+  if role=='Orbiter' then
+   hardware('FocusingMast',Vector3.new(.15,.85,.15),CFrame.new(0,.62,0),Color3.fromRGB(90,96,98))
+   for i=1,3 do
+    local lens=hardware('OrbitalLens'..i,Vector3.new(.12,.8-i*.12,.8-i*.12),CFrame.new(0,.30+i*.23,0)*CFrame.Angles(0,0,math.pi/2),Color3.fromRGB(205,171,101))
+    lens.Shape=Enum.PartType.Cylinder
+   end
+  else
+   for _,side in ipairs({-1,1}) do
+    hardware('MiniDroneBay',Vector3.new(.4,.4,.95),CFrame.new(side*.78,-.26,0),Color3.fromRGB(104,117,85))
+    hardware('BayLatch',Vector3.new(.44,.06,.16),CFrame.new(side*.78,-.02,-.25),Color3.fromRGB(174,188,131))
+   end
+  end
+  model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
+ end
  if role=='Dart' or role=='Charger' then
   local pose=model:GetPivot();local scale=model:GetScale()
   for _,side in ipairs({-1,1}) do

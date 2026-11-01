@@ -48,7 +48,7 @@ local function notice(p,message)
 end
 local function publish(p)
  if not p.player.Parent then return end
- local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.prestigePreview=Pro.prestigePreview(copy)
+ local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(copy)
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
  copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned);copy.droneRoles[owned.id]=owned.role end
  local autoMine,autoHaul=false,false
@@ -174,6 +174,7 @@ local function kill(d)
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
 end
 local function playerCanMine(p,field)
+ if not Shops.unlocked(data(p),field.cfg.Key) then return false end
  return field.cfg.Turrets==0 or field.e.phase=='Cleared' or data(p).clearedFields[field.cfg.Key]==true
 end
 local function unlockedMiners(field)
@@ -318,6 +319,21 @@ for _,f in ipairs(scene.fields) do
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
  table.insert(patches,field);restoreTurrets(field);seedField(field)
 end
+-- Shops are runtime additions; the immutable live-capture geometry is untouched.
+local shopStations={}
+for _,field in ipairs(patches) do
+ local station=scene.packStation:Clone();station.Name=field.cfg.Key..'Shop'
+ for _,child in ipairs(station:GetChildren()) do child:Destroy() end
+ station.Size=Vector3.new(5,3,4);station.Anchored=true;station.Material=Enum.Material.Metal;station.Reflectance=0
+ station.Color=Color3.fromRGB(unpack(Shops.COLORS[field.cfg.Key]));station:SetAttribute('Interaction','Shop');station:SetAttribute('ShopKey',field.cfg.Key)
+ local pos=field.part.CFrame:PointToWorldSpace(Vector3.new(0,field.part.Size.Y/2+1.5,field.part.Size.Z/2+3))
+ station.CFrame=CFrame.lookAt(pos,Vector3.new(home.X,pos.Y,home.Z));station.Parent=scene.map
+ local face=Instance.new('SurfaceGui');face.Face=Enum.NormalId.Front;face.CanvasSize=Vector2.new(400,180);face.Parent=station
+ local title=Instance.new('TextLabel');title.Size=UDim2.fromScale(1,1);title.BackgroundColor3=Color3.fromRGB(30,30,60);title.TextColor3=Color3.new(1,1,1)
+ title.Font=Enum.Font.SourceSansBold;title.TextSize=48;title.Text=field.cfg.Key..' SHOP';title.Parent=face
+ local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Upgrades';prompt.ObjectText=field.cfg.Key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=station
+ shopStations[field.cfg.Key]=station
+end
 local prices={};for _,field in ipairs(patches) do prices[field.cfg.Material or field.cfg.Key or field.cfg.Name]=field.cfg.Value end
 local discoveries=DiscoveryService.new(root,RoleConfig.Discoveries,function(player)
  local p=profiles[player.UserId];if not healthy(p) then return nil end
@@ -356,9 +372,9 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end
  return false
 end
-hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?)
+hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any)
  local p=profiles[d.owner]
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or not r.slots[d.id] or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  local recipient=d
  if secondary then
   for id in pairs(r.slots) do
@@ -370,7 +386,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
  end
  if d.role=='Courier' or d.role=='Medic' or Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then return false end
- if secondary then
+ if abilityOrigin then
+  local hr=characterRoot(p)
+  if not hr or (hr.Position-r.field.center).Magnitude>RoleConfig.Mining.BackpackRange or not los(abilityOrigin,r.position,r.part,{droneFolder,p.player.Character}) then return false end
+  for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then return false end end
+ elseif secondary then
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
@@ -382,14 +402,14 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  amount=amount*Mining.efficiency(d.owned.type,r.kind)
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
- if not secondary then r.processingPrimary=d.id end
+ if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
  r.stage=Feel.stage(actual,r.maxHP)
  if r.stage~=previous then r.part:SetAttribute('Stage',r.stage) end
  r.part:SetAttribute('HP',actual)
- if not secondary and Mining.kind(d.owned.type)=='Red' then
+ if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
  if broken then
@@ -403,7 +423,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
   else award(recipient,r);discoveries:TrySpawn(p.player,r.field.part);table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn) end
  end
- if not secondary then
+ if not secondary and not abilityOrigin then
   local secondaryId
   if (d.stats.forkFraction or 0)>0 then secondaryId=secondaryMining(d,r,baseAmount*d.stats.forkFraction,d.stats.forkRange or 6) end
   if Mining.kind(d.owned.type)=='Green' and r.stage>previous then
@@ -575,7 +595,8 @@ end
 local function move(d,goal,dt)
  local settling=(d.target~=nil and (d.state=='Travel' or d.state=='Mine')) or d.state=='Deliver' or d.state=='Collect'
  local weight=settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1
- d.swarmOffset=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
+ local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
+ d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
  goal=goal+d.swarmOffset
  d.goal=goal;local delta=goal-d.pos
  if delta.X*delta.X+delta.Z*delta.Z>1e-6 then
@@ -905,7 +926,7 @@ local function sellBackpack(p: any)
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
  local expected=data(p).run.id;local tx='sale:'..Http:GenerateGUID(false)
  transact(p,tx,function(copy) local ok,result=Pro.sell(copy,prices,tx,expected);if ok then return result end;return nil,result end,function(result)
-  notice(p,'Backpack sold for '..tostring(result.credits)..' credits.');p.publishDirty=true
+  notice(p,'Backpack sold. Each mineral went to its own shop balance.');p.publishDirty=true
  end)
 end
 local function validPayload(payload)
@@ -973,7 +994,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end
  transact(p,'prestige:'..payload.txId,applyPrestige,function()
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
-  p.oreQueue={};rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
+  p.oreQueue={};RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
  end)
 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
@@ -1003,13 +1024,75 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  return true
 end
+local function abilityContext(p,fieldId)
+ local function valid(id)
+  local field=patches[id];local hr=characterRoot(p)
+  return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and (hr.Position-field.center).Magnitude<=RoleConfig.Mining.BackpackRange
+ end
+ local miner
+ for _,d in ipairs(p.drones) do if d.hp>0 and d.role~='Medic' and d.role~='Courier' then miner=d;break end end
+ local hr=characterRoot(p);local origin=hr and hr.Position or home
+ local function unlocked(kind)
+  local profile=data(p);local key=kind=='Orbital' and 'cobalt_orbital' or 'violet_scrap'
+  if (profile.run.shopLevels[key] or 0)>0 then return true end
+  for _,owned in ipairs(profile.fleet) do if owned.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end end
+  return false
+ end
+ return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
+  valid=function(id) return miner~=nil and valid(id) end,
+  full=function() return Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) end,
+  targets=function(id)
+   local list={};if not valid(id) then return list end
+   for _,r in ipairs(patches[id].resources) do
+    local free=true;for droneId in pairs(r.slots) do local worker=drones[droneId];if not worker or worker.owner~=p.player.UserId then free=false end end
+    if free and not r.paid and r.hp>0 and now>=r.readyAt and r.part.Parent then
+     table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,radius=math.max(.1,r.fullSize.X*.5*(1-r.stage*.25)),x=r.position.X,y=r.position.Y+r.fullSize.Y*.5*(1-r.stage*.25),z=r.position.Z})
+    end
+   end
+   return list
+  end,
+  hit=function(id,damage,_kind,from)
+   local resource=resources[id]
+   if not resource or not miner or not valid(resource.field.id) or type(from)~='table' then return false end
+   if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
+   local accepted=hitResource(miner,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z))
+   return accepted,resource.paid==true
+  end,
+  emit=function(event) RoleEffects.Ability(p.player.UserId,event,scene.droneTemplate) end}
+end
+local function miningAbility(p,payload)
+ if type(payload)~='table' or payload.runId~=data(p).run.id or (payload.kind~='Orbital' and payload.kind~='Scrap') or not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not patches[payload.fieldId] then return end
+ if payload.op~='begin' and payload.op~='confirm' then return end
+ if payload.token~=nil and (type(payload.token)~='string' or #payload.token>160) then return end
+ p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
+ local context=abilityContext(p,payload.fieldId)
+ local ok,reason
+ if payload.op=='begin' then ok,reason=DroneAbilities.begin(p.ability,payload.kind,now,context)
+ else ok,reason=DroneAbilities.confirm(p.ability,payload.token,now,context) end
+ if ok then data(p).run.abilityCooldowns=Pro.clone(p.ability.cooldowns);p.dirty=true end
+ notice(p,reason);p.publishDirty=true
+end
+local function buyShopUpgrade(p,pl,payload)
+ if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
+ local entry=type(payload.upgradeId)=='string' and Shops.BY_ID[payload.upgradeId]
+ local station=entry and shopStations[entry.shop]
+ if not station or not atStation(p,station,20) then notice(p,'Visit that mineral shop to buy upgrades.');return end
+ transact(p,'shop:'..payload.txId,function(copy)
+  local ok,result=Shops.buy(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{shop=entry.shop,atShop=true,activeEncounter=false})
+  if ok then return result end;return nil,result
+ end,function() refreshStats(p);notice(p,entry.title..' installed.');p.publishDirty=true end)
+end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
  if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
  if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end
- if action=='TestLoadout' then
+ if action=='MiningAbility' then
+  miningAbility(p,payload)
+ elseif action=='BuyUpgrade' then
+  buyShopUpgrade(p,pl,payload)
+ elseif action=='TestLoadout' then
   if not preview or now<(p.nextTestLoadout or 0) then return end
   p.nextTestLoadout=now+RoleConfig.Settings.RandomizeCooldown;pl:SetAttribute('MA_TestReadyAt',p.nextTestLoadout)
   leaveField(p);p.testFleet=randomTestFleet(p);rebuildFleet(p)
@@ -1071,6 +1154,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not R.finite(fieldId) or fieldId%1~=0 then commandReply(pl,payload,'rejected','Invalid field');return end
   local field=patches[fieldId];local hr=characterRoot(p)
   if not field or (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then commandReply(pl,payload,'rejected','Too far from field',field);return end
+  if not Shops.unlocked(data(p),field.cfg.Key) then commandReply(pl,payload,'rejected','Buy access in the previous mineral shop first',field);return end
   local can=playerCanMine(p,field)
   if can and field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if can then
@@ -1202,7 +1286,7 @@ end
 Players.PlayerAdded:Connect(function(pl) task.spawn(addPlayer,pl) end)
 local function removePlayer(pl)
  local p=profiles[pl.UserId];if not p or p.leaving then return end
- p.leaving=true;leaveField(p);if p.connection then p.connection:Disconnect() end
+ p.leaving=true;RoleEffects.ClearAbility(pl.UserId);leaveField(p);if p.connection then p.connection:Disconnect() end
  for _,d in ipairs(p.drones) do release(d);spend(d);d.model:Destroy();drones[d.id]=nil end
  -- Wait for the one ordered economy operation, then final save/unlock. No default fallback.
  local deadline=os.clock()+12
@@ -1231,7 +1315,10 @@ RunService.Heartbeat:Connect(function(dt: number)
  while elapsed>=C.Tick and steps<(C.MaxCatchup or 6) do
   elapsed=elapsed-C.Tick;steps=steps+1
   for _,field in ipairs(patches) do encounterStep(field) end
-  for _,p in pairs(profiles) do dispatchOreQueue(p) end
+  for _,p in pairs(profiles) do
+   dispatchOreQueue(p)
+   if p.ability and healthy(p) then DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,p.ability.charge and p.ability.charge.fieldId or p.ability.swarm and p.ability.swarm.fieldId or 1)) end
+  end
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   for _,field in ipairs(patches) do turretStep(field);encounterStep(field) end
@@ -1277,7 +1364,12 @@ RunService.Heartbeat:Connect(function(dt: number)
     replenished=replenished+cost
    end
   end
-  for _,p in pairs(profiles) do serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p));if not p.busy then settleRuntime(p) end;if p.publishDirty then p.publishDirty=false;publish(p) end end
+  for _,p in pairs(profiles) do
+   if p.ability then
+    local encoded=Http:JSONEncode(DroneAbilities.view(p.ability,now))
+    if encoded~=p.lastAbilityJSON then p.lastAbilityJSON=encoded;p.player:SetAttribute('MA_Ability',encoded) end
+   end
+   serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p));if not p.busy then settleRuntime(p) end;if p.publishDirty then p.publishDirty=false;publish(p) end end
  end
  if autosaveElapsed>=30 then
   autosaveElapsed=0

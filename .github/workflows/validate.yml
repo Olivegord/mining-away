@@ -1,4 +1,4 @@
-name: Validate and build Mining Away
+name: Validate and build Drone Blower revolution
 
 on:
   push:
@@ -25,18 +25,18 @@ jobs:
           echo '6506f0852c623aaffcb28494aac16c26dc04a269ea0e16cc0aafc8c8ac79f3ec  luau-ubuntu.zip' | sha256sum --check
           unzip -q luau-ubuntu.zip
           chmod +x luau luau-compile luau-analyze
-      - name: Validate Luau and execute rule/server tests
-        run: python3 tools/test.py "$RUNNER_TEMP/mining-away-luau"
-      - name: Validate deterministic build and asset preservation
-        run: |
-          python3 tests/binary.spec.py
-          python3 tests/geometry.spec.py
+      - name: Ensure native capture decoder
+        run: command -v zstd || sudo apt-get install -y zstd
+      - name: Validate current economy, persistence and active capture
+        run: python3 tools/test_shops.py "$RUNNER_TEMP/mining-away-luau"
+      - name: Validate gadgets, swarm steering and production server
+        run: python3 tools/test_gadgets.py "$RUNNER_TEMP/mining-away-luau"
       - name: Build revision-stamped review artifact
         run: python3 tools/release.py
       - name: Upload review build
         uses: actions/upload-artifact@v4
         with:
-          name: mining-away-${{ github.event.pull_request.head.sha || github.sha }}
+          name: drone-blower-revolution-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             build/Drone Blower revolution.rbxl
             build/drone-blower-revolution-review.zip

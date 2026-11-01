@@ -1,7 +1,7 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10}
-local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red'}
+local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
 local descriptions={
@@ -11,11 +11,11 @@ local descriptions={
 }
 function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
 function M.description(kind: string): string
- local roles={Dart='Scout · fast, light mining and combat',Striker='Miner · steady work on ordinary stones',Medic='Healer · slowly follows drones; 10 health every 2 seconds',Courier='Courier · sells 8 ore from your backpack per trip',Charger='Breaker · charged hits; +50% shell/core damage'}
+ local roles={Dart='Scout · fast, light mining and combat',Striker='Miner · steady work on ordinary stones',Medic='Healer · slowly follows drones; 10 health every 2 seconds',Courier='Courier · sells 8 ore from your backpack per trip',Charger='Breaker · charged hits; +50% shell/core damage',Orbiter='Orbiter · unlocks timed orbital strikes on the biggest rock',Scrapper='Scrapper · unlocks disposable 10-second mining swarms'}
  return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
 end
 function M.workRole(kind: string): string
- return ({Dart='Scout',Striker='Miner',Medic='Healer',Courier='Courier',Charger='Breaker',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
+ return ({Dart='Scout',Striker='Miner',Medic='Healer',Courier='Courier',Charger='Breaker',Orbiter='Orbiter',Scrapper='Scrapper',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
 end
 function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never

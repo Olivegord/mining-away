@@ -1,8 +1,9 @@
+local Shops=require('./Shops')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=4,CONTENT=1}
+local P={SCHEMA=5,CONTENT=1}
 local types={'Blue','Red','Green'}
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
+local effectKeys={orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -15,7 +16,8 @@ local function clone(v)
 end
 P.clone=clone
 local function run(uid,index)
- return {id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={}}
+ local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={}}
+ Shops.fresh(state);return state
 end
 local function cargoId(p,id)
  if type(id)~='string' or #id>160 then return false end
@@ -42,7 +44,8 @@ local function drone(uid,serial,kind,seed)
  local base=clone(P.BASE);local scale=P.TYPE_SCALES[kind]
  base.maxStep60=step*scale.speed;base.miningDPS=base.miningDPS*scale.mining;base.combatDPS=base.combatDPS*scale.combat
  local role=kind=='Green' and 'Medic' or (kind=='Red' and 'Charger' or (math.floor((serial-1)/3)%2==1 and 'Courier' or 'Striker'))
- return {id=tostring(uid)..':drone:'..serial,name=kind..' '..serial,type=kind,role=role,base=base}
+ if serial>=4 then role=({'Orbiter','Scrapper','Courier','Striker','Charger','Medic'})[(serial-4)%6+1] end
+ return {id=tostring(uid)..':drone:'..serial,name=(serial>=4 and role or kind)..' '..serial,type=kind,role=role,base=base}
 end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
@@ -58,13 +61,16 @@ function P.validate(p,uid)
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or not table.find(types,d.type) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=true
-  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' then return false,'Invalid permanent role' end
+  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' and d.role~='Orbiter' and d.role~='Scrapper' then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end
  for key,value in pairs(p.clearedFields) do if not guardedFields[key] or value~=true then return false,'Invalid permanent plot unlock' end end
  local r=p.run
  if type(r)~='table' or not integer(r.index) or r.index~=p.prestiges+1 or r.id~=tostring(uid)..':run:'..r.index then return false,'Invalid current run' end
+ if type(r.abilityCooldowns)~='table' then return false,'Missing gadget cooldowns' end
+ for key,value in pairs(r.abilityCooldowns) do if (key~='Orbital' and key~='Scrap') or not finite(value) or value<0 or value>=1e14 then return false,'Invalid gadget cooldown' end end
+ local shopOK,shopError=Shops.validate(r);if not shopOK then return false,shopError end
  for _,k in ipairs({'credits','saleEarnings','packIndex','offersWithoutCombat'}) do if not integer(r[k]) then return false,'Invalid run counter '..k end end
  for _,k in ipairs({'cargo','droneCargo','deliveries','cards','wins','entitlements','yieldRemainders'}) do if type(r[k])~='table' then return false,'Missing run state '..k end end
  if not validBag(r.cargo) then return false,'Invalid legacy cargo' end
@@ -92,6 +98,7 @@ function P.validate(p,uid)
  local offer=r.pendingOffer
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
+  if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
   local seen={}
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
@@ -169,6 +176,18 @@ function P.migrate(raw,uid,seed)
   end
   p.schemaVersion=4
  end
+ if p.schemaVersion==4 then
+  if type(p.run)~='table' or not integer(p.run.credits) or not validBag(p.run.cargo) or type(p.clearedFields or {})~='table' then return nil,'Invalid legacy shop migration' end
+  Shops.fresh(p.run);p.run.wallet.Quartz=p.run.credits;p.run.abilityCooldowns={}
+  -- Preserve reached fields without inventing mineral exchange rates. Only
+  -- old unspent universal credits become Quartz; unsold ore keeps its type.
+  local highest=2
+  for i,key in ipairs(Shops.ORDER) do
+   if (p.clearedFields or {})[key] or (p.run.cargo[key] or 0)>0 then highest=math.max(highest,i) end
+  end
+  for i=1,highest do p.run.shops[Shops.ORDER[i]]=true end
+  p.schemaVersion=5
+ end
  -- Preserve live permanent plot clearances. Only the old progression required
  -- guarded plots before its first prestige; the new first two prestiges do not.
  if p.clearedFields==nil then p.clearedFields={} end
@@ -188,7 +207,8 @@ function P.migrate(raw,uid,seed)
   for _,choice in ipairs(pending.choices) do if type(choice)=='table' and choice.scope=='Individual' and not ids[choice.targetDroneId] then missing=true end end
   if missing then
    if not integer(pending.price) or not integer(p.run.credits) or p.run.credits+pending.price>=1e14 then return nil,'Cannot safely refund invalid saved offer' end
-   p.run.credits=p.run.credits+pending.price;p.run.pendingOffer=nil;p.lastMigration='Refunded missing-target paid offer at full saved price'
+   if p.run.wallet and not integer(p.run.wallet.Quartz+pending.price) then return nil,'Refund exceeds wallet limit' end
+   p.run.credits=p.run.credits+pending.price;if p.run.wallet then p.run.wallet.Quartz=p.run.wallet.Quartz+pending.price end;p.run.pendingOffer=nil;p.lastMigration='Refunded missing-target paid offer at full saved price'
   end
  end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
@@ -285,6 +305,7 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
+ local deposited,depositError=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,depositError end
  p.run.deliveries[droneId]=nil;p.run.credits=p.run.credits+amount;p.run.saleEarnings=p.run.saleEarnings+amount
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount}
  P.record(p,'FinishDelivery',tx,result);return true,result
@@ -297,6 +318,7 @@ function P.sell(p,prices,tx,expectedRun)
  for material,n in pairs(p.run.cargo) do local value=prices[material];if not finite(value) or value<0 then return false,'Unknown material value' end;amount=amount+n*value end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
+ local deposited,depositError=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,depositError end
  p.run.cargo={};p.run.credits=p.run.credits+amount;p.run.saleEarnings=p.run.saleEarnings+amount
  local result={credits=amount,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
@@ -311,7 +333,7 @@ function P.prestigePreview(p)
  local m=P.milestone(p);local wins=p.clearedFields[m.field] and 1 or 0
  local eligible=p.run.saleEarnings>=m.earnings and wins>=m.wins and p.run.pendingOffer==nil
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Earn more cumulative sale credits' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
- return {eligible=eligible,reason=reason,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),cards=#p.run.cards,runId=p.run.id}
+ return {eligible=eligible,reason=reason,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed).role,cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)

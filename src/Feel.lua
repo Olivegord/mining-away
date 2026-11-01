@@ -82,16 +82,26 @@ local function swarmHash(id)
  return value
 end
 local function swarmCell(x,y,z) return x..':'..y..':'..z end
+local function intentVelocity(record)
+ if record.velocity then return record.velocity end
+ local goal=record.goal
+ if not goal then return Vector3.zero end
+ local delta=goal-record.pos;local distance=delta.Magnitude
+ if distance<.001 then return Vector3.zero end
+ local step=record.maxStep60 or (record.stats and record.stats.maxStep60) or .35
+ return delta/distance*math.min(distance*1.8,math.max(0,step)*60)
+end
 function F.swarmGrid(records)
  -- Snapshot once before moving any worker, so update order cannot make the
  -- first drone push the last one differently. Buckets hold immutable poses.
- local grid={buckets={}};local cell=F.SwarmRadius
+ local grid={buckets={},velocities={}};local cell=F.SwarmRadius
  for _,record in pairs(records) do
   if record.id and record.pos and (record.hp==nil or record.hp>0) then
    local pos=record.pos;local key=swarmCell(math.floor(pos.X/cell),math.floor(pos.Y/cell),math.floor(pos.Z/cell))
    local bucket=grid.buckets[key]
    if not bucket then bucket={};grid.buckets[key]=bucket end
-   table.insert(bucket,{id=tostring(record.id),pos=pos})
+   local id=tostring(record.id);local velocity=intentVelocity(record)
+   table.insert(bucket,{id=id,pos=pos,velocity=velocity});grid.velocities[id]=velocity
   end
  end
  -- Stable sampling in crowded cells must not depend on table iteration order.
@@ -104,6 +114,7 @@ function F.swarmOffset(position,id,grid,weight)
  id=tostring(id)
  local cell=F.SwarmRadius;local x,y,z=math.floor(position.X/cell),math.floor(position.Y/cell),math.floor(position.Z/cell)
  local neighbors={}
+ local velocity=(grid.velocities and grid.velocities[id]) or Vector3.zero
  -- Read only 27 local bins, at most 12 samples per bin and 12 final contacts.
  -- Even a crowd stacked at exactly one pose cannot cause a fleet-wide scan for
  -- each worker. Samples spread through the stable bucket using the caller ID.
@@ -116,7 +127,10 @@ function F.swarmOffset(position,id,grid,weight)
     if other.id~=id then
      local delta=position-other.pos;local square=delta:Dot(delta)
      if square<cell*cell then
-      local candidate={id=other.id,delta=delta,square=square}
+      local relative=velocity-(other.velocity or Vector3.zero);local motion=relative:Dot(relative)
+      local closest=motion>.001 and math.clamp(-delta:Dot(relative)/motion,0,.45) or 0
+      local future=delta+relative*closest
+      local candidate={id=other.id,delta=delta,square=square,futureSquare=future:Dot(future),closest=closest}
       if #neighbors<12 then table.insert(neighbors,candidate)
       else
        local worst=1
@@ -144,16 +158,27 @@ function F.swarmOffset(position,id,grid,weight)
    local angle=(pair%6283)/1000
    normal=Vector3.new(math.cos(angle)*side,0,math.sin(angle)*side)
   end
-  local pressure=(1-distance/cell)^2
+  -- Predict a crossing before the models overlap. Pair-stable tangents let
+  -- head-on workers pass on opposite sides instead of stopping nose-to-nose.
+  local currentPressure=(1-distance/cell)^2
+  local futureDistance=math.sqrt(other.futureSquare or other.square)
+  local anticipation=(other.closest or 0)>0 and (1-math.min(cell,futureDistance)/cell)^2*.8 or 0
+  local pressure=math.max(currentPressure,anticipation)
   local tangent=Vector3.new(-normal.Z,0,normal.X)*(pair%2==0 and 1 or -1)
   local lane=side*((pair%3)-1)*.12
-  force+=(normal*1.8+tangent*.48+Vector3.new(0,lane,0))*pressure
+  force+=(normal*1.8+tangent*(anticipation>currentPressure and 1.4 or .48)+Vector3.new(0,lane,0))*pressure
  end
  force=Vector3.new(force.X,math.clamp(force.Y,-.24,.24),force.Z)
  if force.Magnitude>F.SwarmMaxOffset then force=force.Unit*F.SwarmMaxOffset end
  -- Add to the movement GOAL and pass through original capped easing. Settled
  -- mining passes zero weight so its exact overhead station/arrival gate wins.
  return force*weight
+end
+function F.smoothSwarm(previous,desired,dt)
+ -- Smooth steering pressure, not a second smoothing of the drone's position.
+ -- Isolated movement therefore retains the original .03 capped equation.
+ if dt<=0 then return previous or Vector3.zero end
+ return (previous or Vector3.zero):Lerp(desired,1-math.exp(-math.min(dt,.1)*10))
 end
 function F.stationOffset(slot,geode,height)
  height=height or (geode and 5 or F.WorkHeight)

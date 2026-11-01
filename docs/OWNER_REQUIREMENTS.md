@@ -1,5 +1,13 @@
 # Owner requirements
 
+## November 1 latest — mineral shops, tutorial UI and creative automation
+
+The owner requests simpler Leaf Blower Revolution style progression in this same game. New players begin with Quartz only; the Quartz shop sells access to Ruby and its shop, continuing through the existing minerals. Each shop spends its own mineral currency. Keep the Packs stand and its server-generated three-choice, choose-one upgrades. Shop upgrades should mostly remove friction or unlock automation, including faster pack reveal animations. Use Roblox UI tutorials as concrete structure: compact equal-sized upgrade cells, a short description, Buy, and a separate Info action for full terms.
+
+The owner explicitly requests a subagent for new drone types, smoother movement and drones separating/pushing past each other. Mining upgrades should create interesting actions rather than rely on generic money/damage multipliers: examples include an orbital laser that instantly breaks the biggest rock and a cute miniature scrap-bot swarm lasting ten seconds. The owner additionally names **N-Gon**, the web platformer, as a major inspiration for creative upgrades and combinations. Adapt these mechanics to authoritative Roblox mining; preserve original models and the permanent fleet. Do not copy another game's branding or artwork.
+
+Current implementation choices (not additional verbatim requirements): sold ore deposits one unit of its matching currency; the Packs stand spends Quartz; shop access/upgrades and currency balances reset at prestige, while permanent drones and previously earned guard clearances stay. Orbiter/Scrapper roles also unlock their respective abilities. See [mineral shops](review/MINERAL_SHOPS.md) and [drone gadgets](review/DRONE_GADGETS.md). Prices, ability timings and progression still need owner playtesting. The standing restriction against new Studio Play sessions and publishing remains.
+
 ## October 31 latest — spheres, Part lasers and flight
 
 The owner corrected the effect design: **three spheres of different sizes, oscillating in size with sine waves**, not rings. Mining lasers must be **transparent cylinder Parts**, always straight down, with smooth transitions. Every drone needs trails and a flying effect. The owner explicitly authorized one Play verification session after a renderer crash; this permits inspecting and replacing the client renderer within that same session, not publishing or claiming multiplayer/visual approval.
