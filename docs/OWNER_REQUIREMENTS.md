@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — apply the map in editable Workspace
+
+The owner supplied an Edit-mode screenshot and clarified that they stopped the work because the changes were not visible in Workspace. Apply the requested shops, central Quartz and adjacent spawn directly to the open editable Studio map. Runtime-only generation does not satisfy this request. Preserve the original capture, assets, unrelated content and backup scripts; no publishing or new Play session. Keep a local native editable copy and a reproducible Edit-mode layout application.
+
 ## November 1 latest — spawn beside central Quartz
 
 The owner requests spawn next to Quartz, with Quartz the closest field on the central approach rather than at the map edge. Preserve the same field model and later progression.

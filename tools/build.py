@@ -51,6 +51,33 @@ def bundle():
  return module_bundle(('Shops','ShopStands','DroneAbilities','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
  return module_bundle(('Shops','Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView'))+(ROOT/'src/Client.lua').read_text()
+def editor_layout_script():
+ """Materialize the requested map in Studio Edit without running gameplay."""
+ return module_bundle(('Config','Shops','World','ShopStands'))+'''
+assert(not game:GetService('RunService'):IsRunning(),'Stop Play before editing the map')
+assert(game.PlaceId==136098934779395 or game.PlaceId==0,'Wrong experience')
+local root=assert(workspace:FindFirstChild('MiningAway'),'Open the Drone Blower revolution capture')
+assert(root:GetAttribute('EditableMap'),'Expected the preserved editable map')
+local map=assert(root:FindFirstChild('Map'));local fields=assert(root:FindFirstChild('Fields'))
+local hub=assert(map:FindFirstChild('HubPad',true));local home=root:GetAttribute('DepotHome') or hub.Position
+local history=game:GetService('ChangeHistoryService');history:SetWaypoint('Before editable mineral layout')
+World.layoutFields(root,fields,home)
+local metadata={}
+for id,cfg in ipairs(Config.Fields) do
+ local model=assert(fields:FindFirstChild(cfg.Key));local part=assert(model:FindFirstChild('Field'))
+ table.insert(metadata,{id=id,cfg=cfg,model=model,part=part,center=part.Position})
+end
+local scene={root=root,map=map,home=home,fields=metadata}
+World.placeStart(scene)
+local stands=ShopStands.mount(map,home,assert(map:FindFirstChild('PackStation',true)))
+history:SetWaypoint('Editable Quartz start and mineral shops')
+local report={place_id=game.PlaceId,mode='Edit',spawn={scene.spawnPosition.X,scene.spawnPosition.Y,scene.spawnPosition.Z},fields={},shops={}}
+for _,field in ipairs(metadata) do
+ table.insert(report.fields,{key=field.cfg.Key,position={field.part.Position.X,field.part.Position.Y,field.part.Position.Z},from_spawn=(field.part.Position-scene.spawnPosition).Magnitude})
+end
+for key,part in pairs(stands) do report.shops[key]={part.Position.X,part.Position.Y,part.Position.Z} end
+return report
+'''
 LIVE_SOURCES={
  'ServerScriptService.GlobalDroneControl':('Script','Server'),
  'StarterPlayer.StarterPlayerScripts.ClientDroneControl':('LocalScript','Client'),
@@ -211,8 +238,12 @@ if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('original',nargs='?',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path)
  p.add_argument('--legacy-reference',action='store_true',help='Build the historical reference fixture, never the active game')
  p.add_argument('--source-payload',type=pathlib.Path,help='Write a source-only exact-path JSON payload for the existing active place')
+ p.add_argument('--editor-layout-script',type=pathlib.Path,help='Write a Command Bar script that applies the layout directly in Studio Edit')
  a=p.parse_args()
- if a.source_payload:
+ if a.editor_layout_script:
+  a.editor_layout_script.parent.mkdir(parents=True,exist_ok=True);a.editor_layout_script.write_text(editor_layout_script())
+  print(str(a.editor_layout_script))
+ elif a.source_payload:
   a.source_payload.parent.mkdir(parents=True,exist_ok=True);a.source_payload.write_text(json.dumps(live_source_payload(),ensure_ascii=False))
   print(str(a.source_payload))
  elif a.legacy_reference:

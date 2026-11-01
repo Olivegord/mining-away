@@ -7,3 +7,6 @@ function game:GetService(name)
 end
 function IM:GetScale() return self._scale or 1 end
 function IM:ScaleTo(value) self._scale=value end
+
+-- Native CFrame + Vector3 translates while retaining rotation.
+CF.__add=function(pose,offset) local result=CFrame.new(pose.Position+offset);result.yaw=pose.yaw;return result end

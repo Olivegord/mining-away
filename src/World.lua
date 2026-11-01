@@ -217,7 +217,7 @@ local function nativeFinish(part,material,studs)
  part.TopSurface=studs and Enum.SurfaceType.Studs or Enum.SurfaceType.Smooth
  part.BottomSurface=Enum.SurfaceType.Smooth
 end
-local function finishEditableMap(root,map,fields,home)
+function W.layoutFields(root,fields,home)
  -- Preserve the captured parts, machines and field identities. The former
  -- straight-line order placed Cobalt in front of spawn and Quartz at the end.
  -- Reuse the existing plot footprints, ordered by distance, then stagger the
@@ -242,6 +242,13 @@ local function finishEditableMap(root,map,fields,home)
   end
   root:SetAttribute('PlotOrderVersion',1)
  end
+ for id,cfg in ipairs(Config.Fields) do
+  local model=fields:FindFirstChild(cfg.Key);local part=model:FindFirstChild('Field')
+  model:SetAttribute('Tier',id);model:SetAttribute('FieldId',id);part:SetAttribute('FieldId',id)
+ end
+end
+local function finishEditableMap(root,map,fields,home)
+ W.layoutFields(root,fields,home)
  -- Native Roblox surfaces provide readable material changes without global
  -- gloss: studded plastic trim, rough ore beds, paved lanes and metal machines.
  for _,part in ipairs(map:GetDescendants()) do if part:IsA('BasePart') then

@@ -1,5 +1,7 @@
 # Drone Blower revolution
 
+**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. The separate source-only preservation build keeps the immutable capture intact. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it in Edit mode, then use File → Download a Copy. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
+
 November 1 correction: [visible depot shops and standalone upgrades](docs/review/SHOP_VISIBILITY_CORRECTION.md). Spawn is beside central Quartz, the nearest field. N-Gon is inspiration; explicit combo cards are removed.
 
 Current November 1 work: [mineral shops and tutorial-based upgrade cells](docs/review/MINERAL_SHOPS.md), [Orbiter/Scrapper gadgets and smoother swarm movement](docs/review/DRONE_GADGETS.md). Fresh profiles start with Quartz; each mineral shop spends its own balance and sells the next field/shop. Packs spend Quartz. New focused checks run without Studio Play via `python3 tools/test_shops.py /path/to/luau` and `python3 tools/test_gadgets.py /path/to/luau`. The UI, busy multiplayer scenes and gameplay satisfaction still need the owner's engine playtest; historical validation below does not approve this new candidate.

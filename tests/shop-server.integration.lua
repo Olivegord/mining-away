@@ -19,6 +19,19 @@ shopCheck('spawn and real character respawns face the centrally placed nearest Q
  local ch=Instance.new('Model');local hr=Instance.new('Part');hr.Name='HumanoidRootPart';hr.Parent=ch;ch.PrimaryPart=hr;pl.Character=ch;ch.Parent=workspace
  pl.CharacterAdded:Fire(ch);assert((ch:GetPivot().Position-(scene.spawnPosition+Vector3.new(0,4,0))).Magnitude<1e-8)
 end)
+shopCheck('baked field layouts are stable on replay and keep original field instances',function()
+ local scratch=Instance.new('Folder');local copies=Instance.new('Folder');copies.Parent=scratch;local identities={}
+ for _,field in ipairs(scene.fields) do local copy=field.model:Clone();copy.Parent=copies;identities[field.cfg.Key]=copy:FindFirstChild('Field') end
+ World.layoutFields(scratch,copies,home);local positions={}
+ for id,cfg in ipairs(Config.Fields) do
+  local model=copies:FindFirstChild(cfg.Key);assert(model:FindFirstChild('Field')==identities[cfg.Key])
+  assert(model:GetAttribute('FieldId')==id and identities[cfg.Key]:GetAttribute('FieldId')==id)
+  positions[cfg.Key]=identities[cfg.Key].Position
+ end
+ World.layoutFields(scratch,copies,home)
+ for key,part in pairs(identities) do assert((part.Position-positions[key]).Magnitude<1e-8) end
+ scratch:Destroy()
+end)
 shopCheck('all five named counters are grounded and visible near the original depot',function()
  local pad=scene.map:FindFirstChild('HubPad',true)
  local ground=pad and pad.Position.Y+pad.Size.Y/2 or scene.packStation.Position.Y-scene.packStation.Size.Y/2

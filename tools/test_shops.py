@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 
-from build import ROOT, bundle, client_bundle
+from build import ROOT, bundle, client_bundle, editor_layout_script
 
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/luau')
 for path in sorted((ROOT / 'src').glob('*.lua')):
@@ -14,7 +14,7 @@ subprocess.run([str(luau / 'luau-analyze'), *[str(ROOT / 'src' / f'{name}.lua') 
 for name in ('shops', 'mining', 'persistence'):
     subprocess.run([str(luau / 'luau'), str(ROOT / 'tests' / f'{name}.spec.lua')], check=True)
 with tempfile.TemporaryDirectory(prefix='mineral-shop-tests-') as directory:
-    for name, source in [('server', bundle()), ('client', client_bundle())]:
+    for name, source in [('server', bundle()), ('client', client_bundle()), ('editor-layout', editor_layout_script())]:
         path = pathlib.Path(directory) / f'{name}.lua'
         path.write_text(source)
         subprocess.run([str(luau / 'luau-compile'), str(path)], check=True, stdout=subprocess.DEVNULL)
