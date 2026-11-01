@@ -44,7 +44,7 @@ local function drone(uid,serial,kind,seed)
  local base=clone(P.BASE);local scale=P.TYPE_SCALES[kind]
  base.maxStep60=step*scale.speed;base.miningDPS=base.miningDPS*scale.mining;base.combatDPS=base.combatDPS*scale.combat
  local role=kind=='Green' and 'Medic' or (kind=='Red' and 'Charger' or (math.floor((serial-1)/3)%2==1 and 'Courier' or 'Striker'))
- if serial>=4 then role=({'Orbiter','Scrapper','Courier','Striker','Charger','Medic'})[(serial-4)%6+1] end
+ if serial>=4 then role=({'Orbiter','Scrapper','Courier','Striker','Charger','Medic','Dart'})[(serial-4)%7+1] end
  return {id=tostring(uid)..':drone:'..serial,name=(serial>=4 and role or kind)..' '..serial,type=kind,role=role,base=base}
 end
 function P.new(uid,seed)
@@ -61,7 +61,7 @@ function P.validate(p,uid)
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or not table.find(types,d.type) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=true
-  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' and d.role~='Orbiter' and d.role~='Scrapper' then return false,'Invalid permanent role' end
+  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' and d.role~='Orbiter' and d.role~='Scrapper' and d.role~='Dart' then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end

@@ -35,6 +35,7 @@ function View.start(options)
   if options.hidden() or os.clock()-lastSend<.15 then return end
   local profile=options.profile();if not enabled(profile,kind) or profile.pendingTransaction then return end
   local charge=state.runId==profile.run.id and state.charge or nil
+  if charge and charge.kind~=kind then return end
   local fieldId=nearestField();if not fieldId then return end
   lastSend=os.clock()
   options.command:FireServer('MiningAbility',{op=charge and 'confirm' or 'begin',kind=kind,fieldId=fieldId,
@@ -108,7 +109,7 @@ function View.start(options)
    sweet.Size=UDim2.fromScale((charge.sweetEnd-charge.sweetStart)/span,1)
    cursor.Position=UDim2.new(math.clamp((now-charge.started)/span,0,1),-1,0,0)
   elseif (state.swarmUntil or 0)>now then hint.Text='Scrap swarm · '..math.ceil(state.swarmUntil-now)..'s'
-  else hint.Text='Charge, then tap in green' end
+  else hint.Text='Drones work automatically; tap for precision' end
   if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end
   for source,record in pairs(bots) do
    if not source.Parent or not source.Parent.Parent or now>=(source.Parent:GetAttribute('Expires') or 0) then remove(source,record)

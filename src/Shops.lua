@@ -56,7 +56,7 @@ function S.abilityUnlocked(p,kind,extra)
  local key=kind=='Orbital' and 'orbitalLaser' or 'scrapSwarm'
  if (S.effects(p)[key] or 0)>0 or (extra and (extra.effects[key] or 0)>0) then return true end
  for _,c in ipairs(p.run.cards) do if (c.effects[key] or 0)>0 then return true end end
- for _,d in ipairs(p.fleet) do if d.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end end
+ for _,d in ipairs(p.activeFleet or p.fleet) do if d.role==(kind=='Orbital' and 'Orbiter' or 'Scrapper') then return true end end
  return false
 end
 function S.packSpeed(p) return 2^math.min(2,S.effects(p).packSpeed or 0) end

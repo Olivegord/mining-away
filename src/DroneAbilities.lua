@@ -34,6 +34,14 @@ function A.cancel(state,ctx)
  state.charge=nil;state.swarm=nil
  if ctx then event(ctx,'clear') end
 end
+function A.pause(state,dt)
+ if not finite(dt) or dt<=0 then return end
+ local charge=state.charge
+ if charge then
+  for _,key in ipairs({'started','sweetStart','sweetEnd','expires'}) do charge[key]+=dt end
+ end
+ if state.swarm then state.swarm.started+=dt;state.swarm.expires+=dt;state.swarm.nextPose=0 end
+end
 function A.begin(state,kind,now,ctx)
  if not finite(now) or not A.KINDS[kind] then return false,'Unknown mining gadget' end
  if state.runId~=ctx.runId then A.cancel(state,ctx);state.runId=ctx.runId;state.cooldowns={} end

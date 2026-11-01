@@ -44,11 +44,12 @@ def module_bundle(names):
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
   if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
+  if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')
   boundary=': any' if name=='World' else ''
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','DroneRoles','Config','Feel','Mining','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
  return module_bundle(('Shops','Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():

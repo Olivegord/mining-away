@@ -100,6 +100,50 @@ function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	end
 end
 
+-- A scout identifies work without pretending to cut it. The small nested
+-- spheres mark that real server target; there is deliberately no laser beam.
+function Effects.Scan(from: Vector3,target: Vector3,lifetime: number?)
+ local duration=math.clamp(lifetime or 8,.2,10)
+ local blue=Color3.fromRGB(103,194,227)
+ Effects.Pulse(from,blue,.18,.85,.25)
+ for index,size in ipairs({.18,.32,.5}) do
+  local marker=part();if not marker then break end
+  marker.Name='ScoutMark';marker.Shape=Enum.PartType.Ball;marker.Color=blue
+  marker.Position=target+Vector3.new(0,.45,0);marker.Size=Vector3.one*size
+  marker.Transparency=.22+index*.15
+  TweenService:Create(marker,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
+   Transparency=1,Size=Vector3.one*size*.65,
+  }):Play()
+  Debris:AddItem(marker,duration+.05)
+ end
+end
+
+-- These are one-shot phase cues. The authoritative drone moves through its
+-- windup/dive/recovery; none of these effects is a steady mining beam.
+function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
+ local amber=Color3.fromRGB(220,164,81)
+ if phase=='Windup' then
+  Effects.Pulse(target,amber,.2,1.4,.75)
+ elseif phase=='Dive' then
+  Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
+ elseif phase=='Impact' then
+  Effects.Pulse(target,Color3.fromRGB(252,231,179),.25,2.8,.22)
+  -- Debris-like points communicate an impact, rather than a long emitter ray.
+  for index=1,3 do
+   local chip=part();if not chip then break end
+   local angle=index*2.399963
+   chip.Name='BreakerChip';chip.Shape=Enum.PartType.Ball;chip.Material=Enum.Material.Slate
+   chip.Color=Color3.fromRGB(142,131,109);chip.Size=Vector3.one*(.15+index*.035);chip.Position=target
+   TweenService:Create(chip,TweenInfo.new(.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+    Position=target+Vector3.new(math.cos(angle)*1.7,.5+index*.2,math.sin(angle)*1.7),Transparency=1,
+   }):Play()
+   Debris:AddItem(chip,.35)
+  end
+ elseif phase=='Recover' then
+  Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
+ end
+end
+
 -- Gadget FX are consequences of the authoritative DroneAbilities state machine.
 -- Sources replicate complete poses for late joiners; AbilityView interpolates
 -- their local clones without feeding any rendered transform back into damage.

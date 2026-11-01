@@ -302,22 +302,25 @@ local function tabs(width,mode)
 end
 openFleet=function()
  if not profile then return end
- local l=menu('fleet','Meet your crew','Your drones stay with you. Run upgrades change the stats below.','drone');local width=l.bodyWidth-6
+ local crew=profile.activeFleet or profile.fleet
+ local l=menu('fleet','Meet your crew',profile.activeFleet and ('Studio role test · '..#crew..' active drones · '..#profile.fleet..' permanent owned') or 'Your drones stay with you. Run upgrades change the stats below.','drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
  local rosterY=64
  if player:GetAttribute('MA_TestingEnabled')==true then
-  local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(math.min(width,220),44),'Random 2–5 drones [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
+  local half=(width-12)/2
+  local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
   reroll.Name='RerollTestCrew';rosterY=114
+  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),'Role crew · 8',function() command:FireServer('RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
  end
  local columns=width>=650 and 2 or 1;local gap=14;local rowWidth=(width-gap*(columns-1))/columns
- for index,d in ipairs(profile.fleet or {}) do
+ for index,d in ipairs(crew or {}) do
   local stats=(profile.droneStats and profile.droneStats[d.id]) or d.effective or d.base or {}
   local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
   local tint=colors[d.type] or palette.mineral
   local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
   U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
   label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,33),d.name or ('Drone '..index),24,palette.ink,true)
-  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),'PERMANENT · '..string.upper(d.type or 'Blue'),10,palette.muted,true)
+  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),(profile.activeFleet and 'TEST CREW' or 'PERMANENT')..' · '..string.upper(d.role or d.type or 'Blue'),10,palette.muted,true)
   local count=0;for _,c in ipairs(profile.run.cards) do if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id) then count=count+1 end end
   identity.Text=identity.Text..' · '..tostring(count)..' cards'
   local tileWidth=(rowWidth-42)/2
@@ -328,6 +331,18 @@ openFleet=function()
   elseif role=='Courier' then
    statTile(row,14,91,tileWidth,'PARCEL',tostring(DroneConfig.Courier.BatchUnits)..' ore')
    statTile(row,tileWidth+28,91,tileWidth,'JOB','Sell for you')
+  elseif role=='Dart' then
+   statTile(row,14,91,tileWidth,'JOB','Mark rocks')
+   statTile(row,tileWidth+28,91,tileWidth,'STARTUP','65% shorter')
+  elseif role=='Charger' then
+   statTile(row,14,91,tileWidth,'JOB','Dive + impact')
+   statTile(row,tileWidth+28,91,tileWidth,'IMPACT',number((stats.miningDPS or 30)*2.4)..' base')
+  elseif role=='Orbiter' then
+   statTile(row,14,91,tileWidth,'JOB','Orbital strike')
+   statTile(row,tileWidth+28,91,tileWidth,'CYCLE','45s cooldown')
+  elseif role=='Scrapper' then
+   statTile(row,14,91,tileWidth,'JOB','Launch bots')
+   statTile(row,tileWidth+28,91,tileWidth,'SWARM','10 seconds')
   else
    statTile(row,14,91,tileWidth,'MINING',number(stats.miningDPS or 30)..' /s')
    statTile(row,tileWidth+28,91,tileWidth,'COMBAT',number(stats.combatDPS or 12)..' /s')
@@ -336,7 +351,7 @@ openFleet=function()
   statTile(row,tileWidth+28,153,tileWidth,'FLIGHT',number((stats.maxStep60 or .35)*60)..' studs/s')
   label(row,UDim2.fromOffset(15,211),UDim2.new(1,-30,0,40),Mining.description(role),16,palette.muted)
  end
- local index=#profile.fleet+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
+ local index=#crew+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
  local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),palette.accent:Lerp(palette.white,.76),14)
  local narrowTile=rowWidth<330;local tileTextX=narrowTile and 70 or 81
  U.icon(nextDrone,'prestige',UDim2.fromOffset(14,16),UDim2.fromOffset(narrowTile and 45 or 55,narrowTile and 45 or 55),palette.accent)
@@ -347,7 +362,7 @@ openFleet=function()
  local guardRequirement=(pre.winsRequired or 1)>0 and ((pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' · Unlocked' or ' · Defeat guards once')) or 'No sentry clear required'
  label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),guardRequirement,16,palette.muted)
  local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
- local audioY=rosterY+math.ceil((#profile.fleet+1)/columns)*276
+ local audioY=rosterY+math.ceil((#crew+1)/columns)*276
  local music=button(body,UDim2.fromOffset(3,audioY),UDim2.fromOffset((width-12)/2,44),soundscape.musicMuted and 'Music: off' or 'Music: on',function() soundscape:toggleMusic();openFleet() end,palette.paper)
  music.Name='ToggleMusic'
  local effects=button(body,UDim2.fromOffset((width-12)/2+15,audioY),UDim2.fromOffset((width-12)/2,44),soundscape.effectsMuted and 'Effects: off' or 'Effects: on',function() soundscape:toggleEffects();openFleet() end,palette.paper)
@@ -441,7 +456,9 @@ local function readProfile()
   local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
   local milestone=p.prestigePreview or {}
   local milestoneChanged=modalMode=='fleet' and (oldMilestone.earnings~=milestone.earnings or oldMilestone.wins~=milestone.wins or oldMilestone.eligible~=milestone.eligible)
-  if not oldProfile or changedRun or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
+  local oldCrew=oldProfile and (oldProfile.activeFleet or oldProfile.fleet) or {};local crew=p.activeFleet or p.fleet
+  local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
+  if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
  else refreshModal() end
 end
 connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
@@ -666,7 +683,7 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical
  elseif not motionPaused then
-  local workTravel=state=='Deliver' or (state=='Travel' and (s:GetAttribute('TargetId') or '')~='')
+  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or (s:GetAttribute('TargetId') or '')~=''
   d.pos=(workTravel and Feel.approachWork or Feel.approach)(d.pos,goal,maxStep,math.min(dt,.1))
   local error=logical-d.pos
   -- Correct drift gradually, including after a delayed pause packet; never snap.

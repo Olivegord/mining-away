@@ -1,4 +1,5 @@
 local Shops=require('./Shops')
+local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
 local C={CONTENT_VERSION=9,BASE_CAPACITY=40}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
@@ -80,8 +81,7 @@ local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
 end
 local function support(d)
- local role=d.role or d.type
- return role=='Medic' or role=='Courier' or (d.role==nil and d.type=='Green')
+ return not DroneRoles.isWorker(d.role or d.type)
 end
 local function courier(d) return (d.role or d.type)=='Courier' end
 local workEffects={mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true}
@@ -117,11 +117,11 @@ function C.stats(p,d,extra)
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
- return {miningDPS=b.miningDPS*clamp(1+(s.mining or 0),.1,4),combatDPS=dps,shotDamage=damage,shotInterval=interval,
+ return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(.08,b.warmup/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
-  splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=clamp(s.fork or 0,0,.2),forkRange=6+clamp(s.forkRange or 0,0,6),
+  splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,.2) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
@@ -253,6 +253,7 @@ local function resolve(p,entry,seed,combatVisible)
    local eligibleRole=true
    for k,n in pairs(c.effects) do
     if n>0 and ((workEffects[k] or combatOnly[k]) and support(d) or k=='fullAuto' and not courier(d)) then eligibleRole=false end
+    if n>0 and (k=='fork' or k=='forkRange') and not DroneRoles.isMiner(d.role or d.type) then eligibleRole=false end
    end
    if eligibleRole and beneficial(p,c) then table.insert(eligible,d) end
   end

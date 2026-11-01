@@ -11,11 +11,11 @@ local descriptions={
 }
 function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
 function M.description(kind: string): string
- local roles={Dart='Scout · fast, light mining and combat',Striker='Miner · steady work on ordinary stones',Medic='Healer · slowly follows drones; 10 health every 2 seconds',Courier='Courier · sells 8 ore from your backpack per trip',Charger='Breaker · charged hits; +50% shell/core damage',Orbiter='Orbiter · unlocks timed orbital strikes on the biggest rock',Scrapper='Scrapper · unlocks disposable 10-second mining swarms'}
+ local roles={Dart='Scout · marks rocks for quicker miner startup',Striker='Miner · cuts one crystal with a continuous laser',Medic='Healer · follows allies; 10 health every 2 seconds',Courier='Backpack emptier · carries 8 ore to sell, then returns',Charger='Breaker · winds up, dives, hits, then recovers',Orbiter='Orbital · charges, then vaporizes the biggest rock',Scrapper='Swarm · launches tiny miners for 10 seconds'}
  return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
 end
 function M.workRole(kind: string): string
- return ({Dart='Scout',Striker='Miner',Medic='Healer',Courier='Courier',Charger='Breaker',Orbiter='Orbiter',Scrapper='Scrapper',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
+ return ({Dart='Scout',Striker='Miner',Medic='Healer',Courier='Backpack emptier',Charger='Breaker',Orbiter='Orbital controller',Scrapper='Swarm fabricator',Blue='Miner',Red='Breaker',Green='Healer'})[kind] or 'Cutter'
 end
 function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never

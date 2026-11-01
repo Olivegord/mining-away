@@ -1,6 +1,6 @@
 --!strict
 
-export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry"
+export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry" | "Scan" | "Orbital" | "Swarm"
 
 export type DroneDefinition = {
 	DisplayName: string,
@@ -48,14 +48,14 @@ DroneConfig.Order = {
 DroneConfig.Types = {
 	Dart = {
 		DisplayName = "Dart",
-		Description = "Very fast skirmisher with low durability.",
+		Description = "Scout. Flies ahead and marks rocks so the miner starts its laser sooner. Does not mine.",
 		Color = Color3.fromRGB(45, 224, 255),
 		Accent = Color3.fromRGB(224, 253, 255),
 		Scale = 0.72,
 		MaxHealth = 48,
 		Speed = 35,
 		FlightHeight = 3.2,
-		AttackStyle = "Bolt",
+		AttackStyle = "Scan",
 		AttackRange = 26,
 		AttackCooldown = 0.38,
 		Damage = 5,
@@ -63,7 +63,7 @@ DroneConfig.Types = {
 	},
 	Striker = {
 		DisplayName = "Striker",
-		Description = "Reliable mid-range damage and medium speed.",
+		Description = "Miner. The crew's ordinary continuous mining laser; works above one crystal at a time.",
 		Color = Color3.fromRGB(75, 122, 255),
 		Accent = Color3.fromRGB(190, 206, 255),
 		Scale = 0.9,
@@ -95,7 +95,7 @@ DroneConfig.Types = {
 	},
 	Courier = {
 		DisplayName = "Courier",
-		Description = "Takes 8 ore from your backpack to the depot and sells it.",
+		Description = "Backpack emptier. Reserves up to 8 ore, takes its own parcel to sell, then returns for another.",
 		Color = Color3.fromRGB(218, 172, 81),
 		Accent = Color3.fromRGB(243, 219, 162),
 		Scale = 0.75,
@@ -110,7 +110,7 @@ DroneConfig.Types = {
 	},
 	Charger = {
 		DisplayName = "Charger",
-		Description = "Low-flying bruiser with a telegraphed impact dash.",
+		Description = "Breaker. Winds up, dives into a tough rock, impacts once, then recovers. No continuous mining beam.",
 		Color = Color3.fromRGB(255, 113, 65),
 		Accent = Color3.fromRGB(255, 226, 133),
 		Scale = 1.12,
@@ -127,14 +127,14 @@ DroneConfig.Types = {
 	},
 	Orbiter = {
 		DisplayName = "Orbiter",
-		Description = "Survey drone with an orbital focusing mast. Unlocks the timed orbital gadget.",
+		Description = "Orbital controller. Charges and calls a real strike on the biggest rock, then cools down. Does not mine normally.",
 		Color = Color3.fromRGB(221, 165, 78),
 		Accent = Color3.fromRGB(245, 223, 162),
 		Scale = 0.84,
 		MaxHealth = 80,
 		Speed = 22,
 		FlightHeight = 3.6,
-		AttackStyle = "Bolt",
+		AttackStyle = "Orbital",
 		AttackRange = 24,
 		AttackCooldown = 0.8,
 		Damage = 10,
@@ -142,14 +142,14 @@ DroneConfig.Types = {
 	},
 	Scrapper = {
 		DisplayName = "Scrapper",
-		Description = "Workshop drone carrying disposable mini-drone bays. Unlocks the 10-second scrap swarm.",
+		Description = "Swarm fabricator. Launches disposable mini miners for ten seconds, then waits to rebuild them. No normal mining beam.",
 		Color = Color3.fromRGB(155, 181, 110),
 		Accent = Color3.fromRGB(219, 230, 181),
 		Scale = 0.82,
 		MaxHealth = 84,
 		Speed = 21,
 		FlightHeight = 3.2,
-		AttackStyle = "Bolt",
+		AttackStyle = "Swarm",
 		AttackRange = 20,
 		AttackCooldown = 0.9,
 		Damage = 11,

@@ -51,10 +51,12 @@ local function publish(p)
  if not p.player.Parent then return end
  local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(copy)
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
- copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned);copy.droneRoles[owned.id]=owned.role end
+ -- The active preview crew is presentation data, never permanent ownership.
+ copy.activeFleet=p.testFleet and Pro.clone(p.testFleet) or nil
+ copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(p.testFleet or copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned);copy.droneRoles[owned.id]=owned.role end
  local autoMine,autoHaul=false,false
  for _,d in ipairs(p.drones) do
-  autoMine=autoMine or ((d.role~='Courier' and d.role~='Medic') and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
+  autoMine=autoMine or (DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
  end
  p.player:SetAttribute('BackpackUnits',copy.cargoUnits);p.player:SetAttribute('BackpackCapacity',copy.capacity)
  p.player:SetAttribute('AutomationMineEnabled',autoMine);p.player:SetAttribute('AutomationHaulEnabled',autoHaul)
@@ -82,9 +84,15 @@ end
 local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: boolean?): ()
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
+ d.breaker=nil;d.scanTarget=nil;d.scanAt=nil
  if not keepBreakContact then d.mineBreakContact=nil end
  if not keepCombatEffects then d.chainUntil=0;d.chainTargetId=nil end
  if not keepCombatEffects then d.chargeAt=nil;d.chargeTarget=nil end
+end
+local function retireTarget(d,keepBreakContact)
+ local impact=d.breaker
+ if impact and impact.phase~='Impact' and impact.phase~='Recover' then impact=nil end
+ release(d,false,keepBreakContact);d.breaker=impact
 end
 local function spend(d)
  for _,p in ipairs(patches) do R.spend(p.e,d.id) end
@@ -104,7 +112,8 @@ local function leaveDroneField(p: any,d: any)
  dropFieldIfEmpty(p,old)
 end
 local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?): ()
- p.oreQueue={}
+ p.oreQueue={};p.workField=nil
+ if p.ability then DroneAbilities.cancel(p.ability);RoleEffects.ClearAbility(p.player.UserId) end
  local runId=data(p).run.id
  for _,field in ipairs(patches) do
   if field.id~=keepField then
@@ -120,6 +129,20 @@ for _,name in ipairs(RoleConfig.TypeOrder) do
  table.insert(TEST_ROLES,{type=name,name=name,height=role.height,base=role.base})
 end
 local function runtimeFleet(p: any) return p.testFleet or data(p).fleet end
+local function roleTestFleet(p: any)
+ p.testRoll=(p.testRoll or 0)+1
+ local fleet,counts={},{}
+ local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Scout',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
+ for i,name in ipairs({'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}) do
+  counts[name]=(counts[name] or 0)+1
+  local role=RoleConfig.StudioRoles[name]
+  table.insert(fleet,{id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,i),type=name,role=name,name=names[name]..(name=='Courier' and ' '..counts[name] or ''),flightHeight=role.height,base=Pro.clone(role.base)})
+ end
+ -- Keep the real first miner's identity so named cards also work in this test.
+ local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
+ p.player:SetAttribute('MA_TestLoadoutLabel','Role crew: 1 miner · 2 backpack emptiers · healer · scout · breaker · orbital · swarm')
+ return fleet
+end
 local function randomTestFleet(p: any)
  p.testRoll=(p.testRoll or 0)+1
  local picks={TEST_ROLES[2]} -- Every preview loadout can mine; support is random.
@@ -360,7 +383,7 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end
  return false
 end
-hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any)
+hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?)
  local p=profiles[d.owner]
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  local recipient=d
@@ -373,7 +396,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
   end
  end
- if d.role=='Courier' or d.role=='Medic' or Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then return false end
+ if (not DroneRoles.isWorker(d.role) and not (abilityOrigin and DroneRoles.ability(d.role))) or Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then return false end
+ if not abilityOrigin and not DroneRoles.isMiner(d.role) then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
   if not hr or (hr.Position-r.field.center).Magnitude>RoleConfig.Mining.BackpackRange or not los(abilityOrigin,r.position,r.part,{droneFolder,p.player.Character}) then return false end
@@ -387,7 +411,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
- amount=amount*Mining.efficiency(d.owned.type,r.kind)
+ amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
@@ -435,7 +459,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if broken then
   for id in pairs(r.slots) do
    local worker=drones[id]
-   if worker and worker.target==r then release(worker,false,not secondary and worker==d and d.mineBreakContact~=nil) else r.slots[id]=nil end
+   if worker and worker.target==r then retireTarget(worker,not secondary and worker==d and d.mineBreakContact~=nil) else r.slots[id]=nil end
   end
   updateSlots(r)
  end
@@ -578,10 +602,10 @@ local function combatHit(d,field,target,stats)
  publishTurretHealth(target)
 end
 local function travelSpeed(d)
- return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or 1))
+ return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
- local settling=(d.target~=nil and (d.state=='Travel' or d.state=='Mine')) or d.state=='Deliver' or d.state=='Collect'
+ local settling=d.target~=nil or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='Scan' or d.state=='Survey'
  local weight=settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
  d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
@@ -591,7 +615,7 @@ local function move(d,goal,dt)
   local target=math.atan2(-delta.X,-delta.Z);local diff=(target-d.yaw+math.pi)%(math.pi*2)-math.pi
   d.yaw=d.yaw+diff*Feel.turnAlpha(dt)
  end
- local approach=((d.target and (d.state=='Travel' or d.state=='Mine')) or d.state=='Deliver') and Feel.approachWork or Feel.approach
+ local approach=(d.target~=nil or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover') and Feel.approachWork or Feel.approach
  local speed=travelSpeed(d)
  d.pos=approach(d.pos,goal,speed,dt)
  -- Exact logical pose; no server presentation lerp, no body pitch.
@@ -668,10 +692,10 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   local goal=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize);d.state='Travel';move(d,goal,dt)
   if Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) and los(d.pos,r.position,r.part,{droneFolder}) then
    d.warmAt=d.warmAt or now;d.state='Mine'
-   if now-d.warmAt>=d.stats.warmup then
+   if now-d.warmAt>=math.max(.08,d.stats.warmup*DroneRoles.startupFactor(r.scoutedUntil,now)) then
     if not d.mining then d.beamSince=now end
     d.mining=true
-    local damage,charge=Mining.step(d.owned.type,d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
+    local damage,charge=Mining.step('Blue',d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
     if damage>0 then hitResource(d,r,damage) end
    end
   else d.warmAt=nil;d.mineCharge=0;d.mining=false end
@@ -683,6 +707,99 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   local hr=characterRoot(p)
   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
  end
+end
+local roleAbilityStep
+local function followRole(d,p,hr,dt,state)
+ d.mining=false;d.state=state or 'Follow'
+ move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+end
+local function roleNodes(p,field)
+ local list={}
+ for _,r in ipairs(field.resources) do
+  local eligible=true;local count=0
+  for id in pairs(r.slots) do count+=1;local worker=drones[id];if not worker or worker.owner~=p.player.UserId then eligible=false end end
+  if r.part.Parent then table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,kind=r.kind,x=r.position.X,y=r.position.Y,z=r.position.Z,readyAt=r.readyAt,markedUntil=r.scoutedUntil,paid=r.paid,eligible=eligible and count<r.limit}) end
+ end
+ return list
+end
+local function workingField(p,hr)
+ local field=p.workField and patches[p.workField]
+ if field and not activeAssault(p) and playerCanMine(p,field) and (hr.Position-field.center).Magnitude<=RoleConfig.Mining.BackpackRange then return field end
+ return nil
+end
+local function scoutDrone(d,p,hr,dt)
+ d.mining=false
+ local field=workingField(p,hr)
+ if not field or Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then d.scanTarget=nil;d.scanAt=nil;followRole(d,p,hr,dt);return end
+ local r=d.scanTarget
+ if not r or r.paid or not r.part.Parent or (r.scoutedUntil or 0)>now then
+  d.scanAt=nil;d.scanTarget=nil
+  if now>=(d.nextScan or 0) then
+   local chosen=DroneRoles.chooseTarget('Dart',roleNodes(p,field),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
+   r=chosen and resources[chosen.id];d.scanTarget=r
+  else r=nil end
+ end
+ if not r then followRole(d,p,hr,dt,'Survey');return end
+ local goal=r.position+Vector3.new(1.8,math.max(5,r.fullSize.Y*.5+3),0)
+ d.state='Survey';move(d,goal,dt)
+ if (d.pos-goal).Magnitude<=.8 and los(d.pos,r.position,r.part,{droneFolder}) then
+  d.state='Scan';d.scanAt=d.scanAt or now
+  if now-d.scanAt>=DroneRoles.SCOUT.scanSeconds then
+   r.scoutedUntil=now+DroneRoles.SCOUT.markSeconds;r.part:SetAttribute('ScoutUntil',r.scoutedUntil)
+   RoleEffects.Scan(d.pos,r.position+Vector3.new(0,r.fullSize.Y*.5*(1-r.stage*.25),0),DroneRoles.SCOUT.markSeconds)
+   d.nextScan=now+DroneRoles.SCOUT.revisit;d.scanAt=nil;d.scanTarget=nil
+  end
+ else d.scanAt=nil end
+end
+local function breakerDrone(d,p,hr,field,dt)
+ d.mining=false
+ local job=d.breaker
+ -- Recovery survives destruction of this stone, but never a recall/death.
+ if job and (job.phase=='Impact' or job.phase=='Recover') then
+  local phase,event=DroneRoles.stepBreaker(job,now,{valid=true})
+  d.state='BreakerRecover';move(d,job.station,dt)
+  if event=='recover' then RoleEffects.BreakerPhase(d.pos,job.contact,'Recover') end
+  if phase=='Complete' then d.breaker=nil end
+  return
+ end
+ if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then release(d);followRole(d,p,hr,dt);return end
+ if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
+ -- Owning a breaker earns autonomous heavy-rock work after the owner chooses
+ -- an ore/plot. The ordinary miner still needs the earned Plot Scanner.
+ if not d.target and p.workField==field.id then
+  local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
+  local r=node and resources[node.id]
+  if r then
+   local occupied={};for _,slot in pairs(r.slots) do occupied[slot]=true end
+   local slot=1;while occupied[slot] do slot+=1 end
+   r.slots[d.id]=slot;d.target=r;d.targetSlot=slot;updateSlots(r)
+  end
+ end
+ local r=d.target
+ if not r then followRole(d,p,hr,dt);return end
+ job=d.breaker
+ if not job then
+  job=DroneRoles.newBreaker(r.id,now);d.breaker=job
+  job.windup=math.max(.08,d.stats.warmup*DroneRoles.startupFactor(r.scoutedUntil,now))
+  job.station=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)+Vector3.new(0,2,0)
+  job.contact=r.position+Vector3.new(0,r.fullSize.Y*.5*(1-r.stage*.25),0)
+  job.impact=job.contact+Vector3.new(0,1.4,0)
+ end
+ local phase=job.phase;local pose=DroneRoles.breakerPose(job,now)
+ local goal=job.station+Vector3.new(0,pose.lift,0)
+ if phase=='Dive' then goal=job.impact elseif phase=='Impact' then goal=job.impact end
+ d.state=phase=='Approach' and 'Travel' or 'Breaker'..phase;move(d,goal,dt)
+ local event
+ phase,event=DroneRoles.stepBreaker(job,now,{valid=not r.paid and now>=r.readyAt and r.slots[d.id]~=nil,targetId=r.id,arrived=(d.pos-job.station).Magnitude<=.7,impactReached=(d.pos-job.impact).Magnitude<=.65})
+ if event=='windup' then RoleEffects.BreakerPhase(d.pos,job.contact,'Windup')
+ elseif event=='dive' then RoleEffects.BreakerPhase(d.pos,job.contact,'Dive')
+ elseif event=='impact' then
+  -- One physically reached impact; no ticking laser or recursive beam effects.
+  if hitResource(d,r,d.stats.miningDPS*2.4,false,nil,d.pos,'Breaker') then
+   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact');d.impactSerial=(d.impactSerial or 0)+1
+  end
+  d.breaker=job
+ elseif event=='missed' or event=='canceled' then release(d) end
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
@@ -701,6 +818,8 @@ local function droneStep(d: any,dt: number)
   if d.launchAt then d.launchAt=d.launchAt+dt end
   if d.unloadAt then d.unloadAt=d.unloadAt+dt end
   if d.repairChargeAt then d.repairChargeAt=d.repairChargeAt+dt end
+  if d.breaker then d.breaker.phaseAt+=dt end
+  if d.scanAt then d.scanAt+=dt end
   return
  end
  if not store:healthy(p.session) then release(d);return end
@@ -726,7 +845,9 @@ local function droneStep(d: any,dt: number)
  if d.role=='Courier' then
   d.mining=false;d.field=nil
   if Pro.cargoUnits(data(p))>0 and now>=(d.collectAfter or 0) then
-   d.state='Collect';move(d,hr.Position+Vector3.new(-1,d.flightHeight,1),dt)
+   local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
+   local side=rank%2==0 and 1 or -1
+   d.state='Collect';move(d,hr.Position+Vector3.new(side*2.2,2.4,1),dt)
    if (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
     d.pickupAt=d.pickupAt or now;d.state='Pickup'
     d.deliveryRequested=now-d.pickupAt>=RoleConfig.Courier.PickupHold
@@ -737,7 +858,13 @@ local function droneStep(d: any,dt: number)
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
   end
   return
- elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return end
+ elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return
+ elseif d.role=='Dart' then scoutDrone(d,p,hr,dt);return
+ elseif DroneRoles.ability(d.role) then roleAbilityStep(d,p,hr,dt);return end
+ if d.role=='Charger' and not d.field then
+  local selected=workingField(p,hr)
+  if selected then d.field=selected.id end
+ end
  local field=d.field and patches[d.field]
  -- Cleared/safe mining orders are independent jobs. Combat still has the
  -- owner leash and server-owned guard participation.
@@ -755,6 +882,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along; saved jobs resume when the player returns to work.
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
     move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+   elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
   else leaveDroneField(p,d) end
  else
@@ -771,7 +899,7 @@ end
 local function snapshotDrone(d)
  local profile=data(profiles[d.owner])
  local target=d.target
- if target and (target.paid or target.hp<=0 or not target.part.Parent) then release(d);target=nil end
+ if target and (target.paid or target.hp<=0 or not target.part.Parent) then retireTarget(d);target=nil end
  local breakContact=d.mineBreakContact
  if breakContact and (now>=breakContact.untilTime or not healthy(profiles[d.owner]) or d.hp<=0) then d.mineBreakContact=nil;breakContact=nil end
  if (d.forkUntil or 0)<=now then d.forkTargetId=nil end
@@ -781,14 +909,14 @@ local function snapshotDrone(d)
  local mining=d.state=='Mine' and d.mining and target~=nil
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
   Position=d.pos,Goal=d.goal,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,MotionPaused=(profiles[d.owner].busy or not store:healthy(profiles[d.owner].session)) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
-  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=d.stats.warmup,
-  MiningStyle=Mining.style(d.owned.type),MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
+  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=target and math.max(.08,d.stats.warmup*DroneRoles.startupFactor(target.scoutedUntil,now)) or d.stats.warmup,
+  MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=profile.run.deliveries[d.id] and profile.run.deliveries[d.id].id or '',AutoFieldId=d.autoField or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.converter or scene.packStation).Position,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
   RepairChargeAt=d.repairChargeAt or 0,RepairChargeDuration=RoleConfig.Types.Medic.ChargeWindup,
-  AutomationMineEnabled=d.role~='Courier' and d.role~='Medic' and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=Mining.workRole(d.role),
+  AutomationMineEnabled=DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=DroneRoles.job(d.role),ImpactSerial=d.impactSerial or 0,
   MineBreakSerial=d.mineBreakSerial,MineBreakAt=breakContact and breakContact.at or 0,MineBreakUntil=breakContact and breakContact.untilTime or 0,
   MineBreakPrimaryId=breakContact and breakContact.primaryId or '',MineBreakSecondaryId=breakContact and breakContact.secondaryId or '',MineBreakBeamSince=breakContact and breakContact.beamSince or 0,
   ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
@@ -839,11 +967,12 @@ local function transact(p: any,id: any,mutate: any,after: any,outcome: any)
  return true
 end
 local function assignOre(p: any,d: any,r: any): boolean
+ if not DroneRoles.isWorker(d.role) then return false end
  local occupied={};for _,slot in pairs(r.slots) do occupied[slot]=true end
  local slot=1;while slot<=r.limit and occupied[slot] do slot+=1 end
  if slot>r.limit then return false end
  local old=d.field;release(d);spend(d)
- d.autoField=nil;d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil
+ d.autoField=nil;d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil;p.workField=r.field.id
  r.slots[d.id]=slot;updateSlots(r)
  if old~=d.field then dropFieldIfEmpty(p,old) end
  return true
@@ -857,7 +986,7 @@ local function dispatchOreQueue(p: any)
   else
    local best,distance=nil,math.huge
    for _,d in ipairs(p.drones) do
-    if d.hp>0 and d.role~='Courier' and d.role~='Medic' and not d.target and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) then
+    if d.hp>0 and DroneRoles.isWorker(d.role) and not d.target and not d.breaker and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) then
      local n=(d.pos-r.position).Magnitude
      if n<distance then best,distance=d,n end
     end
@@ -1012,17 +1141,24 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  return true
 end
-local function abilityContext(p,fieldId)
+local function abilityContext(p,fieldId,operator)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)
   return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and (hr.Position-field.center).Magnitude<=RoleConfig.Mining.BackpackRange
  end
- local miner
- for _,d in ipairs(p.drones) do if d.hp>0 and d.role~='Medic' and d.role~='Courier' then miner=d;break end end
- local hr=characterRoot(p);local origin=hr and hr.Position or home
- local function unlocked(kind) return Shops.abilityUnlocked(data(p),kind) end
+ local active=p.ability and (p.ability.charge or p.ability.swarm)
+ local actor=operator or (active and active.actorId and drones[active.actorId])
+ if not actor and not (active and active.actorId) then
+  for _,d in ipairs(p.drones) do if d.hp>0 and (DroneRoles.isWorker(d.role) or DroneRoles.ability(d.role)) then actor=d;break end end
+ end
+ local hr=characterRoot(p);local origin=actor and actor.pos or (hr and hr.Position or home)
+ local function unlocked(kind)
+  if Shops.abilityUnlocked(data(p),kind) then return true end
+  for _,d in ipairs(p.drones) do if d.hp>0 and DroneRoles.ability(d.role)==kind then return true end end
+  return false
+ end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
-  valid=function(id) return miner~=nil and valid(id) end,
+  valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) end,
   targets=function(id)
    local list={};if not valid(id) then return list end
@@ -1036,12 +1172,51 @@ local function abilityContext(p,fieldId)
   end,
   hit=function(id,damage,_kind,from)
    local resource=resources[id]
-   if not resource or not miner or not valid(resource.field.id) or type(from)~='table' then return false end
+   if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
-   local accepted=hitResource(miner,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z))
+   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z))
    return accepted,resource.paid==true
   end,
   emit=function(event) RoleEffects.Ability(p.player.UserId,event,scene.droneTemplate) end}
+end
+local function finishAbility(p,token,context)
+ local charge=p.ability.charge
+ local ok,reason=DroneAbilities.confirm(p.ability,token,now,context)
+ if ok then
+  if p.ability.swarm and charge then p.ability.swarm.actorId=charge.actorId end
+  data(p).run.abilityCooldowns=Pro.clone(p.ability.cooldowns);p.dirty=true
+ end
+ p.publishDirty=true;return ok,reason
+end
+roleAbilityStep=function(d,p,hr,dt)
+ d.mining=false
+ local kind=DroneRoles.ability(d.role);local field=workingField(p,hr)
+ if not field then followRole(d,p,hr,dt);return end
+ p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
+ local ability=p.ability;local charge=ability.charge
+ local context=abilityContext(p,field.id,d)
+ if charge and charge.actorId==d.id then
+  d.state=kind=='Orbital' and 'OrbitalCharge' or 'SwarmDeploy'
+  if now>=charge.started+1.4 then finishAbility(p,charge.token,context) end
+ elseif kind=='Scrap' and ability.swarm and ability.swarm.actorId==d.id then d.state='SwarmActive'
+ elseif now<(ability.cooldowns[kind] or 0) then d.state=kind=='Orbital' and 'OrbitalCool' or 'SwarmCool'
+ else d.state=kind=='Orbital' and 'OrbitalSurvey' or 'SwarmReady' end
+ local goal
+ if kind=='Orbital' then
+  local target=charge and charge.actorId==d.id and resources[charge.targetId] or nil
+  if not target then
+   local largest=-1
+   for _,node in ipairs(context.targets(field.id)) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
+  end
+  goal=target and target.position+Vector3.new(0,math.max(12,target.fullSize.Y*.5+7),0) or hr.Position+Vector3.new(4,10,0)
+ else goal=hr.Position+Vector3.new(4,4,-3) end
+ move(d,goal,dt)
+ -- Hardware performs the normal server gadget, sharing its saved cooldown and
+ -- allowing the player to intervene in the green window for precision.
+ if not ability.charge and not (kind=='Scrap' and ability.swarm) and now>=(ability.cooldowns[kind] or 0) and (d.pos-goal).Magnitude<1 then
+  local ok=DroneAbilities.begin(ability,kind,now,context)
+  if ok then ability.charge.actorId=d.id;ability.charge.automatic=true;p.publishDirty=true end
+ end
 end
 local function miningAbility(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or (payload.kind~='Orbital' and payload.kind~='Scrap') or not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not patches[payload.fieldId] then return end
@@ -1051,7 +1226,8 @@ local function miningAbility(p,payload)
  local context=abilityContext(p,payload.fieldId)
  local ok,reason
  if payload.op=='begin' then ok,reason=DroneAbilities.begin(p.ability,payload.kind,now,context)
- else ok,reason=DroneAbilities.confirm(p.ability,payload.token,now,context) end
+ elseif p.ability.charge and p.ability.charge.kind==payload.kind and p.ability.charge.fieldId==payload.fieldId then ok,reason=finishAbility(p,payload.token,context)
+ else return end
  if ok then data(p).run.abilityCooldowns=Pro.clone(p.ability.cooldowns);p.dirty=true end
  notice(p,reason);p.publishDirty=true
 end
@@ -1075,11 +1251,11 @@ local function commandPlayer(pl: any,action: any,payload: any)
   miningAbility(p,payload)
  elseif action=='BuyUpgrade' then
   buyShopUpgrade(p,pl,payload)
- elseif action=='TestLoadout' then
+ elseif action=='TestLoadout' or action=='RoleLoadout' then
   if not preview or now<(p.nextTestLoadout or 0) then return end
   p.nextTestLoadout=now+RoleConfig.Settings.RandomizeCooldown;pl:SetAttribute('MA_TestReadyAt',p.nextTestLoadout)
-  leaveField(p);p.testFleet=randomTestFleet(p);rebuildFleet(p)
-  notice(p,'Random test loadout ready — no scrap spent, no saved fleet changed.')
+  leaveField(p);RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=action=='RoleLoadout' and roleTestFleet(p) or randomTestFleet(p);rebuildFleet(p)
+  notice(p,action=='RoleLoadout' and 'Eight-role test crew ready. Click ore to start work.' or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,d in ipairs(p.drones) do if d.hp>0 then d.state='Follow' end end
@@ -1104,7 +1280,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
   if (characterRoot(p).Position-field.center).Magnitude>RoleConfig.Mining.BackpackRange then reject('Move closer to the plot to mine',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
-  if d.role=='Courier' or d.role=='Medic' then reject('Choose a mining drone',field,d);return end
+  if not DroneRoles.isWorker(d.role) then reject('Choose the miner or breaker',field,d);return end
   if Pro.cargoUnits(data(p))>=Ca.capacity(data(p)) then reject('Bring your full backpack to sell',field,d);return end
   if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
   if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
@@ -1112,7 +1288,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local occupied={};for _,v in pairs(r.slots) do occupied[v]=true end
   local slot=1;while slot<=r.limit and occupied[slot] do slot=slot+1 end
   if slot>r.limit then reject('Resource is busy',field,d,r);return end
-  local old=d.field;release(d);spend(d);d.autoField=nil;d.field=field.id;d.target=r;d.targetSlot=slot;r.slots[d.id]=slot;updateSlots(r);d.state='Travel';d.shotAt=now
+  local old=d.field;release(d);spend(d);d.autoField=nil;d.field=field.id;d.target=r;d.targetSlot=slot;r.slots[d.id]=slot;updateSlots(r);d.state='Travel';d.shotAt=now;p.workField=field.id
   if old~=field.id then dropFieldIfEmpty(p,old) end
   commandReply(pl,payload,'accepted','Drone assigned',field,d,r,slot)
  elseif action=='MineOre' then
@@ -1127,7 +1303,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   for _,d in ipairs(p.drones) do if d.target==r then return end end
   for _,id in ipairs(p.oreQueue) do if id==r.id then return end end
   if #p.oreQueue>=16 then notice(p,'Ore queue full. Let the workers finish or recall to clear it.');return end
-  table.insert(p.oreQueue,r.id);dispatchOreQueue(p)
+  p.workField=r.field.id;table.insert(p.oreQueue,r.id);dispatchOreQueue(p)
  elseif action=='ReturnCargo' then
   if payload~=nil and (type(payload)~='string' or #payload>160) then return end
   sellBackpack(p)
@@ -1145,7 +1321,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    if activeAssault(p) then commandReply(pl,payload,'rejected','Recall fighting drones first',field);return end
    local assigned=0
    for _,d in ipairs(p.drones) do
-    if d.hp>0 and d.role~='Medic' and d.role~='Courier' and (d.stats.plotAuto or 0)>0 and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) then
+    if d.hp>0 and DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0 and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) then
      local old=d.field
      if old~=field.id then release(d);spend(d);d.field=field.id;d.state='Travel';d.shotAt=now end
      d.autoField=field.id;d.commandOutAt=nil;assigned+=1
@@ -1153,15 +1329,15 @@ local function commandPlayer(pl: any,action: any,payload: any)
     end
    end
    if assigned==0 then commandReply(pl,payload,'rejected','Click individual ores, or install Plot Scanner for an available worker',field);notice(p,'Click ores first. Plot Scanner unlocks plot orders.');return end
-   p.oreQueue={};commandReply(pl,payload,'accepted','Plot survey assigned',field)
+   p.workField=field.id;p.oreQueue={};commandReply(pl,payload,'accepted','Plot survey assigned',field)
   else
    local fleet={}
    for _,d in ipairs(p.drones) do
-    if d.hp>0 and d.role~='Courier' and R.allowed(d.owner,pl.UserId,d.state) then table.insert(fleet,d) end
+    if d.hp>0 and (DroneRoles.combat(d.role) or d.role=='Medic') and R.allowed(d.owner,pl.UserId,d.state) then table.insert(fleet,d) end
    end
    local fighters=0;for _,d in ipairs(fleet) do if d.role~='Medic' then fighters+=1 end end
    if fighters==0 then commandReply(pl,payload,'rejected','Reprint a fighting drone first',field);return end
-   p.oreQueue={}
+   p.oreQueue={};p.workField=nil
    -- Living replacements may join at any time. Repeating a guard order does
    -- not restart an existing attack or refresh its once-per-life entry shield.
    for _,d in ipairs(fleet) do
@@ -1256,6 +1432,7 @@ addPlayer=function(pl)
  profiles[pl.UserId]=p
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
+ if preview then p.testFleet=roleTestFleet(p) end
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
@@ -1300,7 +1477,11 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,field in ipairs(patches) do encounterStep(field) end
   for _,p in pairs(profiles) do
    dispatchOreQueue(p)
-   if p.ability and healthy(p) then DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,p.ability.charge and p.ability.charge.fieldId or p.ability.swarm and p.ability.swarm.fieldId or 1)) end
+   if p.ability and p.busy then DroneAbilities.pause(p.ability,C.Tick)
+   elseif p.ability and healthy(p) then
+    local swarm=p.ability.swarm
+    DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,swarm and swarm.fieldId or p.ability.charge and p.ability.charge.fieldId or 1,swarm and swarm.actorId and drones[swarm.actorId]))
+   end
   end
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end

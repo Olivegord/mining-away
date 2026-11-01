@@ -129,4 +129,12 @@ test('view publishes complete current state without target or client mutation ri
  assert(v.runId==c.runId and v.charge.token==s.charge.token and v.charge.sweetStart==10.7 and not v.target)
  v.charge.token='changed';assert(s.charge.token~='changed')
 end)
+test('storage pauses preserve charge windows and ten seconds of working swarm time',function()
+ local s,c=setup();begin(s,c);local started=s.charge.started;local expires=s.charge.expires
+ A.pause(s,3);assert(s.charge.started==started+3 and s.charge.expires==expires+3)
+ A.confirm(s,s.charge.token,13.9,c);assert(s.cooldowns.Orbital)
+ local swarmState,ctx=setup();local token=begin(swarmState,ctx,'Scrap');A.confirm(swarmState,token,10.5,ctx)
+ local deadline=swarmState.swarm.expires;local cooldown=swarmState.cooldowns.Scrap
+ A.pause(swarmState,4);assert(swarmState.swarm.expires==deadline+4 and swarmState.swarm.expires-swarmState.swarm.started==10 and swarmState.cooldowns.Scrap==cooldown)
+end)
 print(passed..' production gadget domain checks passed; not Studio or multiplayer evidence')

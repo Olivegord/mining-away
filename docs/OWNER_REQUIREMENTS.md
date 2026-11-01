@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — distinguish every drone job
+
+The owner reports that healer movement looks good but other drones all appear to mine alike. Give every unique type a mechanically distinct job and preserve the current healer behavior. For their test, start Studio players with one miner, two backpack emptiers, one healer and one of every other unique type. This eight-drone preview crew is separate from saved permanent ownership; the production new-profile invariant remains one permanent drone. See [distinct drone jobs](review/DRONE_ROLES.md).
+
 ## November 1 latest — apply the map in editable Workspace
 
 The owner supplied an Edit-mode screenshot and clarified that they stopped the work because the changes were not visible in Workspace. Apply the requested shops, central Quartz and adjacent spawn directly to the open editable Studio map. Runtime-only generation does not satisfy this request. Preserve the original capture, assets, unrelated content and backup scripts; no publishing or new Play session. Keep a local native editable copy and a reproducible Edit-mode layout application.
