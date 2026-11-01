@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — spawn beside central Quartz
+
+The owner requests spawn next to Quartz, with Quartz the closest field on the central approach rather than at the map edge. Preserve the same field model and later progression.
+
 ## November 1 correction — visible shops and standalone upgrades
 
 The owner could not find the shops and clarified: **standalone upgrades only; N-Gon is inspiration**, not a request for explicit upgrade combinations. Make the separate mineral shops discoverable and keep each upgrade useful on its own. The previous interpretation that requested combos was incorrect. The owner authorized stopping their existing Play session after applying the visibility fix, to save and verify corrected Studio sources; this does not authorize starting another Play session.

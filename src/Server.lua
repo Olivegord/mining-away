@@ -8,6 +8,7 @@ local RoleConfig: any,RoleEffects: any,DiscoveryService: any=DroneConfig,DroneRo
 local C: any,R: any=Config,Rules
 local Pro: any,Ca: any=Profile,Cards
 local scene: any=World.initialize()
+World.placeStart(scene)
 local root,home=scene.root,scene.home
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
@@ -1258,7 +1259,7 @@ addPlayer=function(pl)
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
-  local spawnAt=home+Vector3.new(0,4,0);local firstField=scene.fields[1].center
+  local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0);local firstField=scene.fields[1].center
   leaveField(p);ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
  end
  p.connection=pl.CharacterAdded:Connect(character)

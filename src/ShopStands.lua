@@ -2,12 +2,13 @@
 -- never move the original machine or replace field/world assets.
 local Stands={}
 function Stands.position(home,index,groundY)
- local offset=({-32,-16,16,32,48})[index]
- return Vector3.new(home.X+offset,groundY+1.5,home.Z+18)
+ local offset=({-16,-20,12,24,36})[index]
+ return Vector3.new(home.X+offset,groundY+1.5,home.Z+(index==1 and 32 or 18))
 end
 function Stands.mount(map,home,template)
  local stations={}
- local groundY=template.Position.Y-template.Size.Y/2
+ local pad=map:FindFirstChild('HubPad',true)
+ local groundY=pad and pad.Position.Y+pad.Size.Y/2 or template.Position.Y-template.Size.Y/2
  for index,key in ipairs(Shops.ORDER) do
   local name=key..'Shop';local station=map:FindFirstChild(name)
   if not station then

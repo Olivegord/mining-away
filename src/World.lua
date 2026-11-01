@@ -271,7 +271,7 @@ local function finishEditableMap(root,map,fields,home)
    if nearEdge>laneEdge then
     local length=nearEdge-laneEdge+1
     local link=W.part(model,'DepotApproach',Vector3.new(part.Position.X,lane.Position.Y,laneEdge+length/2),Vector3.new(12,lane.Size.Y,length),lane.Color,Enum.Material.Pavement)
-    nativeFinish(link,Enum.Material.Pavement);solid(link)
+    link:SetAttribute('GeneratedDepotApproach',true);nativeFinish(link,Enum.Material.Pavement);solid(link)
    end
   end
  end
@@ -294,6 +294,35 @@ local function restoreMiningFX()
   end
  end
 end
+-- Keep the first field on the depot's center approach and respawn beside it.
+-- Run before resources/turrets spawn; move the original model as one assembly.
+function W.placeStart(scene)
+ local home=scene.home;local pad=scene.map:FindFirstChild('HubPad',true)
+ scene.root:SetAttribute('DepotHome',home)
+ local quartz
+ for _,field in ipairs(scene.fields) do if field.cfg.Key=='Quartz' then quartz=field;break end end
+ if not quartz then return end
+ local half=pad and pad.Size.Z/2 or 32
+ local center=Vector3.new(home.X,quartz.part.Position.Y,home.Z+half+6+quartz.part.Size.Z/2)
+ local target=CFrame.new(center)*quartz.part.CFrame.Rotation
+ quartz.model:PivotTo(target*quartz.part.CFrame:Inverse()*quartz.model:GetPivot());quartz.center=quartz.part.Position
+ local approach=quartz.model:FindFirstChild('DepotApproach')
+ if approach and approach:GetAttribute('GeneratedDepotApproach') then approach:Destroy() end
+ local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+ local surface=pad and pad.Position.Y+pad.Size.Y/2 or home.Y
+ local nearEdge=quartz.center.Z-quartz.part.Size.Z/2
+ if pad then
+  local edge=pad.Position.Z+pad.Size.Z/2
+  if nearEdge>edge then
+   local bridge=scene.map:FindFirstChild('QuartzApproach') or W.part(scene.map,'QuartzApproach',Vector3.zero,Vector3.one,pad.Color,Enum.Material.Pavement)
+   bridge.Size=Vector3.new(12,pad.Size.Y,nearEdge-edge+1);bridge.CFrame=CFrame.new(home.X,pad.Position.Y,(nearEdge+edge)/2)
+   bridge.CanCollide=true;bridge.CanQuery=true
+  end
+ end
+ scene.spawnPosition=Vector3.new(home.X,surface+(spawn and spawn.Size.Y/2 or .5),nearEdge-10)
+ if spawn then spawn.CFrame=CFrame.lookAt(scene.spawnPosition,Vector3.new(quartz.center.X,scene.spawnPosition.Y,quartz.center.Z)) end
+ scene.root:SetAttribute('StarterField','Quartz');scene.root:SetAttribute('StarterSpawn',scene.spawnPosition)
+end
 function W.initialize(): any
  restoreMiningFX()
  Daylight.apply()
@@ -305,7 +334,8 @@ function W.initialize(): any
   local map=existing:FindFirstChild('Map')
   local fields=existing:FindFirstChild('Fields')
   local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
-  local home=spawn and spawn.Position or Vector3.new(-56,.5,-11)
+  local hub=map and map:FindFirstChild('HubPad',true)
+  local home=existing:GetAttribute('DepotHome') or (hub and hub.Position) or (spawn and spawn.Position) or Vector3.new(-56,.5,-11)
   assert(map and fields,'Editable map is missing required folders')
   finishEditableMap(existing,map,fields,home)
   local fieldMetadata={}

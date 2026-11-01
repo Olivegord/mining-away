@@ -155,7 +155,9 @@ local function menu(mode,title,subtitle,icon)
 end
 local function atHomeUI()
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
- return hr and spawn and (hr.Position-spawn.Position).Magnitude<30
+ local hub=world.Map:FindFirstChild('HubPad',true)
+ local depot=world:GetAttribute('DepotHome') or (hub and hub.Position) or (spawn and spawn.Position)
+ return hr and depot and (hr.Position-depot).Magnitude<30
 end
 local function availability(action)
  if not profile then return false,'Connecting…' end

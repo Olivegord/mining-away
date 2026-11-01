@@ -59,13 +59,15 @@ PASS persistence actual Profile missing-target migration refund is durable befor
 PASS persistence actual Profile prestige crash retains identities and exactly one permanent grant
 PASS persistence signed Studio identities are accepted only by explicit isolated preview adapter
 28 FINAL persistence tests passed (deterministic storage adapter; live DataStore not executed)
+PASS shop server spawn and real character respawns face the centrally placed nearest Quartz field
 PASS shop server all five named counters are grounded and visible near the original depot
 PASS shop server mounting counters again preserves live handler references and original assets
+PASS shop server counter feet use the real hub-pad top rather than an embedded machine bottom
 PASS shop server remote cannot purchase away from its actual kiosk
 PASS shop server kiosk purchase is saved once and updates real drone targeting stats
 PASS shop server shop access does not bypass the real Cobalt guard gate
 PASS shop server locked field commands cannot enroll a fleet into its encounter
-6 actual server shop integration checks passed using API doubles; not Studio evidence
+8 actual server shop integration checks passed using API doubles; not Studio evidence
 PASS active capture: deterministic build, exact seven Source paths, all other chunks and backup Sources preserved; not Studio evidence
 PASS current shop domain/server checks, all source and bundle syntax, deterministic live-capture preservation. Not Studio visual/multiplayer QA.
 

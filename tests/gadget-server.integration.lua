@@ -49,7 +49,7 @@ check('foreign worker reservations are excluded from selection and reject direct
 end)
 check('leaving plot and full backpack reject the real authoritative contact',function()
  local pl,p=fixture();data(p).run.shopLevels.cobalt_orbital=1;local r=largeNode();local context=abilityContext(p,1)
- pl.Character:PivotTo(CFrame.new(home));local hp=r.hp
+ pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(RoleConfig.Mining.BackpackRange+20,0,0)));local hp=r.hp
  assert(not context.hit(r.id,100,'Orbital',{x=r.position.X,y=r.position.Y+34,z=r.position.Z}));assert(r.hp==hp)
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)))
  data(p).run.cargo={Quartz=Ca.capacity(data(p))}
