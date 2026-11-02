@@ -115,6 +115,7 @@ function View.start(options)
    sweet.Position=UDim2.fromScale((charge.sweetStart-charge.started)/span,0)
    sweet.Size=UDim2.fromScale((charge.sweetEnd-charge.sweetStart)/span,1)
    cursor.Position=UDim2.new(math.clamp((now-charge.started)/span,0,1),-1,0,0)
+  elseif (state.burnUntil or 0)>now then hint.Text='Orbital melting · '..math.ceil(state.burnUntil-now)..'s'
   elseif (state.swarmUntil or 0)>now then hint.Text='Scrap swarm · '..math.ceil(state.swarmUntil-now)..'s'
   else hint.Text='Drones work automatically; tap for precision' end
   if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end

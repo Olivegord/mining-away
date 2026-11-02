@@ -1,5 +1,12 @@
 # Owner requirements
 
+## November 1 latest — mining impact and testing while playing
+
+The owner requests stronger default mining feedback; rocks turn black before each size reduction; some much larger rocks have more shrink stages. Orbital charge uses a very thin translucent red cylinder sight, followed by sustained melting damage and screen shake throughout the active burn. Breakers need a harsher powered fall, rocket particles and a heavier hit effect. Drones keep mining with a full backpack; pickup waits for space. Add an always-unlocked field beside Quartz with tenfold rock health.
+
+The owner subsequently says: “make sure you can edit and save WHILE i am playing. i want to test right now”. This permits starting their immediate Play session, superseding the earlier no-new-Play restriction for that session. Keep editing/saving the same project alongside their test, leave their session running, and ask before stopping it again. Distinguish saved source/build updates from code actually loaded into a running session. No Roblox publishing or new experience is authorized. See [mining impact review](review/MINING_IMPACT.md).
+
+
 ## November 1 latest — collectible mining and gentler feedback
 
 Rocks must drop collectible rock fragments with stronger attraction to the player. Improve laser contacts with sparks; drones linger about a second after finishing and accelerate/decelerate smoothly. Replace grating money/break sounds with gentler feedback and add proximity mining audio. Make drone jobs visibly and mechanically distinct, including a red orbital target sight followed by a strike from above, rather than another ordinary beam. Improve grounded rock presentation while preserving original assets. Every mineral shop needs upgrades for specific drone roles, including Ruby granting backpack emptiers four times their parcel capacity. Increase rock work to about three times the previous health to slow progression. Add restrained screen feedback/polish. Existing no-publishing and no-new-Play-session restrictions remain.

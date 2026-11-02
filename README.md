@@ -1,6 +1,6 @@
 # Drone Blower revolution
 
-Latest mining pass: [collectible ore, inertia, gentler audio and hardware upgrades](docs/review/MINING_EXPERIENCE.md).
+Latest mining pass: [blackening rock layers, large boulders, sustained orbital melting, powered breaker hits and the always-open 10× health test field beside Quartz](docs/review/MINING_IMPACT.md). Full backpacks permit mining and pause pickup. The owner-requested Play session is running; project files and review builds can continue to be saved while they test. Earlier [collectible mining and hardware upgrades](docs/review/MINING_EXPERIENCE.md) remain.
 
 
 **Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. The separate source-only preservation build keeps the immutable capture intact. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it in Edit mode, then use File → Download a Copy. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).

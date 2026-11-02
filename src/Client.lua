@@ -14,26 +14,47 @@ local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local pickupView=PickupView.new(world,localFX)
 local previousShake=CFrame.new();local shakeCamera=nil
+local orbitalBurns={};local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
 end)
 RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
  local camera=workspace.CurrentCamera
+ local now=workspace:GetServerTimeNow()
+ for source in pairs(orbitalBurns) do
+  if not source.Parent then orbitalBurns[source]=nil
+  else
+   local active=now-(source:GetAttribute('ContactAt') or 0)<.3
+   for _,part in ipairs(source:GetDescendants()) do
+    if part:IsA('BasePart') then part.LocalTransparencyModifier=active and 0 or 1
+    elseif part:IsA('ParticleEmitter') then part.Enabled=active end
+   end
+   if active and now>=burnShakeAt then
+    presentation:kick(source:GetAttribute('Position') or Vector3.zero,.13,now)
+   end
+  end
+ end
+ if now>=burnShakeAt then burnShakeAt=now+.075 end
  if camera and player:GetAttribute('ReducedMotion')~=true and player:GetAttribute('MA_ReducedMotion')~=true then
   previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
 local function roleImpact(source)
+ if source:IsA('Folder') and source:GetAttribute('OrbitalBurn') then
+  orbitalBurns[source]=true;soundscape:play('orbital',source:GetAttribute('Position'))
+ end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
   if math.abs(now-at)<.7 then
-   presentation:kick(source.Position,source:GetAttribute('MiningImpact')=='Orbital' and .15 or .065,now)
+   presentation:kick(source.Position,source:GetAttribute('MiningImpact')=='Orbital' and .15 or .14,now)
    soundscape:play(source:GetAttribute('MiningImpact')=='Orbital' and 'orbital' or 'mining',source.Position)
   end
  end
 end
-local impactConnection=workspace.DescendantAdded:Connect(function(source) if source:IsA('BasePart') then task.defer(roleImpact,source) end end)
+local impactConnection=workspace.DescendantAdded:Connect(function(source) if source:IsA('BasePart') or source:IsA('Folder') then task.defer(roleImpact,source) end end)
+local existingRoleFX=workspace:FindFirstChild('DroneRoleServerEffects')
+if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do roleImpact(source) end end
 
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
@@ -574,7 +595,7 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=0;view.Parent=localFX;hidePart(source)
- resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow())}
+ resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
 end
 local function registerTurret(source)
@@ -637,7 +658,7 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  local s=r.source;local view=r.view
- local key=Shops.ORDER[s:GetAttribute('FieldId') or 1]
+ local key=s:GetAttribute('Mineral') or Shops.ORDER[s:GetAttribute('FieldId') or 1]
  if profile and not Shops.unlocked(profile,key) then view.Transparency=1;return end
  local full=s:GetAttribute('FullSize') or s.Size
  if type(full)=='number' then full=Vector3.one*full end
@@ -647,12 +668,13 @@ local function renderResource(r,now)
  -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
  local growth=Feel.growth(now,spawnAt)
  if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
- local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,3)
+ local stageCount=s:GetAttribute('StageCount') or 3
+ local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now)
+ local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
- local period=1-stage*.25
+ local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
   view.Size=full*math.max(.005,growth*period)
@@ -662,7 +684,8 @@ local function renderResource(r,now)
   local ground=s:GetAttribute('GroundY')
   if type(ground)=='number' then view.CFrame=Feel.groundedRockFrame(pos,view.Size,ground,stage,seed)
   else view.CFrame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
-  view.Color=r.baseColor:Lerp(Color3.new(.12,.12,.15),stage*.13)
+  local darkness=r.visual.scorched and 1 or Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
+  view.Color=r.baseColor:Lerp(Color3.fromRGB(7,8,10),darkness)
  else view.Transparency=1 end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now) end
@@ -705,6 +728,10 @@ local function renderDrone(d,dt,now)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
+ elseif not motionPaused and state=='BreakerImpact' then
+  d.pos=s:GetAttribute('BreakerImpact') or logical;d.velocity=Vector3.zero
+ elseif not motionPaused and state=='BreakerDive' then
+  d.pos,d.velocity=Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,s:GetAttribute('BreakerImpact') or goal,now-(s:GetAttribute('BreakerPhaseAt') or now),.28)
  elseif not motionPaused then
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -917,7 +944,7 @@ connect(game:GetService('ProximityPromptService').PromptTriggered,function(promp
  if (not who or who==player) and prompt.Parent and prompt.Parent:IsA('BasePart') then performStation(prompt.Parent) end
 end)
 local function availableAutomaticWorker()
- if not profile or cargoUnits(profile)>=(profile.capacity or 40) then return false end
+ if not profile then return false end
  for source in pairs(drones) do
   if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutomationMineEnabled')==true
    and (source:GetAttribute('HP') or 0)>0 and source:GetAttribute('State')~='Reprinting' and source:GetAttribute('State')~='Deliver'
@@ -936,7 +963,7 @@ local function requestPlot(id)
   notice.Text='Click an ore. Plot Scanner unlocks automatic stone selection.';noticeUntil=os.clock()+4;return
  end
  if not guarded and not availableAutomaticWorker() then
-  notice.Text='Bring your full backpack to the depot to sell.';noticeUntil=os.clock()+4;return
+  notice.Text='Choose an available miner with Plot Scanner.';noticeUntil=os.clock()+4;return
  end
  command:FireServer('Patch',id)
 end
@@ -1042,7 +1069,7 @@ connect(RunService.Heartbeat,function(dt)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
   local pre=profile.prestigePreview;local price=profile.nextPackPrice or 40
   if pending() then objective.Text='Your paid pack is waiting.\nChoose your card at the depot.'
-  elseif amount>=capacity then objective.Text='Backpack full · return to sell.\nCouriers sell small parcels for you.'
+  elseif amount>=capacity then objective.Text='Backpack full · mining continues.\nSell to collect waiting fragments.'
   elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
   elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' Quartz.\nOpen your next pack at the depot.'
   elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click an ore to assign a miner.\nCarry your backpack back to sell.'

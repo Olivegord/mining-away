@@ -16,7 +16,7 @@ local function setup()
  ctx.full=function() return ctx.isFull end
  ctx.targets=function() local list={};for _,r in ipairs(rocks) do if r.hp>0 then table.insert(list,table.clone(r)) end end;return list end
  ctx.hit=function(id,damage,kind,origin)
-  if ctx.blocked or ctx.isFull then return false end
+  if ctx.blocked then return false end
   for _,r in ipairs(rocks) do if r.id==id and r.hp>0 then
    table.insert(hits,{id=id,damage=damage,kind=kind,origin=origin});r.hp=math.max(0,r.hp-damage);return true,r.hp<=0
   end end
@@ -34,9 +34,9 @@ end)
 test('unknown gadget, NaN time and locked plot are rejected',function()
  local s,c=setup();assert(not A.begin(s,'Fake',10,c));assert(not A.begin(s,'Orbital',0/0,c));c.blocked=true;assert(not A.begin(s,'Orbital',10,c))
 end)
-test('full backpack cannot start or fire a gadget',function()
- local s,c,_,h=setup();c.isFull=true;assert(not A.begin(s,'Orbital',10,c));c.isFull=false;local token=begin(s,c);c.isFull=true
- assert(not A.confirm(s,token,10.9,c));assert(#h==0 and not s.charge and not s.cooldowns.Orbital)
+test('full backpack does not prevent sustained mining abilities',function()
+ local s,c,r,h=setup();c.isFull=true;local token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(s.burn and #h==0)
+ A.step(s,11,.1,c);assert(#h==1 and r[1].hp>0 and r[1].hp<100)
 end)
 test('largest grown eligible crystal is selected with stable ID tie break',function()
  local s,c,r=setup();r[4].maxHP=100;r[4].id='aaa';begin(s,c);assert(s.charge.targetId=='aaa')
@@ -46,21 +46,38 @@ test('server timing rejects premature and expired input without spending cooldow
  assert(not A.confirm(s,token,12.6,c));assert(not s.charge and not s.cooldowns.Orbital and #h==0)
 end)
 test('unrecognized/replayed tokens cannot fire twice',function()
- local s,c,_,h=setup();local token=begin(s,c);assert(not A.confirm(s,'spoof',10.9,c));assert(A.confirm(s,token,10.5,c));assert(#h==1)
+ local s,c,_,h=setup();local token=begin(s,c);assert(not A.confirm(s,'spoof',10.9,c));assert(A.confirm(s,token,10.5,c));A.step(s,10.6,.1,c);assert(#h==1)
  assert(not A.confirm(s,token,11,c));assert(#h==1)
 end)
-test('ordinary orbital vaporizes one biggest rock and starts cooldown',function()
- local s,c,r,h=setup();local token=begin(s,c);assert(A.confirm(s,token,10.5,c));assert(r[1].hp==0 and #h==1 and h[1].id=='big')
- assert(h[1].origin.y==34 and s.cooldowns.Orbital==55.5);assert(not A.begin(s,'Orbital',11,c))
+local function burn(s,c,start,seconds)
+ for n=1,math.ceil((seconds or 4.1)*60) do A.step(s,start+n/60,1/60,c) end
+end
+test('ordinary orbital melts one biggest rock over four seconds',function()
+ local s,c,r,h=setup();local token=begin(s,c);assert(A.confirm(s,token,10.5,c));assert(r[1].hp==100 and #h==0)
+ burn(s,c,10.5,2);assert(r[1].hp>45 and r[1].hp<55 and #h==120 and s.burn)
+ burn(s,c,12.5,2.1);assert(r[1].hp<1e-6 and not s.burn)
+ for _,hit in ipairs(h) do assert(hit.id=='big' and hit.damage<1 and hit.origin.y==34) end
+ assert(s.cooldowns.Orbital==55.5 and not A.begin(s,'Orbital',15,c))
 end)
-test('precision strike has one intrinsic neighbor fracture and ignores retired combo perks',function()
- local s,c,_,h=setup();local token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==2)
- s,c,_,h=setup();c.perks.orbitalRelay=true;token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==2)
- for _,hit in ipairs(h) do assert(hit.id~='far') end
+test('precision burn fractures one neighbor on completion, never during charge',function()
+ for _,retired in ipairs({false,true}) do
+  local s,c,r,h=setup();c.perks.orbitalRelay=retired;local token=begin(s,c);assert(A.confirm(s,token,10.9,c));assert(#h==0)
+  burn(s,c,10.9,4.1);local relays=0
+  for _,hit in ipairs(h) do if hit.kind=='OrbitalRelay' then relays+=1;assert(hit.id~='far') end end
+  assert(relays==1 and not s.burn)
+ end
 end)
-test('lost original target or blocked authoritative contact refunds cooldown',function()
+test('lost target cancels and first blocked contact refunds cooldown',function()
  local s,c,r,h=setup();local token=begin(s,c);r[1].hp=0;assert(not A.confirm(s,token,10.9,c));assert(not s.cooldowns.Orbital and #h==0)
- s,c=setup();token=begin(s,c);c.hit=function() return false end;assert(not A.confirm(s,token,10.9,c));assert(s.cooldowns.Orbital<=10.9)
+ s,c=setup();token=begin(s,c);c.hit=function() return false end;assert(A.confirm(s,token,10.9,c))
+ A.step(s,11,.1,c);assert(not s.burn and s.cooldowns.Orbital<=11)
+end)
+test('burn loss of eligibility and save pauses cannot catch up damage',function()
+ local s,c,r,h=setup();local token=begin(s,c);A.confirm(s,token,10.9,c)
+ A.step(s,11,.1,c);local hp=r[1].hp;local remaining=s.burn.remaining;A.pause(s,3)
+ assert(r[1].hp==hp and s.burn.remaining==remaining)
+ A.step(s,14,30,c);assert(hp-r[1].hp<=2.51,'stall caused a burst')
+ c.blocked=true;A.step(s,14.1,.1,c);assert(not s.burn)
 end)
 test('cycle upgrade changes the orbital cooldown only',function()
  local s,c=setup();c.perks.orbitalCycle=true;local token=begin(s,c);A.confirm(s,token,10.9,c);assert(s.cooldowns.Orbital==40.9)
@@ -105,12 +122,12 @@ test('scrap pairs cooperate on weak rocks and late-field chips remain capped',fu
  assert(r[2].hp==0 or r[3].hp==0,'a late-field deployment should finish a paired target')
  assert(r[2].hp+r[3].hp<before)
 end)
-test('leaving field, filling backpack and expiry tear down bots without further damage',function()
+test('leaving field and expiry tear down bots; filling backpack preserves work',function()
  for _,failure in ipairs({'blocked','full','expired'}) do
   local s,c,_,h,e=setup();local token=begin(s,c,'Scrap');A.confirm(s,token,10.9,c)
   if failure=='blocked' then c.blocked=true elseif failure=='full' then c.isFull=true end
   A.step(s,failure=='expired' and 21 or 11,1/60,c)
-  assert(not s.swarm and #h==0 and e[#e].kind=='clearScrap')
+  if failure=='full' then assert(s.swarm) else assert(not s.swarm and #h==0 and e[#e].kind=='clearScrap') end
  end
 end)
 test('scrap duration stays ten seconds even with a retired combo flag',function()

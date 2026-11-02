@@ -1,6 +1,6 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
-local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3}
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6}
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -11,7 +11,7 @@ local descriptions={
 }
 function M.style(kind: string): string return styles[M.kind(kind)] or 'Cutter' end
 function M.description(kind: string): string
- local roles={Dart='Scout · marks rocks for quicker miner startup',Striker='Miner · cuts one crystal with a continuous laser',Medic='Healer · follows allies; 10 health every 2 seconds',Courier='Backpack emptier · carries 8 ore to sell, then returns',Charger='Breaker · winds up, dives, hits, then recovers',Orbiter='Orbital · charges, then vaporizes the biggest rock',Scrapper='Swarm · launches tiny miners for 10 seconds'}
+ local roles={Dart='Scout · marks rocks for quicker miner startup',Striker='Miner · cuts one crystal with a continuous laser',Medic='Healer · follows allies; 10 health every 2 seconds',Courier='Backpack emptier · carries 8 ore to sell, then returns',Charger='Breaker · winds up, dives, hits, then recovers',Orbiter='Orbital · charges, then melts the biggest rock over time',Scrapper='Swarm · launches tiny miners for 10 seconds'}
  return roles[kind] or descriptions[M.kind(kind)] or descriptions.Blue
 end
 function M.workRole(kind: string): string

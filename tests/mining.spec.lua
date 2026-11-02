@@ -4,7 +4,7 @@ local passed=0
 local function test(name,fn) fn();passed+=1;print('PASS mining '..name) end
 local function close(a,b) assert(math.abs(a-b)<1e-7,tostring(a)..' ~= '..tostring(b)) end
 test('field hardness changes effective work while preserving authored footprint',function()
- local expected={1,1.8,3.2,5.2,8}
+ local expected={1,1.8,3.2,5.2,8,1}
  for index,field in ipairs(C.Fields) do
   close(field.Hardness,expected[index])
   for _,roll in ipairs({50,75,100}) do
@@ -20,6 +20,7 @@ end)
 test('harder fields increase mineral value per equivalent mining work',function()
  local previous=0
  for _,field in ipairs(C.Fields) do
+  if field.TestField then continue end
   local creditsPerBaseWork=field.Ore*field.Value/field.Hardness
   assert(creditsPerBaseWork>previous,field.Key..' reduced raw mining returns despite harder work')
   previous=creditsPerBaseWork

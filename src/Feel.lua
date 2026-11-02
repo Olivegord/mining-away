@@ -232,18 +232,28 @@ function F.mineGoal(resourcePosition,slot,geode,fullSize)
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end
-function F.stage(hp,maxHP)
- if maxHP<=0 then return 3 end
- local fraction=hp/maxHP
- if fraction<=.25 then return 3 elseif fraction<=.5 then return 2 elseif fraction<=.75 then return 1 end
- return 0
+function F.stage(hp,maxHP,count)
+ count=math.clamp(math.floor(count or 3),1,7)
+ if maxHP<=0 then return count end
+ return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
+end
+function F.stageDarkness(hp,maxHP,stage,count)
+ count=math.clamp(math.floor(count or 3),1,7)
+ local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
+ -- Black well before the layer gives way, then expose fresh mineral beneath.
+ return math.clamp(progress/.82,0,1)^.8
+end
+function F.powerDive(start,impact,elapsed,duration)
+ local p=math.clamp(elapsed/math.max(.01,duration),0,1)
+ local q=p^2.6
+ return start:Lerp(impact,q),(impact-start)*(2.6*p^1.6/math.max(.01,duration))
 end
 function F.stagesCrossed(previous,hp,maxHP)
  local result={}
  for stage=previous+1,F.stage(hp,maxHP) do table.insert(result,stage) end
  return result
 end
-function F.stageScale(stage) return 1-math.clamp(stage,0,3)*.25 end
+function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
  -- TweenInfo.new(2) originally used Roblox's default Quad.Out easing.
@@ -264,15 +274,19 @@ function F.approachYaw(yaw,target,dt)
  return yaw+delta*F.turnAlpha(dt)
 end
 -- Cosmetic-only quarter-stage sequencing. Server damage/rewards never wait for it.
-function F.newStagePresentation(stage,broken,now)
- stage=math.clamp(math.floor(stage or 0),0,3)
+function F.newStagePresentation(stage,broken,now,count)
+ stage=math.clamp(math.floor(stage or 0),0,count or 3)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
-function F.updateStagePresentation(p,authoritativeStage,broken,now)
- -- A break implies all three quarters crossed, even if attributes arrive out of order.
- local target=broken and 3 or math.clamp(math.floor(authoritativeStage or 0),0,3)
+function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
+ local scorch=count~=nil
+ count=count or 3
+ local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
  if target>p.knownStage and not p.knownBreak then
-  for stage=p.knownStage+1,target do table.insert(p.queue,{stage=stage}) end
+  for stage=p.knownStage+1,target do
+   if scorch then table.insert(p.queue,{scorch=true}) end
+   table.insert(p.queue,{stage=stage})
+  end
   p.knownStage=target
  end
  -- Keep an already-fractured source visible briefly so its final authoritative
@@ -283,7 +297,8 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now)
  if p.queue[1].broken and now<p.queue[1].notBefore then return nil end
  local event=table.remove(p.queue,1)
  if event.broken then p.broken=true;return 'break' end
- p.stage=event.stage;p.nextAt=now+.09
+ if event.scorch then p.scorched=true;p.nextAt=now+.075;return 'scorch' end
+ p.scorched=false;p.stage=event.stage;p.nextAt=now+(scorch and .075 or .09)
  return 'stage'
 end
 return F

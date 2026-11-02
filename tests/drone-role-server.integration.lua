@@ -91,7 +91,9 @@ check('orbital hardware automatically strikes a largest rock and persists its co
  p.workField=1;d.pos=r.position+Vector3.new(0,12,0);ticks(d,.1,true)
  assert(p.ability and p.ability.charge and p.ability.charge.actorId==d.id and not d.target and not d.mining)
  local hp=r.hp;ticks(d,1.1);assert(r.hp==hp)
- ticks(d,.5,true);assert(r.paid and data(p).run.abilityCooldowns.Orbital>now)
+ ticks(d,.5,true);assert(not r.paid and p.ability.burn and data(p).run.abilityCooldowns.Orbital>now)
+ for _=1,250 do clock(C.Tick);DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,1,d)) end
+ assert(r.paid and not p.ability.burn)
  local untilTime=data(p).run.abilityCooldowns.Orbital;ticks(d,1,true);assert(p.ability.cooldowns.Orbital==untilTime and not d.mining)
 end)
 check('swarm hardware deploys four physical mini miners for exactly ten seconds',function()

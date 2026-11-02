@@ -128,15 +128,28 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
   Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
  elseif phase=='Impact' then
   local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(252,231,179),.25,2.8,.22)
+  Effects.Pulse(target,Color3.fromRGB(252,231,179),.4,4.6,.18)
+  local shock=part()
+  if shock then
+   shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
+   shock.Transparency=.45;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
+   local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
+   local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/smoke_main.dds'
+   dust.Color=ColorSequence.new(Color3.fromRGB(156,145,122));dust.Rate=0;dust.Lifetime=NumberRange.new(.25,.5)
+   dust.Speed=NumberRange.new(5,11);dust.Drag=5;dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
+   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(1,1.3)})
+   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(14)
+   TweenService:Create(shock,TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(.055,8,8),Transparency=1}):Play()
+   Debris:AddItem(shock,.65)
+  end
   -- Debris-like points communicate an impact, rather than a long emitter ray.
-  for index=1,3 do
+  for index=1,9 do
    local chip=part();if not chip then break end
    local angle=index*2.399963
    chip.Name='BreakerChip';chip.Shape=Enum.PartType.Ball;chip.Material=Enum.Material.Slate
-   chip.Color=Color3.fromRGB(142,131,109);chip.Size=Vector3.one*(.15+index*.035);chip.Position=target
+   chip.Color=Color3.fromRGB(142,131,109);chip.Size=Vector3.one*(.14+(index%3)*.10);chip.Position=target
    TweenService:Create(chip,TweenInfo.new(.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
-    Position=target+Vector3.new(math.cos(angle)*1.7,.5+index*.2,math.sin(angle)*1.7),Transparency=1,
+    Position=target+Vector3.new(math.cos(angle)*(2+index*.3),.7+(index%4)*.45,math.sin(angle)*(2+index*.3)),Transparency=1,
    }):Play()
    Debris:AddItem(chip,.35)
   end
@@ -167,55 +180,69 @@ local function column(position: Vector3,height: number,width: number,color: Colo
  TweenService:Create(value,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Transparency=1,Size=Vector3.new(height,.02,.02)}):Play()
  Debris:AddItem(value,duration+.05)
 end
-local function confirmedImpact(position: Vector3,kind: string)
- local value=part();if not value then return end
- value.Name='ConfirmedMiningImpact';value.Transparency=1;value.Size=Vector3.one*.05;value.Position=position
- value:SetAttribute('MiningImpact',kind);value:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(value,1)
+local burns: {[number]: Folder} = {}
+local function clearBurn(owner: number)
+ local old=burns[owner];burns[owner]=nil
+ if old then old:Destroy() end
 end
 local function targetSight(owner: number,target: any)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
- local position=location(target);local radius=math.clamp((target.radius or 1)+.7,1.4,4)
- local ground=target.ground or position.Y
- for index=1,4 do
-  local angle=(index-1)*math.pi/2;
-  local value=part();if not value then break end
-  value.Name='RedTargetBracket';value.Color=Color3.fromRGB(238,63,63);value.Transparency=.22
-  value.Size=Vector3.new(.12,.055,radius*.8);value.CFrame=CFrame.new(position.X,ground+.045,position.Z)*CFrame.Angles(0,-angle,0)*CFrame.new(radius,0,0)
-  value.Parent=group
-  TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{CFrame=value.CFrame*CFrame.new(-.35,0,0),Transparency=.05}):Play()
- end
- for index=1,2 do
-  local value=part();if not value then break end
-  value.Name='RedTargetCrosshair';value.Color=Color3.fromRGB(255,82,72);value.Transparency=.3
-  value.Size=Vector3.new(.65,.05,.07);value.CFrame=CFrame.new(position.X,ground+.06,position.Z)*CFrame.Angles(0,index*math.pi/2,0);value.Parent=group
- end
+ local value=part();if not value then group:Destroy();return end
+ local radius=math.clamp((target.radius or 1)+.7,1.4,8)
+ value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
+ value.Color=Color3.fromRGB(242,38,44);value.Transparency=.8
+ value.Size=Vector3.new(.035,radius*2,radius*2)
+ value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
+ value.Parent=group
+ TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{Transparency=.55}):Play()
  Debris:AddItem(group,2.6)
 end
-local function descendingStrike(position: Vector3)
- local red=Color3.fromRGB(248,78,61)
- for index,width in ipairs({2.4,.42}) do
-  local value=part();if not value then break end
-  value.Name='OrbitalRain';value.Shape=Enum.PartType.Cylinder;value.Color=index==1 and red or Color3.fromRGB(255,235,194)
-  value.Transparency=index==1 and .68 or .12;value.Size=Vector3.new(.05,width,width)
-  value.CFrame=CFrame.new(position+Vector3.new(0,34,0))*CFrame.Angles(0,0,math.pi/2)
-  TweenService:Create(value,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
-   Size=Vector3.new(34,width,width),CFrame=CFrame.new(position+Vector3.new(0,17,0))*CFrame.Angles(0,0,math.pi/2),
-  }):Play()
-  task.delay(.12,function() if value.Parent then
-   TweenService:Create(value,TweenInfo.new(.32,Enum.EasingStyle.Sine),{Transparency=1,Size=Vector3.new(34,.02,.02)}):Play()
-  end end)
-  Debris:AddItem(value,.5)
+local function sustainedStrike(owner: number,event: any)
+ local group=burns[owner]
+ if group and not group.Parent then burns[owner]=nil;group=nil end
+ if not group then
+  group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
+  group:SetAttribute('OrbitalBurn',true)
+  for index,width in ipairs({2.8,.8}) do
+   local value=part();if not value then break end
+   value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
+   value.Color=index==1 and Color3.fromRGB(252,66,43) or Color3.fromRGB(255,233,176)
+   value.Transparency=index==1 and .65 or .13;value.Size=Vector3.new(34,width,width);value.Parent=group
+   value:SetAttribute('BurnTransparency',value.Transparency)
+  end
+  local contact=part()
+  if contact then
+   contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=Color3.fromRGB(255,183,77)
+   contact.Transparency=.25;contact.Size=Vector3.one*1.2;contact.Parent=group;contact:SetAttribute('BurnTransparency',.25)
+   local tip=Instance.new('Attachment');tip.Parent=contact
+   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
+   sparks.Color=ColorSequence.new(Color3.fromRGB(255,230,144),Color3.fromRGB(240,76,35));sparks.LightEmission=1
+   sparks.Lifetime=NumberRange.new(.2,.45);sparks.Speed=NumberRange.new(10,21);sparks.Drag=2
+   sparks.Acceleration=Vector3.new(0,-32,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(75,75)
+   sparks.Rate=95;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(1,0)})
+   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
+  end
+  group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
+  group.Parent=folder();Debris:AddItem(group,12)
  end
- task.delay(.12,function() confirmedImpact(position,'Orbital');Effects.Pulse(position,red,.35,4.2,.3) end)
+ local position=location(event.target)
+ group:SetAttribute('Position',position);group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
+ for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,17,0))*CFrame.Angles(0,0,math.pi/2)
+  if not group:GetAttribute('Placed') then value.CFrame=pose
+  else TweenService:Create(value,TweenInfo.new(.1,Enum.EasingStyle.Linear),{CFrame=pose}):Play() end
+ end end
+ group:SetAttribute('Placed',true)
 end
 function Effects.ClearAbility(owner: number)
- clearSwarm(owner);clearMarker(owner)
+ clearSwarm(owner);clearMarker(owner);clearBurn(owner)
 end
 function Effects.Ability(owner: number,event: any,template: Model?)
  local kind=event.kind
  if kind=='clear' then Effects.ClearAbility(owner)
  elseif kind=='clearCharge' then clearMarker(owner)
  elseif kind=='clearScrap' then clearSwarm(owner)
+ elseif kind=='orbitalEnd' then clearBurn(owner)
  elseif kind=='charge' then
   clearMarker(owner)
   if event.ability=='Orbital' then targetSight(owner,event.target);return end
@@ -226,7 +253,7 @@ function Effects.Ability(owner: number,event: any,template: Model?)
   markers[owner]=value;Debris:AddItem(value,2.6)
  elseif kind=='orbital' then
   clearMarker(owner)
-  descendingStrike(location(event.target))
+  sustainedStrike(owner,event)
  elseif kind=='relay' then
   local position=location(event.target)
   column(position,9,.22,Color3.fromRGB(176,218,255),.3,.4)

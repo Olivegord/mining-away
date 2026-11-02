@@ -795,7 +795,7 @@ end
 function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
- return CFrame.new(math.sin(age*67)*strength,math.sin(age*83+.7)*strength*.65,0)
+ return CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
 end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end

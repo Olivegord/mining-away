@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'client-inertia': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/motion-setup.lua').read_text() + '\n' + render + '\n' + (ROOT / 'tests/client-inertia.integration.lua').read_text(),
         'server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/gadget-server.integration.lua').read_text(),
         'pickups-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/pickups-server.integration.lua').read_text(),
+        'mining-impact': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/mining-impact-server.integration.lua').read_text(),
         'roles-server': mock + '\nfunction runService:IsStudio() return true end\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/drone-role-server.integration.lua').read_text(),
     }
     for name, source in fixtures.items():

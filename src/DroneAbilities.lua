@@ -1,7 +1,7 @@
 -- Authoritative, bounded mining gadgets. No rewards, ownership, input timestamps
 -- or client-selected targets are trusted here. Context owns the normal hit path.
 local A={}
-A.KINDS={Orbital={cooldown=45},Scrap={cooldown=35}}
+A.KINDS={Orbital={cooldown=45,burnSeconds=4},Scrap={cooldown=35}}
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 local function point(p)
  return {x=p.x or p.X or 0,y=p.y or p.Y or 0,z=p.z or p.Z or 0}
@@ -28,10 +28,10 @@ function A.new(savedCooldowns,runId)
   local saved=type(savedCooldowns)=='table' and savedCooldowns[kind]
   if finite(saved) and saved>=0 and saved<1e14 then cooldowns[kind]=saved end
  end
- return {sequence=0,cooldowns=cooldowns,runId=runId,charge=nil,swarm=nil}
+ return {sequence=0,cooldowns=cooldowns,runId=runId,charge=nil,swarm=nil,burn=nil}
 end
 function A.cancel(state,ctx)
- state.charge=nil;state.swarm=nil
+ state.charge=nil;state.swarm=nil;state.burn=nil
  if ctx then event(ctx,'clear') end
 end
 function A.pause(state,dt)
@@ -40,6 +40,7 @@ function A.pause(state,dt)
  if charge then
   for _,key in ipairs({'started','sweetStart','sweetEnd','expires'}) do charge[key]+=dt end
  end
+ if state.burn then state.burn.started+=dt;state.burn.nextPose=0 end
  if state.swarm then state.swarm.started+=dt;state.swarm.expires+=dt;state.swarm.nextPose=0 end
 end
 function A.begin(state,kind,now,ctx)
@@ -47,9 +48,10 @@ function A.begin(state,kind,now,ctx)
  if state.runId~=ctx.runId then A.cancel(state,ctx);state.runId=ctx.runId;state.cooldowns={} end
  if not ctx.unlocked(kind) then return false,'Buy this gadget in its mineral shop first' end
  if state.charge then return false,'Finish the current gadget charge first' end
+ if kind=='Orbital' and state.burn then return false,'Orbital laser is still melting its target' end
  if kind=='Scrap' and state.swarm then return false,'Scrap bots are already working' end
  if now<(state.cooldowns[kind] or 0) then return false,'Gadget cooling down' end
- if not ctx.valid(ctx.fieldId) or ctx.full() then return false,'Use this beside an unlocked, unguarded plot with backpack space' end
+ if not ctx.valid(ctx.fieldId) then return false,'Use this beside an unlocked, unguarded plot' end
  local list=targets(ctx,ctx.fieldId)
  if #list==0 then return false,'No grown crystals are ready' end
  state.sequence+=1
@@ -63,8 +65,8 @@ function A.confirm(state,token,now,ctx)
  if state.runId~=ctx.runId or not charge or token~=charge.token or not finite(now) then return false,'Charge changed; try again' end
  if now>charge.expires then state.charge=nil;event(ctx,'clearCharge');return false,'Charge expired; no cooldown spent' end
  if now<charge.started+.08 then return false,'Let the gadget charge briefly' end
- if not ctx.unlocked(charge.kind) or not ctx.valid(charge.fieldId) or ctx.full() then
-  state.charge=nil;event(ctx,'clearCharge');return false,'Gadget canceled; return to the plot with backpack space'
+ if not ctx.unlocked(charge.kind) or not ctx.valid(charge.fieldId) then
+  state.charge=nil;event(ctx,'clearCharge');return false,'Gadget canceled; return to the plot'
  end
  local list=targets(ctx,charge.fieldId);local target
  for _,r in ipairs(list) do if r.id==charge.targetId then target=r;break end end
@@ -76,21 +78,11 @@ function A.confirm(state,token,now,ctx)
  if charge.kind=='Orbital' and perks.orbitalCycle then cooldown=30 end
  state.cooldowns[charge.kind]=now+cooldown
  if charge.kind=='Orbital' then
-  -- The largest saved target is vaporized through the ordinary server hit path.
-  -- A precision strike cracks nearby rocks; it never recursively triggers itself.
-  local accepted=ctx.hit(target.id,target.hp+10,'Orbital',{x=target.x,y=target.y+34,z=target.z})
-  if accepted then
-   event(ctx,'orbital',{target=target,precise=precise})
-   local relays=precise and 1 or 0
-   for _,r in ipairs(list) do
-    if relays>0 and r.id~=target.id and distance(target,r)<=14 and not ctx.full() then
-     if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});relays-=1 end
-    end
-   end
-  else
-   state.cooldowns[charge.kind]=now;event(ctx,'clearCharge')
-   return false,'Orbital contact blocked; no cooldown spent'
-  end
+  local duration=A.KINDS.Orbital.burnSeconds
+  state.burn={fieldId=charge.fieldId,targetId=target.id,actorId=charge.actorId,started=now,
+   remaining=duration,dps=target.hp/duration,precise=precise,nextPose=0,accepted=false}
+  event(ctx,'clearCharge')
+
  else
   local origin=point(ctx.origin);local bots={}
   for i=1,math.min(6,(precise and 6 or 4)+math.clamp(perks.scrapBots or 0,0,2)) do
@@ -103,13 +95,47 @@ function A.confirm(state,token,now,ctx)
  end
  return true,precise and 'Precision! Gadget deployed' or 'Gadget deployed'
 end
-function A.step(state,now,dt,ctx)
+function A.step(state,now,dt,ctx,swarmContext)
  if not finite(now) or not finite(dt) or dt<=0 then return end
  if state.runId~=ctx.runId then A.cancel(state,ctx);state.runId=ctx.runId;state.cooldowns={};return end
  if state.charge and now>state.charge.expires then state.charge=nil;event(ctx,'clearCharge') end
+ local burn=state.burn
+ if burn then
+  local target
+  if ctx.valid(burn.fieldId) and ctx.unlocked('Orbital') then
+   for _,r in ipairs(targets(ctx,burn.fieldId)) do if r.id==burn.targetId then target=r;break end end
+  end
+  if not target or burn.remaining<=1e-7 then
+   state.burn=nil;event(ctx,'orbitalEnd')
+  else
+   local slice=math.min(dt,.1,burn.remaining)
+   local accepted,broken=ctx.hit(target.id,burn.dps*slice,'Orbital',{x=target.x,y=target.y+34,z=target.z})
+   if not accepted then
+    if not burn.accepted then state.cooldowns.Orbital=now end
+    state.burn=nil;event(ctx,'orbitalEnd')
+   else
+    burn.accepted=true;burn.remaining-=slice
+    if now>=burn.nextPose then
+     burn.nextPose=now+.1
+     event(ctx,'orbital',{target=target,remaining=burn.remaining,precise=burn.precise})
+    end
+    if broken or burn.remaining<=1e-7 then
+     if burn.precise then
+      for _,r in ipairs(targets(ctx,burn.fieldId)) do
+       if r.id~=target.id and distance(target,r)<=14 then
+        if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
+       end
+      end
+     end
+     state.burn=nil;event(ctx,'orbitalEnd')
+    end
+   end
+  end
+ end
+ ctx=swarmContext or ctx
  local swarm=state.swarm
  if not swarm then return end
- if now>=swarm.expires or not ctx.valid(swarm.fieldId) or ctx.full() or not ctx.unlocked('Scrap') then
+ if now>=swarm.expires or not ctx.valid(swarm.fieldId) or not ctx.unlocked('Scrap') then
   state.swarm=nil;event(ctx,'clearScrap');return
  end
  -- No catch-up burst after a stall. At most six normal hit callbacks per step.
@@ -129,7 +155,7 @@ function A.step(state,now,dt,ctx)
    bot.targetId=target and target.id or nil;bot.charge=0
   end
   bot.active=false;bot.target=nil
-  if target and not ctx.full() then
+  if target then
    local slot=(taken[target.id] or 0)+1;taken[target.id]=slot
    local radius=finite(target.radius) and math.max(.1,target.radius) or .6
    local offset=math.min(.3,radius*.35)*(slot%2==0 and 1 or -1)
@@ -163,7 +189,7 @@ function A.step(state,now,dt,ctx)
  end
 end
 function A.view(state,_now)
- local view={runId=state.runId,cooldowns={Orbital=state.cooldowns.Orbital or 0,Scrap=state.cooldowns.Scrap or 0},swarmUntil=state.swarm and state.swarm.expires or 0}
+ local view={runId=state.runId,cooldowns={Orbital=state.cooldowns.Orbital or 0,Scrap=state.cooldowns.Scrap or 0},swarmUntil=state.swarm and state.swarm.expires or 0,burnUntil=state.burn and (_now+state.burn.remaining) or 0}
  if state.charge then
   local c=state.charge;view.charge={kind=c.kind,token=c.token,started=c.started,sweetStart=c.sweetStart,sweetEnd=c.sweetEnd,expires=c.expires}
  end

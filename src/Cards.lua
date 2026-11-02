@@ -15,7 +15,7 @@ local function card(id,title,scope,effects,description,kind)
 end
 C.CATALOG={
  card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let mining drones choose stones for you'),
- card('G01','Orbital Laser','Player',{orbitalLaser=1},'Unlock timed orbital strikes that instantly break the biggest ready rock'),
+ card('G01','Orbital Laser','Player',{orbitalLaser=1},'Unlock timed orbital burns that melt the biggest ready rock over four seconds'),
  card('G02','Scrap-bot Swarm','Player',{scrapSwarm=1},'Unlock a ten-second swarm of tiny mining bots'),
  card('A02','Fast Couriers','Player',{fullAuto=1},'+100% courier delivery speed; couriers carry small batches from your backpack'),
  card('F01','Sharper Beams','Fleet',{mining=.25},'+25% mining output across your fleet'),

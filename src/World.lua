@@ -217,7 +217,32 @@ local function nativeFinish(part,material,studs)
  part.TopSurface=studs and Enum.SurfaceType.Studs or Enum.SurfaceType.Smooth
  part.BottomSurface=Enum.SurfaceType.Smooth
 end
+function W.ensureImpactField(root,fields)
+ local quartz=fields:FindFirstChild('Quartz');local source=quartz and quartz:FindFirstChild('Field')
+ if not source then return end
+ local cfg=Config.Fields[6]
+ local model=fields:FindFirstChild(cfg.Key)
+ if not model then
+  model=Instance.new('Model');model.Name=cfg.Key;model.Parent=fields
+  local bed=W.part(model,'Field',source.Position,Vector3.new(56,source.Size.Y,64),source.Color,Enum.Material.Slate)
+  bed.Anchored=true;bed.CanCollide=true;bed.CanQuery=true
+ end
+ local bed=model:FindFirstChild('Field')
+ local destination=source.Position+Vector3.new(source.Size.X/2+8+bed.Size.X/2,0,0)
+ model:PivotTo(CFrame.new(destination-bed.Position)*model:GetPivot())
+ model:SetAttribute('AlwaysUnlocked',true);model:SetAttribute('Mineral','Quartz');model:SetAttribute('DisplayName',cfg.Name)
+ bed:SetAttribute('Mineral','Quartz')
+ if not model:FindFirstChild('ImpactTestSign') then
+  for _,side in ipairs({-1,1}) do
+   local foot=W.part(model,'TestSignFoot',bed.Position+Vector3.new(side*5,1.5,-bed.Size.Z/2+1),Vector3.new(.3,3,.3),Color3.fromRGB(67,73,72),Enum.Material.Metal)
+   foot.CanCollide=false
+  end
+  local board=W.part(model,'ImpactTestSign',bed.Position+Vector3.new(0,3,-bed.Size.Z/2+1),Vector3.new(13,3,.3),Color3.fromRGB(43,48,49),Enum.Material.Metal)
+  textFace(board,'IMPACT TEST','10x ROCK HEALTH  /  ALWAYS OPEN',Color3.fromRGB(225,202,143))
+ end
+end
 function W.layoutFields(root,fields,home)
+ W.ensureImpactField(root,fields)
  -- Preserve the captured parts, machines and field identities. The former
  -- straight-line order placed Cobalt in front of spawn and Quartz at the end.
  -- Reuse the existing plot footprints, ordered by distance, then stagger the
@@ -225,6 +250,7 @@ function W.layoutFields(root,fields,home)
  if root:GetAttribute('PlotOrderVersion')~=1 then
   local slots={};local plots={}
   for id,cfg in ipairs(Config.Fields) do
+   if cfg.TestField then continue end
    local model=fields:FindFirstChild(cfg.Key);local part=model and model:FindFirstChild('Field')
    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
    plots[id]={model=model,part=part};table.insert(slots,part.CFrame)
@@ -245,6 +271,7 @@ function W.layoutFields(root,fields,home)
  for id,cfg in ipairs(Config.Fields) do
   local model=fields:FindFirstChild(cfg.Key);local part=model:FindFirstChild('Field')
   model:SetAttribute('Tier',id);model:SetAttribute('FieldId',id);part:SetAttribute('FieldId',id)
+  model:SetAttribute('AlwaysUnlocked',cfg.AlwaysUnlocked==true);model:SetAttribute('Mineral',cfg.Material or cfg.Key);part:SetAttribute('Mineral',cfg.Material or cfg.Key)
  end
 end
 local function finishEditableMap(root,map,fields,home)
@@ -269,7 +296,7 @@ local function finishEditableMap(root,map,fields,home)
  local beds={Color3.fromRGB(164,157,133),Color3.fromRGB(139,112,116),Color3.fromRGB(111,127,145),Color3.fromRGB(129,117,143),Color3.fromRGB(106,131,117)}
  for id,cfg in ipairs(Config.Fields) do
   local model=fields:FindFirstChild(cfg.Key);local part=model:FindFirstChild('Field')
-  nativeFinish(part,finishes[id]);part.Color=beds[id]
+  nativeFinish(part,finishes[id] or Enum.Material.Slate);part.Color=beds[id] or beds[1]
   local border=model:FindFirstChild('Border')
   if border and border:IsA('BasePart') then nativeFinish(border,Enum.Material.Plastic,true) end
   if lane and lane:IsA('BasePart') and not model:FindFirstChild('DepotApproach') then
@@ -328,6 +355,8 @@ function W.placeStart(scene)
  end
  scene.spawnPosition=Vector3.new(home.X,surface+(spawn and spawn.Size.Y/2 or .5),nearEdge-10)
  if spawn then spawn.CFrame=CFrame.lookAt(scene.spawnPosition,Vector3.new(quartz.center.X,scene.spawnPosition.Y,quartz.center.Z)) end
+ W.ensureImpactField(scene.root,scene.root:FindFirstChild('Fields'))
+ for _,field in ipairs(scene.fields) do if field.cfg.TestField then field.center=field.part.Position end end
  scene.root:SetAttribute('StarterField','Quartz');scene.root:SetAttribute('StarterSpawn',scene.spawnPosition)
 end
 function W.initialize(): any
@@ -454,7 +483,7 @@ function W.initialize(): any
  end
  local fields={};local originals=workspace:FindFirstChild('Patches')
  for id,field in ipairs(cfg.Fields) do
-  local model=Instance.new('Model');model.Name=field.Key;model:SetAttribute('FieldId',id);model:SetAttribute('Tier',id);model:SetAttribute('DisplayName',field.Name);model.Parent=root.Fields
+  local model=Instance.new('Model');model.Name=field.Key;model:SetAttribute('AlwaysUnlocked',field.AlwaysUnlocked==true);model:SetAttribute('Mineral',field.Material or field.Key);model:SetAttribute('FieldId',id);model:SetAttribute('Tier',id);model:SetAttribute('DisplayName',field.Name);model.Parent=root.Fields
   local part=originals and field.Original and originals:FindFirstChild(field.Original)
   if part and part:IsA('BasePart') then part.Parent=model
   else local o=field.Offset;part=block(model,'Field',home+Vector3.new(o[1],o[2],o[3]),Vector3.new(unpack(field.Size)),P.ground,Enum.Material.Ground) end
@@ -463,7 +492,7 @@ function W.initialize(): any
   cleanSurface(part,archive)
   local accent=Color3.fromRGB(unpack(field.Color))
   local beds={Color3.fromRGB(130,190,139),Color3.fromRGB(159,102,91),Color3.fromRGB(88,146,179),Color3.fromRGB(142,117,178),Color3.fromRGB(63,156,114)}
-  part.Name='Field';part.Anchored=true;part.CanCollide=true;part.CanQuery=true;part.Color=beds[id];part.Material=Enum.Material.SmoothPlastic;part:SetAttribute('FieldId',id);part:SetAttribute('Patch',id)
+  part.Name='Field';part.Anchored=true;part.CanCollide=true;part.CanQuery=true;part.Color=beds[id] or beds[1];part.Material=Enum.Material.SmoothPlastic;part:SetAttribute('FieldId',id);part:SetAttribute('Patch',id)
   local top=part.Position.Y+part.Size.Y/2;local bottom=part.Position.Y-part.Size.Y/2
   -- The original raised Ruby patch is now visibly supported by a low layered mesa.
   if bottom>.4 then
@@ -473,7 +502,7 @@ function W.initialize(): any
   end
   -- Signs stand on each actual field top, beside its incoming route.
   local shoulders={{-20,-11},{-20,-8},{-20,10},{-21,-8},{21,-8}}
-  local shoulder=shoulders[id];local edge=Vector3.new(part.Position.X+shoulder[1]*MapLayout.FieldScale,top,part.Position.Z+shoulder[2]*MapLayout.FieldScale)
+  local shoulder=shoulders[id] or {0,-20};local edge=Vector3.new(part.Position.X+shoulder[1]*MapLayout.FieldScale,top,part.Position.Z+shoulder[2]*MapLayout.FieldScale)
   local subtitle=id==1 and 'SAFE  /  START HERE' or field.Turrets>0 and (id==3 and 'GUARDED  /  COMBAT CARDS' or 'GUARDED  /  '..field.RecommendedFleet..'+ DRONES') or 'SAFE  /  RICHER ORE'
   local facing=id>3 and fields[id-1].center or home
   solid(block(model,'SignTerrace',edge-Vector3.new(0,top/2,0),Vector3.new(9,math.max(.2,top),5),P.stone))
@@ -499,7 +528,7 @@ function W.initialize(): any
    local a,b,c=Vector3.new(face[1][1],face[1][2],face[1][3]),Vector3.new(face[2][1],face[2][2],face[2][3]),Vector3.new(face[3][1],face[3][2],face[3][3])
    local normal=(b-a):Cross(c-a).Unit
    local steep=math.abs(normal.Y)<.72
-   local color=steep and (cell.biome==2 and Color3.fromRGB(111,76,70) or P.stone) or soils[cell.biome]
+   local color=steep and (cell.biome==2 and Color3.fromRGB(111,76,70) or P.stone) or (soils[cell.biome] or soils[1])
    Facets.triangle(batch,a,b,c,color)
   end
   facetCells+=1

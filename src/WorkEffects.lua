@@ -115,7 +115,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',Color3.fromRGB(255,205,119))
   fx.impact.Orientation=Enum.ParticleOrientation.VelocityParallel
-  fx.impact.Lifetime=NumberRange.new(.14,.30);fx.impact.Speed=NumberRange.new(6,12)
+  fx.impact.Lifetime=NumberRange.new(.14,.30);fx.impact.Speed=NumberRange.new(9,17)
   fx.impact.Drag=2;fx.impact.Acceleration=Vector3.new(0,-25,0);fx.impact.SpreadAngle=Vector2.new(72,72)
   fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.65,.06),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Squash=NumberSequence.new(.8);fx.impact.LightEmission=.8
@@ -158,13 +158,13 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=charging and (4+8*q) or 6;fx.sparks.Enabled=charging or working
  fx.glow.Rate=charging and 5 or 3;fx.glow.Enabled=charging or working
  fx.impact.Color=ColorSequence.new(Color3.fromRGB(255,224,158),sample.mineralColor or beam.tint or WHITE)
- fx.impact.Rate=continuous and 42 or 0;fx.impact.Enabled=working and continuous
+ fx.impact.Rate=continuous and 78 or 0;fx.impact.Enabled=working and continuous
  if point and normal then
   beam.marker.CFrame=facing(point+normal*.045,normal)
   if fx.contact then
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.20+.22*width+.12*pulse)
-   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.72-.15*pulse) or 1
+   fx.contact.Size=Vector3.one*(.30+.32*width+.16*pulse)
+   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.45-.12*pulse) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse)
     fx.inner.Color=WHITE;fx.inner.Transparency=working and .15 or 1
@@ -189,6 +189,7 @@ function W:destroyCourier(record)
  end
 end
 function W:destroyDrone(record)
+ for _,rocket in ipairs(record.rockets or {}) do rocket.attachment:Destroy() end;record.rockets=nil
  self:destroyCourier(record)
  if record.repair then record.repair.anchor:Destroy();record.repair=nil;self.repairCount=math.max(0,self.repairCount-1) end
  if record.flight then
@@ -200,7 +201,21 @@ end
 function W:flight(drone,record,dt,now)
  local root=drone.view.PrimaryPart or drone.emitter
  if not root or not root.Parent then return end
- local source=drone.source;local fx=record.flight
+ local source=drone.source
+ local powered=source:GetAttribute('State')=='BreakerDive' and source:GetAttribute('MotionPaused')~=true
+ if powered and not record.rockets then
+  record.rockets={}
+  for _,side in ipairs({-1,1}) do
+   local nozzle=Instance.new('Attachment');nozzle.Name='BreakerRocket';nozzle.Position=Vector3.new(side*.4,.35,0);nozzle.Parent=root
+   local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66));jet.Texture='rbxasset://textures/particles/fire_main.dds'
+   jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(18,28);jet.Drag=0
+   jet.Lifetime=NumberRange.new(.08,.17);jet.Acceleration=Vector3.new(0,12,0);jet.Rate=160;jet.LightEmission=1
+   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
+   table.insert(record.rockets,{attachment=nozzle,jet=jet})
+  end
+ end
+ for _,rocket in ipairs(record.rockets or {}) do rocket.jet.Enabled=powered end
+ local fx=record.flight
  if not fx then
   fx={objects={},trails={},position=root.Position,life=source:GetAttribute('Life')};record.flight=fx
   local role=source:GetAttribute('Role')
