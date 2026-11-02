@@ -131,14 +131,22 @@ contextButton.Name='UseContext'
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
-local offerHeader=frame(sheet,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(29,104,210));offerHeader.Name='OfferHeader';offerHeader.ZIndex=sheet.ZIndex;offerHeader.Visible=false
-CardView.housing(U,offerHeader,Color3.fromRGB(29,104,210),Color3.fromRGB(120,230,255))
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
 local modalTitle=label(sheet,UDim2.fromOffset(90,18),UDim2.new(1,-158,0,39),'Build your next adventure',30,palette.ink,true)
 local modalSubtitle=label(sheet,UDim2.fromOffset(24,66),UDim2.new(1,-48,0,32),'',12,palette.muted)
 local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white;close:FindFirstChildOfClass('UIGradient').Enabled=false
 local body=Instance.new('ScrollingFrame');body.Name='MenuContent';body.Position=UDim2.fromOffset(24,112);body.Size=UDim2.new(1,-48,1,-136);body.BackgroundTransparency=1;body.BorderSizePixel=0;body.ScrollBarThickness=4;body.ScrollBarImageColor3=palette.muted;body.CanvasSize=UDim2.fromScale(0,0);body.AutomaticCanvasSize=Enum.AutomaticSize.Y;body.ZIndex=22;body.Parent=sheet
+-- Native touch controls otherwise draw over the physical offer surface.
+local previousTouchEnabled=nil
+local function syncModalTouch()
+ local controls=player.PlayerGui:FindFirstChild('TouchGui');if not controls then return end
+ if modal.Visible then if previousTouchEnabled==nil then previousTouchEnabled=controls.Enabled end;controls.Enabled=false
+ elseif previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled;previousTouchEnabled=nil end
+end
+connect(modal:GetPropertyChangedSignal('Visible'),syncModalTouch)
+connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' then syncModalTouch() end end)
 local modalMode,modalSize=nil,nil
+CardView.backdrop(U,sheet)
 local actionPending=nil
 local function clearBody() for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
 local function tx() return Http:GenerateGUID(false) end
@@ -185,7 +193,6 @@ local function layoutModal()
   l.panelY=math.floor((v.Y-l.panelHeight)*.65)
  end
  sheet.Size=UDim2.fromOffset(l.panelWidth,l.panelHeight);sheet.Position=UDim2.fromOffset(l.panelX,l.panelY);modalSize=v
- offerHeader.Size=UDim2.new(1,0,0,l.headerHeight-12)
  body.Position=UDim2.fromOffset(l.panelPadding,l.headerHeight);body.Size=UDim2.fromOffset(l.bodyWidth,l.bodyHeight)
  modalTitle.TextSize=l.panelWidth<400 and 23 or 30
  modalTitle.Position=UDim2.fromOffset(l.panelWidth<400 and 74 or 90,16)
@@ -206,19 +213,20 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
- local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0;offerHeader.Visible=inOffer
+ local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0;sheet:SetAttribute('CardBackdrop',inOffer)
  local colorful=inOffer or mode=='pack'
  modalTitle.TextColor3=colorful and palette.white or palette.ink;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
  modalSubtitle.TextColor3=inOffer and Color3.fromRGB(215,240,255) or palette.muted
- sheet.BackgroundColor3=mode=='pack' and Color3.fromRGB(217,231,249) or palette.panel
- local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0 end
+ sheet.BackgroundColor3=(inOffer or mode=='pack') and Color3.fromRGB(19,21,35) or palette.panel
+ local rounded=sheet:FindFirstChildOfClass('UICorner');if rounded then rounded.CornerRadius=UDim.new(0,inOffer and 28 or 20) end
+ local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0;border.Color=inOffer and Color3.fromRGB(6,8,17) or palette.ink;border.Thickness=inOffer and 5 or 2 end
  if l.panelWidth<400 then
   local shortTitles={shop=activeShop..' shop',pack='Upgrade pack',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
  modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
- if mode=='pack' then modalTitle.TextColor3=Color3.fromRGB(25,63,126);modalTitle.TextStrokeTransparency=1 end
+ if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modal.Visible=true
  if entering then
   if menuTween then menuTween:Cancel() end
@@ -306,15 +314,15 @@ local function stackText(choice)
  local limit=(choice.scope=='Fleet' or choice.scope=='Player') and 2 or 1
  return reserve and 'Repeatable until its stat cap.' or string.format('Copy %d / %d · adds to base',count+1,limit)
 end
-local function progress(parent,y,width,title,detail,fraction,color)
- label(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,22),title,17,palette.ink,true)
- label(parent,UDim2.fromOffset(0,y+27),UDim2.fromOffset(width,27),detail,12,palette.muted)
+local function progress(parent,y,width,title,detail,fraction,color,dark)
+ label(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,22),title,17,dark and palette.white or palette.ink,true)
+ label(parent,UDim2.fromOffset(0,y+27),UDim2.fromOffset(width,27),detail,12,dark and Color3.fromRGB(202,209,231) or palette.muted)
  local track=frame(parent,UDim2.fromOffset(0,y+62),UDim2.fromOffset(width,10),palette.paper);track.ClipsDescendants=true;corner(track,3)
  local fill=frame(track,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(fraction,0,1),1),color);corner(fill,3)
 end
 openOffer=function()
  local offer=pending();if not offer then return end
- local l=menu('offer','Pick a card','Choose one · This run','cards')
+ local l=menu('offer','UPGRADE PACK','Choose one · This run','cards')
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
   local view
@@ -331,7 +339,7 @@ end
 openPack=function()
  if pending() then openOffer();return end
  if not profile or not profile.run then return end
- local l=menu('pack','A stronger build starts here','Three cards. Pick the upgrade your crew needs.','cards')
+ local l=menu('pack','UPGRADE PACK','Three cards. Pick the upgrade your crew needs.','cards')
  local width=l.bodyWidth-6
  local narrow=l.bodyWidth<400
  local hero=frame(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,180),Color3.fromRGB(31,111,214));hero.Name='PackHousing'
@@ -348,7 +356,7 @@ openPack=function()
  local priceLabel=label(hero,UDim2.fromOffset(heroTextX,47),UDim2.new(1,narrow and -heroTextX-16 or -145,0,narrow and 62 or 45),priceText..(narrow and '\nQuartz' or ' Quartz'),priceSize,palette.white,true)
  priceLabel.TextStrokeColor3=Color3.fromRGB(13,23,48);priceLabel.TextStrokeTransparency=.4
  label(hero,UDim2.fromOffset(22,126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
- progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent)
+ progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true)
  local allowed,blocked=availability('BuyPack')
  local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Sell '..comma(price-credits)..' more Quartz')
  local buy
@@ -357,7 +365,7 @@ openPack=function()
  end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18;buy.TextStrokeTransparency=.5
  local oldEdge=buy:FindFirstChildOfClass('UIStroke');if oldEdge then oldEdge:Destroy() end
  CardView.housing(U,buy,Color3.fromRGB(153,46,201),Color3.fromRGB(247,171,255));enableAction(buy,canAct('BuyPack') and affordable)
- label(body,UDim2.fromOffset(8,374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,palette.muted)
+ label(body,UDim2.fromOffset(8,374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,Color3.fromRGB(202,209,231))
 end
 openShop=function(key,info)
  if not profile or not profile.run.wallet then return end
@@ -1218,12 +1226,13 @@ connect(RunService.Heartbeat,function(dt)
  if l.short then toast.Position=UDim2.fromOffset(l.hudX,l.hudY);if toast.Visible then hud.Visible=false end end
  if toast.Visible and view.X<1100 then objectiveBox.Visible=false end
  if modal.Visible and notice.Text~='' and noticeUntil>os.clock() then
-  modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=palette.ink
- else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=palette.muted end
+  modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.ink
+ else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
+ local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

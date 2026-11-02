@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — glossy interactive egg-window reference
+
+The owner supplies a screenshot of a dark rounded egg shop and explicitly asks for its bright glossy colors, real stud texture, thick black outlines on the 3D objects, meaningful text, mouse-responsive tilt/highlights, light flashes, rotating rays behind the artwork, and gradient card edges. This supersedes earlier removal of highlights and flashes. Keep the earned-currency three-choice selection and original drone/mining art, with real 3D card perspective. Do not copy the reference game's branding, eggs, prices or microtransactions. Include actual screenshots with UI work. See [native glossy-card review](review/GLOSSY_PACK_CARDS.md).
+
 ## November 2 latest — simple textured cards
 
 The owner approves the new original card images but rejects the surrounding complexity: no texture, too many lines and outlines. Match the actual Catch a Brainrot UI's simple textured surface and appealing rounded border. Keep at most three main content elements: the approved artwork, benefit, and target/terms. Remove nested artwork/footer panels, separator lines, fasteners and decorative edge strips. Retain readable text, the 3D card effect and saved server choices. Include one or two actual screenshots with UI updates so the owner can judge quickly.
