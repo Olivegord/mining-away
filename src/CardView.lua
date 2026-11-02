@@ -1,6 +1,6 @@
 -- Presentation only. Two text elements per card: effect and target/terms.
 -- The complete saved server choice remains the selection contract.
-local CardView={HEIGHT=320,MIN_HEIGHT=304}
+local CardView={HEIGHT=320,MIN_HEIGHT=212}
 
 local function percent(value) return string.format('%g%%',math.floor(value*100+.5)) end
 local function amount(value,label) return '+'..percent(value)..' '..label end
@@ -12,8 +12,8 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
- add('orbitalLaser','Unlock orbital strikes on the biggest rock')
- add('scrapSwarm','Unlock a 10-second swarm of tiny miners')
+ add('orbitalLaser','Call an orbital strike on the biggest rock')
+ add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
  add('fullAuto',amount(e.fullAuto or 0,'courier speed'))
  add('mining',amount(e.mining or 0,'mining speed'))
@@ -90,76 +90,156 @@ function CardView.identity(choice)
  if has('speed') or has('startup') then return 'thrust',Color3.fromRGB(0,104,179),Color3.fromRGB(121,237,255) end
  return 'mineral',Color3.fromRGB(104,49,170),Color3.fromRGB(245,177,255)
 end
-local function mechanicVisual(parent,choice)
- local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+2
- viewport.Position=UDim2.fromScale(.06,.035);viewport.Size=UDim2.fromScale(.88,.41)
- viewport.Ambient=Color3.fromRGB(190,190,190);viewport.LightColor=Color3.new(1,1,1);viewport.LightDirection=Vector3.new(-1,-2,-3);viewport.Parent=parent
- local world=Instance.new('WorldModel');world.Name='Mechanic';world.Parent=viewport
- local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
- local e=choice.effects or {};local identity,body,accent=CardView.identity(choice)
- local gray=Color3.fromRGB(27,35,61);local blue=accent;local green=Color3.fromRGB(143,255,163)
- -- An authored instrument stage with six radial teeth makes the silhouettes
- -- legible at card size. Only the scene varies; no extra label competes.
- for i=1,6 do
-  local a=i*math.pi/3
-  local tooth=visualPart(world,Vector3.new(.14,.38,.18),Vector3.new(math.cos(a)*2,math.sin(a)*1.65,-.7),body:Lerp(accent,.35))
-  tooth.CFrame=CFrame.new(tooth.Position)*CFrame.Angles(0,0,a-math.pi/2)
+
+-- A molded housing: a bright upper lip, dark lower edge and an inset face.
+-- These stay local to packs; color does not compete with the working swarm.
+function CardView.housing(U,root,color,accent)
+ root.BackgroundColor3=color
+ U.corner(root,8)
+ local edge=U.stroke(root,Color3.fromRGB(13,23,48),3)
+ local shade=Instance.new('UIGradient');shade.Name='MoldedFinish';shade.Rotation=90
+ shade.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(.5,Color3.fromRGB(235,241,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(160,178,218))});shade.Parent=root
+ local lip=U.frame(root,UDim2.new(0,8,0,3),UDim2.new(1,-16,0,3),accent:Lerp(Color3.new(1,1,1),.35));lip.Name='UpperBevel';lip.BackgroundTransparency=.2;U.corner(lip,2)
+ local heel=U.frame(root,UDim2.new(0,7,1,-7),UDim2.new(1,-14,0,4),Color3.fromRGB(14,25,54));heel.Name='LowerBevel';heel.BackgroundTransparency=.28;U.corner(heel,2)
+ return edge
+end
+
+local function artFinish(U,bay,body,accent)
+ bay.ClipsDescendants=true;U.corner(bay,10);U.stroke(bay,Color3.fromRGB(16,26,52),3)
+ -- Four small fasteners leave the original role models as the focal point.
+ for _,point in ipairs({{.035,.055},{.965,.055},{.035,.945},{.965,.945}}) do
+  local rivet=U.frame(bay,UDim2.fromScale(point[1],point[2]),UDim2.fromOffset(9,9),body:Lerp(accent,.55))
+  rivet.AnchorPoint=Vector2.new(.5,.5);rivet.Name='Fastener';U.corner(rivet,9);U.stroke(rivet,Color3.fromRGB(14,25,54),1)
  end
- local function gain(key) return type(e[key])=='number' and e[key]>0 end
- if gain('orbitalLaser') then
-  local lens=visualPart(world,Vector3.new(.35,1.8,1.8),Vector3.new(0,1.1,0),gray,Enum.PartType.Cylinder)
-  lens.CFrame=CFrame.new(0,1.1,0)*CFrame.Angles(0,0,math.pi/2)
-  for i=-1,1 do visualPart(world,Vector3.new(.12,1.6,.12),Vector3.new(i*.7,-.2,0),Color3.fromRGB(231,173,84)) end
- elseif gain('scrapSwarm') then
-  local template=workspace:FindFirstChild('Drone') or game:GetService('ReplicatedStorage'):FindFirstChild('Drone')
-  if template and template:IsA('Model') then
-   for i=1,3 do
-    local drone=template:Clone()
-    for _,child in ipairs(drone:GetDescendants()) do
-     if child:IsA('LuaSourceContainer') or child:IsA('Sound') or child:IsA('BillboardGui') or child:IsA('SurfaceGui') then child:Destroy()
-     elseif child:IsA('BasePart') then child.Anchored=true;child.CanCollide=false;child.CanTouch=false;child.CanQuery=false
-     elseif child:IsA('Trail') or child:IsA('Beam') or child:IsA('ParticleEmitter') then child.Enabled=false end
-    end
-    drone:ScaleTo(drone:GetScale()*.14);drone:PivotTo(CFrame.new((i-2)*1.1,i==2 and .5 or -.4,0));drone.Parent=world
-    visualPart(world,Vector3.new(.05,.8,.05),Vector3.new((i-2)*1.1,-1.1,0),green)
+ local shine=U.frame(bay,UDim2.fromScale(-.6,-.4),UDim2.fromScale(.55,1.8),Color3.new(1,1,1));shine.Name='RevealGlint';shine.Rotation=22;shine.Visible=false
+ local sweep=Instance.new('UIGradient');sweep.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.4,1),NumberSequenceKeypoint.new(.5,.7),NumberSequenceKeypoint.new(.6,1),NumberSequenceKeypoint.new(1,1)});sweep.Parent=shine
+ local sparks={}
+ for i=1,4 do
+  local spark=U.frame(bay,UDim2.fromScale(.5,.5),UDim2.fromOffset(9,i%2==0 and 16 or 9),accent:Lerp(Color3.new(1,1,1),.35))
+  spark.AnchorPoint=Vector2.new(.5,.5);spark.Rotation=45;spark.Visible=false;spark.Name='FocusSpark';table.insert(sparks,spark)
+ end
+ return shine,sparks
+end
+local function mechanicVisual(parent,choice,compact)
+ local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+2
+ viewport.Position=UDim2.fromScale(.045,.022);viewport.Size=UDim2.fromScale(.91,compact and .30 or .43)
+ viewport.Ambient=Color3.fromRGB(205,210,225);viewport.LightColor=Color3.new(1,1,1);viewport.LightDirection=Vector3.new(-1,-2,-3);viewport.Parent=parent
+ local world=Instance.new('WorldModel');world.Name='Mechanic';world.Parent=viewport
+ local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.new(0,-.1,0));camera.Parent=viewport;viewport.CurrentCamera=camera
+ local identity,body,accent=CardView.identity(choice)
+ local storage=game:GetService('ReplicatedStorage')
+ local config=storage:FindFirstChild('Shared');config=config and config:FindFirstChild('DroneConfig')
+ local roles=config and require(config)
+ local function safe(model)
+  for _,c in ipairs(model:GetDescendants()) do
+   if c:IsA('LuaSourceContainer') or c:IsA('Sound') or c:IsA('BillboardGui') or c:IsA('SurfaceGui') then c:Destroy()
+   elseif c:IsA('BasePart') then c.Anchored=true;c.CanCollide=false;c.CanTouch=false;c.CanQuery=false;c.CastShadow=false;c.Reflectance=0
+   elseif c:IsA('Trail') or c:IsA('Beam') or c:IsA('ParticleEmitter') then c.Enabled=false end
+  end
+ end
+ local function drone(role,size,position,rotation)
+  local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+  if not template or not template:IsA('Model') then return end
+  local model=template:Clone();safe(model)
+  local shell=model:FindFirstChild('Mesh')
+  if shell and shell:IsA('BasePart') then
+   shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25);shell.Material=Enum.Material.SmoothPlastic
+   local eye=visualPart(model,Vector3.new(shell.Size.X*.74,shell.Size.Y*.15,.06),Vector3.zero,Color3.fromRGB(12,22,39))
+   eye.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.16,shell.Size.Z*.5+.035)
+   local optic=visualPart(model,Vector3.new(shell.Size.X*.57,shell.Size.Y*.065,.075),Vector3.zero,accent)
+   optic.CFrame=eye.CFrame*CFrame.new(0,0,.045)
+   local emitter=model:FindFirstChild('Emmiter',true)
+   if emitter and emitter:IsA('BasePart') then
+    emitter.Size=Vector3.one*(shell.Size.Y*.25);emitter.Color=accent
+    emitter.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.61,0)
    end
   end
- elseif identity=='scanner' then
-  local dish=visualPart(world,Vector3.new(.3,2.4,2.4),Vector3.zero,gray,Enum.PartType.Cylinder)
-  dish.CFrame=CFrame.Angles(0,math.pi/2,0)
-  visualPart(world,Vector3.new(.22,.22,1.6),Vector3.new(0,0,.6),accent)
-  for i=-1,1 do visualPart(world,Vector3.new(.32,.32,.32),Vector3.new(i*.85,i==0 and -.85 or .5,.6),green,Enum.PartType.Ball) end
- elseif identity=='prism' then
-  local prism=visualPart(world,Vector3.new(1.1,1.8,1.1),Vector3.zero,accent)
-  prism.CFrame=CFrame.Angles(0,math.rad(45),math.rad(30))
-  for i=-1,1,2 do
-   local beam=visualPart(world,Vector3.new(.14,1.8,.14),Vector3.new(i*.7,-.8,0),i<0 and green or Color3.fromRGB(255,139,217))
-   beam.CFrame=CFrame.new(beam.Position)*CFrame.Angles(0,0,i*.5)
-  end
- elseif gain('capacity') or gain('fullAuto') then
-  visualPart(world,Vector3.new(1.8,1.9,.7),Vector3.zero,gray)
-  visualPart(world,Vector3.new(1.3,.7,.25),Vector3.new(0,-.45,.5),blue)
-  visualPart(world,Vector3.new(.25,1.5,.3),Vector3.new(-.55,.1,-.5),gray)
-  visualPart(world,Vector3.new(.25,1.5,.3),Vector3.new(.55,.1,-.5),gray)
- elseif gain('health') or gain('reduction') or gain('salvage') or gain('shield') then
-  visualPart(world,Vector3.new(1.8,1.8,.4),Vector3.zero,gray)
-  visualPart(world,Vector3.new(.45,1.4,.15),Vector3.new(0,0,.3),green)
-  visualPart(world,Vector3.new(1.4,.45,.15),Vector3.new(0,0,.3),green)
- elseif gain('combat') or gain('rate') or gain('crit') or gain('splash') or gain('finisher') or gain('range') then
-  local lens=visualPart(world,Vector3.new(.7,1.8,1.8),Vector3.zero,gray,Enum.PartType.Cylinder);lens.CFrame=CFrame.Angles(0,math.pi/2,0)
-  local core=visualPart(world,Vector3.new(.15,.95,.95),Vector3.new(0,0,.4),accent,Enum.PartType.Cylinder);core.CFrame=CFrame.new(0,0,.4)*CFrame.Angles(0,math.pi/2,0)
- elseif gain('speed') or gain('startup') then
-  for i=-1,1 do local fin=visualPart(world,Vector3.new(1.9,.25,.55),Vector3.new(0,i*.6,0),i==0 and blue or gray);fin.CFrame=CFrame.new(0,i*.6,0)*CFrame.Angles(0,0,math.rad(-20)) end
- else
-  local original=game:GetService('ReplicatedStorage'):FindFirstChild('Crystal')
-  local template=original and original:FindFirstChild('Mesh')
-  local crystal=template and template:IsA('BasePart') and template:Clone() or Instance.new('WedgePart')
-  for _,child in ipairs(crystal:GetDescendants()) do if child:IsA('LuaSourceContainer') then child:Destroy() end end
-  crystal.Size=Vector3.one*1.7;crystal.CFrame=CFrame.Angles(0,math.rad(30),math.rad(-12));crystal.Color=blue;crystal.Material=Enum.Material.Slate;crystal.Reflectance=0
-  crystal.Anchored=true;crystal.CanCollide=false;crystal.CanTouch=false;crystal.CanQuery=false;crystal.Parent=world
-  visualPart(world,Vector3.new(.5,.5,.5),Vector3.new(0,1.7,0),gray)
+  if roles then roles.decorate(model,role) end
+  -- Show the authored bolt-on hardware clear of the original cubic shell.
+  -- This is an exploded card illustration, not a change to the world asset.
+  for _,hardware in ipairs(model:GetChildren()) do if hardware:IsA('BasePart') then
+   if hardware.Name:find('OrbitalLens') or hardware.Name=='FocusingMast' then hardware.CFrame+=Vector3.new(0,.8,0) end
+   if hardware.Name=='MiniDroneBay' or hardware.Name=='BayLatch' then
+    local localPosition=model:GetPivot():PointToObjectSpace(hardware.Position)
+    hardware.CFrame+=model:GetPivot().RightVector*(localPosition.X<0 and -.5 or .5)
+   end
+  end end
+  safe(model)
+  local _,bounds=model:GetBoundingBox();model:ScaleTo(model:GetScale()*size/math.max(bounds.X,bounds.Y,bounds.Z,.01))
+  local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())
+  model.Parent=world;return model
  end
- return viewport
+ local function crystal(size,position,color,rotation)
+  local original=storage:FindFirstChild('Crystal') or workspace:FindFirstChild('Crystal')
+  local template=original and original:FindFirstChild('Mesh',true)
+  if not template or not template:IsA('BasePart') then return end
+  local part=template:Clone();safe(part)
+  part.Size=template.Size*(size/math.max(template.Size.Y,.01));part.CFrame=CFrame.new(position)*(rotation or CFrame.new())
+  part.Color=color;part.Material=Enum.Material.SmoothPlastic;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Reflectance=0;part.Parent=world
+  return part
+ end
+ local function ray(a,b,width,color)
+  local length=(b-a).Magnitude
+  local halo=visualPart(world,Vector3.new(length,width*2.4,width*2.4),(a+b)/2,color,Enum.PartType.Cylinder);halo.Transparency=.68
+  halo.CFrame=CFrame.lookAt((a+b)/2,b)*CFrame.Angles(0,math.pi/2,0)
+  local core=visualPart(world,Vector3.new(length,width,width),(a+b)/2,color:Lerp(Color3.new(1,1,1),.7),Enum.PartType.Cylinder)
+  core.CFrame=halo.CFrame
+ end
+ local function chips(position,color)
+  for i=1,5 do
+   local a=i*math.pi*2/5
+   crystal(.35+i%2*.12,position+Vector3.new(math.cos(a)*.95,.1+i%2*.25,math.sin(a)*.65),color,CFrame.Angles(.2,a,.3))
+  end
+ end
+ if identity=='orbital' then
+  drone('Orbiter',2.6,Vector3.new(0,1.25,0))
+  crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
+  ray(Vector3.new(0,.75,0),Vector3.new(0,-.9,0),.2,accent)
+  chips(Vector3.new(0,-1.65,0),accent)
+ elseif identity=='swarm' then
+  for i=1,3 do
+   local x=(i-2)*1.45;local y=i==2 and .8 or .15
+   drone('Scrapper',1.65,Vector3.new(x,y,0),CFrame.Angles(0,(i-2)*-.3,(i-2)*.15))
+   ray(Vector3.new(x,y-.4,0),Vector3.new(x*.6,-1.1,0),.065,accent)
+  end
+  crystal(1.7,Vector3.new(0,-1.6,0),Color3.fromRGB(185,122,255),CFrame.Angles(0,.4,-.15));chips(Vector3.new(0,-1.5,0),accent)
+ elseif identity=='prism' then
+  drone('Striker',1.85,Vector3.new(0,1.25,0),CFrame.Angles(0,-.3,.08))
+  local prism=visualPart(world,Vector3.new(.85,1.1,.85),Vector3.new(0,-.15,0),accent)
+  prism.CFrame=CFrame.new(0,-.15,0)*CFrame.Angles(0,math.rad(45),math.rad(25))
+  ray(Vector3.new(0,.65,0),Vector3.new(0,.2,0),.11,accent)
+  for _,sign in ipairs({-1,1}) do
+   local color=sign<0 and Color3.fromRGB(129,255,179) or Color3.fromRGB(255,154,222)
+   crystal(1.6,Vector3.new(sign*1.25,-1.35,0),color,CFrame.Angles(0,sign*.5,sign*.12))
+   ray(Vector3.new(0,-.15,0),Vector3.new(sign*1.25,-.75,0),.11,color)
+  end
+ elseif identity=='cargo' then
+  drone('Courier',3.1,Vector3.new(.25,.45,0),CFrame.Angles(0,-.25,.08))
+  for i=1,3 do crystal(1.05,Vector3.new((i-2)*.6,-1.2,.8),accent,CFrame.Angles(0,i*.7,-.15)) end
+ elseif identity=='repair' then
+  drone('Medic',3.3,Vector3.new(0,.15,0),CFrame.Angles(.1,-.2,-.15))
+  for i=1,3 do
+   local x=(i-2)*1.25;local y=i==2 and 1.6 or -.9
+   visualPart(world,Vector3.new(.14,.55,.14),Vector3.new(x,y,.5),accent)
+   visualPart(world,Vector3.new(.55,.14,.14),Vector3.new(x,y,.5),accent)
+  end
+ elseif identity=='thrust' then
+  drone('Striker',2.75,Vector3.new(.7,.15,0),CFrame.Angles(0,-.3,-.22))
+  for i=-1,1 do ray(Vector3.new(-2.3,i*.5,-.2),Vector3.new(-.55,i*.5+.3,-.2),.12,accent) end
+ elseif identity=='scanner' then
+  drone('Dart',2.5,Vector3.new(0,.95,0),CFrame.Angles(0,-.3,0))
+  for i=-1,1 do crystal(1.4,Vector3.new(i*1.25,-1.1,0),i==0 and accent or body:Lerp(accent,.4),CFrame.Angles(0,i*.4,.1)) end
+  ray(Vector3.new(0,.4,0),Vector3.new(-1.25,-.4,0),.07,accent);ray(Vector3.new(0,.4,0),Vector3.new(1.25,-.4,0),.07,accent)
+ elseif identity=='combat' then
+  drone('Charger',3.1,Vector3.new(0,.45,0),CFrame.Angles(0,-.4,-.22))
+  for i=-1,1 do ray(Vector3.new(i*.6,-.45,.2),Vector3.new(i*.9,-1.65,.2),.12,accent) end
+  chips(Vector3.new(0,-1.6,0),accent)
+ else
+  drone('Striker',2,Vector3.new(-.8,1.05,0),CFrame.Angles(0,-.25,-.1))
+  crystal(2.7,Vector3.new(.45,-.7,0),accent,CFrame.Angles(0,.35,-.17))
+  ray(Vector3.new(-.8,.6,0),Vector3.new(.1,.05,0),.11,accent);chips(Vector3.new(0,-1.5,0),body:Lerp(accent,.65))
+ end
+ return viewport,camera
 end
 local function visibleRect(root)
  local position,size=root.AbsolutePosition,root.AbsoluteSize
@@ -187,6 +267,7 @@ end
 
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
+ local compact=height<300
  local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice);local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
  card.Name='CardChoice'..tostring(index);card.LayoutOrder=index;card.BackgroundTransparency=1
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
@@ -197,25 +278,36 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local part=visualPart(model,Vector3.new(2,3,.05),Vector3.zero,Color3.fromRGB(74,83,88));part.Name='CardBody';part.Transparency=1
  local surface=Instance.new('SurfaceGui');surface.Name='UpgradeCardFace';surface.Adornee=part;surface.Face=Enum.NormalId.Front
  surface.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;surface.CanvasSize=Vector2.new(width*2,height*2)
- surface.AlwaysOnTop=true;surface.LightInfluence=0;surface.MaxDistance=20;surface.Active=false;surface.Enabled=false;surface.ResetOnSpawn=false
+ -- The current native renderer drops AlwaysOnTop faces, even on a minimal
+ -- diagnostic part. Render these camera-local faces near the camera instead.
+ surface.AlwaysOnTop=false;surface.LightInfluence=0;surface.Brightness=1;surface.MaxDistance=8;surface.Active=false;surface.Enabled=false;surface.ResetOnSpawn=false
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*2,height*2),p.paper);canvas.Name='CardCanvas'
- local border=U.stroke(canvas,Color3.fromRGB(20,27,48),5)
- canvas.BackgroundColor3=bodyColor
- local artBay=U.frame(canvas,UDim2.fromScale(.025,.02),UDim2.fromScale(.95,.43),bodyColor:Lerp(Color3.fromRGB(20,27,48),.42))
+ local border=CardView.housing(U,canvas,bodyColor,accentColor);border.Thickness=5
+ local artBay=U.frame(canvas,UDim2.fromScale(.035,.028),UDim2.fromScale(.93,compact and .295 or .42),bodyColor:Lerp(Color3.fromRGB(20,27,48),.35))
  artBay.Name='MechanicArtBay'
- U.frame(canvas,UDim2.fromScale(.04,.465),UDim2.fromScale(.92,.012),accentColor)
- U.frame(canvas,UDim2.fromScale(.025,.755),UDim2.fromScale(.95,.225),Color3.fromRGB(19,27,47))
- mechanicVisual(canvas,choice)
+ local glint,sparks=artFinish(U,artBay,bodyColor,accentColor)
+ local separator=U.frame(canvas,UDim2.fromScale(.055,compact and .345 or .465),UDim2.fromScale(.89,.012),accentColor);U.corner(separator,4)
+ local footer=U.frame(canvas,UDim2.fromScale(.035,compact and .66 or .75),UDim2.fromScale(.93,compact and .315 or .225),Color3.fromRGB(19,27,47));footer.Name='InsetTerms';U.corner(footer,8);U.stroke(footer,bodyColor:Lerp(accentColor,.3),2)
+ local _,artCamera=mechanicVisual(canvas,choice,compact)
  local summary=CardView.summary(choice)
- local effect=U.text(canvas,UDim2.new(0,24,.49,0),UDim2.new(1,-48,.245,0),summary,width<260 and 40 or 44,p.white,true)
+ -- Keep font rasterization and scrolling in the native screen layer. The
+ -- body/art retain real perspective; near-camera SurfaceGui glyphs otherwise
+ -- lose rows of pixels in the depth pass on the verified phone renderer.
+ local effectY=compact and .37 or .49
+ local termsY=compact and .68 or .765
+ local effect=U.text(card,UDim2.new(0,12,effectY,0),UDim2.new(1,-24,compact and .275 or .245,0),summary,compact and 18 or (width<260 and 20 or 22),p.white,true)
  effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center
- local terms=U.text(canvas,UDim2.new(0,24,.765,0),UDim2.new(1,-48,.20,0),CardView.terms(choice,options.target),32,p.white,false)
+ effect.TextStrokeColor3=Color3.fromRGB(13,23,48);effect.TextStrokeTransparency=.35
+ local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .29 or .20,0),CardView.terms(choice,options.target),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  local focused,pressed,blend=false,false,0
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+((index-1)*.14)/revealSpeed
- local reducedMotion=false
+ local reducedMotion=options.reducedMotion==true
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
+ local function motionReduced()
+  return reducedMotion or options.reducedMotion==true or Players.LocalPlayer:GetAttribute('ReducedMotion')==true or Players.LocalPlayer:GetAttribute('MA_ReducedMotion')==true
+ end
  local signals={}
  local function connect(signal,fn) table.insert(signals,signal:Connect(fn)) end
  connect(choose.MouseEnter,function() focused=true end);connect(choose.MouseLeave,function() focused=false;pressed=false end)
@@ -223,7 +315,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
  pcall(function() connect(GuiService:GetPropertyChangedSignal('ReducedMotionEnabled'),function() reducedMotion=GuiService.ReducedMotionEnabled end) end)
  serial=serial+1;local stepName='UpgradeCard'..serial
- local dead=false
+ local dead=false;local wasFocused=false;local focusAt=-10
  local function dispose()
   if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
   for _,connection in ipairs(signals) do connection:Disconnect() end
@@ -234,25 +326,43 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if dead then return end
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
-  local age=os.clock()-revealStart
-  if not reducedMotion and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
+  local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
+  if not quiet and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
   choose.Visible=true
-  local reveal=reducedMotion and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
+  local reveal=quiet and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=focused and choose.Active and 1 or 0
-  blend=reducedMotion and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local lift=(full and not reducedMotion and blend*3 or 0)-(1-reveal)*18
-  local depth=5;local center=onPlane(camera,(left+right)/2,(top+bottom)/2-lift,depth+.025)
+  if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
+  blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
+  local lift=(full and not quiet and blend*5 or 0)-(1-reveal)*18-(pressed and 2 or 0)
+  effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
+  effect.Visible=age>=0 or quiet;terms.Visible=effect.Visible
+  local depth=1;local center=onPlane(camera,(left+right)/2,(top+bottom)/2-lift,depth+.015)
   local w=(onPlane(camera,right,(top+bottom)/2,depth)-onPlane(camera,left,(top+bottom)/2,depth)).Magnitude
   local h=(onPlane(camera,(left+right)/2,top,depth)-onPlane(camera,(left+right)/2,bottom,depth)).Magnitude
-  local tilt=full and not reducedMotion and math.rad((index-2)*2+blend*2+(1-reveal)*25) or 0
-  part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.05)
+  local tilt=full and not quiet and math.rad((index-2)*2+blend*3+(1-reveal)*25) or 0
+  part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
   part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(0,math.pi+tilt,0)
   part.Transparency=0;surface.Enabled=true;surface.CanvasSize=Vector2.new((right-left)*2,(bottom-top)*2)
   canvas.Size=UDim2.fromOffset(size.X*2,size.Y*2);canvas.Position=UDim2.fromOffset((position.X-left)*2,(position.Y-top)*2)
   canvas.BackgroundColor3=not choose.Active and bodyColor:Lerp(p.ink,.25) or pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
   border.Color=focused and accentColor or Color3.fromRGB(20,27,48);border.Thickness=focused and 7 or 5
+  -- One opening sweep, then a short focus response. Everything settles.
+  local opening=age*revealSpeed
+  local pulse=clock-focusAt
+  local sweep=opening<.75 and opening/.75 or (pulse<.45 and pulse/.45 or 2)
+  glint.Visible=not quiet and full and sweep>=0 and sweep<=1
+  if glint.Visible then glint.Position=UDim2.fromScale(-.6+sweep*2.1,-.4) end
+  for i,spark in ipairs(sparks) do
+   spark.Visible=not quiet and full and target==1 and pulse<.35
+   if spark.Visible then
+    local progress=math.clamp(pulse/.35,0,1);local a=(i-.5)*math.pi/2
+    spark.Position=UDim2.fromScale(.5+math.cos(a)*(.26+progress*.26),.5+math.sin(a)*(.22+progress*.24))
+    spark.BackgroundTransparency=progress;spark.Rotation=45+progress*35
+   end
+  end
+  artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or blend*.65),3,7),Vector3.zero)
   effect.Text=choose.Text~='' and choose.Text or summary
  end)
  return {root=card,button=choose}

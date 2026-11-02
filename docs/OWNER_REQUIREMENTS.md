@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — inspect the colorful UI reference and apply it
+
+The owner requests actual Catch a Brainrot UI image study after the cloud task's videos failed to load, then applying the useful lessons to this game's colorful pack UI while retaining its 3D card effect. The owner rejects the first follow-up preview (flat colored rectangles with weak miniature artwork). Rework the actual production cards, not only their palette: emphasize clear original drone/mining artwork, readable benefits, physical depth and purposeful colorful feedback. Preserve saved server-generated choices, original assets, compact UI and the same game; no publishing or main merge. See [reference study and native UI review](review/COLORFUL_PACK_REFERENCE.md).
+
 ## November 1 latest — stop asking about Play and investigate long-session lag
 
 In response to the repeated stop-Play confirmation, the owner says “stop asking this ever again”. Routine Studio stop/install/save/restart work for this same game is authorized without another confirmation. This supersedes earlier instructions to ask before stopping the test session; publishing, a new experience and main merge remain unauthorized. The owner reports it became very laggy after being open a long time. Capture long-session evidence where available, investigate accumulation and per-frame work, and distinguish measured findings from possible Studio/editor overhead.

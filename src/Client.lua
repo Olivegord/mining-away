@@ -131,7 +131,8 @@ contextButton.Name='UseContext'
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
-local offerHeader=U.panel(sheet,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),palette.panel,4);offerHeader.Name='OfferHeader';offerHeader.ZIndex=sheet.ZIndex;offerHeader.Visible=false
+local offerHeader=frame(sheet,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(29,104,210));offerHeader.Name='OfferHeader';offerHeader.ZIndex=sheet.ZIndex;offerHeader.Visible=false
+CardView.housing(U,offerHeader,Color3.fromRGB(29,104,210),Color3.fromRGB(120,230,255))
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
 local modalTitle=label(sheet,UDim2.fromOffset(90,18),UDim2.new(1,-158,0,39),'Build your next adventure',30,palette.ink,true)
 local modalSubtitle=label(sheet,UDim2.fromOffset(24,66),UDim2.new(1,-48,0,32),'',12,palette.muted)
@@ -171,7 +172,14 @@ local function layoutModal()
   l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-116);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
+ if modalMode=='offer' and l.short then
+  l.headerHeight=64;l.panelPadding=12;l.bodyWidth=l.panelWidth-24
+  l.bodyHeight=l.panelHeight-l.headerHeight-l.panelPadding;l.cardHeight=math.clamp(l.bodyHeight-2,212,256)
+ end
  if modalMode=='offer' and l.cardColumns==3 then
+  l.panelWidth=math.min(820,v.X-24);l.panelPadding=12;l.bodyWidth=l.panelWidth-24
+  l.cardWidth=(l.bodyWidth-l.cardGap*2)/3;l.headerHeight=l.short and 64 or 100
+  l.panelX=(v.X-l.panelWidth)/2
   l.panelHeight=math.min(l.panelHeight,l.headerHeight+l.cardHeight+32)
   l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
   l.panelY=math.floor((v.Y-l.panelHeight)*.65)
@@ -186,6 +194,11 @@ local function layoutModal()
  modalEmblem.Position=UDim2.fromOffset(18,18)
  modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,l.short and 58 or 66)
  modalSubtitle.Size=UDim2.new(1,-l.panelPadding*2,0,l.short and 29 or 32)
+ if modalMode=='offer' and l.short then
+  local textX=l.panelWidth<400 and 74 or 90
+  modalTitle.Position=UDim2.fromOffset(textX,6);modalTitle.Size=UDim2.new(1,l.panelWidth<400 and -136 or -158,0,32);modalTitle.TextSize=23
+  modalSubtitle.Position=UDim2.fromOffset(textX,37);modalSubtitle.Size=UDim2.new(1,-textX-60,0,23)
+ end
  return l
 end
 local menuTween=nil
@@ -194,13 +207,18 @@ local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
  local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0;offerHeader.Visible=inOffer
+ local colorful=inOffer or mode=='pack'
+ modalTitle.TextColor3=colorful and palette.white or palette.ink;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
+ modalSubtitle.TextColor3=inOffer and Color3.fromRGB(215,240,255) or palette.muted
+ sheet.BackgroundColor3=mode=='pack' and Color3.fromRGB(217,231,249) or palette.panel
  local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0 end
  if l.panelWidth<400 then
   local shortTitles={shop=activeShop..' shop',pack='Upgrade pack',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
- modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54),palette.mineral)
+ modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
+ if mode=='pack' then modalTitle.TextColor3=Color3.fromRGB(25,63,126);modalTitle.TextStrokeTransparency=1 end
  modal.Visible=true
  if entering then
   if menuTween then menuTween:Cancel() end
@@ -316,22 +334,29 @@ openPack=function()
  local l=menu('pack','A stronger build starts here','Three cards. Pick the upgrade your crew needs.','cards')
  local width=l.bodyWidth-6
  local narrow=l.bodyWidth<400
- local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,180),palette.mineral:Lerp(palette.white,.72),16)
- U.icon(hero,'cards',UDim2.fromOffset(narrow and 18 or 20,24),UDim2.fromOffset(narrow and 64 or 90,narrow and 64 or 90),palette.mineral)
+ local hero=frame(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,180),Color3.fromRGB(31,111,214));hero.Name='PackHousing'
+ CardView.housing(U,hero,Color3.fromRGB(31,111,214),Color3.fromRGB(121,232,255))
+ local wrapper=frame(hero,UDim2.fromOffset(narrow and 18 or 24,23),UDim2.fromOffset(narrow and 63 or 79,narrow and 87 or 99),Color3.fromRGB(123,56,209));wrapper.Rotation=-8;wrapper.Name='PackWrapper'
+ CardView.housing(U,wrapper,Color3.fromRGB(123,56,209),Color3.fromRGB(255,216,86))
+ U.icon(wrapper,'crystal',UDim2.fromScale(.14,.23),UDim2.fromOffset(narrow and 45 or 56,narrow and 45 or 56),Color3.fromRGB(255,216,86))
+ for _,y in ipairs({.08,.86}) do local seal=frame(wrapper,UDim2.fromScale(.09,y),UDim2.fromScale(.82,.035),Color3.fromRGB(255,216,86));seal.Name='PackSeal' end
  local price=profile.nextPackPrice or 40;local credits=Shops.balance(profile,'Quartz');local affordable=credits>=price
  local priceText=comma(price)
  local heroTextX=narrow and 94 or 125
- label(hero,UDim2.fromOffset(heroTextX,17),UDim2.new(1,narrow and -heroTextX-16 or -145,0,25),'UPGRADE PACK '..tostring(profile.run.packIndex+1),13,palette.muted,true)
+ label(hero,UDim2.fromOffset(heroTextX,17),UDim2.new(1,narrow and -heroTextX-16 or -145,0,25),'UPGRADE PACK '..tostring(profile.run.packIndex+1),16,Color3.fromRGB(210,242,255),true)
  local priceSize=narrow and (#priceText>12 and 14 or (#priceText>8 and 18 or 23)) or 35
- label(hero,UDim2.fromOffset(heroTextX,47),UDim2.new(1,narrow and -heroTextX-16 or -145,0,narrow and 62 or 45),priceText..(narrow and '\nQuartz' or ' Quartz'),priceSize,palette.ink,true)
- label(hero,UDim2.fromOffset(22,126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. All three choices are saved before you pick.',12,palette.ink)
+ local priceLabel=label(hero,UDim2.fromOffset(heroTextX,47),UDim2.new(1,narrow and -heroTextX-16 or -145,0,narrow and 62 or 45),priceText..(narrow and '\nQuartz' or ' Quartz'),priceSize,palette.white,true)
+ priceLabel.TextStrokeColor3=Color3.fromRGB(13,23,48);priceLabel.TextStrokeTransparency=.4
+ label(hero,UDim2.fromOffset(22,126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
  progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent)
  local allowed,blocked=availability('BuyPack')
  local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Sell '..comma(price-credits)..' more Quartz')
  local buy
  buy=button(body,UDim2.fromOffset(3,302),UDim2.fromOffset(width,50),text,function()
   if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Opening…';enableAction(buy,false) end
- end,palette.accent);buy.Name='BuyPack';enableAction(buy,canAct('BuyPack') and affordable)
+ end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18;buy.TextStrokeTransparency=.5
+ local oldEdge=buy:FindFirstChildOfClass('UIStroke');if oldEdge then oldEdge:Destroy() end
+ CardView.housing(U,buy,Color3.fromRGB(153,46,201),Color3.fromRGB(247,171,255));enableAction(buy,canAct('BuyPack') and affordable)
  label(body,UDim2.fromOffset(8,374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,palette.muted)
 end
 openShop=function(key,info)
