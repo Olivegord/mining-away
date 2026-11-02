@@ -151,4 +151,15 @@ test('retired paid combo offers refund exactly once and selected combos become s
  eq(S.abilityUnlocked(selected,'Orbital'),true);eq(S.abilityUnlocked(selected,'Scrap'),true)
  eq(selected.run.cards[1].effects.orbitalRelay,nil);eq(selected.run.cards[2].effects.scrapRecycle,nil)
 end)
+test('every mineral shop offers standalone hardware upgrades with correct role isolation',function()
+ local p=fresh();for _,key in ipairs(S.ORDER) do p.run.shops[key]=true;p.run.wallet[key]=10000 end
+ local courier=P.clone(p.fleet[1]);courier.role='Courier';courier.id='test:44:1:2';p.activeFleet={p.fleet[1],courier}
+ assert(buy(p,'ruby_courier_hold'));eq(C.stats(p,courier).courierCapacity,32);eq(C.stats(p,p.fleet[1]).courierCapacity,0)
+ p.run.cargo={Ruby=40};assert(P.beginDelivery(p,courier.id,'large-parcel',p.run.id,32));eq(P.droneCargoUnits(p,courier.id),32);eq(P.cargoUnits(p),8)
+ assert(P.validate(p,44))
+ local before=C.stats(p,p.fleet[1]).warmup;assert(buy(p,'quartz_miner_focus'));eq(C.stats(p,p.fleet[1]).warmup,before/2)
+ local seen={};for _,entry in ipairs(S.CATALOG) do if entry.role then seen[entry.shop]=true end end
+ for _,key in ipairs(S.ORDER) do assert(seen[key],key..' has no hardware upgrade') end
+ eq(buy(p,'violet_repair_kit'),false)
+end)
 print(passed..' production shop/profile/card checks passed (not Studio visual/multiplayer evidence)')

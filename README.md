@@ -1,5 +1,8 @@
 # Drone Blower revolution
 
+Latest mining pass: [collectible ore, inertia, gentler audio and hardware upgrades](docs/review/MINING_EXPERIENCE.md).
+
+
 **Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. The separate source-only preservation build keeps the immutable capture intact. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it in Edit mode, then use File → Download a Copy. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
 
 November 1 correction: [visible depot shops and standalone upgrades](docs/review/SHOP_VISIBILITY_CORRECTION.md). Spawn is beside central Quartz, the nearest field. N-Gon is inspiration; explicit combo cards are removed.

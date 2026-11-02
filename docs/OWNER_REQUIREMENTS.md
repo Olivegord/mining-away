@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — collectible mining and gentler feedback
+
+Rocks must drop collectible rock fragments with stronger attraction to the player. Improve laser contacts with sparks; drones linger about a second after finishing and accelerate/decelerate smoothly. Replace grating money/break sounds with gentler feedback and add proximity mining audio. Make drone jobs visibly and mechanically distinct, including a red orbital target sight followed by a strike from above, rather than another ordinary beam. Improve grounded rock presentation while preserving original assets. Every mineral shop needs upgrades for specific drone roles, including Ruby granting backpack emptiers four times their parcel capacity. Increase rock work to about three times the previous health to slow progression. Add restrained screen feedback/polish. Existing no-publishing and no-new-Play-session restrictions remain.
+
 ## November 1 latest — distinguish every drone job
 
 The owner reports that healer movement looks good but other drones all appear to mine alike. Give every unique type a mechanically distinct job and preserve the current healer behavior. For their test, start Studio players with one miner, two backpack emptiers, one healer and one of every other unique type. This eight-drone preview crew is separate from saved permanent ownership; the production new-profile invariant remains one permanent drone. See [distinct drone jobs](review/DRONE_ROLES.md).

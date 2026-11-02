@@ -12,6 +12,29 @@ local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
+local pickupView=PickupView.new(world,localFX)
+local previousShake=CFrame.new();local shakeCamera=nil
+RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
+ if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
+ previousShake=CFrame.new();shakeCamera=nil
+end)
+RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
+ local camera=workspace.CurrentCamera
+ if camera and player:GetAttribute('ReducedMotion')~=true and player:GetAttribute('MA_ReducedMotion')~=true then
+  previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
+ end
+end)
+local function roleImpact(source)
+ if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
+  local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
+  if math.abs(now-at)<.7 then
+   presentation:kick(source.Position,source:GetAttribute('MiningImpact')=='Orbital' and .15 or .065,now)
+   soundscape:play(source:GetAttribute('MiningImpact')=='Orbital' and 'orbital' or 'mining',source.Position)
+  end
+ end
+end
+local impactConnection=workspace.DescendantAdded:Connect(function(source) if source:IsA('BasePart') then task.defer(roleImpact,source) end end)
+
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
 local renderSwarmGrid=nil
@@ -62,7 +85,7 @@ U.icon(runButton,'cards',UDim2.fromOffset(13,2),UDim2.fromOffset(22,22),palette.
 local runCount=label(runButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Cards',9,palette.ink,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
 local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(360,48),palette.panel,10);objectiveBox.Name='NextStep'
 U.icon(objectiveBox,'crystal',UDim2.fromOffset(9,9),UDim2.fromOffset(27,27),palette.mineral)
-local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine crystals, then carry your backpack to sell.',12,palette.ink)
+local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect the fragments, then sell.',12,palette.ink)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.ink,true);notice.TextXAlignment=Enum.TextXAlignment.Center
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() command:FireServer('Recall') end,Color3.fromRGB(66,177,91));recall.Name='Recall'
@@ -532,7 +555,7 @@ local function registerDrone(source)
  end
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
- local d={source=source,view=clone,emitter=emitter,pos=pos,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
  TacticalHUD.attachHealth(clone,source,typeColor or colors.Blue)
@@ -636,9 +659,9 @@ local function renderResource(r,now)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
   local seed=s:GetAttribute('StageSeed') or 0
-  local ax=stage==0 and 0 or math.rad(math.sin(seed+stage*3.17)*40)
-  local az=stage==0 and 0 or math.rad(math.sin(seed*1.33+stage*5.19)*40)
-  view.CFrame=CFrame.new(pos)*CFrame.Angles(ax,seed*.01,az)
+  local ground=s:GetAttribute('GroundY')
+  if type(ground)=='number' then view.CFrame=Feel.groundedRockFrame(pos,view.Size,ground,stage,seed)
+  else view.CFrame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   view.Color=r.baseColor:Lerp(Color3.new(.12,.12,.15),stage*.13)
  else view.Transparency=1 end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
@@ -669,7 +692,7 @@ local function renderDrone(d,dt,now)
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
- if life~=d.life then d.life=life;d.pos=logical end
+ if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
  if state=='Follow' and not motionPaused then
   local owner=Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
@@ -681,13 +704,12 @@ local function renderDrone(d,dt,now)
    goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0)+d.swarmSteer
   end
  end
- if state=='Destroyed' or state=='Reprinting' then d.pos=logical
+ if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
  elseif not motionPaused then
-  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or (s:GetAttribute('TargetId') or '')~=''
-  d.pos=(workTravel and Feel.approachWork or Feel.approach)(d.pos,goal,maxStep,math.min(dt,.1))
+  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
-  -- Correct drift gradually, including after a delayed pause packet; never snap.
-  if error.Magnitude>5 then d.pos=d.pos+error.Unit*math.min(error.Magnitude-5,maxStep*60*math.min(dt,.1)*.25) end
+  local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
+  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction)
  end
  if not motionPaused then
   local targetYaw=Feel.levelYaw(d.pos,goal,d.yaw)
@@ -823,6 +845,7 @@ end
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  presentation:beginFrame()
+ pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
  for _,t in pairs(turrets) do
   if fieldUnlocked(t.source.Parent) and (t.source:GetAttribute('HP') or 0)>0 then
@@ -833,7 +856,7 @@ connect(RunService.RenderStepped,function(dt)
   end
  end
  local swarmRecords={}
- for _,d in pairs(drones) do table.insert(swarmRecords,{id=tostring(d.source:GetAttribute('DroneId')),pos=d.pos,hp=d.source:GetAttribute('HP') or 0,goal=d.source:GetAttribute('Goal'),maxStep60=d.source:GetAttribute('MaxStep60')}) end
+ for _,d in pairs(drones) do table.insert(swarmRecords,{id=tostring(d.source:GetAttribute('DroneId')),pos=d.pos,velocity=d.velocity,hp=d.source:GetAttribute('HP') or 0,goal=d.source:GetAttribute('Goal'),maxStep60=d.source:GetAttribute('MaxStep60')}) end
  renderSwarmGrid=Feel.swarmGrid(swarmRecords)
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
  renderHealing(now);renderBackpacks()
@@ -1112,6 +1135,9 @@ connect(RunService.Heartbeat,function(dt)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
+ pickupView:destroy();impactConnection:Disconnect()
+ RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
+ if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
  tacticalHUD:destroy()
  crystalAudio:destroy()

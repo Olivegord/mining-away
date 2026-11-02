@@ -71,11 +71,18 @@ function View.start(options)
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
   view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
-   local part=Instance.new('Part');part.Name='TinyScrapLaser';part.Shape=Enum.PartType.Cylinder
+   local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
-   part.Material=Enum.Material.Neon;part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
+   part.Material=Enum.Material.Metal;part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
-  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(171,221,133)),core=beam(.05,Color3.fromRGB(237,255,206)),alpha=0,yaw=0}
+  local chisel=beam(.05,Color3.fromRGB(185,174,126))
+  local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
+  local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
+  sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
+  sparks.Lifetime=NumberRange.new(.1,.22);sparks.Speed=NumberRange.new(2,4);sparks.Acceleration=Vector3.new(0,-15,0)
+  sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
+  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.08),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip
+  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}
  end
  local function scan()
   local folder=workspace:FindFirstChild('DroneRoleServerEffects')
@@ -125,13 +132,20 @@ function View.start(options)
     record.view:PivotTo(CFrame.new(record.pos)*CFrame.Angles(0,record.yaw,0))
     local active=source:GetAttribute('Active')==true
     record.alpha+=( (active and 1 or 0)-record.alpha)*(1-math.exp(-math.min(dt,.1)*22))
-    -- A tiny laser remains vertical even while a bot settles into place.
-    local height=math.max(.01,record.pos.Y-target.Y)
-    local beamPose=CFrame.new(record.pos.X,record.pos.Y-height*.5,record.pos.Z)*CFrame.Angles(0,0,math.pi/2)
-    for index,beam in ipairs({record.beam,record.core}) do
-     local width=index==1 and .16 or .05;beam.Size=Vector3.new(height,width*math.max(.01,record.alpha),width*math.max(.01,record.alpha))
-     beam.CFrame=beamPose;beam.Transparency=1-record.alpha*(index==1 and .35 or .8)
-    end
+    -- Solid miniature chisels tap on confirmed damage pulses; these bots do
+    -- close mechanical work rather than projecting the miner's laser again.
+    local serial=source:GetAttribute('Pulse') or 0
+    if serial~=(record.serial or serial) then record.hitAt=now;record.sparks:Emit(3) end
+    record.serial=serial
+    local tap=math.max(0,1-(now-(record.hitAt or -100))/.18)
+    local height=math.min(1.3,math.max(.1,record.pos.Y-target.Y))
+    local base=Vector3.new(record.pos.X,record.pos.Y-.18-tap*.14,record.pos.Z)
+    local pose=CFrame.new(base-Vector3.new(0,height*.5,0))*CFrame.Angles(0,0,math.pi/2)
+    record.beam.Size=Vector3.new(height,.065,.065);record.beam.CFrame=pose
+    record.beam.Color=Color3.fromRGB(99,111,103);record.beam.Transparency=1-record.alpha
+    record.core.Size=Vector3.new(.16,.22,.22);record.core.CFrame=CFrame.new(base-Vector3.new(0,height-.08,0))*CFrame.Angles(0,0,math.pi/2)
+    record.core.Color=Color3.fromRGB(185,174,126);record.core.Transparency=1-record.alpha
+    if active then record.view:PivotTo(CFrame.new(record.pos+Vector3.new(0,-tap*.08,0))*CFrame.Angles(0,record.yaw,0)) end
    end
   end
  end)

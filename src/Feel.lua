@@ -31,6 +31,44 @@ function F.approachWork(position,goal,maxStep60,dt)
  local step=math.min(distance*F.alpha(.065,dt),math.max(0,maxStep60)*1.45*60*dt,distance)
  return position+delta/distance*step
 end
+-- The original crystal silhouette remains; every tilted/shrinking stage rests
+-- on the same bed. This is the Y row of CFrame.Angles' XYZ rotation matrix.
+function F.groundedRockFrame(position,size,ground,stage,seed)
+ local ax=stage==0 and 0 or math.rad(math.sin(seed+stage*3.17)*40)
+ local az=stage==0 and 0 or math.rad(math.sin(seed*1.33+stage*5.19)*40)
+ local yaw=seed*.01
+ local cx,sx,cy,sy,cz,sz=math.cos(ax),math.sin(ax),math.cos(yaw),math.sin(yaw),math.cos(az),math.sin(az)
+ local half=(math.abs(cx*sz+sx*sy*cz)*size.X+math.abs(cx*cz-sx*sy*sz)*size.Y+math.abs(sx*cy)*size.Z)*.5
+ local center=Vector3.new(position.X,ground+half-.06,position.Z)
+ return CFrame.new(center)*CFrame.Angles(ax,yaw,az),ground+half*2-.06
+end
+function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction)
+ -- Retain the original capped, distance-eased destination rule, but approach
+ -- its requested velocity with thrust. New jobs, reversals and speed upgrades
+ -- cannot replace momentum in a single frame. Substeps keep braking consistent
+ -- across server ticks and 30/60/144 Hz observers.
+ velocity=velocity or Vector3.zero
+ if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
+ local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
+ local cruise=math.max(0,maxStep60 or 0)*60
+ local acceleration=math.max(10,cruise*1.6)
+ for _=1,steps do
+  local delta=goal-position;local distance=delta.Magnitude
+  local nearWork=work and distance<=16
+  local cap=cruise*(nearWork and 1.45 or 1)
+  local ease=nearWork and -60*math.log(1-.065) or -60*math.log(1-.03)
+  local speed=math.min(cap,distance*ease,math.sqrt(2*acceleration*distance))
+  local requested=distance>1e-6 and delta/distance*speed or Vector3.zero
+  if correction then
+   requested+=correction
+   if requested.Magnitude>cap then requested=requested.Unit*cap end
+  end
+  local change=requested-velocity;local limit=acceleration*h
+  local nextVelocity=change.Magnitude>limit and velocity+change.Unit*limit or requested
+  position+=(velocity+nextVelocity)*(.5*h);velocity=nextVelocity
+ end
+ return position,velocity
+end
 local hexDirections={{0,-1},{-1,0},{-1,1},{0,1},{1,0},{1,-1}}
 local function hexRing(slot)
  return math.ceil((math.sqrt(12*(slot-1)+9)-3)/6)

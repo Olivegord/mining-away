@@ -67,6 +67,7 @@ function IM:FindFirstChildWhichIsA(class,deep) for _,c in ipairs(deep and self:G
 function IM:FindFirstChildOfClass(c) return self:FindFirstChildWhichIsA(c) end
 function IM:WaitForChild(n) return self:FindFirstChild(n) end
 function IM:SetAttribute(k,v) self._attrs[k]=v;if self._signals[k] then self._signals[k]:Fire() end end
+function IM:GetAttributes() return table.clone(self._attrs) end
 function IM:GetAttribute(k) return self._attrs[k] end
 function IM:GetAttributeChangedSignal(k) self._signals[k]=self._signals[k] or signal();return self._signals[k] end
 function IM:IsDescendantOf(other) local p=self.Parent;while p do if p==other then return true end;p=p.Parent end;return false end

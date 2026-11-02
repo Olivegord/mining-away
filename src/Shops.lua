@@ -2,8 +2,8 @@
 -- ownership, quoted levels, spending and receipts are server transactions.
 local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz'}
 S.COLORS={Quartz={180,225,213},Ruby={226,75,112},Cobalt={89,150,234},Violet={166,115,217},Emerald={70,184,139}}
-local function item(id,shop,title,description,info,cost,max,effects,unlock)
- return {id=id,shop=shop,title=title,description=description,info=info,cost=cost,max=max or 1,effects=effects or {},unlock=unlock}
+local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
+ return {id=id,shop=shop,title=title,description=description,info=info,cost=cost,max=max or 1,effects=effects or {},unlock=unlock,role=role}
 end
 S.CATALOG={
  item('quartz_ruby','Quartz','Ruby expedition','Unlock Ruby field + shop.','Spend Quartz once to open Ruby for this run. Ruby purchases then spend Ruby. Guard clearances remain permanent.',80,1,nil,'Ruby'),
@@ -21,6 +21,12 @@ S.CATALOG={
  item('violet_courier','Violet','Courier express','Couriers fly delivery trips twice as fast.','Adds 100% courier travel speed, capped with courier cards. Requires a permanent Courier. Couriers still collect small real parcels, fly to sell and return.',48,1,{fullAuto=1}),
  item('emerald_orbital_cycle','Emerald','Rapid orbital laser','Orbital strikes with a 30s cooldown.','A complete orbital ability, usable without another upgrade. Charge and time a strike on the biggest ready rock. Cleared-field and backpack gates still apply.',80,1,{orbitalLaser=1,orbitalCycle=1}),
  item('emerald_relay','Emerald','Wide beam relay','Split a beam into a rock within 12 studs.','A complete mining behavior: split 20% damage into one eligible nearby crystal within 12 studs. Works without Beam relay. Does not increase command radius or recurse.',60,1,{fork=.20,forkRange=6}),
+ item('quartz_miner_focus','Quartz','Miner: focusing lens','Miners gain 100% startup rate.','Striker/Miner hardware only: adds 100% of base startup rate, halving laser warmup on its own. Stacks with startup cards; does not accelerate travel, breaker windup or healing.',35,1,{startup=1},nil,'Striker'),
+ item('ruby_courier_hold','Ruby','Emptier: deep parcel','Backpack emptiers carry 4× as much.','Courier hardware carries up to 32 real ore instead of 8 per trip. It still collects from your backpack, flies to sell, then returns. Requires a Courier; resets on prestige.',55,1,{courierCapacity=3},nil,'Courier'),
+ item('ruby_breaker_head','Ruby','Breaker: shell hammer','Breakers hit shells 80% harder.','Charger/Breaker hardware only: +80% damage against geode shells and cores. Its windup, physical dive and recovery still happen.',65,1,{geode=.8},nil,'Charger'),
+ item('cobalt_scout_memory','Cobalt','Scout: survey memory','Scout marks last twice as long.','Dart/Scout hardware only: marks persist for 16 seconds instead of 8. Marked rocks retain their faster miner startup. No extra mining damage.',50,1,{scanDuration=1},nil,'Dart'),
+ item('violet_repair_kit','Violet','Healer: repair kit','Healers repair 20 hull per pulse.','Medic/Healer hardware only: restores 20 instead of 10 hull every two seconds. Keeps the existing healer flight and attached repair beam.',65,1,{healPower=1},nil,'Medic'),
+ item('emerald_swarm_bay','Emerald','Swarm: extra bays','Fabricators deploy two extra bots.','Scrapper hardware only: six bots per ten-second deployment instead of four. Precision releases still cap at six. Same shared saved cooldown; no permanent drone is consumed.',85,1,{scrapBots=2},nil,'Scrapper'),
  item('emerald_pack_speed','Emerald','Instant pack press','Pack opening animation is 4× faster.','Four times the original reveal speed on its own. Does not require the Ruby upgrade. Every offer still has three saved choices and explicit selection; reveal speed caps at 4×.',100,1,{packSpeed=2}),
 }
 S.BY_ID={};for _,entry in ipairs(S.CATALOG) do S.BY_ID[entry.id]=entry end
@@ -44,11 +50,11 @@ function S.validate(run)
  end
  return true
 end
-function S.effects(p)
+function S.effects(p,role)
  local effects={}
  for id,n in pairs(p.run.shopLevels or {}) do
   local entry=S.BY_ID[id]
-  if entry then for key,value in pairs(entry.effects) do effects[key]=(effects[key] or 0)+n*value end end
+  if entry and (not entry.role or entry.role==role) then for key,value in pairs(entry.effects) do effects[key]=(effects[key] or 0)+n*value end end
  end
  return effects
 end
@@ -63,7 +69,7 @@ function S.packSpeed(p) return 2^math.min(2,S.effects(p).packSpeed or 0) end
 function S.cost(entry,level) return math.floor(entry.cost*2^(level or 0)) end
 function S.balance(p,key) return (p.run.wallet or {})[key] or 0 end
 function S.unlocked(p,key) return p.run.shops and p.run.shops[key]==true end
-function S.reason(p,entry)
+function S.reason(p,entry,context)
  if not S.unlocked(p,entry.shop) then return 'Unlock '..entry.shop..' first' end
  if entry.id=='cobalt_orbital' and S.abilityUnlocked(p,'Orbital') then return 'Orbital laser already installed' end
  if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
@@ -73,6 +79,11 @@ function S.reason(p,entry)
   local capacity=S.effects(p).capacity or 0
   for _,c in ipairs(p.run.cards) do capacity=capacity+(c.effects.capacity or 0) end
   if capacity>=2 then return 'Backpack already at 120 ore' end
+ end
+ if entry.role then
+  local aliases={Blue='Striker',Red='Charger',Green='Medic'};local found=false
+  for _,d in ipairs((context and context.fleet) or p.activeFleet or p.fleet) do if (aliases[d.role or d.type] or d.role or d.type)==entry.role then found=true end end
+  if not found then return 'Requires '..entry.role..' hardware' end
  end
  if entry.id=='violet_courier' then
   local found=false;for _,d in ipairs(p.fleet) do if d.role=='Courier' then found=true end end
@@ -100,7 +111,7 @@ function S.buy(p,id,level,tx,expectedRun,context)
  local entry=type(id)=='string' and S.BY_ID[id]
  if not entry then return false,'Unknown upgrade' end
  if not context or context.shop~=entry.shop or context.atShop~=true or context.activeEncounter then return false,'Visit this shop outside combat' end
- local why=S.reason(p,entry);if why then return false,why end
+ local why=S.reason(p,entry,context);if why then return false,why end
  local owned=p.run.shopLevels[id] or 0
  if not integer(level) or level~=owned then return false,'Price changed; refresh the shop' end
  if owned>=entry.max or (entry.unlock and S.unlocked(p,entry.unlock)) then return false,'Already complete' end

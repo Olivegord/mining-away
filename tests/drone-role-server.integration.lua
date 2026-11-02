@@ -110,4 +110,45 @@ check('healer preserves real ally repair and never acquires mining',function()
  miner.hp-=20;healer.pos=miner.pos+Vector3.new(2,1,2);local hp=miner.hp
  ticks(healer,.7,true);assert(miner.hp==hp+10 and not healer.mining and not healer.target)
 end)
+check('finished mining releases its reservation and lingers before choosing new work',function()
+ local _,p,roles=fixture();local r=rock(20);local nextRock=rock(400,'Crystal',Vector3.new(12,0,0));local d=roles.Striker[1]
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(hitResource(d,r,1000));assert(r.paid and not d.target and not next(r.slots))
+ local untilTime=d.lingerUntil;assert(untilTime and math.abs(untilTime-now-1)<1e-8)
+ p.oreQueue={nextRock.id}
+ local worker=roles.Charger[1];worker.hp=0
+ dispatchOreQueue(p);assert(not d.target and #p.oreQueue==1,'queued work skipped the recovery')
+ p.oreQueue={}
+ d.autoField=1;d.stats.plotAuto=1
+ ticks(d,.8,true);assert(d.state=='Recover' and not d.target and not d.mining,'reacquired during recovery')
+ now=untilTime+.01;realTime=now;droneStep(d,C.Tick)
+ assert(d.target==nextRock,'earned auto mining did not resume after recovery')
+end)
+check('storage pauses preserve the remaining post-mining recovery time',function()
+ local _,p,roles=fixture();local r=rock(20);local d=roles.Striker[1]
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(hitResource(d,r,1000));local remaining=d.lingerUntil-now;p.busy=true;ticks(d,2)
+ assert(math.abs(d.lingerUntil-now-remaining)<1e-7);p.busy=false
+ ticks(d,.5);assert(d.state=='Recover')
+end)
+check('a new explicit order cancels the completed-rock linger',function()
+ local _,p,roles=fixture();local r=rock(20);local other=rock(400,'Crystal',Vector3.new(12,0,0));local d=roles.Striker[1]
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(hitResource(d,r,1000));assert(d.lingerUntil)
+ assert(assignOre(p,d,other));assert(not d.lingerUntil and d.target==other)
+end)
+check('hardware shop upgrades change only their intended real role stats',function()
+ local _,p,roles=fixture();local profile=data(p)
+ profile.run.shopLevels.ruby_courier_hold=1;profile.run.shopLevels.quartz_miner_focus=1
+ profile.run.shopLevels.ruby_breaker_head=1;profile.run.shopLevels.violet_repair_kit=1
+ profile.run.shopLevels.cobalt_scout_memory=1;profile.run.shopLevels.emerald_swarm_bay=1
+ refreshStats(p)
+ assert(roles.Courier[1].stats.courierCapacity==32 and roles.Courier[2].stats.courierCapacity==32)
+ assert(roles.Striker[1].stats.courierCapacity==0 and roles.Medic[1].stats.healAmount==20)
+ assert(roles.Dart[1].stats.scanDuration==16 and roles.Striker[1].stats.scanDuration==8)
+ assert(roles.Charger[1].stats.geodeMultiplier==1.8 and roles.Striker[1].stats.geodeMultiplier==1)
+ local r=rock(1000);p.workField=1;local ctx=abilityContext(p,1,roles.Scrapper[1]);assert(ctx.perks.scrapBots==2)
+ p.ability=DroneAbilities.new({},profile.run.id);assert(DroneAbilities.begin(p.ability,'Scrap',now,ctx))
+ clock(.4);assert(DroneAbilities.confirm(p.ability,p.ability.charge.token,now,ctx));assert(#p.ability.swarm.bots==6)
+end)
 print(roleChecks..' actual production server role checks passed using API doubles; engine motion/multiplayer not verified')

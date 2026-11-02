@@ -75,4 +75,45 @@ check('destroyed neighbors exert no pressure',function()
  local a,b=record('a',0,0),record('b',0,0);b.hp=0
  close(Feel.swarmOffset(a.pos,a.id,Feel.swarmGrid({a,b})),Vector3.zero)
 end)
+check('flight thrust bounds acceleration from rest and through a reversal',function()
+ local pos,velocity=Vector3.zero,Vector3.zero;local dt=1/60;local acceleration=.35*60*1.6
+ for n=1,180 do
+  local goal=Vector3.new(n<=60 and 80 or -80,0,0);local previous=velocity
+  pos,velocity=Feel.inertialApproach(pos,goal,velocity,.35,dt,false)
+  assert((velocity-previous).Magnitude<=acceleration*dt+1e-8,'instant change in velocity')
+  assert(velocity.Magnitude<=21+1e-8,'cruise cap exceeded')
+  if n==1 then assert(velocity.Magnitude<1 and pos.X<.01,'launch should build thrust') end
+  if n==61 then assert(velocity.X>0,'reversal must first brake the previous direction') end
+ end
+ assert(velocity.X<0,'reversal never completes')
+end)
+check('decreasing cruise speed brakes without discarding momentum',function()
+ local pos,velocity=Vector3.zero,Vector3.new(21,0,0)
+ local nextPos,nextVelocity=Feel.inertialApproach(pos,Vector3.new(100,0,0),velocity,.1,1/60,false)
+ assert(nextVelocity.X>20 and nextVelocity.X<21,'a speed downgrade snapped to its new cap')
+ assert(nextPos.X>.3,'retained momentum must remain visible')
+end)
+check('flight settles over the target at 30 60 and 144 Hz',function()
+ local result={}
+ for _,fps in ipairs({30,60,144}) do
+  local pos,velocity=Vector3.zero,Vector3.zero;local goal=Vector3.new(30,4,15)
+  for _=1,fps*10 do pos,velocity=Feel.inertialApproach(pos,goal,velocity,.35,1/fps,true) end
+  close(pos,goal,.001);assert(velocity.Magnitude<.001)
+  table.insert(result,pos)
+ end
+ close(result[1],result[3],.001)
+end)
+check('zero time and long frame stalls do not invent unbounded catch-up',function()
+ local pos,velocity=Vector3.zero,Vector3.new(3,0,0)
+ local same,speed=Feel.inertialApproach(pos,Vector3.new(100,0,0),velocity,.35,0,false)
+ close(same,pos);close(speed,velocity)
+ local stalled,stalledSpeed=Feel.inertialApproach(pos,Vector3.new(100,0,0),velocity,.35,5,false)
+ local bounded,boundedSpeed=Feel.inertialApproach(pos,Vector3.new(100,0,0),velocity,.35,.1,false)
+ close(stalled,bounded);close(stalledSpeed,boundedSpeed)
+end)
+check('replication correction shares the same thrust limit',function()
+ local pos,velocity=Vector3.zero,Vector3.new(8,0,0)
+ local _,nextVelocity=Feel.inertialApproach(pos,Vector3.new(30,0,0),velocity,.35,1/60,false,Vector3.new(-100,0,0))
+ assert((nextVelocity-velocity).Magnitude<=.35*60*1.6/60+1e-8)
+end)
 print(checks..' production steering checks passed using Vector API doubles; not a Studio collision/visual playtest')

@@ -93,7 +93,7 @@ function A.confirm(state,token,now,ctx)
   end
  else
   local origin=point(ctx.origin);local bots={}
-  for i=1,(precise and 6 or 4) do
+  for i=1,math.min(6,(precise and 6 or 4)+math.clamp(perks.scrapBots or 0,0,2)) do
    local angle=i*2.399963
    table.insert(bots,{id=i,x=origin.x+math.cos(angle)*1.1,y=origin.y+.5,z=origin.z+math.sin(angle)*1.1,
     targetId=nil,charge=0,pulse=0,active=false})
@@ -133,11 +133,14 @@ function A.step(state,now,dt,ctx)
    local slot=(taken[target.id] or 0)+1;taken[target.id]=slot
    local radius=finite(target.radius) and math.max(.1,target.radius) or .6
    local offset=math.min(.3,radius*.35)*(slot%2==0 and 1 or -1)
-   local goal={x=target.x+offset,y=target.y+3+math.floor((slot-1)/2)*.45,z=target.z};local d=distance(bot,goal)
-   if d>.001 then
-    local step=math.min(d*(1-math.exp(-dt*5.5)),12*dt,d)
-    bot.x+=(goal.x-bot.x)*step/d;bot.y+=(goal.y-bot.y)*step/d;bot.z+=(goal.z-bot.z)*step/d
-   end
+   local goal={x=target.x+offset,y=target.y+1.2+math.floor((slot-1)/2)*.45,z=target.z};local d=distance(bot,goal)
+   local vx,vy,vz=bot.vx or 0,bot.vy or 0,bot.vz or 0
+   local speed=math.min(12,d*5.5,math.sqrt(40*d));local scale=d>.001 and speed/d or 0
+   local dx,dy,dz=(goal.x-bot.x)*scale-vx,(goal.y-bot.y)*scale-vy,(goal.z-bot.z)*scale-vz
+   local change=math.sqrt(dx*dx+dy*dy+dz*dz);local thrust=change>.001 and math.min(1,20*dt/change) or 0
+   local nx,ny,nz=vx+dx*thrust,vy+dy*thrust,vz+dz*thrust
+   bot.x+=(vx+nx)*dt*.5;bot.y+=(vy+ny)*dt*.5;bot.z+=(vz+nz)*dt*.5
+   bot.vx,bot.vy,bot.vz=nx,ny,nz
    if distance(bot,goal)<=math.min(.15,radius*.25) then
     bot.active=true;bot.target={x=goal.x,y=target.y,z=goal.z};bot.charge+=dt
     if bot.charge>=.25 then

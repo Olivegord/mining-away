@@ -127,6 +127,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
  elseif phase=='Dive' then
   Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
  elseif phase=='Impact' then
+  local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
   Effects.Pulse(target,Color3.fromRGB(252,231,179),.25,2.8,.22)
   -- Debris-like points communicate an impact, rather than a long emitter ray.
   for index=1,3 do
@@ -148,7 +149,7 @@ end
 -- Sources replicate complete poses for late joiners; AbilityView interpolates
 -- their local clones without feeding any rendered transform back into damage.
 local swarms: {[number]: Folder} = {}
-local markers: {[number]: Part} = {}
+local markers: {[number]: Instance} = {}
 local function clearSwarm(owner: number)
  local old=swarms[owner]
  if old then swarms[owner]=nil;old:Destroy() end
@@ -166,6 +167,47 @@ local function column(position: Vector3,height: number,width: number,color: Colo
  TweenService:Create(value,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Transparency=1,Size=Vector3.new(height,.02,.02)}):Play()
  Debris:AddItem(value,duration+.05)
 end
+local function confirmedImpact(position: Vector3,kind: string)
+ local value=part();if not value then return end
+ value.Name='ConfirmedMiningImpact';value.Transparency=1;value.Size=Vector3.one*.05;value.Position=position
+ value:SetAttribute('MiningImpact',kind);value:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(value,1)
+end
+local function targetSight(owner: number,target: any)
+ local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
+ local position=location(target);local radius=math.clamp((target.radius or 1)+.7,1.4,4)
+ local ground=target.ground or position.Y
+ for index=1,4 do
+  local angle=(index-1)*math.pi/2;
+  local value=part();if not value then break end
+  value.Name='RedTargetBracket';value.Color=Color3.fromRGB(238,63,63);value.Transparency=.22
+  value.Size=Vector3.new(.12,.055,radius*.8);value.CFrame=CFrame.new(position.X,ground+.045,position.Z)*CFrame.Angles(0,-angle,0)*CFrame.new(radius,0,0)
+  value.Parent=group
+  TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{CFrame=value.CFrame*CFrame.new(-.35,0,0),Transparency=.05}):Play()
+ end
+ for index=1,2 do
+  local value=part();if not value then break end
+  value.Name='RedTargetCrosshair';value.Color=Color3.fromRGB(255,82,72);value.Transparency=.3
+  value.Size=Vector3.new(.65,.05,.07);value.CFrame=CFrame.new(position.X,ground+.06,position.Z)*CFrame.Angles(0,index*math.pi/2,0);value.Parent=group
+ end
+ Debris:AddItem(group,2.6)
+end
+local function descendingStrike(position: Vector3)
+ local red=Color3.fromRGB(248,78,61)
+ for index,width in ipairs({2.4,.42}) do
+  local value=part();if not value then break end
+  value.Name='OrbitalRain';value.Shape=Enum.PartType.Cylinder;value.Color=index==1 and red or Color3.fromRGB(255,235,194)
+  value.Transparency=index==1 and .68 or .12;value.Size=Vector3.new(.05,width,width)
+  value.CFrame=CFrame.new(position+Vector3.new(0,34,0))*CFrame.Angles(0,0,math.pi/2)
+  TweenService:Create(value,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
+   Size=Vector3.new(34,width,width),CFrame=CFrame.new(position+Vector3.new(0,17,0))*CFrame.Angles(0,0,math.pi/2),
+  }):Play()
+  task.delay(.12,function() if value.Parent then
+   TweenService:Create(value,TweenInfo.new(.32,Enum.EasingStyle.Sine),{Transparency=1,Size=Vector3.new(34,.02,.02)}):Play()
+  end end)
+  Debris:AddItem(value,.5)
+ end
+ task.delay(.12,function() confirmedImpact(position,'Orbital');Effects.Pulse(position,red,.35,4.2,.3) end)
+end
 function Effects.ClearAbility(owner: number)
  clearSwarm(owner);clearMarker(owner)
 end
@@ -176,6 +218,7 @@ function Effects.Ability(owner: number,event: any,template: Model?)
  elseif kind=='clearScrap' then clearSwarm(owner)
  elseif kind=='charge' then
   clearMarker(owner)
+  if event.ability=='Orbital' then targetSight(owner,event.target);return end
   local value=part();if not value then return end
   value.Name='GadgetCharge';value.Shape=Enum.PartType.Ball;value.Size=Vector3.one*.45
   value.Color=event.ability=='Orbital' and Color3.fromRGB(240,173,88) or Color3.fromRGB(178,202,151)
@@ -183,9 +226,7 @@ function Effects.Ability(owner: number,event: any,template: Model?)
   markers[owner]=value;Debris:AddItem(value,2.6)
  elseif kind=='orbital' then
   clearMarker(owner)
-  local position=location(event.target);local color=Color3.fromRGB(255,189,91)
-  column(position,34,3.2,color,.5,.78);column(position,34,.46,Color3.fromRGB(255,238,183),.35,.25)
-  Effects.Pulse(position,color,.4,5,.35)
+  descendingStrike(location(event.target))
  elseif kind=='relay' then
   local position=location(event.target)
   column(position,9,.22,Color3.fromRGB(176,218,255),.3,.4)

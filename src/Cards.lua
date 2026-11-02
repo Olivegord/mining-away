@@ -98,7 +98,7 @@ local function sums(p,d,extra)
   -- Transport upgrades are the one Player modifier that changes a drone.
   if c.scope=='Player' and courier(d) then s.fullAuto=(s.fullAuto or 0)+(c.effects.fullAuto or 0) end
  end
- add({scope='Fleet',effects=Shops.effects(p)})
+ add({scope='Fleet',effects=Shops.effects(p,DroneRoles.canonical(d.role or d.type))})
  for _,c in ipairs(p.run.cards) do add(c) end
  if extra then add(extra) end
  return s
@@ -124,10 +124,12 @@ function C.stats(p,d,extra)
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,.2) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
+  courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
+  scanDuration=8*clamp(1+(s.scanDuration or 0),1,2),healAmount=10*clamp(1+(s.healPower or 0),1,2),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
 end
 function C.abilityPerks(p)
- return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0}
+ return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0,scrapBots=Shops.effects(p,'Scrapper').scrapBots or 0}
 end
 function C.price(p)
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}

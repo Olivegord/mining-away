@@ -13,10 +13,12 @@ local TRACKS = {
 }
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
- sale={id='71803180596130',volume=.32,duration=2,cooldown=.45,fallback='volume_slider.ogg'},
+ sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  pack={id='9126066421',volume=.25,duration=1,pitch=.8,cooldown=.4,fallback='volume_slider.ogg'},
- upgrade={id='91735091370012',volume=.32,duration=4,cooldown=.45,fallback='volume_slider.ogg'},
- prestige={id='91735091370012',volume=.4,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},
+ upgrade={id='91735091370012',pitch=.8,volume=.12,duration=4,cooldown=.45,fallback='volume_slider.ogg'},
+ prestige={id='91735091370012',volume=.16,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},
+ cutting={id='9118614717',volume=.045,duration=.6,pitch=.72,cooldown=.22,fallback='action_jump_land.mp3'},
+ orbital={id='9118612324',volume=.16,duration=1.1,pitch=.65,cooldown=.25,fallback='action_jump_land.mp3'},
  mining={id='9125871199',volume=.1,duration=2,cooldown=.16,fallback='action_jump_land.mp3'},
  hit={id='9125871199',volume=.15,duration=2,cooldown=.12,fallback='action_jump_land.mp3'},
  death={id='9125871199',volume=.32,duration=2,pitch=.75,cooldown=.2,fallback='impact_explosion_03.mp3'},
@@ -37,7 +39,10 @@ function Soundscape.new(effectParent)
   voices=0,closed=false,musicMuted=false,effectsMuted=false,combat=false,menu=false,
   nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
  self.musicGroup=group(folder,'Music',.14)
- self.effectsGroup=group(folder,'Actions',1)
+ self.effectsGroup=group(folder,'Actions',.65)
+ local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=-3;eq.HighGain=-12;eq.Parent=self.effectsGroup
+ local compressor=Instance.new('CompressorSoundEffect');compressor.Name='ActionPeakControl'
+ compressor.Threshold=-18;compressor.Ratio=5;compressor.Attack=.01;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
  local preload={}
  for _,track in ipairs(TRACKS) do
   local sound=Instance.new('Sound');sound.Name=track.name;sound.SoundId='rbxassetid://'..track.id
@@ -46,7 +51,7 @@ function Soundscape.new(effectParent)
  end
  -- Reuse one loaded template per asset, even when several cues share a clip.
  for _,cue in pairs(CUES) do if not self.bank[cue.id] then
-  local sound=Instance.new('Sound');sound.Name='Toolbox_'..cue.id;sound.SoundId='rbxassetid://'..cue.id
+  local sound=Instance.new('Sound');sound.Name='Toolbox_'..cue.id;sound.SoundId=cue.localSound or 'rbxassetid://'..cue.id
   sound.Volume=0;sound.SoundGroup=self.effectsGroup;sound.Parent=folder
   self.bank[cue.id]=sound;table.insert(preload,sound)
  end end
@@ -99,7 +104,7 @@ function Soundscape:toggleMusic()
  return not self.musicMuted
 end
 function Soundscape:toggleEffects()
- self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or 1
+ self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or .65
  return not self.effectsMuted
 end
 function Soundscape:play(name,position)
@@ -111,7 +116,8 @@ function Soundscape:play(name,position)
  local sound=ready and template:Clone() or Instance.new('Sound')
  sound.Name=name;sound.SoundGroup=self.effectsGroup
  if not ready then sound.SoundId='rbxasset://sounds/'..cue.fallback end
- sound.Volume=cue.volume/math.sqrt(1+self.voices*.16)
+ local volume=cue.volume/math.sqrt(1+self.voices*.25)
+ sound.Volume=0
  sound.PlaybackSpeed=(cue.pitch or 1)*(position and self.random:NextNumber(.96,1.04) or 1)
  sound.Looped=false;sound.PlayOnRemove=false
  local anchor
@@ -119,12 +125,16 @@ function Soundscape:play(name,position)
   anchor=Instance.new('Part');anchor.Name='ActionAudio';anchor.Size=Vector3.one*.05
   anchor.Anchored=true;anchor.Transparency=1;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Position=position;anchor.Parent=self.effectParent
-  sound.RollOffMode=Enum.RollOffMode.InverseTapered;sound.RollOffMinDistance=8;sound.RollOffMaxDistance=100
+  sound.RollOffMode=Enum.RollOffMode.InverseTapered;sound.RollOffMinDistance=5;sound.RollOffMaxDistance=65
  end
  sound.Parent=anchor or self.folder;self.voices+=1
  sound.Destroying:Once(function() self.voices=math.max(0,self.voices-1) end)
  sound.Ended:Once(function() if anchor then anchor:Destroy() else sound:Destroy() end end)
- sound:Play();Debris:AddItem(anchor or sound,cue.duration+.5)
+ sound:Play();fade(sound,.025,volume)
+ if name=='cutting' or name=='orbital' or name=='sale' then
+  task.delay(math.max(.05,cue.duration-.25),function() if sound.Parent then fade(sound,.22,0) end end)
+ end
+ Debris:AddItem(anchor or sound,cue.duration+.05)
 end
 function Soundscape:observeProfile(previous,current)
  -- Joining/reconnecting is silent. Only replicated, confirmed changes make a reward cue.

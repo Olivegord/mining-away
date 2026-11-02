@@ -87,7 +87,7 @@ end
 function W:destroyMining(beam)
  local fx=beam.work
  if not fx then return end
- fx.impact:Destroy();fx.anchor:Destroy();beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
+ fx.impact:Destroy();if fx.tip then fx.tip:Destroy() end;fx.anchor:Destroy();beam.work=nil;self.miningBeams[beam]=nil;self.miningCount=math.max(0,self.miningCount-1)
 end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
@@ -112,7 +112,14 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.sparks=particle(anchor,'OriginParticles',beam.tint or WHITE)
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.15,.25);fx.glow.Size=NumberSequence.new(.24)
-  fx.impact=particle(beam.marker,'CuttingSparks',sample.mineralColor or beam.tint or WHITE)
+  fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
+  fx.impact=particle(fx.tip,'CuttingSparks',Color3.fromRGB(255,205,119))
+  fx.impact.Orientation=Enum.ParticleOrientation.VelocityParallel
+  fx.impact.Lifetime=NumberRange.new(.14,.30);fx.impact.Speed=NumberRange.new(6,12)
+  fx.impact.Drag=2;fx.impact.Acceleration=Vector3.new(0,-25,0);fx.impact.SpreadAngle=Vector2.new(72,72)
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.65,.06),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Squash=NumberSequence.new(.8);fx.impact.LightEmission=.8
+  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.7,.25),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -148,10 +155,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local strength=charging and (.25+.75*q) or width
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
- fx.sparks.Rate=charging and (6+20*q) or 20;fx.sparks.Enabled=charging or working
+ fx.sparks.Rate=charging and (4+8*q) or 6;fx.sparks.Enabled=charging or working
  fx.glow.Rate=charging and 5 or 3;fx.glow.Enabled=charging or working
- fx.impact.Color=ColorSequence.new(sample.mineralColor or beam.tint or WHITE)
- fx.impact.Rate=continuous and 26 or 0;fx.impact.Enabled=working and continuous
+ fx.impact.Color=ColorSequence.new(Color3.fromRGB(255,224,158),sample.mineralColor or beam.tint or WHITE)
+ fx.impact.Rate=continuous and 42 or 0;fx.impact.Enabled=working and continuous
  if point and normal then
   beam.marker.CFrame=facing(point+normal*.045,normal)
   if fx.contact then
@@ -318,6 +325,8 @@ function W:courier(drone,record,now)
   fx.sparks.Rate=pickup and 12+q*12 or unload and 16 or 0;fx.sparks.Enabled=not paused and (pickup or unload)
   if paused then fx.sparks:Clear() end
  end
+ local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
+ fx.parcel.Size=Vector3.new(.62,.42,.5)*parcelScale;fx.band.Size=Vector3.new(.65,.07,.53)*parcelScale
  fx.parcel.Transparency=parcelUnits>0 and 0 or 1
  fx.band.Transparency=fx.parcel.Transparency
  if parcelUnits>0 then

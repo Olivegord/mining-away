@@ -1,6 +1,6 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
-local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10}
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3}
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -21,7 +21,7 @@ function M.resource(roll: number,kind: string,hardness: number?)
  -- The original random size remains 2–4 studs. Hardness increases work, never
  -- the footprint, height or station of an otherwise identical mineral.
  local mass=roll*(kind=='Geode' and 3 or 1)
- local work=(mass-10)*(hardness or 1)
+ local work=(mass-10)*(hardness or 1)*M.HEALTH_MULTIPLIER
  local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
  return {maxHP=work+10,work=work,size=size,mass=mass}
 end

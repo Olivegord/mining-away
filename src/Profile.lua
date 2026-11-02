@@ -81,7 +81,7 @@ function P.validate(p,uid)
  end
  local manifests={}
  for id,manifest in pairs(r.deliveries) do
-  if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=r.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 or bagUnits(manifest.cargo)>8 then return false,'Invalid delivery manifest' end
+  if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=r.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 or bagUnits(manifest.cargo)>32 then return false,'Invalid delivery manifest' end
   manifests[manifest.id]=true;cargoTotal=cargoTotal+bagUnits(manifest.cargo)
  end
  if not integer(cargoTotal) then return false,'Cargo total limit exceeded' end
@@ -298,7 +298,7 @@ function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  local existing=p.run.deliveries[droneId]
  if existing then return true,{id=existing.id,droneId=droneId,runId=p.run.id,units=bagUnits(existing.cargo)} end
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
- if not integer(batchSize) or batchSize<1 or batchSize>8 then return false,'Invalid courier batch' end
+ if not integer(batchSize) or batchSize<1 or batchSize>32 then return false,'Invalid courier batch' end
  if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
  local bag,remaining={},batchSize
  local materials={};for material in pairs(p.run.cargo) do table.insert(materials,material) end;table.sort(materials)

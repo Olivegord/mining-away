@@ -206,6 +206,9 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
  self.work:mining(beam,sample,point,normal,width,pulse,now)
+ if visible and sample.active and sample.isMining and now>=(beam.nextWorkSoundAt or 0) then
+  beam.nextWorkSoundAt=now+.48;self:_sound(point,'cutting',now)
+ end
  if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
   self.nextMiningSoundAt=now+.12;self:_sound(point,'mining',now)
  end
@@ -781,8 +784,22 @@ function P:destroyTurret(record)
  for part,original in pairs(record.hidden) do if part.Parent then part.LocalTransparencyModifier=original end end
  record.endpoint:Destroy();record.cue:Destroy();record.view:Destroy();self.turrets[record.source]=nil
 end
+function P:kick(position,strength,now)
+ local camera=workspace.CurrentCamera;if not camera then return end
+ local distance=(camera.CFrame.Position-position).Magnitude
+ local amount=strength*math.clamp(1-distance/55,0,1)^2
+ if amount<=.001 then return end
+ local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
+ self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
+end
+function P:cameraOffset(now)
+ local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
+ local strength=(self.shakeStrength or 0)*envelope
+ return CFrame.new(math.sin(age*67)*strength,math.sin(age*83+.7)*strength*.65,0)
+end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
+ if event=='break' then self:kick(resource.view.Position,.045,now) end
  local view=resource.view;local floor=self:_floor(view.Position,resource.source)
  local contact=resource.lastContact;local point,normal=view.Position+Vector3.new(0,view.Size.Y*.5,0),Vector3.yAxis
  if contact then
@@ -790,7 +807,7 @@ function P:resourceImpact(resource,event,now)
   if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
  end
  self.work:burst(point+normal*.05,normal,resource.baseColor,event=='break' and 18 or 7,now)
- local amount=event=='break' and 2 or 1
+ local amount=event=='break' and 0 or 1
  for i=1,amount do
   local angle=i*2.4+now*.1
   local full=resource.source:GetAttribute('FullSize') or view.Size

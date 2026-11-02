@@ -9,11 +9,11 @@ local Debris = game:GetService('Debris')
 local CrystalAudio = {}
 CrystalAudio.__index = CrystalAudio
 
-local MAX_VOICES = 24
-local STAGE_VOICE_LIMIT = 12 -- Leave room for the final break accents.
+local MAX_VOICES = 10
+local STAGE_VOICE_LIMIT = 6 -- Leave room for the final break accents.
 local MAX_DISTANCE = 85
 local FALLBACK_CRUNCH = 'rbxasset://sounds/action_jump_land.mp3'
-local FALLBACK_POP = 'rbxasset://sounds/impact_explosion_03.mp3'
+local FALLBACK_POP = FALLBACK_CRUNCH
 
 function CrystalAudio.new(parent: Instance, soundGroup: SoundGroup?)
 	local folder = Instance.new('Folder')
@@ -44,7 +44,7 @@ function CrystalAudio:_layer(anchor: BasePart, name: string, volume: number, pit
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = 10; sound.RollOffMaxDistance = MAX_DISTANCE
 	local eq = Instance.new('EqualizerSoundEffect')
-	eq.Name = 'StoneTexture'; eq.LowGain = bass; eq.MidGain = 1; eq.HighGain = .5; eq.Parent = sound
+	eq.Name = 'StoneTexture'; eq.LowGain = bass; eq.MidGain = -4; eq.HighGain = -16; eq.Parent = sound
 	sound.Parent = anchor
 	self.voices += 1
 	sound.Destroying:Once(function() self.voices = math.max(0, self.voices - 1) end)
@@ -59,26 +59,6 @@ function CrystalAudio:_layer(anchor: BasePart, name: string, volume: number, pit
 		if sound.Parent then TweenService:Create(sound, TweenInfo.new(fade, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Volume = 0}):Play() end
 	end)
 	Debris:AddItem(sound, duration + .06)
-end
-
-function CrystalAudio:_importedPop(anchor: BasePart, volume: number, pitch: number)
-	if self.closed or self.voices >= MAX_VOICES then return end
-	local template = self.bank and self.bank:FindFirstChild('StagePop')
-	if not template or not template:IsA('Sound') then return end
-	local sound = template:Clone()
-	sound.Name = 'StagePop'; sound.Looped = false; sound.PlayOnRemove = false
-	sound.SoundGroup = self.soundGroup
-	sound.TimePosition = 0
-	sound.Volume = volume * self.random:NextNumber(.94, 1.04) / math.sqrt(1 + self.voices * .12)
-	sound.PlaybackSpeed = pitch
-	sound.RollOffMode = Enum.RollOffMode.InverseTapered
-	sound.RollOffMinDistance = 10; sound.RollOffMaxDistance = MAX_DISTANCE
-	sound.Parent = anchor; self.voices += 1
-	sound.Destroying:Once(function() self.voices = math.max(0, self.voices - 1) end)
-	sound.Ended:Once(function() sound:Destroy() end)
-	-- No trimming, EQ, or extra layers: keep the Toolbox clip's own pop and tail.
-	sound:Play()
-	Debris:AddItem(sound, math.max(2, sound.TimeLength / sound.PlaybackSpeed + .25))
 end
 
 function CrystalAudio:play(position: Vector3, event: string, stage: number, geode: boolean)
@@ -109,15 +89,10 @@ function CrystalAudio:play(position: Vector3, event: string, stage: number, geod
 	local pitch = (geode and .82 or 1) * self.random:NextNumber(.92, 1.08)
 	local weight = geode and 1.14 or 1
 	if breaking then
-		self:_layer(anchor, 'Pop', .3 * weight, 1.08 * pitch, .24, 0, -2, .06)
-		self:_layer(anchor, crunch, .35 * weight, 1.24 * pitch, geode and 1.3 or 1.1, .02, 1, .65)
-		task.delay(.075, function()
-			self:_layer(anchor, crunch, .1 * weight, 1.85 * pitch, .5, .24, -9, .35)
-		end)
-	else
-		-- Play the imported Toolbox pop as-is, with only volume and pitch variation.
-		local progression = math.clamp(stage, 1, 3)
-		self:_importedPop(anchor, (.22 + progression * .025) * weight, pitch)
+  -- A single rounded rubble layer replaces the sharp pop + bright triple stack.
+  self:_layer(anchor, crunch, .15 * weight, .82 * pitch, geode and 1.2 or .95, .025, 1, .55)
+ else
+  self:_layer(anchor, crunch, (.045 + math.clamp(stage,1,3)*.008) * weight, .9 * pitch, .48, .04, -2, .3)
 	end
 end
 

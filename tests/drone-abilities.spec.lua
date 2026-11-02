@@ -137,4 +137,14 @@ test('storage pauses preserve charge windows and ten seconds of working swarm ti
  local deadline=swarmState.swarm.expires;local cooldown=swarmState.cooldowns.Scrap
  A.pause(swarmState,4);assert(swarmState.swarm.expires==deadline+4 and swarmState.swarm.expires-swarmState.swarm.started==10 and swarmState.cooldowns.Scrap==cooldown)
 end)
+test('tiny miners also accelerate continuously when targets change',function()
+ local s,c=setup();local token=begin(s,c,'Scrap');A.confirm(s,token,10.5,c)
+ local bot=s.swarm.bots[1];local previous={x=0,y=0,z=0}
+ for n=1,90 do
+  A.step(s,10.5+n/60,1/60,c)
+  local dx,dy,dz=(bot.vx or 0)-previous.x,(bot.vy or 0)-previous.y,(bot.vz or 0)-previous.z
+  assert(math.sqrt(dx*dx+dy*dy+dz*dz)<=20/60+1e-7)
+  previous={x=bot.vx,y=bot.vy,z=bot.vz}
+ end
+end)
 print(passed..' production gadget domain checks passed; not Studio or multiplayer evidence')
