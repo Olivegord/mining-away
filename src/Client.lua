@@ -12,7 +12,7 @@ local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
-local pickupView=PickupView.new(world,localFX)
+local pickupView=PickupView.new(world,localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -25,8 +25,14 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
  for source in pairs(orbitalBurns) do
   if not source.Parent then orbitalBurns[source]=nil
   else
-   local active=now-(source:GetAttribute('ContactAt') or 0)<.3
+   local ended=source:GetAttribute('EndedAt')~=nil
+   local active=not ended and now-(source:GetAttribute('ContactAt') or 0)<.3
    for _,part in ipairs(source:GetDescendants()) do
+    if ended then
+     if part:IsA('BasePart') then part.LocalTransparencyModifier=0 end
+     -- Emit(5) afterglow particles continue after the work emitter stops.
+     continue
+    end
     if part:IsA('BasePart') then part.LocalTransparencyModifier=active and 0 or 1
     elseif part:IsA('ParticleEmitter') then part.Enabled=active end
    end
@@ -376,8 +382,8 @@ openFleet=function()
    statTile(row,14,91,tileWidth,'PARCEL',tostring(DroneConfig.Courier.BatchUnits)..' ore')
    statTile(row,tileWidth+28,91,tileWidth,'JOB','Sell for you')
   elseif role=='Dart' then
-   statTile(row,14,91,tileWidth,'JOB','Mark rocks')
-   statTile(row,tileWidth+28,91,tileWidth,'STARTUP','65% shorter')
+   statTile(row,14,91,tileWidth,'JOB','Grow rocks')
+   statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
   elseif role=='Charger' then
    statTile(row,14,91,tileWidth,'JOB','Dive + impact')
    statTile(row,tileWidth+28,91,tileWidth,'IMPACT',number((stats.miningDPS or 30)*2.4)..' base')
@@ -733,7 +739,7 @@ local function renderDrone(d,dt,now)
  elseif not motionPaused and state=='BreakerDive' then
   d.pos,d.velocity=Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,s:GetAttribute('BreakerImpact') or goal,now-(s:GetAttribute('BreakerPhaseAt') or now),.28)
  elseif not motionPaused then
-  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or (s:GetAttribute('TargetId') or '')~=''
+  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction)
@@ -967,13 +973,23 @@ local function requestPlot(id)
  end
  command:FireServer('Patch',id)
 end
+local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
+ profile=function() return profile end,hidden=function() return modal.Visible end,
+ blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
+connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
+connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
+ local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
+ if not ok or type(state)~='table' then return end
+ commandView:reply(state)
+ notice.Text=state.reason or '';noticeUntil=os.clock()+2.2
+end)
 local function assignField(target)
  if modal.Visible then return end
  local node=target
  while node and node~=workspace do
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
-   command:FireServer('MineOre',resourceId);return
+   commandView:request(resourceId);return
   end
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then openFleet();return end
@@ -1072,7 +1088,7 @@ connect(RunService.Heartbeat,function(dt)
   elseif amount>=capacity then objective.Text='Backpack full · mining continues.\nSell to collect waiting fragments.'
   elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
   elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' Quartz.\nOpen your next pack at the depot.'
-  elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click an ore to assign a miner.\nCarry your backpack back to sell.'
+  elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click rocks to send workers.\nGold = queued · green = working.'
   elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Unlock %s to grow your crew.\nDefeat its guards once.',pre.field or 'Cobalt')
   elseif pre and (pre.winsRequired or 1)>0 then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s: %s.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',(pre.wins or 0)>0 and 'Unlocked' or 'Defeat guards once')
   elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.',comma(pre.earnings or 0),comma(pre.saleRequired or 160))
@@ -1162,7 +1178,7 @@ connect(RunService.Heartbeat,function(dt)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
- pickupView:destroy();impactConnection:Disconnect()
+ commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()

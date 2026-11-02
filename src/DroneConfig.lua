@@ -1,6 +1,6 @@
 --!strict
 
-export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry" | "Scan" | "Orbital" | "Swarm"
+export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry" | "Grow" | "Orbital" | "Swarm"
 
 export type DroneDefinition = {
 	DisplayName: string,
@@ -47,15 +47,15 @@ DroneConfig.Order = {
 
 DroneConfig.Types = {
 	Dart = {
-		DisplayName = "Dart",
-		Description = "Scout. Flies ahead and marks rocks so the miner starts its laser sooner. Does not mine.",
-		Color = Color3.fromRGB(45, 224, 255),
+		DisplayName = "Cultivator",
+		Description = "Rock grower. Plants replacement crystals in depleted plots. Flies to an empty spot, seeds it, then the rock grows. Does not mine.",
+		Color = Color3.fromRGB(131, 220, 151),
 		Accent = Color3.fromRGB(224, 253, 255),
 		Scale = 0.72,
 		MaxHealth = 48,
 		Speed = 35,
 		FlightHeight = 3.2,
-		AttackStyle = "Scan",
+		AttackStyle = "Grow",
 		AttackRange = 26,
 		AttackCooldown = 0.38,
 		Damage = 5,
@@ -207,11 +207,11 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
  if role=='Dart' or role=='Charger' then
   local pose=model:GetPivot();local scale=model:GetScale()
   for _,side in ipairs({-1,1}) do
-   local part=Instance.new(role=='Dart' and 'WedgePart' or 'Part');part.Name=role=='Dart' and 'ScoutRail' or 'ImpactDrum'
+   local part=Instance.new('Part');part.Name=role=='Dart' and 'MineralSeeder' or 'ImpactDrum'
    part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
    part.Material=Enum.Material.Metal;part.MaterialVariant='';part.Reflectance=0;part.Color=Color3.fromRGB(72,80,82)
    part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-   part.Size=(role=='Dart' and Vector3.new(.22,.35,1.8) or Vector3.new(.7,.8,.8))*scale
+   part.Size=(role=='Dart' and Vector3.new(.7,.4,.4) or Vector3.new(.7,.8,.8))*scale
    if part:IsA('Part') then part.Shape=Enum.PartType.Cylinder end
    part.CFrame=pose*CFrame.new(side*(role=='Dart' and .85 or 1.1)*scale,-.12*scale,0);part.Parent=model
   end

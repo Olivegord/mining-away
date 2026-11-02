@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — particles, useful grower and readable commands
+
+The owner asks for a polish pass: orbital lasers shrink when finishing and leave noisy fading particles along their entire height; replace the ineffective scout with a drone that grows rocks; simplify sending drones using object highlights and clear outcomes; make collectible mineral currencies glow and feel satisfying to collect. Keep effects simple and purposeful. See [polish and Cultivator review](review/POLISH_CULTIVATOR.md). The existing Play session must remain running unless the owner permits stopping it; saved builds do not automatically hot-load already-running controllers.
+
 ## November 1 latest — mining impact and testing while playing
 
 The owner requests stronger default mining feedback; rocks turn black before each size reduction; some much larger rocks have more shrink stages. Orbital charge uses a very thin translucent red cylinder sight, followed by sustained melting damage and screen shake throughout the active burn. Breakers need a harsher powered fall, rocket particles and a heavier hit effect. Drones keep mining with a full backpack; pickup waits for space. Add an always-unlocked field beside Quartz with tenfold rock health.

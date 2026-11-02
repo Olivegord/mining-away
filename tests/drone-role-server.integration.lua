@@ -1,7 +1,7 @@
 -- Appended to the actual server bundle. Native rendering/LOS are not simulated.
 local roleChecks=0
 local roleEvents={}
-RoleEffects.Scan=function(from,target) table.insert(roleEvents,{kind='scan',from=from,target=target}) end
+RoleEffects.Grow=function(from,target) table.insert(roleEvents,{kind='grow',from=from,target=target}) end
 RoleEffects.BreakerPhase=function(position,target,phase) table.insert(roleEvents,{kind=phase,position=position,target=target}) end
 RoleEffects.Ability=function(_,event) table.insert(roleEvents,{kind=event.kind}) end
 RoleEffects.ClearAbility=function() end
@@ -38,12 +38,29 @@ check('ore queue and direct assignments cannot give specialists ordinary mining 
  p.oreQueue={r.id};dispatchOreQueue(p)
  for _,d in ipairs(p.drones) do if d.target then assert(DroneRoles.isWorker(d.role)) end end
 end)
-check('scout physically scans the exposed rock top without damage or a reservation',function()
- local _,p,roles=fixture();local r=rock(800);local d=roles.Dart[1];local hp=r.hp
- p.workField=1;d.pos=r.position+Vector3.new(1.8,5,0);ticks(d,1.1,true)
- assert(r.scoutedUntil>now and r.hp==hp and not next(r.slots) and not d.mining)
- local event=roleEvents[#roleEvents];assert(event.kind=='scan' and event.target.Y>r.position.Y)
- assert(DroneRoles.startupFactor(r.scoutedUntil,now)==.35)
+check('grower plants a real replacement with normal health yield growth and bounded population',function()
+ local _,p,roles=fixture();local field=patches[1];local d=roles.Dart[1]
+ field.respawnQueue={field.respawnClock+100};p.workField=1
+ ticks(d,C.Tick);assert(d.growPlan and not d.mining)
+ local spot=d.growPlan.spot;d.pos=Vector3.new(spot.X,field.part.Position.Y+field.part.Size.Y*.5+3.2,spot.Z)
+ local before=#field.resources;ticks(d,1.2,true)
+ assert(#field.resources==before+1 and #field.respawnQueue==0)
+ local r=field.resources[#field.resources]
+ assert(r.part:GetAttribute('GrownBy')==d.id and r.readyAt>now and r.ore==field.cfg.Ore)
+ assert(r.hp==r.maxHP-10 and not d.target and not d.mining and not next(r.slots))
+ local count=#field.resources;ticks(d,8);assert(#field.resources==count,'cannot generate rewards without a replacement token')
+end)
+check('recall cancels planting and two growers cannot overlap or exceed replacement tokens',function()
+ local _,p,roles=fixture();local field=patches[1];local d=roles.Dart[1]
+ field.respawnQueue={field.respawnClock+100};p.workField=1;ticks(d,C.Tick)
+ local plan=assert(d.growPlan);leaveField(p);assert(not d.growPlan)
+ local before=#field.resources;ticks(d,2);assert(#field.resources==before)
+ p.workField=1;d.nextGrow=0;d.growPlan=plan
+ d.pos=Vector3.new(plan.spot.X,field.part.Position.Y+field.part.Size.Y*.5+3.2,plan.spot.Z)
+ d.velocity=Vector3.zero
+ ticks(d,C.Tick);p.busy=true;local elapsed=now-d.growAt;ticks(d,2);assert(math.abs(now-d.growAt-elapsed)<1e-5)
+ p.busy=false;ticks(d,1.2);assert(#field.resources==before+1)
+ assert(not spawnResource(field,'Crystal',false,plan),'a second grower must not overlap the first rock')
 end)
 check('only the miner performs a continuous cutting beam after real warmup',function()
  local _,p,roles=fixture();local r=rock(1000);local d=roles.Striker[1];local hp=r.hp
@@ -64,7 +81,7 @@ check('breaker arrives winds up dives hits once and recovers even after a killin
  ticks(d,.3,true);assert(d.breaker and d.breaker.phase=='Recover')
  ticks(d,.6,true);assert(not d.breaker and d.impactSerial==1)
 end)
-check('recall and busy storage cancel or pause breaker and scout work',function()
+check('recall and busy storage cancel or pause breaker and grower work',function()
  local _,p,roles=fixture();local r=rock(500);local d=roles.Charger[1];local hp=r.hp
  assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)+Vector3.new(0,2,0)
  ticks(d,.2);local elapsed=now-d.breaker.phaseAt;p.busy=true;ticks(d,1)
@@ -147,10 +164,28 @@ check('hardware shop upgrades change only their intended real role stats',functi
  refreshStats(p)
  assert(roles.Courier[1].stats.courierCapacity==32 and roles.Courier[2].stats.courierCapacity==32)
  assert(roles.Striker[1].stats.courierCapacity==0 and roles.Medic[1].stats.healAmount==20)
- assert(roles.Dart[1].stats.scanDuration==16 and roles.Striker[1].stats.scanDuration==8)
+ assert(roles.Dart[1].stats.growCooldown==2.5 and roles.Striker[1].stats.growCooldown==5)
  assert(roles.Charger[1].stats.geodeMultiplier==1.8 and roles.Striker[1].stats.geodeMultiplier==1)
  local r=rock(1000);p.workField=1;local ctx=abilityContext(p,1,roles.Scrapper[1]);assert(ctx.perks.scrapBots==2)
  p.ability=DroneAbilities.new({},profile.run.id);assert(DroneAbilities.begin(p.ability,'Scrap',now,ctx))
  clock(.4);assert(DroneAbilities.confirm(p.ability,p.ability.charge.token,now,ctx));assert(#p.ability.swarm.bots==6)
+end)
+check('rock clicks confirm work queue and cancellation without replacing a busy job',function()
+ local pl,p,roles=fixture();local gui=Instance.new('PlayerGui');gui.Parent=pl
+ roles.Charger[1].hp=0
+ local first=rock(1000);local second=rock(1000,'Crystal',Vector3.new(12,0,0));local miner=roles.Striker[1]
+ local serial=0
+ local function click(r,toggle,run)
+  serial+=1;p.tokens=7;p.bucketAt=now
+  commandPlayer(pl,'MineOre',{requestId='polish.'..serial,runId=run or data(p).run.id,resourceId=r.id,toggle=toggle})
+  return http:JSONDecode(gui:GetAttribute('MA_CommandState'))
+ end
+ assert(click(first,true).status=='accepted' and miner.target==first)
+ assert(click(second,true).status=='queued' and #p.oreQueue==1 and miner.target==first)
+ publish(p);assert(http:JSONDecode(pl:GetAttribute('QueuedOreIds'))[1]==second.id)
+ assert(click(second,true).status=='canceled' and #p.oreQueue==0 and miner.target==first)
+ assert(click(first,true).status=='accepted' and miner.target==first,'repeat command must preserve work')
+ assert(click(second,true,'old-run').status=='rejected' and #p.oreQueue==0)
+ second.readyAt=now+2;assert(click(second,true).status=='rejected' and #p.oreQueue==0)
 end)
 print(roleChecks..' actual production server role checks passed using API doubles; engine motion/multiplayer not verified')

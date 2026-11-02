@@ -2,12 +2,12 @@
 -- mining beam: a drone must have the actual mechanical job that performs it.
 local R={}
 R.BREAKER={windup=.8,impactHold=.12,recovery=.65,diveLimit=1.25,diveDuration=.28}
-R.SCOUT={markSeconds=8,scanSeconds=.8,revisit=2.4,startupFactor=.35}
+R.GROWER={plantSeconds=1.1,cooldown=5}
 local legacy={Blue='Striker',Red='Charger',Green='Medic'}
 local definitions={
  Striker={job='Miner',worker=true,miner=true,combat=true},
  Charger={job='Breaker',worker=true,combat=true},
- Dart={job='Scout',scout=true},
+ Dart={job='Rock grower',grower=true},
  Courier={job='Backpack emptier',courier=true},
  Medic={job='Healer',healer=true},
  Orbiter={job='Orbital controller',ability='Orbital'},
@@ -22,7 +22,7 @@ end
 function R.isWorker(role) return capability(role,'worker') end
 function R.isMiner(role) return capability(role,'miner') end
 function R.combat(role) return capability(role,'combat') end
-function R.isScout(role) return capability(role,'scout') end
+function R.isGrower(role) return capability(role,'grower') end
 function R.isCourier(role) return capability(role,'courier') end
 function R.isHealer(role) return capability(role,'healer') end
 function R.ability(role)
@@ -30,9 +30,6 @@ function R.ability(role)
 end
 function R.job(role)
  local definition=definitions[R.canonical(role)];return definition and definition.job or 'Unknown'
-end
-function R.startupFactor(markedUntil,now)
- return finite(markedUntil) and finite(now) and markedUntil>now and R.SCOUT.startupFactor or 1
 end
 local function xyz(value)
  if type(value)~='table' then return nil end
@@ -43,7 +40,7 @@ local function xyz(value)
 end
 function R.chooseTarget(role,nodes,origin,now)
  role=R.canonical(role)
- if role~='Dart' and role~='Charger' then return nil end
+ if role~='Charger' then return nil end
  local x,y,z=xyz(origin);if not x or not finite(now) then return nil end
  local chosen,best=nil,-math.huge
  for _,node in ipairs(nodes or {}) do
@@ -53,11 +50,7 @@ function R.chooseTarget(role,nodes,origin,now)
    and ready and node.paid~=true and node.eligible~=false then
    local distance=math.sqrt((nx-x)^2+(ny-y)^2+(nz-z)^2)
    local score
-   if role=='Dart' then
-    -- A scout spends time making the next substantial job faster, never
-    -- repeatedly marking an already-covered rock or claiming mining damage.
-    if R.startupFactor(node.markedUntil,now)==1 then score=math.min(node.hp,400)*.12-distance*.65 end
-   else
+   do
     -- The impact specialist takes shells first, then substantial remaining work.
     local shell=node.kind=='Geode' and 120 or (node.kind=='Core' and 80 or 0)
     score=shell+math.min(node.hp,1000)*.08-distance*.7

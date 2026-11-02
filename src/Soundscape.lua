@@ -14,6 +14,7 @@ local TRACKS = {
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
+ pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.055,duration=.3,pitch=1.45,cooldown=.09,fallback='volume_slider.ogg'},
  pack={id='9126066421',volume=.25,duration=1,pitch=.8,cooldown=.4,fallback='volume_slider.ogg'},
  upgrade={id='91735091370012',pitch=.8,volume=.12,duration=4,cooldown=.45,fallback='volume_slider.ogg'},
  prestige={id='91735091370012',volume=.16,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},

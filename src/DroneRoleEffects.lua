@@ -100,22 +100,23 @@ function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	end
 end
 
--- A scout identifies work without pretending to cut it. The small nested
--- spheres mark that real server target; there is deliberately no laser beam.
-function Effects.Scan(from: Vector3,target: Vector3,lifetime: number?)
- local duration=math.clamp(lifetime or 8,.2,10)
- local blue=Color3.fromRGB(103,194,227)
- Effects.Pulse(from,blue,.18,.85,.25)
- for index,size in ipairs({.18,.32,.5}) do
-  local marker=part();if not marker then break end
-  marker.Name='ScoutMark';marker.Shape=Enum.PartType.Ball;marker.Color=blue
-  marker.Position=target+Vector3.new(0,.45,0);marker.Size=Vector3.one*size
-  marker.Transparency=.22+index*.15
-  TweenService:Create(marker,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
-   Transparency=1,Size=Vector3.one*size*.65,
-  }):Play()
-  Debris:AddItem(marker,duration+.05)
- end
+-- Seeding dust falls from the actual grower; the bloom confirms a real spawn.
+function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
+ local green=Color3.fromRGB(152,231,158)
+ local value=part();if not value then return end
+ value.Name=planted and 'CrystalSeedBloom' or 'CrystalSeedFall';value.Transparency=1
+ value.Position=planted and target or from
+ local tip=Instance.new('Attachment');tip.Parent=value
+ local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/sparkles_main.dds'
+ dust.Rate=0;dust.Color=ColorSequence.new(green,Color3.fromRGB(234,255,201));dust.LightEmission=.7
+ dust.Lifetime=NumberRange.new(.5,planted and 1.1 or .9);dust.Speed=NumberRange.new(planted and 1 or 3,planted and 4 or 5)
+ dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
+ dust.Acceleration=Vector3.new(0,planted and 2 or -4,0);dust.Drag=1
+ dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
+ dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.08),NumberSequenceKeypoint.new(1,0)})
+ dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(1,1)})
+ dust.Parent=tip;dust:Emit(planted and 22 or 14);Debris:AddItem(value,1.3)
+ if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,2.1,.45) end
 end
 
 -- These are one-shot phase cues. The authoritative drone moves through its
@@ -183,7 +184,34 @@ end
 local burns: {[number]: Folder} = {}
 local function clearBurn(owner: number)
  local old=burns[owner];burns[owner]=nil
- if old then old:Destroy() end
+ if not old or not old.Parent then return end
+ -- Stop work immediately, but let the column collapse into suspended embers.
+ -- EndedAt also stops client shake; the server tween remains visible to everyone.
+ old:SetAttribute('EndedAt',workspace:GetServerTimeNow())
+ for _,effect in ipairs(old:GetDescendants()) do
+  if effect:IsA('ParticleEmitter') then effect.Enabled=false end
+ end
+ local core=old:FindFirstChild('MeltCore')
+ if core and core:IsA('BasePart') then
+  for index=0,13 do
+   local tip=Instance.new('Attachment');tip.Name='CoolingEmbers'
+   tip.Position=Vector3.new(-17+index*34/13,math.noise(index*.81,owner)*.65,math.noise(owner,index*.67)*.65);tip.Parent=core
+   local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
+   embers.Texture='rbxasset://textures/particles/sparkles_main.dds';embers.Rate=0;embers.LightEmission=1
+   embers.Color=ColorSequence.new(Color3.fromRGB(255,225,153),Color3.fromRGB(236,78,40))
+   embers.Lifetime=NumberRange.new(.45,1.1);embers.Speed=NumberRange.new(.8,3.8);embers.Drag=2
+   embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-100,100)
+   embers.Acceleration=Vector3.new(0,1.5,0)
+   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.1),NumberSequenceKeypoint.new(.3,.24,.13),NumberSequenceKeypoint.new(1,0)})
+   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.55,.45),NumberSequenceKeypoint.new(1,1)})
+   embers.Parent=tip;embers:Emit(5)
+  end
+ end
+ for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') then
+  local size=value.Name=='MeltContact' and Vector3.one*.03 or Vector3.new(value.Size.X,.015,.015)
+  TweenService:Create(value,TweenInfo.new(.48,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=size,Transparency=1}):Play()
+ end end
+ Debris:AddItem(old,1.3)
 end
 local function targetSight(owner: number,target: any)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group

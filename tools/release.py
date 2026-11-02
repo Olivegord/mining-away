@@ -61,6 +61,11 @@ def main() -> None:
                                  {'path': path, 'sha256': hashlib.sha256(actual[path]['source']).hexdigest()}
                                  for path in extra],
                              'validation': 'Native Edit export; exact live and backup Sources verified. Not a Play test.'}
+        refresh = output.parent / 'editable-source-refresh.json'
+        if refresh.exists():
+            record = json.loads(refresh.read_text())
+            if record['after_sha256'] == editable_metadata['sha256']:
+                editable_metadata['validation'] = 'Preserved native Edit geometry; allowlisted Sources refreshed offline and all other chunks/backups verified. Existing Studio Play untouched. Not a Play test.'
     metadata = {
         "project": "Olivegord/mining-away",
         "place_id": ACTIVE_PLACE_ID,
