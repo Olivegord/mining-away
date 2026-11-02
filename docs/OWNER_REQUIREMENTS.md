@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — simple textured cards
+
+The owner approves the new original card images but rejects the surrounding complexity: no texture, too many lines and outlines. Match the actual Catch a Brainrot UI's simple textured surface and appealing rounded border. Keep at most three main content elements: the approved artwork, benefit, and target/terms. Remove nested artwork/footer panels, separator lines, fasteners and decorative edge strips. Retain readable text, the 3D card effect and saved server choices. Include one or two actual screenshots with UI updates so the owner can judge quickly.
+
 ## November 2 latest — inspect the colorful UI reference and apply it
 
 The owner requests actual Catch a Brainrot UI image study after the cloud task's videos failed to load, then applying the useful lessons to this game's colorful pack UI while retaining its 3D card effect. The owner rejects the first follow-up preview (flat colored rectangles with weak miniature artwork). Rework the actual production cards, not only their palette: emphasize clear original drone/mining artwork, readable benefits, physical depth and purposeful colorful feedback. Preserve saved server-generated choices, original assets, compact UI and the same game; no publishing or main merge. See [reference study and native UI review](review/COLORFUL_PACK_REFERENCE.md).

@@ -91,35 +91,32 @@ function CardView.identity(choice)
  return 'mineral',Color3.fromRGB(104,49,170),Color3.fromRGB(245,177,255)
 end
 
--- A molded housing: a bright upper lip, dark lower edge and an inset face.
--- These stay local to packs; color does not compete with the working swarm.
-function CardView.housing(U,root,color,accent)
+-- One textured surface and one rounded border, shared by cards and packs.
+-- Use Roblox's shipped stud atlas; no uploaded art or per-stud GUI objects.
+function CardView.housing(U,root,color,_accent)
+ local pixels=root.Parent:IsA('SurfaceGui') and 2 or 1
  root.BackgroundColor3=color
- U.corner(root,8)
- local edge=U.stroke(root,Color3.fromRGB(13,23,48),3)
- local shade=Instance.new('UIGradient');shade.Name='MoldedFinish';shade.Rotation=90
- shade.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(.5,Color3.fromRGB(235,241,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(160,178,218))});shade.Parent=root
- local lip=U.frame(root,UDim2.new(0,8,0,3),UDim2.new(1,-16,0,3),accent:Lerp(Color3.new(1,1,1),.35));lip.Name='UpperBevel';lip.BackgroundTransparency=.2;U.corner(lip,2)
- local heel=U.frame(root,UDim2.new(0,7,1,-7),UDim2.new(1,-14,0,4),Color3.fromRGB(14,25,54));heel.Name='LowerBevel';heel.BackgroundTransparency=.28;U.corner(heel,2)
+ local corner=root:FindFirstChildOfClass('UICorner') or U.corner(root,14*pixels)
+ corner.CornerRadius=UDim.new(0,14*pixels)
+ local edge=U.stroke(root,Color3.fromRGB(16,28,55),3*pixels)
+ edge.BorderStrokePosition=Enum.BorderStrokePosition.Inner;edge.ZIndex=root.ZIndex+5
+ local texture=Instance.new('CanvasGroup');texture.Name='StudTexture';texture.BackgroundTransparency=1
+ texture.Size=UDim2.fromScale(1,1);texture.ZIndex=root.ZIndex+1;texture.Parent=root;U.corner(texture,14*pixels)
+ -- The shipped image is an atlas. Tile its first 512-pixel stud region in
+ -- short bands; cropped ImageRects do not honor TileSize in the native UI.
+ local band=96*pixels
+ local bands=math.max(1,math.ceil(math.max(root.Size.Y.Offset,band)/band))
+ for i=0,bands-1 do
+  local tile=Instance.new('ImageLabel');tile.Name='StudBand';tile.BackgroundTransparency=1
+  tile.Position=UDim2.fromOffset(0,i*band);tile.Size=UDim2.new(1,0,0,band)
+  tile.Image='rbxasset://textures/studs.dds';tile.ScaleType=Enum.ScaleType.Tile
+  tile.TileSize=UDim2.fromOffset(24*pixels,384*pixels)
+  tile.ImageColor3=color:Lerp(Color3.new(1,1,1),.2);tile.ImageTransparency=.60
+  tile.ZIndex=texture.ZIndex+1;tile.Parent=texture
+ end
  return edge
 end
 
-local function artFinish(U,bay,body,accent)
- bay.ClipsDescendants=true;U.corner(bay,10);U.stroke(bay,Color3.fromRGB(16,26,52),3)
- -- Four small fasteners leave the original role models as the focal point.
- for _,point in ipairs({{.035,.055},{.965,.055},{.035,.945},{.965,.945}}) do
-  local rivet=U.frame(bay,UDim2.fromScale(point[1],point[2]),UDim2.fromOffset(9,9),body:Lerp(accent,.55))
-  rivet.AnchorPoint=Vector2.new(.5,.5);rivet.Name='Fastener';U.corner(rivet,9);U.stroke(rivet,Color3.fromRGB(14,25,54),1)
- end
- local shine=U.frame(bay,UDim2.fromScale(-.6,-.4),UDim2.fromScale(.55,1.8),Color3.new(1,1,1));shine.Name='RevealGlint';shine.Rotation=22;shine.Visible=false
- local sweep=Instance.new('UIGradient');sweep.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.4,1),NumberSequenceKeypoint.new(.5,.7),NumberSequenceKeypoint.new(.6,1),NumberSequenceKeypoint.new(1,1)});sweep.Parent=shine
- local sparks={}
- for i=1,4 do
-  local spark=U.frame(bay,UDim2.fromScale(.5,.5),UDim2.fromOffset(9,i%2==0 and 16 or 9),accent:Lerp(Color3.new(1,1,1),.35))
-  spark.AnchorPoint=Vector2.new(.5,.5);spark.Rotation=45;spark.Visible=false;spark.Name='FocusSpark';table.insert(sparks,spark)
- end
- return shine,sparks
-end
 local function mechanicVisual(parent,choice,compact)
  local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+2
  viewport.Position=UDim2.fromScale(.045,.022);viewport.Size=UDim2.fromScale(.91,compact and .30 or .43)
@@ -274,6 +271,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  choose.Name='ChooseCard';choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
  local scale=choose:FindFirstChild('ButtonScale');if scale then scale:Destroy() end
+ local selection=Instance.new('Frame');selection.Name='SelectionMask';selection.BackgroundTransparency=1;selection.Size=UDim2.fromScale(1,1);selection.Parent=choose
+ choose.SelectionImageObject=selection -- The physical card border supplies focus, not a second square outline.
  local model=Instance.new('Folder');model.Name='LocalUpgradeCard';model.Parent=workspace
  local part=visualPart(model,Vector3.new(2,3,.05),Vector3.zero,Color3.fromRGB(74,83,88));part.Name='CardBody';part.Transparency=1
  local surface=Instance.new('SurfaceGui');surface.Name='UpgradeCardFace';surface.Adornee=part;surface.Face=Enum.NormalId.Front
@@ -283,12 +282,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  surface.AlwaysOnTop=false;surface.LightInfluence=0;surface.Brightness=1;surface.MaxDistance=8;surface.Active=false;surface.Enabled=false;surface.ResetOnSpawn=false
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*2,height*2),p.paper);canvas.Name='CardCanvas'
- local border=CardView.housing(U,canvas,bodyColor,accentColor);border.Thickness=5
- local artBay=U.frame(canvas,UDim2.fromScale(.035,.028),UDim2.fromScale(.93,compact and .295 or .42),bodyColor:Lerp(Color3.fromRGB(20,27,48),.35))
- artBay.Name='MechanicArtBay'
- local glint,sparks=artFinish(U,artBay,bodyColor,accentColor)
- local separator=U.frame(canvas,UDim2.fromScale(.055,compact and .345 or .465),UDim2.fromScale(.89,.012),accentColor);U.corner(separator,4)
- local footer=U.frame(canvas,UDim2.fromScale(.035,compact and .66 or .75),UDim2.fromScale(.93,compact and .315 or .225),Color3.fromRGB(19,27,47));footer.Name='InsetTerms';U.corner(footer,8);U.stroke(footer,bodyColor:Lerp(accentColor,.3),2)
+ local border=CardView.housing(U,canvas,bodyColor,accentColor)
  local _,artCamera=mechanicVisual(canvas,choice,compact)
  local summary=CardView.summary(choice)
  -- Keep font rasterization and scrolling in the native screen layer. The
@@ -301,6 +295,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  effect.TextStrokeColor3=Color3.fromRGB(13,23,48);effect.TextStrokeTransparency=.35
  local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .29 or .20,0),CardView.terms(choice,options.target),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
+ terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.45
  local focused,pressed,blend=false,false,0
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+((index-1)*.14)/revealSpeed
  local reducedMotion=options.reducedMotion==true
@@ -315,7 +310,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
  pcall(function() connect(GuiService:GetPropertyChangedSignal('ReducedMotionEnabled'),function() reducedMotion=GuiService.ReducedMotionEnabled end) end)
  serial=serial+1;local stepName='UpgradeCard'..serial
- local dead=false;local wasFocused=false;local focusAt=-10
+ local dead=false
  local function dispose()
   if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
   for _,connection in ipairs(signals) do connection:Disconnect() end
@@ -333,7 +328,6 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=focused and choose.Active and 1 or 0
-  if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
   blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
   local lift=(full and not quiet and blend*5 or 0)-(1-reveal)*18-(pressed and 2 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
@@ -347,21 +341,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
   part.Transparency=0;surface.Enabled=true;surface.CanvasSize=Vector2.new((right-left)*2,(bottom-top)*2)
   canvas.Size=UDim2.fromOffset(size.X*2,size.Y*2);canvas.Position=UDim2.fromOffset((position.X-left)*2,(position.Y-top)*2)
   canvas.BackgroundColor3=not choose.Active and bodyColor:Lerp(p.ink,.25) or pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
-  border.Color=focused and accentColor or Color3.fromRGB(20,27,48);border.Thickness=focused and 7 or 5
-  -- One opening sweep, then a short focus response. Everything settles.
-  local opening=age*revealSpeed
-  local pulse=clock-focusAt
-  local sweep=opening<.75 and opening/.75 or (pulse<.45 and pulse/.45 or 2)
-  glint.Visible=not quiet and full and sweep>=0 and sweep<=1
-  if glint.Visible then glint.Position=UDim2.fromScale(-.6+sweep*2.1,-.4) end
-  for i,spark in ipairs(sparks) do
-   spark.Visible=not quiet and full and target==1 and pulse<.35
-   if spark.Visible then
-    local progress=math.clamp(pulse/.35,0,1);local a=(i-.5)*math.pi/2
-    spark.Position=UDim2.fromScale(.5+math.cos(a)*(.26+progress*.26),.5+math.sin(a)*(.22+progress*.24))
-    spark.BackgroundTransparency=progress;spark.Rotation=45+progress*35
-   end
-  end
+  border.Color=Color3.fromRGB(16,28,55);border.Thickness=(focused and 4 or 3)*2
   artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or blend*.65),3,7),Vector3.zero)
   effect.Text=choose.Text~='' and choose.Text or summary
  end)
