@@ -16,8 +16,10 @@ subprocess.run([str(luau / 'luau'), str(ROOT / 'tests/ore-drops.spec.lua')], che
 mock = (ROOT / 'tests/mock-roblox.lua').read_text()
 client = (ROOT / 'src/Client.lua').read_text()
 render = client[client.index('local function renderDrone(d,dt,now)'):client.index('-- Every observer draws repair beams', client.index('local function renderDrone(d,dt,now)'))]
+resource_render = client[client.index('local function renderResource(r,now)'):client.index('local function resolveRenderedTarget', client.index('local function renderResource(r,now)'))]
 with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
     fixtures = {
+        'resource-render': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'swarm': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/swarm-motion.integration.lua').read_text(),
         'client-inertia': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/motion-setup.lua').read_text() + '\n' + render + '\n' + (ROOT / 'tests/client-inertia.integration.lua').read_text(),

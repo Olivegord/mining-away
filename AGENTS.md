@@ -2,6 +2,7 @@
 
 - This directory and https://github.com/Olivegord/mining-away are the single game project for the existing **Drone Blower revolution**, Roblox place **136098934779395**. Generated `.rbxl` files and preserved captures are artifacts of that game, not independent projects. Preserve the live map, assets, card UI, tactical HUD, roles, crystal audio and discoveries.
 - Read `docs/OWNER_REQUIREMENTS.md` first. It overrides the older design brief and rejected cloud-v1 presentation.
+- Routine Studio stop/install/save/restart work for this same game is authorized. The owner said to stop asking about stopping Play; do not repeat that confirmation. Roblox publishing and a new experience remain unauthorized.
 - Preserve the original drone and mining feel. Compare against `reference/original/src/` and `docs/ORIGINAL_FEEL_PARITY.md`; improve technical correctness without replacing the behavior.
 - Keep original models, meshes, and world identity. Use the original segmented pyramid construct as a real turret. Do not replace distinctive user content with generic primitives when the original asset exists.
 - Server owns gameplay, persistent state, card offers/selection, damage, rewards, encounters, and prestige. Clients may smoothly render all drones and effects from replicated authoritative intent/state.

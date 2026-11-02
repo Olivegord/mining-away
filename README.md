@@ -1,5 +1,7 @@
 # Drone Blower revolution
 
+The owner authorizes routine Studio stop/install/save/restart without repeated questions. The polished editable game has been reopened and initialized in Studio. [Long-session performance findings and remaining limits](docs/review/LONG_SESSION_LAG.md): unnecessary rock/effect render work is removed, but the reported lag is not yet confirmed fixed.
+
 Latest polish: orbital columns shrink into noisy full-height embers; the former scout is now a Cultivator that grows replacement rocks; blue/gold/green rock outlines explain selectable, queued and working orders; mineral fragments glow, trail and burst on confirmed collection. [Implementation and validation limits](docs/review/POLISH_CULTIVATOR.md). Saved source/build changes do not hot-load the owner's running Play session.
 
 Latest mining pass: [blackening rock layers, large boulders, sustained orbital melting, powered breaker hits and the always-open 10× health test field beside Quartz](docs/review/MINING_IMPACT.md). Full backpacks permit mining and pause pickup. The owner-requested Play session is running; project files and review builds can continue to be saved while they test. Earlier [collectible mining and hardware upgrades](docs/review/MINING_EXPERIENCE.md) remain.

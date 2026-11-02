@@ -65,7 +65,7 @@ def main() -> None:
         if refresh.exists():
             record = json.loads(refresh.read_text())
             if record['after_sha256'] == editable_metadata['sha256']:
-                editable_metadata['validation'] = 'Preserved native Edit geometry; allowlisted Sources refreshed offline and all other chunks/backups verified. Existing Studio Play untouched. Not a Play test.'
+                editable_metadata['validation'] = 'Preserved native Edit geometry; allowlisted Sources refreshed offline and all other chunks/backups verified. Native runtime evidence, when available, is recorded separately in the review report.'
     metadata = {
         "project": "Olivegord/mining-away",
         "place_id": ACTIVE_PLACE_ID,

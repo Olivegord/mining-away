@@ -22,19 +22,18 @@ end)
 RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
  local camera=workspace.CurrentCamera
  local now=workspace:GetServerTimeNow()
- for source in pairs(orbitalBurns) do
-  if not source.Parent then orbitalBurns[source]=nil
+ for source,record in pairs(orbitalBurns) do
+  if not source.Parent then record.connection:Disconnect();orbitalBurns[source]=nil
   else
    local ended=source:GetAttribute('EndedAt')~=nil
    local active=not ended and now-(source:GetAttribute('ContactAt') or 0)<.3
-   for _,part in ipairs(source:GetDescendants()) do
-    if ended then
-     if part:IsA('BasePart') then part.LocalTransparencyModifier=0 end
-     -- Emit(5) afterglow particles continue after the work emitter stops.
-     continue
+   local visibility=ended and 'fading' or active and 'active' or 'stale'
+   if record.visibility~=visibility then
+    record.visibility=visibility
+    for _,part in ipairs(record.effects) do
+     if part:IsA('BasePart') then part.LocalTransparencyModifier=(ended or active) and 0 or 1
+     elseif part:IsA('ParticleEmitter') then part.Enabled=active end
     end
-    if part:IsA('BasePart') then part.LocalTransparencyModifier=active and 0 or 1
-    elseif part:IsA('ParticleEmitter') then part.Enabled=active end
    end
    if active and now>=burnShakeAt then
     presentation:kick(source:GetAttribute('Position') or Vector3.zero,.13,now)
@@ -48,7 +47,14 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
 end)
 local function roleImpact(source)
  if source:IsA('Folder') and source:GetAttribute('OrbitalBurn') then
-  orbitalBurns[source]=true;soundscape:play('orbital',source:GetAttribute('Position'))
+  if orbitalBurns[source] then return end
+  local record={effects={}}
+  local function track(part)
+   if part:IsA('BasePart') or part:IsA('ParticleEmitter') then table.insert(record.effects,part);record.visibility=nil end
+  end
+  for _,part in ipairs(source:GetDescendants()) do track(part) end
+  record.connection=source.DescendantAdded:Connect(track)
+  orbitalBurns[source]=record;soundscape:play('orbital',source:GetAttribute('Position'))
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
@@ -485,6 +491,7 @@ local function refreshModal()
  end)
 end
 local lastOffer=nil
+local resourceAccess=''
 local function readProfile()
  local raw=player:GetAttribute('MA_Profile');if type(raw)~='string' then return end
  local ok,p=pcall(function() return Http:JSONDecode(raw) end);if not ok or type(p)~='table' or type(p.run)~='table' then return end
@@ -492,6 +499,13 @@ local function readProfile()
  local changedRun=profile and profile.run.id~=p.run.id
  soundscape:observeProfile(oldProfile,p)
  profile=p
+ local access={p.run.id}
+ for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
+ local accessKey=table.concat(access,':')
+ if accessKey~=resourceAccess then
+  resourceAccess=accessKey
+  for _,record in pairs(resources) do record.dirty=true end
+ end
  if actionPending then
   local offer=p.run.pendingOffer
   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and (p.run.shopLevels[actionPending.upgradeId] or 0)>(actionPending.level or 0)) then actionPending=nil end
@@ -601,7 +615,7 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=0;view.Parent=localFX;hidePart(source)
- resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
+ resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
 end
 local function registerTurret(source)
@@ -627,7 +641,10 @@ local function observe(source)
   if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerDrone(source) end) end
  elseif source:IsA('BasePart') and (source:GetAttribute('ResourceId') or source.Parent.Name=='Resources' or source.Parent:GetAttribute('FieldId')) then
   registerResource(source)
-  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerResource(source) end) end
+  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function()
+   local record=resources[source]
+   if record then record.dirty=true else registerResource(source) end
+  end) end
  elseif source:IsA('BasePart') and source.Parent:IsA('Model') and drones[source.Parent] then hidePart(source)
  end
  if source:IsA('Model') and (source:GetAttribute('Turret') or source:GetAttribute('TurretId') or source.Parent.Name=='Turrets' or source.Parent:GetAttribute('FieldId')) then
@@ -663,9 +680,13 @@ connect(world.DescendantRemoving,function(source)
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
+ -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
+ -- geometry writes. Growth and queued black/shrink/break stages still animate.
+ if r.settled and not r.dirty then return end
+ r.dirty=false
  local s=r.source;local view=r.view
  local key=s:GetAttribute('Mineral') or Shops.ORDER[s:GetAttribute('FieldId') or 1]
- if profile and not Shops.unlocked(profile,key) then view.Transparency=1;return end
+ if profile and not Shops.unlocked(profile,key) then view.Transparency=1;r.settled=true;return end
  local full=s:GetAttribute('FullSize') or s.Size
  if type(full)=='number' then full=Vector3.one*full end
  local final=s:GetAttribute('FullPosition') or s.Position
@@ -695,6 +716,7 @@ local function renderResource(r,now)
  else view.Transparency=1 end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now) end
+ r.settled=now>=readyAt and #r.visual.queue==0
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -1179,6 +1201,8 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
+ for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
+ orbitalBurns={}
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()

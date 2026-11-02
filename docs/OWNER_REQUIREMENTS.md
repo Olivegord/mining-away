@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 1 latest — stop asking about Play and investigate long-session lag
+
+In response to the repeated stop-Play confirmation, the owner says “stop asking this ever again”. Routine Studio stop/install/save/restart work for this same game is authorized without another confirmation. This supersedes earlier instructions to ask before stopping the test session; publishing, a new experience and main merge remain unauthorized. The owner reports it became very laggy after being open a long time. Capture long-session evidence where available, investigate accumulation and per-frame work, and distinguish measured findings from possible Studio/editor overhead.
+
 ## November 1 latest — particles, useful grower and readable commands
 
 The owner asks for a polish pass: orbital lasers shrink when finishing and leave noisy fading particles along their entire height; replace the ineffective scout with a drone that grows rocks; simplify sending drones using object highlights and clear outcomes; make collectible mineral currencies glow and feel satisfying to collect. Keep effects simple and purposeful. See [polish and Cultivator review](review/POLISH_CULTIVATOR.md). The existing Play session must remain running unless the owner permits stopping it; saved builds do not automatically hot-load already-running controllers.
