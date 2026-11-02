@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — refine the finish, preserve movement and outlines
+
+The owner says the card movement and object outlines work well but rejects the finish as sloppy compared with the supplied reference. Preserve those approved behaviors and refine the gradient continuity, smooth rounded edges, lighting and surface quality. See [gradient refinement and native screenshot](review/REFINED_PACK_GRADIENTS.md).
+
 ## November 2 latest — glossy interactive egg-window reference
 
 The owner supplies a screenshot of a dark rounded egg shop and explicitly asks for its bright glossy colors, real stud texture, thick black outlines on the 3D objects, meaningful text, mouse-responsive tilt/highlights, light flashes, rotating rays behind the artwork, and gradient card edges. This supersedes earlier removal of highlights and flashes. Keep the earned-currency three-choice selection and original drone/mining art, with real 3D card perspective. Do not copy the reference game's branding, eggs, prices or microtransactions. Include actual screenshots with UI work. See [native glossy-card review](review/GLOSSY_PACK_CARDS.md).
