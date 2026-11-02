@@ -69,7 +69,9 @@ check('scrap mining uses real hit path and persistence-busy periods preserve dep
  local r=makeResource(patches[1],patches[1].center,'Crystal',800,10,3)
  advance(2.1);input(pl,'Scrap','begin');local charge=assert(p.ability.charge)
  advance(.4);input(pl,'Scrap','confirm',charge.token);assert(p.ability.swarm)
- local initial=r.hp;advance(1.5);assert(r.hp<initial,'physical bots should reach and mine the controlled rock')
+ local initial=r.hp
+ for _=1,40 do if r.hp<initial then break end;advance(.1) end
+ assert(r.hp<initial,'physical bots must reach and mine before half their ten-second deployment')
  local swarm=p.ability.swarm;local before=r.hp;p.busy=true;advance(.3)
  assert(p.ability.swarm==swarm and r.hp==before,'saving must pause work without discarding the swarm')
  p.busy=false;advance(.4);assert(p.ability.swarm==swarm and r.hp<before)

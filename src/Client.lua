@@ -70,7 +70,6 @@ if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do r
 
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
-local renderSwarmGrid=nil
 local turretIndex={}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -750,16 +749,19 @@ local function renderDrone(d,dt,now)
   local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   local desired=renderSwarmGrid and Feel.swarmOffset(d.pos,tostring(s:GetAttribute('DroneId')),renderSwarmGrid,1) or s:GetAttribute('SwarmOffset') or Vector3.zero
-   d.swarmSteer=Feel.smoothSwarm(d.swarmSteer,desired,dt)
+   -- Avoidance is chosen once by the server. Observer-specific crowds must
+   -- not invent competing lanes and send the same drone different ways.
+   d.swarmSteer=s:GetAttribute('SwarmOffset') or Vector3.zero
    goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0)+d.swarmSteer
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
- elseif not motionPaused and state=='BreakerImpact' then
-  d.pos=s:GetAttribute('BreakerImpact') or logical;d.velocity=Vector3.zero
- elseif not motionPaused and state=='BreakerDive' then
-  d.pos,d.velocity=Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,s:GetAttribute('BreakerImpact') or goal,now-(s:GetAttribute('BreakerPhaseAt') or now),.28)
+ elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
+  -- Follow the replicated stroke without assigning its analytic position.
+  -- A late/missed phase packet must not teleport an observer to contact.
+  local impact=s:GetAttribute('BreakerImpact') or goal
+  local stroke=state=='BreakerDive' and Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,impact,now-(s:GetAttribute('BreakerPhaseAt') or now),.28) or impact
+  d.pos,d.velocity=Feel.inertialApproach(d.pos,stroke,d.velocity,80/60,dt,false,nil,8)
  elseif not motionPaused then
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -767,7 +769,7 @@ local function renderDrone(d,dt,now)
   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction)
  end
  if not motionPaused then
-  local targetYaw=Feel.levelYaw(d.pos,goal,d.yaw)
+  local targetYaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
  end
@@ -784,11 +786,11 @@ local function renderDrone(d,dt,now)
   else part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
- local mining=s:GetAttribute('Mining')==true
- local attacking=state=='Attack' and s:GetAttribute('Firing')==true
+ local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
+ local attacking=state=='Attack' and s:GetAttribute('Firing')==true and s:GetAttribute('WorkPaused')~=true
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
  local active=alive and (mining or attacking)
- local charging=alive and state=='Mine' and not mining and (s:GetAttribute('WarmupStart') or 0)>0
+ local charging=alive and state=='Warmup' and not mining and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('WarmupStart') or 0)>0
  local beam=d.beam
  local kind=state=='Attack' and 'turret' or 'resource'
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
@@ -822,7 +824,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),paused=s:GetAttribute('MotionPaused')==true,
+  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
@@ -836,7 +838,7 @@ local function renderHealing(now)
  local candidates={}
  for _,d in pairs(drones) do
   local id=d.source:GetAttribute('HealTargetId');local target=type(id)=='string' and droneIndex[id]
-  local active=(d.source:GetAttribute('Healing')==true or d.source:GetAttribute('State')=='RepairCharge') and d.source:GetAttribute('MotionPaused')~=true
+  local active=(d.source:GetAttribute('Healing')==true or d.source:GetAttribute('State')=='RepairCharge') and d.source:GetAttribute('MotionPaused')~=true and d.source:GetAttribute('WorkPaused')~=true
    and (d.source:GetAttribute('HP') or 0)>0 and target and (target.source:GetAttribute('HP') or 0)>0
    and d.emitter.Parent and target.emitter.Parent
   if active then table.insert(candidates,{drone=d,target=target})
@@ -910,9 +912,6 @@ connect(RunService.RenderStepped,function(dt)
    presentation:renderTurret(t,dt,now)
   end
  end
- local swarmRecords={}
- for _,d in pairs(drones) do table.insert(swarmRecords,{id=tostring(d.source:GetAttribute('DroneId')),pos=d.pos,velocity=d.velocity,hp=d.source:GetAttribute('HP') or 0,goal=d.source:GetAttribute('Goal'),maxStep60=d.source:GetAttribute('MaxStep60')}) end
- renderSwarmGrid=Feel.swarmGrid(swarmRecords)
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
@@ -1157,7 +1156,7 @@ connect(RunService.Heartbeat,function(dt)
     for source in pairs(drones) do
      local state=source:GetAttribute('State')
      if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutoFieldId')==id
-      and (state=='Mine' or state=='Travel' or state=='Deliver' or state=='Full' or state=='Attack') then assigned=true;break end
+      and (state=='Mine' or state=='Warmup' or state=='Travel' or state=='Deliver' or state=='Full' or state=='Attack') then assigned=true;break end
     end
     if not assigned and (guarded or availableAutomaticWorker()) then
      contextAction=function() requestPlot(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name

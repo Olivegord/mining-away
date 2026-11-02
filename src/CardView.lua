@@ -76,13 +76,35 @@ local function visualPart(parent,size,position,color,shape)
  if shape then part.Shape=shape end
  part.Parent=parent;return part
 end
+-- Identity follows the mechanic, never a rainbow rarity assignment.
+function CardView.identity(choice)
+ local e=choice.effects or {}
+ local function has(k) return type(e[k])=='number' and e[k]>0 end
+ if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
+ if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
+ if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
+ if has('fork') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('capacity') or has('fullAuto') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
+ if has('health') or has('reduction') or has('salvage') or has('shield') then return 'repair',Color3.fromRGB(12,125,65),Color3.fromRGB(164,255,180) end
+ if has('combat') or has('rate') or has('crit') or has('splash') or has('finisher') or has('range') then return 'combat',Color3.fromRGB(178,30,80),Color3.fromRGB(255,161,198) end
+ if has('speed') or has('startup') then return 'thrust',Color3.fromRGB(0,104,179),Color3.fromRGB(121,237,255) end
+ return 'mineral',Color3.fromRGB(104,49,170),Color3.fromRGB(245,177,255)
+end
 local function mechanicVisual(parent,choice)
- local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1
- viewport.Position=UDim2.new(.5,-84,0,12);viewport.Size=UDim2.fromOffset(168,112)
+ local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+2
+ viewport.Position=UDim2.fromScale(.06,.035);viewport.Size=UDim2.fromScale(.88,.41)
  viewport.Ambient=Color3.fromRGB(190,190,190);viewport.LightColor=Color3.new(1,1,1);viewport.LightDirection=Vector3.new(-1,-2,-3);viewport.Parent=parent
  local world=Instance.new('WorldModel');world.Name='Mechanic';world.Parent=viewport
  local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
- local e=choice.effects or {};local gray=Color3.fromRGB(95,107,114);local blue=Color3.fromRGB(77,144,177);local green=Color3.fromRGB(102,159,114)
+ local e=choice.effects or {};local identity,body,accent=CardView.identity(choice)
+ local gray=Color3.fromRGB(27,35,61);local blue=accent;local green=Color3.fromRGB(143,255,163)
+ -- An authored instrument stage with six radial teeth makes the silhouettes
+ -- legible at card size. Only the scene varies; no extra label competes.
+ for i=1,6 do
+  local a=i*math.pi/3
+  local tooth=visualPart(world,Vector3.new(.14,.38,.18),Vector3.new(math.cos(a)*2,math.sin(a)*1.65,-.7),body:Lerp(accent,.35))
+  tooth.CFrame=CFrame.new(tooth.Position)*CFrame.Angles(0,0,a-math.pi/2)
+ end
  local function gain(key) return type(e[key])=='number' and e[key]>0 end
  if gain('orbitalLaser') then
   local lens=visualPart(world,Vector3.new(.35,1.8,1.8),Vector3.new(0,1.1,0),gray,Enum.PartType.Cylinder)
@@ -102,6 +124,18 @@ local function mechanicVisual(parent,choice)
     visualPart(world,Vector3.new(.05,.8,.05),Vector3.new((i-2)*1.1,-1.1,0),green)
    end
   end
+ elseif identity=='scanner' then
+  local dish=visualPart(world,Vector3.new(.3,2.4,2.4),Vector3.zero,gray,Enum.PartType.Cylinder)
+  dish.CFrame=CFrame.Angles(0,math.pi/2,0)
+  visualPart(world,Vector3.new(.22,.22,1.6),Vector3.new(0,0,.6),accent)
+  for i=-1,1 do visualPart(world,Vector3.new(.32,.32,.32),Vector3.new(i*.85,i==0 and -.85 or .5,.6),green,Enum.PartType.Ball) end
+ elseif identity=='prism' then
+  local prism=visualPart(world,Vector3.new(1.1,1.8,1.1),Vector3.zero,accent)
+  prism.CFrame=CFrame.Angles(0,math.rad(45),math.rad(30))
+  for i=-1,1,2 do
+   local beam=visualPart(world,Vector3.new(.14,1.8,.14),Vector3.new(i*.7,-.8,0),i<0 and green or Color3.fromRGB(255,139,217))
+   beam.CFrame=CFrame.new(beam.Position)*CFrame.Angles(0,0,i*.5)
+  end
  elseif gain('capacity') or gain('fullAuto') then
   visualPart(world,Vector3.new(1.8,1.9,.7),Vector3.zero,gray)
   visualPart(world,Vector3.new(1.3,.7,.25),Vector3.new(0,-.45,.5),blue)
@@ -113,7 +147,7 @@ local function mechanicVisual(parent,choice)
   visualPart(world,Vector3.new(1.4,.45,.15),Vector3.new(0,0,.3),green)
  elseif gain('combat') or gain('rate') or gain('crit') or gain('splash') or gain('finisher') or gain('range') then
   local lens=visualPart(world,Vector3.new(.7,1.8,1.8),Vector3.zero,gray,Enum.PartType.Cylinder);lens.CFrame=CFrame.Angles(0,math.pi/2,0)
-  local core=visualPart(world,Vector3.new(.15,.95,.95),Vector3.new(0,0,.4),Color3.fromRGB(174,102,89),Enum.PartType.Cylinder);core.CFrame=CFrame.new(0,0,.4)*CFrame.Angles(0,math.pi/2,0)
+  local core=visualPart(world,Vector3.new(.15,.95,.95),Vector3.new(0,0,.4),accent,Enum.PartType.Cylinder);core.CFrame=CFrame.new(0,0,.4)*CFrame.Angles(0,math.pi/2,0)
  elseif gain('speed') or gain('startup') then
   for i=-1,1 do local fin=visualPart(world,Vector3.new(1.9,.25,.55),Vector3.new(0,i*.6,0),i==0 and blue or gray);fin.CFrame=CFrame.new(0,i*.6,0)*CFrame.Angles(0,0,math.rad(-20)) end
  else
@@ -153,7 +187,7 @@ end
 
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
- local p=U.palette;local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
+ local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice);local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
  card.Name='CardChoice'..tostring(index);card.LayoutOrder=index;card.BackgroundTransparency=1
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';choose.TextTransparency=1;choose.BackgroundTransparency=1
@@ -166,12 +200,17 @@ function CardView.create(U,parent,choice,index,width,height,options)
  surface.AlwaysOnTop=true;surface.LightInfluence=0;surface.MaxDistance=20;surface.Active=false;surface.Enabled=false;surface.ResetOnSpawn=false
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*2,height*2),p.paper);canvas.Name='CardCanvas'
- U.stroke(canvas,p.line,3)
+ local border=U.stroke(canvas,Color3.fromRGB(20,27,48),5)
+ canvas.BackgroundColor3=bodyColor
+ local artBay=U.frame(canvas,UDim2.fromScale(.025,.02),UDim2.fromScale(.95,.43),bodyColor:Lerp(Color3.fromRGB(20,27,48),.42))
+ artBay.Name='MechanicArtBay'
+ U.frame(canvas,UDim2.fromScale(.04,.465),UDim2.fromScale(.92,.012),accentColor)
+ U.frame(canvas,UDim2.fromScale(.025,.755),UDim2.fromScale(.95,.225),Color3.fromRGB(19,27,47))
  mechanicVisual(canvas,choice)
  local summary=CardView.summary(choice)
- local effect=U.text(canvas,UDim2.new(0,24,0,132),UDim2.new(1,-48,0,292),summary,width<260 and 44 or 48,p.ink,true)
+ local effect=U.text(canvas,UDim2.new(0,24,.49,0),UDim2.new(1,-48,.245,0),summary,width<260 and 40 or 44,p.white,true)
  effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center
- local terms=U.text(canvas,UDim2.new(0,24,1,-198),UDim2.new(1,-48,0,176),CardView.terms(choice,options.target),32,p.muted,false)
+ local terms=U.text(canvas,UDim2.new(0,24,.765,0),UDim2.new(1,-48,.20,0),CardView.terms(choice,options.target),32,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  local focused,pressed,blend=false,false,0
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+((index-1)*.14)/revealSpeed
@@ -212,7 +251,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
   part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(0,math.pi+tilt,0)
   part.Transparency=0;surface.Enabled=true;surface.CanvasSize=Vector2.new((right-left)*2,(bottom-top)*2)
   canvas.Size=UDim2.fromOffset(size.X*2,size.Y*2);canvas.Position=UDim2.fromOffset((position.X-left)*2,(position.Y-top)*2)
-  canvas.BackgroundColor3=not choose.Active and p.paper:Lerp(p.muted,.12) or pressed and p.paper:Lerp(p.accent,.22) or p.paper:Lerp(p.white,blend*.16)
+  canvas.BackgroundColor3=not choose.Active and bodyColor:Lerp(p.ink,.25) or pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
+  border.Color=focused and accentColor or Color3.fromRGB(20,27,48);border.Thickness=focused and 7 or 5
   effect.Text=choose.Text~='' and choose.Text or summary
  end)
  return {root=card,button=choose}

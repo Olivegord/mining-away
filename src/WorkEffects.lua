@@ -202,7 +202,7 @@ function W:flight(drone,record,dt,now)
  local root=drone.view.PrimaryPart or drone.emitter
  if not root or not root.Parent then return end
  local source=drone.source
- local powered=source:GetAttribute('State')=='BreakerDive' and source:GetAttribute('MotionPaused')~=true
+ local powered=source:GetAttribute('State')=='BreakerDive' and source:GetAttribute('MotionPaused')~=true and source:GetAttribute('WorkPaused')~=true
  if powered and not record.rockets then
   record.rockets={}
   for _,side in ipairs({-1,1}) do
@@ -244,6 +244,7 @@ function W:flight(drone,record,dt,now)
  local distance=(root.Position-fx.position).Magnitude
  local speed=dt>0 and distance/math.max(dt,1/240) or 0
  local state=source:GetAttribute('State');local alive=not record.events.dead and state~='Destroyed' and state~='Reprinting'
+ -- Flight remains visible during healthy storage; only work effects pause.
  local paused=source:GetAttribute('MotionPaused')==true
  local reset=fx.life~=source:GetAttribute('Life') or distance>8 or not alive
  for _,trail in ipairs(fx.trails) do
@@ -260,7 +261,7 @@ end
 function W:repair(drone,record,now)
  local s=drone.source;local charging=s:GetAttribute('State')=='RepairCharge'
  local healing=s:GetAttribute('Healing')==true
- local active=s:GetAttribute('Role')=='Medic' and not record.events.dead and s:GetAttribute('MotionPaused')~=true and (charging or healing) and cameraNear(drone.pos,90)
+ local active=s:GetAttribute('Role')=='Medic' and not record.events.dead and s:GetAttribute('MotionPaused')~=true and s:GetAttribute('WorkPaused')~=true and (charging or healing) and cameraNear(drone.pos,90)
  local fx=record.repair
  if not active then
   if fx then
@@ -312,7 +313,7 @@ function W:courier(drone,record,now)
   record.courier=fx
  end
  if busy then fx.lastAt=now end
- local paused=source:GetAttribute('MotionPaused')==true
+ local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
  for _,trail in ipairs(fx.trails) do trail.Enabled=state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local backpack=backpackPosition(source)

@@ -79,7 +79,9 @@ check('breaker arrives winds up dives hits once and recovers even after a killin
  assert(reached and (d.impactSerial or 0)==1 and d.breaker and d.breaker.phase=='Impact')
  snapshotDrone(d);assert(d.breaker,'retired target snapshots must preserve recovery')
  ticks(d,.3,true);assert(d.breaker and d.breaker.phase=='Recover')
- ticks(d,.6,true);assert(not d.breaker and d.impactSerial==1)
+ ticks(d,.6,true);assert(d.breaker,'recovery must wait for physical overhead return')
+ for _=1,300 do if not d.breaker then break end;ticks(d,C.Tick,true) end
+ assert(not d.breaker and d.impactSerial==1,'physical recovery must complete within five seconds')
 end)
 check('recall and busy storage cancel or pause breaker and grower work',function()
  local _,p,roles=fixture();local r=rock(500);local d=roles.Charger[1];local hp=r.hp

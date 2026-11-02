@@ -82,7 +82,7 @@ function R.stepBreaker(state,now,context)
    phase,event='Impact','impact';state.impactSerial+=1
   elseif now-state.phaseAt>=R.BREAKER.diveLimit then phase,event='Recover','missed' end
  elseif phase=='Impact' and now-state.phaseAt>=R.BREAKER.impactHold then phase,event='Recover','recover'
- elseif phase=='Recover' and now-state.phaseAt>=R.BREAKER.recovery then phase,event='Complete','complete' end
+ elseif phase=='Recover' and context.recovered~=false and now-state.phaseAt>=R.BREAKER.recovery then phase,event='Complete','complete' end
  if phase~=state.phase then state.phase=phase;state.phaseAt=now end
  return phase,event
 end

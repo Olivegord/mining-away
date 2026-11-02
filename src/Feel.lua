@@ -42,7 +42,7 @@ function F.groundedRockFrame(position,size,ground,stage,seed)
  local center=Vector3.new(position.X,ground+half-.06,position.Z)
  return CFrame.new(center)*CFrame.Angles(ax,yaw,az),ground+half*2-.06
 end
-function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction)
+function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
  -- its requested velocity with thrust. New jobs, reversals and speed upgrades
  -- cannot replace momentum in a single frame. Substeps keep braking consistent
@@ -51,14 +51,24 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction)
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
  local cruise=math.max(0,maxStep60 or 0)*60
- local acceleration=math.max(10,cruise*1.6)
+ response=math.clamp(response or 1,1,8)
+ local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
-  local nearWork=work and distance<=16
-  local cap=cruise*(nearWork and 1.45 or 1)
-  local ease=nearWork and -60*math.log(1-.065) or -60*math.log(1-.03)
-  local speed=math.min(cap,distance*ease,math.sqrt(2*acceleration*distance))
-  local requested=distance>1e-6 and delta/distance*speed or Vector3.zero
+  -- Blend the near-work response continuously. The old distance<=16 switch
+  -- changed both speed and easing abruptly at an invisible boundary.
+  local proximity=work and math.clamp((16-distance)/12,0,1) or 0
+  local cap=cruise
+  local ease=-60*math.log(1-.03)
+  -- A damped arrival controller brakes lateral momentum as well as forward
+  -- speed. Pure pursuit with a fixed acceleration repeatedly crossed the
+  -- station and reversed direction during warmup.
+  local omega=ease*(1+proximity*.35)*response
+  local requestedAcceleration=delta*(omega*omega)-velocity*(2*omega)
+  local requestedVelocity=velocity+requestedAcceleration*h
+  local speed=math.min(cap,math.sqrt(2*acceleration*distance))
+  local requested=requestedVelocity
+  if requested.Magnitude>speed then requested=requested.Unit*speed end
   if correction then
    requested+=correction
    if requested.Magnitude>cap then requested=requested.Unit*cap end
@@ -263,6 +273,15 @@ end
 function F.ready(now,spawnAt) return now>=spawnAt+2 end
 function F.canMine(distance,ready,allowed,alive)
  return alive==true and ready==true and allowed==true and distance<=1
+end
+function F.flightYaw(position,goal,velocity,lastYaw)
+ -- Use actual travel direction, retaining heading after arrival. A tiny
+ -- steering residual must never spin a stationary miner through 180 degrees.
+ if velocity and Vector3.new(velocity.X,0,velocity.Z).Magnitude>.35 then
+  return F.levelYaw(position,position+velocity,lastYaw)
+ end
+ if Vector3.new(goal.X-position.X,0,goal.Z-position.Z).Magnitude>1 then return F.levelYaw(position,goal,lastYaw) end
+ return lastYaw or 0
 end
 function F.levelYaw(position,target,lastYaw)
  local dx,dz=target.X-position.X,target.Z-position.Z

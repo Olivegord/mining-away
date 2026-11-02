@@ -85,7 +85,7 @@ end
 local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: boolean?): ()
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
- d.breaker=nil;d.growPlan=nil;d.growAt=nil
+ d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil
  d.lingerUntil=nil;d.lingerGoal=nil
  if not keepBreakContact then d.mineBreakContact=nil end
  if not keepCombatEffects then d.chainUntil=0;d.chainTargetId=nil end
@@ -97,7 +97,10 @@ local function retireTarget(d,keepBreakContact)
  local impact=d.breaker
  if impact and impact.phase~='Impact' and impact.phase~='Recover' then impact=nil end
  release(d,false,keepBreakContact);d.breaker=impact
- if finished then d.lingerUntil=now+1;d.lingerGoal=station end
+ if finished then
+  local p=profiles[d.owner];local hasNext=d.autoField~=nil or (p and #(p.oreQueue or {})>0)
+  d.lingerUntil=now+(hasNext and .2 or 1);d.lingerGoal=station
+ end
 end
 local function spend(d)
  for _,p in ipairs(patches) do R.spend(p.e,d.id) end
@@ -497,11 +500,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
+ if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
+ local revealed=nil
  local broken=R.damage(r,amount)
  local actual=r.paid and 0 or r.hp+10
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
@@ -518,10 +523,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('BreakSerial',1);r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)
-   makeResource(r.field,r.position,'Core',core.maxHP,r.ore*4,core.size)
+   revealed={makeResource(r.field,r.position,'Core',core.maxHP,r.ore*4,core.size)}
    for n=1,4 do
     local a=n*math.pi/2;local shard=Mining.resource(seed:NextInteger(50,70),'Shard',r.hardness)
-    makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',shard.maxHP,r.ore,shard.size)
+    table.insert(revealed,makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',shard.maxHP,r.ore,shard.size))
    end
   else award(recipient,r);discoveries:TrySpawn(p.player,r.field.part);table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn) end
  end
@@ -547,9 +552,24 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.processingPrimary=nil
  end
  if broken then
-  for id in pairs(r.slots) do
+  local workers={};for id in pairs(r.slots) do table.insert(workers,id) end;table.sort(workers)
+  for _,id in ipairs(workers) do
    local worker=drones[id]
-   if worker and worker.target==r then retireTarget(worker,not secondary and worker==d and d.mineBreakContact~=nil) else r.slots[id]=nil end
+   if worker and worker.target==r then
+    retireTarget(worker,not secondary and worker==d and d.mineBreakContact~=nil)
+    -- Breaking a shell commits its existing crew to the actual revealed work.
+    -- This is continuation of that ordered geode, not free field automation.
+    -- New stones still have their normal growth/arrival/warmup gates.
+    if revealed and not worker.breaker then
+     for _,nextRock in ipairs(revealed) do
+      if not next(nextRock.slots) then
+       worker.target=nextRock;worker.targetSlot=1;nextRock.slots[id]=1
+       worker.lingerUntil=nil;worker.lingerGoal=nil;worker.state='Travel'
+       updateSlots(nextRock);break
+      end
+     end
+    end
+   else r.slots[id]=nil end
   end
   updateSlots(r)
  end
@@ -695,19 +715,17 @@ local function travelSpeed(d)
  return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
- local settling=d.target~=nil or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
+ d.intentGoal=goal
+ local settling=d.target~=nil or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
  local weight=d.state=='Recover' and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
  d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
  goal=goal+d.swarmOffset
- d.goal=goal;local delta=goal-d.pos
- if delta.X*delta.X+delta.Z*delta.Z>1e-6 then
-  local target=math.atan2(-delta.X,-delta.Z);local diff=(target-d.yaw+math.pi)%(math.pi*2)-math.pi
-  d.yaw=d.yaw+diff*Feel.turnAlpha(dt)
- end
+ d.goal=goal
  local work=d.target~=nil or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
+ d.yaw=Feel.approachYaw(d.yaw,Feel.flightYaw(d.pos,goal,d.velocity,d.yaw),dt)
  -- Exact logical pose; no server presentation lerp, no body pitch.
  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
 end
@@ -765,6 +783,13 @@ local function attackDrone(d: any,field: any,dt: number)
     else d.chargeAt=nil;d.chargeTarget=nil end
    else d.chargeAt=nil;d.chargeTarget=nil end
 end
+local function committedStation(d,r)
+ if d.workTargetId~=r.id then
+  d.workTargetId=r.id
+  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)
+ end
+ return d.workStation
+end
 local function mineDrone(d: any,p: any,field: any,dt: number)
  if d.combatTarget or d.state=='Attack' then release(d);d.chargeAt=nil;d.chargeTarget=nil end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
@@ -772,12 +797,12 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
  if not d.target and d.autoField==field.id and (d.stats.plotAuto or 0)>0 then chooseResource(d,field) end
  local r=d.target
  if r then
-  local goal=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize);d.state='Travel';move(d,goal,dt)
+  local goal=committedStation(d,r);d.state='Travel';move(d,goal,dt)
   if Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) and los(d.pos,r.position,r.part,{droneFolder}) then
-   d.warmAt=d.warmAt or now;d.state='Mine'
+   d.warmAt=d.warmAt or now;d.state='Warmup'
    if now-d.warmAt>=math.max(.08,d.stats.warmup) then
     if not d.mining then d.beamSince=now end
-    d.mining=true
+    d.state='Mine';d.mining=true
     local damage,charge=Mining.step('Blue',d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
     if damage>0 then hitResource(d,r,damage) end
    end
@@ -817,7 +842,9 @@ local function growerDrone(d,p,hr,dt)
   d.growPlan=nil;d.growAt=nil;d.field=nil;followRole(d,p,hr,dt);return
  end
  d.field=field.id
- if now<(d.nextGrow or 0) then followRole(d,p,hr,dt,'GrowRecover');return end
+ if now<(d.nextGrow or 0) then
+  d.state='GrowRecover';move(d,d.growRecoveryGoal or d.pos,dt);return
+ end
  if not d.growPlan or d.growPlan.field~=field.id then
   d.growAt=nil
   local ok,_,plan=spawnResource(field,'Crystal',true)
@@ -841,14 +868,14 @@ local function growerDrone(d,p,hr,dt)
   resource.part:SetAttribute('GrownBy',d.id)
   RoleEffects.Grow(d.pos,ground,true)
  end
- d.growPlan=nil;d.growAt=nil;d.nextGrow=now+(ok and (d.stats.growCooldown or DroneRoles.GROWER.cooldown) or 1)
+ d.growRecoveryGoal=goal;d.growPlan=nil;d.growAt=nil;d.nextGrow=now+(ok and (d.stats.growCooldown or DroneRoles.GROWER.cooldown) or 1)
 end
 local function breakerDrone(d,p,hr,field,dt)
  d.mining=false
  local job=d.breaker
  -- Recovery survives destruction of this stone, but never a recall/death.
  if job and (job.phase=='Impact' or job.phase=='Recover') then
-  local phase,event=DroneRoles.stepBreaker(job,now,{valid=true})
+  local phase,event=DroneRoles.stepBreaker(job,now,{valid=true,recovered=(d.pos-job.station).Magnitude<=.7 and (d.velocity or Vector3.zero).Magnitude<=1})
   d.state='BreakerRecover';move(d,job.station,dt)
   if event=='recover' then RoleEffects.BreakerPhase(d.pos,job.contact,'Recover') end
   if phase=='Complete' then d.breaker=nil end
@@ -872,7 +899,7 @@ local function breakerDrone(d,p,hr,field,dt)
  if not job then
   job=DroneRoles.newBreaker(r.id,now);d.breaker=job
   job.windup=math.max(.08,d.stats.warmup)
-  job.station=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)+Vector3.new(0,2,0)
+  job.station=committedStation(d,r)+Vector3.new(0,2,0)
   job.contact=Vector3.new(r.position.X,select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),r.position.Z)
   job.impact=job.contact+Vector3.new(0,1.4,0)
  end
@@ -881,7 +908,7 @@ local function breakerDrone(d,p,hr,field,dt)
  if phase=='Dive' then goal=job.impact elseif phase=='Impact' then goal=job.impact end
  d.state=phase=='Approach' and 'Travel' or 'Breaker'..phase
  if phase=='Dive' and job.diveStart then
-  d.goal=job.impact;d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
+  d.goal=job.impact;d.intentGoal=job.impact;d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
   d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
  else move(d,goal,dt) end
  local event
@@ -916,9 +943,19 @@ local function droneStep(d: any,dt: number)
   if d.launchAt then d.launchAt=d.launchAt+dt end
   if d.unloadAt then d.unloadAt=d.unloadAt+dt end
   if d.repairChargeAt then d.repairChargeAt=d.repairChargeAt+dt end
-  if d.breaker then d.breaker.phaseAt+=dt end
+  if d.breaker and d.breaker.phase~='Dive' then d.breaker.phaseAt+=dt end
   if d.growAt then d.growAt+=dt end
   if d.lingerUntil then d.lingerUntil+=dt end
+  -- Storage freezes work, not safe flight. No profile, damage, reservation or
+  -- job transition is mutated here; travel retains its committed destination.
+  if store:healthy(p.session) and d.goal then
+   if d.breaker and d.breaker.phase=='Dive' and d.breaker.diveStart then
+    local job=d.breaker;d.goal=job.impact;d.intentGoal=job.impact
+    d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
+    if now-job.phaseAt>=DroneRoles.BREAKER.diveDuration then d.velocity=Vector3.zero end
+    d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
+   else move(d,d.intentGoal or (d.goal-(d.swarmOffset or Vector3.zero)),dt) end
+  end
   return
  end
  if not store:healthy(p.session) then release(d);return end
@@ -1011,9 +1048,9 @@ local function snapshotDrone(d)
  if (d.chainUntil or 0)<=now then d.chainTargetId=nil end
  local combatTarget=d.state=='Attack' and d.mining and d.combatTarget
  local combatId=combatTarget and combatTarget.hp>0 and combatTarget.model.Parent and combatTarget.model:GetAttribute('TurretId') or ''
- local mining=d.state=='Mine' and d.mining and target~=nil
+ local mining=not profiles[d.owner].busy and d.state=='Mine' and d.mining and target~=nil
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
-  Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,MotionPaused=(profiles[d.owner].busy or not store:healthy(profiles[d.owner].session)) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
+  Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=target and math.max(.08,d.stats.warmup) or d.stats.warmup,
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,
@@ -1037,10 +1074,12 @@ local function setMotionPaused(p: any,paused: boolean)
  for _,d in ipairs(p.drones) do
   if d.model and d.model.Parent and d.hp>0 then
    if paused then
+    d.model:SetAttribute('Mining',false);d.model:SetAttribute('Firing',false)
     d.mineBreakContact=nil;d.model:SetAttribute('MineBreakUntil',0);d.model:SetAttribute('MineBreakPrimaryId','');d.model:SetAttribute('MineBreakSecondaryId','')
    end
    d.model:SetAttribute('Position',d.pos);d.model:SetAttribute('Goal',d.goal);d.model:SetAttribute('Yaw',d.yaw)
-   d.model:SetAttribute('MotionPaused',paused)
+   d.model:SetAttribute('WorkPaused',paused)
+   d.model:SetAttribute('MotionPaused',not store:healthy(p.session))
   end
  end
 end

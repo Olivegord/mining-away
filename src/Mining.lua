@@ -28,6 +28,18 @@ end
 function M.efficiency(kind: string,nodeKind: string): number
  return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1
 end
+-- Outer hard layers reward a physical breaker; exposed inner layers reward
+-- steady cutters. This changes the best fleet/target pairing, without a timer
+-- gate or invalidating the existing continuous hit and fracture rules.
+function M.contactMultiplier(role,_nodeKind,hardness,stage,count)
+ local progress=math.clamp((stage or 0)/math.max(1,count or 3),0,1)
+ if role=='Charger' then
+  local resistance=math.clamp(((hardness or 1)-1)/7,0,1)
+  return 1+resistance*(1-progress)*1.5
+ end
+ if role=='Striker' or role=='Blue' then return 1+progress*.35 end
+ return 1
+end
 function M.step(kind: string,charge: number?,dt: number,dps: number): (number,number,number)
  if dt<=0 then return 0,charge or 0,0 end
  if M.kind(kind)~='Red' then return dps*dt,0,0 end
