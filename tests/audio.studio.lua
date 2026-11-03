@@ -2,11 +2,26 @@
 -- existing Studio Client. All test audio is muted; no gameplay is changed.
 local root=Instance.new('Folder');root.Name='AudioRuntimeVerification';root.Parent=workspace
 local audio=Soundscape.new(root);audio.musicGroup.Volume=0;audio.effectsGroup.Volume=0
+local camera=workspace.CurrentCamera;local originalCamera=camera.CFrame
 local checks={}
 local function check(name,fn) fn();table.insert(checks,name) end
 local ok,err=pcall(function()
  game:GetService('ContentProvider'):PreloadAsync({audio.bank['9119816710'],audio.bank['9118941667'],audio.bank['9114583503']})
- local pos=workspace.CurrentCamera.CFrame.Position+workspace.CurrentCamera.CFrame.LookVector*8
+ local playerRoot=assert(game.Players.LocalPlayer.Character:FindFirstChild('HumanoidRootPart'))
+ local pos=playerRoot.Position+Vector3.new(0,4,-8)
+ check('music starts disabled and never auto-starts a track',function()
+  audio:_musicStep();assert(audio.musicMuted and audio.current==nil and audio.musicGroup.Volume==0)
+  for _,track in ipairs(audio.tracks) do assert(not track.IsPlaying) end
+ end)
+ check('character listener and distance survive a distant camera',function()
+  local kind,object=game.SoundService:GetListener();assert(kind==Enum.ListenerType.ObjectPosition and object==playerRoot)
+  camera.CFrame=CFrame.new(playerRoot.Position+Vector3.new(0,150,150))
+  assert(audio:_distance(pos)<10)
+  audio:setLoop('zoom','charge',pos,1,1);local loop=assert(audio.loops.zoom)
+  assert(loop.sound.RollOffMode==Enum.RollOffMode.Linear and loop.sound.RollOffMinDistance==14)
+  assert(loop.sound.RollOffMaxDistance>=75)
+  audio:stopLoop('zoom',true);camera.CFrame=originalCamera
+ end)
  local d=Instance.new('Model');d.Parent=root
  local function state(s)
   d:SetAttribute('State',s);d:SetAttribute('HP',100);d:SetAttribute('Life',1);d:SetAttribute('SnapshotAt',workspace:GetServerTimeNow())
@@ -46,6 +61,6 @@ local ok,err=pcall(function()
   assert(audio.uiConnection and audio.uiConnection.Connected);gui:Destroy()
  end)
 end)
-audio:destroy();root:Destroy();assert(audio.voices==0)
+camera.CFrame=originalCamera;audio:destroy();root:Destroy();assert(audio.voices==0)
 assert(ok,tostring(err))
 return game:GetService('HttpService'):JSONEncode({checks=checks,voiceCountAfterDestroy=audio.voices,scope='Actual client engine loading/lifecycle checks. Muted; no listening or multiplayer claim.'})

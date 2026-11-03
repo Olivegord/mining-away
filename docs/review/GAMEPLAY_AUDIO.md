@@ -2,6 +2,18 @@
 
 November 2, 2026. Same Drone Blower revolution game, place **136098934779395**, branch `codex/restore-feel-prestige`.
 
+## Audibility correction and music disabled
+
+The owner reported that the added effects could not be heard and requested music off. A real server-accepted `MineOre` order in the preview session produced charge, dive, flight, orbital and rubble sounds, with loaded assets and nonzero `PlaybackLoudness`, but the low action levels, inverse-tapered fade starting at six studs, camera-based culling and strong shared compressor suppressed their output at normal working distances. This is a mix/listener defect; the earlier muted checks did not establish audible gameplay.
+
+The corrected client uses the character's position with the camera's stereo orientation, and measures cue distance from that same character. Effects use linear falloff starting at 14 studs, broader local ranges, stronger core work levels, action group volume 1 and gentler EQ/compression. The existing voice caps and spatial positions remain. Listener ownership updates on respawn and restores its previous baseline when the controller closes; an active controller recovers if an overlapping review controller temporarily takes the listener. Original crystal samples remain intact.
+
+Music now starts disabled with zero group volume, and the playlist does not start a track while muted. The existing Music toggle can explicitly re-enable it for the current session. Confirmed on the actual production client: zero music tracks playing, music volume 0, action volume 1, character listener active, real charge/flight/dive/rubble events playing with the corrected rolloff, and an empty console. The engine harness now also checks music-off startup and a camera moved 150 studs away; ten muted engine checks pass. Final subjective listening and multiplayer balance still require player feedback.
+
+The listener and rolloff choices follow Roblox's primary documentation: [listener positioning](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/ListenerType.yaml), [sound distance attenuation](https://create.roblox.com/docs/sound/objects), and [compressor controls](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/CompressorSoundEffect.yaml). Only the Soundscape block of the current unified client is installed using `ScriptEditorService:UpdateSourceAsync`, with exact prior-source and resulting-source checks. The rest of the unified UI/client source is preserved.
+
+The sections below record the original addition and its earlier validation.
+
 The owner requests substantially more relevant sounds, particularly falling rock fragments and drones charging. Existing music and `CrystalAudio` are preserved. This pass adds:
 
 - Spatial rock landing sounds with three rubble variants. Collectible landings use fresh, increasing server contact receipts containing exact contact position and speed. Resting floor clamps stay silent. Cosmetic stone chips and broken drone parts sound once when their ballistic animation reaches the floor; old contacts after a suspended frame are skipped. Chips now survive long enough to reach the ground.

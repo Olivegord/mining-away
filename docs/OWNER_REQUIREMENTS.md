@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — audible gameplay effects, music off
+
+The owner cannot hear the added gameplay sounds and asks to disable music for now. Diagnose the running audio path, make drone charge/work and rock-contact sounds audible at ordinary play distances and camera zoom, preserve the sound events and mix limits, and default music to off. Loading assets or passing muted lifecycle checks alone does not establish audible playback. Keep this in the existing game and preserve the unified UI.
+
 ## November 2 latest — shared UI style, flicker and fading rays
 
 The owner approves the general start and requests fixing flicker, feathered edges on the rotating glow, and applying the same super-simple, textured, colorful treatment to all UI, with interaction where useful. Preserve the approved 3D card movement and object outlines. Extend the skin through the compact HUD, commands/gadgets, shops, fleet/run menus, pack and prestige; keep saved choices and server authority. The owner explicitly authorizes coordinating the gameplay-audio and UI chats and requests recording chat coordination in AGENTS.md. See [unified UI and native checks](review/UNIFIED_TEXTURED_UI.md).

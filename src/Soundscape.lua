@@ -4,6 +4,8 @@ local SoundService = game:GetService('SoundService')
 local ContentProvider = game:GetService('ContentProvider')
 local TweenService = game:GetService('TweenService')
 local Debris = game:GetService('Debris')
+local Players = game:GetService('Players')
+local Http = game:GetService('HttpService')
 local Soundscape = {}; Soundscape.__index = Soundscape
 
 local TRACKS = {
@@ -20,26 +22,26 @@ local CUES = {
  prestige={id='91735091370012',volume=.16,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},
  cutting={id='9118614717',volume=.045,duration=.6,pitch=.72,cooldown=.22,fallback='action_jump_land.mp3'},
  orbital={id='9118612324',volume=.16,duration=1.1,pitch=.65,cooldown=.25,fallback='action_jump_land.mp3'},
- mining={id='9125871199',volume=.1,duration=2,cooldown=.16,fallback='action_jump_land.mp3'},
+ mining={id='9125871199',volume=.22,duration=2,cooldown=.16,fallback='action_jump_land.mp3'},
  hit={id='9125871199',volume=.15,duration=2,cooldown=.12,fallback='action_jump_land.mp3'},
  death={id='9125871199',volume=.32,duration=2,pitch=.75,cooldown=.2,fallback='impact_explosion_03.mp3'},
  wake={id='9126066421',volume=.3,duration=1,pitch=.65,cooldown=.5,fallback='action_get_up.mp3'},
  ignite={id='9126066421',volume=.27,duration=1,pitch=1.2,cooldown=.25,fallback='action_get_up.mp3'},
  impact={id='9125871199',volume=.45,duration=2,pitch=.7,cooldown=.15,fallback='impact_explosion_03.mp3'},
- rubble={ids={'9125869504','9125869495','9125869138'},volume=.24,duration=1.2,pitch=1.12,cooldown=.055,range=60,maxVoices=4,fallback='action_jump_land.mp3'},
+ rubble={ids={'9125869504','9125869495','9125869138'},volume=.32,duration=1.2,pitch=1.12,cooldown=.055,range=75,maxVoices=4,fallback='action_jump_land.mp3'},
  metal_land={id='9125871199',volume=.22,duration=1,pitch=.78,cooldown=.08,fallback='action_jump_land.mp3'},
- charge={id='9119816710',volume=.17,duration=3,cooldown=.1,range=58,priority=3},
- breaker_charge={id='9114583503',volume=.2,duration=5,pitch=.7,cooldown=.1,range=65,priority=4},
- repair_charge={id='9119816710',volume=.11,duration=3,pitch=1.4,cooldown=.1,range=48,priority=3},
- grow_charge={id='9118941971',volume=.12,duration=1,pitch=.8,cooldown=.1,range=48,priority=2},
- orbital_charge={id='9119816710',volume=.24,duration=3,pitch=.65,cooldown=.1,range=80,priority=4},
- swarm_charge={id='9114583503',volume=.14,duration=5,pitch=1.3,cooldown=.1,range=60,priority=3},
- combat_charge={id='9119816710',volume=.16,duration=3,pitch=.9,cooldown=.1,range=65,priority=4},
- flight={id='9118941667',volume=.065,duration=1,pitch=.85,cooldown=.1,range=42,priority=1},
- cutting_hum={id='9118614717',volume=.12,duration=3,pitch=.85,cooldown=.1,range=60,priority=2},
- orbital_hum={id='9118612324',volume=.22,duration=3,pitch=.6,cooldown=.1,range=80,priority=4},
- healing={id='9118941971',volume=.075,duration=1,pitch=1.45,cooldown=.1,range=45,priority=2},
- transfer={id='9118941667',volume=.08,duration=1,pitch=1.25,cooldown=.1,range=42,priority=2},
+ charge={id='9119816710',volume=.3,duration=3,cooldown=.1,range=75,priority=3},
+ breaker_charge={id='9114583503',volume=.28,duration=5,pitch=.7,cooldown=.1,range=80,priority=4},
+ repair_charge={id='9119816710',volume=.2,duration=3,pitch=1.4,cooldown=.1,range=65,priority=3},
+ grow_charge={id='9118941971',volume=.22,duration=1,pitch=.8,cooldown=.1,range=65,priority=2},
+ orbital_charge={id='9119816710',volume=.3,duration=3,pitch=.65,cooldown=.1,range=95,priority=4},
+ swarm_charge={id='9114583503',volume=.24,duration=5,pitch=1.3,cooldown=.1,range=75,priority=3},
+ combat_charge={id='9119816710',volume=.25,duration=3,pitch=.9,cooldown=.1,range=80,priority=4},
+ flight={id='9118941667',volume=.18,duration=1,pitch=.85,cooldown=.1,range=60,priority=1},
+ cutting_hum={id='9118614717',volume=.24,duration=3,pitch=.85,cooldown=.1,range=80,priority=2},
+ orbital_hum={id='9118612324',volume=.27,duration=3,pitch=.6,cooldown=.1,range=95,priority=4},
+ healing={id='9118941971',volume=.14,duration=1,pitch=1.45,cooldown=.1,range=65,priority=2},
+ transfer={id='9118941667',volume=.17,duration=1,pitch=1.25,cooldown=.1,range=60,priority=2},
  laser_start={id='9126066421',volume=.14,duration=.5,pitch=1.3,cooldown=.08,fallback='action_get_up.mp3'},
  laser_stop={id='9118941971',volume=.085,duration=.45,pitch=.7,cooldown=.12,fallback='volume_slider.ogg'},
  dive={id='9118941667',volume=.21,duration=.55,pitch=.65,cooldown=.1,fallback='action_get_up.mp3'},
@@ -67,14 +69,20 @@ end
 function Soundscape.new(effectParent)
  local folder=Instance.new('SoundGroup');folder.Name='DroneBlowerSoundscape';folder.Volume=1;folder.Parent=SoundService
  local self=setmetatable({folder=folder,effectParent=effectParent,tracks={},bank={},cooldowns={},
-  voices=0,closed=false,musicMuted=false,effectsMuted=false,combat=false,menu=false,
+  voices=0,closed=false,musicMuted=true,effectsMuted=false,combat=false,menu=false,
   loops={},loopCount=0,active={},cueVoices={},droneStates={},
   nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
- self.musicGroup=group(folder,'Music',.14)
- self.effectsGroup=group(folder,'Actions',.65)
- local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=-2;eq.HighGain=-7;eq.Parent=self.effectsGroup
+ self.musicGroup=group(folder,'Music',0)
+ self.effectsGroup=group(folder,'Actions',1)
+ local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=0;eq.HighGain=-3;eq.Parent=self.effectsGroup
  local compressor=Instance.new('CompressorSoundEffect');compressor.Name='ActionPeakControl'
- compressor.Threshold=-18;compressor.Ratio=5;compressor.Attack=.01;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
+ compressor.Threshold=-8;compressor.Ratio=3;compressor.Attack=.1;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
+ self.listenerType,self.listenerObject=SoundService:GetListener()
+ -- A replacement controller inherits the baseline camera listener rather than
+ -- restoring a previous controller's ownership after that controller closes.
+ if SoundService:GetAttribute('DroneBlowerListenerOwner') then self.listenerType=Enum.ListenerType.Camera;self.listenerObject=nil end
+ self.listenerToken=Http:GenerateGUID(false)
+ self:_listenerStep()
  local preload={}
  for _,track in ipairs(TRACKS) do
   local sound=Instance.new('Sound');sound.Name=track.name;sound.SoundId='rbxassetid://'..track.id
@@ -104,7 +112,7 @@ function Soundscape.new(effectParent)
  return self
 end
 function Soundscape:_musicStep()
- if self.closed then return end
+ if self.closed or self.musicMuted then return end
  local current=self.current
  local playing=current and current.IsPlaying
  local remaining=playing and current.TimeLength>0 and (current.TimeLength-current.TimePosition) or math.huge
@@ -133,10 +141,11 @@ function Soundscape:setContext(combat,menu)
 end
 function Soundscape:toggleMusic()
  self.musicMuted=not self.musicMuted;self:setContext(self.combat,self.menu)
+ if self.musicMuted then for _,track in ipairs(self.tracks) do track:Stop() end end
  return not self.musicMuted
 end
 function Soundscape:toggleEffects()
- self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or .65
+ self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or 1
  if self.effectsMuted then
   for key in pairs(self.loops) do self:stopLoop(key,true) end
   local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
@@ -144,7 +153,24 @@ function Soundscape:toggleEffects()
  return not self.effectsMuted
 end
 function Soundscape:_distance(position)
- return position and workspace.CurrentCamera and (position-workspace.CurrentCamera.CFrame.Position).Magnitude or 0
+ local player=Players.LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local origin=root and root.Position or (workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position)
+ return position and origin and (position-origin).Magnitude or 0
+end
+function Soundscape:_listenerStep()
+ local player=Players.LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local kind,object=SoundService:GetListener()
+ if root==self.listenerRoot and (not root or (kind==Enum.ListenerType.ObjectPosition and object==root)) then return end
+ if root then
+  -- Position follows the character; stereo orientation still follows the camera.
+  SoundService:SetListener(Enum.ListenerType.ObjectPosition,root)
+  SoundService:SetAttribute('DroneBlowerListenerOwner',self.listenerToken)
+ elseif SoundService:GetAttribute('DroneBlowerListenerOwner')==self.listenerToken then
+  SoundService:SetListener(Enum.ListenerType.Camera)
+ end
+ self.listenerRoot=root
 end
 function Soundscape:_voice(name,position,looped)
  local cue=CUES[name];local id=cue.ids and cue.ids[self.random:NextInteger(1,#cue.ids)] or cue.id
@@ -162,7 +188,7 @@ function Soundscape:_voice(name,position,looped)
   anchor=Instance.new('Part');anchor.Name='ActionAudio';anchor.Size=Vector3.one*.05
   anchor.Anchored=true;anchor.Transparency=1;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Position=position;anchor.Parent=self.effectParent
-  sound.RollOffMode=Enum.RollOffMode.InverseTapered;sound.RollOffMinDistance=6;sound.RollOffMaxDistance=cue.range or 65
+  sound.RollOffMode=Enum.RollOffMode.Linear;sound.RollOffMinDistance=14;sound.RollOffMaxDistance=cue.range or 80
  end
  sound.Parent=anchor or self.folder;self.voices+=1
  self.cueVoices[name]=(self.cueVoices[name] or 0)+1
@@ -177,7 +203,7 @@ function Soundscape:play(name,position,options)
  local cue=CUES[name];local now=os.clock()
  if self.closed or self.effectsMuted or not cue or self.voices>=22 or now<(self.cooldowns[name] or 0) then return end
  if (self.cueVoices[name] or 0)>=(cue.maxVoices or 5) then return end
- if position and self:_distance(position)>(cue.range or 65) then return end
+ if position and self:_distance(position)>(cue.range or 80) then return end
  self.cooldowns[name]=now+cue.cooldown
  local sound,anchor=self:_voice(name,position,false);if not sound then return end
  local volume=cue.volume/math.sqrt(1+self.voices*.07)*(options and options.level or 1)
@@ -195,7 +221,7 @@ function Soundscape:stopLoop(key,immediate)
 end
 function Soundscape:setLoop(key,name,position,level,pitch)
  local cue=CUES[name];local loop=self.loops[key];local now=os.clock()
- if self.closed or self.effectsMuted or not cue or typeof(position)~='Vector3' or self:_distance(position)>(cue.range or 65) or (level or 1)<=0 then self:stopLoop(key);return end
+ if self.closed or self.effectsMuted or not cue or typeof(position)~='Vector3' or self:_distance(position)>(cue.range or 80) or (level or 1)<=0 then self:stopLoop(key);return end
  if loop and (loop.name~=name or not loop.sound.Parent) then self:stopLoop(key);loop=nil end
  if not loop then
   -- Six spatial beds, with priority and proximity eviction, leave room for
@@ -222,6 +248,8 @@ function Soundscape:setLoop(key,name,position,level,pitch)
  loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)
 end
 function Soundscape:update()
+ if self.closed then return end
+ self:_listenerStep()
  local now=os.clock()
  for key,loop in pairs(self.loops) do
   -- Stop even if an interrupted renderer never gets another cleanup callback.
@@ -295,6 +323,15 @@ function Soundscape:destroy()
  for key in pairs(self.loops) do self:stopLoop(key,true) end
  local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
  self.droneStates={}
+ if SoundService:GetAttribute('DroneBlowerListenerOwner')==self.listenerToken then
+  local kind,object=SoundService:GetListener()
+  if (kind==Enum.ListenerType.ObjectPosition and object==self.listenerRoot) or not self.listenerRoot then
+   local previous=self.listenerObject
+   if typeof(previous)=='Instance' and not previous.Parent then SoundService:SetListener(Enum.ListenerType.Camera)
+   else SoundService:SetListener(self.listenerType,previous) end
+  end
+  SoundService:SetAttribute('DroneBlowerListenerOwner',nil)
+ end
  self.folder:Destroy()
 end
 return Soundscape
