@@ -35,8 +35,8 @@ end)
 check('actual command strike breaks largest node through normal reward path once',function()
  local pl,p=fixture();data(p).run.shopLevels.cobalt_orbital=1;local r=largeNode()
  input(pl,'Orbital','begin');local charge=assert(p.ability.charge);assert(charge.targetId==r.id)
- local cargo=Pro.cargoUnits(data(p));advance(.4);input(pl,'Orbital','confirm',charge.token)
- assert(not r.paid and p.ability.burn,'confirm starts sustained work')
+ local cargo=Pro.cargoUnits(data(p));advance(1.45)
+ assert(not r.paid and p.ability.burn,'one activation automatically starts sustained work')
  advance(2);assert(r.hp>0 and r.hp<r.maxHP*.6,'burn should still be melting halfway through')
  advance(2.1);assert(r.paid,'four seconds of accepted contacts should melt the target')
  advance(1.5);assert(Pro.cargoUnits(data(p))==cargo+r.ore,'nearby fragments must reach the owner')
@@ -68,7 +68,7 @@ check('scrap mining uses real hit path and persistence-busy periods preserve dep
  for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
  local r=makeResource(patches[1],patches[1].center,'Crystal',800,10,3)
  advance(2.1);input(pl,'Scrap','begin');local charge=assert(p.ability.charge)
- advance(.4);input(pl,'Scrap','confirm',charge.token);assert(p.ability.swarm)
+ advance(1.45);assert(p.ability.swarm)
  local initial=r.hp
  for _=1,40 do if r.hp<initial then break end;advance(.1) end
  assert(r.hp<initial,'physical bots must reach and mine before half their ten-second deployment')
@@ -78,7 +78,7 @@ check('scrap mining uses real hit path and persistence-busy periods preserve dep
 end)
 check('successful gadget cooldown is saved and rehydrated runtime rejects immediate reuse',function()
  local pl,p=fixture();data(p).run.shopLevels.cobalt_orbital=1;largeNode()
- input(pl,'Orbital','begin');local charge=assert(p.ability.charge);advance(.4);input(pl,'Orbital','confirm',charge.token)
+ input(pl,'Orbital','begin');local charge=assert(p.ability.charge);advance(1.45)
  local saved=data(p).run.abilityCooldowns.Orbital;assert(saved and saved>now)
  p.ability=nil;input(pl,'Orbital','begin');assert(not p.ability.charge and p.ability.cooldowns.Orbital==saved)
 end)

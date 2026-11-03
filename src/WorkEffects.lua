@@ -4,6 +4,8 @@ local W={};W.__index=W
 local Players=game:GetService('Players')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
+local ENERGY='rbxasset://textures/particles/flare_main.dds'
+local YELLOW=Color3.fromRGB(255,208,69)
 local function part(parent,name)
  local p=Instance.new('Part');p.Name=name;p.Size=Vector3.one*.05;p.Transparency=1
  p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent
@@ -21,21 +23,27 @@ local function cameraNear(position,radius)
  local camera=workspace.CurrentCamera
  return camera and (camera.CFrame.Position-position).Magnitude<radius
 end
+local function cameraAbove(position,radius)
+ local camera=workspace.CurrentCamera
+ if not camera then return false end
+ local delta=camera.CFrame.Position-position
+ return delta.X*delta.X+delta.Z*delta.Z<radius*radius
+end
 local function particle(parent,name,color)
  local fx=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
  local source=fx and fx:FindFirstChild('MiningParticles')
  source=source and source:FindFirstChild(name=='OriginGlow' and 'Mainglow' or 'Largeparticles')
  local p=source and source:IsA('ParticleEmitter') and source:Clone() or Instance.new('ParticleEmitter')
  p.Name=name;p.Enabled=false;p.Rate=0
- -- Keep the authored emitter sprites at the origin; cutting/transport sparks
- -- use a shipped transparent texture and remain readable without asset access.
- p.Texture=source and (name=='OriginParticles' or name=='OriginGlow') and source.Texture or 'rbxasset://textures/particles/sparkles_main.dds'
- p.Color=ColorSequence.new(color);p.LightEmission=.55;p.LightInfluence=0
+ -- A soft plain disc instead of stars/smoke: the energy reads as light,
+ -- including at small screen sizes. Keep the original asset templates intact.
+ p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
+ p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=2.2
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
- p.Lifetime=NumberRange.new(.16,.32);p.Speed=NumberRange.new(1.4,3.5);p.Drag=4
- p.SpreadAngle=Vector2.new(55,55);p.Acceleration=Vector3.new(0,-6,0)
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.045),NumberSequenceKeypoint.new(.25,.13),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.65,.45),NumberSequenceKeypoint.new(1,1)})
+ p.Lifetime=NumberRange.new(.35,.65);p.Speed=NumberRange.new(1.4,3.5);p.Drag=3
+ p.SpreadAngle=Vector2.new(55,55);p.Acceleration=Vector3.new(0,-6,0);p.WindAffectsDrag=true
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.28),NumberSequenceKeypoint.new(1,0)})
+ p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.55,.22),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
@@ -76,13 +84,26 @@ function W.drawCylinder(cylinder,origin,target,diameter,transparency)
  cylinder.Transparency=math.clamp(transparency,0,1)
 end
 function W.new(parent)
- return setmetatable({parent=parent,miningBeams={},miningCount=0,maxMining=16,courierCount=0,maxCouriers=12,repairCount=0,maxRepairs=12,flightCount=0,maxFlightParticles=64,bursts={},maxBursts=14},W)
+ return setmetatable({parent=parent,miningBeams={},miningCount=0,maxMining=16,courierCount=0,maxCouriers=12,repairCount=0,maxRepairs=12,flightCount=0,maxFlightParticles=64,bursts={},maxBursts=14,orbitals={},scanAt=0},W)
+end
+function W:energyBloom()
+ if self.bloom and self.bloom.Parent then return end
+ local lighting=game:GetService('Lighting')
+ local existing=lighting:FindFirstChild('MiningEnergyBloom')
+ if existing then self.bloom=existing;return end
+ local bloom=Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
+ bloom.Intensity=1.25;bloom.Size=32;bloom.Threshold=1.1;bloom.Parent=lighting
+ self.bloom=bloom;self.ownsBloom=true
 end
 function W:burst(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
+ self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
- local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(2,5)
- sparks:Emit(math.min(20,count));table.insert(self.bursts,{part=anchor,untilAt=now+.65})
+ local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(4,13)
+ sparks.Lifetime=NumberRange.new(.35,.85);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-20,0)
+ sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.28,.1),NumberSequenceKeypoint.new(.18,.5,.15),NumberSequenceKeypoint.new(1,0)})
+ sparks.SpreadAngle=Vector2.new(85,85)
+ sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+1})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -107,18 +128,17 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  end
  if not fx then
   if self.miningCount>=self.maxMining then return end
+  self:energyBloom()
   local anchor=part(beam.holder,'OriginalMiningOrigin')
   fx={anchor=anchor,spheres=spheres(anchor,beam.tint or WHITE),lastAt=now,pulseSerial=sample.pulseSerial or 0}
   fx.sparks=particle(anchor,'OriginParticles',beam.tint or WHITE)
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.15,.25);fx.glow.Size=NumberSequence.new(.24)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
-  fx.impact=particle(fx.tip,'CuttingSparks',Color3.fromRGB(255,205,119))
-  fx.impact.Orientation=Enum.ParticleOrientation.VelocityParallel
-  fx.impact.Lifetime=NumberRange.new(.14,.30);fx.impact.Speed=NumberRange.new(9,17)
-  fx.impact.Drag=2;fx.impact.Acceleration=Vector3.new(0,-25,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.65,.06),NumberSequenceKeypoint.new(1,0)})
-  fx.impact.Squash=NumberSequence.new(.8);fx.impact.LightEmission=.8
+  fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  fx.impact.Lifetime=NumberRange.new(.35,.8);fx.impact.Speed=NumberRange.new(6,13)
+  fx.impact.Drag=1.8;fx.impact.Acceleration=Vector3.new(0,-21,0);fx.impact.SpreadAngle=Vector2.new(72,72)
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.07),NumberSequenceKeypoint.new(.15,.38,.09),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.7,.25),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
@@ -157,8 +177,15 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local continuous=sample.style~='Percussion'
  fx.sparks.Rate=charging and (4+8*q) or 6;fx.sparks.Enabled=charging or working
  fx.glow.Rate=charging and 5 or 3;fx.glow.Enabled=charging or working
- fx.impact.Color=ColorSequence.new(Color3.fromRGB(255,224,158),sample.mineralColor or beam.tint or WHITE)
- fx.impact.Rate=continuous and 78 or 0;fx.impact.Enabled=working and continuous
+ local resonance=sample.style=='Resonance'
+ fx.impact.Color=ColorSequence.new(resonance and (beam.tint or WHITE) or YELLOW)
+ -- Smooth low-frequency sideways acceleration gives each tool its own
+ -- turbulence without moving contacts or inventing damage events.
+ local noise=math.noise(now*(resonance and 2.5 or .8),origin.X*.11,origin.Z*.11)
+ local turbulence=resonance and 12 or 2.5
+ fx.impact.Acceleration=Vector3.new(noise*turbulence,resonance and -5 or -21,math.noise(origin.Z*.17,now*.9)*turbulence)
+ fx.impact.Drag=resonance and 4 or 1.8
+ fx.impact.Rate=continuous and (resonance and 24 or 38) or 0;fx.impact.Enabled=working and continuous
  if point and normal then
   beam.marker.CFrame=facing(point+normal*.045,normal)
   if fx.contact then
@@ -172,7 +199,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(12);fx.sparks:Emit(6) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(22);fx.sparks:Emit(9) end
   fx.pulseSerial=sample.pulseSerial
  end
 end
@@ -207,10 +234,10 @@ function W:flight(drone,record,dt,now)
   record.rockets={}
   for _,side in ipairs({-1,1}) do
    local nozzle=Instance.new('Attachment');nozzle.Name='BreakerRocket';nozzle.Position=Vector3.new(side*.4,.35,0);nozzle.Parent=root
-   local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66));jet.Texture='rbxasset://textures/particles/fire_main.dds'
+   local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66))
    jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(18,28);jet.Drag=0
-   jet.Lifetime=NumberRange.new(.08,.17);jet.Acceleration=Vector3.new(0,12,0);jet.Rate=160;jet.LightEmission=1
-   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,0)})
+   jet.Lifetime=NumberRange.new(.12,.25);jet.Acceleration=Vector3.new(0,12,0);jet.Rate=60;jet.LightEmission=1
+   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
    table.insert(record.rockets,{attachment=nozzle,jet=jet})
   end
  end
@@ -234,7 +261,7 @@ function W:flight(drone,record,dt,now)
    local a=Instance.new('Attachment');a.Name='HoverExhaust'
    a.Position=(role~='Medic' and role~='Courier' and drone.beam and drone.beam.origin.Position) or Vector3.zero;a.Parent=drone.emitter
    local wisp=particle(a,'FlightWisp',drone.emitter.Color)
-   wisp.Texture='rbxasset://textures/particles/smoke_main.dds';wisp.EmissionDirection=Enum.NormalId.Bottom
+   wisp.EmissionDirection=Enum.NormalId.Bottom
    wisp.Lifetime=NumberRange.new(.25,.42);wisp.Speed=NumberRange.new(.4,1.2);wisp.Acceleration=Vector3.new(0,-2,0)
    wisp.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.07),NumberSequenceKeypoint.new(.55,.26),NumberSequenceKeypoint.new(1,.35)})
    wisp.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.82),NumberSequenceKeypoint.new(1,1)})
@@ -362,7 +389,74 @@ function W:courier(drone,record,now)
   fx.band.CFrame=fx.parcel.CFrame
  end
 end
+-- A monochrome beam with alternating opaque/clear bands. Shift the sequence
+-- along its normalized length, so the pulse remains fast at every frame rate.
+-- Fourteen or fewer keys stay inside Roblox's twenty-key NumberSequence limit.
+function W.orbitalTransparency(now)
+ local phase=(now*7)%1
+ local function opacity(t)
+  local x=(t*3+phase)%1
+  if x<.22 then return .04 elseif x<.32 then return .04+.96*(x-.22)/.1
+  elseif x<.88 then return 1 else return 1-.96*(x-.88)/.12 end
+ end
+ local keys={NumberSequenceKeypoint.new(0,opacity(0))}
+ for i=-1,4 do for _,point in ipairs({{0,.04},{.22,.04},{.32,1},{.88,1}}) do
+  local t=(i+point[1]-phase)/3
+  if t>0 and t<1 then table.insert(keys,NumberSequenceKeypoint.new(t,point[2])) end
+ end end
+ table.insert(keys,NumberSequenceKeypoint.new(1,opacity(1)))
+ return NumberSequence.new(keys)
+end
+function W:orbital(now)
+ if now>=self.scanAt then
+  self.scanAt=now+.2
+  local source=workspace:FindFirstChild('DroneRoleServerEffects')
+  if source then for _,group in ipairs(source:GetChildren()) do
+   local position=group:GetAttribute('Position')
+   if group:GetAttribute('OrbitalBurn') and not self.orbitals[group] and not group:GetAttribute('EndedAt')
+    and typeof(position)=='Vector3' and cameraAbove(position,180) then
+    local holder=part(self.parent,'OrbitalEnergyRamp')
+    local bottom=Instance.new('Attachment');bottom.Parent=holder
+    local top=Instance.new('Attachment');top.Parent=holder
+    local ramp=Instance.new('Beam');ramp.Name='DescendingWhiteClearEnergy'
+    ramp.Attachment0=bottom;ramp.Attachment1=top;ramp.FaceCamera=true;ramp.Segments=48
+    ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=1.6
+    ramp.Width0=1.8;ramp.Width1=1.8;ramp.Parent=holder
+    local hidden={}
+    for _,column in ipairs(group:GetChildren()) do
+     if column:IsA('BasePart') and (column.Name=='MeltCore' or column.Name=='MeltHalo') then
+      hidden[column]=column.LocalTransparencyModifier or 0;column.LocalTransparencyModifier=1
+     end
+    end
+    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,nextRamp=0,hidden=hidden}
+    self:energyBloom()
+   end
+  end end
+ end
+ for group,record in pairs(self.orbitals) do
+  local position=group:GetAttribute('Position')
+  local ended=group:GetAttribute('EndedAt')
+  local strength=ended and (1-progress(now,ended,.48))^2 or 1
+  if not group.Parent or typeof(position)~='Vector3' or strength<.002 then
+   for column,value in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=value end end
+   record.holder:Destroy();self.orbitals[group]=nil
+  else
+   local camera=workspace.CurrentCamera
+   for column in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=1 end end
+   local contactAt=group:GetAttribute('ContactAt')
+   -- A yielding save or a stalled contact stream must not leave a cosmetic
+   -- strike drilling after authoritative work has paused.
+   record.ramp.Enabled=ended~=nil or contactAt==nil or now-contactAt<.3
+   local height=math.max(260,(camera and camera.CFrame.Position.Y or position.Y)-position.Y+180)
+   record.holder.CFrame=CFrame.new(position)
+   record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
+   record.ramp.Width0=1.8*strength;record.ramp.Width1=record.ramp.Width0
+   if now>=record.nextRamp then record.nextRamp=now+.04;record.ramp.Transparency=W.orbitalTransparency(now) end
+  end
+ end
+end
 function W:update(now)
+ self:orbital(now)
  for i=#self.bursts,1,-1 do
   local item=self.bursts[i]
   if now>=item.untilAt then item.part:Destroy();table.remove(self.bursts,i) end
@@ -371,5 +465,10 @@ end
 function W:destroy()
  for beam in pairs(self.miningBeams) do self:destroyMining(beam) end
  for _,item in ipairs(self.bursts) do item.part:Destroy() end;self.bursts={}
+ for _,record in pairs(self.orbitals) do
+  for column,value in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=value end end
+  record.holder:Destroy()
+ end;self.orbitals={}
+ if self.ownsBloom and self.bloom then self.bloom:Destroy() end;self.bloom=nil
 end
 return W

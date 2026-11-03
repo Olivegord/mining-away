@@ -72,11 +72,18 @@ check('breaker arrives winds up dives hits once and recovers even after a killin
  local _,p,roles=fixture();local r=rock(20);local d=roles.Charger[1];local hp=r.hp
  assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)+Vector3.new(0,2,0)
  ticks(d,.7,true);assert(r.hp==hp and not d.mining)
+ local held=false
+ for _=1,120 do ticks(d,C.Tick,true)
+  if d.breaker and d.breaker.phase=='Impact' then held=true;break end
+ end
+ assert(held and r.hp==hp and (d.impactSerial or 0)==0,'surface contact must precede damage')
+ local contact=d.pos;ticks(d,.8,true)
+ assert(r.hp==hp and (d.pos-contact).Magnitude<1e-8,'held contact drifted or damaged early')
  local reached=false
  for _=1,150 do ticks(d,C.Tick,true);assert(not d.mining and d.model:GetAttribute('Mining')==false)
   if r.paid then reached=true;break end
  end
- assert(reached and (d.impactSerial or 0)==1 and d.breaker and d.breaker.phase=='Impact')
+ assert(reached and (d.impactSerial or 0)==1 and d.breaker and d.breaker.phase=='Recover')
  snapshotDrone(d);assert(d.breaker,'retired target snapshots must preserve recovery')
  ticks(d,.3,true);assert(d.breaker and d.breaker.phase=='Recover')
  ticks(d,.6,true);assert(d.breaker,'recovery must wait for physical overhead return')
@@ -170,7 +177,7 @@ check('hardware shop upgrades change only their intended real role stats',functi
  assert(roles.Charger[1].stats.geodeMultiplier==1.8 and roles.Striker[1].stats.geodeMultiplier==1)
  local r=rock(1000);p.workField=1;local ctx=abilityContext(p,1,roles.Scrapper[1]);assert(ctx.perks.scrapBots==2)
  p.ability=DroneAbilities.new({},profile.run.id);assert(DroneAbilities.begin(p.ability,'Scrap',now,ctx))
- clock(.4);assert(DroneAbilities.confirm(p.ability,p.ability.charge.token,now,ctx));assert(#p.ability.swarm.bots==6)
+ clock(1.4);assert(DroneAbilities.confirm(p.ability,p.ability.charge.token,now,ctx));assert(#p.ability.swarm.bots==6)
 end)
 check('rock clicks confirm work queue and cancellation without replacing a busy job',function()
  local pl,p,roles=fixture();local gui=Instance.new('PlayerGui');gui.Parent=pl
@@ -189,5 +196,76 @@ check('rock clicks confirm work queue and cancellation without replacing a busy 
  assert(click(first,true).status=='accepted' and miner.target==first,'repeat command must preserve work')
  assert(click(second,true,'old-run').status=='rejected' and #p.oreQueue==0)
  second.readyAt=now+2;assert(click(second,true).status=='rejected' and #p.oreQueue==0)
+end)
+check('field edge padding silently recalls once and clears orders permanently',function()
+ local pl,p,roles=fixture();local r=rock(500);local d=roles.Striker[1];assert(assignOre(p,d,r))
+ local field=patches[1];local edge=field.part.Size.X*.5
+ pl.Character:PivotTo(field.part.CFrame*CFrame.new(edge+17,3,0));recallFromField(p)
+ assert(d.target==r and p.workField==1 and not d.recallSerial)
+ local previous=pl:GetAttribute('MA_Notice')
+ pl.Character:PivotTo(field.part.CFrame*CFrame.new(edge+19,3,0));recallFromField(p)
+ assert(not d.target and not d.autoField and not d.field and not p.workField and #p.oreQueue==0)
+ assert(d.state=='Follow' and d.recallSerial==1 and d.recallAt==now and pl:GetAttribute('MA_Notice')==previous)
+ assert(d.model:GetAttribute('RecallSerial')==1 and pl:GetAttribute('MA_RecallSerial')==1)
+ recallFromField(p);assert(d.recallSerial==1)
+ pl.Character:PivotTo(CFrame.new(field.center+Vector3.new(0,3,0)));ticks(d,2)
+ assert(not d.target,'returning to the field must not restore old orders')
+end)
+check('Studio max bag and named additions preserve permanent ownership and existing drone state',function()
+ local pl,p,roles=fixture();local fleetBefore=Http:JSONEncode(data(p).fleet)
+ local existing=roles.Striker[1];local r=rock(500);assert(assignOre(p,existing,r))
+ p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==Ca.capacity(data(p)))
+ local units=Pro.cargoUnits(data(p));p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==units)
+ local before=#p.drones;p.tokens=7;commandPlayer(pl,'DevAddDrone',{role='Courier'})
+ assert(#p.drones==before+1 and p.drones[#p.drones].role=='Courier' and existing.target==r)
+ assert(Http:JSONEncode(data(p).fleet)==fleetBefore and #data(p).fleet==1 and Pro.validate(data(p),pl.UserId))
+ p.tokens=7;commandPlayer(pl,'DevAddDrone',{role='Forged'});assert(#p.drones==before+1)
+ local old=RunService.IsStudio;RunService.IsStudio=function() return false end
+ data(p).run.cargo={};p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==0)
+ p.tokens=7;commandPlayer(pl,'DevAddDrone',{role='Medic'});assert(#p.drones==before+1)
+ RunService.IsStudio=old
+end)
+check('cooperative shell break during held contact recovers safely and continues its revealed work',function()
+ local _,p,roles=fixture();local r=rock(80,'Geode');local breaker=roles.Charger[1];local miner=roles.Striker[1]
+ assert(assignOre(p,breaker,r));assert(assignOre(p,miner,r));miner.pos=committedStation(miner,r)
+ breaker.pos=committedStation(breaker,r)+Vector3.new(0,2,0);breaker.velocity=Vector3.zero
+ for _=1,150 do ticks(breaker,C.Tick);if breaker.breaker and breaker.breaker.phase=='Impact' then break end end
+ local job=assert(breaker.breaker);assert(job.phase=='Impact')
+ assert(hitResource(miner,r,1000));assert(r.paid and not r.slots[breaker.id])
+ assert(breaker.breaker==job and job.phase=='Recover' and (breaker.impactSerial or 0)==0)
+ local nextRock=assert(breaker.target);assert(nextRock.kind=='Core' or nextRock.kind=='Shard');assert(nextRock.slots[breaker.id])
+ local hp=nextRock.hp
+ for _=1,300 do ticks(breaker,C.Tick);if breaker.breaker~=job then break end end
+ assert(breaker.breaker~=job and breaker.target==nextRock and nextRock.hp==hp,'recovery damaged or discarded revealed work')
+end)
+check('a shared rock shrinking during the hold moves the weight to its actual surface',function()
+ local _,p,roles=fixture();local r=rock(1000,'Geode');local breaker=roles.Charger[1];local miner=roles.Striker[1]
+ assert(assignOre(p,breaker,r));assert(assignOre(p,miner,r));miner.pos=committedStation(miner,r);breaker.pos=committedStation(breaker,r)+Vector3.new(0,2,0)
+ for _=1,150 do ticks(breaker,C.Tick);if breaker.breaker and breaker.breaker.phase=='Impact' then break end end
+ local job=assert(breaker.breaker);assert(job.phase=='Impact');local before=job.contact.Y
+ assert(hitResource(miner,r,400));assert(r.stage>0 and not r.paid);local hp=r.hp
+ ticks(breaker,C.Tick)
+ local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
+ assert(math.abs(job.contact.Y-top)<1e-7 and math.abs(breaker.pos.Y-top-job.impactClearance)<1e-7 and r.hp==hp)
+ assert(job.contact.Y~=before,'did not observe the changed surface')
+end)
+check('powered phase snapshots precede contact effects and record both real contacts',function()
+ local _,p,roles=fixture();local r=rock(5000);local d=roles.Charger[1];assert(assignOre(p,d,r))
+ d.pos=committedStation(d,r)+Vector3.new(0,2,0);d.velocity=Vector3.zero
+ local events={};local old=RoleEffects.BreakerPhase
+ RoleEffects.BreakerPhase=function(_,_,phase)
+  if phase=='Dive' or phase=='Hold' or phase=='Impact' then
+   local model=d.model
+   assert(model:GetAttribute('SnapshotAt')==now and model:GetAttribute('BreakerPhaseAt')==d.breaker.phaseAt)
+   assert(model:GetAttribute('BreakerDiveDuration')==DroneRoles.BREAKER.diveDuration)
+   assert(model:GetAttribute('State')==d.state and model:GetAttribute('Position')==d.pos)
+   table.insert(events,phase)
+   if phase=='Hold' then assert(model:GetAttribute('BreakerContactSerial')==1 and model:GetAttribute('BreakerContactAt')==now) end
+   if phase=='Impact' then assert(model:GetAttribute('ImpactSerial')==1 and model:GetAttribute('ImpactAt')==now and now-d.contactAt>=1) end
+  end
+ end
+ for _=1,300 do ticks(d,C.Tick);if (d.impactSerial or 0)>0 then break end end
+ RoleEffects.BreakerPhase=old
+ assert(#events==3 and events[1]=='Dive' and events[2]=='Hold' and events[3]=='Impact')
 end)
 print(roleChecks..' actual production server role checks passed using API doubles; engine motion/multiplayer not verified')

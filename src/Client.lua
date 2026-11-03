@@ -14,7 +14,7 @@ local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local pickupView=PickupView.new(world,localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
-local orbitalBurns={};local roleAudio={};local burnShakeAt=0
+local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
@@ -75,9 +75,16 @@ local function roleImpact(source)
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
-  if math.abs(now-at)<.7 then
-   presentation:kick(source.Position,source:GetAttribute('MiningImpact')=='Orbital' and .15 or .14,now)
-   soundscape:play(source:GetAttribute('MiningImpact')=='Orbital' and 'orbital' or 'mining',source.Position)
+  if now>=at and now-at<=.35 and not impactCues[source] then
+   impactCues[source]=true
+   local impact=source:GetAttribute('MiningImpact')
+   if impact=='BreakerContact' then
+    presentation:kick(source.Position,.09,now)
+    soundscape:play('breaker_contact',source.Position)
+   else
+    presentation:kick(source.Position,impact=='Orbital' and .15 or .14,now)
+    soundscape:play(impact=='Orbital' and 'orbital' or impact=='Breaker' and 'breaker_fracture' or 'mining',source.Position)
+   end
   end
  end
 end
@@ -431,8 +438,21 @@ openFleet=function()
  if player:GetAttribute('MA_TestingEnabled')==true then
   local half=(width-12)/2
   local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
-  reroll.Name='RerollTestCrew';rosterY=114
+  reroll.Name='RerollTestCrew'
   local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),'Role crew · 8',function() command:FireServer('RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
+  if player:GetAttribute('MA_DevToolsEnabled')==true then
+  local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
+  fill.Name='DevFillBag'
+  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Scrapper','+ Swarm'}}
+  local columns=width>=560 and 4 or 2;local gap=8;local cell=(width-gap*(columns-1))/columns
+  for index,choice in ipairs(choices) do
+   local b=button(body,UDim2.fromOffset(3+((index-1)%columns)*(cell+gap),157+math.floor((index-1)/columns)*46),UDim2.fromOffset(cell,38),choice[2],function()
+    command:FireServer('DevAddDrone',{role=choice[1]});modal.Visible=false
+   end,colors[choice[1]] or palette.paper)
+   b.Name='DevAdd'..choice[1]
+  end
+  rosterY=157+math.ceil(#choices/columns)*46+10
+  else rosterY=114 end
  end
  local columns=width>=650 and 2 or 1;local gap=14;local rowWidth=(width-gap*(columns-1))/columns
  for index,d in ipairs(crew or {}) do
@@ -835,11 +855,17 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
-  -- Follow the replicated stroke without assigning its analytic position.
-  -- A late/missed phase packet must not teleport an observer to contact.
+  -- A powered fall accelerates all the way into the surface. Evaluate the
+  -- authoritative stroke directly: destination smoothing here brakes before
+  -- contact and puts landing effects ahead of the visible weight.
   local impact=s:GetAttribute('BreakerImpact') or goal
-  local stroke=state=='BreakerDive' and Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,impact,now-(s:GetAttribute('BreakerPhaseAt') or now),.28) or impact
-  d.pos,d.velocity=Feel.inertialApproach(d.pos,stroke,d.velocity,80/60,dt,false,nil,8)
+  if state=='BreakerDive' then
+   d.pos,d.velocity=Feel.powerDive(s:GetAttribute('BreakerDiveStart') or logical,impact,
+    now-(s:GetAttribute('BreakerPhaseAt') or now),s:GetAttribute('BreakerDiveDuration') or .28)
+  else
+   -- The impact plane is a hard stop, followed by the server-owned weight hold.
+   d.pos=impact;d.velocity=Vector3.zero
+  end
  elseif not motionPaused then
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -853,10 +879,22 @@ local function renderDrone(d,dt,now)
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(state=='Mine' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=(d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*(state=='Mine' and .05 or .10)
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(0,0,d.bank))
+ local desiredBank=(state=='Mine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
+ local grounded=state=='BreakerDive' or state=='BreakerImpact'
+ local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*(state=='Mine' and .05 or .10)
+ -- The server issues one silent recall cue. A short lift and settling nod
+ -- communicate the return before the familiar inertial following takes over.
+ -- Reading server time makes every observer see the same hop, and late joins
+ -- never replay an old recall.
+ local recallAt=s:GetAttribute('RecallAt') or -100
+ local recallAge=now-recallAt;local hop,recallPitch=0,0
+ if not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+  local p=recallAge/.72
+  hop=math.sin(math.pi*p)^2*.9
+  recallPitch=math.sin(2*math.pi*p)*math.rad(7)
+ end
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
@@ -1065,14 +1103,14 @@ local function requestPlot(id)
   end
  end end
  if not guarded and player:GetAttribute('AutomationMineEnabled')~=true then
-  notice.Text='Click an ore. Plot Scanner unlocks automatic stone selection.';noticeUntil=os.clock()+4;return
+  return
  end
  if not guarded and not availableAutomaticWorker() then
-  notice.Text='Choose an available miner with Plot Scanner.';noticeUntil=os.clock()+4;return
+  return
  end
  command:FireServer('Patch',id)
 end
-local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
+local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
@@ -1081,7 +1119,7 @@ connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  if not ok or type(state)~='table' then return end
  commandView:reply(state)
  soundscape:play(state.status=='rejected' and 'denied' or 'command')
- notice.Text=state.reason or '';noticeUntil=os.clock()+2.2
+ if state.status=='rejected' then notice.Text=state.reason or '';noticeUntil=os.clock()+2.2 end
 end)
 local function assignField(target)
  if modal.Visible then return end
@@ -1089,7 +1127,10 @@ local function assignField(target)
  while node and node~=workspace do
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
-   commandView:request(resourceId);return
+   local fieldId=node:GetAttribute('FieldId')
+   if player:GetAttribute('AutomationMineEnabled')==true and type(fieldId)=='number' then requestPlot(fieldId)
+   else commandView:request(resourceId) end
+   return
   end
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then openFleet();return end
@@ -1220,31 +1261,6 @@ connect(RunService.Heartbeat,function(dt)
    elseif kind=='Sell' then title='Sell backpack';detail='Sell the ore you carried here' end
   end
   if action then contextAction=function() performStation(station) end;contextTitle.Text=title;contextDetail.Text=detail;contextButton.Text=(actionText or 'Use')..(touch and '' or ' [E]');context.Visible=true end
- elseif not modal.Visible then
-  local hr=ownerRoot();local nearest,best=nil,46;local fields=world:FindFirstChild('Fields')
-  if hr and fields then for _,field in ipairs(fields:GetChildren()) do
-   local floor=field:FindFirstChild('FieldFloor') or field:FindFirstChildWhichIsA('BasePart')
-   if floor then local n=(floor.Position-hr.Position).Magnitude;if n<best then nearest=field;best=n end end
-  end end
-  if nearest then
-   local id=nearest:GetAttribute('FieldId') or nearest:GetAttribute('Tier')
-   if id then
-    local phase=nearest:GetAttribute('Phase') or 'Safe'
-    local guarded=not fieldUnlocked(nearest) and (phase=='Guarded' or phase=='Active')
-    local assigned=false
-    for source in pairs(drones) do
-     local state=source:GetAttribute('State')
-     if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutoFieldId')==id
-      and (state=='Mine' or state=='Warmup' or state=='Travel' or state=='Deliver' or state=='Full' or state=='Attack') then assigned=true;break end
-    end
-    if not assigned and (guarded or availableAutomaticWorker()) then
-     contextAction=function() requestPlot(id) end;contextTitle.Text=nearest:GetAttribute('DisplayName') or nearest.Name
-     local actionText=guarded and 'Fight' or 'Automate'
-     contextDetail.Text=guarded and 'Defeat guards once to unlock' or (number(nearest:GetAttribute('Hardness') or 1)..'× work · crystals replenish')
-     contextButton.Text=actionText..(touch and '' or ' [E]');context.Visible=true
-    end
-   end
-  end
  end
  if l.contextReplacesHUD and context.Visible then hud.Visible=false end
  local hr=ownerRoot();local nearestEnemy,dist=nil,65

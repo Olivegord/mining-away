@@ -72,7 +72,9 @@ check('a save during a powered dive finishes flight without damage or a resume r
  local job=assert(d.breaker);assert(job.phase=='Dive');local hp=r.hp
  p.busy=true;tick(d,60);assert(r.hp==hp and (d.pos-job.impact).Magnitude<1e-7)
  local held=d.pos;p.busy=false;tick(d,1)
- assert((d.pos-held).Magnitude<1e-7 and r.hp<hp and d.impactSerial==1,'resume rewound or duplicated dive')
+ assert((d.pos-held).Magnitude<1e-7 and r.hp==hp and job.phase=='Impact','resume rewound the dive or skipped held contact')
+ tick(d,45);assert((d.pos-held).Magnitude<1e-7 and r.hp==hp,'save resume skipped the remaining weight hold')
+ tick(d,20);assert(r.hp<hp and d.impactSerial==1 and job.phase=='Recover','held contact never produced its one delayed hit')
 end)
 check('layer mechanics make hard-shell breakers and exposed-layer cutters distinct',function()
  local outer=Mining.contactMultiplier('Charger','Geode',8,0,3)
@@ -96,5 +98,27 @@ check('a manually ordered shell continues into its real growing core without gra
  assert(not d.autoField and not d.lingerUntil and core.readyAt>now)
  local hp=core.hp;tick(d,60);assert(core.hp==hp,'mined a growing core')
  tick(d,420);assert(core.hp<hp,'never completed arrival/warmup on the revealed core')
+end)
+check('powered weight accelerates to the contact plane and stops without an arrival brake',function()
+ local start,impact=Vector3.new(2,14,3),Vector3.new(2,2,3);local duration=DroneRoles.BREAKER.diveDuration
+ for _,fps in ipairs({30,60,144}) do
+  local previousDistance=0;local previousPosition=start
+  local n=math.floor(duration*fps)
+  for frame=1,n do
+   local elapsed=frame/fps;local position,velocity=Feel.powerDive(start,impact,elapsed,duration)
+   local distance=(position-previousPosition).Magnitude
+   assert(distance>=previousDistance-1e-8 and position.Y>=impact.Y,'descent eased out before contact')
+   if elapsed<duration then assert(velocity.Y<0,'powered descent lost downward momentum') end
+   previousDistance=distance;previousPosition=position
+  end
+  for _,elapsed in ipairs({duration,duration+1,duration+50}) do
+   local position,velocity=Feel.powerDive(start,impact,elapsed,duration)
+   assert((position-impact).Magnitude==0 and velocity.Magnitude==0,'contact drifted or retained motion')
+  end
+ end
+ local position,velocity=Feel.powerDive(start,impact,-1,duration)
+ assert((position-start).Magnitude==0 and velocity.Magnitude==0)
+ local half,halfVelocity=Feel.powerDive(start,impact,duration*.5,duration)
+ assert(math.abs((half-start).Magnitude/(impact-start).Magnitude-.5^2.6)<1e-9 and halfVelocity.Y<0)
 end)
 print(checks..' production mining-flight checks using API doubles; not engine or fun evidence')

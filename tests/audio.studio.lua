@@ -47,6 +47,17 @@ local ok,err=pcall(function()
   for _,id in ipairs({'9125869504','9125869495','9125869138'}) do game:GetService('ContentProvider'):PreloadAsync({audio.bank[id]});assert(audio.bank[id].IsLoaded) end
   for _=1,10 do audio.cooldowns.rubble=0;audio:play('rubble',pos) end;assert(audio.cueVoices.rubble==4)
  end)
+ check('breaker contact and fracture are distinct bounded spatial voices',function()
+  audio:play('breaker_contact',pos);audio:play('breaker_fracture',pos)
+  assert(audio.cueVoices.breaker_contact==1 and audio.cueVoices.breaker_fracture==1)
+  local contact,fracture
+  for sound in pairs(audio.active) do
+   if sound.Name=='breaker_contact' then contact=sound end
+   if sound.Name=='breaker_fracture' then fracture=sound end
+  end
+  assert(contact and fracture and contact.SoundId~=fracture.SoundId)
+  assert(contact.PlaybackSpeed<fracture.PlaybackSpeed and contact.RollOffMode==Enum.RollOffMode.Linear)
+ end)
  check('mute clears all action voices and prevents new ones',function()
   audio:toggleEffects();assert(audio.loopCount==0 and audio.voices==0)
   audio:setLoop('muted','charge',pos,1,1);audio:play('rubble',pos);assert(audio.voices==0)

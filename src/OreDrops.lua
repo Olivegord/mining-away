@@ -1,6 +1,6 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.38,MAX_NODES=16}
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.60,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38}
 function O.partition(units)
  local out={};local count=math.min(4,units)
  if count<1 then return out end
@@ -9,8 +9,10 @@ function O.partition(units)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- return math.cos(angle)*5,6+index*.7,math.sin(angle)*5
+ return math.cos(angle)*5.6,7.5+index*.65,math.sin(angle)*5.6
 end
+function O.expired(spawnAt,now) return now>=spawnAt+O.LIFETIME end
+function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_SECONDS))/O.FADE_SECONDS,0,1) end
 function O.step(s,target,dt,attract)
  if dt<=0 then return false end
  dt=math.min(dt,.05);s.age+=dt
@@ -20,18 +22,19 @@ function O.step(s,target,dt,attract)
  if pulling then
   -- Accelerate into a critically damped homing path, fast enough to catch a
   -- walking player. No orbiting an indefinitely moving pickup target.
-  local speed=math.min(42,20+distance*2)
+  local speed=math.min(42,18+distance*1.6,math.sqrt(200*distance))
   local k=1-math.exp(-dt*12);local scale=speed/math.max(.001,distance)
   s.vx+=(dx*scale-s.vx)*k;s.vy+=(dy*scale-s.vy)*k;s.vz+=(dz*scale-s.vz)*k
  else
-  local drag=math.exp(-dt*4);s.vx*=drag;s.vz*=drag;s.vy-=24*dt
+  local drag=math.exp(-dt*4);s.vx*=drag;s.vz*=drag;s.vy-=O.GRAVITY*dt
  end
+ s.homing=pulling
  local x,y,z=s.x+s.vx*dt,s.y+s.vy*dt,s.z+s.vz*dt
  local impactSpeed=0
  if y<s.floor then
   -- Return the real downward contact once; resting floor clamps are silent.
-  if s.vy < -1 then impactSpeed=-s.vy end
-  y=s.floor;s.vy=math.abs(s.vy)>.8 and math.abs(s.vy)*.22 or 0
+  if s.vy < -2 then impactSpeed=-s.vy end
+  y=s.floor;s.vy=math.abs(s.vy)>2 and math.abs(s.vy)*.26 or 0
  end
  -- Test the full segment as well as its end, so low-FPS homing cannot skip
  -- through the owner and enter a repeated overshoot loop.

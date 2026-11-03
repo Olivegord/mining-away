@@ -254,9 +254,15 @@ function F.stageDarkness(hp,maxHP,stage,count)
  return math.clamp(progress/.82,0,1)^.8
 end
 function F.powerDive(start,impact,elapsed,duration)
- local p=math.clamp(elapsed/math.max(.01,duration),0,1)
- local q=p^2.6
- return start:Lerp(impact,q),(impact-start)*(2.6*p^1.6/math.max(.01,duration))
+ local delta=impact-start
+ -- A powered weight gains speed all the way down. It has no arrival brake:
+ -- contact stops the stroke, then the separate held phase carries its weight.
+ -- Repeated/late samples stay exactly at contact with no residual velocity.
+ if elapsed<=0 then return start,delta*0 end
+ duration=math.max(.01,duration)
+ if elapsed>=duration then return impact,delta*0 end
+ local p=elapsed/duration
+ return start:Lerp(impact,p^2.6),delta*(2.6*p^1.6/duration)
 end
 function F.stagesCrossed(previous,hp,maxHP)
  local result={}

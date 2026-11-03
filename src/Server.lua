@@ -4,6 +4,7 @@ local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
 local RunService=game:GetService('RunService')
 local Http=game:GetService('HttpService')
+local Debris=game:GetService('Debris')
 local RoleConfig: any,RoleEffects: any,DiscoveryService: any=DroneConfig,DroneRoleEffects,MiningDiscoveries
 local C: any,R: any=Config,Rules
 local Pro: any,Ca: any=Profile,Cards
@@ -78,6 +79,11 @@ end
 local function atHome(p)
  local hr=characterRoot(p);return hr and (hr.Position-home).Magnitude<30
 end
+-- Orders belong to a field footprint with a forgiving walking margin.
+local function nearMiningField(position,field)
+ local localPoint=field.part.CFrame:PointToObjectSpace(position)
+ return math.abs(localPoint.X)<=field.part.Size.X*.5+18 and math.abs(localPoint.Z)<=field.part.Size.Z*.5+18 and math.abs(localPoint.Y)<=45
+end
 local function updateSlots(r)
  local count=0;for _ in pairs(r.slots) do count=count+1 end
  if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
@@ -95,7 +101,11 @@ local function retireTarget(d,keepBreakContact)
  local finished=d.target and d.target.paid and DroneRoles.isWorker(d.role)
  local station=finished and ((d.breaker and d.breaker.station) or d.goal or d.pos)
  local impact=d.breaker
- if impact and impact.phase~='Impact' and impact.phase~='Recover' then impact=nil end
+ if impact and impact.phase=='Impact' then
+  -- A teammate retired the stone during its weight hold. Lift safely without
+  -- applying the delayed hit to a replacement target.
+  impact.phase='Recover';impact.phaseAt=now
+ elseif impact and impact.phase~='Recover' then impact=nil end
  release(d,false,keepBreakContact);d.breaker=impact
  if finished then
   local p=profiles[d.owner];local hasNext=d.autoField~=nil or (p and #(p.oreQueue or {})>0)
@@ -129,6 +139,24 @@ local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?):
   end
  end
  for _,d in ipairs(p.drones) do release(d,false,keepBreakContact);spend(d);d.field=nil;d.autoField=nil;d.state=d.hp>0 and 'Return' or d.state end
+end
+local function recallFromField(p)
+ if not healthy(p) then return end
+ local hr=characterRoot(p);if not hr then return end
+ local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
+ local field=p.workField and patches[p.workField]
+ if not field then
+  for _,d in ipairs(p.drones) do if d.field and patches[d.field] then field=patches[d.field];hasOrders=true;break end end
+ end
+ if not hasOrders or not field or nearMiningField(hr.Position,field) then return end
+ leaveField(p)
+ p.recallSerial=(p.recallSerial or 0)+1
+ p.player:SetAttribute('MA_RecallSerial',p.recallSerial);p.player:SetAttribute('MA_RecallAt',now)
+ for _,d in ipairs(p.drones) do if d.hp>0 then
+  d.state='Follow';d.recallSerial=(d.recallSerial or 0)+1;d.recallAt=now
+  d.model:SetAttribute('RecallSerial',d.recallSerial);d.model:SetAttribute('RecallAt',now)
+ end end
+ p.publishDirty=true
 end
 local colors={Blue=Color3.fromRGB(86,190,255),Red=Color3.fromRGB(255,110,118),Green=Color3.fromRGB(116,230,157)}
 local TEST_ROLES={}
@@ -404,17 +432,19 @@ local function award(d: any,r: any)
   chip.Color=r.field.color
   chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
   chip:SetAttribute('Owner',d.owner);chip:SetAttribute('RunId',profile.run.id);chip:SetAttribute('Units',n);chip:SetAttribute('Mineral',material)
+  chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',ground+.22);chip:SetAttribute('Homing',false)
   chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',Vector3.new(vx,vy,vz));chip:SetAttribute('SnapshotAt',now)
   chip.Parent=pickupFolder
   pickups[pickupSerial]={part=chip,owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,
-   x=position.X,y=position.Y,z=position.Z,vx=vx,vy=vy,vz=vz,age=0,floor=ground+.22}
+   x=position.X,y=position.Y,z=position.Z,vx=vx,vy=vy,vz=vz,age=0,spawnAt=now,floor=ground+.22}
  end
  p.dirty=true;p.publishDirty=true
 end
 local function pickupStep(dt)
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
-  if not p or p.leaving or data(p).run.id~=drop.runId then drop.part:Destroy();pickups[id]=nil
+  if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.spawnAt,now) then
+   drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
   elseif healthy(p) then
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
@@ -437,18 +467,20 @@ local function pickupStep(dt)
      drop.units-=accepted;p.dirty=true;p.publishDirty=true
      p.collectSerial=(p.collectSerial or 0)+1
      local color=drop.part.Color
-     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,at=now,units=accepted,
+     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,x=drop.x,y=drop.y,z=drop.z,
       r=math.floor(color.R*255),g=math.floor(color.G*255),b=math.floor(color.B*255)}))
-     if drop.units==0 then drop.part:Destroy();pickups[id]=nil
+     if drop.units==0 then
+      drop.part:SetAttribute('Units',0);drop.part:SetAttribute('CollectedPosition',target);drop.part:SetAttribute('CollectedAt',now)
+      drop.part.Transparency=1;Debris:AddItem(drop.part,.35);pickups[id]=nil
      else drop.part:SetAttribute('Units',drop.units);drop.clearPath=false;drop.queryAt=0 end
     end
    end
    if pickups[id] then
     local position=Vector3.new(drop.x,drop.y,drop.z)
-    drop.part.Position=position
+    drop.part.Position=position;drop.part.Transparency=OreDrops.fade(drop.spawnAt,now)
     if now>=(drop.snapshotAt or 0) then
      drop.snapshotAt=now+C.Snapshot;drop.part:SetAttribute('Position',position)
-     drop.part:SetAttribute('Velocity',Vector3.new(drop.vx,drop.vy,drop.vz));drop.part:SetAttribute('SnapshotAt',now)
+     drop.part:SetAttribute('Velocity',Vector3.new(drop.vx,drop.vy,drop.vz));drop.part:SetAttribute('Homing',drop.homing==true);drop.part:SetAttribute('SnapshotAt',now)
     end
    end
   end
@@ -496,7 +528,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not abilityOrigin and not DroneRoles.isMiner(d.role) then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
-  if not hr or (hr.Position-r.field.center).Magnitude>RoleConfig.Mining.BackpackRange or not los(abilityOrigin,r.position,r.part,{droneFolder,p.player.Character}) then return false end
+  if not hr or not nearMiningField(hr.Position,r.field) or not los(abilityOrigin,r.position,r.part,{droneFolder,p.player.Character}) then return false end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then return false end end
  elseif secondary then
   local primary=d.target
@@ -567,7 +599,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     -- Breaking a shell commits its existing crew to the actual revealed work.
     -- This is continuation of that ordered geode, not free field automation.
     -- New stones still have their normal growth/arrival/warmup gates.
-    if revealed and not worker.breaker then
+    if revealed then
      for _,nextRock in ipairs(revealed) do
       if not next(nextRock.slots) then
        worker.target=nextRock;worker.targetSlot=1;nextRock.slots[id]=1
@@ -839,7 +871,7 @@ local function roleNodes(p,field)
 end
 local function workingField(p,hr)
  local field=p.workField and patches[p.workField]
- if field and not activeAssault(p) and playerCanMine(p,field) and (hr.Position-field.center).Magnitude<=RoleConfig.Mining.BackpackRange then return field end
+ if field and not activeAssault(p) and playerCanMine(p,field) and nearMiningField(hr.Position,field) then return field end
  return nil
 end
 local function growerDrone(d,p,hr,dt)
@@ -877,11 +909,23 @@ local function growerDrone(d,p,hr,dt)
  end
  d.growRecoveryGoal=goal;d.growPlan=nil;d.growAt=nil;d.nextGrow=now+(ok and (d.stats.growCooldown or DroneRoles.GROWER.cooldown) or 1)
 end
+local function publishBreakerPhase(d,job)
+ -- Publish the full transition before its world contact effects. In particular,
+ -- observers must receive the powered stroke instead of holding an old windup
+ -- until the next 10 Hz snapshot. SnapshotAt is the final coherence marker.
+ local model=d.model
+ model:SetAttribute('Position',d.pos);model:SetAttribute('Goal',d.goal);model:SetAttribute('Velocity',d.velocity or Vector3.zero)
+ model:SetAttribute('BreakerDiveStart',job.diveStart or d.pos);model:SetAttribute('BreakerImpact',job.impact)
+ model:SetAttribute('BreakerPhaseAt',job.phaseAt);model:SetAttribute('BreakerDiveDuration',DroneRoles.BREAKER.diveDuration)
+ model:SetAttribute('BreakerContactSerial',d.contactSerial or 0);model:SetAttribute('BreakerContactAt',d.contactAt or 0)
+ model:SetAttribute('ImpactSerial',d.impactSerial or 0);model:SetAttribute('ImpactAt',d.impactAt or 0)
+ model:SetAttribute('State',d.state);model:SetAttribute('SnapshotAt',now)
+end
 local function breakerDrone(d,p,hr,field,dt)
  d.mining=false
  local job=d.breaker
  -- Recovery survives destruction of this stone, but never a recall/death.
- if job and (job.phase=='Impact' or job.phase=='Recover') then
+ if job and job.phase=='Recover' then
   local phase,event=DroneRoles.stepBreaker(job,now,{valid=true,recovered=(d.pos-job.station).Magnitude<=.7 and (d.velocity or Vector3.zero).Magnitude<=1})
   d.state='BreakerRecover';move(d,job.station,dt)
   if event=='recover' then RoleEffects.BreakerPhase(d.pos,job.contact,'Recover') end
@@ -908,8 +952,21 @@ local function breakerDrone(d,p,hr,field,dt)
   job.windup=math.max(.08,d.stats.warmup)
   job.station=committedStation(d,r)+Vector3.new(0,2,0)
   job.contact=Vector3.new(r.position.X,select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),r.position.Z)
-  job.impact=job.contact+Vector3.new(0,1.4,0)
+  local lowest=0;local pivot=d.model:GetPivot()
+  for _,part in ipairs(d.model:GetDescendants()) do if part:IsA('BasePart') and part.Transparency<1 then
+   local cf=part.CFrame;local half=part.Size*.5
+   for _,x in ipairs({-half.X,half.X}) do for _,y in ipairs({-half.Y,half.Y}) do for _,z in ipairs({-half.Z,half.Z}) do
+    lowest=math.min(lowest,pivot:PointToObjectSpace(cf:PointToWorldSpace(Vector3.new(x,y,z))).Y)
+   end end end
+  end end
+  job.impactClearance=math.max(.45,-lowest+.12)
+  job.impact=job.contact+Vector3.new(0,job.impactClearance,0)
  end
+ -- A teammate may chip the shared crystal while this weight descends or
+ -- rests on it. Follow the real current surface instead of hovering over its
+ -- previous size or letting the body penetrate a newly rotated fragment.
+ job.contact=Vector3.new(r.position.X,select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),r.position.Z)
+ job.impact=job.contact+Vector3.new(0,job.impactClearance,0)
  local phase=job.phase;local pose=DroneRoles.breakerPose(job,now)
  local goal=job.station+Vector3.new(0,pose.lift,0)
  if phase=='Dive' then goal=job.impact elseif phase=='Impact' then goal=job.impact end
@@ -917,17 +974,28 @@ local function breakerDrone(d,p,hr,field,dt)
  if phase=='Dive' and job.diveStart then
   d.goal=job.impact;d.intentGoal=job.impact;d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
   d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
+ elseif phase=='Impact' then
+  d.pos=job.impact;d.goal=job.impact;d.intentGoal=job.impact;d.velocity=Vector3.zero
+  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
  else move(d,goal,dt) end
  local event
- phase,event=DroneRoles.stepBreaker(job,now,{valid=not r.paid and now>=r.readyAt and r.slots[d.id]~=nil,targetId=r.id,arrived=(d.pos-job.station).Magnitude<=.7,impactReached=(d.pos-job.impact).Magnitude<=.65})
+ phase,event=DroneRoles.stepBreaker(job,now,{valid=not r.paid and now>=r.readyAt and r.slots[d.id]~=nil,targetId=r.id,arrived=(d.pos-job.station).Magnitude<=.7,impactReached=now-job.phaseAt>=DroneRoles.BREAKER.diveDuration and (d.pos-job.impact).Magnitude<=.15})
  if phase~='Approach' then d.state='Breaker'..phase end
- if event=='windup' then RoleEffects.BreakerPhase(d.pos,job.contact,'Windup')
- elseif event=='dive' then job.diveStart=d.pos;RoleEffects.BreakerPhase(d.pos,job.contact,'Dive')
+ if event=='windup' then publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Windup')
+ elseif event=='dive' then job.diveStart=d.pos;publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Dive')
+ elseif event=='contact' then
+  d.velocity=Vector3.zero;d.pos=job.impact;d.goal=job.impact;d.intentGoal=job.impact
+  d.contactSerial=(d.contactSerial or 0)+1;d.contactAt=now;publishBreakerPhase(d,job)
+  RoleEffects.BreakerPhase(d.pos,job.contact,'Hold')
  elseif event=='impact' then
   d.velocity=Vector3.zero
-  -- One physically reached impact; no ticking laser or recursive beam effects.
-  if hitResource(d,r,d.stats.miningDPS*2.4,false,nil,d.pos,'Breaker') then
-   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact');d.impactSerial=(d.impactSerial or 0)+1
+  -- Hold the physical weight on the surface before this single delayed fracture.
+  -- The longer weight hold earns a larger hit, retaining its pre-hold work
+  -- rate while the shell/perk multipliers continue to define the specialist.
+  if hitResource(d,r,d.stats.miningDPS*3.2,false,nil,d.pos,'Breaker') then
+   d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
+   d.goal=job.station;d.intentGoal=job.station;publishBreakerPhase(d,job)
+   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact')
   end
   d.breaker=job
  elseif event=='missed' or event=='canceled' then release(d) end
@@ -1026,9 +1094,9 @@ local function droneStep(d: any,dt: number)
   if field.e.phase=='Active' and R.participates(field.e,d,data(p).run.id) then
    attackDrone(d,field,dt)
   elseif playerCanMine(p,field) then
-   if (hr.Position-field.center).Magnitude>RoleConfig.Mining.BackpackRange then
+   if not nearMiningField(hr.Position,field) then
     -- Ore goes into a backpack carried by the owner. Leaving the plot brings
-    -- the swarm along; saved jobs resume when the player returns to work.
+    -- the swarm along. The profile-level leash clears the order before work resumes.
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
     move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
@@ -1060,7 +1128,9 @@ local function snapshotDrone(d)
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=target and math.max(.08,d.stats.warmup) or d.stats.warmup,
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
-  BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,
+  RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
+  BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
+  BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=profile.run.deliveries[d.id] and profile.run.deliveries[d.id].id or '',AutoFieldId=d.autoField or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.converter or scene.packStation).Position,
@@ -1296,7 +1366,7 @@ end
 local function abilityContext(p,fieldId,operator)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)
-  return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and (hr.Position-field.center).Magnitude<=RoleConfig.Mining.BackpackRange
+  return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and nearMiningField(hr.Position,field)
  end
  local active=p.ability and (p.ability.burn or p.ability.charge or p.ability.swarm)
  local actor=operator or (active and active.actorId and drones[active.actorId])
@@ -1365,7 +1435,7 @@ roleAbilityStep=function(d,p,hr,dt)
  else goal=hr.Position+Vector3.new(4,4,-3) end
  move(d,goal,dt)
  -- Hardware performs the normal server gadget, sharing its saved cooldown and
- -- allowing the player to intervene in the green window for precision.
+ -- completing its charge automatically without a timing minigame.
  if not ability.charge and not (kind=='Orbital' and ability.burn) and not (kind=='Scrap' and ability.swarm) and now>=(ability.cooldowns[kind] or 0) and (d.pos-goal).Magnitude<1 then
   local ok=DroneAbilities.begin(ability,kind,now,context)
   if ok then ability.charge.actorId=d.id;ability.charge.automatic=true;p.publishDirty=true end
@@ -1373,14 +1443,10 @@ roleAbilityStep=function(d,p,hr,dt)
 end
 local function miningAbility(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or (payload.kind~='Orbital' and payload.kind~='Scrap') or not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not patches[payload.fieldId] then return end
- if payload.op~='begin' and payload.op~='confirm' then return end
- if payload.token~=nil and (type(payload.token)~='string' or #payload.token>160) then return end
+ if payload.op~='begin' then return end
  p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
  local context=abilityContext(p,payload.fieldId)
- local ok,reason
- if payload.op=='begin' then ok,reason=DroneAbilities.begin(p.ability,payload.kind,now,context)
- elseif p.ability.charge and p.ability.charge.kind==payload.kind and p.ability.charge.fieldId==payload.fieldId then ok,reason=finishAbility(p,payload.token,context)
- else return end
+ local ok,reason=DroneAbilities.begin(p.ability,payload.kind,now,context)
  if ok then data(p).run.abilityCooldowns=Pro.clone(p.ability.cooldowns);p.dirty=true end
  notice(p,reason);p.publishDirty=true
 end
@@ -1404,6 +1470,25 @@ local function commandPlayer(pl: any,action: any,payload: any)
   miningAbility(p,payload)
  elseif action=='BuyUpgrade' then
   buyShopUpgrade(p,pl,payload)
+ elseif action=='DevFillBag' then
+  if not RunService:IsStudio() then return end
+  local field=p.workField and patches[p.workField] or patches[1]
+  local material=field.cfg.Material or field.cfg.Key or 'Quartz'
+  local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p))-Pro.cargoUnits(data(p))),Ca.capacity(data(p)))
+  if added>0 then p.dirty=true;p.publishDirty=true end
+ elseif action=='DevAddDrone' then
+  if not RunService:IsStudio() or type(payload)~='table' or type(payload.role)~='string' then return end
+  local role=RoleConfig.StudioRoles[payload.role]
+  if not role or #p.drones>=24 then return end
+  p.testFleet=p.testFleet or Pro.clone(data(p).fleet)
+  p.testRoll=(p.testRoll or 0)+1
+  local owned={id=string.format('test:%d:add:%d',pl.UserId,p.testRoll),type=payload.role,role=payload.role,name=RoleConfig.Types[payload.role].DisplayName,flightHeight=role.height,base=Pro.clone(role.base)}
+  table.insert(p.testFleet,owned)
+  local d=spawnDrone(p,owned,#p.testFleet);local hr=characterRoot(p)
+  d.pos=Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0)
+  d.goal=d.pos;d.model:PivotTo(CFrame.new(d.pos));snapshotDrone(d)
+  pl:SetAttribute('MA_TestLoadoutLabel',tostring(#p.testFleet)..' preview drones')
+  p.publishDirty=true
  elseif action=='TestLoadout' or action=='RoleLoadout' then
   if not preview or now<(p.nextTestLoadout or 0) then return end
   p.nextTestLoadout=now+RoleConfig.Settings.RandomizeCooldown;pl:SetAttribute('MA_TestReadyAt',p.nextTestLoadout)
@@ -1431,7 +1516,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
-  if (characterRoot(p).Position-field.center).Magnitude>RoleConfig.Mining.BackpackRange then reject('Move closer to the plot to mine',field,d);return end
+  if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the plot to mine',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if not DroneRoles.isWorker(d.role) then reject('Choose the miner or breaker',field,d);return end
   if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
@@ -1462,7 +1547,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    else reply('queued','Already queued',r) end
    return
   end end
-  if (hr.Position-r.field.center).Magnitude>RoleConfig.Mining.BackpackRange then reply('rejected','Move closer to that rock',r);return end
+  if not nearMiningField(hr.Position,r.field) then reply('rejected','Move closer to that rock',r);return end
   if activeAssault(p) or not playerCanMine(p,r.field) then reply('rejected','Clear the guards before mining',r);return end
   if now<r.readyAt then reply('rejected','Rock is still growing',r);return end
   local hasWorker=false;for _,d in ipairs(p.drones) do if d.hp>0 and DroneRoles.isWorker(d.role) then hasWorker=true;break end end
@@ -1487,7 +1572,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local can=playerCanMine(p,field)
   if can and field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if can then
-   if (hr.Position-field.center).Magnitude>RoleConfig.Mining.BackpackRange then commandReply(pl,payload,'rejected','Move closer to the plot to mine',field);return end
+   if not nearMiningField(hr.Position,field) then commandReply(pl,payload,'rejected','Move closer to the plot to mine',field);return end
    if activeAssault(p) then commandReply(pl,payload,'rejected','Recall fighting drones first',field);return end
    local assigned=0
    for _,d in ipairs(p.drones) do
@@ -1600,7 +1685,7 @@ addPlayer=function(pl)
  session.data.run.entitlements={}
  local p={player=pl,session=session,drones={},tokens=7,bucketAt=now,busy=false,dirty=false,leaving=false,publishDirty=true}
  profiles[pl.UserId]=p
- pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_NoRestock',false)
+ pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
  if preview then p.testFleet=roleTestFleet(p) end
  local function character(ch)
@@ -1646,14 +1731,15 @@ RunService.Heartbeat:Connect(function(dt: number)
   elapsed=elapsed-C.Tick;steps=steps+1
   for _,field in ipairs(patches) do encounterStep(field) end
   for _,p in pairs(profiles) do
+   recallFromField(p)
    dispatchOreQueue(p)
    if p.ability and p.busy then DroneAbilities.pause(p.ability,C.Tick)
    elseif p.ability and healthy(p) then
     local work=p.ability.burn or p.ability.swarm or p.ability.charge
-    local swarm=p.ability.swarm;local burn=p.ability.burn
+    local swarm=p.ability.swarm;local burn=p.ability.burn;local charge=p.ability.charge
     DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,work and work.fieldId or 1,work and work.actorId and drones[work.actorId]),
      swarm and abilityContext(p,swarm.fieldId,swarm.actorId and drones[swarm.actorId]))
-    if burn and not p.ability.burn then
+    if (burn and not p.ability.burn) or (charge and not p.ability.charge) then
      data(p).run.abilityCooldowns=Pro.clone(p.ability.cooldowns);p.dirty=true;p.publishDirty=true
     end
    end

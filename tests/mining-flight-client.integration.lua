@@ -5,17 +5,13 @@ local function fixture()
  local view=Instance.new('Model');view.Parent=workspace
  return {source=source,view=view,pos=Vector3.zero,velocity=Vector3.zero,life=1,yaw=0,parts={},beam={}}
 end
-check('missing dive packets do not snap an existing life to impact',function()
+check('a missed dive snapshot enters the authoritative contact hold without braking',function()
  for _,fps in ipairs({30,60,144}) do
-  local d=fixture();d.pos=Vector3.new(0,10,0);d.source:SetAttribute('State','BreakerImpact');d.source:SetAttribute('BreakerImpact',Vector3.zero)
-  local before=d.pos;renderDrone(d,1/fps,1)
-  assert((d.pos-before).Magnitude<.3 and d.pos.Y>9.7,'impact teleported')
-  for n=1,fps*2 do
-   local previous=d.pos;local velocity=d.velocity;renderDrone(d,1/fps,1+n/fps)
-   assert((d.pos-previous).Magnitude<=80/fps+1e-6)
-   assert((d.velocity-velocity).Magnitude<=80*1.6*math.sqrt(8)/fps+1e-6)
-  end
-  assert(d.pos.Magnitude<.02,'impact never reconciled')
+  local d=fixture();d.pos=Vector3.new(0,10,0);d.velocity=Vector3.new(0,-30,0)
+  d.source:SetAttribute('State','BreakerImpact');d.source:SetAttribute('BreakerImpact',Vector3.zero)
+  renderDrone(d,1/fps,1)
+  assert(d.pos.Magnitude==0 and d.velocity.Magnitude==0,'contact must stop at the server plane, without easing out')
+  for n=1,fps do renderDrone(d,1/fps,1+n/fps);assert(d.pos.Magnitude==0 and d.velocity.Magnitude==0) end
  end
 end)
 check('settled station and heading remain stable across stale same-life snapshots',function()

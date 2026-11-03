@@ -266,7 +266,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.evade.Text=touch and 'Evade' or 'Evade [Q]'
  if r.unload then r.unload.Text=touch and 'Sell' or 'Sell [U]' end
  self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
- self.hint.Text=Players.LocalPlayer:GetAttribute('AutomationMineEnabled') and 'Click a plot to assign your fleet' or 'Click an ore to assign a drone'
+ self.hint.Text='Click to send your drones'
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
  -- One small counter row. No permanent objectives, test banner or portraits.

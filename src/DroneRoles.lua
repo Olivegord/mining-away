@@ -1,7 +1,7 @@
 -- Pure capabilities and work phases. Color/ownership never grants an implicit
 -- mining beam: a drone must have the actual mechanical job that performs it.
 local R={}
-R.BREAKER={windup=.8,impactHold=.12,recovery=.65,diveLimit=1.25,diveDuration=.28}
+R.BREAKER={windup=.8,impactHold=1,recovery=.65,diveLimit=1.25,diveDuration=.28}
 R.GROWER={plantSeconds=1.1,cooldown=5}
 local legacy={Blue='Striker',Red='Charger',Green='Medic'}
 local definitions={
@@ -79,9 +79,10 @@ function R.stepBreaker(state,now,context)
  elseif phase=='Windup' and now-state.phaseAt>=breakerWindup(state) then phase,event='Dive','dive'
  elseif phase=='Dive' then
   if context.impactReached==true then
-   phase,event='Impact','impact';state.impactSerial+=1
+   phase,event='Impact','contact'
   elseif now-state.phaseAt>=R.BREAKER.diveLimit then phase,event='Recover','missed' end
- elseif phase=='Impact' and now-state.phaseAt>=R.BREAKER.impactHold then phase,event='Recover','recover'
+ elseif phase=='Impact' and now-state.phaseAt>=R.BREAKER.impactHold then
+  phase,event='Recover','impact';state.impactSerial+=1
  elseif phase=='Recover' and context.recovered~=false and now-state.phaseAt>=R.BREAKER.recovery then phase,event='Complete','complete' end
  if phase~=state.phase then state.phase=phase;state.phaseAt=now end
  return phase,event

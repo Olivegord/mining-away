@@ -8,7 +8,7 @@ local HOT=Color3.fromRGB(255,179,102)
 local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local miningLooks={
- Cutter={color=Color3.fromRGB(94,190,255),core=Color3.fromRGB(223,246,255),width0=1.05,width1=.78},
+ Cutter={color=Color3.fromRGB(255,208,69),core=Color3.fromRGB(255,244,179),width0=1.05,width1=.78},
  Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.85,width1=.72},
  Resonance={color=Color3.fromRGB(104,224,146),core=Color3.fromRGB(221,255,227),width0=.9,width1=.68},
 }
@@ -63,7 +63,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,audio=options.audio,work=WorkEffects.new(options.parent),drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=28,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
+  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -806,7 +806,11 @@ function P:destroyTurret(record)
 end
 function P:kick(position,strength,now)
  local camera=workspace.CurrentCamera;if not camera then return end
- local distance=(camera.CFrame.Position-position).Magnitude
+ local player=game:GetService('Players').LocalPlayer
+ if player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true) then return end
+ local character=player and player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  local amount=strength*math.clamp(1-distance/55,0,1)^2
  if amount<=.001 then return end
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
@@ -819,22 +823,32 @@ function P:cameraOffset(now)
 end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
- if event=='break' then self:kick(resource.view.Position,.045,now) end
+ local breaking=event=='break'
+ if breaking then self:kick(resource.view.Position,.065,now) end
  local view=resource.view;local floor=self:_floor(view.Position,resource.source)
  local contact=resource.lastContact;local point,normal=view.Position+Vector3.new(0,view.Size.Y*.5,0),Vector3.yAxis
  if contact then
   local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
   if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
  end
- self.work:burst(point+normal*.05,normal,resource.baseColor,event=='break' and 18 or 7,now)
- local amount=event=='break' and 0 or 1
+ self.work:burst(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
+ -- Retain the exact authored crystal silhouette in a short, weighted shower.
+ -- Spawning from the fracture surface makes a break read as a release of
+ -- material, rather than the final quarter-sized rock simply disappearing.
+ local amount=breaking and 9 or 3
+ local full=resource.source:GetAttribute('FullSize') or view.Size
+ if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do
-  local angle=i*2.4+now*.1
-  local full=resource.source:GetAttribute('FullSize') or view.Size
-  local scale=(event=='break' and .10 or .045)*full.X/math.max(.01,view.Size.X)
-  self:_fragment(view,view.CFrame,resource.baseColor,0,scale,
-   Vector3.new(math.cos(angle)*(event=='break' and 2 or 1),1+i*.3,math.sin(angle)*1.5),
-   Vector3.new(i,1,-i),floor,now,event=='break' and .65 or .4)
+  local angle=i*2.399963+now*.1
+  local size=(breaking and (.10+(i%3)*.026) or .055)*full.X
+  local scale=math.clamp(size/math.max(.01,view.Size.X),.03,.62)
+  local radius=math.min(full.X*.18,.65)
+  local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
+  local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
+  local speed=breaking and (3.5+i%3*1.4) or (1.8+i*.4)
+  self:_fragment(view,frame,resource.baseColor,0,scale,
+   Vector3.new(math.cos(angle)*speed,breaking and (4.8+i%4*1.1) or 2.4+i*.45,math.sin(angle)*speed),
+   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 1.15 or .75)
  end
 end
 function P:update(_dt,now)

@@ -7,7 +7,11 @@ local sample={alive=true,isMining=true,active=true,paused=false,warmupStart=0,ke
 w:mining(b,sample,Vector3.zero,Vector3.yAxis,1,0,10)
 assert(b.work and b.work.tip.Parent==marker and b.work.impact.Parent==b.work.tip)
 assert(b.work.impact.Enabled and b.work.impact.Rate>0 and b.work.impact.Speed.Min>=6)
-assert(b.work.impact.Orientation==Enum.ParticleOrientation.VelocityParallel)
+-- The owner requested round energy discs, replacing stretched spark streaks.
+assert(b.work.impact.Orientation==Enum.ParticleOrientation.FacingCamera)
+assert(b.work.impact.Texture=='rbxasset://textures/particles/flare_main.dds')
+assert(b.work.impact.LightEmission==1 and b.work.impact.Brightness>=2)
+assert(b.work.impact.Lifetime.Max>=.7 and b.work.impact.Acceleration.Y<0)
 local tip=b.work.tip;sample.paused=true;w:mining(b,sample,nil,nil,0,0,10.1)
 assert(not b.work.impact.Enabled and b.work.impact.cleared>0)
 sample.alive=false;w:mining(b,sample,nil,nil,0,0,10.2)

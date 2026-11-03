@@ -7,6 +7,9 @@ local TweenService = game:GetService("TweenService")
 local Effects = {}
 local MAX_LIVE = 256
 local live = 0
+local ENERGY='rbxasset://textures/particles/flare_main.dds'
+local ORBITAL_HEIGHT=260
+local ORBITAL_COLOR=Color3.new(1,1,1)
 
 local function folder(): Folder
 	local existing = workspace:FindFirstChild("DroneRoleServerEffects")
@@ -108,13 +111,13 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  if planted then value:SetAttribute('AudioCue','plant');value:SetAttribute('AudioAt',workspace:GetServerTimeNow()) end
  value.Position=planted and target or from
  local tip=Instance.new('Attachment');tip.Parent=value
- local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/sparkles_main.dds'
- dust.Rate=0;dust.Color=ColorSequence.new(green,Color3.fromRGB(234,255,201));dust.LightEmission=.7
+ local dust=Instance.new('ParticleEmitter');dust.Texture=ENERGY
+ dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=2;dust.LightInfluence=0
  dust.Lifetime=NumberRange.new(.5,planted and 1.1 or .9);dust.Speed=NumberRange.new(planted and 1 or 3,planted and 4 or 5)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
  dust.Acceleration=Vector3.new(0,planted and 2 or -4,0);dust.Drag=1
  dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.08),NumberSequenceKeypoint.new(1,0)})
+ dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.24,.08),NumberSequenceKeypoint.new(.2,.42,.1),NumberSequenceKeypoint.new(1,0)})
  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(1,1)})
  dust.Parent=tip;dust:Emit(planted and 22 or 14);Debris:AddItem(value,1.3)
  if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,2.1,.45) end
@@ -136,25 +139,24 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
    shock.Transparency=.45;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
    local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
-   local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/smoke_main.dds'
-   dust.Color=ColorSequence.new(Color3.fromRGB(156,145,122));dust.Rate=0;dust.Lifetime=NumberRange.new(.25,.5)
-   dust.Speed=NumberRange.new(5,11);dust.Drag=5;dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(1,1.3)})
-   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(14)
+   local dust=Instance.new('ParticleEmitter');dust.Texture=ENERGY
+   dust.Color=ColorSequence.new(Color3.fromRGB(255,210,108));dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=2.6
+   dust.Rate=0;dust.Lifetime=NumberRange.new(.35,.8)
+   dust.Speed=NumberRange.new(6,16);dust.Drag=2;dust.Acceleration=Vector3.new(0,-24,0)
+   dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
+   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.12),NumberSequenceKeypoint.new(.12,.65,.18),NumberSequenceKeypoint.new(1,0)})
+   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.5,.2),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(32)
    TweenService:Create(shock,TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(.055,8,8),Transparency=1}):Play()
-   Debris:AddItem(shock,.65)
+   Debris:AddItem(shock,.9)
   end
-  -- Debris-like points communicate an impact, rather than a long emitter ray.
-  for index=1,9 do
-   local chip=part();if not chip then break end
-   local angle=index*2.399963
-   chip.Name='BreakerChip';chip.Shape=Enum.PartType.Ball;chip.Material=Enum.Material.Slate
-   chip.Color=Color3.fromRGB(142,131,109);chip.Size=Vector3.one*(.14+(index%3)*.10);chip.Position=target
-   TweenService:Create(chip,TweenInfo.new(.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
-    Position=target+Vector3.new(math.cos(angle)*(2+index*.3),.7+(index%4)*.45,math.sin(angle)*(2+index*.3)),Transparency=1,
-   }):Play()
-   Debris:AddItem(chip,.35)
-  end
+  -- The actual fracture creates authored crystal fragments in Presentation.
+  -- Avoid a second shower of generic weightless balls on the same event.
+ elseif phase=='Hold' then
+  -- This is physical touchdown, distinct from the later damaging fracture.
+  -- A single server receipt drives both the local thud and camera impulse.
+  local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
+  Effects.Pulse(target,Color3.fromRGB(255,220,151),.35,2.5,.12)
+  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2,.7,.9)
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
  end
@@ -194,16 +196,16 @@ local function clearBurn(owner: number)
  end
  local core=old:FindFirstChild('MeltCore')
  if core and core:IsA('BasePart') then
-  for index=0,13 do
+  for index=0,11 do
    local tip=Instance.new('Attachment');tip.Name='CoolingEmbers'
-   tip.Position=Vector3.new(-17+index*34/13,math.noise(index*.81,owner)*.65,math.noise(owner,index*.67)*.65);tip.Parent=core
+   tip.Position=Vector3.new(-ORBITAL_HEIGHT*.5+index*ORBITAL_HEIGHT/11,math.noise(index*.81,owner)*.8,math.noise(owner,index*.67)*.8);tip.Parent=core
    local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
-   embers.Texture='rbxasset://textures/particles/sparkles_main.dds';embers.Rate=0;embers.LightEmission=1
-   embers.Color=ColorSequence.new(Color3.fromRGB(255,225,153),Color3.fromRGB(236,78,40))
-   embers.Lifetime=NumberRange.new(.45,1.1);embers.Speed=NumberRange.new(.8,3.8);embers.Drag=2
+   embers.Texture=ENERGY;embers.Rate=0;embers.LightEmission=1;embers.LightInfluence=0;embers.Brightness=3
+   embers.Color=ColorSequence.new(ORBITAL_COLOR)
+   embers.Lifetime=NumberRange.new(1.5,3.1);embers.Speed=NumberRange.new(2,7);embers.Drag=2.5;embers.WindAffectsDrag=true
    embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-100,100)
-   embers.Acceleration=Vector3.new(0,1.5,0)
-   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.1),NumberSequenceKeypoint.new(.3,.24,.13),NumberSequenceKeypoint.new(1,0)})
+   embers.Acceleration=Vector3.new(math.noise(index,owner)*12,1.5,math.noise(owner,index)*12)
+   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55,.2),NumberSequenceKeypoint.new(.2,1.15,.35),NumberSequenceKeypoint.new(1,0)})
    embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.55,.45),NumberSequenceKeypoint.new(1,1)})
    embers.Parent=tip;embers:Emit(5)
   end
@@ -212,7 +214,7 @@ local function clearBurn(owner: number)
   local size=value.Name=='MeltContact' and Vector3.one*.03 or Vector3.new(value.Size.X,.015,.015)
   TweenService:Create(value,TweenInfo.new(.48,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=size,Transparency=1}):Play()
  end end
- Debris:AddItem(old,1.3)
+ Debris:AddItem(old,3.4)
 end
 local function targetSight(owner: number,target: any)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
@@ -236,20 +238,28 @@ local function sustainedStrike(owner: number,event: any)
   for index,width in ipairs({2.8,.8}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
-   value.Color=index==1 and Color3.fromRGB(252,66,43) or Color3.fromRGB(255,233,176)
-   value.Transparency=index==1 and .65 or .13;value.Size=Vector3.new(34,width,width);value.Parent=group
+   value.Color=ORBITAL_COLOR
+   value.Transparency=index==1 and .8 or .35;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
    value:SetAttribute('BurnTransparency',value.Transparency)
+   if index==2 then
+    local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
+    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=3
+    energy.Rate=28;energy.Lifetime=NumberRange.new(1.5,2.7);energy.Speed=NumberRange.new(2,6);energy.Drag=2.5
+    energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(7,-2,-6);energy.WindAffectsDrag=true
+    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.65,.2),NumberSequenceKeypoint.new(.15,1.2,.4),NumberSequenceKeypoint.new(1,0)})
+    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.5,.25),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
+   end
   end
   local contact=part()
   if contact then
-   contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=Color3.fromRGB(255,183,77)
+   contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
    contact.Transparency=.25;contact.Size=Vector3.one*1.2;contact.Parent=group;contact:SetAttribute('BurnTransparency',.25)
    local tip=Instance.new('Attachment');tip.Parent=contact
-   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
-   sparks.Color=ColorSequence.new(Color3.fromRGB(255,230,144),Color3.fromRGB(240,76,35));sparks.LightEmission=1
-   sparks.Lifetime=NumberRange.new(.2,.45);sparks.Speed=NumberRange.new(10,21);sparks.Drag=2
-   sparks.Acceleration=Vector3.new(0,-32,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(75,75)
-   sparks.Rate=95;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(1,0)})
+   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=ENERGY
+   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3
+   sparks.Lifetime=NumberRange.new(1.1,2.3);sparks.Speed=NumberRange.new(9,18);sparks.Drag=2.2;sparks.WindAffectsDrag=true
+   sparks.Acceleration=Vector3.new(0,-15,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(85,85)
+   sparks.Rate=42;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45,.15),NumberSequenceKeypoint.new(.12,.8,.25),NumberSequenceKeypoint.new(1,0)})
    sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
   end
   group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
@@ -258,9 +268,13 @@ local function sustainedStrike(owner: number,event: any)
  local position=location(event.target)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
  for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,17,0))*CFrame.Angles(0,0,math.pi/2)
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   if not group:GetAttribute('Placed') then value.CFrame=pose
   else TweenService:Create(value,TweenInfo.new(.1,Enum.EasingStyle.Linear),{CFrame=pose}):Play() end
+ end end
+ for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
+  local now=workspace:GetServerTimeNow();local columnEnergy=emitter.Name=='TurbulentColumnEnergy'
+  emitter.Acceleration=Vector3.new(math.noise(owner*.1,now*1.3)*18,columnEnergy and -2 or -15,math.noise(now*1.7,owner*.1)*18)
  end end
  group:SetAttribute('Placed',true)
 end

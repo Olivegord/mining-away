@@ -1,5 +1,5 @@
 -- Compact gadget controls and smooth, all-observer scrap-bot rendering.
--- Buttons send intent only. Targets, timing judgement, damage and rewards are server-owned.
+-- One activation sends intent. The server owns the charge, release, targets, damage and rewards.
 local View={}
 local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
@@ -12,7 +12,7 @@ end
 function View.start(options)
  local player=Players.LocalPlayer
  local U=options.interface;local root=options.parent
- local panel=U.panel(root,UDim2.fromOffset(16,160),UDim2.fromOffset(220,110),U.palette.panel,12)
+ local panel=U.panel(root,UDim2.fromOffset(16,160),UDim2.fromOffset(220,56),U.palette.panel,12)
  panel.Name='MiningGadgets';panel.Visible=false
  local state: any={cooldowns={}};local connections={};local dead=false;local lastSend=0
  local function connect(signal,fn) table.insert(connections,signal:Connect(fn)) end
@@ -35,23 +35,15 @@ function View.start(options)
   if options.hidden() or os.clock()-lastSend<.15 then return end
   local profile=options.profile();if not enabled(profile,kind) or profile.pendingTransaction then return end
   local charge=state.runId==profile.run.id and state.charge or nil
-  if charge and charge.kind~=kind then return end
+  if charge then return end
   local fieldId=nearestField();if not fieldId then return end
   lastSend=os.clock()
-  options.command:FireServer('MiningAbility',{op=charge and 'confirm' or 'begin',kind=kind,fieldId=fieldId,
-   token=charge and charge.token or nil,runId=profile.run.id})
+  options.command:FireServer('MiningAbility',{op='begin',kind=kind,fieldId=fieldId,runId=profile.run.id})
  end
  local orbital=U.button(panel,UDim2.fromOffset(8,7),UDim2.fromOffset(98,42),'Orbital [G]',function() activate('Orbital') end,Color3.fromRGB(208,47,70))
  orbital.Name='OrbitalGadget';orbital.TextSize=16
  local scrap=U.button(panel,UDim2.fromOffset(114,7),UDim2.fromOffset(98,42),'Scrap [B]',function() activate('Scrap') end,Color3.fromRGB(133,53,211))
  scrap.Name='ScrapGadget';scrap.TextSize=16
- local hint=U.text(panel,UDim2.fromOffset(8,53),UDim2.fromOffset(204,32),'',16,U.palette.text,false)
- hint.Name='GadgetTimingHint';hint.TextXAlignment=Enum.TextXAlignment.Center
- local track=U.frame(panel,UDim2.fromOffset(8,90),UDim2.fromOffset(204,12),U.palette.paper)
- track.Name='TimingTrack';track.Visible=false
- local sweet=U.frame(track,UDim2.fromScale(.28,0),UDim2.fromScale(.2,1),Color3.fromRGB(90,164,98))
- sweet.Name='PrecisionWindow'
- local cursor=U.frame(track,UDim2.fromScale(0,0),UDim2.new(0,3,1,0),U.palette.text);cursor.Name='TimingCursor'
  connect(UIS.InputBegan,function(input,processed)
   if processed or UIS:GetFocusedTextBox() then return end
   if input.KeyCode==Enum.KeyCode.G then activate('Orbital') elseif input.KeyCode==Enum.KeyCode.B then activate('Scrap') end
@@ -78,10 +70,10 @@ function View.start(options)
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
   local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
-  sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
+  sparks.Texture='rbxasset://textures/particles/flare_main.dds';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
   sparks.Lifetime=NumberRange.new(.1,.22);sparks.Speed=NumberRange.new(2,4);sparks.Acceleration=Vector3.new(0,-15,0)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
-  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.08),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip
+  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}
  end
  local function scan()
@@ -100,29 +92,17 @@ function View.start(options)
   panel.Position=UDim2.fromOffset(math.min(12,math.max(0,root.AbsoluteSize.X-panelWidth)),short and 64 or 160)
   orbital.Size=UDim2.fromOffset(compact and 78 or 98,42)
   scrap.Position=UDim2.fromOffset(compact and 94 or 114,7);scrap.Size=orbital.Size
-  hint.Size=UDim2.fromOffset(panelWidth-16,32);track.Size=UDim2.fromOffset(panelWidth-16,12)
   local charge=profile and state.runId==profile.run.id and state.charge or nil
-  local details=charge~=nil or (state.burnUntil or 0)>now or (state.swarmUntil or 0)>now
-  panel.Size=UDim2.fromOffset(panelWidth,details and 110 or 56);hint.Visible=details
+  panel.Size=UDim2.fromOffset(panelWidth,56)
   local function paint(button,kind,unlocked,key)
    button.Visible=unlocked
    local remaining=math.max(0,math.ceil(((state.cooldowns or {})[kind] or 0)-now))
    local charging=charge and charge.kind==kind
    local busy=profile and profile.pendingTransaction
-   U.setEnabled(button,unlocked and not busy and (charging or remaining==0) and not (charge and not charging))
-   button.Text=busy and 'Saving…' or charging and 'TAP!' or remaining>0 and (kind..' '..remaining..'s') or (kind..(UIS.TouchEnabled and '' or ' ['..key..']'))
+   U.setEnabled(button,unlocked and not busy and remaining==0 and not charge)
+   button.Text=busy and 'Saving…' or charging and (kind..'…') or remaining>0 and (kind..' '..remaining..'s') or (kind..(UIS.TouchEnabled and '' or ' ['..key..']'))
   end
   paint(orbital,'Orbital',hasOrbital,'G');paint(scrap,'Scrap',hasScrap,'B')
-  track.Visible=charge~=nil
-  if charge then
-   hint.Text=charge.kind=='Orbital' and 'Green: crack a nearby rock' or 'Green: launch 2 extra bots'
-   local span=math.max(.01,charge.expires-charge.started)
-   sweet.Position=UDim2.fromScale((charge.sweetStart-charge.started)/span,0)
-   sweet.Size=UDim2.fromScale((charge.sweetEnd-charge.sweetStart)/span,1)
-   cursor.Position=UDim2.new(math.clamp((now-charge.started)/span,0,1),-1,0,0)
-  elseif (state.burnUntil or 0)>now then hint.Text='Orbital melting · '..math.ceil(state.burnUntil-now)..'s'
-  elseif (state.swarmUntil or 0)>now then hint.Text='Scrap swarm · '..math.ceil(state.swarmUntil-now)..'s'
-  else hint.Text='' end
   if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end
   for source,record in pairs(bots) do
    if not source.Parent or not source.Parent.Parent or now>=(source.Parent:GetAttribute('Expires') or 0) then remove(source,record)

@@ -66,4 +66,23 @@ check('landing receipts describe real contacts and stop advancing at rest',funct
  assert(found);steps(120)
  for id,serial in pairs(serials) do assert(pickups[id].part:GetAttribute('GroundImpactSerial')==serial) end
 end)
+check('full bags cannot stockpile rewards beyond the wall-clock expiry',function()
+ local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ local born=now;local found=false
+ for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then
+  found=true;assert(drop.part:GetAttribute('SpawnAt')==born)
+  assert(drop.part:GetAttribute('FadeAt')==born+OreDrops.LIFETIME-OreDrops.FADE_SECONDS)
+  assert(drop.part:GetAttribute('ExpiresAt')==born+OreDrops.LIFETIME)
+ end end
+ assert(found);now=born+OreDrops.LIFETIME-2;realTime=now;pickupStep(C.Tick)
+ for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then assert(drop.part.Transparency>.5 and drop.part.Transparency<1) end end
+ p.busy=true;now=born+OreDrops.LIFETIME;realTime=now;pickupStep(C.Tick)
+ assert(pendingOre(p)==0 and Pro.cargoUnits(data(p))==Ca.capacity(data(p)))
+end)
+check('partial pickup receipts identify the real fragment and retain expiry of the remainder',function()
+ local pl,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))-1}
+ steps(100);assert(Pro.cargoUnits(data(p))==Ca.capacity(data(p)) and pendingOre(p)==9)
+ local receipt=Http:JSONDecode(pl:GetAttribute('MA_Collect'));assert(receipt.units==1 and receipt.pickupId and receipt.exhausted==false)
+ local drop=assert(pickups[receipt.pickupId]);assert(drop.units>0 and drop.part:GetAttribute('ExpiresAt')==drop.spawnAt+OreDrops.LIFETIME)
+end)
 print(checks..' production pickup server checks with API doubles; not Studio validation')

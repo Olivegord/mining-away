@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 2 latest — physical animation, contacts and complete refinement pass
+
+The owner requests currency drops that cannot be stockpiled: finite server lifetime, visible fade, weighted falls and smooth collection. Rework energy into plain glowing circles with substantially more bloom and distinct gravity, turbulence, scale and persistence by drone role; stronger rock fracture feedback. Orbital must continue above the view and include a monochrome fast downward white/clear transparency pattern. Smasher must strike the actual surface, hold roughly one second, then damage. The owner subsequently identified that its visible descent still eases out: accelerate down into a sharp landing instead, and give both physical landing and delayed fracture their own synchronized shake and sound. Review force, easing, inertia, contact and feedback as a connected animation rather than checking phase presence alone. Actively find comparable inconsistencies without waiting for the owner to list them.
+
+Automation must use the same world interaction: highlight one rock before the upgrade, the field after, with no additional unlock UI. Walking beyond a padded field footprint silently recalls orders, with a little drone hop and following instead of a message. Remove the timing/QTE interface. Add a max-backpack button and named drone additions to development controls, isolated from permanent ownership. Preserve the current game, original assets, compact colorful UI, audio fixes and server authority. See [complete refinement review](review/MINING_REFINEMENTS.md).
+
 ## November 2 latest — audible gameplay effects, music off
 
 The owner cannot hear the added gameplay sounds and asks to disable music for now. Diagnose the running audio path, make drone charge/work and rock-contact sounds audible at ordinary play distances and camera zoom, preserve the sound events and mix limits, and default music to off. Loading assets or passing muted lifecycle checks alone does not establish audible playback. Keep this in the existing game and preserve the unified UI.

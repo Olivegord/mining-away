@@ -35,4 +35,10 @@ check('real falls report contact speed while settled ore is silent',function()
   for _=1,fps do local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false);assert(speed==0) end
  end
 end)
+check('fade is monotonic and expiry never depends on attraction or bag space',function()
+ local born=40;local before=0
+ for age=0,O.LIFETIME do local fade=O.fade(born,born+age);assert(fade>=before and fade>=0 and fade<=1);before=fade end
+ assert(O.fade(born,born+O.LIFETIME-O.FADE_SECONDS)==0 and O.fade(born,born+O.LIFETIME)==1)
+ assert(not O.expired(born,born+O.LIFETIME-.001) and O.expired(born,born+O.LIFETIME))
+end)
 print(checks..' production ore trajectory checks; not engine physics')

@@ -1,5 +1,5 @@
--- One rock click sends an available worker; busy workers finish their existing
--- jobs. Blue previews, amber queues and green work reflect server state.
+-- The same world gesture grows from one rock to an entire field as automation
+-- is earned. Color and outlines carry feedback without floating instructions.
 local Players=game:GetService('Players')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
@@ -10,14 +10,7 @@ local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
 function V.new(ctx)
  local self=setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
- local gui=Instance.new('BillboardGui');gui.Name='RockCommandHint';gui.Size=UDim2.fromOffset(240,32)
- gui.StudsOffsetWorldSpace=Vector3.new(0,1.1,0);gui.ExtentsOffsetWorldSpace=Vector3.new(0,.5,0)
- gui.AlwaysOnTop=false;gui.MaxDistance=100;gui.Enabled=false;gui.Parent=ctx.parent
- local label=Instance.new('TextLabel');label.Size=UDim2.fromScale(1,1);label.BackgroundColor3=Color3.fromRGB(39,44,47)
- label.BackgroundTransparency=.12;label.TextColor3=BLUE;label.TextSize=16;label.Font=Enum.Font.SourceSansBold
- label.TextStrokeTransparency=1;label.Parent=gui
- local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,3);corner.Parent=label
- self.hint=gui;self.label=label;return self
+ self.fields={};return self
 end
 function V:request(id)
  local profile=self.ctx.profile();if not profile or not profile.run then return end
@@ -53,7 +46,8 @@ function V:update(dt,now)
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
   end
  end
- local hover=nil;local camera=workspace.CurrentCamera
+ local automatic=player:GetAttribute('AutomationMineEnabled')==true
+ local hover,hoverField=nil,nil;local camera=workspace.CurrentCamera
  if visible and camera and not UIS:GetFocusedTextBox() then
   local pointer=UIS:GetMouseLocation()
   local ray
@@ -63,10 +57,39 @@ function V:update(dt,now)
   if ray then
    local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={ctx.parent,player.Character}
    local hit=workspace:Raycast(ray.Origin,ray.Direction*240,params)
-   if hit then hover=hit.Instance:GetAttribute('ResourceId') end
+   if hit then
+    local node=hit.Instance
+    while node and node~=workspace do
+     hover=hover or node:GetAttribute('ResourceId')
+     hoverField=hoverField or node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
+     node=node.Parent
+    end
+   end
   end
  end
- self.hint.Enabled=false
+ local fields=ctx.world and ctx.world:FindFirstChild('Fields')
+ local assigned={}
+ if automatic then
+  for source in pairs(ctx.drones) do
+   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
+    local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
+   end
+  end
+ end
+ if fields then for _,field in ipairs(fields:GetChildren()) do
+  local id=field:GetAttribute('FieldId') or field:GetAttribute('Tier')
+  local floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor')
+  if floor and floor:IsA('BasePart') then
+   local h=self.fields[field]
+   if not h then
+    h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
+   end
+   h.Enabled=visible and automatic and (hoverField==id or assigned[id]==true)
+   local color=assigned[id] and GREEN or BLUE
+   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hoverField==id and .91 or .97;h.OutlineTransparency=hoverField==id and .02 or .38
+  end
+ end end
+ for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
  if hover and records[hover] then table.insert(marked,hover) end
  for id in pairs(self.queued) do if id~=hover then table.insert(marked,id) end end
@@ -81,7 +104,7 @@ function V:update(dt,now)
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
-  if visible and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
+  if visible and not automatic and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
    used+=1
    local h=self.pool[used]
    if not h then
@@ -94,21 +117,13 @@ function V:update(dt,now)
    if pulse>0 then color=flash.color end
    h.Adornee=r.view;h.Enabled=true;h.FillColor=color;h.OutlineColor=color
    h.FillTransparency=(id==hover and .86 or .95)-pulse*.2;h.OutlineTransparency=id==hover and .05 or .3
-   if id==hover then
-    self.hint.Adornee=r.view;self.hint.Enabled=true;self.label.TextColor3=color
-    local click=UIS.GamepadEnabled and UIS:GetLastInputType()==Enum.UserInputType.Gamepad1 and 'R1' or 'Click'
-    self.label.Text=working[id] and 'Mining · worker on the way / working'
-     or self.queued[id] and ('Queued #'..self.queued[id]..' · '..click..' to cancel')
-     or self.pending[id] and 'Sending order…'
-     or growing and 'Growing…'
-     or busy and 'Another crew is mining'
-     or (click..' · send a worker')
-   end
+
   end
  end
  for index=used+1,#self.pool do self.pool[index].Enabled=false end
 end
 function V:destroy()
- self.hint:Destroy();if self.worker then self.worker:Destroy() end;for _,h in ipairs(self.pool) do h:Destroy() end
+ if self.worker then self.worker:Destroy() end;for _,h in ipairs(self.pool) do h:Destroy() end
+ for _,h in pairs(self.fields) do h:Destroy() end
 end
 return V

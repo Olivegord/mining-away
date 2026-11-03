@@ -2,6 +2,7 @@
 -- or client-selected targets are trusted here. Context owns the normal hit path.
 local A={}
 A.KINDS={Orbital={cooldown=45,burnSeconds=4},Scrap={cooldown=35}}
+A.CHARGE_SECONDS=1.4
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 local function point(p)
  return {x=p.x or p.X or 0,y=p.y or p.Y or 0,z=p.z or p.Z or 0}
@@ -38,7 +39,7 @@ function A.pause(state,dt)
  if not finite(dt) or dt<=0 then return end
  local charge=state.charge
  if charge then
-  for _,key in ipairs({'started','sweetStart','sweetEnd','expires'}) do charge[key]+=dt end
+  for _,key in ipairs({'started','readyAt','expires'}) do charge[key]+=dt end
  end
  if state.burn then state.burn.started+=dt;state.burn.nextPose=0 end
  if state.swarm then state.swarm.started+=dt;state.swarm.expires+=dt;state.swarm.nextPose=0 end
@@ -56,22 +57,23 @@ function A.begin(state,kind,now,ctx)
  if #list==0 then return false,'No grown crystals are ready' end
  state.sequence+=1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=list[1].id,target=point(list[1]),
-  token=ctx.runId..':gadget:'..state.sequence,started=now,sweetStart=now+.7,sweetEnd=now+1.2,expires=now+2.5}
+  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+A.CHARGE_SECONDS,expires=now+2.5}
  event(ctx,'charge',{ability=kind,target=list[1],expires=now+2.5})
- return true,'Tap in the marked window for a precision effect'
+ return true,'Gadget charging'
 end
 function A.confirm(state,token,now,ctx)
  local charge=state.charge
  if state.runId~=ctx.runId or not charge or token~=charge.token or not finite(now) then return false,'Charge changed; try again' end
  if now>charge.expires then state.charge=nil;event(ctx,'clearCharge');return false,'Charge expired; no cooldown spent' end
- if now<charge.started+.08 then return false,'Let the gadget charge briefly' end
+ if now<charge.readyAt then return false,'Gadget charging' end
  if not ctx.unlocked(charge.kind) or not ctx.valid(charge.fieldId) then
   state.charge=nil;event(ctx,'clearCharge');return false,'Gadget canceled; return to the plot'
  end
  local list=targets(ctx,charge.fieldId);local target
  for _,r in ipairs(list) do if r.id==charge.targetId then target=r;break end end
  if not target then state.charge=nil;event(ctx,'clearCharge');return false,'That crystal was mined; no cooldown spent' end
- local precise=now>=charge.sweetStart and now<=charge.sweetEnd
+ -- Effects follow equipment perks; player reaction timing never changes mining.
+ local precise=charge.kind=='Orbital' and (ctx.perks or {}).orbitalRelay==true
  state.charge=nil
  local perks=ctx.perks or {}
  local cooldown=A.KINDS[charge.kind].cooldown
@@ -85,20 +87,20 @@ function A.confirm(state,token,now,ctx)
 
  else
   local origin=point(ctx.origin);local bots={}
-  for i=1,math.min(6,(precise and 6 or 4)+math.clamp(perks.scrapBots or 0,0,2)) do
+  for i=1,math.min(6,4+math.clamp(perks.scrapBots or 0,0,2)) do
    local angle=i*2.399963
    table.insert(bots,{id=i,x=origin.x+math.cos(angle)*1.1,y=origin.y+.5,z=origin.z+math.sin(angle)*1.1,
     targetId=nil,charge=0,pulse=0,active=false})
   end
-  state.swarm={fieldId=charge.fieldId,started=now,expires=now+10,bots=bots,nextPose=0}
+  state.swarm={fieldId=charge.fieldId,actorId=charge.actorId,started=now,expires=now+10,bots=bots,nextPose=0}
   event(ctx,'scrapStart',{expires=now+10,count=#bots,precise=precise})
  end
- return true,precise and 'Precision! Gadget deployed' or 'Gadget deployed'
+ return true,'Gadget deployed'
 end
 function A.step(state,now,dt,ctx,swarmContext)
  if not finite(now) or not finite(dt) or dt<=0 then return end
  if state.runId~=ctx.runId then A.cancel(state,ctx);state.runId=ctx.runId;state.cooldowns={};return end
- if state.charge and now>state.charge.expires then state.charge=nil;event(ctx,'clearCharge') end
+ if state.charge and now>=state.charge.readyAt then A.confirm(state,state.charge.token,now,ctx) end
  local burn=state.burn
  if burn then
   local target
@@ -191,7 +193,7 @@ end
 function A.view(state,_now)
  local view={runId=state.runId,cooldowns={Orbital=state.cooldowns.Orbital or 0,Scrap=state.cooldowns.Scrap or 0},swarmUntil=state.swarm and state.swarm.expires or 0,burnUntil=state.burn and (_now+state.burn.remaining) or 0}
  if state.charge then
-  local c=state.charge;view.charge={kind=c.kind,token=c.token,started=c.started,sweetStart=c.sweetStart,sweetEnd=c.sweetEnd,expires=c.expires}
+  local c=state.charge;view.charge={kind=c.kind,started=c.started,readyAt=c.readyAt}
  end
  return view
 end
