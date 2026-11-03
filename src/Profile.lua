@@ -1,7 +1,11 @@
 local Shops=require('./Shops')
+local DroneCatalog=require('./DroneCatalog')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=6,CONTENT=1}
+local P={SCHEMA=7,CONTENT=1}
 local types={'Blue','Red','Green'}
+local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
+for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
@@ -16,8 +20,11 @@ local function clone(v)
 end
 P.clone=clone
 local function run(uid,index)
- local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={}}
+ local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
  Shops.fresh(state);return state
+end
+local function logisticsOwnership()
+ return {carriers={},nextCarrier=1,backpack=false,autoLaunch=false,launches=0}
 end
 local function cargoId(p,id)
  if type(id)~='string' or #id>160 then return false end
@@ -39,35 +46,82 @@ local function validBag(bag)
  end
  return true
 end
-local function drone(uid,serial,kind,seed)
+local function denseArray(value,limit)
+ if type(value)~='table' or (limit and #value>limit) then return false end
+ local count=0
+ for key in pairs(value) do
+  if not integer(key) or key<1 or key>#value then return false end
+  count=count+1
+ end
+ return count==#value
+end
+local function mineralBag(bag)
+ if not validBag(bag) then return false end
+ for material in pairs(bag) do if not Shops.COLORS[material] then return false end end
+ return true
+end
+local function validateLogistics(p,ids)
+ local ownership=p.logistics
+ if type(ownership)~='table' or not denseArray(ownership.carriers,3) or not integer(ownership.nextCarrier) or ownership.nextCarrier<1 or not integer(ownership.launches)
+  or type(ownership.backpack)~='boolean' or type(ownership.autoLaunch)~='boolean' then return false,'Invalid permanent logistics' end
+ local carrierIds,loaded={},{}
+ local prefix=tostring(p.userId)..':carrier:'
+ for _,carrier in ipairs(ownership.carriers) do
+  if type(carrier)~='table' or type(carrier.id)~='string' or #carrier.id>128 or carrierIds[carrier.id] or not denseArray(carrier.droneIds,4) then return false,'Invalid carrier ownership' end
+  if string.sub(carrier.id,1,#prefix)~=prefix then return false,'Foreign carrier identity' end
+  local suffix=string.sub(carrier.id,#prefix+1)
+  local serial=tonumber(suffix)
+  if not string.match(suffix,'^%d+$') or not integer(serial) or serial<1 or tostring(serial)~=suffix or serial>=ownership.nextCarrier then return false,'Invalid carrier serial' end
+  carrierIds[carrier.id]=true
+  for _,id in ipairs(carrier.droneIds) do
+   if type(id)~='string' or not ids[id] or loaded[id] then return false,'Invalid carrier loadout' end
+   loaded[id]=true
+  end
+ end
+ local state=p.run.logistics
+ if type(state)~='table' or not finite(state.launchRemaining) or state.launchRemaining<0 or state.launchRemaining>6 then return false,'Invalid storage launch' end
+ for _,key in ipairs({'storage','launchCargo','backpackCargo','pendingCargo'}) do if not mineralBag(state[key]) then return false,'Invalid logistics cargo '..key end end
+ if bagUnits(state.launchCargo)==0 and state.launchRemaining~=0 then return false,'Empty capsule has a launch timer' end
+ return true
+end
+local function drone(uid,serial,kind,seed,earnedSerial)
+ local progression=earnedSerial or serial
  local step=(20+((seed+serial*17)%31))/100
  local base=clone(P.BASE);local scale=P.TYPE_SCALES[kind]
  base.maxStep60=step*scale.speed;base.miningDPS=base.miningDPS*scale.mining;base.combatDPS=base.combatDPS*scale.combat
- local role=kind=='Green' and 'Medic' or (kind=='Red' and 'Charger' or (math.floor((serial-1)/3)%2==1 and 'Courier' or 'Striker'))
- if serial>=4 then role=({'Orbiter','Scrapper','Courier','Striker','Charger','Medic','Dart'})[(serial-4)%7+1] end
- return {id=tostring(uid)..':drone:'..serial,name=(serial>=4 and role or kind)..' '..serial,type=kind,role=role,base=base}
+ local role=kind=='Green' and 'Medic' or (kind=='Red' and 'Charger' or (math.floor((progression-1)/3)%2==1 and 'Courier' or 'Striker'))
+ if progression>=4 then role=({'Orbiter','Scrapper','Courier','Striker','Charger','Medic','Dart'})[(progression-4)%7+1] end
+ return {id=tostring(uid)..':drone:'..serial,name=(progression>=4 and role or kind)..' '..serial,type=kind,role=role,base=base}
+end
+local function specialDrone(uid,serial,kind,seed)
+ local base=clone(P.BASE)
+ base.maxStep60=(30+((seed+serial*17)%16))/100
+ base.combatDPS=kind=='Singularity' and 20 or 12
+ base.maxHealth=kind=='Halver' and 110 or (kind=='Singularity' and 100 or 80)
+ return {id=tostring(uid)..':drone:'..serial,name=DroneCatalog.Types[kind].Name..' '..serial,type=kind,role=kind,base=base,flightHeight=3.4}
 end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,nextDroneSerial=2,seed=seed,fleet={drone(uid,1,'Blue',seed)},run=run(uid,1),receipts={},settings={},clearedFields={}}
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,nextDroneSerial=2,seed=seed,fleet={drone(uid,1,'Blue',seed)},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
- if not integer(p.prestiges) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
- if type(p.fleet)~='table' or #p.fleet~=p.prestiges+1 or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
+ if not integer(p.prestiges) or not integer(p.purchasedDrones) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
+ if not denseArray(p.fleet) or #p.fleet~=p.prestiges+1+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
  for serial,d in ipairs(p.fleet) do
-  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or not table.find(types,d.type) or type(d.base)~='table' then return false,'Invalid permanent drone' end
+  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=true
-  if d.role~='Striker' and d.role~='Charger' and d.role~='Medic' and d.role~='Courier' and d.role~='Orbiter' and d.role~='Scrapper' and d.role~='Dart' then return false,'Invalid permanent role' end
+  if not roles[d.role] or (specialTypes[d.type] and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end
  for key,value in pairs(p.clearedFields) do if not guardedFields[key] or value~=true then return false,'Invalid permanent plot unlock' end end
  local r=p.run
  if type(r)~='table' or not integer(r.index) or r.index~=p.prestiges+1 or r.id~=tostring(uid)..':run:'..r.index then return false,'Invalid current run' end
+ local logisticsOK,logisticsError=validateLogistics(p,ids);if not logisticsOK then return false,logisticsError end
  if type(r.abilityCooldowns)~='table' then return false,'Missing gadget cooldowns' end
  for key,value in pairs(r.abilityCooldowns) do if (key~='Orbital' and key~='Scrap') or not finite(value) or value<0 or value>=1e14 then return false,'Invalid gadget cooldown' end end
  local shopOK,shopError=Shops.validate(r);if not shopOK then return false,shopError end
@@ -84,6 +138,7 @@ function P.validate(p,uid)
   if not cargoId(p,id) or type(manifest)~='table' or manifest.droneId~=id or manifest.runId~=r.id or type(manifest.id)~='string' or #manifest.id<1 or #manifest.id>128 or manifests[manifest.id] or not validBag(manifest.cargo) or bagUnits(manifest.cargo)<=0 or bagUnits(manifest.cargo)>32 then return false,'Invalid delivery manifest' end
   manifests[manifest.id]=true;cargoTotal=cargoTotal+bagUnits(manifest.cargo)
  end
+ for _,key in ipairs({'storage','launchCargo','backpackCargo','pendingCargo'}) do cargoTotal=cargoTotal+bagUnits(r.logistics[key]) end
  if not integer(cargoTotal) then return false,'Cargo total limit exceeded' end
  for field,n in pairs(r.wins) do if type(field)~='string' or not integer(n) then return false,'Invalid run wins' end end
  for material,n in pairs(r.yieldRemainders) do if type(material)~='string' or not finite(n) or n<0 or n>=1 then return false,'Invalid yield remainder' end end
@@ -231,6 +286,13 @@ function P.migrate(raw,uid,seed)
   end
   p.schemaVersion=6
  end
+ if p.schemaVersion==6 then
+  if type(p.run)~='table' then return nil,'Invalid logistics migration' end
+  if p.purchasedDrones==nil then p.purchasedDrones=0 end
+  if p.logistics==nil then p.logistics=logisticsOwnership() end
+  if p.run.logistics==nil then p.run.logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}} end
+  p.schemaVersion=7
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  return p
 end
@@ -244,6 +306,28 @@ function P.record(p,operation,tx,result)
  table.insert(p.receipts,{operation=operation,id=tx,runId=p.run.id,result=clone(result)})
  while #p.receipts>64 do table.remove(p.receipts,1) end
  return true
+end
+function P.buyDrone(p,kind,tx,expectedRun,context)
+ if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
+ local replay=P.receipt(p,'BuyDrone',tx)
+ if replay then
+  if replay.droneType~=kind or replay.runId~=expectedRun then return false,'Transaction ID already used' end
+  return true,replay
+ end
+ if expectedRun~=p.run.id then return false,'Stale run' end
+ if type(kind)~='string' or not specialTypes[kind] then return false,'Unknown special drone' end
+ context=context or {}
+ if not context.atDepot or context.activeEncounter then return false,'Visit the depot outside combat' end
+ local definition=DroneCatalog.Types[kind]
+ if not definition or not integer(definition.Price) or definition.Price<1 then return false,'Drone is unavailable' end
+ if p.run.wallet.Quartz<definition.Price then return false,'Need '..definition.Price..' Quartz' end
+ if not integer(p.nextDroneSerial+1) or not integer(p.purchasedDrones+1) then return false,'Permanent serial limit exceeded' end
+ local serial=p.nextDroneSerial
+ local awarded=specialDrone(p.userId,serial,kind,p.seed)
+ p.run.wallet.Quartz=p.run.wallet.Quartz-definition.Price;p.run.credits=p.run.wallet.Quartz
+ table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.purchasedDrones=p.purchasedDrones+1
+ local result={droneId=awarded.id,droneType=kind,role=kind,price=definition.Price,currency='Quartz',fleetCount=#p.fleet,runId=p.run.id}
+ P.record(p,'BuyDrone',tx,result);return true,result
 end
 function P.cargoUnits(p)
  return bagUnits(p.run.cargo)
@@ -352,8 +436,8 @@ function P.nextType(p) return ({'Red','Green','Blue'})[(p.prestiges%3)+1] end
 function P.prestigePreview(p)
  local m=P.milestone(p);local wins=p.clearedFields[m.field] and 1 or 0
  local eligible=p.run.saleEarnings>=m.earnings and wins>=m.wins and p.run.pendingOffer==nil
- local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Earn more cumulative sale credits' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
- return {eligible=eligible,reason=reason,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed).role,cards=#p.run.cards,runId=p.run.id}
+ local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Earn more cumulative launch credits' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
+ return {eligible=eligible,reason=reason,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed,p.prestiges+2).role,cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -364,7 +448,7 @@ function P.prestige(p,tx,expectedRun,context)
  if not context.atDepot or context.activeEncounter then return false,'Recall your fighting drones and return to the depot' end
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
- local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=drone(p.userId,serial,P.nextType(p),p.seed)
+ local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=drone(p.userId,serial,P.nextType(p),p.seed,p.prestiges+2)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)
  local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,fleetCount=#p.fleet,prestiges=p.prestiges}
  P.record(p,'Prestige',tx,result);return true,result
