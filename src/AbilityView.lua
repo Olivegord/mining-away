@@ -70,7 +70,7 @@ function View.start(options)
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
   local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
-  sparks.Texture='rbxasset://textures/particles/flare_main.dds';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
+  sparks.Texture='rbxasset://textures/ui/VR/circleWhite.png';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
   sparks.Lifetime=NumberRange.new(.1,.22);sparks.Speed=NumberRange.new(2,4);sparks.Acceleration=Vector3.new(0,-15,0)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
   sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip

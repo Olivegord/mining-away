@@ -7,7 +7,7 @@ local TweenService = game:GetService("TweenService")
 local Effects = {}
 local MAX_LIVE = 256
 local live = 0
-local ENERGY='rbxasset://textures/particles/flare_main.dds'
+local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
 local ORBITAL_HEIGHT=260
 local ORBITAL_COLOR=Color3.new(1,1,1)
 
@@ -117,7 +117,7 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
  dust.Acceleration=Vector3.new(0,planted and 2 or -4,0);dust.Drag=1
  dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.24,.08),NumberSequenceKeypoint.new(.2,.42,.1),NumberSequenceKeypoint.new(1,0)})
+ dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45,.08),NumberSequenceKeypoint.new(.2,.7,.1),NumberSequenceKeypoint.new(1,0)})
  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(1,1)})
  dust.Parent=tip;dust:Emit(planted and 22 or 14);Debris:AddItem(value,1.3)
  if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,2.1,.45) end
@@ -144,7 +144,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
    dust.Rate=0;dust.Lifetime=NumberRange.new(.35,.8)
    dust.Speed=NumberRange.new(6,16);dust.Drag=2;dust.Acceleration=Vector3.new(0,-24,0)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.12),NumberSequenceKeypoint.new(.12,.65,.18),NumberSequenceKeypoint.new(1,0)})
+   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.7,.1),NumberSequenceKeypoint.new(.12,1.05,.15),NumberSequenceKeypoint.new(1,0)})
    dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.5,.2),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(32)
    TweenService:Create(shock,TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(.055,8,8),Transparency=1}):Play()
    Debris:AddItem(shock,.9)

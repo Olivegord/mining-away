@@ -6,7 +6,7 @@ local Debris=game:GetService('Debris')
 local V={};V.__index=V
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
- p.Texture='rbxasset://textures/particles/flare_main.dds';p.Color=ColorSequence.new(color)
+ p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
  p.LightEmission=1;p.LightInfluence=0;p.Rate=1.5;p.Lifetime=NumberRange.new(.3,.55);p.Speed=NumberRange.new(.2,.7);p.Drag=3
  p.SpreadAngle=Vector2.new(180,180)
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.08),NumberSequenceKeypoint.new(.3,.45,.1),NumberSequenceKeypoint.new(1,0)})

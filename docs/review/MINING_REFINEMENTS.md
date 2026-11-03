@@ -1,5 +1,7 @@
 # Mining, energy and physical animation refinements
 
+**Particle visibility correction:** the owner subsequently reported invisible particles. Native loading exposed a nonexistent sprite path in this revision. The later [visibility correction](PARTICLE_VISIBILITY.md) replaces that path and inherited slow settings; the particle-property checks below did not establish that the original texture loaded or rendered.
+
 November 2, 2026. Existing **Drone Blower revolution**, place **136098934779395**, branch `codex/restore-feel-prestige`. The source revision and primary/native place checksums are stamped in `build/revision.json` after the clean commit. Roblox publication and a main merge were not performed.
 
 ## Behavior

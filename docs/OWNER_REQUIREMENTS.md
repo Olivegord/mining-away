@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — particles must actually load and show bloom
+
+The owner reports that the requested blooming particles are not visible. Diagnose actual runtime asset fetch, emitter settings and ordinary-distance rendering; fixing property values or passing API doubles does not establish visibility. The previous energy texture returned AssetFetchStatus.Failure in Studio. Replace it with a verified plain circle, remove inherited slow emitter settings, and preserve the existing game and other integrated refinements. See [particle visibility diagnosis and validation limits](review/PARTICLE_VISIBILITY.md).
+
 ## November 2 latest — physical animation, contacts and complete refinement pass
 
 The owner requests currency drops that cannot be stockpiled: finite server lifetime, visible fade, weighted falls and smooth collection. Rework energy into plain glowing circles with substantially more bloom and distinct gravity, turbulence, scale and persistence by drone role; stronger rock fracture feedback. Orbital must continue above the view and include a monochrome fast downward white/clear transparency pattern. Smasher must strike the actual surface, hold roughly one second, then damage. The owner subsequently identified that its visible descent still eases out: accelerate down into a sharp landing instead, and give both physical landing and delayed fracture their own synchronized shake and sound. Review force, easing, inertia, contact and feedback as a connected animation rather than checking phase presence alone. Actively find comparable inconsistencies without waiting for the owner to list them.

@@ -4,7 +4,7 @@ local W={};W.__index=W
 local Players=game:GetService('Players')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
-local ENERGY='rbxasset://textures/particles/flare_main.dds'
+local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
 local YELLOW=Color3.fromRGB(255,208,69)
 local function part(parent,name)
  local p=Instance.new('Part');p.Name=name;p.Size=Vector3.one*.05;p.Transparency=1
@@ -21,7 +21,10 @@ local function facing(position,direction)
 end
 local function cameraNear(position,radius)
  local camera=workspace.CurrentCamera
- return camera and (camera.CFrame.Position-position).Magnitude<radius
+ if camera and (camera.CFrame.Position-position).Magnitude<radius then return true end
+ local character=Players.LocalPlayer and Players.LocalPlayer.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ return root and (root.Position-position).Magnitude<radius or false
 end
 local function cameraAbove(position,radius)
  local camera=workspace.CurrentCamera
@@ -30,19 +33,19 @@ local function cameraAbove(position,radius)
  return delta.X*delta.X+delta.Z*delta.Z<radius*radius
 end
 local function particle(parent,name,color)
- local fx=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
- local source=fx and fx:FindFirstChild('MiningParticles')
- source=source and source:FindFirstChild(name=='OriginGlow' and 'Mainglow' or 'Largeparticles')
- local p=source and source:IsA('ParticleEmitter') and source:Clone() or Instance.new('ParticleEmitter')
+ -- Energy uses a fresh emitter: the preserved Largeparticles template runs at
+ -- TimeScale .2 and must not silently slow newly authored work effects.
+ local p=Instance.new('ParticleEmitter')
  p.Name=name;p.Enabled=false;p.Rate=0
  -- A soft plain disc instead of stars/smoke: the energy reads as light,
  -- including at small screen sizes. Keep the original asset templates intact.
  p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
- p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=2.2
+ p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=6
+ p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
  p.Lifetime=NumberRange.new(.35,.65);p.Speed=NumberRange.new(1.4,3.5);p.Drag=3
  p.SpreadAngle=Vector2.new(55,55);p.Acceleration=Vector3.new(0,-6,0);p.WindAffectsDrag=true
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.28),NumberSequenceKeypoint.new(1,0)})
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(.2,.65),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.55,.22),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
@@ -101,7 +104,7 @@ function W:burst(position,normal,color,count,now)
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
  local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(4,13)
  sparks.Lifetime=NumberRange.new(.35,.85);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-20,0)
- sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.28,.1),NumberSequenceKeypoint.new(.18,.5,.15),NumberSequenceKeypoint.new(1,0)})
+ sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.7,.08),NumberSequenceKeypoint.new(.18,1.05,.15),NumberSequenceKeypoint.new(1,0)})
  sparks.SpreadAngle=Vector2.new(85,85)
  sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+1})
 end
@@ -133,12 +136,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx={anchor=anchor,spheres=spheres(anchor,beam.tint or WHITE),lastAt=now,pulseSerial=sample.pulseSerial or 0}
   fx.sparks=particle(anchor,'OriginParticles',beam.tint or WHITE)
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.15,.25);fx.glow.Size=NumberSequence.new(.24)
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.15,.25);fx.glow.Size=NumberSequence.new(.5)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
   fx.impact.Lifetime=NumberRange.new(.35,.8);fx.impact.Speed=NumberRange.new(6,13)
   fx.impact.Drag=1.8;fx.impact.Acceleration=Vector3.new(0,-21,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.07),NumberSequenceKeypoint.new(.15,.38,.09),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5,.05),NumberSequenceKeypoint.new(.15,.8,.05),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.7,.25),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')

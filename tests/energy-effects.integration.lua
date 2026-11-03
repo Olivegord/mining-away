@@ -22,10 +22,31 @@ check('break energy uses round glowing discs and bounded burst cleanup',function
  for n=1,30 do work:burst(Vector3.zero,Vector3.yAxis,Color3.new(1,1,0),38,100) end
  assert(#work.bursts==work.maxBursts)
  local emitter=work.bursts[1].part:FindFirstChildWhichIsA('ParticleEmitter')
- assert(emitter.Texture=='rbxasset://textures/particles/flare_main.dds' and emitter.LightEmission==1)
+ assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and emitter.LightEmission==1)
+ assert(emitter.TimeScale==1 and emitter.FlipbookLayout==Enum.ParticleFlipbookLayout.None and not emitter.LockedToPart)
+ assert(emitter.Size[2].Value-emitter.Size[2].Envelope>=.7 and emitter.Size[2].Value+emitter.Size[2].Envelope<=1.2)
  assert(emitter.Emitted==38 and emitter.Rate==0 and emitter.Lifetime.Max==.85)
  local bloom=game:GetService('Lighting'):FindFirstChild('MiningEnergyBloom');assert(bloom and bloom.Intensity>1)
  work:update(101.1);assert(#work.bursts==0);work:destroy();assert(bloom.Parent==nil)
+end)
+check('nearby owner sees fresh full-speed mining discs while zoomed far out',function()
+ local oldPlayer=players.LocalPlayer;local player=Instance.new('Player');local character=Instance.new('Model')
+ local body=Instance.new('Part');body.Name='HumanoidRootPart';body.Position=Vector3.zero;body.Parent=character;player.Character=character
+ players.LocalPlayer=player;camera.CFrame=CFrame.new(0,400,0)
+ local templates=Instance.new('Folder');templates.Name='MiningFX';templates.Parent=rs
+ local particles=Instance.new('Folder');particles.Name='MiningParticles';particles.Parent=templates
+ local source=Instance.new('ParticleEmitter');source.Name='Largeparticles';source.TimeScale=.2;source.FlipbookLayout='badInheritedFlipbook';source.Parent=particles
+ local work=WorkEffects.new(root);local holder=Instance.new('Folder');holder.Parent=root
+ local marker=Instance.new('Part');marker.Parent=holder
+ local beam={holder=holder,marker=marker,origin={WorldPosition=Vector3.new(0,5,0)},tint=Color3.new(1,.8,.2)}
+ local sample={alive=true,isMining=true,active=true,paused=false,warmupStart=0,key='rock',life=1,style='Cutter',pulseSerial=0}
+ work:mining(beam,sample,Vector3.zero,Vector3.yAxis,1,0,100)
+ local impact=assert(beam.work and beam.work.impact,'zoom swallowed nearby work effects')
+ assert(impact.Enabled and impact.TimeScale==1 and impact.FlipbookLayout==Enum.ParticleFlipbookLayout.None)
+ assert(impact.Size[2].Value-impact.Size[2].Envelope>=.5 and impact.Size[2].Value+impact.Size[2].Envelope<=.85+.000001)
+ assert(impact.Brightness>=4 and impact.LightInfluence==0 and impact.LightEmission==1)
+ assert(source.TimeScale==.2 and source.FlipbookLayout=='badInheritedFlipbook','preserved template was overwritten')
+ work:destroy();holder:Destroy();templates:Destroy();character:Destroy();player:Destroy();players.LocalPlayer=oldPlayer;camera.CFrame=CFrame.new(0,20,0)
 end)
 check('orbital extends above high camera and collapses on authoritative end',function()
  local source=Instance.new('Folder');source.Name='DroneRoleServerEffects';source.Parent=workspace

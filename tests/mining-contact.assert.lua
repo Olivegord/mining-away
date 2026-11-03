@@ -9,8 +9,8 @@ assert(b.work and b.work.tip.Parent==marker and b.work.impact.Parent==b.work.tip
 assert(b.work.impact.Enabled and b.work.impact.Rate>0 and b.work.impact.Speed.Min>=6)
 -- The owner requested round energy discs, replacing stretched spark streaks.
 assert(b.work.impact.Orientation==Enum.ParticleOrientation.FacingCamera)
-assert(b.work.impact.Texture=='rbxasset://textures/particles/flare_main.dds')
-assert(b.work.impact.LightEmission==1 and b.work.impact.Brightness>=2)
+assert(b.work.impact.Texture=='rbxasset://textures/ui/VR/circleWhite.png')
+assert(b.work.impact.LightEmission==1 and b.work.impact.Brightness>=4 and b.work.impact.TimeScale==1)
 assert(b.work.impact.Lifetime.Max>=.7 and b.work.impact.Acceleration.Y<0)
 local tip=b.work.tip;sample.paused=true;w:mining(b,sample,nil,nil,0,0,10.1)
 assert(not b.work.impact.Enabled and b.work.impact.cleared>0)
