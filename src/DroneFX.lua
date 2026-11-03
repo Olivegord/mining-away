@@ -5,6 +5,8 @@ local TAU = math.pi * 2
 local MAX_PARTS, MAX_EFFECT_PARTS = 360, 48
 local TAIL = 1.15
 local supported = {Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local effectAttributes={ResourceId=true,EffectSerial=true,EffectType=true,EffectStartedAt=true,EffectDuration=true,EffectDoneAt=true,EffectPausedAt=true,EffectCancelledSerial=true}
+local resourceNames={Crystal=true,Geode=true,Core=true,Shard=true}
 local cyan = Color3.fromRGB(130,239,255)
 local gold = Color3.fromRGB(255,211,83)
 local purple = Color3.fromRGB(179,105,255)
@@ -241,9 +243,9 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 local function finishPose(e,age)
  if not e.finished then
   e.finished=true;e.burstOrigin=e.kind=='Bubbler' and e.center+Vector3.new(0,-2,0) or e.center
+  for _,p in ipairs(e.parts) do p.Transparency=1 end
  end
  local fade=clamp(age/TAIL)
- for _,p in ipairs(e.parts) do p.Transparency=1 end
  local fragments=e.fragments or {}
  for i,p in ipairs(fragments) do
   local a=i*2.399963
@@ -263,7 +265,17 @@ end
 
 function FX.new(world,options)
  options=options or {}
- local self={world=world,tracked={},dirty={},active={},count=0,connections={},destroyed=false}
+ local self={world=world,tracked={},dirty={},retry={},active={},count=0,connections={},destroyed=false,poseUpdates=0}
+ local interval=options.interval or 1/30
+ local maxDistance=options.maxDistance or 160
+ local focusPosition
+ local function nearby(v)
+  if focusPosition then local delta=focusPosition-v.Position;if delta:Dot(delta)<=maxDistance*maxDistance then return true end end
+  local camera=workspace.CurrentCamera
+  if not camera then return true end
+  local offset=camera.CFrame.Position-v.Position
+  return offset:Dot(offset)<=maxDistance*maxDistance
+ end
  local folder=Instance.new('Folder');folder.Name='MiningAwayDroneFX';folder.Parent=workspace;self.folder=folder
  local function freeGeometry(e)
   self.count=math.max(0,self.count-#e.parts);e.parts={}
@@ -278,19 +290,28 @@ function FX.new(world,options)
  end
  local function observe(v)
   if not v:IsA('BasePart') or self.tracked[v] then return end
-  self.tracked[v]=v.AttributeChanged:Connect(function() self.dirty[v]=true end)
+  -- Ignore scenery, drone hardware, currency and their constantly changing
+  -- attributes. Name/parent cover resources streamed before their attributes.
+  local parent=v.Parent
+  if not v:GetAttribute('ResourceId') and not resourceNames[v.Name]
+   and not (parent and (parent.Name=='Resources' or parent:GetAttribute('FieldId'))) then return end
+  self.tracked[v]=v.AttributeChanged:Connect(function(name)
+   if effectAttributes[name] then self.dirty[v]=true;self.retry[v]=nil end
+  end)
   self.dirty[v]=true
  end
  self.connections[#self.connections+1]=world.DescendantAdded:Connect(observe)
  self.connections[#self.connections+1]=world.DescendantRemoving:Connect(function(v)
   remove(v)
   if self.tracked[v] then self.tracked[v]:Disconnect();self.tracked[v]=nil end
-  self.dirty[v]=nil
+  self.dirty[v]=nil;self.retry[v]=nil
  end)
  for _,v in ipairs(world:GetDescendants()) do observe(v) end
  function self:isActive(source) return self.active[source]~=nil end
  function self:step(now,_dt)
   if self.destroyed then return end
+  focusPosition=options.focus and options.focus() or nil
+  for v,at in pairs(self.retry) do if now>=at then self.retry[v]=nil;self.dirty[v]=true end end
   for v in pairs(self.dirty) do
    self.dirty[v]=nil
    if v.Parent and v:GetAttribute('ResourceId') then
@@ -300,11 +321,13 @@ function FX.new(world,options)
     local duration=v:GetAttribute('EffectDuration')
     local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
-    if e and (e.serial~=serial or e.start~=start or e.kind~=kind or cancelled) then remove(v);e=nil end
+    if e and (e.serial~=serial or e.kind~=kind or cancelled or type(start)~='number' or type(duration)~='number' or duration<=0) then remove(v);e=nil end
+    if e then e.start=start end -- Save-pause clock shifts do not rebuild geometry.
     if not e and serial>0 and not cancelled and supported[kind] and type(start)=='number' and type(duration)=='number' and duration>0 then
      local done=v:GetAttribute('EffectDoneAt') or 0
      if done>0 and done>=start and now-done>TAIL then
       -- A late joiner does not replay old payouts.
+     elseif not nearby(v) then self.retry[v]=now+.2
      elseif self.count+MAX_EFFECT_PARTS<=MAX_PARTS then
       local view=options.resolve and options.resolve(v) or (not options.resolve and v or nil)
       if view and view.Parent and view.Transparency<.99 then
@@ -314,13 +337,15 @@ function FX.new(world,options)
        local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder
        e={owner=self,resource=v,view=view,kind=kind,serial=serial,start=start,duration=duration,folder=effectFolder,parts={},center=view.Position,cf=view.CFrame,size=size,color=view.Color,material=view.Material,radius=math.max(size.X,size.Y,size.Z)*.5,originalTransparency=view.LocalTransparencyModifier}
        build(e);self.active[v]=e;view.LocalTransparencyModifier=1
-      elseif done<=0 then self.dirty[v]=true end
-     else self.dirty[v]=true end
+      elseif done<=0 then self.retry[v]=now+.1 end
+     else self.retry[v]=now+.1 end
     end
    end
   end
   for v,e in pairs(self.active) do
    if not v.Parent or not e.view.Parent or not v:GetAttribute('ResourceId') or (v:GetAttribute('EffectCancelledSerial') or 0)>=e.serial then remove(v)
+   elseif not nearby(v) then
+    remove(v);self.retry[v]=now+.2
    else
     -- Run after the ordinary growth/fracture renderer. Hide its view without
     -- changing the hidden server collider or suppressing existing crystal audio.
@@ -333,12 +358,16 @@ function FX.new(world,options)
       -- Free every effect Part now, but conceal that retired rock until its
       -- authoritative source disappears, rather than flashing it back in.
       if not e.retired then freeGeometry(e);e.retired=true end
-     elseif not e.retired then finishPose(e,age) end
+     elseif not e.retired and now>=(e.nextPose or 0) then
+      e.nextPose=now+interval;self.poseUpdates+=1;finishPose(e,age)
+     end
     else
      local pausedAt=v:GetAttribute('EffectPausedAt') or 0
      local visualNow=pausedAt>0 and math.min(now,pausedAt) or now
      local t=math.min(.985,clamp((visualNow-e.start)/e.duration))
-     poses[e.kind](e,t)
+     if now>=(e.nextPose or 0) and (not e.lastPhase or t~=e.lastPhase) then
+      e.nextPose=now+interval;e.lastPhase=t;self.poseUpdates+=1;poses[e.kind](e,t)
+     end
      -- If the server cancels without retiring a resource, the next attribute pass cleans it.
      -- A small timeout also bounds stale effects after streaming/network interruptions.
      if visualNow-e.start>e.duration+3 then remove(v) end
@@ -351,6 +380,7 @@ function FX.new(world,options)
   for v in pairs(self.active) do remove(v) end
   for _,connection in pairs(self.tracked) do connection:Disconnect() end
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
+  table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked)
   self.folder:Destroy()
  end
  return self

@@ -140,7 +140,9 @@ function L.new(ctx: any): any
  local function move(m: any, pos: any, force: any?): ()
   local now=ctx.getClock()
   if not force and now-(m:GetAttribute('PoseAt') or -math.huge)<.1 then return end
-  local cf=CFrame.new(pos);m:PivotTo(cf);m:SetAttribute('Pose',cf);m:SetAttribute('PoseAt',now)
+  local cf=CFrame.new(pos)
+  if not force and m:GetAttribute('Pose')==cf then return end
+  m:PivotTo(cf);m:SetAttribute('Pose',cf);m:SetAttribute('PoseAt',now)
  end
  local function approach(pos: any, goal: any, dt: any, speed: any): (any, any)
   local delta=goal-pos;local n=delta.Magnitude;if n<.001 then return goal,true end
@@ -379,7 +381,7 @@ function L.new(ctx: any): any
      if n>0 then dirty(p) end
     end
     if L.bagUnits(state.launchCargo)>0 then
-     state.launchRemaining=math.max(0,state.launchRemaining-dt);dirty(p)
+     state.launchRemaining=math.max(0,state.launchRemaining-dt);p.dirty=true
      local t=1-state.launchRemaining/L.LAUNCH_SECONDS
      move(rt.capsule,rt.capsuleBase+v(0,t*t*240,0));rt.jet.Transparency=.15
      rt.capsule:SetAttribute('Manifest',L.bagUnits(state.launchCargo))
@@ -429,6 +431,7 @@ function L.new(ctx: any): any
     end
     if now>=rt.nextPublish then
      rt.nextPublish=now+.25
+     if state.launchRemaining>0 then p.publishDirty=true end
      rt.label.Text=string.format('ORBITAL STORAGE\n%d / %d%s',L.bagUnits(state.storage),capacity,L.bagUnits(state.launchCargo)>0 and ' · IN FLIGHT' or '')
      for _,piece in ipairs(rt.building:GetChildren()) do if piece.Name=='Signal' then piece.Color=L.bagUnits(state.storage)>=capacity and gold or cyan end end
      for key,value in pairs(self:decorate(p)) do p.player:SetAttribute('MA_'..key,value) end

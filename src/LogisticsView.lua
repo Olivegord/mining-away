@@ -260,7 +260,8 @@ function View.start(ctx)
    for _,source in ipairs(ctx.world:GetChildren()) do
     local class=source:GetAttribute('Class')
     local previous=self.visuals[source]
-    if previous and previous.sourceCount~=#source:GetDescendants() then
+    if previous and previous.geometryDirty then
+     for _,connection in ipairs(previous.connections) do connection:Disconnect() end
      previous.view:Destroy();for node,value in pairs(previous.hidden) do if node.Parent then node.LocalTransparencyModifier=value end end;self.visuals[source]=nil
     end
     if source:IsA('Model') and (class=='Carrier' or class=='Backpack' or class=='Capsule') and not self.visuals[source] and source:GetAttribute('Pose') then
@@ -271,18 +272,24 @@ function View.start(ctx)
      end
      clone.Parent=ctx.localFX;local hidden={}
      for _,node in ipairs(source:GetDescendants()) do if node:IsA('BasePart') then hidden[node]=node.LocalTransparencyModifier;node.LocalTransparencyModifier=1 end end
-     self.visuals[source]={view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,sourceCount=#source:GetDescendants()}
+     local record={view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}
+     local function changed() record.geometryDirty=true end
+     table.insert(record.connections,source.DescendantAdded:Connect(changed));table.insert(record.connections,source.DescendantRemoving:Connect(changed))
+     self.visuals[source]=record
     end
    end
   end
   for source,record in pairs(self.visuals) do
-   if not source.Parent then record.view:Destroy();self.visuals[source]=nil
+   if not source.Parent then
+    for _,connection in ipairs(record.connections) do connection:Disconnect() end
+    record.view:Destroy();self.visuals[source]=nil
    else
     local target=source:GetAttribute('Pose')
     if target then
      local reset=source:GetAttribute('Class')=='Capsule' and (source:GetAttribute('Manifest') or 0)==0
-     record.pose=reset and target or record.pose:Lerp(target,1-math.exp(-16*math.min(dt,.1)));record.view:PivotTo(record.pose)
-     local exhaust=record.view:FindFirstChild('Exhaust',true);local original=source:FindFirstChild('Exhaust',true)
+     record.pose=(reset or (target.Position-record.pose.Position).Magnitude<.001) and target or record.pose:Lerp(target,1-math.exp(-16*math.min(dt,.1)))
+     if record.drawnPose~=record.pose then record.view:PivotTo(record.pose);record.drawnPose=record.pose end
+     local exhaust,original=record.exhaust,record.sourceExhaust
      if exhaust and original and exhaust:IsA('BasePart') then exhaust.Transparency=original.Transparency end
     end
    end
@@ -291,6 +298,7 @@ function View.start(ctx)
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for source,record in pairs(self.visuals) do
+   for _,connection in ipairs(record.connections) do connection:Disconnect() end
    record.view:Destroy();if source.Parent then for node,value in pairs(record.hidden) do if node.Parent then node.LocalTransparencyModifier=value end end end
   end
   trigger:Destroy();targetCycle:Destroy();carrierReturn:Destroy();bar:Destroy();layer:Destroy()

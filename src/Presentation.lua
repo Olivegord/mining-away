@@ -825,6 +825,9 @@ function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
  local breaking=event=='break'
  if breaking then self:kick(resource.view.Position,.065,now) end
+ -- A completed specialist already owns the absorbed/split/cube/shatter
+ -- fragments. Do not pile generic showers onto all its hidden fracture stages.
+ if resource.source:GetAttribute('EffectType') and (resource.source:GetAttribute('EffectDoneAt') or 0)>0 then return end
  local view=resource.view;local floor=self:_floor(view.Position,resource.source)
  local contact=resource.lastContact;local point,normal=view.Position+Vector3.new(0,view.Size.Y*.5,0),Vector3.yAxis
  if contact then

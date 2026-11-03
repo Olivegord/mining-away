@@ -13,6 +13,24 @@ ACTIVE_PLACE_ID=136098934779395
 ACTIVE_EXPECTED='b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd'
 ACTIVE_BASE=ROOT/'assets/drone-blower-revolution-base.rbxl'
 ACTIVE_OUTPUT=ROOT/'build/Drone Blower revolution.rbxl'
+@lru_cache(maxsize=1)
+def native_zstd():
+ """Reuse an installed decoder; do not spawn a process for every place chunk."""
+ import ctypes,ctypes.util
+ executable=shutil.which('zstd')
+ candidates=[ctypes.util.find_library('zstd')]
+ if executable:
+  prefix=pathlib.Path(executable).resolve().parent.parent
+  candidates.extend(str(prefix/'lib'/name) for name in ('libzstd.dylib','libzstd.so','zstd.dll'))
+ for candidate in candidates:
+  if not candidate:continue
+  try:lib=ctypes.CDLL(candidate)
+  except OSError:continue
+  lib.ZSTD_decompress.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t]
+  lib.ZSTD_decompress.restype=ctypes.c_size_t
+  lib.ZSTD_isError.argtypes=[ctypes.c_size_t];lib.ZSTD_isError.restype=ctypes.c_uint
+  return lib
+ return None
 @lru_cache(maxsize=1024)
 def decompress(raw,size):
  if raw.startswith(b'\x28\xb5\x2f\xfd'):
@@ -21,10 +39,18 @@ def decompress(raw,size):
   try:
    import zstandard
   except ImportError:
-   executable=shutil.which('zstd')
-   if not executable: raise RuntimeError('Zstandard decoder missing: install zstd (tested 1.5.7) or Python zstandard')
-   result=subprocess.run([executable,'--decompress','--stdout','--quiet'],input=raw,capture_output=True,check=True)
-   decoded=result.stdout
+   lib=native_zstd()
+   if lib:
+    import ctypes
+    target=ctypes.create_string_buffer(size)
+    count=lib.ZSTD_decompress(target,size,raw,len(raw))
+    if lib.ZSTD_isError(count):raise RuntimeError('Invalid Zstandard place chunk')
+    decoded=target.raw[:count]
+   else:
+    executable=shutil.which('zstd')
+    if not executable: raise RuntimeError('Zstandard decoder missing: install zstd (tested 1.5.7) or Python zstandard')
+    result=subprocess.run([executable,'--decompress','--stdout','--quiet'],input=raw,capture_output=True,check=True)
+    decoded=result.stdout
   else: decoded=zstandard.ZstdDecompressor().decompress(raw,max_output_size=size)
   assert len(decoded)==size,'Zstandard chunk length mismatch'
   return decoded

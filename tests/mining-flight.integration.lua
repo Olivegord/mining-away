@@ -7,7 +7,12 @@ local function fixture()
  uid+=1;local pl=player(uid);players.PlayerAdded:Fire(pl);local p=assert(profiles[uid])
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)))
  for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
- local roles={};for _,d in ipairs(p.drones) do roles[d.role]=d end
+ local roles={};for _,d in ipairs(p.drones) do
+  roles[d.role]=d
+  -- These cases isolate ordinary/breaker queue and recovery behavior. The
+  -- all-type deployment and performance fixtures exercise the full test crew.
+  if DroneRoles.isSpecial(d.role) then d.hp=0 end
+ end
  return pl,p,roles
 end
 local function tick(d,n)

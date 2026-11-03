@@ -106,7 +106,8 @@ function A.step(state,now,dt,ctx,swarmContext)
  if burn then
   local target
   if ctx.valid(burn.fieldId) and ctx.unlocked('Orbital') then
-   for _,r in ipairs(targets(ctx,burn.fieldId,'Orbital')) do if r.id==burn.targetId then target=r;break end end
+   if ctx.target then target=ctx.target(burn.targetId,burn.fieldId)
+   else for _,r in ipairs(targets(ctx,burn.fieldId,'Orbital')) do if r.id==burn.targetId then target=r;break end end end
   end
   if not target or burn.remaining<=1e-7 then
    if not burn.accepted then state.cooldowns.Orbital=now end

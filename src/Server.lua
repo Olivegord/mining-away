@@ -53,13 +53,15 @@ local function notice(p,message)
 end
 local function publish(p)
  if not p.player.Parent then return end
- local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy,testPerks);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(copy)
+ local copy={}
+ for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
+ copy.capacity=Ca.capacity(copy,testPerks);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
  -- The active preview crew is presentation data, never permanent ownership.
  copy.activeFleet=p.testFleet and Pro.clone(p.testFleet) or nil
- copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(p.testFleet or copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned,testPerks);copy.droneRoles[owned.id]=owned.role end
+ copy.droneStats={};copy.droneRoles={};for _,d in ipairs(p.drones) do copy.droneStats[d.id]=d.stats;copy.droneRoles[d.id]=d.role end
  local autoMine,autoHaul=false,false
  for _,d in ipairs(p.drones) do
   autoMine=autoMine or (DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
@@ -507,8 +509,8 @@ local function pickupStep(dt)
    end
    if pickups[id] then
     local position=Vector3.new(drop.x,drop.y,drop.z)
-    drop.part.Position=position;drop.part.Transparency=OreDrops.fade(drop.spawnAt,now)
     if now>=(drop.snapshotAt or 0) then
+     drop.part.Position=position;drop.part.Transparency=OreDrops.fade(drop.spawnAt,now)
      drop.snapshotAt=now+C.Snapshot;drop.part:SetAttribute('Position',position)
      drop.part:SetAttribute('Velocity',Vector3.new(drop.vx,drop.vy,drop.vz));drop.part:SetAttribute('Homing',drop.homing==true);drop.part:SetAttribute('SnapshotAt',now)
     end
@@ -803,8 +805,7 @@ local function move(d,goal,dt)
  local speed=travelSpeed(d)
  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
  d.yaw=Feel.approachYaw(d.yaw,Feel.flightYaw(d.pos,goal,d.velocity,d.yaw),dt)
- -- Exact logical pose; no server presentation lerp, no body pitch.
- d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
+ -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
 local function supportDrone(d: any,p: any,hr: any,dt: number)
  if d.target or d.combatTarget then release(d) end
@@ -987,6 +988,7 @@ local function publishBreakerPhase(d,job)
  -- observers must receive the powered stroke instead of holding an old windup
  -- until the next 10 Hz snapshot. SnapshotAt is the final coherence marker.
  local model=d.model
+ model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0));d.publishedAttributes=nil;d.publishedPose=nil
  model:SetAttribute('Position',d.pos);model:SetAttribute('Goal',d.goal);model:SetAttribute('Velocity',d.velocity or Vector3.zero)
  model:SetAttribute('BreakerDiveStart',job.diveStart or d.pos);model:SetAttribute('BreakerImpact',job.impact)
  model:SetAttribute('BreakerPhaseAt',job.phaseAt);model:SetAttribute('BreakerDiveDuration',DroneRoles.BREAKER.diveDuration)
@@ -1050,10 +1052,8 @@ local function breakerDrone(d,p,hr,field,dt)
  d.state=phase=='Approach' and 'Travel' or 'Breaker'..phase
  if phase=='Dive' and job.diveStart then
   d.goal=job.impact;d.intentGoal=job.impact;d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
-  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
  elseif phase=='Impact' then
   d.pos=job.impact;d.goal=job.impact;d.intentGoal=job.impact;d.velocity=Vector3.zero
-  d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
  else move(d,goal,dt) end
  local event
  phase,event=DroneRoles.stepBreaker(job,now,{valid=not r.paid and now>=r.readyAt and r.slots[d.id]~=nil,targetId=r.id,arrived=(d.pos-job.station).Magnitude<=.7,impactReached=now-job.phaseAt>=DroneRoles.BREAKER.diveDuration and (d.pos-job.impact).Magnitude<=.15})
@@ -1082,7 +1082,6 @@ local function droneStep(d: any,dt: number)
  if d.hp<=0 then
   d.velocity=Vector3.zero
   d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
-  d.model:PivotTo(CFrame.new(d.pos))
   if R.finishReprint(d,now,d.stats.maxHealth) then d.field=nil;d.commandOutAt=nil end
   return
  end
@@ -1105,7 +1104,6 @@ local function droneStep(d: any,dt: number)
     local job=d.breaker;d.goal=job.impact;d.intentGoal=job.impact
     d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
     if now-job.phaseAt>=DroneRoles.BREAKER.diveDuration then d.velocity=Vector3.zero end
-    d.model:PivotTo(CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0))
    else move(d,d.intentGoal or (d.goal-(d.swarmOffset or Vector3.zero)),dt) end
   end
   return
@@ -1114,7 +1112,7 @@ local function droneStep(d: any,dt: number)
  if logistics then
   local station=logistics:station(d)
   if station then
-   release(d);d.pos=station;d.goal=station;d.velocity=Vector3.zero;d.state='Docked';d.model:PivotTo(CFrame.new(station))
+   release(d);d.pos=station;d.goal=station;d.velocity=Vector3.zero;d.state='Docked'
    if logistics:atHome(d) then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
    return
   end
@@ -1208,6 +1206,8 @@ local function droneStep(d: any,dt: number)
  end
 end
 local function snapshotDrone(d)
+ local pose=CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0)
+ if d.publishedPose~=pose then d.model:PivotTo(pose);d.publishedPose=pose end
  local profile=data(profiles[d.owner])
  local target=d.target
  if target and (target.paid or target.hp<=0 or not target.part.Parent) then retireTarget(d);target=nil end
@@ -1237,14 +1237,18 @@ local function snapshotDrone(d)
   ForkTargetPosition=d.forkTarget or d.pos,ForkTargetId=(d.forkUntil or 0)>now and (d.forkTargetId or '') or '',ForkUntil=d.forkUntil or 0,
   ChainTargetPosition=d.chainTarget or d.pos,ChainTargetId=(d.chainUntil or 0)>now and (d.chainTargetId or '') or '',ChainUntil=d.chainUntil or 0,
   GeodeMultiplier=d.stats.geodeMultiplier,FinisherMultiplier=d.stats.finisherMultiplier,SalvageFraction=d.stats.salvageFraction,ChainRange=d.stats.splashRange}
- for k,v in pairs(values) do d.model:SetAttribute(k,v) end
- d.model:SetAttribute('CarrierId',d.carrierId);d.model:SetAttribute('DeployedCarrier',d.deployedCarrier==true)
+ local published=d.publishedAttributes or {};d.publishedAttributes=published
+ for k,v in pairs(values) do if published[k]~=v then d.model:SetAttribute(k,v);published[k]=v end end
+ if published.CarrierId~=d.carrierId then d.model:SetAttribute('CarrierId',d.carrierId);published.CarrierId=d.carrierId end
+ local deployed=d.deployedCarrier==true
+ if published.DeployedCarrier~=deployed then d.model:SetAttribute('DeployedCarrier',deployed);published.DeployedCarrier=deployed end
 end
 -- Publish pause transitions immediately, not only on the periodic snapshot.
 -- Resume position and goal are sent before the pause flag is cleared.
 local function setMotionPaused(p: any,paused: boolean)
  for _,d in ipairs(p.drones) do
   if d.model and d.model.Parent and d.hp>0 then
+   d.publishedAttributes=nil -- Immediate pause writes invalidate snapshot deltas.
    if paused then
     if d.specialJob and not d.specialPausedAt then
      d.specialPausedAt=now;d.target.part:SetAttribute('EffectPausedAt',now)
@@ -1505,9 +1509,22 @@ local function abilityContext(p,fieldId,operator)
   for _,d in ipairs(p.drones) do if d.hp>0 and DroneRoles.ability(d.role)==kind then return true end end
   return false
  end
+ local function targetRecord(r)
+  if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
+  for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
+  return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.fullSize.X*.5*Feel.stageScale(r.stage,r.stageCount)),x=r.position.X,y=top,z=r.position.Z}
+ end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
+  -- During a burn inspect only its fixed target. The normal ctx.hit path still
+  -- performs a fresh authoritative obstruction query before every damage tick.
+  target=function(id,field)
+   local r=resources[id]
+   if valid(field) and r and r.field.id==field then return targetRecord(r) end
+   return nil
+  end,
   targets=function(id,kind)
    local list={};if not valid(id) then return list end
    for _,r in ipairs(patches[id].resources) do
@@ -1548,6 +1565,11 @@ roleAbilityStep=function(d,p,hr,dt)
  if not field then followRole(d,p,hr,dt);return end
  p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
  local ability=p.ability;local charge=ability.charge
+ if now<(ability.cooldowns[kind] or 0) and not (charge and charge.actorId==d.id)
+  and not (kind=='Orbital' and ability.burn and ability.burn.actorId==d.id)
+  and not (kind=='Scrap' and ability.swarm and ability.swarm.actorId==d.id) then
+  followRole(d,p,hr,dt,kind=='Orbital' and 'OrbitalCool' or 'SwarmCool');return
+ end
  local context=abilityContext(p,field.id,d)
  if charge and charge.actorId==d.id then
   d.state=kind=='Orbital' and 'OrbitalCharge' or 'SwarmDeploy'
@@ -1559,10 +1581,14 @@ roleAbilityStep=function(d,p,hr,dt)
  local goal
  if kind=='Orbital' then
   local target=ability.burn and ability.burn.actorId==d.id and resources[ability.burn.targetId] or (charge and charge.actorId==d.id and resources[charge.targetId]) or nil
-  if not target then
+  if not target and (d.surveyField~=field.id or now>=(d.nextSurveyAt or 0)) then
+   d.surveyField=field.id;d.nextSurveyAt=now+C.Snapshot;d.surveyTargetId=nil
    local largest=-1
    for _,node in ipairs(context.targets(field.id,'Orbital')) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
+   d.surveyTargetId=target and target.id or nil
   end
+  if not target then target=d.surveyTargetId and resources[d.surveyTargetId] end
+  if target and (target.paid or target.hp<=0 or not target.part.Parent) then target=nil end
   goal=target and target.position+Vector3.new(0,math.max(12,target.fullSize.Y*.5+7),0) or hr.Position+Vector3.new(4,10,0)
  else goal=hr.Position+Vector3.new(4,4,-3) end
  move(d,goal,dt)
@@ -1900,7 +1926,7 @@ RunService.Heartbeat:Connect(function(dt: number)
    recallFromField(p)
    dispatchOreQueue(p)
    if p.ability and p.busy then DroneAbilities.pause(p.ability,C.Tick)
-   elseif p.ability and healthy(p) then
+   elseif p.ability and healthy(p) and (p.ability.charge or p.ability.burn or p.ability.swarm) then
     local work=p.ability.burn or p.ability.swarm or p.ability.charge
     local swarm=p.ability.swarm;local burn=p.ability.burn;local charge=p.ability.charge
     DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,work and work.fieldId or 1,work and work.actorId and drones[work.actorId]),

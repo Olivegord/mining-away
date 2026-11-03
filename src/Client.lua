@@ -1021,7 +1021,8 @@ local function renderBackpacks()
  for owner,record in pairs(backpacks) do if not present[owner] then record.model:Destroy();backpacks[owner]=nil end end
 end
 
-local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end})
+local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
+ focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  presentation:beginFrame()

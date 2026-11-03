@@ -1,5 +1,13 @@
 # Owner requirements
 
+## November 3 latest — optimize the full crew without running Play
+
+The owner reports severe lag with the all-type test crew and requests optimization of the actual game code. Keep the simple native assets and all drone options; remove unnecessary computation, replication, rendering work and accumulation. Do not start or run the game during this pass. Complete offline verification and saved builds, leaving Play stopped for the owner to test.
+
+## November 3 latest — smaller varied particles, smoky fracture and orbital afterglow
+
+The owner requests smaller particles, smoky rock-breaking feedback that is visually distinct from the collectible drops, and varied simple shapes rather than circles for every effect. Orbital should show its physical beam Part alongside the Beam element, with a larger color-ramp scale and a dense residual vertical particle cylinder. Remove coherent sideways wind; most energy stays localized or uses irregular turbulence. The owner also requests pictures of most effects. Coordinate with the active particle chat, preserve the performance improvements and do not start Play for this pass. See [particle refinement review](review/PARTICLE_SHAPES.md) when available.
+
 ## November 3 latest — all drone types and useful testing defaults
 
 For testing, start with all new drone options, automatic rock selection and maximum backpack capacity. Every mining-capable drone must receive field work. Fix the misleading mining fraction: support drones do not belong in its denominator, and warmup, breaker phases and special jobs must retain their assignment status. These are isolated Studio/preview defaults; production still starts with one permanent drone and earned automation. Preserve the distinct support jobs.
