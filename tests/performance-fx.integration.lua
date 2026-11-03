@@ -22,7 +22,7 @@ print('METRIC','fx144',writes)
 if ctrl.retry then
  local tracked=0;for _ in pairs(ctrl.tracked)do tracked+=1 end
  assert(tracked==7,'unrelated scenery was subscribed by mining FX')
- assert(ctrl.poseUpdates<=7*32,'multi-part effects exceeded 30 updates per second')
+ assert(ctrl.poseUpdates==7*145,'visible choreography skipped render frames')
  local previous=ctrl.poseUpdates
  for r in pairs(views)do r:SetAttribute('HP',50);assert(not ctrl.dirty[r],'ordinary HP snapshots dirtied effect construction')end
  workspace.CurrentCamera.CFrame=CFrame.new(10000,8,12);ctrl:step(21.1,.1)
@@ -32,4 +32,4 @@ if ctrl.retry then
  assert(ctrl.poseUpdates>previous)
 end
 ctrl:destroy();assert(ctrl.count==0)
-print(ctrl.retry and 'PASS production FX bounded cadence, scenery filtering, distance return and cleanup; API doubles only' or 'Recorded original FX write load for comparison')
+print(ctrl.retry and 'PASS production FX continuous motion, scenery filtering, distance return and cleanup; API doubles only' or 'Recorded original FX write load for comparison')

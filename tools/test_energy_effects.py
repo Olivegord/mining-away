@@ -9,7 +9,7 @@ import tempfile
 from build import ROOT, module_bundle
 
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/private/tmp/mining-away-luau')
-modules = ('Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation', 'DroneRoleEffects')
+modules = ('Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation', 'RoleVisuals')
 for name in modules + ('DroneRoleEffects',):
     subprocess.run([str(luau / 'luau-compile'), str(ROOT / 'src' / (name + '.lua'))],
                    stdout=subprocess.DEVNULL, check=True)
@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='mining-energy-checks-') as directory:
 # A native fetch gate complements API doubles, which cannot load images.
 textures = sorted(set(re.findall(r"(?:local ENERGY=|\.Texture=)['\"]([^'\"]+)['\"]", '\n'.join(
     (ROOT / 'src' / (name + '.lua')).read_text()
-    for name in ('WorkEffects', 'DroneRoleEffects', 'AbilityView', 'PickupView')))))
+    for name in ('WorkEffects', 'RoleVisuals', 'AbilityView', 'PickupView')))))
 native = 'local energyTextures={' + ','.join(repr(value) for value in textures) + '}\n'
 native += (ROOT / 'tests/energy-assets.studio.lua').read_text()
 (ROOT / 'build/energy-asset-check.lua').write_text(native)

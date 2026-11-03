@@ -1,367 +1,100 @@
 --!strict
--- Simple replicated effects for Drone Blower Revolution role testing.
--- All parts are created by the server and cleaned automatically.
-local Debris = game:GetService("Debris")
-local TweenService = game:GetService("TweenService")
-
-local Effects = {}
-local MAX_LIVE = 256
-local live = 0
-local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SMOKE='rbxasset://textures/particles/smoke_main.dds'
-local SPARK='rbxasset://textures/particles/sparkles_main.dds'
-local ORBITAL_HEIGHT=260
-local ORBITAL_COLOR=Color3.new(1,1,1)
-local ORBITAL_TAIL=4.4
-
-local function folder(): Folder
-	local existing = workspace:FindFirstChild("DroneRoleServerEffects")
-	if existing and existing:IsA("Folder") then
-		return existing
-	end
-	local created = Instance.new("Folder")
-	created.Name = "DroneRoleServerEffects"
-	created.Parent = workspace
-	return created
+-- Server-owned effect receipts only. No cosmetic Parts, tweens or animation.
+-- Persistent active records let every observer (including late joiners) render
+-- the same effect from server time, without trusting clients with gameplay.
+local Debris=game:GetService('Debris')
+local Effects={}
+local live=0
+local MAX_LIVE=256
+local markers,burns,swarms={},{},{}
+local function folder()
+ local root=workspace:FindFirstChild('DroneRoleState')
+ if not root then root=Instance.new('Folder');root.Name='DroneRoleState';root.Parent=workspace end
+ return root
 end
-
-local function part(): Part?
-	if live >= MAX_LIVE then
-		return nil
-	end
-	local value = Instance.new("Part")
-	value.Name = "RoleEffect"
-	value.Anchored = true
-	value.CanCollide = false
-	value.CanQuery = false
-	value.CanTouch = false
-	value.CastShadow = false
-	value.Material = Enum.Material.Neon
-	value.Parent = folder()
-	live += 1
-	local counted = true
-	value.Destroying:Connect(function()
-		if counted then
-			counted = false
-			live -= 1
-		end
-	end)
-	return value
+local function record(kind,attributes,lifetime)
+ if live>=MAX_LIVE then return nil end
+ local node=Instance.new('Folder');node.Name=kind
+ node:SetAttribute('Kind',kind);node:SetAttribute('StartedAt',workspace:GetServerTimeNow())
+ for key,value in pairs(attributes) do node:SetAttribute(key,value) end
+ if lifetime then node:SetAttribute('ExpiresAt',workspace:GetServerTimeNow()+lifetime);Debris:AddItem(node,lifetime) end
+ live+=1;node.Destroying:Connect(function() live-=1 end)
+ node.Parent=folder();return node
 end
-
-function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?)
-	local delta = to - from
-	if delta.Magnitude < 0.05 then
-		return
-	end
-	local value = part()
-	if not value then
-		return
-	end
-	local duration = lifetime or 0.16
-	local thickness = width or 0.18
-	value.Color = color
-	value.Size = Vector3.new(thickness, thickness, delta.Magnitude)
-	value.CFrame = CFrame.lookAt(from:Lerp(to, 0.5), to)
-	TweenService:Create(value, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Transparency = 1,
-		Size = Vector3.new(0.02, 0.02, delta.Magnitude),
-	}):Play()
-	Debris:AddItem(value, duration + 0.05)
+local function clear(map,owner)
+ local old=map[owner];map[owner]=nil;if old then old:Destroy() end
 end
-
-function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?)
-	local value = part()
-	if not value then
-		return
-	end
-	local duration = lifetime or 0.3
-	local first = startSize or 0.8
-	local last = endSize or 5
-	value.Shape = Enum.PartType.Ball
-	value.Color = color
-	-- Keep the event readable without an opaque neon sphere washing out its rock.
-	value.Transparency = 0.42
-	value.Size = Vector3.one * first
-	value.Position = position
-	TweenService:Create(value, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Transparency = 1,
-		Size = Vector3.one * last,
-	}):Play()
-	Debris:AddItem(value, duration + 0.05)
+local function point(p) return Vector3.new(p.x,p.y,p.z) end
+function Effects.Beam(from,to,color,width,lifetime)
+ record('Beam',{From=from,Position=to,Color=color,Width=width or .18,Duration=lifetime or .16},(lifetime or .16)+.2)
 end
-
-function Effects.Heal(from: Vector3, to: Vector3)
-	local color = Color3.fromRGB(99, 255, 164)
-	Effects.Beam(from, to, color, 0.22, 0.2)
-	Effects.Pulse(to, color, 0.5, 2.5, 0.24)
+function Effects.Pulse(position,color,first,last,lifetime)
+ record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
-
-function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
-	local color = Color3.fromRGB(255, 137, 70)
-	if impact then
-		Effects.Beam(position, target, color, 0.42, 0.2)
-		Effects.Pulse(target, color, .7, 4.2, 0.28)
-	else
-		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.5, 3.4, 0.8)
-	end
+function Effects.Heal(from,to)
+ record('Heal',{From=from,Position=to},.4)
 end
-
--- Seeding dust falls from the actual grower; the bloom confirms a real spawn.
-function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
- local green=Color3.fromRGB(152,231,158)
- local value=part();if not value then return end
- value.Name=planted and 'CrystalSeedBloom' or 'CrystalSeedFall';value.Transparency=1
- if planted then value:SetAttribute('AudioCue','plant');value:SetAttribute('AudioAt',workspace:GetServerTimeNow()) end
- value.Position=planted and target or from
- local tip=Instance.new('Attachment');tip.Parent=value
- local dust=Instance.new('ParticleEmitter');dust.Texture=SPARK
- dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=.95;dust.LightInfluence=0
- dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(.5,1.5)
- dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
- dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=1.8;dust.WindAffectsDrag=false
- dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.02),NumberSequenceKeypoint.new(.2,.24,.03),NumberSequenceKeypoint.new(1,0)})
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.45,.55),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=tip;dust:Emit(planted and 14 or 9);Debris:AddItem(value,1.8)
- if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,1.6,.45) end
+function Effects.Charge(position,target,impact)
+ record('Charge',{From=position,Position=target,Impact=impact==true},1)
 end
-
--- These are one-shot phase cues. The authoritative drone moves through its
--- windup/dive/recovery; none of these effects is a steady mining beam.
-function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
- local amber=Color3.fromRGB(220,164,81)
- if phase=='Windup' then
-  Effects.Pulse(target,amber,.2,1.4,.75)
- elseif phase=='Dive' then
-  Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
- elseif phase=='Impact' then
-  local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35,3.2,.18)
-  local shock=part()
-  if shock then
-   shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
-   shock.Transparency=.68;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
-   local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
-   local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';dust.Texture=SMOKE
-   dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
-   dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
-   dust.Speed=NumberRange.new(.6,1.6);dust.Drag=3;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
-   dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-50,50)
-   dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
-   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
-   TweenService:Create(shock,TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(.055,8,8),Transparency=1}):Play()
-   Debris:AddItem(shock,1.8)
-  end
-  -- The actual fracture creates authored crystal fragments in Presentation.
-  -- Avoid a second shower of generic weightless balls on the same event.
- elseif phase=='Hold' then
-  -- This is physical touchdown, distinct from the later damaging fracture.
-  -- A single server receipt drives both the local thud and camera impulse.
-  local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3,1.8,.12)
-  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2,.7,.9)
- elseif phase=='Recover' then
-  Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
- end
+function Effects.Grow(from,target,planted)
+ record('Grow',{From=from,Position=target,Planted=planted},1.8)
 end
-
--- Gadget FX are consequences of the authoritative DroneAbilities state machine.
--- Sources replicate complete poses for late joiners; AbilityView interpolates
--- their local clones without feeding any rendered transform back into damage.
-local swarms: {[number]: Folder} = {}
-local markers: {[number]: Instance} = {}
-local function clearSwarm(owner: number)
- local old=swarms[owner]
- if old then swarms[owner]=nil;old:Destroy() end
+function Effects.BreakerPhase(position,target,phase)
+ record('Breaker',{From=position,Position=target,Phase=phase},1.8)
 end
-local function clearMarker(owner: number)
- local old=markers[owner];markers[owner]=nil
- if old then old:Destroy() end
-end
-local function location(p: any): Vector3 return Vector3.new(p.x,p.y,p.z) end
-local function column(position: Vector3,height: number,width: number,color: Color3,duration: number,transparency: number)
- local value=part();if not value then return end
- value.Shape=Enum.PartType.Cylinder;value.Color=color;value.Transparency=transparency
- value.Size=Vector3.new(height,width,width)
- value.CFrame=CFrame.new(position+Vector3.new(0,height*.5,0))*CFrame.Angles(0,0,math.pi/2)
- TweenService:Create(value,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Transparency=1,Size=Vector3.new(height,.02,.02)}):Play()
- Debris:AddItem(value,duration+.05)
-end
-local burns: {[number]: Folder} = {}
-local function clearBurn(owner: number)
+local function endBurn(owner)
  local old=burns[owner];burns[owner]=nil
- if not old or not old.Parent then return end
- -- Stop work immediately, but let the column collapse into suspended embers.
- -- EndedAt also stops client shake; the server tween remains visible to everyone.
- old:SetAttribute('EndedAt',workspace:GetServerTimeNow())
- for _,effect in ipairs(old:GetDescendants()) do
-  if effect:IsA('ParticleEmitter') then effect.Enabled=false end
- end
- local core=old:FindFirstChild('MeltCore')
- if core and core:IsA('BasePart') then
-  -- A full volume leaves a continuous vertical trail, rather than twelve
-  -- isolated pairs of dots. Its fixed carrier must not shrink with the laser.
-  local trail=part()
-  if trail then
-   trail.Name='OrbitalResidualColumn';trail.Transparency=1;trail.Shape=Enum.PartType.Cylinder
-   trail.Size=Vector3.new(ORBITAL_HEIGHT,2.25,2.25);trail.CFrame=core.CFrame;trail.Parent=old
-   local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
-   embers.Texture=ENERGY;embers.Enabled=false;embers.Rate=0;embers.LightEmission=.8;embers.LightInfluence=0;embers.Brightness=1.1
-   embers.Color=ColorSequence.new(ORBITAL_COLOR)
-   embers.Shape=Enum.ParticleEmitterShape.Cylinder;embers.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
-   embers.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;embers.ShapePartial=1;embers.EmissionDirection=Enum.NormalId.Right
-   embers.Lifetime=NumberRange.new(2.5,4);embers.Speed=NumberRange.new(.05,.35);embers.Drag=2.5;embers.WindAffectsDrag=false
-   embers.LockedToPart=false;embers.VelocityInheritance=0
-   embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-45,45)
-   embers.Acceleration=Vector3.new(0,.08,0)
-   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.2,.3,.06),NumberSequenceKeypoint.new(1,0)})
-   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.55,.55),NumberSequenceKeypoint.new(1,1)})
-   embers.Parent=trail;embers:Emit(312)
-  end
- end
- for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalResidualColumn' then
-  local size=value.Name=='MeltContact' and Vector3.one*.03 or Vector3.new(value.Size.X,.015,.015)
-  TweenService:Create(value,TweenInfo.new(.48,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=size,Transparency=1}):Play()
- end end
- Debris:AddItem(old,ORBITAL_TAIL)
+ if old and old.Parent then old:SetAttribute('EndedAt',workspace:GetServerTimeNow());Debris:AddItem(old,4.4) end
 end
--- A fixed timer from the strike's creation could cut off its last motes after
--- a storage pause. One watchdog per live group instead begins cleanup only
--- after contacts stop, then preserves a full final particle lifetime.
-local function watchBurn(owner: number,group: Folder)
+local function watchBurn(owner,node)
  task.delay(8,function()
-  if not group.Parent or group:GetAttribute('EndedAt') then return end
-  local at=group:GetAttribute('ContactAt') or 0
-  if workspace:GetServerTimeNow()-at<8 then watchBurn(owner,group);return end
-  if burns[owner]==group then burns[owner]=nil end
-  group:SetAttribute('EndedAt',workspace:GetServerTimeNow())
-  for _,object in ipairs(group:GetDescendants()) do
-   if object:IsA('ParticleEmitter') then object.Enabled=false
-   elseif object:IsA('BasePart') then object.Transparency=1 end
-  end
-  Debris:AddItem(group,ORBITAL_TAIL)
+  if not node.Parent or node:GetAttribute('EndedAt') then return end
+  if workspace:GetServerTimeNow()-(node:GetAttribute('ContactAt') or 0)<8 then watchBurn(owner,node)
+  elseif burns[owner]==node then endBurn(owner) end
  end)
 end
-local function targetSight(owner: number,target: any)
- local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
- local value=part();if not value then group:Destroy();return end
- local radius=math.clamp((target.radius or 1)+.7,1.4,8)
- value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
- value:SetAttribute('AudioLoop','orbital_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
- value.Color=Color3.fromRGB(242,38,44);value.Transparency=.88
- value.Size=Vector3.new(.035,radius*2,radius*2)
- value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
- value.Parent=group
- TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{Transparency=.74}):Play()
- Debris:AddItem(group,2.6)
+function Effects.ClearAbility(owner)
+ clear(swarms,owner);clear(markers,owner);endBurn(owner)
 end
-local function sustainedStrike(owner: number,event: any)
- local group=burns[owner]
- if group and not group.Parent then burns[owner]=nil;group=nil end
- if not group then
-  group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
-  group:SetAttribute('OrbitalBurn',true)
-  for index,width in ipairs({2.25,.65}) do
-   local value=part();if not value then break end
-   value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
-   value.Color=ORBITAL_COLOR
-   value.Transparency=index==1 and .9 or .6;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
-   value:SetAttribute('BurnTransparency',value.Transparency)
-   if index==2 then
-    local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
-    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=1.25
-    energy.Rate=10;energy.Lifetime=NumberRange.new(2,3.5);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
-    energy.Shape=Enum.ParticleEmitterShape.Cylinder;energy.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume;energy.EmissionDirection=Enum.NormalId.Right
-    energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(0,-.1,0);energy.WindAffectsDrag=false
-    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.32,.06),NumberSequenceKeypoint.new(1,0)})
-    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.5,.6),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
-   end
-  end
-  local contact=part()
-  if contact then
-   contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
-   contact.Transparency=.78;contact.Size=Vector3.one*.55;contact.Parent=group;contact:SetAttribute('BurnTransparency',.78)
-   local tip=Instance.new('Attachment');tip.Parent=contact
-   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=SPARK;sparks.Squash=NumberSequence.new(.65);sparks.Rotation=NumberRange.new(-180,180)
-   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
-   sparks.Lifetime=NumberRange.new(2,3.5);sparks.Speed=NumberRange.new(.8,2);sparks.Drag=2.2;sparks.WindAffectsDrag=false
-   sparks.Acceleration=Vector3.new(0,-.4,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(60,60)
-   sparks.Rate=8;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.03),NumberSequenceKeypoint.new(.12,.28,.04),NumberSequenceKeypoint.new(1,0)})
-   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.48),NumberSequenceKeypoint.new(.5,.68),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
-  end
-  group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
-  group.Parent=folder();watchBurn(owner,group)
- end
- local position=location(event.target)
- group:SetAttribute('Position',position);group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
- for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
-  if not group:GetAttribute('Placed') then value.CFrame=pose
-  else TweenService:Create(value,TweenInfo.new(.1,Enum.EasingStyle.Linear),{CFrame=pose}):Play() end
- end end
- group:SetAttribute('Placed',true)
-end
-function Effects.ClearAbility(owner: number)
- clearSwarm(owner);clearMarker(owner);clearBurn(owner)
-end
-function Effects.Ability(owner: number,event: any,template: Model?)
- local kind=event.kind
+function Effects.Ability(owner,event,template)
+ local kind=event.kind;local now=workspace:GetServerTimeNow()
  if kind=='clear' then Effects.ClearAbility(owner)
- elseif kind=='clearCharge' then clearMarker(owner)
- elseif kind=='clearScrap' then clearSwarm(owner)
- elseif kind=='orbitalEnd' then clearBurn(owner)
+ elseif kind=='clearCharge' then clear(markers,owner)
+ elseif kind=='clearScrap' then clear(swarms,owner)
+ elseif kind=='orbitalEnd' then endBurn(owner)
  elseif kind=='charge' then
-  clearMarker(owner)
-  if event.ability=='Orbital' then targetSight(owner,event.target);return end
-  local value=part();if not value then return end
-  value.Name='GadgetCharge';value.Shape=Enum.PartType.Ball;value.Size=Vector3.one*.45
-  value:SetAttribute('AudioLoop','swarm_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
-  value.Color=event.ability=='Orbital' and Color3.fromRGB(240,173,88) or Color3.fromRGB(178,202,151)
-  value.Transparency=.7;value.Position=location(event.target)+Vector3.new(0,5,0)
-  markers[owner]=value;Debris:AddItem(value,2.6)
+  clear(markers,owner)
+  markers[owner]=record('AbilityCharge',{Owner=owner,Ability=event.ability,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius},2.6)
  elseif kind=='orbital' then
-  clearMarker(owner)
-  sustainedStrike(owner,event)
- elseif kind=='relay' then
-  local position=location(event.target)
-  column(position,9,.18,Color3.fromRGB(176,218,255),.3,.65)
-  Effects.Pulse(position,Color3.fromRGB(176,218,255),.2,1.7,.3)
- elseif kind=='scrapStart' then clearMarker(owner)
- elseif kind=='recycle' then Effects.Pulse(location(event.target),Color3.fromRGB(173,222,146),.4,2.8,.4)
+  clear(markers,owner)
+  local node=burns[owner]
+  if not node or not node.Parent then
+   node=record('Orbital',{Owner=owner,Position=point(event.target),ContactAt=now})
+   burns[owner]=node;if not node then return end;watchBurn(owner,node)
+  end
+  -- ContactAt commits the complete sample. No replicated geometry moves.
+  node:SetAttribute('Position',point(event.target));node:SetAttribute('ContactAt',now)
+ elseif kind=='relay' or kind=='recycle' then
+  record('AbilityPulse',{Owner=owner,Ability=kind,Position=point(event.target)},.6)
+ elseif kind=='scrapStart' then clear(markers,owner)
  elseif kind=='scrapPose' then
   local group=swarms[owner]
-  if group and not group.Parent then clearSwarm(owner);group=nil end
-  if not group then
-   -- One group of at most six bots per connected owner. Do not silently omit
-   -- another player's authoritative work after a fixed first-N visual cap.
-   if not template or not template:IsA('Model') then return end
-   group=Instance.new('Folder');group.Name='ScrapSwarm_'..owner;group:SetAttribute('ScrapSwarm',true);group:SetAttribute('Owner',owner)
-   group.Parent=folder();swarms[owner]=group;Debris:AddItem(group,13)
+  if not group or not group.Parent then
+   if not template then return end
+   group=record('ScrapSwarm',{Owner=owner,ScrapSwarm=true},13);if not group then return end
+   local ref=Instance.new('ObjectValue');ref.Name='Template';ref.Value=template;ref.Parent=group
+   swarms[owner]=group
   end
   group:SetAttribute('Expires',event.expires)
   for index,bot in ipairs(event.bots) do
    if index>6 then break end
-   local name='ScrapBot_'..bot.id;local model=group:FindFirstChild(name) :: Model?
-   if not model then
-    model=template:Clone();model.Name=name
-    for _,object in ipairs(model:GetDescendants()) do
-     if object:IsA('LuaSourceContainer') or object:IsA('BillboardGui') or object:IsA('SurfaceGui') or object:IsA('Sound') then object:Destroy()
-     elseif object:IsA('BasePart') then
-      object.Anchored=true;object.CanCollide=false;object.CanTouch=false;object.CanQuery=false
-      object.Reflectance=0;object.CastShadow=false
-     elseif object:IsA('Trail') or object:IsA('Beam') or object:IsA('ParticleEmitter') then object.Enabled=false end
-    end
-    model:ScaleTo(model:GetScale()*.18);model:SetAttribute('ScrapBot',true);model.Parent=group
-   end
-   local position=Vector3.new(bot.x,bot.y,bot.z)
-   model:SetAttribute('Position',position);model:SetAttribute('Active',bot.active)
-   model:SetAttribute('TargetPosition',bot.target and location(bot.target) or position)
-   model:SetAttribute('Pulse',bot.pulse);model:PivotTo(CFrame.new(position))
+   local name='ScrapBot_'..bot.id;local node=group:FindFirstChild(name)
+   if not node then node=Instance.new('Folder');node.Name=name;node:SetAttribute('ScrapBot',true);node.Parent=group end
+   node:SetAttribute('Position',point(bot));node:SetAttribute('Active',bot.active)
+   node:SetAttribute('TargetPosition',bot.target and point(bot.target) or point(bot))
+   node:SetAttribute('Pulse',bot.pulse);node:SetAttribute('PoseAt',now)
   end
  end
 end
-
 return Effects
-

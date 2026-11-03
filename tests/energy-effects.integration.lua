@@ -80,16 +80,16 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  work:destroy();holder:Destroy();templates:Destroy();character:Destroy();player:Destroy();players.LocalPlayer=oldPlayer;camera.CFrame=CFrame.new(0,20,0)
 end)
 check('role burst and orbital cleanup retain their longest particle lifetimes',function()
- DroneRoleEffects.Grow(Vector3.new(0,8,0),Vector3.zero,true)
- local source=assert(workspace:FindFirstChild('DroneRoleServerEffects'))
+ RoleVisuals.Grow(Vector3.new(0,8,0),Vector3.zero,true)
+ local source=assert(workspace:FindFirstChild('DroneRoleClientEffects'))
  local grow=assert(source:FindFirstChild('CrystalSeedBloom'))
  local dust=grow:FindFirstChildWhichIsA('ParticleEmitter',true)
  assert(dust.Lifetime.Max==1.6 and dust.Speed.Max<=1.5 and grow.EnergyCleanup>dust.Lifetime.Max)
- DroneRoleEffects.BreakerPhase(Vector3.new(0,5,0),Vector3.zero,'Impact')
+ RoleVisuals.BreakerPhase(Vector3.new(0,5,0),Vector3.zero,'Impact')
  local shock=assert(source:FindFirstChild('BreakerPressureWave'))
  local sparks=shock:FindFirstChildWhichIsA('ParticleEmitter',true)
  assert(sparks.Lifetime.Min==1 and sparks.Lifetime.Max==1.6 and sparks.Speed.Max<=5 and shock.EnergyCleanup>sparks.Lifetime.Max)
- DroneRoleEffects.Ability(991,{kind='orbital',target={x=0,y=2,z=0}},nil)
+ RoleVisuals.Ability(991,{kind='orbital',target={x=0,y=2,z=0}},nil)
  local group=assert(source:FindFirstChild('OrbitalMelt'));local tick=delayedEnergy[#delayedEnergy]
  assert(group.EnergyCleanup==nil,'creation timer can truncate a later final tail')
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
@@ -97,7 +97,7 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  end end
  realTime=tick.at-.5;group:SetAttribute('ContactAt',realTime);realTime=tick.at;tick.fn()
  assert(group:GetAttribute('EndedAt')==nil and delayedEnergy[#delayedEnergy].at>realTime,'fresh strike expired')
- DroneRoleEffects.Ability(991,{kind='orbitalEnd'},nil)
+ RoleVisuals.Ability(991,{kind='orbitalEnd'},nil)
  assert(group.EnergyCleanup>=4.4)
  local afterglow=0
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
@@ -113,14 +113,14 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  end end
  assert(afterglow==1)
  source:Destroy()
- DroneRoleEffects.Ability(992,{kind='orbital',target={x=0,y=2,z=0}},nil)
- source=workspace:FindFirstChild('DroneRoleServerEffects');group=source:FindFirstChild('OrbitalMelt');tick=delayedEnergy[#delayedEnergy]
+ RoleVisuals.Ability(992,{kind='orbital',target={x=0,y=2,z=0}},nil)
+ source=workspace:FindFirstChild('DroneRoleClientEffects');group=source:FindFirstChild('OrbitalMelt');tick=delayedEnergy[#delayedEnergy]
  realTime=tick.at;tick.fn();assert(group:GetAttribute('EndedAt') and group.EnergyCleanup>=4.4)
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then assert(not emitter.Enabled) end end
  source:Destroy()
 end)
 check('orbital extends above high camera and collapses on authoritative end',function()
- local source=Instance.new('Folder');source.Name='DroneRoleServerEffects';source.Parent=workspace
+ local source=Instance.new('Folder');source.Name='DroneRoleClientEffects';source.Parent=workspace
  local group=Instance.new('Folder');group:SetAttribute('OrbitalBurn',true);group:SetAttribute('Position',Vector3.zero);group.Parent=source
  local core=Instance.new('Part');core.Name='MeltCore';core.LocalTransparencyModifier=.2;core.Parent=group
  local work=WorkEffects.new(root);camera.CFrame=CFrame.new(0,400,0);work:update(10)

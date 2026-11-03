@@ -141,8 +141,11 @@ function L.new(ctx: any): any
   local now=ctx.getClock()
   if not force and now-(m:GetAttribute('PoseAt') or -math.huge)<.1 then return end
   local cf=CFrame.new(pos)
-  if not force and m:GetAttribute('Pose')==cf then return end
-  m:PivotTo(cf);m:SetAttribute('Pose',cf);m:SetAttribute('PoseAt',now)
+  local moving=m:GetAttribute('Pose')~=cf
+  if not force and not moving and m:GetAttribute('PoseMoving')~=true then return end
+  -- One final stationary sample cancels prediction after arrival.
+  if moving then m:PivotTo(cf);m:SetAttribute('Pose',cf) end
+  m:SetAttribute('PoseMoving',moving);m:SetAttribute('PoseAt',now)
  end
  local function approach(pos: any, goal: any, dt: any, speed: any): (any, any)
   local delta=goal-pos;local n=delta.Magnitude;if n<.001 then return goal,true end

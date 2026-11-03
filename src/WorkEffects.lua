@@ -438,7 +438,7 @@ end
 function W:orbital(now)
  if now>=self.scanAt then
   self.scanAt=now+.2
-  local source=workspace:FindFirstChild('DroneRoleServerEffects')
+  local source=workspace:FindFirstChild('DroneRoleClientEffects')
   if source then for _,group in ipairs(source:GetChildren()) do
    local position=group:GetAttribute('Position')
    if group:GetAttribute('OrbitalBurn') and not self.orbitals[group] and not group:GetAttribute('EndedAt')
@@ -450,8 +450,8 @@ function W:orbital(now)
     ramp.Attachment0=bottom;ramp.Attachment1=top;ramp.FaceCamera=true;ramp.Segments=48
     ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=1.6
     ramp.Width0=3.2;ramp.Width1=3.2;ramp.Parent=holder
-    -- The replicated cylinder stays visible through the clear ramp bands.
-    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,nextRamp=0}
+    -- The local physical cylinder stays visible through the clear ramp bands.
+    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp}
     self:energyBloom()
    end
   end end
@@ -472,7 +472,7 @@ function W:orbital(now)
    record.holder.CFrame=CFrame.new(position)
    record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
    record.ramp.Width0=3.2*strength;record.ramp.Width1=record.ramp.Width0
-   if now>=record.nextRamp then record.nextRamp=now+.04;record.ramp.Transparency=W.orbitalTransparency(now) end
+   record.ramp.Transparency=W.orbitalTransparency(now)
   end
  end
 end

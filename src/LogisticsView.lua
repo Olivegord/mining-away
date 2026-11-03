@@ -272,7 +272,7 @@ function View.start(ctx)
      end
      clone.Parent=ctx.localFX;local hidden={}
      for _,node in ipairs(source:GetDescendants()) do if node:IsA('BasePart') then hidden[node]=node.LocalTransparencyModifier;node.LocalTransparencyModifier=1 end end
-     local record={view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}
+     local record={samples={},view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}
      local function changed() record.geometryDirty=true end
      table.insert(record.connections,source.DescendantAdded:Connect(changed));table.insert(record.connections,source.DescendantRemoving:Connect(changed))
      self.visuals[source]=record
@@ -287,7 +287,8 @@ function View.start(ctx)
     local target=source:GetAttribute('Pose')
     if target then
      local reset=source:GetAttribute('Class')=='Capsule' and (source:GetAttribute('Manifest') or 0)==0
-     record.pose=(reset or (target.Position-record.pose.Position).Magnitude<.001) and target or record.pose:Lerp(target,1-math.exp(-16*math.min(dt,.1)))
+     MotionBuffer.push(record.samples,source:GetAttribute('PoseAt'),target,reset)
+     record.pose=MotionBuffer.pose(record.samples,now) or target
      if record.drawnPose~=record.pose then record.view:PivotTo(record.pose);record.drawnPose=record.pose end
      local exhaust,original=record.exhaust,record.sourceExhaust
      if exhaust and original and exhaust:IsA('BasePart') then exhaust.Transparency=original.Transparency end

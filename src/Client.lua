@@ -13,6 +13,7 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local pickupView=PickupView.new(world,localFX,soundscape)
+local roleEffectView=RoleEffectView.new()
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -89,7 +90,7 @@ local function roleImpact(source)
  end
 end
 local impactConnection=workspace.DescendantAdded:Connect(function(source) if source:IsA('BasePart') or source:IsA('Folder') then task.defer(roleImpact,source) end end)
-local existingRoleFX=workspace:FindFirstChild('DroneRoleServerEffects')
+local existingRoleFX=workspace:FindFirstChild('DroneRoleClientEffects')
 if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do roleImpact(source) end end
 
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
@@ -1025,6 +1026,7 @@ local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=r
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
+ roleEffectView:step(now)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
@@ -1320,7 +1322,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
+ commandView:destroy();pickupView:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

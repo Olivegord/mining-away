@@ -34,26 +34,31 @@ local function fragmentSet(e,n,color,material)
  return set
 end
 local function makeRing(e,n,color,width)
- local ring={parts={},width=width or .065}
- for i=1,n do ring.parts[i]=part(e,'EnergyArc',Vector3.one,color) end
+ local ring={parts={},points={},width=width or .065}
+ for i=1,n do ring.parts[i]=part(e,'EnergyArc',Vector3.one,color);local angle=(i-1)*TAU/n;ring.points[i]=Vector3.new(math.cos(angle),0,math.sin(angle)) end
  return ring
+end
+local values=setmetatable({},{__mode='k'})
+local function set(p,key,value)
+ local cached=values[p]
+ if not cached then cached={};values[p]=cached end
+ if cached[key]~=value then p[key]=value;cached[key]=value end
 end
 local function showRing(ring,cf,radius,alpha)
  local n=#ring.parts
  for i,p in ipairs(ring.parts) do
-  local a,b=(i-1)*TAU/n,i*TAU/n
-  local from=cf:PointToWorldSpace(Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius))
-  local to=cf:PointToWorldSpace(Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius))
+  local from=cf:PointToWorldSpace(ring.points[i]*radius)
+  local to=cf:PointToWorldSpace(ring.points[i%n+1]*radius)
   p.Size=Vector3.new(ring.width,ring.width,math.max(.025,(to-from).Magnitude))
-  p.CFrame=CFrame.lookAt((from+to)*.5,to);p.Transparency=alpha or 0
+  p.CFrame=CFrame.lookAt((from+to)*.5,to);set(p,'Transparency',alpha or 0)
  end
 end
 local function line(p,a,b,width,alpha)
- if (b-a).Magnitude<.001 then p.Transparency=1;return end
- p.Size=Vector3.new(width,width,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Transparency=alpha or 0
+ if (b-a).Magnitude<.001 then set(p,'Transparency',1);return end
+ p.Size=Vector3.new(width,width,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)*.5,b);set(p,'Transparency',alpha or 0)
 end
 local function hideParts(parts)
- for _,p in ipairs(parts) do p.Transparency=1 end
+ for _,p in ipairs(parts) do set(p,'Transparency',1) end
 end
 local function proxy(e)
  -- The authoritative collider remains hidden by Client.lua. Clone the current
@@ -114,16 +119,16 @@ local function bubblePose(e,t)
  local center=e.center+Vector3.new(0,lift-fall,0)
  local absorb=smooth((t-.18)/.2)
  e.rock.CFrame=e.cf+Vector3.new(0,lift-fall,0)
- e.rock.Size=safeSize(e.size*(1-absorb*.77));e.rock.Transparency=clamp((t-.55)*2)
+ set(e.rock,'Size',safeSize(e.size*(1-absorb*.77)));set(e.rock,'Transparency',clamp((t-.55)*2))
  for i,p in ipairs(e.bubbles) do
   local a=i*TAU/5+t*4
   local converge=1-smooth(t/.32)
   local offset=i==1 and Vector3.zero or Vector3.new(math.cos(a),math.sin(a*1.7)*.5,math.sin(a))*(r*.55+converge*3)
   p.Position=center+offset+Vector3.new(0,converge*(i+2),0)
   local diameter=i==1 and r*2.65 or r*.8
-  p.Size=Vector3.one*math.max(.05,diameter*smooth(t/.17));p.Transparency=.43
-  local glint=e.glints[i];glint.Size=Vector3.one*math.max(.025,diameter*.075)
-  glint.Position=p.Position+Vector3.new(-diameter*.23,diameter*.3,-diameter*.2);glint.Transparency=.12
+  set(p,'Size',Vector3.one*math.max(.05,diameter*smooth(t/.17)));set(p,'Transparency',.43)
+  local glint=e.glints[i];set(glint,'Size',Vector3.one*math.max(.025,diameter*.075))
+  glint.Position=p.Position+Vector3.new(-diameter*.23,diameter*.3,-diameter*.2);set(glint,'Transparency',.12)
  end
  local view=workspace.CurrentCamera
  local rimCF=CFrame.new(center)
@@ -136,7 +141,7 @@ local function halverPose(e,t)
  local n=2^levels
  local stretch=math.sin((split*5)%1*math.pi)*.35
  local grind=smooth((t-.6)/.28)
- e.rock.Transparency=t<.12 and 0 or 1
+ set(e.rock,'Transparency',t<.12 and 0 or 1)
  for i,p in ipairs(e.fragments) do
   if i<=n and t>=.12 then
    local angle=(i-1)*TAU/n+t*t*48
@@ -153,17 +158,17 @@ local function halverPose(e,t)
    local ringPos=e.center+Vector3.new(math.cos(angle)*e.radius*1.6,2+math.sin(angle*3)*.2,math.sin(angle)*e.radius*1.6)
    p.Position=splitPos:Lerp(ringPos,grind)
    local shrink=1-smooth((t-.84)/.16)*.87
-   p.Size=safeSize(cell*(.94+stretch*.35)*shrink)
+   set(p,'Size',safeSize(cell*(.94+stretch*.35)*shrink))
    p.CFrame=CFrame.new(p.Position)*e.cf.Rotation*CFrame.Angles(t*grind*30+i*grind,t*grind*20,stretch)
-   p.Transparency=clamp((t-.94)*8)
-  else p.Transparency=1 end
+   set(p,'Transparency',clamp((t-.94)*8))
+  else set(p,'Transparency',1) end
  end
  showRing(e.ring,CFrame.new(e.center+Vector3.new(0,2,0)),e.radius*1.7,t<.58 and 1 or .45)
 end
 local function gridPose(e,t)
  local r=e.radius*1.05
  local scan=clamp(t/.7)
- e.rock.CFrame=e.cf;e.rock.Size=e.size;e.rock.Transparency=t<.82 and 0 or 1
+ e.rock.CFrame=e.cf;set(e.rock,'Size',e.size);set(e.rock,'Transparency',t<.82 and 0 or 1)
  for i,p in ipairs(e.grid) do
   local axis=i>4;local index=(i-1)%4
   local coordinate=(index/3-.5)*r*1.5
@@ -180,48 +185,48 @@ local function gridPose(e,t)
   local cell=e.size/3
   local offset=Vector3.new(x*cell.X,y*cell.Y,z*cell.Z)
   local spill=clamp((t-.82)/.18)
-  p.Size=safeSize(cell*.91)
+  set(p,'Size',safeSize(cell*.91))
   p.CFrame=CFrame.new(e.center+offset+Vector3.new(x*spill*.9,spill*.55,z*spill*.9))*CFrame.Angles(z*spill*.3,x*spill*.3,0)
-  p.Transparency=t>=.82 and 0 or 1
+  set(p,'Transparency',t>=.82 and 0 or 1)
  end
 end
 local function singularityPose(e,t)
  local center=e.center+Vector3.new(0,e.radius*.4+1,0)
  local grow=smooth(t/.2);local absorb=smooth((t-.12)/.78)
  local diameter=e.radius*.82*grow
- e.hole.Size=Vector3.one*math.max(.05,diameter);e.hole.Position=center
+ set(e.hole,'Size',Vector3.one*math.max(.05,diameter));e.hole.Position=center
  showRing(e.ring,CFrame.new(center)*CFrame.Angles(.35,0,t*4),math.max(.05,diameter*.9),.05)
- e.rock.Size=safeSize(e.size*(1-absorb*.97))
+ set(e.rock,'Size',safeSize(e.size*(1-absorb*.97)))
  e.rock.CFrame=CFrame.new(e.center:Lerp(center,absorb))*e.cf.Rotation*CFrame.Angles(t*t*5,absorb*12,0)
- e.rock.Transparency=clamp((t-.8)*5)
+ set(e.rock,'Transparency',clamp((t-.8)*5))
  for i,p in ipairs(e.fragments) do
   local phase=(t*1.1+i/16)%1
   local radius=e.radius*(.2+(1-phase)*2.2)
   local a=i*2.4+t*15+phase*5
   p.Position=center+Vector3.new(math.cos(a)*radius,math.sin(a*2)*radius*.25,math.sin(a)*radius)
-  p.Size=Vector3.one*(.04+(1-phase)*.12);p.Transparency=1-grow*(1-phase)
+  set(p,'Size',Vector3.one*(.04+(1-phase)*.12));set(p,'Transparency',1-grow*(1-phase))
  end
 end
 local function starforgePose(e,t)
  local center=e.center+Vector3.new(0,e.radius+3,0)
  local heat=smooth((t-.12)/.75)
  local diameter=e.radius*(.5+.5*smooth(t/.2))
- e.sun.Position=center;e.sun.Size=Vector3.one*diameter
- e.corona.Position=center;e.corona.Size=e.sun.Size*(1.45+math.sin(t*48)*.04)
+ e.sun.Position=center;set(e.sun,'Size',Vector3.one*diameter)
+ e.corona.Position=center;set(e.corona,'Size',e.sun.Size*(1.45+math.sin(t*48)*.04))
  showRing(e.ring,CFrame.new(center)*CFrame.Angles(.45,t*4,.3),diameter*.95,.22)
- e.rock.Color=e.color:Lerp(hot,heat);e.rock.Material=t>.45 and Enum.Material.Neon or e.material
- e.rock.Size=safeSize(e.size*Vector3.new(1+heat*.22,1-heat*.6,1+heat*.22))
+ set(e.rock,'Color',e.color:Lerp(hot,heat));set(e.rock,'Material',t>.45 and Enum.Material.Neon or e.material)
+ set(e.rock,'Size',safeSize(e.size*Vector3.new(1+heat*.22,1-heat*.6,1+heat*.22)))
  e.rock.CFrame=e.cf+Vector3.new(0,-heat*e.size.Y*.24,0)
  for i,p in ipairs(e.fragments) do
   local a=i*2.4;local phase=(t*2+i/18)%1
   p.Position=e.center+Vector3.new(math.cos(a)*e.radius*(.7+phase),-e.radius*.3-phase*phase*2,math.sin(a)*e.radius*(.7+phase))
-  p.Size=Vector3.one*(.15+.23*(1-phase));p.Transparency=t<.35 and 1 or phase*.8
+  set(p,'Size',Vector3.one*(.15+.23*(1-phase)));set(p,'Transparency',t<.35 and 1 or phase*.8)
  end
 end
 local function frostbitePose(e,t)
  local freeze=smooth(t/.6);local shiver=math.sin(t*150)*smooth((t-.68)/.25)*.035
- e.rock.CFrame=e.cf+Vector3.new(shiver,0,-shiver);e.rock.Color=e.color:Lerp(ice,freeze)
- e.shell.CFrame=e.rock.CFrame;e.shell.Size=e.size*(1.02+freeze*.14);e.shell.Transparency=1-freeze*.55
+ e.rock.CFrame=e.cf+Vector3.new(shiver,0,-shiver);set(e.rock,'Color',e.color:Lerp(ice,freeze))
+ e.shell.CFrame=e.rock.CFrame;set(e.shell,'Size',e.size*(1.02+freeze*.14));set(e.shell,'Transparency',1-freeze*.55)
  local pulse=((t-.7)*5)%1
  showRing(e.ring,CFrame.new(e.center)*CFrame.Angles(math.pi/2,0,0),e.radius*(1+pulse*1.4),t<.7 and 1 or pulse)
  hideParts(e.fragments)
@@ -230,7 +235,7 @@ local function resonatorPose(e,t)
  local pulse=(t*5)%1
  local shake=smooth((t-.25)/.7)*.07
  e.rock.CFrame=e.cf*CFrame.Angles(math.sin(t*125)*shake,0,math.cos(t*113)*shake)
- e.rock.Size=safeSize(e.size*Vector3.new(1+math.sin(t*80)*shake,1-math.sin(t*80)*shake,1))
+ set(e.rock,'Size',safeSize(e.size*Vector3.new(1+math.sin(t*80)*shake,1-math.sin(t*80)*shake,1)))
  for i,ring in ipairs(e.rings) do
   local phase=(pulse+(i-1)/3)%1
   local cf=CFrame.new(e.center+Vector3.new(0,(i-2)*e.radius*.5,0))*CFrame.Angles(i==2 and math.pi/2 or .15,0,t*(i-2)*2)
@@ -243,7 +248,7 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 local function finishPose(e,age)
  if not e.finished then
   e.finished=true;e.burstOrigin=e.kind=='Bubbler' and e.center+Vector3.new(0,-2,0) or e.center
-  for _,p in ipairs(e.parts) do p.Transparency=1 end
+  for _,p in ipairs(e.parts) do set(p,'Transparency',1) end
  end
  local fade=clamp(age/TAIL)
  local fragments=e.fragments or {}
@@ -258,15 +263,15 @@ local function finishPose(e,age)
   end
   p.CFrame=CFrame.new(start+velocity*age+Vector3.new(0,-6*age*age,0))*CFrame.Angles(i+age*4,age*6,i*.5)
   local size=e.kind=='Gridcutter' and e.size/3*.85 or Vector3.one*(e.kind=='Bubbler' and .34 or .23)
-  p.Size=safeSize(size*(1-fade*.8));p.Transparency=fade
-  if e.kind=='Bubbler' then p.Shape=Enum.PartType.Cylinder;p.Size=Vector3.new(.1, .43, .43)*(1-fade*.8);p.Color=gold end
+  set(p,'Size',safeSize(size*(1-fade*.8)));set(p,'Transparency',fade)
+  if e.kind=='Bubbler' then set(p,'Shape',Enum.PartType.Cylinder);set(p,'Size',Vector3.new(.1, .43, .43)*(1-fade*.8));set(p,'Color',gold) end
  end
 end
 
 function FX.new(world,options)
  options=options or {}
  local self={world=world,tracked={},dirty={},retry={},active={},count=0,connections={},destroyed=false,poseUpdates=0}
- local interval=options.interval or 1/30
+ local interval=options.interval or 0 -- continuous render-frame motion by default
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)

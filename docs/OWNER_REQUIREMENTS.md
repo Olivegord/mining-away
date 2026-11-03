@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 3 latest — smooth animation on every client
+
+Move remaining cosmetic animation off the server. The server publishes authoritative effect intent/timing and gameplay state; every observer renders its own smooth animation, including ongoing effects for late joiners. Remove stepped special-miner motion without undoing the earlier query, replication and cleanup optimizations. Keep damage, rewards, reservations and persistence on the server. Do not start Play for this work.
+
 ## November 3 latest — optimize the full crew without running Play
 
 The owner reports severe lag with the all-type test crew and requests optimization of the actual game code. Keep the simple native assets and all drone options; remove unnecessary computation, replication, rendering work and accumulation. Do not start or run the game during this pass. Complete offline verification and saved builds, leaving Play stopped for the owner to test.

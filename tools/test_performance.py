@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
         fixtures=[
             ('server',mock+'\nmath.randomseed(42)\n'+setup+'\nfunction runService:IsStudio()return true end\n'+server+'\n'+server_check),
             ('fx',fx_setup+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
-            ('logistics',fx_setup+view_setup+'\n'+methods+'\n'+view_check),
+            ('logistics',fx_setup+'\nlocal MotionBuffer=(function()\n'+(ROOT/'src/MotionBuffer.lua').read_text()+'\nend)()\n'+view_setup+'\n'+methods+'\n'+view_check),
         ]
         if name=='after':fixtures.append(('fracture',mock+'\nlocal P={}\n'+impact+'\n'+(ROOT/'tests/performance-fracture.integration.lua').read_text()))
         for kind,source in fixtures:
@@ -59,6 +59,6 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
     assert after['cooldown'][2]<=before['cooldown'][2]*.25,'cooldown field surveys remain excessive'
     assert after['burn'][2]<=before['burn'][2]*.25,'burn still rescans the entire field'
     assert after['specialists'][2]<=before['specialists'][2]*.3,'specialist holds still raycast every simulation tick'
-    assert after['fx144'][0]<=before['fx144'][0]*.35,'FX property writes did not fall'
+    assert after['fx144'][0]<before['fx144'][0],'continuous FX still repeat unchanged property writes'
     assert after['logistics']==[0,0],'stationary logistics still perform traversal/pose writes'
 print(json.dumps({'baseline':args.baseline,'metrics':results,'scope':'Deterministic API-double call counts, not Studio timing/FPS/energy'},indent=2))

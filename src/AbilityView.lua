@@ -49,7 +49,7 @@ function View.start(options)
   if processed or UIS:GetFocusedTextBox() then return end
   if input.KeyCode==Enum.KeyCode.G then activate('Orbital') elseif input.KeyCode==Enum.KeyCode.B then activate('Scrap') end
  end)
- -- Sources remain on the server; local clones interpolate each complete pose.
+ -- Server records carry poses only; each observer clones the original art locally.
  local visualRoot=Instance.new('Folder');visualRoot.Name='ScrapBotPresentation';visualRoot.Parent=workspace
  local bots={}
  local function remove(source,record)
@@ -58,13 +58,20 @@ function View.start(options)
   -- get their full tail instead of being cut off at swarm expiry.
   record.sparks.Enabled=false;record.core.Transparency=1
   Debris:AddItem(record.core,record.sparks.Lifetime.Max+.1);bots[source]=nil
-  if source.Parent then for _,part in ipairs(source:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0 end end end
  end
  local function observe(source)
-  if bots[source] or not source:IsA('Model') or source:GetAttribute('ScrapBot')~=true then return end
+  if bots[source] or not source:IsA('Folder') or source:GetAttribute('ScrapBot')~=true then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
-  local view=source:Clone();view.Name='LocalScrapBot'
-  for _,part in ipairs(source:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=1 end end
+  local reference=source.Parent and source.Parent:FindFirstChild('Template')
+  local template=reference and reference.Value
+  if not template or not template:IsA('Model') then return end
+  local view=template:Clone();view.Name='LocalScrapBot'
+  for _,node in ipairs(view:GetDescendants()) do
+   if node:IsA('LuaSourceContainer') or node:IsA('BillboardGui') or node:IsA('SurfaceGui') or node:IsA('Sound') then node:Destroy()
+   elseif node:IsA('Beam') or node:IsA('Trail') or node:IsA('ParticleEmitter') then node.Enabled=false
+   elseif node:IsA('BasePart') then node.Anchored=true;node.CastShadow=false;node.Reflectance=0 end
+  end
+  view:ScaleTo(view:GetScale()*.18)
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
   view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
@@ -80,10 +87,10 @@ function View.start(options)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
   sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.09),NumberSequenceKeypoint.new(1,0)})
   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.45,.5),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
-  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}
+  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0,samples={}}
  end
  local function scan()
-  local folder=workspace:FindFirstChild('DroneRoleServerEffects')
+  local folder=workspace:FindFirstChild('DroneRoleState')
   if folder then for _,group in ipairs(folder:GetChildren()) do if group:GetAttribute('ScrapSwarm') then for _,source in ipairs(group:GetChildren()) do observe(source) end end end end
  end
  local scanAt=0;local nearby=false
@@ -115,8 +122,11 @@ function View.start(options)
    else
     local position=source:GetAttribute('Position') or record.pos
     local target=source:GetAttribute('TargetPosition') or position
-    local delta=position-record.pos;local alpha=1-math.exp(-math.min(dt,.1)*16)
-    record.pos=record.pos:Lerp(position,alpha)
+    MotionBuffer.push(record.samples,source:GetAttribute('PoseAt'),CFrame.new(position))
+    local pose=MotionBuffer.pose(record.samples,now)
+    local nextPosition=pose and pose.Position or position
+    local delta=nextPosition-record.pos
+    record.pos=nextPosition
     if delta.X*delta.X+delta.Z*delta.Z>.001 then
      local yaw=math.atan2(-delta.X,-delta.Z);local diff=(yaw-record.yaw+math.pi)%(2*math.pi)-math.pi
      record.yaw+=diff*(1-math.exp(-math.min(dt,.1)*8))
