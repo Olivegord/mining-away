@@ -6,6 +6,7 @@ Baseline: `09e89298735fdaf7f0a4eae908398b1954b23eb6`, the 15-drone preview (nine
 
 - Server drone motion still integrates at its original fixed rate. Physical proxy models now move with snapshots instead of every simulation step; clients continue their existing smooth local rendering. Breaker phase transitions still publish their exact pose immediately. Ordinary unchanged snapshot attributes are not rewritten; immediate pause/phase writes invalidate the cache so resuming cannot leave mining hidden.
 - Orbital cooldown no longer surveys the field. Ready surveys are bounded by snapshot cadence. Active burns resolve their fixed target directly instead of sorting and raycasting all rocks on every damage tick. Each actual hit retains its fresh authoritative obstruction check. Idle ability state no longer creates per-step work contexts.
+- Specialist startup/hold phases monitor obstructions at snapshot cadence instead of raycasting every simulation tick. Actual startup and completion force a fresh check, and the final damage resolver still validates its hit. An obstruction cannot turn a cached clear path into an accepted final hit.
 - Currency physics, expiry and collection remain fixed-rate authoritative logic. Its physical proxy position/fade updates at the existing snapshot cadence, matching the separately rendered client trajectory.
 - Multi-part specialist geometry updates at up to 30 Hz from elapsed authoritative time. Ordinary drone flight keeps its original render cadence. Effects subscribe only to resources and relevant effect attributes; scenery and currency no longer dirty the effect constructor. Waiting construction retries are bounded. Distant effects free geometry and restore their rock; nearby-owner work remains visible when zoomed out. Pause clock shifts reuse the existing geometry.
 - Specialist jobs retain their own bubble/split/cube/shatter aftermath instead of receiving another generic shower for every hidden fracture stage. Ordinary rock fracture and break feedback remain, including authored mesh fragments; confirmed break shake and crystal audio remain.
@@ -22,6 +23,7 @@ Run `python3 tools/test_performance.py /tmp/mining-away-luau`. It executes the r
 | Drone snapshot attribute writes, same workload | 22,695 | 3,960 | 82.6% |
 | Field-survey rays, two seconds cooldown | 1,440 | 0 | 100% |
 | Rays during two seconds of actual orbital burn logic | 1,560 | 120 | 92.3% |
+| Rays for seven specialists during two seconds of startup/work | 840 | 126 | 85.0% |
 | Specialist property writes, seven active types, one second at 144 callbacks/s | 90,492 | 17,594 | 80.6% |
 | Idle client logistics descendant scans / pose writes, ten seconds | 650 / 600 | 0 / 0 | 100% |
 

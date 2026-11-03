@@ -100,6 +100,7 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
   d.target.part:SetAttribute('EffectCancelledSerial',d.specialJob.serial);d.target.part:SetAttribute('EffectType',nil)
  end
  d.specialJob=nil;d.specialPausedAt=nil;d.obstructedAt=nil
+ d.specialClear=nil;d.specialQueryAt=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
  d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil
@@ -910,7 +911,16 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  local r=d.target
  if not r or r.kind=='Geode' then mineDrone(d,p,field,dt);return end
  local goal=committedStation(d,r);d.state='Travel';d.mining=false;move(d,goal,dt)
- if not Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) or not los(d.pos,r.position,r.part,{droneFolder}) then
+ local arrived=Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0)
+ local job=d.specialJob
+ local starting=not job and d.warmAt and now-d.warmAt>=math.max(.08,d.stats.warmup)
+ local completing=job and now>=job.startedAt+job.duration
+ if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or completing) then
+  -- No damage occurs during the long cosmetic work hold. Monitor obstruction
+  -- at snapshot cadence, and always recheck at actual startup and completion.
+  d.specialClear=los(d.pos,r.position,r.part,{droneFolder});d.specialQueryAt=now+C.Snapshot
+ end
+ if not arrived or not d.specialClear then
   if (d.pos-goal).Magnitude<=1 and now>=r.readyAt then
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+3;release(d)
   elseif d.specialJob then release(d) else d.warmAt=nil end;return

@@ -58,6 +58,7 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
     assert after['idle'][1]<=before['idle'][1]*.4,'snapshot attribute writes did not fall'
     assert after['cooldown'][2]<=before['cooldown'][2]*.25,'cooldown field surveys remain excessive'
     assert after['burn'][2]<=before['burn'][2]*.25,'burn still rescans the entire field'
+    assert after['specialists'][2]<=before['specialists'][2]*.3,'specialist holds still raycast every simulation tick'
     assert after['fx144'][0]<=before['fx144'][0]*.35,'FX property writes did not fall'
     assert after['logistics']==[0,0],'stationary logistics still perform traversal/pose writes'
 print(json.dumps({'baseline':args.baseline,'metrics':results,'scope':'Deterministic API-double call counts, not Studio timing/FPS/energy'},indent=2))

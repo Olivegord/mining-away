@@ -35,10 +35,28 @@ reset()
 for _=1,120 do realTime+=C.Tick;now=realTime;DroneAbilities.step(p.ability,now,C.Tick,abilityContext(p,1,orbital)) end
 assert(r.hp<before and p.ability.burn,'burn must still damage the same real rock')
 report('burn')
+leaveField(p)
+local specialists={}
+for _,d in ipairs(p.drones)do if DroneRoles.isSpecial(d.role)then table.insert(specialists,d)end end
+for i,d in ipairs(specialists)do
+ local target=field.resources[i];target.hp=1000000;target.maxHP=1000000;target.paid=false;target.readyAt=now
+ assert(assignOre(p,d,target));d.pos=Feel.mineGoal(target.position,d.targetSlot,false,target.fullSize);d.velocity=Vector3.zero
+end
+reset()
+for _=1,120 do realTime+=C.Tick;now=realTime;for _,d in ipairs(specialists)do droneStep(d,C.Tick)end end
+for _,d in ipairs(specialists)do assert(d.specialJob and d.state=='SpecialMine' and d.target.hp==1000000)end
+report('specialists')
+-- A cached clear path must never authorize an obstructed completion.
+local blocked=specialists[1];local target=blocked.target;local hp=target.hp
+blocked.specialJob.startedAt=now-blocked.specialJob.duration;blocked.specialClear=true;blocked.specialQueryAt=now+100
+local ray=workspace.Raycast;local obstacle=Instance.new('Part')
+function workspace:Raycast()return {Instance=obstacle}end
+droneStep(blocked,C.Tick);assert(not blocked.target and not blocked.specialJob and target.hp==hp,'cached visibility allowed an obstructed final hit')
+workspace.Raycast=ray
 -- Cached snapshots must not leave a stale false Mining flag after a save pause.
 local miner;for _,d in ipairs(p.drones) do if d.role=='Striker' then miner=d end end
 release(miner);assert(assignOre(p,miner,r));miner.state='Mine';miner.mining=true
 snapshotDrone(miner);assert(miner.model:GetAttribute('Mining')==true)
 setMotionPaused(p,true);assert(miner.model:GetAttribute('Mining')==false)
 setMotionPaused(p,false);snapshotDrone(miner);assert(miner.model:GetAttribute('Mining')==true)
-print('PASS actual production burn damage and snapshot pause/resume coherence; API doubles only')
+print('PASS production burn damage, specialist monitoring/final-hit obstruction and snapshot pause/resume coherence; API doubles only')
