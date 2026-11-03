@@ -5,7 +5,7 @@
 local V={}
 function V.render(U,parent,options)
  local p=options.profile;local key=options.shop;local width=options.width
- local color=Color3.fromRGB(unpack(Shops.COLORS[key]));local ink=U.palette.ink
+ local color=key=='Quartz' and Color3.fromRGB(41,139,214) or Color3.fromRGB(unpack(Shops.COLORS[key]));local ink=U.palette.text
  local function text(root,x,y,w,h,value,size,bold)
   return U.text(root,UDim2.fromOffset(x,y),UDim2.fromOffset(w,h),value,size or 16,ink,bold)
  end
@@ -39,8 +39,7 @@ function V.render(U,parent,options)
  for index,entry in ipairs(Shops.CATALOG) do if entry.shop==key then
   local owned=p.run.shopLevels[entry.id] or 0;local cost=Shops.cost(entry,owned)
   local complete=owned>=entry.max or (entry.unlock and Shops.unlocked(p,entry.unlock))
-  local cell=U.panel(grid,UDim2.fromOffset(0,0),UDim2.fromOffset(200,190));cell.Name='Upgrade_'..entry.id;cell.LayoutOrder=index
-  local stripe=U.frame(cell,UDim2.fromOffset(0,0),UDim2.new(1,0,0,4),color);stripe.Name='ShopColor'
+  local cell=U.panel(grid,UDim2.fromOffset(0,0),UDim2.fromOffset(200,190),color:Lerp(U.palette.panel,.45),14);cell.Name='Upgrade_'..entry.id;cell.LayoutOrder=index
   local title=U.text(cell,UDim2.fromOffset(12,10),UDim2.new(1,-24,0,42),entry.title,18,ink,true);title.TextYAlignment=Enum.TextYAlignment.Top
   local desc=U.text(cell,UDim2.fromOffset(12,55),UDim2.new(1,-24,0,44),entry.description,16,ink);desc.TextYAlignment=Enum.TextYAlignment.Top
   U.text(cell,UDim2.fromOffset(12,102),UDim2.new(1,-24,0,24),complete and 'Installed' or ('Level '..owned..' / '..entry.max),16,U.palette.muted)

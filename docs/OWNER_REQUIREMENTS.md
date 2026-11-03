@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 2 latest — shared UI style, flicker and fading rays
+
+The owner approves the general start and requests fixing flicker, feathered edges on the rotating glow, and applying the same super-simple, textured, colorful treatment to all UI, with interaction where useful. Preserve the approved 3D card movement and object outlines. Extend the skin through the compact HUD, commands/gadgets, shops, fleet/run menus, pack and prestige; keep saved choices and server authority. The owner explicitly authorizes coordinating the gameplay-audio and UI chats and requests recording chat coordination in AGENTS.md. See [unified UI and native checks](review/UNIFIED_TEXTURED_UI.md).
+
 ## November 2 latest — refine the finish, preserve movement and outlines
 
 The owner says the card movement and object outlines work well but rejects the finish as sloppy compared with the supplied reference. Preserve those approved behaviors and refine the gradient continuity, smooth rounded edges, lighting and surface quality. See [gradient refinement and native screenshot](review/REFINED_PACK_GRADIENTS.md).

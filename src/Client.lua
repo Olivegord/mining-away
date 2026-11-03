@@ -121,7 +121,7 @@ local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop
 local activeShop,shopInfo='Quartz',nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 U.icon(hud,'crystal',UDim2.fromOffset(9,10),UDim2.fromOffset(34,34),Color3.fromRGB(255,208,70))
-local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'Quartz 0',18,palette.ink,true);creditsLabel.Name='Credits'
+local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'Quartz 0',18,palette.text,true);creditsLabel.Name='Credits'
 local shopButton=button(safeRoot,UDim2.new(1,-150,0,6),UDim2.fromOffset(44,44),'Shops',function() if openShop then openShop(activeShop) end end,palette.mineral);shopButton.Name='OpenShops';shopButton.TextSize=16
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
 local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 40',11,palette.muted,true)
@@ -129,19 +129,19 @@ local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local fleetButton=button(hud,UDim2.new(1,-104,0,10),UDim2.fromOffset(46,44),'',function() if openFleet then openFleet() end end,Color3.fromRGB(48,145,221));fleetButton.Name='OpenFleet'
 U.icon(fleetButton,'drone',UDim2.fromOffset(13,2),UDim2.fromOffset(22,22),colors.Blue)
-local fleetCount=label(fleetButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Fleet',9,palette.ink,true);fleetCount.TextXAlignment=Enum.TextXAlignment.Center
+local fleetCount=label(fleetButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Fleet',9,palette.text,true);fleetCount.TextXAlignment=Enum.TextXAlignment.Center
 local runButton=button(hud,UDim2.new(1,-54,0,10),UDim2.fromOffset(46,44),'',function() if profile and profile.run.pendingOffer then openOffer() else openRunCards() end end,Color3.fromRGB(139,83,224));runButton.Name='OpenRunCards'
 U.icon(runButton,'cards',UDim2.fromOffset(13,2),UDim2.fromOffset(22,22),palette.accent)
-local runCount=label(runButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Cards',9,palette.ink,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
+local runCount=label(runButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Cards',9,palette.text,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
 local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(360,48),palette.panel,10);objectiveBox.Name='NextStep'
 U.icon(objectiveBox,'crystal',UDim2.fromOffset(9,9),UDim2.fromOffset(27,27),palette.mineral)
-local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect the fragments, then sell.',12,palette.ink)
+local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect the fragments, then sell.',12,palette.text)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
-local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.ink,true);notice.TextXAlignment=Enum.TextXAlignment.Center
+local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.text,true);notice.TextXAlignment=Enum.TextXAlignment.Center
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() command:FireServer('Recall') end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local contextIcon=U.icon(context,'mining',UDim2.fromOffset(12,17),UDim2.fromOffset(34,34),palette.mineral)
-local contextTitle=label(context,UDim2.fromOffset(55,6),UDim2.new(1,-174,0,30),'',18,palette.ink,true)
+local contextTitle=label(context,UDim2.fromOffset(55,6),UDim2.new(1,-174,0,30),'',18,palette.text,true)
 local contextDetail=label(context,UDim2.fromOffset(55,35),UDim2.new(1,-174,0,27),'',11,palette.muted)
 local contextAction=nil
 local contextButton=button(context,UDim2.new(1,-112,0,14),UDim2.fromOffset(100,44),'Use [E]',function() if contextAction then contextAction() end end)
@@ -150,9 +150,9 @@ local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.from
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
-local modalTitle=label(sheet,UDim2.fromOffset(90,18),UDim2.new(1,-158,0,39),'Build your next adventure',30,palette.ink,true)
+local modalTitle=label(sheet,UDim2.fromOffset(90,18),UDim2.new(1,-158,0,39),'Build your next adventure',30,palette.text,true)
 local modalSubtitle=label(sheet,UDim2.fromOffset(24,66),UDim2.new(1,-48,0,32),'',12,palette.muted)
-local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white;close:FindFirstChildOfClass('UIGradient').Enabled=false
+local close=button(sheet,UDim2.new(1,-62,0,16),UDim2.fromOffset(44,44),'X',function() modal.Visible=false end,palette.danger);close.Name='CloseMenu';close.TextColor3=palette.white;close:FindFirstChildOfClass('UIGradient').Enabled=true
 local body=Instance.new('ScrollingFrame');body.Name='MenuContent';body.Position=UDim2.fromOffset(24,112);body.Size=UDim2.new(1,-48,1,-136);body.BackgroundTransparency=1;body.BorderSizePixel=0;body.ScrollBarThickness=4;body.ScrollBarImageColor3=palette.muted;body.CanvasSize=UDim2.fromScale(0,0);body.AutomaticCanvasSize=Enum.AutomaticSize.Y;body.ZIndex=22;body.Parent=sheet
 -- Native touch controls otherwise draw over the physical offer surface.
 local previousTouchEnabled=nil
@@ -166,12 +166,13 @@ connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' th
 local modalMode,modalSize=nil,nil
 CardView.backdrop(U,sheet)
 local actionPending=nil
-local function clearBody() for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
+local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
+local function clearBody() table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil; for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
 local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
  data=data or {};data.txId=tx();data.runId=profile.run.id
- actionPending={kind=action,at=os.clock(),runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level}
+ actionPending={kind=action,at=os.clock(),runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
  command:FireServer(action,data);return true
 end
 local function comma(n) local s=tostring(math.floor(tonumber(n) or 0));local r=s:reverse():gsub('(%d%d%d)','%1,'):reverse();return (r:gsub('^,','')) end
@@ -194,9 +195,10 @@ end
 local function currentLayout() local v=viewport();return UILayout.calculate(v.X,v.Y,UIS.TouchEnabled and not UIS.KeyboardEnabled) end
 local function layoutModal()
  local v=viewport();local l=currentLayout()
+ if l.short then l.headerHeight=64;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding) end
  if modalMode=='shop' then
-  l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=100
-  l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-116);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
+  l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
+  l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='offer' and l.short then
   l.headerHeight=64;l.panelPadding=12;l.bodyWidth=l.panelWidth-24
@@ -219,7 +221,8 @@ local function layoutModal()
  modalEmblem.Position=UDim2.fromOffset(18,18)
  modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,l.short and 58 or 66)
  modalSubtitle.Size=UDim2.new(1,-l.panelPadding*2,0,l.short and 29 or 32)
- if modalMode=='offer' and l.short then
+ if l.short then
+  modalEmblem.Size=UDim2.fromOffset(38,38);modalEmblem.Position=UDim2.fromOffset(18,10)
   local textX=l.panelWidth<400 and 74 or 90
   modalTitle.Position=UDim2.fromOffset(textX,6);modalTitle.Size=UDim2.new(1,l.panelWidth<400 and -136 or -158,0,32);modalTitle.TextSize=23
   modalSubtitle.Position=UDim2.fromOffset(textX,37);modalSubtitle.Size=UDim2.new(1,-textX-60,0,23)
@@ -230,12 +233,13 @@ local menuTween=nil
 local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
- modalMode=mode;clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
+ modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
  local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0;sheet:SetAttribute('CardBackdrop',inOffer)
- local colorful=inOffer or mode=='pack'
- modalTitle.TextColor3=colorful and palette.white or palette.ink;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
+ local colorful=true
+ local texture=sheet:FindFirstChild('StudSurface');if texture then texture.Visible=not inOffer end
+ modalTitle.TextColor3=colorful and palette.white or palette.text;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
  modalSubtitle.TextColor3=inOffer and Color3.fromRGB(215,240,255) or palette.muted
- sheet.BackgroundColor3=(inOffer or mode=='pack') and Color3.fromRGB(19,21,35) or palette.panel
+ sheet.BackgroundColor3=palette.panel
  local rounded=sheet:FindFirstChildOfClass('UICorner');if rounded then rounded.CornerRadius=UDim.new(0,inOffer and 28 or 20) end
  local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0;border.Color=inOffer and Color3.fromRGB(6,8,17) or palette.ink;border.Thickness=inOffer and 5 or 2 end
  if l.panelWidth<400 then
@@ -243,7 +247,8 @@ local function menu(mode,title,subtitle,icon)
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
- modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,18),UDim2.fromOffset(l.panelWidth<400 and 42 or 54,l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
+ modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,l.short and 10 or 18),UDim2.fromOffset(l.short and 38 or l.panelWidth<400 and 42 or 54,l.short and 38 or l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
+ local titles={shop=string.upper(activeShop)..' SHOP',pack='UPGRADE PACK',offer='UPGRADE PACK',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modal.Visible=true
  if entering then
@@ -333,26 +338,37 @@ local function stackText(choice)
  return reserve and 'Repeatable until its stat cap.' or string.format('Copy %d / %d · adds to base',count+1,limit)
 end
 local function progress(parent,y,width,title,detail,fraction,color,dark)
- label(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,22),title,17,dark and palette.white or palette.ink,true)
+ label(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,22),title,17,dark and palette.white or palette.text,true)
  label(parent,UDim2.fromOffset(0,y+27),UDim2.fromOffset(width,27),detail,12,dark and Color3.fromRGB(202,209,231) or palette.muted)
  local track=frame(parent,UDim2.fromOffset(0,y+62),UDim2.fromOffset(width,10),palette.paper);track.ClipsDescendants=true;corner(track,3)
  local fill=frame(track,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(fraction,0,1),1),color);corner(fill,3)
 end
+local function updateOfferControls()
+ local usable,reason=availability('ChooseCard')
+ local choosing=actionPending and actionPending.kind=='ChooseCard'
+ normalSubtitle=choosing and 'Installing your upgrade…' or (not usable and (reason..' · Choices stay saved.') or 'Choose one · This run')
+ for index,view in ipairs(offerViews) do
+  enableAction(view.button,usable)
+  local text=choosing and (actionPending.index==index and 'Installing…' or 'Please wait') or ''
+  if view.button.Text~=text then view.button.Text=text end
+ end
+end
 openOffer=function()
  local offer=pending();if not offer then return end
+ local size=viewport()
+ if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
+ local skipReveal=presentedOfferId==offer.id
  local l=menu('offer','UPGRADE PACK','Choose one · This run','cards')
+ offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view
-  view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{revealSpeed=profile.packSpeed or 1,category=categoryText(choice),target=targetText(choice),previewRows=previewRows(choice),stackText=stackText(choice),onChoose=function()
+  local view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,target=targetText(choice),onChoose=function()
    if not pending() or pending().id~=offer.id or not canAct() then return end
-   if send('ChooseCard',{offerId=offer.id,index=index}) then
-    for _,card in ipairs(body:GetChildren()) do if card:IsA('Frame') then local b=card:FindFirstChild('ChooseCard');if b then enableAction(b,false);b.Text=card==view.root and 'Installing…' or 'Please wait' end end end
-   end
+   if send('ChooseCard',{offerId=offer.id,index=index}) then updateOfferControls() end
   end})
-  local usable=canAct();enableAction(view.button,usable)
-  if not usable then local _,reason=availability('ChooseCard');view.button.Text=reason end
+  offerViews[index]=view
  end
+ updateOfferControls()
 end
 openPack=function()
  if pending() then openOffer();return end
@@ -360,30 +376,30 @@ openPack=function()
  local l=menu('pack','UPGRADE PACK','Three cards. Pick the upgrade your crew needs.','cards')
  local width=l.bodyWidth-6
  local narrow=l.bodyWidth<400
- local hero=frame(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,180),Color3.fromRGB(31,111,214));hero.Name='PackHousing'
+ local hero=frame(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,l.short and 140 or 180),Color3.fromRGB(31,111,214));hero.Name='PackHousing'
  CardView.housing(U,hero,Color3.fromRGB(31,111,214),Color3.fromRGB(121,232,255))
- local wrapper=frame(hero,UDim2.fromOffset(narrow and 18 or 24,23),UDim2.fromOffset(narrow and 63 or 79,narrow and 87 or 99),Color3.fromRGB(123,56,209));wrapper.Rotation=-8;wrapper.Name='PackWrapper'
+ local wrapper=frame(hero,UDim2.fromOffset(narrow and 18 or 24,23),UDim2.fromOffset(l.short and 56 or narrow and 63 or 79,l.short and 74 or narrow and 87 or 99),Color3.fromRGB(123,56,209));wrapper.Rotation=-8;wrapper.Name='PackWrapper'
  CardView.housing(U,wrapper,Color3.fromRGB(123,56,209),Color3.fromRGB(255,216,86))
- U.icon(wrapper,'crystal',UDim2.fromScale(.14,.23),UDim2.fromOffset(narrow and 45 or 56,narrow and 45 or 56),Color3.fromRGB(255,216,86))
+ U.icon(wrapper,'crystal',UDim2.fromScale(.14,.23),UDim2.fromOffset(l.short and 40 or narrow and 45 or 56,l.short and 40 or narrow and 45 or 56),Color3.fromRGB(255,216,86))
  for _,y in ipairs({.08,.86}) do local seal=frame(wrapper,UDim2.fromScale(.09,y),UDim2.fromScale(.82,.035),Color3.fromRGB(255,216,86));seal.Name='PackSeal' end
  local price=profile.nextPackPrice or 40;local credits=Shops.balance(profile,'Quartz');local affordable=credits>=price
  local priceText=comma(price)
  local heroTextX=narrow and 94 or 125
- label(hero,UDim2.fromOffset(heroTextX,17),UDim2.new(1,narrow and -heroTextX-16 or -145,0,25),'UPGRADE PACK '..tostring(profile.run.packIndex+1),16,Color3.fromRGB(210,242,255),true)
+ label(hero,UDim2.fromOffset(heroTextX,17),UDim2.new(1,narrow and -heroTextX-16 or -145,0,25),'UPGRADE PACK '..tostring(profile.run.packIndex+1)..(l.short and (' · '..comma(credits)..' Quartz owned') or ''),16,Color3.fromRGB(210,242,255),true)
  local priceSize=narrow and (#priceText>12 and 14 or (#priceText>8 and 18 or 23)) or 35
  local priceLabel=label(hero,UDim2.fromOffset(heroTextX,47),UDim2.new(1,narrow and -heroTextX-16 or -145,0,narrow and 62 or 45),priceText..(narrow and '\nQuartz' or ' Quartz'),priceSize,palette.white,true)
  priceLabel.TextStrokeColor3=Color3.fromRGB(13,23,48);priceLabel.TextStrokeTransparency=.4
- label(hero,UDim2.fromOffset(22,126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
- progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true)
+ label(hero,UDim2.fromOffset(22,l.short and 94 or 126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
+ if not l.short then progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true) end
  local allowed,blocked=availability('BuyPack')
  local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Sell '..comma(price-credits)..' more Quartz')
  local buy
- buy=button(body,UDim2.fromOffset(3,302),UDim2.fromOffset(width,50),text,function()
+ buy=button(body,UDim2.fromOffset(3,l.short and 154 or 302),UDim2.fromOffset(width,50),text,function()
   if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Opening…';enableAction(buy,false) end
  end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18;buy.TextStrokeTransparency=.5
  local oldEdge=buy:FindFirstChildOfClass('UIStroke');if oldEdge then oldEdge:Destroy() end
- CardView.housing(U,buy,Color3.fromRGB(153,46,201),Color3.fromRGB(247,171,255));enableAction(buy,canAct('BuyPack') and affordable)
- label(body,UDim2.fromOffset(8,374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,Color3.fromRGB(202,209,231))
+ U.skin(buy,Color3.fromRGB(153,46,201),12);enableAction(buy,canAct('BuyPack') and affordable)
+ label(body,UDim2.fromOffset(8,l.short and 218 or 374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,Color3.fromRGB(202,209,231))
 end
 openShop=function(key,info)
  if not profile or not profile.run.wallet then return end
@@ -397,9 +413,9 @@ openShop=function(key,info)
   end})
 end
 local function statTile(parent,x,y,width,title,value,color)
- local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);corner(tile,9)
- label(tile,UDim2.fromOffset(10,5),UDim2.new(1,-20,0,15),title,10,palette.muted,true)
- label(tile,UDim2.fromOffset(10,24),UDim2.new(1,-20,0,26),value,20,color or palette.ink,true)
+ local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);tile.BackgroundTransparency=1
+ label(tile,UDim2.fromOffset(10,5),UDim2.new(1,-20,0,15),title,14,palette.muted,true)
+ label(tile,UDim2.fromOffset(10,24),UDim2.new(1,-20,0,26),value,20,color or palette.text,true)
 end
 local function tabs(width,mode)
  local a=button(body,UDim2.fromOffset(3,3),UDim2.fromOffset((width-14)/2,44),'Permanent fleet',openFleet,mode=='fleet' and palette.mineral or palette.paper)
@@ -423,12 +439,12 @@ openFleet=function()
   local stats=(profile.droneStats and profile.droneStats[d.id]) or d.effective or d.base or {}
   local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
   local tint=colors[d.type] or palette.mineral
-  local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),tint:Lerp(palette.white,.80),14);row.Name='FleetDrone'..index
+  local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),tint:Lerp(palette.panel,.36),14);row.Name='FleetDrone'..index
   U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
-  label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,33),d.name or ('Drone '..index),24,palette.ink,true)
-  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),(profile.activeFleet and 'TEST CREW' or 'PERMANENT')..' · '..string.upper(d.role or d.type or 'Blue'),10,palette.muted,true)
+  label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,33),d.name or ('Drone '..index),24,palette.text,true)
+  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),(profile.activeFleet and 'Test · ' or '')..(d.role or d.type or 'Blue'),16,palette.muted,true)
   local count=0;for _,c in ipairs(profile.run.cards) do if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id) then count=count+1 end end
-  identity.Text=identity.Text..' · '..tostring(count)..' cards'
+  identity.Text=identity.Text..' · '..tostring(count)..' upgrades'
   local tileWidth=(rowWidth-42)/2
   local role=(profile.droneRoles and profile.droneRoles[d.id]) or d.role or d.type
   if role=='Medic' then
@@ -458,13 +474,13 @@ openFleet=function()
   label(row,UDim2.fromOffset(15,211),UDim2.new(1,-30,0,40),Mining.description(role),16,palette.muted)
  end
  local index=#crew+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
- local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),palette.accent:Lerp(palette.white,.76),14)
+ local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),palette.accent:Lerp(palette.panel,.35),14);nextDrone.Name='FleetMilestone'
  local narrowTile=rowWidth<330;local tileTextX=narrowTile and 70 or 81
  U.icon(nextDrone,'prestige',UDim2.fromOffset(14,16),UDim2.fromOffset(narrowTile and 45 or 55,narrowTile and 45 or 55),palette.accent)
- label(nextDrone,UDim2.fromOffset(tileTextX,17),UDim2.new(1,-tileTextX-15,0,31),narrowTile and 'Next drone' or 'Next crewmate',narrowTile and 21 or 24,palette.ink,true)
+ label(nextDrone,UDim2.fromOffset(tileTextX,17),UDim2.new(1,-tileTextX-15,0,31),narrowTile and 'Next drone' or 'Next crewmate',narrowTile and 21 or 24,palette.text,true)
  label(nextDrone,UDim2.fromOffset(tileTextX,54),UDim2.new(1,-tileTextX-15,0,20),'+1 PERMANENT DRONE',10,palette.muted,true)
  local pre=profile.prestigePreview or {};local earned=pre.earnings or 0;local required=pre.saleRequired or 2000
- label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' credits sold',13,palette.ink,true)
+ label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' credits sold',13,palette.text,true)
  local guardRequirement=(pre.winsRequired or 1)>0 and ((pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' · Unlocked' or ' · Defeat guards once')) or 'No sentry clear required'
  label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),guardRequirement,16,palette.muted)
  local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
@@ -480,14 +496,15 @@ openRunCards=function()
  tabs(width,'run')
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
-  local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.ink,true);title.TextXAlignment=Enum.TextXAlignment.Center
+  local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
   local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine crystals, sell minerals at the Converter, and open a pack at the depot. Choose one of three cards to shape this run.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   button(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,48),'View next pack',openPack,palette.accent)
  else
   for index,c in ipairs(profile.run.cards) do
    local y=63+(index-1)*145
-   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,130),palette.paper,12)
-   label(row,UDim2.fromOffset(16,12),UDim2.new(1,-32,0,55),CardView.summary(c),22,palette.ink,true)
+   local _,tint=CardView.identity(c)
+   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,130),tint:Lerp(palette.panel,.42),12)
+   label(row,UDim2.fromOffset(16,12),UDim2.new(1,-32,0,55),CardView.summary(c),22,palette.text,true)
    label(row,UDim2.fromOffset(16,72),UDim2.new(1,-32,0,46),CardView.terms(c,targetText(c)),16,palette.muted)
   end
  end
@@ -497,18 +514,18 @@ openPrestige=function()
  local l=menu('prestige','One more drone. A new run.','Your drones and unlocked plots stay with you when you prestige.','prestige');local width=l.bodyWidth-6
  local narrow=width<400
  local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
- local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.white,.63),16)
+ local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
  U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),colors[pre.newType] or palette.mineral)
- label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.ink,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),narrow and ('+1 permanent '..(pre.newRole or pre.newType or 'new')..' drone.\nKeep your whole crew.') or ('Gain one '..(pre.newRole or pre.newType or 'new')..' drone. Keep your whole crew.'),12,palette.ink)
+ label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),narrow and ('+1 permanent '..(pre.newRole or pre.newType or 'new')..' drone.\nKeep your whole crew.') or ('Gain one '..(pre.newRole or pre.newType or 'new')..' drone. Keep your whole crew.'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
- local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.white,.68),12)
- label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.ink,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone\nBuilt-in types and base traits\nUnlocked plots and free reprinting',12,palette.ink)
+ local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
+ label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
+ label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone\nBuilt-in types and base traits\nUnlocked plots and free reprinting',12,palette.text)
  local resetY=pair and 141 or 274
- local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.white,.83),12)
- label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.ink,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nAll mineral balances and backpack ore\nPack prices and sale progress',12,palette.ink)
+ local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
+ label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nAll mineral balances and backpack ore\nPack prices and sale progress',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
@@ -542,6 +559,16 @@ local function refreshModal()
 end
 local lastOffer=nil
 local resourceAccess=''
+local function menuContentKey(p)
+ if not p or not p.run then return '' end
+ local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
+ for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
+ for _,entry in ipairs(Shops.CATALOG) do table.insert(values,(run.shopLevels or {})[entry.id] or 0) end
+ local pre=p.prestigePreview or {}
+ for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
+ for i,value in ipairs(values) do values[i]=tostring(value) end
+ return table.concat(values,':')
+end
 local function readProfile()
  local raw=player:GetAttribute('MA_Profile');if type(raw)~='string' then return end
  local ok,p=pcall(function() return Http:JSONDecode(raw) end);if not ok or type(p)~='table' or type(p.run)~='table' then return end
@@ -565,7 +592,7 @@ local function readProfile()
  if offer and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
  elseif not offer and modalMode=='offer' then modal.Visible=false;modalMode=nil
  elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
-  if p.pendingTransaction~=(oldProfile and oldProfile.pendingTransaction) then refreshModal() end
+  updateOfferControls()
  elseif modalMode=='fleet' or modalMode=='run' then
   local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
   local milestone=p.prestigePreview or {}
@@ -573,7 +600,7 @@ local function readProfile()
   local oldCrew=oldProfile and (oldProfile.activeFleet or oldProfile.fleet) or {};local crew=p.activeFleet or p.fleet
   local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
   if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
- else refreshModal() end
+ elseif menuContentKey(oldProfile)~=menuContentKey(p) then refreshModal() end
 end
 connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 local noticeUntil=0
@@ -976,10 +1003,10 @@ local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Sel
 unload.Name='ReturnCargo';unload.Visible=false
 local enemyHUD=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(300,58),palette.panel,12);enemyHUD.Name='SentryHealth';enemyHUD.Visible=false
 local enemyTitle=label(enemyHUD,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),'PYRAMID SENTRY',12,palette.white,true)
-local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(53,55,57));enemyHealth.Name='HealthTrack';enemyHealth.ClipsDescendants=true;corner(enemyHealth,3)
-local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(104,45,51));enemyFill.Name='Fill';corner(enemyFill,3)
+local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(53,55,57));enemyHealth.Name='HealthTrack';enemyHealth.ClipsDescendants=true;enemyHealth.BackgroundTransparency=1;corner(enemyHealth,3)
+local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),palette.danger);enemyFill.Name='Fill';corner(enemyFill,3);U.gradient(enemyFill)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
-local tacticalHUD=TacticalHUD.new({root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
+local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
  credits=creditsLabel,cargoText=cargoText,cargoTrack=cargoTrack,fleet=fleetButton,cards=runButton,fleetText=fleetCount,cardsText=runCount,
  objectiveText=objective,contextTitle=contextTitle,contextDetail=contextDetail,contextButton=contextButton})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
@@ -1053,6 +1080,7 @@ connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end
  commandView:reply(state)
+ soundscape:play(state.status=='rejected' and 'denied' or 'command')
  notice.Text=state.reason or '';noticeUntil=os.clock()+2.2
 end)
 local function assignField(target)
@@ -1077,7 +1105,6 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
- soundscape:play(state.status=='rejected' and 'denied' or 'command')
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
@@ -1131,7 +1158,7 @@ connect(RunService.Heartbeat,function(dt)
  if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop') then
   local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
-  if signature~=availabilitySignature then availabilitySignature=signature;if modalMode~='offer' then refreshModal() end end
+  if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
  if actionPending and os.clock()-actionPending.at>10 and not (profile and profile.pendingTransaction) then
   actionPending=nil;notice.Text='Still waiting for confirmation. You can retry.';noticeUntil=os.clock()+5;refreshModal()
@@ -1146,7 +1173,7 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.TextSize=16;saveLabel.Position=UDim2.fromOffset(12,42);saveLabel.TextXAlignment=Enum.TextXAlignment.Left
  shopButton.Position=UDim2.new(1,-150,0,6);shopButton.Visible=not modal.Visible
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
- saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(137,91,37) or palette.muted
+ saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 40
   local credits=Shops.balance(profile,'Quartz');local creditText=comma(credits)
@@ -1245,7 +1272,7 @@ connect(RunService.Heartbeat,function(dt)
  if l.short then toast.Position=UDim2.fromOffset(l.hudX,l.hudY);if toast.Visible then hud.Visible=false end end
  if toast.Visible and view.X<1100 then objectiveBox.Visible=false end
  if modal.Visible and notice.Text~='' and noticeUntil>os.clock() then
-  modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.ink
+  modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
  else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
 end)
@@ -1255,6 +1282,7 @@ connect(gui.Destroying,function()
  commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
+ for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
@@ -1267,5 +1295,3 @@ connect(gui.Destroying,function()
  for part in pairs(hiddenParts) do if part.Parent then part.LocalTransparencyModifier=0 end end
  localFX:Destroy()
 end)
-
- for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

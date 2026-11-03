@@ -252,23 +252,13 @@ local function mechanicVisual(parent,choice,compact)
  return viewport,camera
 end
 
--- A rotating native sunburst stays behind the model and never enters its
--- silhouette render. Paired wedges form ten broad tapered rays.
-local function sunburst(U,canvas,compact,color)
- local rays=Instance.new('ViewportFrame');rays.Name='SpinningRays';rays.BackgroundTransparency=1
- rays.Position=UDim2.fromScale(.045,.022);rays.Size=UDim2.fromScale(.91,compact and .32 or .46)
- rays.ImageTransparency=.76;rays.ImageColor3=color:Lerp(Color3.new(1,1,1),.65);rays.Ambient=Color3.new(1,1,1);rays.LightColor=Color3.new(1,1,1);rays.ZIndex=canvas.ZIndex+2;rays.Parent=canvas
- local world=Instance.new('WorldModel');world.Parent=rays
- local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(0,0,10),Vector3.zero);camera.Parent=rays;rays.CurrentCamera=camera
- for i=0,9 do
-  local turn=CFrame.Angles(0,0,i*math.pi/5)
-  for _,side in ipairs({-1,1}) do
-   local wedge=Instance.new('WedgePart');wedge.Anchored=true;wedge.CanCollide=false;wedge.CastShadow=false;wedge.Material=Enum.Material.Neon;wedge.Color=Color3.new(1,1,1)
-   wedge.Size=Vector3.new(.025,2.7,.43)
-   wedge.CFrame=turn*CFrame.new(-side*.215,1.35,0)*CFrame.Angles(math.pi,side*math.pi/2,0)
-   wedge.Parent=world
-  end
- end
+-- Shipped radial light has transparent, feathered spokes and ends.
+local function sunburst(_U,canvas,compact,color)
+ local rays=Instance.new('ImageLabel');rays.Name='SpinningRays';rays.BackgroundTransparency=1
+ rays.AnchorPoint=Vector2.new(.5,.5);rays.Position=UDim2.fromScale(.5,compact and .182 or .252)
+ rays.Size=UDim2.fromScale(1,compact and .54 or .76);rays.Image='rbxasset://textures/glow.png'
+ rays.ImageColor3=color:Lerp(Color3.new(1,1,1),.65);rays.ImageTransparency=.35;rays.ZIndex=canvas.ZIndex+2;rays.Parent=canvas
+ local aspect=Instance.new('UIAspectRatioConstraint');aspect.AspectRatio=1;aspect.DominantAxis=Enum.DominantAxis.Height;aspect.Parent=rays
  return rays
 end
 
@@ -348,7 +338,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice);local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
  card.Name='CardChoice'..tostring(index);card.LayoutOrder=index;card.BackgroundTransparency=1
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
- choose.Name='ChooseCard';choose.TextTransparency=1;choose.BackgroundTransparency=1
+ choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
  local scale=choose:FindFirstChild('ButtonScale');if scale then scale:Destroy() end
  local selection=Instance.new('Frame');selection.Name='SelectionMask';selection.BackgroundTransparency=1;selection.Size=UDim2.fromScale(1,1);selection.Parent=choose
@@ -382,6 +372,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local texture=canvas:FindFirstChild('StudTexture');texture.Position=UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS);texture.Size=UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS);texture:FindFirstChildOfClass('UICorner').CornerRadius=UDim.new(0,15*FACE_PIXELS)
  local rays=sunburst(U,canvas,compact,accentColor)
  local sweep,spot,flash=shineLayer(U,canvas,rim)
+ rays.Parent=canvas.FaceLight
  local _,artCamera=mechanicVisual(canvas,choice,compact)
  local summary=CardView.summary(choice)
  local function escape(v) return (tostring(v):gsub('&','&amp;'):gsub('<','&lt;'):gsub('>','&gt;')) end
@@ -400,7 +391,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
  local focused,pressed,blend=false,false,0
- local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+((index-1)*.14)/revealSpeed
+ local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.14)/revealSpeed)
  local reducedMotion=options.reducedMotion==true
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
  local function motionReduced()
@@ -425,9 +416,9 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
-  if not quiet and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
+  if not quiet and not options.skipReveal and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
   choose.Visible=true
-  local reveal=quiet and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
+  local reveal=(quiet or options.skipReveal) and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=focused and choose.Active and 1 or 0
@@ -438,7 +429,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
   blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
   local lift=(full and not quiet and blend*9 or 0)-(1-reveal)*18-(pressed and 2 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=age>=0 or quiet;terms.Visible=effect.Visible
+  effect.Visible=age>=0 or quiet or options.skipReveal;terms.Visible=effect.Visible
   local bleed=full and 12 or 0
   local depth=1;local center=onPlane(camera,(left+right)/2,(top+bottom)/2-lift,depth+.015)
   local w=(onPlane(camera,right+bleed,(top+bottom)/2,depth)-onPlane(camera,left-bleed,(top+bottom)/2,depth)).Magnitude
@@ -447,14 +438,14 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local pitch=full and not quiet and math.rad(-pointerY*blend*5) or 0
   part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
   part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,0)
-  part.Transparency=1;surface.Enabled=true;surface.CanvasSize=Vector2.new((right-left+bleed*2)*FACE_PIXELS,(bottom-top+bleed*2)*FACE_PIXELS)
+  part.Transparency=1;surface.Enabled=true;local canvasSize=Vector2.new(math.floor((right-left+bleed*2)*FACE_PIXELS+.5),math.floor((bottom-top+bleed*2)*FACE_PIXELS+.5));if surface.CanvasSize~=canvasSize then surface.CanvasSize=canvasSize end
   canvas.Size=UDim2.fromOffset(size.X*FACE_PIXELS,size.Y*FACE_PIXELS);canvas.Position=UDim2.fromOffset((position.X-left+bleed)*FACE_PIXELS,(position.Y-top+bleed)*FACE_PIXELS)
-  canvas.BackgroundColor3=not choose.Active and bodyColor:Lerp(p.ink,.25) or pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
+  canvas.BackgroundColor3=pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
   rimFace.BackgroundColor3=Color3.new(1,1,1)
-  inner.BackgroundColor3=not choose.Active and Color3.fromRGB(165,165,165) or pressed and Color3.fromRGB(190,190,190) or Color3.new(1,1,1)
+  inner.BackgroundColor3=pressed and Color3.fromRGB(190,190,190) or Color3.new(1,1,1)
   rimLight.Offset=Vector2.new(quiet and 0 or pointerX*.15,quiet and 0 or pointerY*.2)
   rays.Rotation=quiet and 0 or (clock*9+index*27)%360
-  rays.ImageTransparency=quiet and .8 or .8-blend*.08
+  rays.ImageTransparency=quiet and .4 or .4-blend*.1
   local pulse=clock-focusAt;local opening=age*revealSpeed
   local shine=opening<.9 and opening/.9 or (pulse<.7 and pulse/.7 or 2)
   sweep.Visible=not quiet and full and shine>=0 and shine<=1

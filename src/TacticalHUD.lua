@@ -4,14 +4,15 @@ local Players = game:GetService('Players')
 local UIS = game:GetService('UserInputService')
 local TweenService = game:GetService('TweenService')
 local Config = require(script.Parent.DroneConfig)
+local interfaceKit=nil
 local HUD = {}
 HUD.__index = HUD
 local C = {
- panel=Color3.fromRGB(66,69,72), line=Color3.fromRGB(210,214,216),
+ panel=Color3.fromRGB(24,29,49), line=Color3.fromRGB(10,15,31),
  text=Color3.fromRGB(245,245,241), muted=Color3.fromRGB(192,197,199),
- blue=Color3.fromRGB(105,188,217), green=Color3.fromRGB(132,187,120),
- red=Color3.fromRGB(223,112,114), track=Color3.fromRGB(53,55,57),
- gold=Color3.fromRGB(223,203,125), violet=Color3.fromRGB(169,149,201),
+ blue=Color3.fromRGB(28,132,216), green=Color3.fromRGB(30,153,95),
+ red=Color3.fromRGB(218,56,79), track=Color3.fromRGB(16,21,38),
+ gold=Color3.fromRGB(255,219,102), violet=Color3.fromRGB(135,58,211),
 }
 local function frame(parent: Instance, name: string, color: Color3): Frame
  local f = Instance.new('Frame')
@@ -28,6 +29,7 @@ local function text(parent: Instance, name: string, x: number, y: number, w: num
  return t
 end
 local function skin(f: GuiObject, color: Color3)
+ if interfaceKit then interfaceKit.skin(f,color,10);return end
  f.BackgroundColor3=color; f.BackgroundTransparency=.12
  local stroke=f:FindFirstChildOfClass('UIStroke') or Instance.new('UIStroke')
  stroke.Color=C.line; stroke.Thickness=1; stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; stroke.Transparency=.3; stroke.Parent=f
@@ -38,6 +40,7 @@ local function card(parent: Instance, name: string, color: Color3?): Frame
  local f=frame(parent,name,color or C.panel); f.Active=true; skin(f,color or C.panel); return f
 end
 local function plain(f: GuiObject)
+ if interfaceKit then interfaceKit.unskin(f) end
  f.BackgroundTransparency=1; f.Active=false
  for _,child in f:GetChildren() do if child:IsA('UIStroke') or child:IsA('UIGradient') then child:Destroy() end end
 end
@@ -99,7 +102,7 @@ function HUD.styleWorldLabel(gui: BillboardGui)
   label.BorderSizePixel=0
   for _,v in label:GetChildren() do if v:IsA('UISizeConstraint') or v:IsA('UITextSizeConstraint') or v:IsA('UIPadding') then v:Destroy() end end
   local round=label:FindFirstChildOfClass('UICorner') or Instance.new('UICorner')
-  round.CornerRadius=UDim.new(0,3); round.Parent=label
+  round.CornerRadius=UDim.new(0,8); round.Parent=label
   local stroke=label:FindFirstChildOfClass('UIStroke') or Instance.new('UIStroke')
   stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border; stroke.Color=accent; stroke.Transparency=0; stroke.Thickness=1.5; stroke.Parent=label
  end
@@ -130,27 +133,28 @@ function HUD.attachHealth(view: Model, source: Instance, color: Color3, turret: 
 end
 
 function HUD.new(refs: any)
+ interfaceKit=refs.interface
  local self: any=setmetatable({refs=refs,health=-1,tween=nil,input=UIS:GetLastInputType()},HUD)
  self.dock=frame(refs.root,'CommandDock',C.panel); plain(self.dock)
  self.dockScale=Instance.new('UIScale'); self.dockScale.Parent=self.dock
- self.status=card(self.dock,'SquadStatus'); self.status.BackgroundTransparency=.28
+ self.status=card(self.dock,'SquadStatus'); self.status.BackgroundTransparency=0
  self.order=text(self.status,'CurrentOrder',8,0,150,22,11,C.green)
  self.living=text(self.status,'Living',150,0,180,22,11,C.text); self.living.TextXAlignment=Enum.TextXAlignment.Right
- local track=frame(self.status,'HealthTrack',C.track);track.Position=UDim2.fromScale(0,0);track.Size=UDim2.fromScale(1,1);track.ClipsDescendants=true
- self.fill=frame(track,'Fill',Color3.fromRGB(48,86,57));self.fill.Size=UDim2.fromScale(1,1)
+ local track=frame(self.status,'HealthTrack',C.track);track.Position=UDim2.fromScale(0,0);track.Size=UDim2.fromScale(1,1);track.ClipsDescendants=true;track.BackgroundTransparency=1
+ self.fill=frame(track,'Fill',C.green);self.fill.Size=UDim2.fromScale(1,1)
  self.order.ZIndex=track.ZIndex+3;self.living.ZIndex=track.ZIndex+3
  -- The fleet roster lives in its menu; the work stays visible.
  self.roles={}
  for _,b in {refs.recall,refs.evade,refs.unload} do
-  b.Parent=self.dock;b.Font=Enum.Font.SourceSansBold;b.TextSize=16;skin(b,C.panel);b.TextColor3=C.text;b.TextStrokeTransparency=1
+  b.Parent=self.dock;b.Font=Enum.Font.SourceSansBold;b.TextSize=16;skin(b,b==refs.recall and C.green or b==refs.evade and C.red or C.blue);b.TextColor3=C.text;b.TextStrokeTransparency=1
  end
  refs.evade.Name='Evade'
- refs.test.Parent=refs.root;refs.test.Font=Enum.Font.SourceSansBold;refs.test.TextSize=16;skin(refs.test,C.panel);refs.test.TextColor3=C.text
+ refs.test.Parent=refs.root;refs.test.Font=Enum.Font.SourceSansBold;refs.test.TextSize=16;skin(refs.test,C.violet);refs.test.TextColor3=C.text
  self.hint=text(refs.root,'Controls',0,0,500,16,10,C.text);self.hint.TextXAlignment=Enum.TextXAlignment.Center;self.hint.TextStrokeColor3=Color3.new(0,0,0);self.hint.TextStrokeTransparency=.3
  -- Two short, flat label/value meters closely follow the Bee Swarm reference.
  plain(refs.resources)
- self.coins=card(refs.resources,'CreditsCounter');self.coins.BackgroundTransparency=0
- self.cargo=card(refs.resources,'CargoCounter');self.cargo.BackgroundTransparency=0
+ self.coins=card(refs.resources,'CreditsCounter',C.blue);self.coins.BackgroundTransparency=0
+ self.cargo=card(refs.resources,'CargoCounter',C.green);self.cargo.BackgroundTransparency=0
  refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.SourceSansBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
  for _,name in ipairs({'Icon_coin','Icon_crystal'}) do local icon=refs.resources:FindFirstChild(name);if icon then icon.Visible=false end end
  self.creditCaption=text(self.coins,'Caption',0,0,58,26,11,Color3.fromRGB(35,38,40));self.creditCaption.BackgroundTransparency=0;self.creditCaption.BackgroundColor3=C.line;self.creditCaption.Text='Credits';self.creditCaption.TextXAlignment=Enum.TextXAlignment.Center
@@ -164,12 +168,10 @@ function HUD.new(refs: any)
  self.testMode=text(refs.root,'TestMode',0,0,420,16,10,C.gold);self.testMode.Text='TESTING  •  NO RESTOCK';self.testMode.TextXAlignment=Enum.TextXAlignment.Center;self.testMode.TextStrokeColor3=Color3.new(0,0,0);self.testMode.TextStrokeTransparency=.35
  refs.fleet.Parent=refs.root;refs.cards.Parent=refs.root
  for _,b in {refs.fleet,refs.cards} do
-  plain(b);b.Active=true
-  local round=b:FindFirstChildOfClass('UICorner');if round then round:Destroy() end
-  for _,v in b:GetChildren() do if v:IsA('Frame') and v.Name:sub(1,5)~='Icon_' then v.Visible=false end end
+  skin(b,b==refs.fleet and C.blue or C.violet);b.Active=true
  end
  for _,label in {refs.fleetText,refs.cardsText} do label.TextSize=10;label.Font=Enum.Font.SourceSansBold;label.TextColor3=C.text;label.TextStrokeColor3=Color3.new(0,0,0);label.TextStrokeTransparency=.2 end
- skin(refs.context,C.panel);skin(refs.enemy,C.panel);skin(refs.toast,C.panel)
+ skin(refs.context,C.panel);skin(refs.enemy,C.red:Lerp(C.panel,.5));skin(refs.toast,C.blue:Lerp(C.panel,.6))
  for _,panel in {refs.context,refs.enemy,refs.toast} do
   for _,label in panel:GetDescendants() do if label:IsA('TextLabel') then label.TextColor3=C.text end end
  end

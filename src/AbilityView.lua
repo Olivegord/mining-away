@@ -12,7 +12,7 @@ end
 function View.start(options)
  local player=Players.LocalPlayer
  local U=options.interface;local root=options.parent
- local panel=U.panel(root,UDim2.fromOffset(16,160),UDim2.fromOffset(220,110),U.palette.panel,4)
+ local panel=U.panel(root,UDim2.fromOffset(16,160),UDim2.fromOffset(220,110),U.palette.panel,12)
  panel.Name='MiningGadgets';panel.Visible=false
  local state: any={cooldowns={}};local connections={};local dead=false;local lastSend=0
  local function connect(signal,fn) table.insert(connections,signal:Connect(fn)) end
@@ -41,17 +41,17 @@ function View.start(options)
   options.command:FireServer('MiningAbility',{op=charge and 'confirm' or 'begin',kind=kind,fieldId=fieldId,
    token=charge and charge.token or nil,runId=profile.run.id})
  end
- local orbital=U.button(panel,UDim2.fromOffset(8,7),UDim2.fromOffset(98,42),'Orbital [G]',function() activate('Orbital') end,U.palette.accent)
+ local orbital=U.button(panel,UDim2.fromOffset(8,7),UDim2.fromOffset(98,42),'Orbital [G]',function() activate('Orbital') end,Color3.fromRGB(208,47,70))
  orbital.Name='OrbitalGadget';orbital.TextSize=16
- local scrap=U.button(panel,UDim2.fromOffset(114,7),UDim2.fromOffset(98,42),'Scrap [B]',function() activate('Scrap') end,U.palette.mineral)
+ local scrap=U.button(panel,UDim2.fromOffset(114,7),UDim2.fromOffset(98,42),'Scrap [B]',function() activate('Scrap') end,Color3.fromRGB(133,53,211))
  scrap.Name='ScrapGadget';scrap.TextSize=16
- local hint=U.text(panel,UDim2.fromOffset(8,53),UDim2.fromOffset(204,32),'',16,U.palette.ink,false)
+ local hint=U.text(panel,UDim2.fromOffset(8,53),UDim2.fromOffset(204,32),'',16,U.palette.text,false)
  hint.Name='GadgetTimingHint';hint.TextXAlignment=Enum.TextXAlignment.Center
  local track=U.frame(panel,UDim2.fromOffset(8,90),UDim2.fromOffset(204,12),U.palette.paper)
  track.Name='TimingTrack';track.Visible=false
  local sweet=U.frame(track,UDim2.fromScale(.28,0),UDim2.fromScale(.2,1),Color3.fromRGB(90,164,98))
  sweet.Name='PrecisionWindow'
- local cursor=U.frame(track,UDim2.fromScale(0,0),UDim2.new(0,3,1,0),U.palette.ink);cursor.Name='TimingCursor'
+ local cursor=U.frame(track,UDim2.fromScale(0,0),UDim2.new(0,3,1,0),U.palette.text);cursor.Name='TimingCursor'
  connect(UIS.InputBegan,function(input,processed)
   if processed or UIS:GetFocusedTextBox() then return end
   if input.KeyCode==Enum.KeyCode.G then activate('Orbital') elseif input.KeyCode==Enum.KeyCode.B then activate('Scrap') end
@@ -94,11 +94,16 @@ function View.start(options)
   local now=workspace:GetServerTimeNow();local profile=options.profile()
   local hasOrbital,hasScrap=enabled(profile,'Orbital'),enabled(profile,'Scrap')
   panel.Visible=(hasOrbital or hasScrap) and nearby and not options.hidden()
-  -- Keep below the existing objective while respecting a narrow safe rectangle.
   local short=root.AbsoluteSize.Y<390
-  local x=short and math.max(0,(root.AbsoluteSize.X-220)/2) or math.min(16,math.max(0,root.AbsoluteSize.X-220))
-  panel.Position=UDim2.fromOffset(x,short and (root.AbsoluteSize.X>=740 and 12 or 76) or 160)
+  local compact=short and root.AbsoluteSize.X>=568
+  local panelWidth=compact and 180 or 220
+  panel.Position=UDim2.fromOffset(math.min(12,math.max(0,root.AbsoluteSize.X-panelWidth)),short and 64 or 160)
+  orbital.Size=UDim2.fromOffset(compact and 78 or 98,42)
+  scrap.Position=UDim2.fromOffset(compact and 94 or 114,7);scrap.Size=orbital.Size
+  hint.Size=UDim2.fromOffset(panelWidth-16,32);track.Size=UDim2.fromOffset(panelWidth-16,12)
   local charge=profile and state.runId==profile.run.id and state.charge or nil
+  local details=charge~=nil or (state.burnUntil or 0)>now or (state.swarmUntil or 0)>now
+  panel.Size=UDim2.fromOffset(panelWidth,details and 110 or 56);hint.Visible=details
   local function paint(button,kind,unlocked,key)
    button.Visible=unlocked
    local remaining=math.max(0,math.ceil(((state.cooldowns or {})[kind] or 0)-now))
@@ -117,7 +122,7 @@ function View.start(options)
    cursor.Position=UDim2.new(math.clamp((now-charge.started)/span,0,1),-1,0,0)
   elseif (state.burnUntil or 0)>now then hint.Text='Orbital melting · '..math.ceil(state.burnUntil-now)..'s'
   elseif (state.swarmUntil or 0)>now then hint.Text='Scrap swarm · '..math.ceil(state.swarmUntil-now)..'s'
-  else hint.Text='Drones work automatically; tap for precision' end
+  else hint.Text='' end
   if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end
   for source,record in pairs(bots) do
    if not source.Parent or not source.Parent.Parent or now>=(source.Parent:GetAttribute('Expires') or 0) then remove(source,record)
