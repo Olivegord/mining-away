@@ -5,6 +5,7 @@ local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
+local Debris=game:GetService('Debris')
 local function enabled(profile,kind)
  return profile and profile.run and Shops.abilityUnlocked(profile,kind) or false
 end
@@ -52,7 +53,11 @@ function View.start(options)
  local visualRoot=Instance.new('Folder');visualRoot.Name='ScrapBotPresentation';visualRoot.Parent=workspace
  local bots={}
  local function remove(source,record)
-  record.view:Destroy();record.beam:Destroy();record.core:Destroy();bots[source]=nil
+  record.view:Destroy();record.beam:Destroy()
+  -- The tiny tool retires immediately; its already emitted world-space motes
+  -- get their full tail instead of being cut off at swarm expiry.
+  record.sparks.Enabled=false;record.core.Transparency=1
+  Debris:AddItem(record.core,record.sparks.Lifetime.Max+.1);bots[source]=nil
   if source.Parent then for _,part in ipairs(source:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0 end end end
  end
  local function observe(source)
@@ -71,7 +76,7 @@ function View.start(options)
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
   local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
   sparks.Texture='rbxasset://textures/ui/VR/circleWhite.png';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
-  sparks.Lifetime=NumberRange.new(.1,.22);sparks.Speed=NumberRange.new(2,4);sparks.Acceleration=Vector3.new(0,-15,0)
+  sparks.Lifetime=NumberRange.new(.25,.5);sparks.Speed=NumberRange.new(1,2);sparks.Acceleration=Vector3.new(0,-4,0)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
   sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}

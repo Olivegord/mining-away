@@ -7,7 +7,7 @@ local V={};V.__index=V
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
  p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
- p.LightEmission=1;p.LightInfluence=0;p.Rate=1.5;p.Lifetime=NumberRange.new(.3,.55);p.Speed=NumberRange.new(.2,.7);p.Drag=3
+ p.LightEmission=1;p.LightInfluence=0;p.Rate=1.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
  p.SpreadAngle=Vector2.new(180,180)
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.08),NumberSequenceKeypoint.new(.3,.45,.1),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(1,1)})
@@ -29,6 +29,7 @@ function V.new(root,parent,audio)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0},V)
  local function add(source)
+  if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
   if (source:GetAttribute('CollectedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
@@ -39,7 +40,7 @@ function V.new(root,parent,audio)
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.13,0);a.Parent=view
   local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.13,0);b.Parent=view
   local trail=Instance.new('Trail');trail.Name='OreMagnetTrail';trail.Attachment0=a;trail.Attachment1=b
-  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.13;trail.MinLength=.08;trail.FaceCamera=true;trail.LightEmission=1
+  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.25;trail.MinLength=.08;trail.FaceCamera=true;trail.LightEmission=1
   trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(1,0)})
   trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
   local glints=sparkle(a,view.Color);glints.Enabled=false
@@ -68,7 +69,7 @@ function V.new(root,parent,audio)
   anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=rootPart.Position;anchor.Parent=parent
   local a=Instance.new('Attachment');a.Parent=anchor
   local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(5)
-  Debris:AddItem(anchor,.65)
+  Debris:AddItem(anchor,burst.Lifetime.Max+.15)
   if audio and os.clock()-self.lastSound>.09 then self.lastSound=os.clock();audio:play('pickup',rootPart.Position) end
  end))
  return self
@@ -111,7 +112,12 @@ function V:update(dt,now)
    r.trail.Enabled=false
   end
   if done then
-   r.view:Destroy();self.byId[r.seed]=nil;self.records[source]=nil
+   -- Retire the ore visual and authority immediately; let existing particles
+   -- finish on an invisible, bounded cosmetic anchor.
+   r.view.Name='FadingOreParticles';r.view.Transparency=1
+   r.glints.Enabled=false;r.glow.Enabled=false;r.trail.Enabled=false
+   Debris:AddItem(r.view,math.max(r.glints.Lifetime.Max,r.trail.Lifetime)+.1)
+   self.byId[r.seed]=nil;self.records[source]=nil
   else
    local age=math.max(0,now-r.born)
    -- Fast tumble settles to a fixed pose. No perpetual size bob or floor jitter.
@@ -127,6 +133,7 @@ function V:update(dt,now)
  end
 end
 function V:destroy()
+ if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
  self.records={};self.byId={}

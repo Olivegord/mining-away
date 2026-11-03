@@ -3,6 +3,7 @@
 local A={}
 A.KINDS={Orbital={cooldown=45,burnSeconds=4},Scrap={cooldown=35}}
 A.CHARGE_SECONDS=1.4
+A.ORBITAL_ORIGIN_HEIGHT=34
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 local function point(p)
  return {x=p.x or p.X or 0,y=p.y or p.Y or 0,z=p.z or p.Z or 0}
@@ -14,9 +15,9 @@ local function usable(r)
  return type(r)=='table' and type(r.id)=='string' and finite(r.hp) and r.hp>0 and finite(r.maxHP) and r.maxHP>0
   and finite(r.x) and finite(r.y) and finite(r.z)
 end
-local function targets(ctx,fieldId)
+local function targets(ctx,fieldId,kind)
  local list={}
- for _,r in ipairs(ctx.targets(fieldId) or {}) do if usable(r) then table.insert(list,r) end end
+ for _,r in ipairs(ctx.targets(fieldId,kind) or {}) do if usable(r) then table.insert(list,r) end end
  table.sort(list,function(a,b) if a.maxHP==b.maxHP then return a.id<b.id end;return a.maxHP>b.maxHP end)
  return list
 end
@@ -53,7 +54,7 @@ function A.begin(state,kind,now,ctx)
  if kind=='Scrap' and state.swarm then return false,'Scrap bots are already working' end
  if now<(state.cooldowns[kind] or 0) then return false,'Gadget cooling down' end
  if not ctx.valid(ctx.fieldId) then return false,'Use this beside an unlocked, unguarded plot' end
- local list=targets(ctx,ctx.fieldId)
+ local list=targets(ctx,ctx.fieldId,kind)
  if #list==0 then return false,'No grown crystals are ready' end
  state.sequence+=1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=list[1].id,target=point(list[1]),
@@ -69,7 +70,7 @@ function A.confirm(state,token,now,ctx)
  if not ctx.unlocked(charge.kind) or not ctx.valid(charge.fieldId) then
   state.charge=nil;event(ctx,'clearCharge');return false,'Gadget canceled; return to the plot'
  end
- local list=targets(ctx,charge.fieldId);local target
+ local list=targets(ctx,charge.fieldId,charge.kind);local target
  for _,r in ipairs(list) do if r.id==charge.targetId then target=r;break end end
  if not target then state.charge=nil;event(ctx,'clearCharge');return false,'That crystal was mined; no cooldown spent' end
  -- Effects follow equipment perks; player reaction timing never changes mining.
@@ -105,13 +106,14 @@ function A.step(state,now,dt,ctx,swarmContext)
  if burn then
   local target
   if ctx.valid(burn.fieldId) and ctx.unlocked('Orbital') then
-   for _,r in ipairs(targets(ctx,burn.fieldId)) do if r.id==burn.targetId then target=r;break end end
+   for _,r in ipairs(targets(ctx,burn.fieldId,'Orbital')) do if r.id==burn.targetId then target=r;break end end
   end
   if not target or burn.remaining<=1e-7 then
+   if not burn.accepted then state.cooldowns.Orbital=now end
    state.burn=nil;event(ctx,'orbitalEnd')
   else
    local slice=math.min(dt,.1,burn.remaining)
-   local accepted,broken=ctx.hit(target.id,burn.dps*slice,'Orbital',{x=target.x,y=target.y+34,z=target.z})
+   local accepted,broken=ctx.hit(target.id,burn.dps*slice,'Orbital',{x=target.x,y=target.y+A.ORBITAL_ORIGIN_HEIGHT,z=target.z})
    if not accepted then
     if not burn.accepted then state.cooldowns.Orbital=now end
     state.burn=nil;event(ctx,'orbitalEnd')
@@ -123,7 +125,7 @@ function A.step(state,now,dt,ctx,swarmContext)
     end
     if broken or burn.remaining<=1e-7 then
      if burn.precise then
-      for _,r in ipairs(targets(ctx,burn.fieldId)) do
+      for _,r in ipairs(targets(ctx,burn.fieldId,'OrbitalRelay')) do
        if r.id~=target.id and distance(target,r)<=14 then
         if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
        end
@@ -142,7 +144,7 @@ function A.step(state,now,dt,ctx,swarmContext)
  end
  -- No catch-up burst after a stall. At most six normal hit callbacks per step.
  dt=math.min(dt,.1)
- local list=targets(ctx,swarm.fieldId);local byId={};for _,r in ipairs(list) do byId[r.id]=r end
+ local list=targets(ctx,swarm.fieldId,'Scrap');local byId={};for _,r in ipairs(list) do byId[r.id]=r end
  local taken={}
  for _,bot in ipairs(swarm.bots) do
   local target=byId[bot.targetId]

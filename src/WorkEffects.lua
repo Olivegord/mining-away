@@ -6,6 +6,7 @@ local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
 local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
 local YELLOW=Color3.fromRGB(255,208,69)
+local ENERGY_TAIL=1.8
 local function part(parent,name)
  local p=Instance.new('Part');p.Name=name;p.Size=Vector3.one*.05;p.Transparency=1
  p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent
@@ -40,11 +41,11 @@ local function particle(parent,name,color)
  -- A soft plain disc instead of stars/smoke: the energy reads as light,
  -- including at small screen sizes. Keep the original asset templates intact.
  p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
- p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=6
+ p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=4
  p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
- p.Lifetime=NumberRange.new(.35,.65);p.Speed=NumberRange.new(1.4,3.5);p.Drag=3
- p.SpreadAngle=Vector2.new(55,55);p.Acceleration=Vector3.new(0,-6,0);p.WindAffectsDrag=true
+ p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
+ p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.new(0,-.6,0);p.WindAffectsDrag=true
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(.2,.65),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.55,.22),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
@@ -102,11 +103,11 @@ function W:burst(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
- local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(4,13)
- sparks.Lifetime=NumberRange.new(.35,.85);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-20,0)
+ local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(2,5)
+ sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-.8,0)
  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.7,.08),NumberSequenceKeypoint.new(.18,1.05,.15),NumberSequenceKeypoint.new(1,0)})
- sparks.SpreadAngle=Vector2.new(85,85)
- sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+1})
+ sparks.SpreadAngle=Vector2.new(65,65)
+ sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -125,7 +126,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
    if sample.paused or not sample.alive then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
-   if not sample.alive or now-fx.lastAt>1 then self:destroyMining(beam) end
+   if not sample.alive or now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
   end
   return
  end
@@ -136,12 +137,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx={anchor=anchor,spheres=spheres(anchor,beam.tint or WHITE),lastAt=now,pulseSerial=sample.pulseSerial or 0}
   fx.sparks=particle(anchor,'OriginParticles',beam.tint or WHITE)
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.15,.25);fx.glow.Size=NumberSequence.new(.5)
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.5)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  fx.impact.Lifetime=NumberRange.new(.35,.8);fx.impact.Speed=NumberRange.new(6,13)
-  fx.impact.Drag=1.8;fx.impact.Acceleration=Vector3.new(0,-21,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5,.05),NumberSequenceKeypoint.new(.15,.8,.05),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(2,4)
+  fx.impact.Drag=2.4;fx.impact.Acceleration=Vector3.new(0,-2,0);fx.impact.SpreadAngle=Vector2.new(80,80)
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35,.03),NumberSequenceKeypoint.new(.15,.55,.05),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.7,.25),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
@@ -160,7 +161,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   beam.work=fx;self.miningBeams[beam]=true;self.miningCount+=1
  end
  if fx.key~=sample.key or fx.life~=sample.life then
-  fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear();fx.key=sample.key;fx.life=sample.life
+  -- Already-emitted world-space light belongs to the previous contact. Let it
+  -- finish naturally when changing rocks; only a new life invalidates the tail.
+  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
+  fx.key=sample.key;fx.life=sample.life
   fx.pulseSerial=sample.pulseSerial or 0
  end
  if fx.contact then fx.contact.Transparency=1 end
@@ -178,22 +182,22 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local strength=charging and (.25+.75*q) or width
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
- fx.sparks.Rate=charging and (4+8*q) or 6;fx.sparks.Enabled=charging or working
- fx.glow.Rate=charging and 5 or 3;fx.glow.Enabled=charging or working
+ fx.sparks.Rate=charging and (1+3*q) or 2;fx.sparks.Enabled=charging or working
+ fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=charging or working
  local resonance=sample.style=='Resonance'
  fx.impact.Color=ColorSequence.new(resonance and (beam.tint or WHITE) or YELLOW)
  -- Smooth low-frequency sideways acceleration gives each tool its own
  -- turbulence without moving contacts or inventing damage events.
  local noise=math.noise(now*(resonance and 2.5 or .8),origin.X*.11,origin.Z*.11)
- local turbulence=resonance and 12 or 2.5
- fx.impact.Acceleration=Vector3.new(noise*turbulence,resonance and -5 or -21,math.noise(origin.Z*.17,now*.9)*turbulence)
- fx.impact.Drag=resonance and 4 or 1.8
- fx.impact.Rate=continuous and (resonance and 24 or 38) or 0;fx.impact.Enabled=working and continuous
+ local turbulence=resonance and 1 or .25
+ fx.impact.Acceleration=Vector3.new(noise*turbulence,resonance and -.6 or -2,math.noise(origin.Z*.17,now*.9)*turbulence)
+ fx.impact.Drag=resonance and 2 or 2.4
+ fx.impact.Rate=continuous and (resonance and 10 or 12) or 0;fx.impact.Enabled=working and continuous
  if point and normal then
-  beam.marker.CFrame=facing(point+normal*.045,normal)
+  beam.marker.CFrame=facing(point+normal*.2,normal)
   if fx.contact then
    fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.30+.32*width+.16*pulse)
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse)
    fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.45-.12*pulse) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse)
@@ -202,7 +206,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(22);fx.sparks:Emit(9) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(16);fx.sparks:Emit(5) end
   fx.pulseSerial=sample.pulseSerial
  end
 end
@@ -238,8 +242,8 @@ function W:flight(drone,record,dt,now)
   for _,side in ipairs({-1,1}) do
    local nozzle=Instance.new('Attachment');nozzle.Name='BreakerRocket';nozzle.Position=Vector3.new(side*.4,.35,0);nozzle.Parent=root
    local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66))
-   jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(18,28);jet.Drag=0
-   jet.Lifetime=NumberRange.new(.12,.25);jet.Acceleration=Vector3.new(0,12,0);jet.Rate=60;jet.LightEmission=1
+   jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(4,8);jet.Drag=3.5
+   jet.Lifetime=NumberRange.new(.6,1.1);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=1
    jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
    table.insert(record.rockets,{attachment=nozzle,jet=jet})
   end
@@ -254,7 +258,7 @@ function W:flight(drone,record,dt,now)
    local a=Instance.new('Attachment');a.Name='FlightTrailTop';a.Position=Vector3.new(side*span,-.03,span*.65);a.Parent=root
    local b=Instance.new('Attachment');b.Name='FlightTrailBottom';b.Position=a.Position-Vector3.new(0,.065,0);b.Parent=root
    local trail=Instance.new('Trail');trail.Name='DroneFlightTrail';trail.Attachment0=a;trail.Attachment1=b
-   trail.Lifetime=.42;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.35
+   trail.Lifetime=.65;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.35
    trail.Color=ColorSequence.new(drone.emitter.Color)
    trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.45,.72),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root
@@ -265,7 +269,7 @@ function W:flight(drone,record,dt,now)
    a.Position=(role~='Medic' and role~='Courier' and drone.beam and drone.beam.origin.Position) or Vector3.zero;a.Parent=drone.emitter
    local wisp=particle(a,'FlightWisp',drone.emitter.Color)
    wisp.EmissionDirection=Enum.NormalId.Bottom
-   wisp.Lifetime=NumberRange.new(.25,.42);wisp.Speed=NumberRange.new(.4,1.2);wisp.Acceleration=Vector3.new(0,-2,0)
+   wisp.Lifetime=NumberRange.new(.6,1.1);wisp.Speed=NumberRange.new(.15,.35);wisp.Acceleration=Vector3.new(0,-.12,0);wisp.Drag=2.2
    wisp.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.07),NumberSequenceKeypoint.new(.55,.26),NumberSequenceKeypoint.new(1,.35)})
    wisp.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.82),NumberSequenceKeypoint.new(1,1)})
    wisp.LightEmission=.25;wisp.Rate=3;fx.wisp=wisp;self.flightCount+=1;table.insert(fx.objects,a)
@@ -284,7 +288,7 @@ function W:flight(drone,record,dt,now)
  if fx.wisp then
   if reset then fx.wisp:Clear() end
   fx.wisp.Enabled=alive and not paused and cameraNear(root.Position,100)
-  fx.wisp.Rate=3+math.min(14,speed*.55)
+  fx.wisp.Rate=1+math.min(3,speed*.25)
  end
  fx.position=root.Position;fx.life=source:GetAttribute('Life')
 end
@@ -297,7 +301,7 @@ function W:repair(drone,record,now)
   if fx then
    fx.sparks.Enabled=false
    drawSpheres(fx,now,0,0,0,WHITE)
-   if now-fx.lastAt>.6 then fx.anchor:Destroy();record.repair=nil;self.repairCount=math.max(0,self.repairCount-1) end
+   if now-fx.lastAt>ENERGY_TAIL then fx.anchor:Destroy();record.repair=nil;self.repairCount=math.max(0,self.repairCount-1) end
   end
   return
  end
@@ -310,7 +314,7 @@ function W:repair(drone,record,now)
  fx.lastAt=now;fx.anchor.CFrame=facing(drone.emitter.Position,Vector3.new(0,-1,0))
  local q=charging and progress(now,s:GetAttribute('RepairChargeAt') or now,s:GetAttribute('RepairChargeDuration') or .4) or 1
  drawSpheres(fx,now,charging and .3+.7*q or 1,q,healing and .5 or 0,color)
- fx.sparks.Rate=charging and 8+q*10 or 24;fx.sparks.Enabled=true
+ fx.sparks.Rate=charging and 3+q*4 or 8;fx.sparks.Enabled=true
 end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
@@ -320,7 +324,7 @@ function W:courier(drone,record,now)
  local parcelUnits=source:GetAttribute('DeliveryUnits') or 0
  local busy=state=='Pickup' or state=='Unload' or parcelUnits>0
  if not busy and not fx then return end
- if fx and not busy and now-fx.lastAt>.8 then self:destroyCourier(record);return end
+ if fx and not busy and now-fx.lastAt>ENERGY_TAIL then self:destroyCourier(record);return end
  if not fx then
   local detailed=self.courierCount<self.maxCouriers
   local root=Instance.new('Folder');root.Name='CourierWork';root.Parent=self.parent
@@ -334,7 +338,7 @@ function W:courier(drone,record,now)
    local top=Instance.new('Attachment');top.Position=Vector3.new(side*.38,.025,.25);top.Parent=drive
    local bottom=Instance.new('Attachment');bottom.Position=Vector3.new(side*.38,-.025,.25);bottom.Parent=drive
    local trail=Instance.new('Trail');trail.Name='LoadedFlightTrail';trail.Attachment0=top;trail.Attachment1=bottom
-   trail.Lifetime=.32;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.45
+   trail.Lifetime=.6;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.45
    trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
@@ -368,7 +372,7 @@ function W:courier(drone,record,now)
  drawSpheres(fx,now,pickup and .3+.7*q or unload and .7 or 0,q,0,GOLD)
  if pickup then W.drawCylinder(fx.tether,mount,backpack,.045+.025*q,.5-.2*q) else fx.tether.Transparency=1 end
  if fx.sparks then
-  fx.sparks.Rate=pickup and 12+q*12 or unload and 16 or 0;fx.sparks.Enabled=not paused and (pickup or unload)
+  fx.sparks.Rate=pickup and 4+q*5 or unload and 6 or 0;fx.sparks.Enabled=not paused and (pickup or unload)
   if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)

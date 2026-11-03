@@ -9,7 +9,7 @@ import tempfile
 from build import ROOT, module_bundle
 
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/private/tmp/mining-away-luau')
-modules = ('Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation')
+modules = ('Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation', 'DroneRoleEffects')
 for name in modules + ('DroneRoleEffects',):
     subprocess.run([str(luau / 'luau-compile'), str(ROOT / 'src' / (name + '.lua'))],
                    stdout=subprocess.DEVNULL, check=True)

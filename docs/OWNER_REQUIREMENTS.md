@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 3 latest — moderate particle tails, localized motion and screenshots
+
+Studio is available again. The owner requests screenshots of the finished running game. Their request for longer particles was followed by a correction: **not that much longer, and most particles should not travel so far**. Keep ordinary energy close to its contact with modest persistence; reserve the longer, more turbulent trail for the orbital. Preserve the verified plain circle texture and visible bloom. Check actual rendering and complete particle tails rather than only extending Lifetime values. See [final tuning and native captures](review/PARTICLE_TUNING.md).
+
 ## November 2 latest — particles must actually load and show bloom
 
 The owner reports that the requested blooming particles are not visible. Diagnose actual runtime asset fetch, emitter settings and ordinary-distance rendering; fixing property values or passing API doubles does not establish visibility. The previous energy texture returned AssetFetchStatus.Failure in Studio. Replace it with a verified plain circle, remove inherited slow emitter settings, and preserve the existing game and other integrated refinements. See [particle visibility diagnosis and validation limits](review/PARTICLE_VISIBILITY.md).

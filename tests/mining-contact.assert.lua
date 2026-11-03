@@ -6,7 +6,7 @@ local b={holder=holder,marker=marker,origin={WorldPosition=Vector3.new(0,5,0)},t
 local sample={alive=true,isMining=true,active=true,paused=false,warmupStart=0,key='rock',life=1,style='Cutter',pulseSerial=0}
 w:mining(b,sample,Vector3.zero,Vector3.yAxis,1,0,10)
 assert(b.work and b.work.tip.Parent==marker and b.work.impact.Parent==b.work.tip)
-assert(b.work.impact.Enabled and b.work.impact.Rate>0 and b.work.impact.Speed.Min>=6)
+assert(b.work.impact.Enabled and b.work.impact.Rate>0 and b.work.impact.Speed.Min>=2 and b.work.impact.Speed.Max<=4)
 -- The owner requested round energy discs, replacing stretched spark streaks.
 assert(b.work.impact.Orientation==Enum.ParticleOrientation.FacingCamera)
 assert(b.work.impact.Texture=='rbxasset://textures/ui/VR/circleWhite.png')

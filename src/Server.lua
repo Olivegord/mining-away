@@ -249,6 +249,9 @@ local function los(a,b,target,ignore)
  local hit=workspace:Raycast(a,b-a,params)
  return hit==nil or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target))
 end
+local function abilityLineOfSight(p,from,r)
+ return los(from,r.position,r.part,{droneFolder,p.player.Character})
+end
 local resourceSerial=0
 local function nodeUsage(field)
  local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
@@ -528,7 +531,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not abilityOrigin and not DroneRoles.isMiner(d.role) then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
-  if not hr or not nearMiningField(hr.Position,r.field) or not los(abilityOrigin,r.position,r.part,{droneFolder,p.player.Character}) then return false end
+  if not hr or not nearMiningField(hr.Position,r.field) or not abilityLineOfSight(p,abilityOrigin,r) then return false end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then return false end end
  elseif secondary then
   local primary=d.target
@@ -1382,12 +1385,18 @@ local function abilityContext(p,fieldId,operator)
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
-  targets=function(id)
+  targets=function(id,kind)
    local list={};if not valid(id) then return list end
    for _,r in ipairs(patches[id].resources) do
     local free=true;for droneId in pairs(r.slots) do local worker=drones[droneId];if not worker or worker.owner~=p.player.UserId then free=false end end
     if free and not r.paid and r.hp>0 and now>=r.readyAt and r.part.Parent then
-     table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.fullSize.X*.5*Feel.stageScale(r.stage,r.stageCount)),x=r.position.X,y=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),z=r.position.Z})
+     local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
+     -- Survey the same vertical path that the authoritative orbital hit uses.
+     -- A taller blocked crystal must not starve reachable work forever. Tiny
+     -- scrap miners keep their normal nearby target list and contact checks.
+     if kind~='Orbital' or abilityLineOfSight(p,Vector3.new(r.position.X,top+DroneAbilities.ORBITAL_ORIGIN_HEIGHT,r.position.Z),r) then
+      table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.fullSize.X*.5*Feel.stageScale(r.stage,r.stageCount)),x=r.position.X,y=top,z=r.position.Z})
+     end
     end
    end
    return list
@@ -1429,7 +1438,7 @@ roleAbilityStep=function(d,p,hr,dt)
   local target=ability.burn and ability.burn.actorId==d.id and resources[ability.burn.targetId] or (charge and charge.actorId==d.id and resources[charge.targetId]) or nil
   if not target then
    local largest=-1
-   for _,node in ipairs(context.targets(field.id)) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
+   for _,node in ipairs(context.targets(field.id,'Orbital')) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
   end
   goal=target and target.position+Vector3.new(0,math.max(12,target.fullSize.Y*.5+7),0) or hr.Position+Vector3.new(4,10,0)
  else goal=hr.Position+Vector3.new(4,4,-3) end

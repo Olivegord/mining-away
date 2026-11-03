@@ -1,5 +1,7 @@
 # Particle visibility correction
 
+**November 3 follow-up:** Studio became available and the repaired energy was inspected in the running game. The owner then requested moderately longer, more localized particles. Final values, actual screenshots, the newly discovered orbital obstruction retry, and current verification limits are recorded in [particle tuning](PARTICLE_TUNING.md). That follow-up supersedes the pending Screen Time status and ordinary size/rate values below; this page preserves the original diagnosis.
+
 November 2, 2026. Existing Drone Blower revolution, place 136098934779395. This corrects the particles in source 768721e without changing mining authority, the map, original models, smasher timing, ownership or the card UI.
 
 The owner reported that the requested particles with bloom were not visible. The failure was real: an actual Studio Client ContentProvider:PreloadAsync returned **AssetFetchStatus.Failure** for rbxasset://textures/particles/flare_main.dds. That file is absent from the installed Studio asset bundle. The earlier API-double tests checked the path string but could not fetch or render it; those tests missed this defect. Bloom itself was present and enabled (Intensity 1.25, Threshold 1.1, Size 32), so increasing the post effect alone would not restore the missing sprite.

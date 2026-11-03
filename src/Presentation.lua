@@ -513,7 +513,7 @@ function P:_sentryAudio(position,kind,now)
  if kind=='impact' then
   local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
   dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))
-  dust.Lifetime=NumberRange.new(.45,.85);dust.Speed=NumberRange.new(3,8);dust.Drag=5
+  dust.Lifetime=NumberRange.new(.8,1.3);dust.Speed=NumberRange.new(1.5,4);dust.Drag=5
   dust.SpreadAngle=Vector2.new(75,75);dust.Acceleration=Vector3.new(0,-4,0)
   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(.3,2.5),NumberSequenceKeypoint.new(1,4)})
   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.4,.6),NumberSequenceKeypoint.new(1,1)})

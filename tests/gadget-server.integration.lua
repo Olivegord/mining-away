@@ -82,4 +82,66 @@ check('successful gadget cooldown is saved and rehydrated runtime rejects immedi
  local saved=data(p).run.abilityCooldowns.Orbital;assert(saved and saved>now)
  p.ability=nil;input(pl,'Orbital','begin');assert(not p.ability.charge and p.ability.cooldowns.Orbital==saved)
 end)
+check('orbital survey and charge choose the largest reachable rock while preserving obstruction and scrap rules',function()
+ local pl,p=fixture();for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
+ local blocked=makeResource(patches[1],patches[1].center+Vector3.new(-6,0,0),'Crystal',5000,10,3);blocked.readyAt=now
+ local reachable=makeResource(patches[1],patches[1].center+Vector3.new(6,0,0),'Crystal',3000,10,3);reachable.readyAt=now
+ local owned=Pro.clone(data(p).fleet[1]);owned.type='Orbiter';owned.role='Orbiter';owned.flightHeight=3.6;owned.base=Pro.clone(RoleConfig.StudioRoles.Orbiter.base)
+ p.testFleet={owned};rebuildFleet(p);local d=p.drones[1];p.workField=1
+ local oldRaycast=workspace.Raycast;local obstruction=Instance.new('Part');obstruction.Name='PreservedTreeTrunk';obstruction.Parent=workspace
+ local rays=0
+ workspace.Raycast=function(_,from,delta,params)
+  rays+=1
+  assert(params.FilterDescendantsInstances[1]==droneFolder and params.FilterDescendantsInstances[2]==pl.Character)
+  if math.abs(from.X-blocked.position.X)<1e-7 and math.abs(from.Z-blocked.position.Z)<1e-7 then
+   local top=select(2,Feel.groundedRockFrame(blocked.position,blocked.part.Size,blocked.part:GetAttribute('GroundY'),blocked.stage,blocked.stageSeed))
+   assert(math.abs(from.Y-top-DroneAbilities.ORBITAL_ORIGIN_HEIGHT)<1e-7,'survey and hit origins differ')
+   assert((from+delta-blocked.position).Magnitude<1e-7,'survey and hit endpoints differ')
+   return {Instance=obstruction,Position=from+delta*.4}
+  end
+  return nil
+ end
+ local context=abilityContext(p,1,d);local orbital=context.targets(1,'Orbital');assert(#orbital==1 and orbital[1].id==reachable.id)
+ assert(#context.targets(1,'Scrap')==2,'a roof must not remove targets from ground-working scrap bots')
+ data(p).run.shopLevels.violet_scrap=1
+ local scrap=DroneAbilities.new({},data(p).run.id);assert(DroneAbilities.begin(scrap,'Scrap',now,context));assert(scrap.charge.targetId==blocked.id)
+ local goal=reachable.position+Vector3.new(0,math.max(12,reachable.fullSize.Y*.5+7),0);d.pos=goal;d.velocity=Vector3.zero
+ roleAbilityStep(d,p,characterRoot(p),C.Tick)
+ assert(p.ability.charge and p.ability.charge.targetId==reachable.id and (d.intentGoal-goal).Magnitude<1e-7,'survey still committed to the blocked largest rock')
+ local blockedHP,reachableHP=blocked.hp,reachable.hp
+ now=p.ability.charge.readyAt;realTime=now;DroneAbilities.step(p.ability,now,C.Tick,context)
+ assert(p.ability.burn and p.ability.burn.accepted and reachable.hp<reachableHP and blocked.hp==blockedHP)
+ local top=select(2,Feel.groundedRockFrame(blocked.position,blocked.part.Size,blocked.part:GetAttribute('GroundY'),blocked.stage,blocked.stageSeed))
+ assert(not context.hit(blocked.id,100,'Orbital',{x=blocked.position.X,y=top+DroneAbilities.ORBITAL_ORIGIN_HEIGHT,z=blocked.position.Z}))
+ assert(blocked.hp==blockedHP and rays>=4,'selection must not weaken authoritative geometry checks')
+ workspace.Raycast=oldRaycast;obstruction:Destroy()
+end)
+check('fully obstructed orbital fields stay in survey without charge damage or cooldown loops',function()
+ local pl,p=fixture();for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
+ local r=makeResource(patches[1],patches[1].center,'Crystal',5000,10,3);r.readyAt=now
+ local owned=Pro.clone(data(p).fleet[1]);owned.type='Orbiter';owned.role='Orbiter';owned.flightHeight=3.6;owned.base=Pro.clone(RoleConfig.StudioRoles.Orbiter.base)
+ p.testFleet={owned};rebuildFleet(p);local d=p.drones[1];p.workField=1;local hr=characterRoot(p)
+ d.pos=hr.Position+Vector3.new(4,10,0);d.velocity=Vector3.zero
+ local oldRaycast=workspace.Raycast;local obstruction=Instance.new('Part');obstruction.Name='PreservedCanopy';obstruction.Parent=workspace
+ workspace.Raycast=function(_,from,delta) return {Instance=obstruction,Position=from+delta*.5} end
+ local hp=r.hp;local eventCount=#effects
+ for _=1,30 do now+=C.Tick;realTime=now;roleAbilityStep(d,p,hr,C.Tick) end
+ assert(p.ability and not p.ability.charge and not p.ability.burn and not p.ability.cooldowns.Orbital)
+ assert(r.hp==hp and d.state=='OrbitalSurvey' and #effects==eventCount,'obstructed field repeated charge/refund effects')
+ assert(#abilityContext(p,1,d).targets(1,'Scrap')==1)
+ workspace.Raycast=oldRaycast;obstruction:Destroy()
+end)
+check('new obstruction between charge and first contact cancels unspent orbital work safely',function()
+ local pl,p=fixture();data(p).run.shopLevels.cobalt_orbital=1
+ for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
+ local r=makeResource(patches[1],patches[1].center,'Crystal',5000,10,3);r.readyAt=now
+ local context=abilityContext(p,1);local state=DroneAbilities.new({},data(p).run.id)
+ assert(DroneAbilities.begin(state,'Orbital',now,context));now=state.charge.readyAt;realTime=now
+ assert(DroneAbilities.confirm(state,state.charge.token,now,context));assert(state.burn and not state.burn.accepted)
+ local oldRaycast=workspace.Raycast;local obstruction=Instance.new('Part');obstruction.Parent=workspace
+ workspace.Raycast=function(_,from,delta) return {Instance=obstruction,Position=from+delta*.5} end
+ local hp=r.hp;DroneAbilities.step(state,now,C.Tick,context)
+ assert(not state.burn and state.cooldowns.Orbital==now and r.hp==hp)
+ workspace.Raycast=oldRaycast;obstruction:Destroy()
+end)
 print(checks..' actual server gadget integration checks passed with API doubles; not Studio visual/multiplayer evidence')
