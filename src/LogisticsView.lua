@@ -85,7 +85,7 @@ function View.start(ctx)
   text(card,54,10,contentWidth-(preview and 152 or 68),28,name,19)
   if preview then U.button(card,UDim2.fromOffset(contentWidth-86,8),UDim2.fromOffset(72,36),'Preview',function() send('DevAddDrone',{role=key});say(name..' added to the temporary test crew.');setOpen(false) end,C.paper).TextSize=14 end
   U.text(card,UDim2.fromOffset(14,46),UDim2.fromOffset(contentWidth-28,cardHeight-96),description,15,C.muted)
-  text(card,14,cardHeight-39,contentWidth-150,28,duration and string.format('%.1fs • whole rock',duration) or 'Permanent equipment',13,color)
+  text(card,14,cardHeight-39,contentWidth-150,28,duration and string.format('%.1fs / cycle',duration) or 'Permanent equipment',13,color)
   local b=U.button(card,UDim2.fromOffset(contentWidth-136,cardHeight-44),UDim2.fromOffset(122,36),alreadyOwned and 'Owned' or compact(price)..' Quartz',function() purchase(action,key) end,color)
   b.TextSize=15;table.insert(purchases,{button=b,price=price,owned=alreadyOwned})
   return cardHeight

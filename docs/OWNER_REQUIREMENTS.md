@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 3 latest — specialist balance, animation and identity
+
+Rework all seven new specialist miners: Bubbler, Halver, Gridcutter, Singularity, Starforge, Frostbite and Resonator. Their fixed-duration whole-rock deletion is overpowered; they must remove bounded chunks and respect resource hardness. Repeated strikes should show persistent progress before a final earned break. Research animation principles and apply readable anticipation, decisive contact, continuous motion, overlapping tool action and controlled recovery. Give every unique specialist a recognizable mechanical silhouette, beyond a color swap or small accessories on the same body. Preserve the authored base drone, original travel and overhead mining station. Server timing/damage remains authoritative; clients render the shared animation each frame. See [rework and research](review/SPECIALIST_REWORK.md).
+
 ## November 3 latest — smooth animation on every client
 
 Move remaining cosmetic animation off the server. The server publishes authoritative effect intent/timing and gameplay state; every observer renders its own smooth animation, including ongoing effects for late joiners. Remove stepped special-miner motion without undoing the earlier query, replication and cleanup optimizations. Keep damage, rewards, reservations and persistence on the server. Do not start Play for this work.

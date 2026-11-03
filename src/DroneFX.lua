@@ -1,277 +1,228 @@
--- Synced, client-only mining choreography. Damage and payout stay on the server.
--- Each effect owns its geometry; interrupted jobs never leave hidden rocks behind.
+-- Client-only, server-clocked specialist work. Each cycle removes a chunk;
+-- the remaining authored crystal stays grounded and readable throughout.
 local FX = {}
-local TAU = math.pi * 2
-local MAX_PARTS, MAX_EFFECT_PARTS = 360, 48
-local TAIL = 1.15
-local supported = {Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
-local effectAttributes={ResourceId=true,EffectSerial=true,EffectType=true,EffectStartedAt=true,EffectDuration=true,EffectDoneAt=true,EffectPausedAt=true,EffectCancelledSerial=true}
+local TAU=math.pi*2
+local MAX_PARTS,MAX_EFFECT_PARTS=360,48
+local TAIL=1.15
+local supported={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local effectAttributes={ResourceId=true,EffectSerial=true,EffectType=true,EffectStartedAt=true,EffectDuration=true,EffectImpact=true,EffectDoneAt=true,EffectDepleted=true,EffectPausedAt=true,EffectCancelledSerial=true}
 local resourceNames={Crystal=true,Geode=true,Core=true,Shard=true}
-local cyan = Color3.fromRGB(130,239,255)
-local gold = Color3.fromRGB(255,211,83)
-local purple = Color3.fromRGB(179,105,255)
-local ice = Color3.fromRGB(169,229,255)
-local hot = Color3.fromRGB(255,140,48)
+local cyan=Color3.fromRGB(130,239,255)
+local gold=Color3.fromRGB(255,211,83)
+local purple=Color3.fromRGB(179,105,255)
+local ice=Color3.fromRGB(169,229,255)
+local hot=Color3.fromRGB(255,140,48)
 local function clamp(x) return math.clamp(x,0,1) end
 local function smooth(x) x=clamp(x);return x*x*(3-2*x) end
-local function safeSize(v)
- return Vector3.new(math.max(.025,v.X),math.max(.025,v.Y),math.max(.025,v.Z))
-end
-
+local function safeSize(v) return Vector3.new(math.max(.025,v.X),math.max(.025,v.Y),math.max(.025,v.Z)) end
 local function part(e,name,size,color,material,shape)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
- p.Size=safeSize(size);p.Color=color;p.Material=material or Enum.Material.Neon
+ p.Size=safeSize(size);p.Color=color;p.Material=material or Enum.Material.Neon;p.CFrame=e.cf;p.Transparency=1
  if shape then p.Shape=shape end
- p.Parent=e.folder;e.parts[#e.parts+1]=p;e.owner.count=e.owner.count+1
- return p
+ p.Parent=e.folder;e.parts[#e.parts+1]=p;e.owner.count+=1;return p
 end
-local function fragmentSet(e,n,color,material)
- local set={}
- for i=1,n do
-  local p=part(e,'Fragment',Vector3.one,color or e.color,material or e.material or Enum.Material.SmoothPlastic)
-  p.Transparency=1;set[i]=p
- end
- return set
+local function fragments(e,n,color,material,shape)
+ local result={}
+ for i=1,n do result[i]=part(e,'ExtractedChip',Vector3.one,color or e.color,material or e.material,shape) end
+ return result
 end
-local function makeRing(e,n,color,width)
- local ring={parts={},points={},width=width or .065}
- for i=1,n do ring.parts[i]=part(e,'EnergyArc',Vector3.one,color);local angle=(i-1)*TAU/n;ring.points[i]=Vector3.new(math.cos(angle),0,math.sin(angle)) end
- return ring
-end
-local values=setmetatable({},{__mode='k'})
-local function set(p,key,value)
- local cached=values[p]
- if not cached then cached={};values[p]=cached end
- if cached[key]~=value then p[key]=value;cached[key]=value end
-end
-local function showRing(ring,cf,radius,alpha)
- local n=#ring.parts
- for i,p in ipairs(ring.parts) do
-  local from=cf:PointToWorldSpace(ring.points[i]*radius)
-  local to=cf:PointToWorldSpace(ring.points[i%n+1]*radius)
-  p.Size=Vector3.new(ring.width,ring.width,math.max(.025,(to-from).Magnitude))
-  p.CFrame=CFrame.lookAt((from+to)*.5,to);set(p,'Transparency',alpha or 0)
- end
+local function ring(e,n,color,width)
+ local result={parts={},width=width or .045}
+ for i=1,n do result.parts[i]=part(e,'WaveSegment',Vector3.one,color) end
+ return result
 end
 local function line(p,a,b,width,alpha)
- if (b-a).Magnitude<.001 then set(p,'Transparency',1);return end
- p.Size=Vector3.new(width,width,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)*.5,b);set(p,'Transparency',alpha or 0)
+ if (b-a).Magnitude<.001 then p.Transparency=1;return end
+ p.Size=Vector3.new(width,width,math.max(.025,(b-a).Magnitude));p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Transparency=clamp(alpha)
 end
-local function hideParts(parts)
- for _,p in ipairs(parts) do set(p,'Transparency',1) end
+local function showRing(value,cf,radius,alpha)
+ for i,p in ipairs(value.parts) do
+  local a,b=(i-1)*TAU/#value.parts,i*TAU/#value.parts
+  line(p,cf:PointToWorldSpace(Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius)),cf:PointToWorldSpace(Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius)),value.width,alpha)
+ end
 end
+local function hideParts(values) for _,p in ipairs(values) do p.Transparency=1 end end
 local function proxy(e)
- -- The authoritative collider remains hidden by Client.lua. Clone the current
- -- local rock so authored silhouette, grounded pose and prior fractures agree.
  local p=e.view:Clone()
  for _,v in ipairs(p:GetDescendants()) do
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Highlight') or v:IsA('Sound') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Trail') then v:Destroy() end
  end
- p.Name='VisualRock';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
- p.LocalTransparencyModifier=0;p.Transparency=0;p.Parent=e.folder
- e.parts[#e.parts+1]=p;e.owner.count=e.owner.count+1
- return p
+ p.Name='GroundedCrystal';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+ p.LocalTransparencyModifier=0;p.Transparency=0;p.Parent=e.folder;e.parts[#e.parts+1]=p;e.owner.count+=1;return p
 end
-
 local function build(e)
  e.rock=proxy(e)
  if e.kind=='Bubbler' then
-  e.bubbles={}
-  e.glints={}
-  for i=1,5 do
-   local p=part(e,'GlassBubble',Vector3.one,cyan,Enum.Material.Glass,Enum.PartType.Ball)
-   p.Transparency=.43;p.Reflectance=.24;e.bubbles[i]=p
-   e.glints[i]=part(e,'BubbleGlint',Vector3.one,Color3.new(1,1,1),Enum.Material.Neon,Enum.PartType.Ball)
+  e.bubbles={};e.glints={}
+  for i=1,3 do
+   local p=part(e,'PressureBubble',Vector3.one,cyan,Enum.Material.Glass,Enum.PartType.Ball);p.Reflectance=.18;e.bubbles[i]=p
+   e.glints[i]=part(e,'GlassGlint',Vector3.one,Color3.new(1,1,1),Enum.Material.Neon,Enum.PartType.Ball)
   end
-  e.bubbleRim=makeRing(e,12,cyan,.045)
-  e.fragments=fragmentSet(e,16,gold,Enum.Material.Neon)
+  e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
-  e.fragments=fragmentSet(e,32)
-  e.ring=makeRing(e,12,cyan,.045)
+  e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal)}
+  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,8)
  elseif e.kind=='Gridcutter' then
-  e.fragments=fragmentSet(e,27)
-  e.grid={}
-  for i=1,8 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
-  e.scanner=part(e,'ScanningLaser',Vector3.one,Color3.new(1,1,1))
+  e.grid={};for i=1,6 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
+  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
-  e.ring=makeRing(e,14,purple,.13)
-  e.fragments=fragmentSet(e,16,purple,Enum.Material.Neon)
+  e.ring=ring(e,12,purple,.07);e.fragments=fragments(e,10)
  elseif e.kind=='Starforge' then
-  e.sun=part(e,'MiniatureSun',Vector3.one,gold,Enum.Material.Neon,Enum.PartType.Ball)
-  e.corona=part(e,'Corona',Vector3.one,hot,Enum.Material.Neon,Enum.PartType.Ball);e.corona.Transparency=.76
-  e.ring=makeRing(e,12,hot,.07)
-  e.fragments=fragmentSet(e,18,hot,Enum.Material.Neon)
+  e.sun=part(e,'ContainedSun',Vector3.one,gold,Enum.Material.Neon,Enum.PartType.Ball)
+  e.corona=part(e,'HeatEnvelope',Vector3.one,hot,Enum.Material.Neon,Enum.PartType.Ball)
+  e.rays={};for i=1,3 do e.rays[i]=part(e,'HeatRay',Vector3.one,hot) end
+  e.fragments=fragments(e,10,hot,Enum.Material.Neon,Enum.PartType.Ball)
  elseif e.kind=='Frostbite' then
-  e.shell=part(e,'IceCasing',e.size*1.12,ice,Enum.Material.Glass);e.shell.Transparency=.65;e.shell.Reflectance=.2
-  e.ring=makeRing(e,12,ice,.08)
-  e.fragments=fragmentSet(e,24,ice,Enum.Material.Glass)
+  e.shell=proxy(e);e.shell.Name='GrowingIce';e.shell.Color=ice;e.shell.Material=Enum.Material.Glass;e.shell.Transparency=1;e.shell.Reflectance=.16
+  e.ring=ring(e,10,ice,.045);e.fragments=fragments(e,12,ice,Enum.Material.Glass)
  elseif e.kind=='Resonator' then
-  e.rings={makeRing(e,12,cyan,.065),makeRing(e,12,purple,.065),makeRing(e,12,cyan,.065)}
-  e.fragments=fragmentSet(e,10)
+  e.rings={ring(e,10,cyan,.045),ring(e,10,purple,.045),ring(e,10,cyan,.045)}
+  e.fragments=fragments(e,8)
  end
 end
-
-local function bubblePose(e,t)
- local r=e.radius
- local lift=smooth((t-.28)/.34)*7
- local fall=smooth((t-.7)/.3)*9
- local center=e.center+Vector3.new(0,lift-fall,0)
- local absorb=smooth((t-.18)/.2)
- e.rock.CFrame=e.cf+Vector3.new(0,lift-fall,0)
- set(e.rock,'Size',safeSize(e.size*(1-absorb*.77)));set(e.rock,'Transparency',clamp((t-.55)*2))
+local function facePoint(e,i)
+ local a=i*2.399963
+ return e.center+Vector3.new(math.cos(a)*e.radius*.38,e.size.Y*.36,math.sin(a)*e.radius*.38)
+end
+local function fade(e,age) return age and smooth(age/e.tail) or 0 end
+local function recovery(age) return age and smooth(age/.65) or 0 end
+local function ballistic(e,age,style)
+ hideParts(e.fragments)
+ if not age then return end
+ local alpha=fade(e,age)
+ for i,p in ipairs(e.fragments) do
+  local a=i*2.399963;local r=e.radius
+  local origin=facePoint(e,i)
+  local force=style=='slab' and 1.6 or style=='dust' and 1.1 or 2
+  local velocity=Vector3.new(math.cos(a)*force,1.6+(i%3)*.4,math.sin(a)*force)
+  p.CFrame=CFrame.new(origin+velocity*age+Vector3.new(0,-5*age*age,0))*e.cf.Rotation*CFrame.Angles(age*(i%3-1),age*.7,i*.2)
+  local size=style=='slab' and Vector3.new(r*.4,r*.11,r*.3) or style=='ice' and Vector3.new(r*.09,r*.35,r*.13) or Vector3.one*r*(style=='dust' and .075 or .16)
+  p.Size=safeSize(size*(1-alpha*.7));p.Transparency=alpha
+ end
+end
+local function bubblePose(e,t,age)
+ local r=e.radius;local fill=smooth(t/(e.impact*.73));local release=smooth((t-e.impact*.78)/(e.impact*.22))
+ local cap=e.center+Vector3.new(0,e.size.Y*.42,0)
+ local lift=age and math.min(age,.5) or 0
+ local floating=cap+Vector3.new(lift*.45,math.sin(lift*math.pi)*r*.85,0)
+ local pop=age and smooth((age-.44)/.18) or 0
  for i,p in ipairs(e.bubbles) do
-  local a=i*TAU/5+t*4
-  local converge=1-smooth(t/.32)
-  local offset=i==1 and Vector3.zero or Vector3.new(math.cos(a),math.sin(a*1.7)*.5,math.sin(a))*(r*.55+converge*3)
-  p.Position=center+offset+Vector3.new(0,converge*(i+2),0)
-  local diameter=i==1 and r*2.65 or r*.8
-  set(p,'Size',Vector3.one*math.max(.05,diameter*smooth(t/.17)));set(p,'Transparency',.43)
-  local glint=e.glints[i];set(glint,'Size',Vector3.one*math.max(.025,diameter*.075))
-  glint.Position=p.Position+Vector3.new(-diameter*.23,diameter*.3,-diameter*.2);set(glint,'Transparency',.12)
+  local side=i-2
+  local position=cap+Vector3.new(side*r*.65*(1-fill),r*.4*(1-fill),side*r*.2*(1-fill))
+  position=position:Lerp(floating,release)
+  local diameter=r*(i==2 and .82 or .27)*fill*(1+pop*.5)
+  p.Position=position;p.Size=Vector3.one*math.max(.025,diameter);p.Transparency=.55+pop*.45
+  local glint=e.glints[i];glint.Position=position+Vector3.new(-diameter*.23,diameter*.27,-diameter*.12)
+  glint.Size=Vector3.one*math.max(.025,diameter*.05);glint.Transparency=.18+pop*.82
  end
- local view=workspace.CurrentCamera
- local rimCF=CFrame.new(center)
- if view and (view.CFrame.Position-center).Magnitude>.001 then rimCF=CFrame.lookAt(center,view.CFrame.Position)*CFrame.Angles(math.pi/2,0,0) end
- showRing(e.bubbleRim,rimCF,math.max(.025,r*1.325*smooth(t/.17)),.25)
-end
-local function halverPose(e,t)
- local split=clamp((t-.12)/.5)
- local levels=math.min(5,math.floor(split*5)+1)
- local n=2^levels
- local stretch=math.sin((split*5)%1*math.pi)*.35
- local grind=smooth((t-.6)/.28)
- set(e.rock,'Transparency',t<.12 and 0 or 1)
- for i,p in ipairs(e.fragments) do
-  if i<=n and t>=.12 then
-   local angle=(i-1)*TAU/n+t*t*48
-   -- Alternate X/Y/Z cuts: 2 halves, 4 quarters, 8 eighths, then 16/32 chips.
-   local cell=e.size;local offset=Vector3.zero
-   for level=1,levels do
-    local sign=math.floor((i-1)/2^(level-1))%2==0 and -1 or 1
-    local axis=(level-1)%3
-    if axis==0 then cell=Vector3.new(cell.X*.5,cell.Y,cell.Z);offset=offset+Vector3.new(sign*cell.X*.5,0,0)
-    elseif axis==1 then cell=Vector3.new(cell.X,cell.Y*.5,cell.Z);offset=offset+Vector3.new(0,sign*cell.Y*.5,0)
-    else cell=Vector3.new(cell.X,cell.Y,cell.Z*.5);offset=offset+Vector3.new(0,0,sign*cell.Z*.5) end
-   end
-   local splitPos=e.center+e.cf:VectorToWorldSpace(offset)*(1.08+stretch)+Vector3.new(0,1.2+stretch*2,0)
-   local ringPos=e.center+Vector3.new(math.cos(angle)*e.radius*1.6,2+math.sin(angle*3)*.2,math.sin(angle)*e.radius*1.6)
-   p.Position=splitPos:Lerp(ringPos,grind)
-   local shrink=1-smooth((t-.84)/.16)*.87
-   set(p,'Size',safeSize(cell*(.94+stretch*.35)*shrink))
-   p.CFrame=CFrame.new(p.Position)*e.cf.Rotation*CFrame.Angles(t*grind*30+i*grind,t*grind*20,stretch)
-   set(p,'Transparency',clamp((t-.94)*8))
-  else set(p,'Transparency',1) end
+ hideParts(e.fragments)
+ if age then
+  for i,p in ipairs(e.fragments) do
+   local a=i*2.399963;local spread=math.max(0,age-.5)
+   local origin=floating+Vector3.new(math.cos(a),0,math.sin(a))*r*.1
+   p.CFrame=CFrame.new(origin+Vector3.new(math.cos(a)*spread*1.6,spread*1.4-5*spread*spread,math.sin(a)*spread*1.6))*e.cf.Rotation
+   p.Size=safeSize(Vector3.one*r*.14*(1-fade(e,age)*.6));p.Transparency=fade(e,age)
+  end
  end
- showRing(e.ring,CFrame.new(e.center+Vector3.new(0,2,0)),e.radius*1.7,t<.58 and 1 or .45)
 end
-local function gridPose(e,t)
- local r=e.radius*1.05
- local scan=clamp(t/.7)
- e.rock.CFrame=e.cf;set(e.rock,'Size',e.size);set(e.rock,'Transparency',t<.82 and 0 or 1)
+local function halverPose(e,t,age)
+ local charge=smooth(t/(e.impact*.7));local cut=smooth((t-e.impact*.8)/(e.impact*.2));local reset=recovery(age)
+ local gap=e.radius*(1.1+.15*charge-.76*cut+.9*reset)
+ local top=e.center+Vector3.new(0,e.size.Y*.4,0)
+ for i,p in ipairs(e.jaws) do
+  local side=i==1 and -1 or 1
+  p.CFrame=CFrame.new(top+Vector3.new(side*gap,.15*charge,0))*e.cf.Rotation*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
+  p.Size=Vector3.new(.09,e.radius*.28,e.radius*1.35);p.Transparency=.15+reset*.85
+ end
+ line(e.cut,top+Vector3.new(0,0,-e.radius*.65),top+Vector3.new(0,0,e.radius*.65),.04,.9-cut*.8+reset*.9)
+ ballistic(e,age,'slab')
+end
+local function gridPose(e,t,age)
+ local r=e.radius*.73;local top=e.center+Vector3.new(0,e.size.Y*.46,0)
+ local scan=smooth(t/(e.impact*.83));local out=fade(e,age)
  for i,p in ipairs(e.grid) do
-  local axis=i>4;local index=(i-1)%4
-  local coordinate=(index/3-.5)*r*1.5
-  local from=axis and Vector3.new(-r,r,coordinate) or Vector3.new(coordinate,r,-r)
-  local to=axis and Vector3.new(r,r,coordinate) or Vector3.new(coordinate,r,r)
-  local visible=scan>=i/9
-  line(p,e.center+from,e.center+to,.045,visible and .12 or 1)
+  local axis=i>3;local coordinate=((i-1)%3-1)*r*.56
+  local a=axis and Vector3.new(-r,0,coordinate) or Vector3.new(coordinate,0,-r)
+  local b=axis and Vector3.new(r,0,coordinate) or Vector3.new(coordinate,0,r)
+  local visible=smooth((scan-(i-1)/7)*7)
+  line(p,top+a,top+a:Lerp(b,visible),.035,1-visible*(1-out)*.8)
  end
- local scanPos=e.center+Vector3.new(-r+scan*r*2,r+.08,0)
- line(e.scanner,scanPos+Vector3.new(0,0,-r),scanPos+Vector3.new(0,0,r),.1,t<.75 and .05 or 1)
- -- The final short impulse exposes a real 3 × 3 × 3 cube lattice.
- for i,p in ipairs(e.fragments) do
-  local q=i-1;local x=q%3-1;local y=math.floor(q/3)%3-1;local z=math.floor(q/9)-1
-  local cell=e.size/3
-  local offset=Vector3.new(x*cell.X,y*cell.Y,z*cell.Z)
-  local spill=clamp((t-.82)/.18)
-  set(p,'Size',safeSize(cell*.91))
-  p.CFrame=CFrame.new(e.center+offset+Vector3.new(x*spill*.9,spill*.55,z*spill*.9))*CFrame.Angles(z*spill*.3,x*spill*.3,0)
-  set(p,'Transparency',t>=.82 and 0 or 1)
- end
-end
-local function singularityPose(e,t)
- local center=e.center+Vector3.new(0,e.radius*.4+1,0)
- local grow=smooth(t/.2);local absorb=smooth((t-.12)/.78)
- local diameter=e.radius*.82*grow
- set(e.hole,'Size',Vector3.one*math.max(.05,diameter));e.hole.Position=center
- showRing(e.ring,CFrame.new(center)*CFrame.Angles(.35,0,t*4),math.max(.05,diameter*.9),.05)
- set(e.rock,'Size',safeSize(e.size*(1-absorb*.97)))
- e.rock.CFrame=CFrame.new(e.center:Lerp(center,absorb))*e.cf.Rotation*CFrame.Angles(t*t*5,absorb*12,0)
- set(e.rock,'Transparency',clamp((t-.8)*5))
- for i,p in ipairs(e.fragments) do
-  local phase=(t*1.1+i/16)%1
-  local radius=e.radius*(.2+(1-phase)*2.2)
-  local a=i*2.4+t*15+phase*5
-  p.Position=center+Vector3.new(math.cos(a)*radius,math.sin(a*2)*radius*.25,math.sin(a)*radius)
-  set(p,'Size',Vector3.one*(.04+(1-phase)*.12));set(p,'Transparency',1-grow*(1-phase))
- end
-end
-local function starforgePose(e,t)
- local center=e.center+Vector3.new(0,e.radius+3,0)
- local heat=smooth((t-.12)/.75)
- local diameter=e.radius*(.5+.5*smooth(t/.2))
- e.sun.Position=center;set(e.sun,'Size',Vector3.one*diameter)
- e.corona.Position=center;set(e.corona,'Size',e.sun.Size*(1.45+math.sin(t*48)*.04))
- showRing(e.ring,CFrame.new(center)*CFrame.Angles(.45,t*4,.3),diameter*.95,.22)
- set(e.rock,'Color',e.color:Lerp(hot,heat));set(e.rock,'Material',t>.45 and Enum.Material.Neon or e.material)
- set(e.rock,'Size',safeSize(e.size*Vector3.new(1+heat*.22,1-heat*.6,1+heat*.22)))
- e.rock.CFrame=e.cf+Vector3.new(0,-heat*e.size.Y*.24,0)
- for i,p in ipairs(e.fragments) do
-  local a=i*2.4;local phase=(t*2+i/18)%1
-  p.Position=e.center+Vector3.new(math.cos(a)*e.radius*(.7+phase),-e.radius*.3-phase*phase*2,math.sin(a)*e.radius*(.7+phase))
-  set(p,'Size',Vector3.one*(.15+.23*(1-phase)));set(p,'Transparency',t<.35 and 1 or phase*.8)
- end
-end
-local function frostbitePose(e,t)
- local freeze=smooth(t/.6);local shiver=math.sin(t*150)*smooth((t-.68)/.25)*.035
- e.rock.CFrame=e.cf+Vector3.new(shiver,0,-shiver);set(e.rock,'Color',e.color:Lerp(ice,freeze))
- e.shell.CFrame=e.rock.CFrame;set(e.shell,'Size',e.size*(1.02+freeze*.14));set(e.shell,'Transparency',1-freeze*.55)
- local pulse=((t-.7)*5)%1
- showRing(e.ring,CFrame.new(e.center)*CFrame.Angles(math.pi/2,0,0),e.radius*(1+pulse*1.4),t<.7 and 1 or pulse)
+ local x=-r+scan*r*2
+ line(e.scanner,top+Vector3.new(x,.04,-r),top+Vector3.new(x,.04,r),.07,.18+out*.82)
  hideParts(e.fragments)
-end
-local function resonatorPose(e,t)
- local pulse=(t*5)%1
- local shake=smooth((t-.25)/.7)*.07
- e.rock.CFrame=e.cf*CFrame.Angles(math.sin(t*125)*shake,0,math.cos(t*113)*shake)
- set(e.rock,'Size',safeSize(e.size*Vector3.new(1+math.sin(t*80)*shake,1-math.sin(t*80)*shake,1)))
- for i,ring in ipairs(e.rings) do
-  local phase=(pulse+(i-1)/3)%1
-  local cf=CFrame.new(e.center+Vector3.new(0,(i-2)*e.radius*.5,0))*CFrame.Angles(i==2 and math.pi/2 or .15,0,t*(i-2)*2)
-  showRing(ring,cf,e.radius*(1.15+phase*.65),.15+phase*.7)
+ if age then
+  for i,p in ipairs(e.fragments) do
+   local x1=(i-1)%3-1;local z1=math.floor((i-1)/3)-1
+   local origin=top+Vector3.new(x1*r*.56,0,z1*r*.56)
+   p.Size=safeSize(Vector3.new(r*.48,r*.18,r*.48)*(1-out*.65))
+   p.CFrame=CFrame.new(origin+Vector3.new(x1*age*.85,age*1.8-age*age*5,z1*age*.85))*e.cf.Rotation*CFrame.Angles(z1*age*.5,0,x1*age*.5);p.Transparency=out
+  end
  end
+end
+local function singularityPose(e,t,age)
+ local r=e.radius;local grow=smooth(t/(e.impact*.75));local close=recovery(age)
+ local center=e.center+Vector3.new(0,e.size.Y*.5+r*.55,0)
+ local diameter=r*.46*grow*(1-close*.85)
+ e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
+ showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,t*.7,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
  hideParts(e.fragments)
+ if age then
+  for i,p in ipairs(e.fragments) do
+   -- Each chip has one continuous inward spiral, with no modulo wrap.
+   local u=smooth((age-(i-1)*.018)/.7);local a=i*2.399963+u*TAU*.9
+   local radius=r*.55*(1-u)
+   local origin=facePoint(e,i)
+   local target=center+Vector3.new(math.cos(a)*radius,-r*.4*(1-u),math.sin(a)*radius)
+   p.Position=origin:Lerp(target,smooth(u*3));p.Size=Vector3.one*math.max(.025,r*.17*(1-u));p.Transparency=math.max(u,fade(e,age))
+  end
+ end
+end
+local function starforgePose(e,t,age)
+ local heat=smooth(t/(e.impact*.9));local cool=recovery(age);local r=e.radius
+ local center=e.center+Vector3.new(0,e.size.Y*.5+r*.8,0)
+ local diameter=r*(.2+.35*heat)*(1-cool*.8)
+ e.sun.Position=center;e.sun.Size=Vector3.one*math.max(.025,diameter);e.sun.Transparency=cool
+ e.corona.Position=center;e.corona.Size=e.sun.Size*1.35;e.corona.Transparency=.82+cool*.18
+ for i,p in ipairs(e.rays) do line(p,center,facePoint(e,i*2),.035,.95-heat*.65+cool*.75) end
+ e.rock.Color=e.color:Lerp(hot,heat*.25*(1-cool))
+ hideParts(e.fragments)
+ if age then
+  for i,p in ipairs(e.fragments) do
+   local drip=math.max(0,age-(i-1)*.035);local a=i*2.399963
+   p.Position=facePoint(e,i)+Vector3.new(math.cos(a)*drip*.35,-2.8*drip*drip,math.sin(a)*drip*.35)
+   p.Size=safeSize(Vector3.new(r*.10,r*(.12+drip*.13),r*.10)*(1-fade(e,age)*.65));p.Transparency=fade(e,age)
+  end
+ end
+end
+local function frostbitePose(e,t,age)
+ local freeze=smooth(t/(e.impact*.8));local shatter=age and smooth(age/.16) or 0
+ e.shell.CFrame=e.cf;e.shell.Size=safeSize(e.size*(1.006+.022*freeze))
+ e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
+ local wave=age and smooth(age/.45) or 0
+ showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and (1-math.sin(math.pi*wave)*.65) or 1)
+ ballistic(e,age,'ice')
+end
+local function resonatorPose(e,t,age)
+ for i,value in ipairs(e.rings) do
+  local from=e.impact*(.08+(i-1)*.19)
+  local phase=clamp((t-from)/(e.impact*.55))
+  local strength=math.sin(math.pi*phase)^2
+  local center=e.center+Vector3.new(0,(i-2)*e.radius*.22,0)
+  showRing(value,CFrame.new(center)*CFrame.Angles(i==2 and math.pi/2 or .13,0,(i-2)*.16),e.radius*(.7+.75*smooth(phase)),1-strength*.65)
+ end
+ -- One low-amplitude recoil at contact replaces whole-rock high-frequency jitter.
+ if age then
+  local recoil=math.sin(math.pi*clamp(age/.26))*math.exp(-age*8)*.018
+  e.rock.CFrame=e.cf*CFrame.Angles(0,recoil,0)
+ end
+ ballistic(e,age,'dust')
 end
 local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularity=singularityPose,Starforge=starforgePose,Frostbite=frostbitePose,Resonator=resonatorPose}
 
-local function finishPose(e,age)
- if not e.finished then
-  e.finished=true;e.burstOrigin=e.kind=='Bubbler' and e.center+Vector3.new(0,-2,0) or e.center
-  for _,p in ipairs(e.parts) do set(p,'Transparency',1) end
- end
- local fade=clamp(age/TAIL)
- local fragments=e.fragments or {}
- for i,p in ipairs(fragments) do
-  local a=i*2.399963
-  local force=e.kind=='Gridcutter' and 3.2 or e.kind=='Singularity' and 1.3 or 4.4
-  local velocity=Vector3.new(math.cos(a)*force,2+(i%4),math.sin(a)*force)
-  local start=e.burstOrigin
-  if e.kind=='Gridcutter' then
-   local q=i-1;local x=q%3-1;local y=math.floor(q/3)%3-1;local z=math.floor(q/9)-1
-   start=e.center+Vector3.new(x*(e.size.X/3+.9),y*e.size.Y/3+.55,z*(e.size.Z/3+.9))
-  end
-  p.CFrame=CFrame.new(start+velocity*age+Vector3.new(0,-6*age*age,0))*CFrame.Angles(i+age*4,age*6,i*.5)
-  local size=e.kind=='Gridcutter' and e.size/3*.85 or Vector3.one*(e.kind=='Bubbler' and .34 or .23)
-  set(p,'Size',safeSize(size*(1-fade*.8)));set(p,'Transparency',fade)
-  if e.kind=='Bubbler' then set(p,'Shape',Enum.PartType.Cylinder);set(p,'Size',Vector3.new(.1, .43, .43)*(1-fade*.8));set(p,'Color',gold) end
- end
-end
-
 function FX.new(world,options)
  options=options or {}
- local self={world=world,tracked={},dirty={},retry={},active={},count=0,connections={},destroyed=false,poseUpdates=0}
- local interval=options.interval or 0 -- continuous render-frame motion by default
+ local self={world=world,tracked={},dirty={},retry={},active={},completed={},count=0,connections={},destroyed=false,poseUpdates=0}
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)
@@ -293,6 +244,12 @@ function FX.new(world,options)
    freeGeometry(e);self.active[v]=nil
   end
  end
+ -- A final hit is irreversible. Recall/death may cancel its cosmetic tail,
+ -- but cannot reveal the old crystal while ordinary fracture stages drain.
+ local function concealDepleted(e)
+  if not e.retired then freeGeometry(e) end
+  e.retired=true;e.tombstone=true;e.view.LocalTransparencyModifier=1
+ end
  local function observe(v)
   if not v:IsA('BasePart') or self.tracked[v] then return end
   -- Ignore scenery, drone hardware, currency and their constantly changing
@@ -309,7 +266,7 @@ function FX.new(world,options)
  self.connections[#self.connections+1]=world.DescendantRemoving:Connect(function(v)
   remove(v)
   if self.tracked[v] then self.tracked[v]:Disconnect();self.tracked[v]=nil end
-  self.dirty[v]=nil;self.retry[v]=nil
+  self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil
  end)
  for _,v in ipairs(world:GetDescendants()) do observe(v) end
  function self:isActive(source) return self.active[source]~=nil end
@@ -326,12 +283,13 @@ function FX.new(world,options)
     local duration=v:GetAttribute('EffectDuration')
     local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
-    if e and (e.serial~=serial or e.kind~=kind or cancelled or type(start)~='number' or type(duration)~='number' or duration<=0) then remove(v);e=nil end
-    if e then e.start=start end -- Save-pause clock shifts do not rebuild geometry.
-    if not e and serial>0 and not cancelled and supported[kind] and type(start)=='number' and type(duration)=='number' and duration>0 then
+    if e and e.serial==serial and cancelled and v:GetAttribute('EffectDepleted')==true then concealDepleted(e)
+    elseif e and (e.serial~=serial or e.kind~=kind or cancelled or type(start)~='number' or type(duration)~='number' or duration<=0) then remove(v);e=nil end
+    if e and not e.tombstone then e.start=start;e.duration=duration;e.tail=math.min(TAIL,duration*(1-e.impact)*.98) end -- Save-pause clock shifts preserve geometry and phase.
+    if not e and self.completed[v]~=serial and serial>0 and not cancelled and supported[kind] and type(start)=='number' and type(duration)=='number' and duration>0 then
      local done=v:GetAttribute('EffectDoneAt') or 0
      if done>0 and done>=start and now-done>TAIL then
-      -- A late joiner does not replay old payouts.
+      self.completed[v]=serial -- A late joiner never replays an old contact.
      elseif not nearby(v) then self.retry[v]=now+.2
      elseif self.count+MAX_EFFECT_PARTS<=MAX_PARTS then
       local view=options.resolve and options.resolve(v) or (not options.resolve and v or nil)
@@ -340,7 +298,8 @@ function FX.new(world,options)
        if type(full)=='number' then full=Vector3.one*full end
        local size=view.Size.Magnitude>.05 and view.Size or full
        local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder
-       e={owner=self,resource=v,view=view,kind=kind,serial=serial,start=start,duration=duration,folder=effectFolder,parts={},center=view.Position,cf=view.CFrame,size=size,color=view.Color,material=view.Material,radius=math.max(size.X,size.Y,size.Z)*.5,originalTransparency=view.LocalTransparencyModifier}
+       e={owner=self,resource=v,view=view,kind=kind,serial=serial,start=start,duration=duration,impact=math.clamp(v:GetAttribute('EffectImpact') or .68,.1,.95),folder=effectFolder,parts={},center=view.Position,cf=view.CFrame,size=size,color=view.Color,material=view.Material,radius=math.max(size.X,size.Y,size.Z)*.5,originalTransparency=view.LocalTransparencyModifier}
+       e.tail=math.min(TAIL,duration*(1-e.impact)*.98)
        build(e);self.active[v]=e;view.LocalTransparencyModifier=1
       elseif done<=0 then self.retry[v]=now+.1 end
      else self.retry[v]=now+.1 end
@@ -348,33 +307,33 @@ function FX.new(world,options)
    end
   end
   for v,e in pairs(self.active) do
-   if not v.Parent or not e.view.Parent or not v:GetAttribute('ResourceId') or (v:GetAttribute('EffectCancelledSerial') or 0)>=e.serial then remove(v)
+   if not v.Parent or not e.view.Parent or not v:GetAttribute('ResourceId') then remove(v)
+   elseif e.tombstone then e.view.LocalTransparencyModifier=1
+   elseif (v:GetAttribute('EffectCancelledSerial') or 0)>=e.serial then
+    if v:GetAttribute('EffectDepleted')==true then concealDepleted(e) else remove(v) end
    elseif not nearby(v) then
-    remove(v);self.retry[v]=now+.2
+    if v:GetAttribute('EffectDepleted')==true then concealDepleted(e) else remove(v);self.retry[v]=now+.2 end
    else
-    -- Run after the ordinary growth/fracture renderer. Hide its view without
-    -- changing the hidden server collider or suppressing existing crystal audio.
-    e.view.LocalTransparencyModifier=1
+    local pausedAt=v:GetAttribute('EffectPausedAt') or 0
+    local visualNow=pausedAt>0 and math.min(now,pausedAt) or now
     local done=v:GetAttribute('EffectDoneAt') or 0
-    if done>0 and done>=e.start then
-     local age=math.max(0,now-done)
-     if age>TAIL then
-      -- The ordinary renderer can still be draining a long fracture queue.
-      -- Free every effect Part now, but conceal that retired rock until its
-      -- authoritative source disappears, rather than flashing it back in.
+    local impacted=done>0 and done>=e.start
+    local depleted=impacted and v:GetAttribute('EffectDepleted')==true
+    local age=impacted and math.max(0,visualNow-done) or nil
+    -- The ordinary fracture queue owns surviving crystal size/pose immediately
+    -- after the accepted hit. Keep only local chips/tool recovery over that view.
+    e.view.LocalTransparencyModifier=(not impacted or depleted) and 1 or e.originalTransparency
+    if age and age>=e.tail then
+     if depleted then
       if not e.retired then freeGeometry(e);e.retired=true end
-     elseif not e.retired and now>=(e.nextPose or 0) then
-      e.nextPose=now+interval;self.poseUpdates+=1;finishPose(e,age)
+     else self.completed[v]=e.serial;remove(v) end
+    elseif not e.retired then
+     local t=impacted and math.min(1,e.impact+age/e.duration) or math.min(e.impact,clamp((visualNow-e.start)/e.duration))
+     if t~=e.lastPhase or age~=e.lastAge then
+      e.lastPhase=t;e.lastAge=age;self.poseUpdates+=1
+      e.rock.CFrame=e.cf;e.rock.Size=e.size;e.rock.Color=e.color;e.rock.Transparency=impacted and 1 or 0
+      poses[e.kind](e,t,age)
      end
-    else
-     local pausedAt=v:GetAttribute('EffectPausedAt') or 0
-     local visualNow=pausedAt>0 and math.min(now,pausedAt) or now
-     local t=math.min(.985,clamp((visualNow-e.start)/e.duration))
-     if now>=(e.nextPose or 0) and (not e.lastPhase or t~=e.lastPhase) then
-      e.nextPose=now+interval;e.lastPhase=t;self.poseUpdates+=1;poses[e.kind](e,t)
-     end
-     -- If the server cancels without retiring a resource, the next attribute pass cleans it.
-     -- A small timeout also bounds stale effects after streaming/network interruptions.
      if visualNow-e.start>e.duration+3 then remove(v) end
     end
    end
@@ -385,7 +344,7 @@ function FX.new(world,options)
   for v in pairs(self.active) do remove(v) end
   for _,connection in pairs(self.tracked) do connection:Disconnect() end
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
-  table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked)
+  table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked);table.clear(self.completed)
   self.folder:Destroy()
  end
  return self

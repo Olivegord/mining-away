@@ -701,6 +701,7 @@ local function registerDrone(source)
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
  TacticalHUD.attachHealth(clone,source,typeColor or colors.Blue)
@@ -902,6 +903,10 @@ local function renderDrone(d,dt,now)
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
+ if d.specialMotion then
+  local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
+  SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now)
+ end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1

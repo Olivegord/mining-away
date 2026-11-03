@@ -99,7 +99,11 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
  if d.specialJob and d.target and not d.target.paid then
   d.target.part:SetAttribute('EffectCancelledSerial',d.specialJob.serial);d.target.part:SetAttribute('EffectType',nil)
  end
- d.specialJob=nil;d.specialPausedAt=nil;d.obstructedAt=nil
+ if d.specialRecovery and d.specialRecovery.part.Parent then
+  local part=d.specialRecovery.part
+  part:SetAttribute('EffectPausedAt',0);part:SetAttribute('EffectCancelledSerial',d.specialRecovery.serial)
+ end
+ d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil
  d.specialClear=nil;d.specialQueryAt=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
@@ -548,7 +552,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local p=profiles[d.owner]
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  local recipient=d
- local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and d.specialJob and d.specialJob.targetId==r.id and now>=d.specialJob.startedAt+d.specialJob.duration
+ local job=d.specialJob
+ local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and job and not job.impacted and job.targetId==r.id and now>=job.startedAt+job.duration*job.impact
  local shell=contactKind=='SpecialShell' and DroneCatalog.Types[d.role] and r.kind=='Geode'
  if secondary then
   for id in pairs(r.slots) do
@@ -572,18 +577,29 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   -- final hit. No saved state/remote can authorize an echo from a retired node.
   if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode',primary.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ -- A specialist's committed job, never its caller, supplies the finite hit budget.
+ if special then amount=job.damage end
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
- if special then amount=r.hp end
+ if special then
+  amount=DroneCatalog.capDamage(d.role,r.maxHP,amount)
+  -- Quarter-work subtraction can leave a floating-point residue on minerals
+  -- such as Ruby. Resolve only arithmetic dust, never another real chunk.
+  if r.hp>amount and r.hp-amount<=math.max(1,r.maxHP)*1e-10 then amount=r.hp end
+ end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
  local revealed=nil
  local broken=R.damage(r,amount)
+ if special then
+  job.impacted=true
+  r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
+ end
  local actual=r.paid and 0 or r.hp+10
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous then
@@ -596,7 +612,6 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
  if broken then
-  if special then r.part:SetAttribute('EffectDoneAt',now) end
   r.part:SetAttribute('BreakSerial',1);r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)
@@ -652,6 +667,12 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    else r.slots[id]=nil end
   end
   updateSlots(r)
+  if special then
+   d.lingerUntil=math.max(d.lingerUntil or now,job.startedAt+job.duration)
+   -- A dead rock owns no work reservation. Retain only its cosmetic timeline
+   -- so a yielding save can freeze the last recovery just like earlier hits.
+   d.specialRecovery={part=r.part,serial=job.serial,startedAt=job.startedAt,duration=job.duration,impacted=true}
+  end
  end
  return true
 end
@@ -914,10 +935,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  local arrived=Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0)
  local job=d.specialJob
  local starting=not job and d.warmAt and now-d.warmAt>=math.max(.08,d.stats.warmup)
- local completing=job and now>=job.startedAt+job.duration
- if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or completing) then
-  -- No damage occurs during the long cosmetic work hold. Monitor obstruction
-  -- at snapshot cadence, and always recheck at actual startup and completion.
+ local contacting=job and not job.impacted and now>=job.startedAt+job.duration*job.impact
+ if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or contacting) then
+  -- Monitor obstruction at snapshot cadence, with fresh checks at startup
+  -- and the actual contact. Cosmetic recovery never adds damage.
   d.specialClear=los(d.pos,r.position,r.part,{droneFolder});d.specialQueryAt=now+C.Snapshot
  end
  if not arrived or not d.specialClear then
@@ -928,16 +949,21 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.warmAt=d.warmAt or now;d.state='Warmup'
  if now-d.warmAt<math.max(.08,d.stats.warmup) then return end
  if not d.specialJob then
-  local kind=DroneCatalog.Types[d.role]
-  local ratio=d.stats.miningDPS/math.max(.01,d.owned.base.miningDPS)
-  local duration=kind.Duration/math.clamp(ratio,.25,4)
+  local cycle=DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
+  if not cycle then return end
   r.specialSerial=(r.specialSerial or 0)+1
-  d.specialJob={targetId=r.id,serial=r.specialSerial,startedAt=now,duration=duration}
-  for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=duration,EffectDoneAt=0,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
+  d.specialJob={targetId=r.id,serial=r.specialSerial,startedAt=now,duration=cycle.duration,impact=cycle.impact,damage=cycle.damage,impacted=false}
+  for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
   r.part:SetAttribute('EffectSerial',r.specialSerial)
  end
  d.state='SpecialMine'
- if now>=d.specialJob.startedAt+d.specialJob.duration then hitResource(d,r,r.hp,false,nil,nil,'Special') end
+ job=d.specialJob
+ if not job.impacted and now>=job.startedAt+job.duration*job.impact then
+  hitResource(d,r,job.damage,false,nil,nil,'Special')
+ end
+ -- Keep the same reservation during recovery. A new serial can begin only
+ -- after the current complete gesture; no extra warmup or overlapping hits.
+ if d.specialJob==job and job.impacted and now>=job.startedAt+job.duration then d.specialJob=nil end
 end
 local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
@@ -1089,6 +1115,7 @@ local function breakerDrone(d,p,hr,field,dt)
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
+ if d.specialRecovery and not d.specialPausedAt and (not d.specialRecovery.part.Parent or now>=d.specialRecovery.startedAt+d.specialRecovery.duration+1.15) then d.specialRecovery=nil end
  if d.hp<=0 then
   d.velocity=Vector3.zero
   d.state=now>=d.readyAt-C.Assembly and 'Reprinting' or 'Destroyed';d.pos=scene.printer.Position+Vector3.new((d.slot-1)%4*2,3,math.floor((d.slot-1)/4)*2);d.goal=d.pos
@@ -1259,16 +1286,25 @@ local function setMotionPaused(p: any,paused: boolean)
  for _,d in ipairs(p.drones) do
   if d.model and d.model.Parent and d.hp>0 then
    d.publishedAttributes=nil -- Immediate pause writes invalidate snapshot deltas.
+   local effectJob=d.specialJob or d.specialRecovery
+   local effectPart=d.specialJob and d.target and d.target.part or d.specialRecovery and d.specialRecovery.part
+   if effectPart and not effectPart.Parent then effectJob=nil;effectPart=nil end
    if paused then
-    if d.specialJob and not d.specialPausedAt then
-     d.specialPausedAt=now;d.target.part:SetAttribute('EffectPausedAt',now)
+    if effectJob and effectPart and not d.specialPausedAt then
+     d.specialPausedAt=now;effectPart:SetAttribute('EffectPausedAt',now)
     end
     d.model:SetAttribute('Mining',false);d.model:SetAttribute('Firing',false)
     d.mineBreakContact=nil;d.model:SetAttribute('MineBreakUntil',0);d.model:SetAttribute('MineBreakPrimaryId','');d.model:SetAttribute('MineBreakSecondaryId','')
    elseif d.specialPausedAt then
-    if d.specialJob and d.target then
-     d.specialJob.startedAt+=math.max(0,now-d.specialPausedAt)
-     d.target.part:SetAttribute('EffectStartedAt',d.specialJob.startedAt);d.target.part:SetAttribute('EffectPausedAt',0)
+    if effectJob and effectPart then
+     local pausedFor=math.max(0,now-d.specialPausedAt)
+     effectJob.startedAt+=pausedFor
+     if effectJob.impacted then effectPart:SetAttribute('EffectDoneAt',(effectPart:GetAttribute('EffectDoneAt') or now)+pausedFor) end
+     effectPart:SetAttribute('EffectStartedAt',effectJob.startedAt);effectPart:SetAttribute('EffectPausedAt',0)
+     if d.specialRecovery then
+      local retired=resources[effectPart:GetAttribute('ResourceId')]
+      if retired and retired.removeAt then retired.removeAt+=pausedFor end
+     end
     end
     d.specialPausedAt=nil
    end
@@ -1967,7 +2003,7 @@ RunService.Heartbeat:Connect(function(dt: number)
     end
     if t.awake and t.hp>0 and hr then t.model:SetAttribute('WatchPosition',hr.Position) end
    end
-   for i=#field.resources,1,-1 do local r=field.resources[i];if r.paid and r.removeAt and now>=r.removeAt then resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,i) end end
+   for i=#field.resources,1,-1 do local r=field.resources[i];if r.paid and r.removeAt and now>=r.removeAt and (r.part:GetAttribute('EffectPausedAt') or 0)<=0 then resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,i) end end
    local rate,count=respawnRate(field)
    field.model:SetAttribute('MiningDroneCount',count);field.model:SetAttribute('RespawnRate',rate)
    local replenishing=field.e.phase=='Safe' or field.e.phase=='Cleared' or unlockedMiners(field)

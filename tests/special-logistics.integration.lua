@@ -24,8 +24,8 @@ end
 local function specialTicks(d,seconds)
  for _=1,math.ceil(seconds/C.Tick) do specialClock(C.Tick);droneStep(d,C.Tick) end
 end
-local function specialRock(p,d,kind,hp,ore)
- local field=patches[1]
+local function specialRock(p,d,kind,hp,ore,fieldOverride)
+ local field=fieldOverride or patches[1]
  for _,r in ipairs(field.resources) do r.paid=true;r.hp=0 end
  p.player.Character:PivotTo(CFrame.new(field.center+Vector3.new(0,3,0)))
  local r=makeResource(field,field.center,kind or 'Crystal',hp or 20000,ore or 11,3)
@@ -87,22 +87,89 @@ specialCheck('permanent miner purchase validates run context range ownership and
  specialEq(#data(p).fleet,initial+1);specialEq(#p.drones,initial+1);specialEq(d.id,data(p).fleet[initial+1].id)
  specialInput(pl,p,'BuyDrone',{droneType='Halver',txId='lost-response-buy',runId=data(p).run.id});specialEq(#data(p).fleet,initial+1)
 end)
-specialCheck('all seven special miners wait for startup and full timed work before one-shot reward',function()
+local function specialWaitForJob(d,afterSerial)
+ for _=1,600 do
+  if d.specialJob and (not afterSerial or d.specialJob.serial>afterSerial) then return d.specialJob end
+  specialTicks(d,C.Tick)
+ end
+ error('Timed out waiting for specialist cycle')
+end
+local function specialUntil(d,at)
+ while now+C.Tick<at-1e-7 do specialTicks(d,C.Tick) end
+end
+specialCheck('all seven miners take four authoritative chunks and pay once only on depletion',function()
  for _,kind in ipairs(DroneCatalog.Order) do if kind~='Laser' then
-  local pl,p=specialOwner();local d=specialBuy(pl,p,kind);local r=specialRock(p,d,'Crystal',20000,11)
+  local pl,p=specialOwner();local d=specialBuy(pl,p,kind);local r=specialRock(p,d,'Crystal',210,11)
   local hp=r.hp;local before=pendingOre(p)
   specialTicks(d,.3);specialEq(r.hp,hp);assert(not d.specialJob)
-  for _=1,180 do if d.specialJob then break end;specialTicks(d,C.Tick) end
-  local job=assert(d.specialJob,'no '..kind..' work cycle');specialEq(r.hp,hp)
-  specialEq(r.part:GetAttribute('EffectType'),kind);specialEq(r.part:GetAttribute('EffectDrone'),d.id)
-  assert(math.abs(job.duration-DroneCatalog.Types[kind].Duration)<1e-6)
-  while now+C.Tick<job.startedAt+job.duration-.001 do specialTicks(d,C.Tick) end
-  specialEq(r.hp,hp);specialEq(pendingOre(p),before)
-  specialTicks(d,.1);specialEq(r.paid,true);assert(r.part:GetAttribute('EffectDoneAt')>0)
-  specialEq(pendingOre(p)-before,11*(DroneCatalog.Types[kind].Yield or 1))
+  local previousSerial=0
+  for cycle=1,4 do
+   local job=specialWaitForJob(d,previousSerial)
+   specialEq(job.serial,previousSerial+1);previousSerial=job.serial
+   specialEq(r.part:GetAttribute('EffectType'),kind);specialEq(r.part:GetAttribute('EffectDrone'),d.id)
+   assert(math.abs(job.duration-DroneCatalog.Types[kind].Duration)<1e-6)
+   specialEq(r.part:GetAttribute('EffectImpact'),.68)
+   specialUntil(d,job.startedAt+job.duration*job.impact)
+   specialEq(r.hp,hp);specialEq(pendingOre(p),before)
+   specialTicks(d,C.Tick*2)
+   specialEq(r.hp,hp-50);hp=r.hp
+   assert(r.part:GetAttribute('EffectDoneAt')>=job.startedAt+job.duration*job.impact)
+   specialEq(r.part:GetAttribute('EffectDepleted'),cycle==4)
+   if cycle<4 then
+    assert(not r.paid and d.specialJob==job and r.slots[d.id])
+    local after=r.hp
+    specialEq(hitResource(d,r,999999,false,nil,nil,'Special'),false)
+    specialEq(r.hp,after)
+    specialUntil(d,job.startedAt+job.duration)
+    specialEq(r.hp,after);specialEq(d.specialJob,job)
+   end
+  end
+  assert(r.paid and not d.specialJob)
+  specialEq(pendingOre(p)-before,math.floor(11*DroneCatalog.Types[kind].Yield))
+  assert(d.lingerUntil>=now,'final impact still has a recovery hold')
   specialEq(hitResource(d,r,20000,false,nil,nil,'Special'),false)
-  specialEq(pendingOre(p)-before,11*(DroneCatalog.Types[kind].Yield or 1));assert(not d.specialJob)
+  specialEq(pendingOre(p)-before,math.floor(11*DroneCatalog.Types[kind].Yield))
  end end
+end)
+specialCheck('real fractional Ruby hardness finishes on its fourth chunk without an extra dust cycle',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Bubbler');local field=patches[2]
+ data(p).run.shops.Ruby=true;data(p).run.shopLevels.quartz_ruby=1
+ local ruby=Mining.resource(52,'Crystal',field.cfg.Hardness)
+ local r=specialRock(p,d,'Crystal',ruby.maxHP,11,field)
+ assert(math.abs(r.hp-226.8)<1e-10,'fixture must exercise fractional Ruby work')
+ local serial=0
+ for strike=1,4 do
+  local job=specialWaitForJob(d,serial);serial=job.serial
+  specialUntil(d,job.startedAt+job.duration*job.impact);specialTicks(d,C.Tick*2)
+  if strike<4 then assert(not r.paid and r.hp>0) end
+ end
+ assert(r.paid and r.hp==0 and serial==4,'floating residue forced a fifth complete gesture')
+ specialEq(r.part:GetAttribute('BreakSerial'),1)
+end)
+specialCheck('huge rocks retain a finite work budget and modifiers cannot bypass the final chunk cap',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Singularity');local r=specialRock(p,d,'Core',20010,11)
+ local originalMultiplier=discoveries.Multiplier
+ discoveries.Multiplier=function() return 1 end
+ local job=specialWaitForJob(d);local hp=r.hp
+ specialUntil(d,job.startedAt+job.duration*job.impact);specialTicks(d,C.Tick*2)
+ assert(r.hp>hp*.99 and not r.paid,'huge rock was scaled away by percent-only damage')
+ assert(math.abs(hp-r.hp-job.damage)<1e-6,'finite committed budget changed')
+ local firstSerial=job.serial
+ local nextJob=specialWaitForJob(d,firstSerial);hp=r.hp
+ d.stats.geodeMultiplier=100000
+ discoveries.Multiplier=function() return 100000 end
+ specialUntil(d,nextJob.startedAt+nextJob.duration*nextJob.impact);specialTicks(d,C.Tick*2)
+ assert(not r.paid);assert(math.abs(hp-r.hp-(r.maxHP-10)*.25)<1e-6,'modifier bypassed chunk cap')
+ discoveries.Multiplier=originalMultiplier
+end)
+specialCheck('mining cards accelerate repeated cycles once and retain per-hit budget',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Gridcutter');local r=specialRock(p,d,'Crystal',10010,11)
+ d.stats.miningDPS=d.owned.base.miningDPS*4
+ local job=specialWaitForJob(d)
+ assert(math.abs(job.duration-DroneCatalog.Types.Gridcutter.Duration/4)<1e-6)
+ assert(math.abs(job.damage-d.owned.base.miningDPS*DroneCatalog.Types.Gridcutter.Duration*DroneCatalog.Types.Gridcutter.Power)<1e-6)
+ local hp=r.hp;specialUntil(d,job.startedAt+job.duration*job.impact);specialTicks(d,C.Tick*2)
+ assert(math.abs(hp-r.hp-job.damage)<1e-6,'mining card doubled both rate and hit budget')
 end)
 specialCheck('special mining requires authoritative overhead arrival and clear line of sight',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Bubbler');local r=specialRock(p,d)
@@ -111,6 +178,17 @@ specialCheck('special mining requires authoritative overhead arrival and clear l
  local original=workspace.Raycast;workspace.Raycast=function() return {Instance=scene.packStation} end
  specialTicks(d,1.5);assert(not d.specialJob);specialEq(r.hp,hp);workspace.Raycast=original
 end)
+specialCheck('fresh line of sight at the impact defeats an otherwise cached clear work hold',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Bubbler');local r=specialRock(p,d,'Crystal',210,11)
+ local job=specialWaitForJob(d);local hp=r.hp
+ specialUntil(d,job.startedAt+job.duration*job.impact)
+ d.specialQueryAt=now+10;d.specialClear=true
+ local original=workspace.Raycast;workspace.Raycast=function() return {Instance=scene.packStation} end
+ specialTicks(d,C.Tick*2)
+ workspace.Raycast=original
+ specialEq(r.hp,hp);assert(not d.specialJob and not r.slots[d.id])
+ specialEq(r.part:GetAttribute('EffectCancelledSerial'),job.serial)
+end)
 specialCheck('recall cancels choreography without payout and releases its reservation',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Halver');local r=specialRock(p,d)
  specialTicks(d,1.2);local job=assert(d.specialJob);local before=pendingOre(p)
@@ -118,16 +196,54 @@ specialCheck('recall cancels choreography without payout and releases its reserv
  specialEq(r.part:GetAttribute('EffectCancelledSerial'),job.serial);specialTicks(d,9)
  specialEq(r.paid,false);specialEq(pendingOre(p),before)
 end)
-specialCheck('yielding save pauses authoritative special time and resumes the remaining work',function()
- local pl,p=specialOwner();local d=specialBuy(pl,p,'Gridcutter');local r=specialRock(p,d)
- specialTicks(d,1.2);local job=assert(d.specialJob);local started=job.startedAt
+specialCheck('yielding saves freeze anticipation and recovery without duplicating or skipping chunks',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Gridcutter');local r=specialRock(p,d,'Crystal',210,11)
+ local job=specialWaitForJob(d);local started=job.startedAt;local hp=r.hp
+ specialTicks(d,.2)
  p.busy=true;setMotionPaused(p,true);specialTicks(d,3)
- specialEq(r.paid,false);specialEq(job.startedAt,started);assert(r.part:GetAttribute('EffectPausedAt')>0)
+ specialEq(r.hp,hp);specialEq(job.startedAt,started);assert(r.part:GetAttribute('EffectPausedAt')>0)
  p.busy=false;setMotionPaused(p,false)
  assert(math.abs(job.startedAt-started-3)<C.Tick*.1);specialEq(r.part:GetAttribute('EffectPausedAt'),0)
- specialTicks(d,1);specialEq(r.paid,false)
- while not r.paid do specialTicks(d,C.Tick) end
- assert(r.part:GetAttribute('EffectDoneAt')>=job.startedAt+job.duration)
+ specialUntil(d,job.startedAt+job.duration*job.impact);specialEq(r.hp,hp)
+ specialTicks(d,C.Tick*2);specialEq(r.hp,hp-50);assert(job.impacted)
+ local impactedAt=r.part:GetAttribute('EffectDoneAt');started=job.startedAt
+ p.busy=true;setMotionPaused(p,true);specialTicks(d,4)
+ specialEq(r.hp,hp-50);specialEq(d.specialJob,job)
+ p.busy=false;setMotionPaused(p,false)
+ assert(math.abs(job.startedAt-started-4)<C.Tick*.1)
+ assert(math.abs(r.part:GetAttribute('EffectDoneAt')-impactedAt-4)<C.Tick*.1)
+ specialUntil(d,job.startedAt+job.duration);specialEq(r.hp,hp-50)
+ local nextJob=specialWaitForJob(d,job.serial);specialEq(nextJob.serial,job.serial+1)
+ specialEq(r.hp,hp-50)
+end)
+specialCheck('yielding save freezes the lethal recovery without retaining damage authority or losing its source',function()
+ local pl,p=specialOwner();local d=specialBuy(pl,p,'Halver');local r=specialRock(p,d,'Crystal',210,11)
+ local serial=0
+ for _=1,4 do
+  local job=specialWaitForJob(d,serial);serial=job.serial
+  specialUntil(d,job.startedAt+job.duration*job.impact);specialTicks(d,C.Tick*2)
+ end
+ assert(r.paid and not d.target and not d.specialJob and not r.slots[d.id])
+ local recovery=assert(d.specialRecovery);local started=recovery.startedAt
+ local impact=r.part:GetAttribute('EffectDoneAt');local removeAt=r.removeAt
+ p.busy=true;setMotionPaused(p,true)
+ local pausedAt=r.part:GetAttribute('EffectPausedAt');assert(pausedAt>0)
+ specialTicks(d,3)
+ -- Exercise actual snapshot cleanup after the normal two-second removal deadline.
+ heartbeat:Fire(.11)
+ assert(r.part.Parent and resources[r.id]==r and d.specialRecovery==recovery,'save removed a frozen final effect')
+ specialEq(r.part:GetAttribute('EffectDoneAt'),impact)
+ specialEq(r.part:GetAttribute('EffectStartedAt'),started)
+ local elapsedPause=now-pausedAt
+ p.busy=false;setMotionPaused(p,false)
+ assert(math.abs(recovery.startedAt-started-elapsedPause)<1e-8)
+ assert(math.abs(r.part:GetAttribute('EffectDoneAt')-impact-elapsedPause)<1e-8)
+ assert(math.abs(r.removeAt-removeAt-elapsedPause)<1e-8)
+ specialEq(r.part:GetAttribute('EffectPausedAt'),0)
+ assert(r.removeAt>now and d.lingerUntil>now)
+ specialEq(hitResource(d,r,999999,false,nil,nil,'Special'),false)
+ specialEq(r.part:GetAttribute('BreakSerial'),1)
+ release(d);assert(not d.specialRecovery);specialEq(r.part:GetAttribute('EffectPausedAt'),0)
 end)
 specialCheck('special workers use ordinary shared shell mining and cannot instantly remove geodes',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Singularity');local r=specialRock(p,d,'Geode',10000,0)
@@ -228,8 +344,11 @@ specialCheck('carrier rejects foreign invalid and guarded loads then deploys fou
  pl.Character:PivotTo(CFrame.new(field.center));specialInput(pl,p,'CarrierPatch',{carrierId=carrier.id,patch=1})
  specialEq(logistics:view(p)[carrier.id].state,'Working');specialEq(d.specialJob.serial,serial);specialEq(d.specialJob.startedAt,started)
  pl.Character:PivotTo(CFrame.new(home+Vector3.new(0,4,0)));pl.Character:FindFirstChildOfClass('Humanoid').Health=0
- local before=Logistics.bagUnits(specialState(p).storage);specialRuntime(p,10)
- assert(Logistics.bagUnits(specialState(p).storage)>before,'deployed miners stopped when owner left/died')
+ local before=Logistics.bagUnits(specialState(p).storage);local target=d.target;local workBefore=target.hp
+ specialRuntime(p,10)
+ assert(target.hp<workBefore,'deployed miners stopped chunk work when owner left/died')
+ for _=1,500 do if Logistics.bagUnits(specialState(p).storage)>before then break end;specialRuntime(p,.1) end
+ assert(Logistics.bagUnits(specialState(p).storage)>before,'completed carrier mining did not reach storage')
  specialEq(Pro.cargoUnits(data(p)),0)
  -- Free reprints remain at home until a deliberate new deployment.
  kill(d);specialRuntime(p,.1);specialEq(d.deployedCarrier,false)

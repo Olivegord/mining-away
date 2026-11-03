@@ -53,8 +53,19 @@ check('one plot command assigns every miner and each reserves distinct real work
  for _,d in ipairs(p.drones) do if DroneRoles.isSpecial(d.role) then
   local previous=d.target;d.pos=Feel.mineGoal(previous.position,d.targetSlot,false,previous.fullSize)
   droneStep(d,C.Tick);now+=d.stats.warmup+C.Tick;realTime=now;droneStep(d,C.Tick)
-  local job=assert(d.specialJob);now=job.startedAt+job.duration+C.Tick;realTime=now;droneStep(d,C.Tick)
-  assert(previous.paid,'timed specialist did not complete its first rock')
+  local job=assert(d.specialJob);local hp=previous.hp
+  now=job.startedAt+job.duration*job.impact+C.Tick;realTime=now;droneStep(d,C.Tick)
+  assert(not previous.paid and previous.hp<hp,'first cycle must remove a finite chunk, not the whole hard rock')
+  local maxCycles=math.ceil(hp/math.min(job.damage,(previous.maxHP-10)*.25))+4
+  for _=1,maxCycles do
+   if previous.paid then break end
+   job=assert(d.specialJob)
+   now=job.startedAt+job.duration+C.Tick;realTime=now;droneStep(d,C.Tick)
+   now+=C.Tick;realTime=now;droneStep(d,C.Tick)
+   job=assert(d.specialJob)
+   now=job.startedAt+job.duration*job.impact+C.Tick;realTime=now;droneStep(d,C.Tick)
+  end
+  assert(previous.paid,'repeated finite specialist cycles did not finish bounded work')
   d.lingerUntil=nil;droneStep(d,C.Tick)
   assert(d.autoField==1 and d.target and d.target~=previous,'specialist stopped after one rock')
   break
