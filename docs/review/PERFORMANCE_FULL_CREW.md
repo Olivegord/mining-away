@@ -1,6 +1,6 @@
 # Full-crew performance pass
 
-Baseline: `09e89298735fdaf7f0a4eae908398b1954b23eb6`, the 15-drone preview (nine miners and six support), automatic targeting and 120-unit backpack. All of those options remain. The map, original assets, permanent ownership, damage/reward authority and mining work durations remain intact. **Play was not started or run for this pass.**
+Baseline: `09e89298735fdaf7f0a4eae908398b1954b23eb6`, the 15-drone preview (nine miners and six support), automatic targeting and 120-unit backpack. All of those options remain. The map, original assets, permanent ownership, damage/reward authority and mining work durations remain intact. **Optimization verification remained offline; this pass issued no Play-start call.**
 
 ## Removed work
 
@@ -37,4 +37,6 @@ Current special/logistics/FX/HUD checks and focused client, energy, audio, gadge
 
 The existing editable export is refreshed offline against the exact previously installed source payload, preserving its map and backups. `python3 tools/release.py` builds the primary verified live capture, the review ZIP and `build/revision.json` with the exact final commit and checksums. No source asset is overwritten and no Roblox publication occurs.
 
-Studio reported no connected instance. No native run, new profiler capture, FPS/energy comparison, visual acceptance or multiplayer acceptance is claimed. The owner-requested optimization is implemented and verified offline; the saved build is left ready for a later owner-controlled test.
+Studio initially reported no connected instance, then reconnected for the parallel particle chat's isolated Edit previews. That workflow unexpectedly encountered Play mode; only stop calls were issued, cleanup was repeated in Edit and no performance playtest was conducted. No new profiler capture, FPS/energy comparison, gameplay visual acceptance or multiplayer acceptance is claimed.
+
+The final native Edit install updated only the three changed approved script paths. The client edit's automatic permission review timed out once and its permitted retry succeeded. Save was issued in the existing editable file; although the UI response timed out, the resulting native file was independently decoded and verified: all seven final Sources exactly match implementation `70c5986`, all 39 unrelated Sources and all 29 serialized script enablement values match the preserved export, and no preview modules remain. Preview objects had also been confirmed absent in Edit before Save. The final saved native file SHA-256 is `8ad24875374a85ef6656701b83c7858cb07f4c5b5c5444e1ea72ba703ba8d47f`. Studio subsequently disconnected. The saved optimized file and source-only release are ready for the owner's later test; no restart or publication was issued.
