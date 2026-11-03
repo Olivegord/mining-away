@@ -191,39 +191,52 @@ function HUD:blocksPoint(position: Vector2): boolean
  return false
 end
 
+-- Count authoritative capabilities and orders, not cosmetic beam state. Special
+-- jobs and breaker windup keep their assignment; support never inflates miners.
+function HUD.activity(folder,ownerId)
+ local a={total=0,living=0,miners=0,support=0,assigned=0,delivering=0,hp=0,maximum=0}
+ if folder then for _,drone in folder:GetChildren() do
+  if drone:GetAttribute('Owner')==ownerId then
+   a.total+=1
+   local health=drone:GetAttribute('HP') or 0
+   a.hp+=math.max(0,health);a.maximum+=drone:GetAttribute('MaxHP') or 0
+   if health>0 then
+    a.living+=1
+    if drone:GetAttribute('CanMine')==true then
+     a.miners+=1
+     local target=drone:GetAttribute('TargetId')
+     if (type(target)=='string' and target~='') or (drone:GetAttribute('AutoFieldId') or 0)>0 then a.assigned+=1 end
+    else a.support+=1 end
+    local state=drone:GetAttribute('State')
+    if state=='Collect' or state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then a.delivering+=1 end
+   end
+  end
+ end end
+ return a
+end
+
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs
  local w,h=view.X,view.Y
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
- local total,living,working,delivering=0,0,0,0
+ local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
+ local total,living,working,delivering=activity.total,activity.living,activity.assigned,activity.delivering
  local backpackUnits=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
  local backpackCapacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
  local full=backpackUnits>=backpackCapacity
- local hp,maximum=0,0
- local folder=world:FindFirstChild('Drones')
- if folder then for _,drone in folder:GetChildren() do
-  if drone:GetAttribute('Owner')==Players.LocalPlayer.UserId then
-   total+=1
-   local health=drone:GetAttribute('HP') or 0
-   hp+=math.max(0,health);maximum+=drone:GetAttribute('MaxHP') or 0
-   if health>0 then
-    living+=1
-    local state=drone:GetAttribute('State')
-    if state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then delivering+=1
-    elseif state=='Mine' or state=='SpecialMine' or state=='Travel' or state=='Attack' then working+=1 end
-   end
-  end
- end end
+ local hp,maximum=activity.hp,activity.maximum
  local hidden=r.modal.Visible
  local busy=working>0 or delivering>0 or full or living<total
  if working>0 or delivering>0 then self.hasWorked=true end
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
- if delivering>0 then status=string.format('%d mining · %d hauling',working,delivering)
+ if fighting then status='Fleet fighting'
+ elseif working>0 then status=string.format('%d / %d miners assigned',working,activity.miners)
+ elseif delivering>0 then status=string.format('%d hauling · %d miners ready',delivering,activity.miners)
  elseif full then status='Backpack full · deposit for launch'
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
- elseif working>0 then status=string.format('%d / %d working',working,living)
  elseif living<total then status=string.format('%d / %d ready',living,total)
+ elseif activity.miners>0 then status=string.format('%d miners · %d support',activity.miners,activity.support)
  else status=string.format('%d drones ready',living) end
  self.order.Text=status;self.order.TextSize=16;self.order.TextColor3=C.text
  self.living.Visible=false

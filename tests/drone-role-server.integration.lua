@@ -13,7 +13,12 @@ local function fixture()
  roleUid+=1;local pl=player(roleUid);players.PlayerAdded:Fire(pl);local p=assert(profiles[roleUid])
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)))
  for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end
- local roles={};for _,d in ipairs(p.drones) do roles[d.role]=roles[d.role] or {};table.insert(roles[d.role],d) end
+ local roles={};for _,d in ipairs(p.drones) do
+  roles[d.role]=roles[d.role] or {};table.insert(roles[d.role],d)
+  -- Retained original-role scenarios isolate their workers from the new crew.
+  -- All-specialist deployment is covered by special-logistics-preview.integration.
+  if DroneRoles.isSpecial(d.role) then d.hp=0 end
+ end
  return pl,p,roles
 end
 local function rock(hp,kind,offset)
@@ -22,11 +27,11 @@ end
 local function ticks(d,seconds,snapshot)
  for _=1,math.ceil(seconds/C.Tick) do clock(C.Tick);droneStep(d,C.Tick);if snapshot then snapshotDrone(d) end end
 end
-check('Studio starts exactly eight active roles but still owns one permanent drone',function()
- local pl,p,roles=fixture();assert(preview and #p.drones==8 and #data(p).fleet==1)
+check('Studio starts every drone type but still owns one permanent drone',function()
+ local pl,p,roles=fixture();assert(preview and #p.drones==15 and #data(p).fleet==1)
  assert(#roles.Striker==1 and #roles.Courier==2 and #roles.Medic==1 and #roles.Dart==1 and #roles.Charger==1 and #roles.Orbiter==1 and #roles.Scrapper==1)
  assert(Pro.validate(data(p),pl.UserId));publish(p)
- local view=http:JSONDecode(pl:GetAttribute('MA_Profile'));assert(#view.activeFleet==8 and #view.fleet==1)
+ local view=http:JSONDecode(pl:GetAttribute('MA_Profile'));assert(#view.activeFleet==15 and #view.fleet==1)
  for _,role in ipairs({'Dart','Medic','Courier','Orbiter','Scrapper'}) do assert(view.droneStats[roles[role][1].id].miningDPS==0) end
  assert(#Pro.new(42,123).fleet==1,'production ownership creation is unchanged')
 end)
@@ -221,7 +226,7 @@ end)
 check('Studio max bag and named additions preserve permanent ownership and existing drone state',function()
  local pl,p,roles=fixture();local fleetBefore=Http:JSONEncode(data(p).fleet)
  local existing=roles.Striker[1];local r=rock(500);assert(assignOre(p,existing,r))
- p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==Ca.capacity(data(p)))
+ p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==C.Capacity)
  local units=Pro.cargoUnits(data(p));p.tokens=7;commandPlayer(pl,'DevFillBag');assert(Pro.cargoUnits(data(p))==units)
  local before=#p.drones;p.tokens=7;commandPlayer(pl,'DevAddDrone',{role='Courier'})
  assert(#p.drones==before+1 and p.drones[#p.drones].role=='Courier' and existing.target==r)

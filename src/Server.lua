@@ -34,6 +34,8 @@ local elapsed,snapshotElapsed,autosaveElapsed=0,0,0
 local seed=Random.new()
 local instanceId=(game.JobId~='' and game.JobId or Http:GenerateGUID(false))
 local preview=RunService:IsStudio() or game.GameId==0
+-- Runtime-only test perks: never add cards, upgrades or fleet ownership to a save.
+local testPerks=preview and {scope='Fleet',effects={plotAuto=1,capacity=C.Capacity/Ca.BASE_CAPACITY-1}} or nil
 local adapter
 if preview then adapter=Persistence.previewAdapter('MiningAwayPreview:'..instanceId)
 else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataStore('MiningAwayProfiles_v2')) end
@@ -51,13 +53,13 @@ local function notice(p,message)
 end
 local function publish(p)
  if not p.player.Parent then return end
- local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(copy)
+ local copy=Pro.clone(data(p));copy.capacity=Ca.capacity(copy,testPerks);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(copy)
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
  -- The active preview crew is presentation data, never permanent ownership.
  copy.activeFleet=p.testFleet and Pro.clone(p.testFleet) or nil
- copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(p.testFleet or copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned);copy.droneRoles[owned.id]=owned.role end
+ copy.droneStats={};copy.droneRoles={};for _,owned in ipairs(p.testFleet or copy.fleet) do copy.droneStats[owned.id]=Ca.stats(copy,owned,testPerks);copy.droneRoles[owned.id]=owned.role end
  local autoMine,autoHaul=false,false
  for _,d in ipairs(p.drones) do
   autoMine=autoMine or (DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
@@ -183,14 +185,18 @@ local function roleTestFleet(p: any)
  p.testRoll=(p.testRoll or 0)+1
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
- for i,name in ipairs({'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}) do
+ local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
+ for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' then table.insert(order,name) end end
+ for i,name in ipairs(order) do
   counts[name]=(counts[name] or 0)+1
   local role=RoleConfig.StudioRoles[name]
-  table.insert(fleet,{id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,i),type=name,role=name,name=names[name]..(name=='Courier' and ' '..counts[name] or ''),flightHeight=role.height,base=Pro.clone(role.base)})
+  local owned
+  if DroneCatalog.Types[name] then for _,candidate in ipairs(data(p).fleet) do if candidate.role==name then owned=Pro.clone(candidate);break end end end
+  table.insert(fleet,owned or {id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,i),type=name,role=name,name=(names[name] or RoleConfig.Types[name].DisplayName)..(name=='Courier' and ' '..counts[name] or ''),flightHeight=role.height,base=Pro.clone(role.base)})
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
- p.player:SetAttribute('MA_TestLoadoutLabel','Role crew: 1 miner · 2 backpack emptiers · healer · grower · breaker · orbital · swarm')
+ p.player:SetAttribute('MA_TestLoadoutLabel','All drone types · Plot Scanner · max backpack')
  return includePurchasedSpecials(p,fleet)
 end
 local function randomTestFleet(p: any)
@@ -212,7 +218,7 @@ local function randomTestFleet(p: any)
  return includePurchasedSpecials(p,fleet)
 end
 local function spawnDrone(p,owned,slot)
- local stats=Ca.stats(data(p),owned)
+ local stats=Ca.stats(data(p),owned,testPerks)
  local roleName=owned.role or owned.type
  local role=RoleConfig.StudioRoles[roleName]
  local flightHeight=owned.flightHeight or (role and role.height) or Feel.FollowHeight
@@ -235,7 +241,7 @@ local function rebuildFleet(p)
 end
 local function refreshStats(p)
  for _,d in ipairs(p.drones) do
-  local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned)
+  local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned,testPerks)
   if d.hp>0 then d.hp=math.min(stats.maxHealth,math.max(1,d.hp+math.max(0,stats.maxHealth-old))) end
   d.stats=stats
  end
@@ -472,7 +478,7 @@ local function pickupStep(dt)
   elseif healthy(p) then
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
-   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p)) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
+   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),testPerks) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
    if canCollect then
     if now>=(drop.queryAt or 0) then drop.clearPath=los(from,target,hr.Parent,{pickupFolder,droneFolder});drop.queryAt=now+.15 end
     canCollect=drop.clearPath==true
@@ -486,7 +492,7 @@ local function pickupStep(dt)
     drop.part:SetAttribute('GroundImpactSerial',drop.groundSerial)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,hr.Parent,{pickupFolder,droneFolder}) then
-    local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p)))
+    local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p),testPerks))
     if accepted>0 then
      drop.units-=accepted;p.dirty=true;p.publishDirty=true
      p.collectSerial=(p.collectSerial or 0)+1
@@ -1224,7 +1230,7 @@ local function snapshotDrone(d)
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.converter or scene.packStation).Position,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
   RepairChargeAt=d.repairChargeAt or 0,RepairChargeDuration=RoleConfig.Types.Medic.ChargeWindup,
-  AutomationMineEnabled=DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=DroneRoles.job(d.role),ImpactSerial=d.impactSerial or 0,
+  CanMine=DroneRoles.isWorker(d.role),AutomationMineEnabled=DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=DroneRoles.job(d.role),ImpactSerial=d.impactSerial or 0,
   MineBreakSerial=d.mineBreakSerial,MineBreakAt=breakContact and breakContact.at or 0,MineBreakUntil=breakContact and breakContact.untilTime or 0,
   MineBreakPrimaryId=breakContact and breakContact.primaryId or '',MineBreakSecondaryId=breakContact and breakContact.secondaryId or '',MineBreakBeamSince=breakContact and breakContact.beamSince or 0,
   ReprintAt=d.hp<=0 and d.readyAt or 0,SnapshotAt=now,ShotSerial=d.shotSerial,ShotAt=d.lastShotAt,LastCritAt=d.lastCritAt,Shield=d.shield,
@@ -1288,7 +1294,7 @@ local function transact(p: any,id: any,mutate: any,after: any,outcome: any)
 end
 local logisticsTerrain=MapLayout.plan(C.Fields,{home.X,home.Y,home.Z})
 logistics=Logistics.new({C=C,R=R,W=World,root=root,origin=home,profiles=profiles,drones=drones,patches=patches,
- data=data,Pro=Pro,Profile=Pro,Shops=Shops,capacityOf=Ca.capacity,healthy=healthy,characterRoot=characterRoot,inHome=atHome,
+ data=data,Pro=Pro,Profile=Pro,Shops=Shops,capacityOf=function(profile) return Ca.capacity(profile,testPerks) end,healthy=healthy,characterRoot=characterRoot,inHome=atHome,
  notice=notice,updateProfile=publish,getClock=function() return now end,transact=transact,
  atDepotStation=function(p) return atStation(p,scene.converter or scene.packStation,18) end,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
@@ -1621,7 +1627,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not RunService:IsStudio() then return end
   local field=p.workField and patches[p.workField] or patches[1]
   local material=field.cfg.Material or field.cfg.Key or 'Quartz'
-  local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p))-Pro.cargoUnits(data(p))),Ca.capacity(data(p)))
+  local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p),testPerks)-Pro.cargoUnits(data(p))),Ca.capacity(data(p),testPerks))
   if added>0 then p.dirty=true;p.publishDirty=true end
  elseif action=='DevAddDrone' then
   if not RunService:IsStudio() or type(payload)~='table' or type(payload.role)~='string' then return end
@@ -1642,7 +1648,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
   RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=action=='RoleLoadout' and roleTestFleet(p) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
-  notice(p,action=='RoleLoadout' and 'Eight-role test crew ready. Click ore to start work.' or 'Random test loadout ready — no saved fleet changed.')
+  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a field to send every miner.' or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
@@ -1838,7 +1844,14 @@ addPlayer=function(pl)
  profiles[pl.UserId]=p
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
- if preview then p.testFleet=roleTestFleet(p) end
+ if preview then
+  p.testFleet=roleTestFleet(p)
+  local equipment=data(p).logistics;equipment.backpack=true
+  if #equipment.carriers==0 then
+   table.insert(equipment.carriers,{id=tostring(pl.UserId)..':carrier:'..equipment.nextCarrier,droneIds={}})
+   equipment.nextCarrier+=1
+  end
+ end
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end

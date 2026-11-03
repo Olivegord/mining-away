@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 3 latest — all drone types and useful testing defaults
+
+For testing, start with all new drone options, automatic rock selection and maximum backpack capacity. Every mining-capable drone must receive field work. Fix the misleading mining fraction: support drones do not belong in its denominator, and warmup, breaker phases and special jobs must retain their assignment status. These are isolated Studio/preview defaults; production still starts with one permanent drone and earned automation. Preserve the distinct support jobs.
+
 ## November 3 latest — special miners, carriers and orbital storage
 
 Add Bubbler (Roblox Glass bubbles absorb a whole rock, float up, fall and shatter into money), Halver (levitate, stretch and recursively split a rock, then slowly grind the pieces in a fast ring), a laser grid cutter (scan, cut into cubes, then nudge them into a spill), and a very strong tiny black-hole miner. Add three more distinctive mining ideas. These are regular permanent mining drones and must coexist with the existing roles, original world, colorful UI, cards, shops and audio.

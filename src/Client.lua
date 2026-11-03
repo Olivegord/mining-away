@@ -441,7 +441,7 @@ openFleet=function()
   local half=(width-12)/2
   local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
   reroll.Name='RerollTestCrew'
-  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),'Role crew · 8',function() command:FireServer('RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
+  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),'All drone types',function() command:FireServer('RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
   if player:GetAttribute('MA_DevToolsEnabled')==true then
   local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
