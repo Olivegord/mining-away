@@ -22,15 +22,28 @@ check('break energy uses round glowing discs and bounded burst cleanup',function
  for n=1,30 do work:burst(Vector3.zero,Vector3.yAxis,Color3.new(1,1,0),38,100) end
  assert(#work.bursts==work.maxBursts)
  local emitter=work.bursts[1].part:FindFirstChildWhichIsA('ParticleEmitter')
- assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and emitter.LightEmission==1)
+ assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and emitter.LightEmission>=.5 and emitter.LightEmission<1)
+ assert(emitter.Brightness>=1 and emitter.Brightness<=2,'common burst became an overbright white mass')
  assert(emitter.TimeScale==1 and emitter.FlipbookLayout==Enum.ParticleFlipbookLayout.None and not emitter.LockedToPart)
  assert(emitter.Size[2].Value-emitter.Size[2].Envelope>=.7 and emitter.Size[2].Value+emitter.Size[2].Envelope<=1.2)
  assert(emitter.Emitted==38 and emitter.Rate==0 and emitter.Lifetime.Min>=1 and emitter.Lifetime.Max==1.6)
  assert(emitter.Speed.Max<=5 and emitter.Drag>=1.8,'break particles spread too far')
  assert(work.bursts[1].untilAt>=100+emitter.Lifetime.Max)
- local bloom=game:GetService('Lighting'):FindFirstChild('MiningEnergyBloom');assert(bloom and bloom.Intensity>1)
+ local bloom=game:GetService('Lighting'):FindFirstChild('MiningEnergyBloom')
+ assert(bloom and bloom.Enabled and bloom.Intensity>0 and bloom.Intensity<=.6 and bloom.Size<=22 and bloom.Threshold>=1.2)
  work:update(101.5);assert(#work.bursts==work.maxBursts,'burst parent clipped a living tail')
  work:update(101.9);assert(#work.bursts==0);work:destroy();assert(bloom.Parent==nil)
+end)
+check('existing named bloom is retuned without stacking or deleting unrelated lighting',function()
+ local lighting=game:GetService('Lighting');local bloom=Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
+ bloom.Intensity=1.25;bloom.Enabled=false;bloom.Parent=lighting
+ local unrelated=Instance.new('BloomEffect');unrelated.Name='PreservedOtherBloom';unrelated.Intensity=.1;unrelated.Parent=lighting
+ local work=WorkEffects.new(root);work:energyBloom()
+ assert(work.bloom==bloom and bloom.Enabled and bloom.Intensity<=.6)
+ local count=0;for _,effect in ipairs(lighting:GetChildren()) do if effect.Name=='MiningEnergyBloom' then count+=1 end end
+ assert(count==1 and unrelated.Intensity==.1)
+ work:destroy();assert(bloom.Parent==lighting and unrelated.Parent==lighting)
+ bloom:Destroy();unrelated:Destroy()
 end)
 check('nearby owner sees fresh full-speed mining discs while zoomed far out',function()
  local oldPlayer=players.LocalPlayer;local player=Instance.new('Player');local character=Instance.new('Model')
@@ -39,6 +52,8 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  local templates=Instance.new('Folder');templates.Name='MiningFX';templates.Parent=rs
  local particles=Instance.new('Folder');particles.Name='MiningParticles';particles.Parent=templates
  local source=Instance.new('ParticleEmitter');source.Name='Largeparticles';source.TimeScale=.2;source.FlipbookLayout='badInheritedFlipbook';source.Parent=particles
+ local contact=Instance.new('Part');contact.Name='MiningEffect';contact.Parent=templates
+ local inner=Instance.new('Part');inner.Name='InnerMiningEffect';inner.Parent=contact
  local work=WorkEffects.new(root);local holder=Instance.new('Folder');holder.Parent=root
  local marker=Instance.new('Part');marker.Parent=holder
  local beam={holder=holder,marker=marker,origin={WorldPosition=Vector3.new(0,5,0)},tint=Color3.new(1,.8,.2)}
@@ -47,7 +62,12 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  local impact=assert(beam.work and beam.work.impact,'zoom swallowed nearby work effects')
  assert(impact.Enabled and impact.TimeScale==1 and impact.FlipbookLayout==Enum.ParticleFlipbookLayout.None)
  assert(impact.Size[2].Value-impact.Size[2].Envelope>=.5 and impact.Size[2].Value+impact.Size[2].Envelope<=.85+.000001)
- assert(impact.Brightness>=4 and impact.LightInfluence==0 and impact.LightEmission==1)
+ assert(impact.Brightness>=1 and impact.Brightness<=2 and impact.LightInfluence==0 and impact.LightEmission>=.5 and impact.LightEmission<1)
+ assert(#beam.work.spheres==3 and beam.work.spheres[1].part.Transparency>=.5)
+ local coreColor=beam.work.spheres[1].part.Color
+ assert((coreColor.B or coreColor.Z)<.6,'sphere core lost its actual job color')
+ assert(beam.work.sparks.Brightness<=1 and beam.work.glow.Brightness<=1,'origin stacks overpower the body')
+ assert(beam.work.contact.Transparency>=.6 and beam.work.inner.Transparency>=.4,'contact balls form an opaque white lump')
  assert(impact.Lifetime.Min==.85 and impact.Lifetime.Max==1.35 and impact.Rate<=24)
  assert(impact.Speed.Min==2 and impact.Speed.Max<=4 and impact.Drag>=2.4,'ordinary particles travel too far')
  impact.Cleared=false;sample.key='next-rock'
@@ -81,7 +101,7 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  assert(group.EnergyCleanup>=4.4)
  local afterglow=0
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
-  if emitter.Name=='OrbitalAfterglow' then afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted==4) end
+  if emitter.Name=='OrbitalAfterglow' then afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted==2) end
   assert(group.EnergyCleanup>emitter.Lifetime.Max)
  end end
  assert(afterglow==12)

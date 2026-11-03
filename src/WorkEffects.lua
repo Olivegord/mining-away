@@ -41,13 +41,13 @@ local function particle(parent,name,color)
  -- A soft plain disc instead of stars/smoke: the energy reads as light,
  -- including at small screen sizes. Keep the original asset templates intact.
  p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
- p.Color=ColorSequence.new(color);p.LightEmission=1;p.LightInfluence=0;p.Brightness=4
+ p.Color=ColorSequence.new(color);p.LightEmission=.8;p.LightInfluence=0;p.Brightness=1.8
  p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
  p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
  p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.new(0,-.6,0);p.WindAffectsDrag=true
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(.2,.65),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.55,.22),NumberSequenceKeypoint.new(1,1)})
+ p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.55,.42),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
@@ -56,7 +56,7 @@ local function spheres(parent,color)
  local out={}
  for index,size in ipairs({.24,.46,.76}) do
   local globe=part(parent,'MiningSphere'..index);globe.Shape=Enum.PartType.Ball
-  globe.Material=Enum.Material.Neon;globe.Color=index==1 and WHITE or color
+  globe.Material=Enum.Material.Neon;globe.Color=index==1 and color:Lerp(WHITE,.18) or color
   table.insert(out,{part=globe,size=size,index=index})
  end
  return out
@@ -67,8 +67,8 @@ local function drawSpheres(record,now,strength,charge,pulse,color)
   local size=sphere.size*(record.scale or 1)*(.75+.25*charge)*breathing*(1+pulse*.12)
   sphere.part.Size=Vector3.one*math.max(.01,size)
   sphere.part.CFrame=record.anchor.CFrame*CFrame.new(0,0,-.08)
-  sphere.part.Color=sphere.index==1 and WHITE or color
-  local opacity=({.70,.38,.18})[sphere.index]
+  sphere.part.Color=sphere.index==1 and color:Lerp(WHITE,.18) or color
+  local opacity=({.45,.22,.08})[sphere.index]
   sphere.part.Transparency=1-math.clamp(strength,0,1)*opacity
  end
 end
@@ -94,10 +94,9 @@ function W:energyBloom()
  if self.bloom and self.bloom.Parent then return end
  local lighting=game:GetService('Lighting')
  local existing=lighting:FindFirstChild('MiningEnergyBloom')
- if existing then self.bloom=existing;return end
- local bloom=Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
- bloom.Intensity=1.25;bloom.Size=32;bloom.Threshold=1.1;bloom.Parent=lighting
- self.bloom=bloom;self.ownsBloom=true
+ local bloom=existing or Instance.new('BloomEffect');bloom.Name='MiningEnergyBloom'
+ bloom.Enabled=true;bloom.Intensity=.5;bloom.Size=20;bloom.Threshold=1.25;bloom.Parent=lighting
+ self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
@@ -136,14 +135,16 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   local anchor=part(beam.holder,'OriginalMiningOrigin')
   fx={anchor=anchor,spheres=spheres(anchor,beam.tint or WHITE),lastAt=now,pulseSerial=sample.pulseSerial or 0}
   fx.sparks=particle(anchor,'OriginParticles',beam.tint or WHITE)
+  fx.sparks.Brightness=1;fx.sparks.LightEmission=.55
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.5)
+  fx.glow.Brightness=.8;fx.glow.LightEmission=.4
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.3)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
   fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(2,4)
   fx.impact.Drag=2.4;fx.impact.Acceleration=Vector3.new(0,-2,0);fx.impact.SpreadAngle=Vector2.new(80,80)
   fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35,.03),NumberSequenceKeypoint.new(.15,.55,.05),NumberSequenceKeypoint.new(1,0)})
-  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.7,.25),NumberSequenceKeypoint.new(1,1)})
+  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(.7,.45),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -198,10 +199,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   if fx.contact then
    fx.contact.CFrame=CFrame.new(point+normal*.05)
    fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse)
-   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.45-.12*pulse) or 1
+   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.68-.05*pulse) or 1
    if fx.inner then
     fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse)
-    fx.inner.Color=WHITE;fx.inner.Transparency=working and .15 or 1
+    fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25);fx.inner.Transparency=working and .45 or 1
    end
   end
  end
@@ -243,8 +244,8 @@ function W:flight(drone,record,dt,now)
    local nozzle=Instance.new('Attachment');nozzle.Name='BreakerRocket';nozzle.Position=Vector3.new(side*.4,.35,0);nozzle.Parent=root
    local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66))
    jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(4,8);jet.Drag=3.5
-   jet.Lifetime=NumberRange.new(.6,1.1);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=1
-   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
+   jet.Lifetime=NumberRange.new(.6,1.1);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=.7;jet.Brightness=1.4
+   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.34),NumberSequenceKeypoint.new(1,0)})
    table.insert(record.rockets,{attachment=nozzle,jet=jet})
   end
  end
@@ -258,9 +259,9 @@ function W:flight(drone,record,dt,now)
    local a=Instance.new('Attachment');a.Name='FlightTrailTop';a.Position=Vector3.new(side*span,-.03,span*.65);a.Parent=root
    local b=Instance.new('Attachment');b.Name='FlightTrailBottom';b.Position=a.Position-Vector3.new(0,.065,0);b.Parent=root
    local trail=Instance.new('Trail');trail.Name='DroneFlightTrail';trail.Attachment0=a;trail.Attachment1=b
-   trail.Lifetime=.65;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.35
+   trail.Lifetime=.65;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.2
    trail.Color=ColorSequence.new(drone.emitter.Color)
-   trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.45,.72),NumberSequenceKeypoint.new(1,1)})
+   trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(.45,.8),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root
    table.insert(fx.objects,a);table.insert(fx.objects,b);table.insert(fx.objects,trail);table.insert(fx.trails,trail)
   end
@@ -272,7 +273,7 @@ function W:flight(drone,record,dt,now)
    wisp.Lifetime=NumberRange.new(.6,1.1);wisp.Speed=NumberRange.new(.15,.35);wisp.Acceleration=Vector3.new(0,-.12,0);wisp.Drag=2.2
    wisp.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.07),NumberSequenceKeypoint.new(.55,.26),NumberSequenceKeypoint.new(1,.35)})
    wisp.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.82),NumberSequenceKeypoint.new(1,1)})
-   wisp.LightEmission=.25;wisp.Rate=3;fx.wisp=wisp;self.flightCount+=1;table.insert(fx.objects,a)
+   wisp.LightEmission=.15;wisp.Brightness=.8;wisp.Rate=3;fx.wisp=wisp;self.flightCount+=1;table.insert(fx.objects,a)
   end
  end
  local distance=(root.Position-fx.position).Magnitude
@@ -309,7 +310,8 @@ function W:repair(drone,record,now)
  if not fx then
   if self.repairCount>=self.maxRepairs then return end
   local anchor=part(self.parent,'RepairCapacitor');fx={anchor=anchor,spheres=spheres(anchor,color),scale=.42,lastAt=now}
-  fx.sparks=particle(anchor,'RepairParticles',color);record.repair=fx;self.repairCount+=1
+  fx.sparks=particle(anchor,'RepairParticles',color);fx.sparks.Brightness=1.2;fx.sparks.LightEmission=.65
+  record.repair=fx;self.repairCount+=1
  end
  fx.lastAt=now;fx.anchor.CFrame=facing(drone.emitter.Position,Vector3.new(0,-1,0))
  local q=charging and progress(now,s:GetAttribute('RepairChargeAt') or now,s:GetAttribute('RepairChargeDuration') or .4) or 1
@@ -338,12 +340,14 @@ function W:courier(drone,record,now)
    local top=Instance.new('Attachment');top.Position=Vector3.new(side*.38,.025,.25);top.Parent=drive
    local bottom=Instance.new('Attachment');bottom.Position=Vector3.new(side*.38,-.025,.25);bottom.Parent=drive
    local trail=Instance.new('Trail');trail.Name='LoadedFlightTrail';trail.Attachment0=top;trail.Attachment1=bottom
-   trail.Lifetime=.6;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.45
-   trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,1)})
+   trail.Lifetime=.6;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.25
+   trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
   fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
-  if detailed then fx.sparks=particle(anchor,'CourierSparks',GOLD);self.courierCount+=1 end
+  if detailed then
+   fx.sparks=particle(anchor,'CourierSparks',GOLD);fx.sparks.Brightness=1.2;fx.sparks.LightEmission=.65;self.courierCount+=1
+  end
   record.courier=fx
  end
  if busy then fx.lastAt=now end

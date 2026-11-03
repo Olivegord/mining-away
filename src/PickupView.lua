@@ -7,7 +7,7 @@ local V={};V.__index=V
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
  p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
- p.LightEmission=1;p.LightInfluence=0;p.Rate=1.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
+ p.LightEmission=.7;p.LightInfluence=0;p.Brightness=1;p.Rate=1.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
  p.SpreadAngle=Vector2.new(180,180)
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.08),NumberSequenceKeypoint.new(.3,.45,.1),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(1,1)})
@@ -34,17 +34,17 @@ function V.new(root,parent,audio)
   if (source:GetAttribute('CollectedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
-  view.Material=Enum.Material.Neon;view.Color=source.Color:Lerp(Color3.new(1,1,1),.12);view.Reflectance=0
+  view.Material=Enum.Material.SmoothPlastic;view.Color=source.Color;view.Reflectance=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.13,0);a.Parent=view
   local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.13,0);b.Parent=view
   local trail=Instance.new('Trail');trail.Name='OreMagnetTrail';trail.Attachment0=a;trail.Attachment1=b
-  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.25;trail.MinLength=.08;trail.FaceCamera=true;trail.LightEmission=1
-  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(1,0)})
-  trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
+  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.25;trail.MinLength=.08;trail.FaceCamera=true;trail.LightEmission=.55
+  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
+  trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
   local glints=sparkle(a,view.Color);glints.Enabled=false
-  local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=3;glow.Brightness=.55;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
+  local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=2.5;glow.Brightness=.18;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,trail=trail,glints=glints,glow=glow,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
@@ -68,7 +68,7 @@ function V.new(root,parent,audio)
   local anchor=Instance.new('Part');anchor.Name='CollectedMineral';anchor.Size=Vector3.one*.05;anchor.Transparency=1
   anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=rootPart.Position;anchor.Parent=parent
   local a=Instance.new('Attachment');a.Parent=anchor
-  local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(5)
+  local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(4)
   Debris:AddItem(anchor,burst.Lifetime.Max+.15)
   if audio and os.clock()-self.lastSound>.09 then self.lastSound=os.clock();audio:play('pickup',rootPart.Position) end
  end))
@@ -128,7 +128,7 @@ function V:update(dt,now)
    r.glints.Enabled=not r.removedAt and not r.collectAt and opacity>.15 and distance<55 and glints<16
    if r.glints.Enabled then glints+=1 end
    r.glow.Enabled=opacity>.05 and distance<24 and lights<4
-   if r.glow.Enabled then lights+=1;r.glow.Brightness=.55*opacity end
+   if r.glow.Enabled then lights+=1;r.glow.Brightness=.18*opacity end
   end
  end
 end

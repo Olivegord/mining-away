@@ -182,7 +182,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local tint=miningTypeColors[sample.droneType] or look.color
  if beam.look~=look or beam.tint~=tint then
   beam.look=look;beam.tint=tint
-  beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.78) or look.core
+  beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.4) or look.core
   beam.halo.Color=tint;beam.marker.Color=tint
  end
  beam.miningCue=beam.miningCue or {}
@@ -200,12 +200,12 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   end
   local tip=beam.vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
   local workerScale=.58;local alpha=beam.visibility
-  WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.80*alpha)
-  WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.43*alpha)
+  WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
+  WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
  end
  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
- beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
+ beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  self.work:mining(beam,sample,point,normal,width,pulse,now)
  if self.audio and self.audio.setLoop then
   if visible and sample.active and sample.isMining and not sample.paused then
@@ -603,10 +603,10 @@ function P:registerTurret(source,now)
  local a=Instance.new('Attachment');a.Name='ChargeOrigin';a.Parent=eye
  local b=Instance.new('Attachment');b.Parent=endpoint
  local beam=Instance.new('Beam');beam.Name='SentryTelegraph';beam.Attachment0=a;beam.Attachment1=b
- beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=1;beam.LightInfluence=0
+ beam.FaceCamera=true;beam.Color=ColorSequence.new(HOT);beam.LightEmission=.65;beam.LightInfluence=0
  beam.Transparency=NumberSequence.new(.7);beam.Segments=1;beam.Enabled=false;beam.Parent=view
  local core=beam:Clone();core.Name='SentryBeamCore';core.Color=ColorSequence.new(WHITE)
- core.Transparency=NumberSequence.new(.15);core.Parent=view
+ core.Transparency=NumberSequence.new(.4);core.Parent=view
  local light=Instance.new('PointLight');light.Name='SentryCharge';light.Color=ICE;light.Range=7
  light.Shadows=false;light.Brightness=0;light.Parent=eye
  local initial=F.new(snapshot(source))
@@ -775,7 +775,7 @@ function P:renderTurret(record,dt,now)
   end
  end
  record.light.Color=eyeColor;record.light.Range=5+ignite*2
- record.light.Brightness=awake and (.15+warm*.35+ignite*.45+shotFlash*.3) or 0
+ record.light.Brightness=awake and (.08+warm*.22+ignite*.25+shotFlash*.2) or 0
  record.flare.Enabled=false
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)

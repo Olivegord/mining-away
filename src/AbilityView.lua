@@ -75,10 +75,11 @@ function View.start(options)
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
   local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
-  sparks.Texture='rbxasset://textures/ui/VR/circleWhite.png';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=3;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
+  sparks.Texture='rbxasset://textures/ui/VR/circleWhite.png';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.1;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
   sparks.Lifetime=NumberRange.new(.25,.5);sparks.Speed=NumberRange.new(1,2);sparks.Acceleration=Vector3.new(0,-4,0)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
-  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)});sparks.Parent=tip
+  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)})
+  sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.45,.5),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}
  end
  local function scan()
@@ -126,7 +127,7 @@ function View.start(options)
     -- Solid miniature chisels tap on confirmed damage pulses; these bots do
     -- close mechanical work rather than projecting the miner's laser again.
     local serial=source:GetAttribute('Pulse') or 0
-    if serial~=(record.serial or serial) then record.hitAt=now;record.sparks:Emit(3) end
+    if serial~=(record.serial or serial) then record.hitAt=now;record.sparks:Emit(2) end
     record.serial=serial
     local tap=math.max(0,1-(now-(record.hitAt or -100))/.18)
     local height=math.min(1.3,math.max(.1,record.pos.Y-target.Y))

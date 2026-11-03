@@ -78,7 +78,8 @@ function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, end
 	local last = endSize or 5
 	value.Shape = Enum.PartType.Ball
 	value.Color = color
-	value.Transparency = 0.12
+	-- Keep the event readable without an opaque neon sphere washing out its rock.
+	value.Transparency = 0.42
 	value.Size = Vector3.one * first
 	value.Position = position
 	TweenService:Create(value, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -98,9 +99,9 @@ function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	local color = Color3.fromRGB(255, 137, 70)
 	if impact then
 		Effects.Beam(position, target, color, 0.42, 0.2)
-		Effects.Pulse(target, color, 1, 6, 0.28)
+		Effects.Pulse(target, color, .7, 4.2, 0.28)
 	else
-		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.7, 4.8, 0.8)
+		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.5, 3.4, 0.8)
 	end
 end
 
@@ -113,15 +114,15 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  value.Position=planted and target or from
  local tip=Instance.new('Attachment');tip.Parent=value
  local dust=Instance.new('ParticleEmitter');dust.Texture=ENERGY
- dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=2;dust.LightInfluence=0
+ dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=.95;dust.LightInfluence=0
  dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(.5,1.5)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
  dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=1.8
  dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45,.08),NumberSequenceKeypoint.new(.2,.7,.1),NumberSequenceKeypoint.new(1,0)})
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=tip;dust:Emit(planted and 22 or 14);Debris:AddItem(value,1.8)
- if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,2.1,.45) end
+ dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35,.06),NumberSequenceKeypoint.new(.2,.55,.08),NumberSequenceKeypoint.new(1,0)})
+ dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.45,.55),NumberSequenceKeypoint.new(1,1)})
+ dust.Parent=tip;dust:Emit(planted and 14 or 9);Debris:AddItem(value,1.8)
+ if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,1.6,.45) end
 end
 
 -- These are one-shot phase cues. The authoritative drone moves through its
@@ -134,19 +135,19 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
   Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
  elseif phase=='Impact' then
   local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(252,231,179),.4,4.6,.18)
+  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35,3.2,.18)
   local shock=part()
   if shock then
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
-   shock.Transparency=.45;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
+   shock.Transparency=.68;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
    local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
    local dust=Instance.new('ParticleEmitter');dust.Texture=ENERGY
-   dust.Color=ColorSequence.new(Color3.fromRGB(255,210,108));dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=2.6
+   dust.Color=ColorSequence.new(Color3.fromRGB(255,210,108));dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1.15
    dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
-   dust.Speed=NumberRange.new(2,5);dust.Drag=2.2;dust.Acceleration=Vector3.new(0,-1.2,0)
+   dust.Speed=NumberRange.new(2,4);dust.Drag=2.5;dust.Acceleration=Vector3.new(0,-1.2,0)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.7,.1),NumberSequenceKeypoint.new(.12,1.05,.15),NumberSequenceKeypoint.new(1,0)})
-   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.5,.2),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(24)
+   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.5,.08),NumberSequenceKeypoint.new(.12,.75,.1),NumberSequenceKeypoint.new(1,0)})
+   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.28),NumberSequenceKeypoint.new(.5,.55),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
    TweenService:Create(shock,TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(.055,8,8),Transparency=1}):Play()
    Debris:AddItem(shock,1.8)
   end
@@ -156,7 +157,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
   -- This is physical touchdown, distinct from the later damaging fracture.
   -- A single server receipt drives both the local thud and camera impulse.
   local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',workspace:GetServerTimeNow());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(255,220,151),.35,2.5,.12)
+  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3,1.8,.12)
   Effects.Pulse(target,Color3.fromRGB(255,206,107),.2,.7,.9)
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
@@ -201,14 +202,14 @@ local function clearBurn(owner: number)
    local tip=Instance.new('Attachment');tip.Name='CoolingEmbers'
    tip.Position=Vector3.new(-ORBITAL_HEIGHT*.5+index*ORBITAL_HEIGHT/11,math.noise(index*.81,owner)*.8,math.noise(owner,index*.67)*.8);tip.Parent=core
    local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
-   embers.Texture=ENERGY;embers.Rate=0;embers.LightEmission=1;embers.LightInfluence=0;embers.Brightness=3
+   embers.Texture=ENERGY;embers.Rate=0;embers.LightEmission=1;embers.LightInfluence=0;embers.Brightness=1.1
    embers.Color=ColorSequence.new(ORBITAL_COLOR)
    embers.Lifetime=NumberRange.new(2.5,4);embers.Speed=NumberRange.new(.4,1.2);embers.Drag=1.8;embers.WindAffectsDrag=true
    embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-100,100)
    embers.Acceleration=Vector3.new(math.noise(index,owner)*.8,.1,math.noise(owner,index)*.8)
-   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.55,.2),NumberSequenceKeypoint.new(.2,1.15,.35),NumberSequenceKeypoint.new(1,0)})
-   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.55,.45),NumberSequenceKeypoint.new(1,1)})
-   embers.Parent=tip;embers:Emit(4)
+   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4,.12),NumberSequenceKeypoint.new(.2,.8,.2),NumberSequenceKeypoint.new(1,0)})
+   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(.55,.68),NumberSequenceKeypoint.new(1,1)})
+   embers.Parent=tip;embers:Emit(2)
   end
  end
  for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') then
@@ -240,11 +241,11 @@ local function targetSight(owner: number,target: any)
  local radius=math.clamp((target.radius or 1)+.7,1.4,8)
  value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
  value:SetAttribute('AudioLoop','orbital_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
- value.Color=Color3.fromRGB(242,38,44);value.Transparency=.8
+ value.Color=Color3.fromRGB(242,38,44);value.Transparency=.88
  value.Size=Vector3.new(.035,radius*2,radius*2)
  value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
  value.Parent=group
- TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{Transparency=.55}):Play()
+ TweenService:Create(value,TweenInfo.new(1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In),{Transparency=.74}):Play()
  Debris:AddItem(group,2.6)
 end
 local function sustainedStrike(owner: number,event: any)
@@ -253,32 +254,32 @@ local function sustainedStrike(owner: number,event: any)
  if not group then
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
-  for index,width in ipairs({2.8,.8}) do
+  for index,width in ipairs({2.25,.65}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
    value.Color=ORBITAL_COLOR
-   value.Transparency=index==1 and .8 or .35;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
+   value.Transparency=index==1 and .9 or .6;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
    value:SetAttribute('BurnTransparency',value.Transparency)
    if index==2 then
     local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
-    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=3
-    energy.Rate=14;energy.Lifetime=NumberRange.new(2,3.5);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
+    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=1.25
+    energy.Rate=10;energy.Lifetime=NumberRange.new(2,3.5);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
     energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(.5,-.1,-.5);energy.WindAffectsDrag=true
-    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.65,.2),NumberSequenceKeypoint.new(.15,1.2,.4),NumberSequenceKeypoint.new(1,0)})
-    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(.5,.25),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
+    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45,.12),NumberSequenceKeypoint.new(.15,.9,.22),NumberSequenceKeypoint.new(1,0)})
+    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.5,.6),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
    end
   end
   local contact=part()
   if contact then
    contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
-   contact.Transparency=.55;contact.Size=Vector3.one*.7;contact.Parent=group;contact:SetAttribute('BurnTransparency',.55)
+   contact.Transparency=.78;contact.Size=Vector3.one*.55;contact.Parent=group;contact:SetAttribute('BurnTransparency',.78)
    local tip=Instance.new('Attachment');tip.Parent=contact
    local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=ENERGY
-   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=2
-   sparks.Lifetime=NumberRange.new(2,3.5);sparks.Speed=NumberRange.new(2,5);sparks.Drag=1.9;sparks.WindAffectsDrag=true
+   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
+   sparks.Lifetime=NumberRange.new(2,3.5);sparks.Speed=NumberRange.new(2,4);sparks.Drag=2.2;sparks.WindAffectsDrag=true
    sparks.Acceleration=Vector3.new(0,-.4,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(60,60)
-   sparks.Rate=10;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45,.15),NumberSequenceKeypoint.new(.12,.8,.25),NumberSequenceKeypoint.new(1,0)})
-   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.5,.5),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
+   sparks.Rate=8;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4,.1),NumberSequenceKeypoint.new(.12,.65,.18),NumberSequenceKeypoint.new(1,0)})
+   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.48),NumberSequenceKeypoint.new(.5,.68),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
   end
   group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',workspace:GetServerTimeNow())
   group.Parent=folder();watchBurn(owner,group)
@@ -312,15 +313,15 @@ function Effects.Ability(owner: number,event: any,template: Model?)
   value.Name='GadgetCharge';value.Shape=Enum.PartType.Ball;value.Size=Vector3.one*.45
   value:SetAttribute('AudioLoop','swarm_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
   value.Color=event.ability=='Orbital' and Color3.fromRGB(240,173,88) or Color3.fromRGB(178,202,151)
-  value.Transparency=.5;value.Position=location(event.target)+Vector3.new(0,5,0)
+  value.Transparency=.7;value.Position=location(event.target)+Vector3.new(0,5,0)
   markers[owner]=value;Debris:AddItem(value,2.6)
  elseif kind=='orbital' then
   clearMarker(owner)
   sustainedStrike(owner,event)
  elseif kind=='relay' then
   local position=location(event.target)
-  column(position,9,.22,Color3.fromRGB(176,218,255),.3,.4)
-  Effects.Pulse(position,Color3.fromRGB(176,218,255),.25,2.3,.3)
+  column(position,9,.18,Color3.fromRGB(176,218,255),.3,.65)
+  Effects.Pulse(position,Color3.fromRGB(176,218,255),.2,1.7,.3)
  elseif kind=='scrapStart' then clearMarker(owner)
  elseif kind=='recycle' then Effects.Pulse(location(event.target),Color3.fromRGB(173,222,146),.4,2.8,.4)
  elseif kind=='scrapPose' then
