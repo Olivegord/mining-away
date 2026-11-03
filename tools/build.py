@@ -45,13 +45,14 @@ def module_bundle(names):
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
   if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
   if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')
+  if 'DroneCatalog' in names[:names.index(name)]:code=code.replace("local DroneCatalog=require('./DroneCatalog')\n",'')
   boundary=': any' if name=='World' else ''
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','DroneRoles','Config','Feel','Mining','OreDrops','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Config','Feel','Mining','OreDrops','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView','PickupMotion','PickupView','CommandView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','WorkEffects','DroneCatalog','DroneFX','Presentation','UILayout','Interface','CardView','ShopView','AbilityView','PickupMotion','PickupView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''

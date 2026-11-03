@@ -99,6 +99,7 @@ local hiddenParts={}
 local pendingDroneSources={}
 local templateRetryQueued=false
 local profile=nil
+local logisticsView=nil
 local U=Interface
 local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
@@ -142,10 +143,10 @@ U.icon(runButton,'cards',UDim2.fromOffset(13,2),UDim2.fromOffset(22,22),palette.
 local runCount=label(runButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Cards',9,palette.text,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
 local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(360,48),palette.panel,10);objectiveBox.Name='NextStep'
 U.icon(objectiveBox,'crystal',UDim2.fromOffset(9,9),UDim2.fromOffset(27,27),palette.mineral)
-local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect the fragments, then sell.',12,palette.text)
+local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect ore, then launch full storage.',12,palette.text)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.text,true);notice.TextXAlignment=Enum.TextXAlignment.Center
-local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() command:FireServer('Recall') end,Color3.fromRGB(66,177,91));recall.Name='Recall'
+local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local contextIcon=U.icon(context,'mining',UDim2.fromOffset(12,17),UDim2.fromOffset(34,34),palette.mineral)
 local contextTitle=label(context,UDim2.fromOffset(55,6),UDim2.new(1,-174,0,30),'',18,palette.text,true)
@@ -154,6 +155,7 @@ local contextAction=nil
 local contextButton=button(context,UDim2.new(1,-112,0,14),UDim2.fromOffset(100,44),'Use [E]',function() if contextAction then contextAction() end end)
 contextButton.Name='UseContext'
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
+local function menusVisible() return modal.Visible or (logisticsView and logisticsView:isOpen()) end
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
@@ -165,7 +167,7 @@ local body=Instance.new('ScrollingFrame');body.Name='MenuContent';body.Position=
 local previousTouchEnabled=nil
 local function syncModalTouch()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if not controls then return end
- if modal.Visible then if previousTouchEnabled==nil then previousTouchEnabled=controls.Enabled end;controls.Enabled=false
+ if menusVisible() then if previousTouchEnabled==nil then previousTouchEnabled=controls.Enabled end;controls.Enabled=false
  elseif previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled;previousTouchEnabled=nil end
 end
 connect(modal:GetPropertyChangedSignal('Visible'),syncModalTouch)
@@ -399,7 +401,7 @@ openPack=function()
  label(hero,UDim2.fromOffset(22,l.short and 94 or 126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
  if not l.short then progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true) end
  local allowed,blocked=availability('BuyPack')
- local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Sell '..comma(price-credits)..' more Quartz')
+ local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Launch '..comma(price-credits)..' more Quartz')
  local buy
  buy=button(body,UDim2.fromOffset(3,l.short and 154 or 302),UDim2.fromOffset(width,50),text,function()
   if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Opening…';enableAction(buy,false) end
@@ -472,7 +474,7 @@ openFleet=function()
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
    statTile(row,14,91,tileWidth,'PARCEL',tostring(DroneConfig.Courier.BatchUnits)..' ore')
-   statTile(row,tileWidth+28,91,tileWidth,'JOB','Sell for you')
+   statTile(row,tileWidth+28,91,tileWidth,'JOB','Haul to storage')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -485,13 +487,17 @@ openFleet=function()
   elseif role=='Scrapper' then
    statTile(row,14,91,tileWidth,'JOB','Launch bots')
    statTile(row,tileWidth+28,91,tileWidth,'SWARM','10 seconds')
+  elseif DroneCatalog.Types[role] then
+   local entry=DroneCatalog.Types[role]
+   statTile(row,14,91,tileWidth,'CYCLE',number(entry.Duration)..' sec')
+   statTile(row,tileWidth+28,91,tileWidth,'RECOVERY',number(entry.Yield or 1)..'× ore')
   else
    statTile(row,14,91,tileWidth,'MINING',number(stats.miningDPS or 30)..' /s')
    statTile(row,tileWidth+28,91,tileWidth,'COMBAT',number(stats.combatDPS or 12)..' /s')
   end
   statTile(row,14,153,tileWidth,'MAX HULL',number(stats.maxHealth or 80))
   statTile(row,tileWidth+28,153,tileWidth,'FLIGHT',number((stats.maxStep60 or .35)*60)..' studs/s')
-  label(row,UDim2.fromOffset(15,211),UDim2.new(1,-30,0,40),Mining.description(role),16,palette.muted)
+  label(row,UDim2.fromOffset(15,211),UDim2.new(1,-30,0,40),DroneCatalog.Types[role] and DroneCatalog.Types[role].Description or Mining.description(role),16,palette.muted)
  end
  local index=#crew+1;local x=((index-1)%columns)*(rowWidth+gap)+3;local y=rosterY+math.floor((index-1)/columns)*276
  local nextDrone=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),palette.accent:Lerp(palette.panel,.35),14);nextDrone.Name='FleetMilestone'
@@ -500,7 +506,7 @@ openFleet=function()
  label(nextDrone,UDim2.fromOffset(tileTextX,17),UDim2.new(1,-tileTextX-15,0,31),narrowTile and 'Next drone' or 'Next crewmate',narrowTile and 21 or 24,palette.text,true)
  label(nextDrone,UDim2.fromOffset(tileTextX,54),UDim2.new(1,-tileTextX-15,0,20),'+1 PERMANENT DRONE',10,palette.muted,true)
  local pre=profile.prestigePreview or {};local earned=pre.earnings or 0;local required=pre.saleRequired or 2000
- label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' credits sold',13,palette.text,true)
+ label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' launch credits earned',13,palette.text,true)
  local guardRequirement=(pre.winsRequired or 1)>0 and ((pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' · Unlocked' or ' · Defeat guards once')) or 'No sentry clear required'
  label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),guardRequirement,16,palette.muted)
  local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
@@ -517,7 +523,7 @@ openRunCards=function()
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine crystals, sell minerals at the Converter, and open a pack at the depot. Choose one of three cards to shape this run.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine crystals, deposit ore and launch full storage. Spend the minerals in their shops or choose one of three pack upgrades.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   button(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,48),'View next pack',openPack,palette.accent)
  else
   for index,c in ipairs(profile.run.cards) do
@@ -541,15 +547,15 @@ openPrestige=function()
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone\nBuilt-in types and base traits\nUnlocked plots and free reprinting',12,palette.text)
+ label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone and base trait\nCarriers, flying backpack and loadouts\nUnlocked plots and free reprinting',12,palette.text)
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nAll mineral balances and backpack ore\nPack prices and sale progress',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nBalances and all cargo, including launches\nPack prices and launch earnings',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
- progress(body,y,width,'Your permanent fleet milestone',comma(earnings)..' / '..comma(required)..' credits sold'..guardRequirement,earnings/math.max(1,required),palette.accent)
+ progress(body,y,width,'Your permanent fleet milestone',comma(earnings)..' / '..comma(required)..' launch credits earned'..guardRequirement,earnings/math.max(1,required),palette.accent)
  local allowed,blocked=availability('Prestige')
  local can=pre.eligible==true and not pending() and allowed
  local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Start new run · +1 permanent drone' or 'Complete the fleet milestone'))
@@ -628,7 +634,7 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,profile=function() return profile end,hidden=function() return modal.Visible end})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.effectsGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
@@ -879,10 +885,10 @@ local function renderDrone(d,dt,now)
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(state=='Mine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredBank=(state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=state=='BreakerDive' or state=='BreakerImpact'
- local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*(state=='Mine' and .05 or .10)
+ local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
@@ -1015,11 +1021,13 @@ local function renderBackpacks()
  for owner,record in pairs(backpacks) do if not present[owner] then record.model:Destroy();backpacks[owner]=nil end end
 end
 
+local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end})
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
+ specialMiningFX:step(now,dt)
  for _,t in pairs(turrets) do
   if fieldUnlocked(t.source.Parent) and (t.source:GetAttribute('HP') or 0)>0 then
    t.view.Parent=nil;t.cue.Transparency=1;t.beam.Enabled=false;t.flare.Enabled=false;t.light.Brightness=0
@@ -1032,12 +1040,13 @@ connect(RunService.RenderStepped,function(dt)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  presentation:update(dt,now)
+ if logisticsView then logisticsView:step(now,dt) end
 end)
 
 local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'Evade  [Q]',function() command:FireServer('Evade') end,palette.accent);evade.Visible=false
 local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() command:FireServer('TestLoadout') end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
-local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Sell backpack [U]',function() command:FireServer('Sell') end,palette.paper)
+local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Deposit [U]',function() command:FireServer('Deposit') end,palette.paper)
 unload.Name='ReturnCargo';unload.Visible=false
 local enemyHUD=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(300,58),palette.panel,12);enemyHUD.Name='SentryHealth';enemyHUD.Visible=false
 local enemyTitle=label(enemyHUD,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),'PYRAMID SENTRY',12,palette.white,true)
@@ -1047,6 +1056,11 @@ enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
  credits=creditsLabel,cargoText=cargoText,cargoTrack=cargoTrack,fleet=fleetButton,cards=runButton,fleetText=fleetCount,cardsText=runCount,
  objectiveText=objective,contextTitle=contextTitle,contextDetail=contextDetail,contextButton=contextButton})
+logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
+ profile=function() return profile end,hidden=function() return modal.Visible end,
+ blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
+ onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
+ notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function nearbyInteraction()
  local hr=ownerRoot();if not hr then return nil end
@@ -1073,14 +1087,14 @@ local function stationAction(station)
   return nil
  elseif kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' Quartz'),pending() and 'Choose' or 'Pack'
  elseif kind=='Prestige' then return openPrestige,'Grow your fleet','Review the milestone and your next permanent drone','Review'
- elseif kind=='Sell' then return function() command:FireServer('Sell') end,'Sell backpack','Bring your backpack to the depot','Sell'
+ elseif kind=='Sell' then return function() command:FireServer('Deposit') end,'Deposit backpack','Fill orbital storage, then launch for currency','Deposit'
  end
  return nil
 end
 local lastStationUse=0
 local function performStation(station)
  local action=stationAction(station)
- if modal.Visible then return end
+ if menusVisible() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -1096,6 +1110,8 @@ local function availableAutomaticWorker()
  return false
 end
 local function requestPlot(id)
+ if menusVisible() then return end
+ if logisticsView and logisticsView:dispatchField(id) then return end
  local fields=world:FindFirstChild('Fields');local guarded=false
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
@@ -1111,7 +1127,7 @@ local function requestPlot(id)
  command:FireServer('Patch',id)
 end
 local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
- profile=function() return profile end,hidden=function() return modal.Visible end,
+ profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
@@ -1122,12 +1138,13 @@ connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  if state.status=='rejected' then notice.Text=state.reason or '';noticeUntil=os.clock()+2.2 end
 end)
 local function assignField(target)
- if modal.Visible then return end
+ if menusVisible() then return end
  local node=target
  while node and node~=workspace do
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
+   if logisticsView and logisticsView.selected and type(fieldId)=='number' then requestPlot(fieldId);return end
    if player:GetAttribute('AutomationMineEnabled')==true and type(fieldId)=='number' then requestPlot(fieldId)
    else commandView:request(resourceId) end
    return
@@ -1141,7 +1158,7 @@ local function assignField(target)
 end
 local mouse=player:GetMouse()
 connect(UIS.TouchTapInWorld,function(position,processed)
- if processed or modal.Visible or tacticalHUD:blocksPoint(position) then return end
+ if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -1149,14 +1166,19 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then if not tacticalHUD:blocksPoint(UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()) then assignField(mouse.Target) end;return end
  local key=input.KeyCode
+ if key==Enum.KeyCode.O and not modal.Visible then logisticsView:toggle();return end
+ if menusVisible() and not modal.Visible then return end
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and key==Enum.KeyCode.M then openShop(activeShop)
- elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then command:FireServer('Recall')
- elseif not modal.Visible and key==Enum.KeyCode.U then command:FireServer('Sell')
+ elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then if not logisticsView:recall() then command:FireServer('Recall') end
+ elseif not modal.Visible and key==Enum.KeyCode.U then command:FireServer('Deposit')
+ elseif not modal.Visible and key==Enum.KeyCode.L then command:FireServer('LaunchStorage')
+ elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif (key==Enum.KeyCode.E or key==Enum.KeyCode.ButtonR2) and not modal.Visible then if contextAction then contextAction() end
@@ -1226,14 +1248,14 @@ connect(RunService.Heartbeat,function(dt)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
   local pre=profile.prestigePreview;local price=profile.nextPackPrice or 40
   if pending() then objective.Text='Your paid pack is waiting.\nChoose your card at the depot.'
-  elseif amount>=capacity then objective.Text='Backpack full · mining continues.\nSell to collect waiting fragments.'
+  elseif amount>=capacity then objective.Text='Backpack full · mining continues.\nDeposit ore in orbital storage.'
   elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
   elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' Quartz.\nOpen your next pack at the depot.'
   elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click rocks to send workers.\nGold = queued · green = working.'
   elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Unlock %s to grow your crew.\nDefeat its guards once.',pre.field or 'Cobalt')
-  elseif pre and (pre.winsRequired or 1)>0 then objective.Text=string.format('Next drone: %s / %s credits sold.\n%s: %s.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',(pre.wins or 0)>0 and 'Unlocked' or 'Defeat guards once')
-  elseif pre then objective.Text=string.format('Next drone: %s / %s credits sold.',comma(pre.earnings or 0),comma(pre.saleRequired or 160))
-  else objective.Text='Click a plot to automate mining.\nBring your backpack back to sell.' end
+  elseif pre and (pre.winsRequired or 1)>0 then objective.Text=string.format('Next drone: %s / %s launch credits earned.\n%s: %s.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',(pre.wins or 0)>0 and 'Unlocked' or 'Defeat guards once')
+  elseif pre then objective.Text=string.format('Next drone: %s / %s launch credits earned.',comma(pre.earnings or 0),comma(pre.saleRequired or 160))
+  else objective.Text='Click a plot to automate mining.\nDeposit ore, then launch full storage.' end
  end
  local ownActive=false;local reprints={};local now=workspace:GetServerTimeNow()
  for source in pairs(drones) do
@@ -1258,7 +1280,7 @@ connect(RunService.Heartbeat,function(dt)
    local kind=station:GetAttribute('Interaction')
    if kind=='Pack' then title='Upgrade pack';detail=pending() and 'Your saved cards are ready' or '3 cards · choose 1'
    elseif kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
-   elseif kind=='Sell' then title='Sell backpack';detail='Sell the ore you carried here' end
+   elseif kind=='Sell' then title='Deposit backpack';detail='Fill storage, then launch for currency' end
   end
   if action then contextAction=function() performStation(station) end;contextTitle.Text=title;contextDetail.Text=detail;contextButton.Text=(actionText or 'Use')..(touch and '' or ' [E]');context.Visible=true end
  end
@@ -1291,11 +1313,14 @@ connect(RunService.Heartbeat,function(dt)
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
  else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
+ unload.Text=touch and 'Deposit' or 'Deposit [U]'
+ logisticsView:update(view,ownActive)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  commandView:destroy();pickupView:destroy();impactConnection:Disconnect()
+ specialMiningFX:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

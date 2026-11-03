@@ -98,19 +98,26 @@ check('recall and busy storage cancel or pause breaker and grower work',function
  p.busy=false;leaveField(p);assert(not d.target and not d.breaker and not p.workField)
  ticks(d,2);assert(r.hp==hp)
 end)
-check('two backpack emptiers own separate real parcels and sell each only once',function()
- local _,p,roles=fixture();data(p).run.cargo={Quartz=24}
+check('two backpack emptiers own separate parcels and store each once before orbital payment',function()
+ local pl,p,roles=fixture();data(p).run.cargo={Quartz=24}
  local hr=characterRoot(p)
  for i,d in ipairs(roles.Courier) do d.pos=hr.Position+Vector3.new(i==1 and -2.2 or 2.2,2.4,1);ticks(d,.7);serviceDeliveries(p);clock(1.1) end
  local a,b=roles.Courier[1],roles.Courier[2]
  assert(Pro.deliveryUnits(data(p),a.id)==8 and Pro.deliveryUnits(data(p),b.id)==8 and Pro.cargoUnits(data(p))==8)
  assert(data(p).run.deliveries[a.id].id~=data(p).run.deliveries[b.id].id)
  for _,d in ipairs(roles.Courier) do
-  local manifest=data(p).run.deliveries[d.id];d.pos=(scene.converter or scene.packStation).Position+Vector3.new(0,3,0)
+  local manifest=data(p).run.deliveries[d.id];d.pos=logistics:storagePosition(p)+Vector3.new(0,3,0)
   d.deliveryId=manifest.id;d.deliveryArrived=true;clock(1.1);serviceDeliveries(p)
  end
- assert(data(p).run.wallet.Quartz==16 and Pro.cargoUnits(data(p))==8)
- clock(1.1);serviceDeliveries(p);assert(data(p).run.wallet.Quartz==16)
+ assert(data(p).run.wallet.Quartz==0 and Pro.cargoUnits(data(p))==8)
+ assert(data(p).run.logistics.storage.Quartz==16 and not next(data(p).run.deliveries))
+ clock(1.1);serviceDeliveries(p);assert(data(p).run.logistics.storage.Quartz==16,'parcel was stored twice')
+ logistics:deposit(p,'Quartz',Logistics.CAPACITY-16)
+ pl.Character:PivotTo(CFrame.new(home+Vector3.new(0,4,0)));logistics:command(p,'LaunchStorage')
+ assert(data(p).run.wallet.Quartz==0 and Logistics.bagUnits(data(p).run.logistics.launchCargo)==Logistics.CAPACITY)
+ for _=1,62 do clock(.1);logistics:tick(.1) end
+ assert(data(p).run.wallet.Quartz==Logistics.CAPACITY and Pro.cargoUnits(data(p))==8)
+ local paid=data(p).run.wallet.Quartz;clock(1.1);serviceDeliveries(p);assert(data(p).run.wallet.Quartz==paid,'parcel was paid twice')
 end)
 check('orbital hardware automatically strikes a largest rock and persists its cooldown',function()
  local _,p,roles=fixture();local r=rock(5000);local d=roles.Orbiter[1]

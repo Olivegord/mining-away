@@ -1,6 +1,6 @@
 --!strict
 
-export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry" | "Grow" | "Orbital" | "Swarm"
+export type AttackStyle = "Bolt" | "Charge" | "Heal" | "Carry" | "Grow" | "Orbital" | "Swarm" | "Special"
 
 export type DroneDefinition = {
 	DisplayName: string,
@@ -19,6 +19,7 @@ export type DroneDefinition = {
 	ChargeWindup: number?,
 	ChargeSpeed: number?,
 	Weight: number,
+	MiningDuration: number?,
 }
 
 local DroneConfig = {}
@@ -95,7 +96,7 @@ DroneConfig.Types = {
 	},
 	Courier = {
 		DisplayName = "Courier",
-		Description = "Backpack emptier. Reserves up to 8 ore, takes its own parcel to sell, then returns for another.",
+		Description = "Backpack emptier. Reserves up to 8 ore, takes its own parcel to orbital storage, then returns for another.",
 		Color = Color3.fromRGB(218, 172, 81),
 		Accent = Color3.fromRGB(243, 219, 162),
 		Scale = 0.75,
@@ -158,6 +159,24 @@ DroneConfig.Types = {
 } :: { [string]: DroneDefinition }
 
 DroneConfig.TypeOrder = { "Dart", "Striker", "Medic", "Charger", "Courier", "Orbiter", "Scrapper" }
+-- Permanent specialist hardware extends the existing seven jobs. The server
+-- completes one reserved rock through each role's distinct timed work cycle.
+local specialDefinitions: {[string]: {description: string, color: {number}, duration: number, health: number}} = {
+ Bubbler={description='Glass bubbles capture a rock, lift it, then fall and shatter into mineral drops.',color={120,225,255},duration=4.2,health=80},
+ Halver={description='Repeatedly stretches and halves a levitating rock, then slowly ring-grinds its pieces into dust.',color={190,140,255},duration=8,health=110},
+ Gridcutter={description='Scans an orthogonal laser grid, then nudges the sliced rock into a spill of cubes.',color={255,100,130},duration=5,health=80},
+ Singularity={description='An expensive gravity specialist. A tiny black hole draws an entire rock into its event horizon.',color={155,100,255},duration=2.4,health=100},
+ Starforge={description='A miniature contained sun heats a rock until it melts into glowing mineral rain.',color={255,170,60},duration=5,health=80},
+ Frostbite={description='Flash-freezes a rock in a shell of ice, then shatters it with a sonic shockwave.',color={150,255,245},duration=5.5,health=80},
+ Resonator={description='Three resonant rings pulse through a rock until it shakes apart into mineral dust.',color={125,255,160},duration=4.8,health=80},
+}
+local specialOrder = {'Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'}
+for _,name in ipairs(specialOrder) do
+ local definition=specialDefinitions[name]
+ local color=Color3.fromRGB(table.unpack(definition.color))
+ DroneConfig.Types[name]={DisplayName=name,Description=definition.description,Color=color,Accent=color:Lerp(Color3.new(1,1,1),.55),Scale=.9,MaxHealth=definition.health,Speed=24,FlightHeight=3.4,AttackStyle='Special',AttackRange=24,AttackCooldown=.9,Damage=name=='Singularity' and 18 or 12,Weight=1,MiningDuration=definition.duration}
+ table.insert(DroneConfig.TypeOrder,name)
+end
 
 -- The active place retains its original elapsed-time motion and mining equations.
 -- These runtime traits preserve the prior Studio role tuning and never enter saved fleets.
@@ -170,6 +189,10 @@ DroneConfig.StudioRoles = {
  Orbiter = {height=3.6,base={miningDPS=30,combatDPS=12,maxHealth=80,maxStep60=.36,warmup=.8,range=24,shotInterval=.8}},
  Scrapper = {height=3.2,base={miningDPS=30,combatDPS=12,maxHealth=84,maxStep60=.35,warmup=.8,range=20,shotInterval=.9}},
 }
+for _,name in ipairs(specialOrder) do
+ local definition=specialDefinitions[name]
+ DroneConfig.StudioRoles[name]={height=3.4,base={miningDPS=30,combatDPS=name=='Singularity' and 20 or 12,maxHealth=definition.health,maxStep60=.38,warmup=.8,range=24,shotInterval=.8}}
+end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
 
@@ -180,6 +203,60 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
  if model:GetAttribute('RoleGeometry')==role then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
+ if specialDefinitions[role] then
+  local pose=model:GetPivot();local scale=model:GetScale()
+  local color=DroneConfig.Types[role].Color
+  local dark=Color3.fromRGB(57,64,73)
+  local function hardware(name: string,size: Vector3,offset: CFrame,tint: Color3,material: Enum.Material,kind: Enum.PartType?): Part
+   local part=Instance.new('Part');part.Name=name;part.Anchored=true
+   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+   part.Material=material;part.MaterialVariant='';part.Color=tint;part.Reflectance=0
+   part.Size=size*scale;part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation
+   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+   if kind then part.Shape=kind end
+   part.Parent=model;return part
+  end
+  if role=='Bubbler' then
+   for _,side in ipairs({-1,1}) do
+    local glass=hardware('BubbleReservoir',Vector3.one*.7,CFrame.new(side*.86,.12,0),color,Enum.Material.Glass,Enum.PartType.Ball)
+    glass.Transparency=.32;glass.Reflectance=.15
+    hardware('ReservoirCollar',Vector3.new(.14,.75,.75),CFrame.new(side*.86,-.1,0)*CFrame.Angles(0,0,math.pi/2),dark,Enum.Material.Metal,Enum.PartType.Cylinder)
+   end
+  elseif role=='Halver' then
+   for _,side in ipairs({-1,1}) do
+    hardware('SplitterArm',Vector3.new(.22,.22,1.5),CFrame.new(side*.85,-.15,0),dark,Enum.Material.Metal)
+    hardware('SplitBlade',Vector3.new(.10,.5,.95),CFrame.new(side*1.0,-.35,0),color,Enum.Material.Metal)
+   end
+  elseif role=='Gridcutter' then
+   for _,side in ipairs({-1,1}) do
+    hardware('ScanRail',Vector3.new(.2,.25,1.45),CFrame.new(side*.8,-.1,0),dark,Enum.Material.Metal)
+    for i=-1,1 do hardware('GridLens',Vector3.new(.13,.15,.16),CFrame.new(side*.8,-.28,i*.42),color,Enum.Material.Neon) end
+   end
+  elseif role=='Singularity' then
+   hardware('GravityCore',Vector3.one*.55,CFrame.new(0,.65,0),Color3.fromRGB(10,7,20),Enum.Material.Glass,Enum.PartType.Ball)
+   for i=1,4 do
+    local angle=i*math.pi/2
+    hardware('GravityBrace',Vector3.new(.18,.8,.18),CFrame.new(math.cos(angle)*.4,.55,math.sin(angle)*.4),color,Enum.Material.Metal)
+   end
+  elseif role=='Starforge' then
+   hardware('SolarCore',Vector3.one*.55,CFrame.new(0,.65,0),color,Enum.Material.Neon,Enum.PartType.Ball)
+   for _,side in ipairs({-1,1}) do
+    hardware('SolarShield',Vector3.new(.15,.7,.9),CFrame.new(side*.55,.55,0),dark,Enum.Material.Metal)
+    hardware('HeatVent',Vector3.new(.4,.1,.9),CFrame.new(side*.75,-.16,0),color,Enum.Material.Metal)
+   end
+  elseif role=='Frostbite' then
+   for _,side in ipairs({-1,1}) do
+    local tank=hardware('CryoTank',Vector3.new(.8,.42,.42),CFrame.new(side*.85,0,0)*CFrame.Angles(0,0,math.pi/2),color,Enum.Material.Glass,Enum.PartType.Cylinder)
+    tank.Transparency=.2
+    for i=-1,1 do hardware('CoolingFin',Vector3.new(.18,.5,.7),CFrame.new(side*.85,.06,i*.3),dark,Enum.Material.Metal) end
+   end
+  else
+   for i=1,3 do
+    hardware('ResonanceHorn',Vector3.new(.18,.75,.75),CFrame.new((i-2)*.65,.4,0)*CFrame.Angles(0,0,math.pi/2),color,Enum.Material.Metal,Enum.PartType.Cylinder)
+   end
+  end
+  model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
+ end
  if role=='Orbiter' or role=='Scrapper' then
   -- Append working hardware to the authored drone; never replace its shell.
   local pose=model:GetPivot();local scale=model:GetScale()

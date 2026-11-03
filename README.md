@@ -1,5 +1,9 @@
 # Drone Blower revolution
 
+New review candidate: [seven special miners, four-bay carriers, flying backpack and orbital storage](docs/review/SPECIAL_DRONES_LOGISTICS.md). This update builds on the current game branch and preserves its map, cards, mineral shops, mining roles and audio. Full storage launches pay the matching mineral currencies; carriers keep mining cleared fields after you leave. Optional auto-launch unlocks after the first shipment.
+
+Run `python3 tools/test_special_logistics.py /path/to/luau` for the current feature checks, then `python3 tests/live-build.spec.py` for exact source-only capture preservation. Open `build/Drone Blower revolution.rbxl` after rebuilding. This cloud update has not been installed into an existing Studio session or visually playtested; historical screenshots below do not show the new drones.
+
 Latest cloud candidate: [committed mining flight and vivid 3D cards](docs/review/COMMITTED_MINING_FLIGHT.md). Healthy saves keep flight moving while work pauses; stations and shell-to-core jobs stay committed; breakers physically recover overhead; cards have nine vivid mechanic families and larger art. New source/renderer/saving regressions and deterministic live-capture builds run in CI. Engine feel, visual/multiplayer acceptance and the requested Catch a Brainrot video study remain **NOT VERIFIED**; the video players buffered without visual frames.
 
 The owner authorizes routine Studio stop/install/save/restart without repeated questions. The polished editable game has been reopened and initialized in Studio. [Long-session performance findings and remaining limits](docs/review/LONG_SESSION_LAG.md): unnecessary rock/effect render work is removed, but the reported lag is not yet confirmed fixed.

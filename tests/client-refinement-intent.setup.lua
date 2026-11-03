@@ -7,6 +7,8 @@ local profile={run={id='run'}}
 local function fieldUnlocked() return true end
 local function availableAutomaticWorker() return true end
 local modal={Visible=false};local notice={Text=''};local noticeUntil=0
+local logisticsView={selected=nil,dispatchField=function() return false end,isOpen=function() return false end}
+local function menusVisible() return modal.Visible or logisticsView:isOpen() end
 local command={calls={}}
 function command:FireServer(action,payload) table.insert(self.calls,{action=action,payload=payload}) end
 local commandView={calls={}}

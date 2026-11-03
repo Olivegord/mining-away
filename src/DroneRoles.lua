@@ -12,6 +12,13 @@ local definitions={
  Medic={job='Healer',healer=true},
  Orbiter={job='Orbital controller',ability='Orbital'},
  Scrapper={job='Swarm fabricator',ability='Scrap'},
+ Bubbler={job='Bubble extractor',worker=true,combat=true,special='Bubbler'},
+ Halver={job='Ring grinder',worker=true,combat=true,special='Halver'},
+ Gridcutter={job='Grid cutter',worker=true,combat=true,special='Gridcutter'},
+ Singularity={job='Gravity extractor',worker=true,combat=true,special='Singularity'},
+ Starforge={job='Solar refiner',worker=true,combat=true,special='Starforge'},
+ Frostbite={job='Cryogenic shatterer',worker=true,combat=true,special='Frostbite'},
+ Resonator={job='Resonance extractor',worker=true,combat=true,special='Resonator'},
 }
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function R.canonical(role) return legacy[role] or role end
@@ -20,6 +27,10 @@ local function capability(role,key)
  return definition and definition[key]==true or false
 end
 function R.isWorker(role) return capability(role,'worker') end
+function R.special(role)
+ local definition=definitions[R.canonical(role)];return definition and definition.special or nil
+end
+function R.isSpecial(role) return R.special(role)~=nil end
 function R.isMiner(role) return capability(role,'miner') end
 function R.combat(role) return capability(role,'combat') end
 function R.isGrower(role) return capability(role,'grower') end

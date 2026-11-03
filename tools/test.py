@@ -4,6 +4,7 @@ luau=pathlib.Path(sys.argv[1] if len(sys.argv)>1 else '/tmp/luau')
 for p in sorted((ROOT/'src').glob('*.lua')):
  subprocess.run([str(luau/'luau-compile'),str(p)],stdout=subprocess.DEVNULL,check=True)
 print('PASS all source Luau syntax checks')
+subprocess.run([sys.executable,str(ROOT/'tools/test_special_logistics.py'),str(luau)],check=True)
 subprocess.run([sys.executable,str(ROOT/'tests/ui_text.spec.py')],check=True)
 subprocess.run([str(luau/'luau-analyze'),*[str(ROOT/'src'/f'{n}.lua') for n in ['Rules','Config','Mining','Profile','Cards','Persistence']]],check=True)
 for name in ['feel','mining','feedback','audio-feedback','sentry','ui-layout','map-layout','rules','profile','cards','persistence','progression']:
@@ -33,7 +34,7 @@ intent=ROOT/'tests/generated-client-intent.spec.lua'
 intent.write_text(module_bundle(('UILayout',))+'\n'+(ROOT/'tests/client-intent.setup.lua').read_text()+'\n'+select_drone+'\n'+cycle_candidate+'\n'+field_name+'\n'+receipt+'\n'+dispatch+'\nlocal function contextSelect(id) '+context_line+' end\n'+input_handler+'\n'+(ROOT/'tests/client-intent.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(intent)],stdout=subprocess.DEVNULL,check=True)
 subprocess.run([str(luau/'luau'),str(intent)],check=True)
-render=client[client.index('local function renderDrone(d,dt,now)'):client.index('connect(RunService.RenderStepped',client.index('local function renderDrone(d,dt,now)'))]
+render=client[client.index('local function renderDrone(d,dt,now)'):client.index('local specialMiningFX=',client.index('local function renderDrone(d,dt,now)'))]
 motion=ROOT/'tests/generated-motion.spec.lua'
 motion.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+module_bundle(('Feel',))+'\n'+(ROOT/'tests/motion-setup.lua').read_text()+'\n'+render+'\n'+(ROOT/'tests/motion.integration.lua').read_text())
 subprocess.run([str(luau/'luau-compile'),str(motion)],stdout=subprocess.DEVNULL,check=True)
