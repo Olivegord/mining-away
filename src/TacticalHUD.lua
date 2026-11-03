@@ -210,7 +210,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
     living+=1
     local state=drone:GetAttribute('State')
     if state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then delivering+=1
-    elseif state=='Mine' or state=='Travel' or state=='Attack' then working+=1 end
+    elseif state=='Mine' or state=='SpecialMine' or state=='Travel' or state=='Attack' then working+=1 end
    end
   end
  end end
@@ -220,7 +220,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
  if delivering>0 then status=string.format('%d mining · %d hauling',working,delivering)
- elseif full then status='Backpack full · return to sell'
+ elseif full then status='Backpack full · deposit for launch'
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
  elseif working>0 then status=string.format('%d / %d working',working,living)
  elseif living<total then status=string.format('%d / %d ready',living,total)
@@ -264,7 +264,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.test.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  r.recall.Text=touch and 'Recall' or 'Recall [R]'
  r.evade.Text=touch and 'Evade' or 'Evade [Q]'
- if r.unload then r.unload.Text=touch and 'Sell' or 'Sell [U]' end
+ if r.unload then r.unload.Text=touch and 'Deposit' or 'Deposit [U]' end
  self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
  self.hint.Text='Click to send your drones'
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)

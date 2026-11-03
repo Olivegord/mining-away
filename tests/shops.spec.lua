@@ -109,7 +109,7 @@ end)
 test('v4 migration preserves fleet, cargo and credits without inventing Ruby',function()
  local p=fresh();p.schemaVersion=4;p.run.wallet=nil;p.run.shopLevels=nil;p.run.shops=nil;p.run.abilityCooldowns=nil
  p.run.credits=123;p.run.cargo={Ruby=12};p.clearedFields.Cobalt=true;local base=P.clone(p.fleet[1])
- local r=assert(P.migrate(p,44));eq(r.schemaVersion,6);eq(r.run.wallet.Quartz,123);eq(r.run.wallet.Ruby,0);eq(r.run.cargo.Ruby,12);eq(S.unlocked(r,'Cobalt'),true);eq(r.fleet[1].id,base.id);eq(r.fleet[1].base.maxStep60,base.base.maxStep60)
+ local r=assert(P.migrate(p,44));eq(r.schemaVersion,P.SCHEMA);eq(r.run.wallet.Quartz,123);eq(r.run.wallet.Ruby,0);eq(r.run.cargo.Ruby,12);eq(S.unlocked(r,'Cobalt'),true);eq(r.fleet[1].id,base.id);eq(r.fleet[1].base.maxStep60,base.base.maxStep60)
 end)
 test('corrupt future wallet, unlock chain and cooldown fail closed',function()
  for _,corrupt in ipairs({function(p) p.run.wallet.Ruby=-1 end,function(p) p.run.wallet.Quartz=nil end,function(p) p.run.wallet.Fake=0 end,function(p) p.run.shops.Emerald=true end,function(p) p.run.abilityCooldowns.Orbital=0/0 end}) do

@@ -1,5 +1,13 @@
 # Owner requirements
 
+## November 3 latest — special miners, carriers and orbital storage
+
+Add Bubbler (Roblox Glass bubbles absorb a whole rock, float up, fall and shatter into money), Halver (levitate, stretch and recursively split a rock, then slowly grind the pieces in a fast ring), a laser grid cutter (scan, cut into cubes, then nudge them into a spill), and a very strong tiny black-hole miner. Add three more distinctive mining ideas. These are regular permanent mining drones and must coexist with the existing roles, original world, colorful UI, cards, shops and audio.
+
+Add a separate carrier class with four miner bays. Select a carrier in the toolbar and dispatch it to a whole patch; its deployed miners continue working when the owner leaves the patch. Add a flying backpack that collects a full backpack and takes the cargo home. Add a storage building whose full cargo is launched into space to earn currency. Preserve mineral-specific balances, authoritative ownership, saved fleet/loadouts, and cargo during full-capacity transfers.
+
+After these systems, the owner authorizes useful surprise additions grounded in research. Current choices are an optional automatic launch setting after the first manual shipment, clear full-storage indicators and automatic resumption of waiting carrier work. See [source-backed research](DRONES_AND_LOGISTICS_RESEARCH.md). Engine rendering, multiplayer, streaming and fun still require actual playtesting; automated checks do not establish those outcomes.
+
 ## November 3 latest — moderate particle tails, localized motion and screenshots
 
 Studio is available again. The owner requests screenshots of the finished running game. Their request for longer particles was followed by a correction: **not that much longer, and most particles should not travel so far**. Keep ordinary energy close to its contact with modest persistence; reserve the longer, more turbulent trail for the orbital. Preserve the verified plain circle texture and visible bloom. Check actual rendering and complete particle tails rather than only extending Lifetime values. See [final tuning and native captures](review/PARTICLE_TUNING.md).
