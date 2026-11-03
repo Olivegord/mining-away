@@ -51,7 +51,7 @@ def module_bundle(names):
 def bundle():
  return module_bundle(('Shops','ShopStands','DroneAbilities','DroneRoles','Config','Feel','Mining','OreDrops','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','Mining','Feedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView','PickupView','CommandView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','Mining','Feedback','AudioFeedback','SentryMotion','Soundscape','WorkEffects','Presentation','UILayout','Interface','CardView','ShopView','AbilityView','PickupView','CommandView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''

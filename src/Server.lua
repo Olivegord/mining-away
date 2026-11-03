@@ -423,7 +423,14 @@ local function pickupStep(dt)
     if now>=(drop.queryAt or 0) then drop.clearPath=los(from,target,hr.Parent,{pickupFolder,droneFolder});drop.queryAt=now+.15 end
     canCollect=drop.clearPath==true
    end
-   local reached=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect)
+   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect)
+   if groundSpeed and groundSpeed>1 then
+    drop.groundSerial=(drop.groundSerial or 0)+1
+    drop.part:SetAttribute('GroundImpactAt',now)
+    drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
+    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.y,drop.z))
+    drop.part:SetAttribute('GroundImpactSerial',drop.groundSerial)
+   end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,hr.Parent,{pickupFolder,droneFolder}) then
     local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p)))
     if accepted>0 then

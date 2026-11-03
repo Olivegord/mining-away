@@ -101,6 +101,7 @@ function P:createMiningBeam(view,emitter)
 end
 function P:destroyMiningBeam(beam)
  if not beam then return end
+ if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
  self.work:destroyMining(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
@@ -206,11 +207,19 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.3+.7*(1-width)) or 1
  self.work:mining(beam,sample,point,normal,width,pulse,now)
- if visible and sample.active and sample.isMining and now>=(beam.nextWorkSoundAt or 0) then
-  beam.nextWorkSoundAt=now+.48;self:_sound(point,'cutting',now)
+ if self.audio and self.audio.setLoop then
+  if visible and sample.active and sample.isMining and not sample.paused then
+   self.audio:setLoop(beam,'cutting_hum',point,.45+.55*width,.9+.1*width)
+   beam.wasCutting=true
+  else
+   self.audio:stopLoop(beam)
+   if beam.wasCutting and sample.alive and not sample.paused then self:_sound(beam.origin.WorldPosition,'laser_stop',now) end
+   beam.wasCutting=false
+  end
  end
  if visible and newPulse and style=='Percussion' and now>=(self.nextMiningSoundAt or 0) then
   self.nextMiningSoundAt=now+.12;self:_sound(point,'mining',now)
+ elseif visible and newPulse and style=='Resonance' then self:_sound(point,'resonance',now)
  end
  beam.secondary.Transparency=1
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
@@ -385,8 +394,10 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
  end
  passive(part);part.CastShadow=false;part.Name='AuthoredDebris';part.Size=part.Size*scale;part.CFrame=frame
  part.Color=color;part.Transparency=transparency;part.Parent=self.parent
+ local ground=floor+part.Size.Y*.3
+ local landing=(velocity.Y+math.sqrt(velocity.Y^2+52*math.max(0,frame.Position.Y-ground)))/26
  table.insert(self.fragments,{part=part,frame=frame,start=now,velocity=velocity,spin=spin,
-  floor=floor+part.Size.Y*.3,transparency=transparency,duration=duration or 1.5,priority=priority})
+  floor=ground,transparency=transparency,duration=math.max(duration or 1.5,landing+.35),priority=priority})
 end
 function P:registerDrone(drone,now)
  if self.closed or self.drones[drone] then return end
@@ -429,11 +440,12 @@ function P:renderDrone(drone,_dt,now)
  end
  if event.shot then record.shotAt=now end
  local pose=drone.view:GetPivot()
+ if self.audio and self.audio.updateDrone then self.audio:updateDrone(source,pose.Position,now) end
  local repairs=source:GetAttribute('RepairSerial') or 0
  if repairs>record.repairSerial and not record.events.dead then self:_pulse(pose.Position,Color3.fromRGB(131,235,168),2.4,now,.3) end
  record.repairSerial=repairs
  local shield=source:GetAttribute('Shield') or 0
- if shield<record.shield-.001 and not record.events.dead then self:_pulse(pose.Position,ICE,2.8,now,.22) end
+ if shield<record.shield-.001 and not record.events.dead then self:_pulse(pose.Position,ICE,2.8,now,.22);self:_sound(pose.Position,'shield',now) end
  record.shield=shield
  local hit=F.flash(now-record.hitAt,.16);local recoil=F.recoil(now-record.shotAt)
  local rebuilding=state=='Reprinting'
@@ -468,12 +480,13 @@ function P:renderDrone(drone,_dt,now)
    drone.view:PivotTo(pose*CFrame.new(0,hit*.045,recoil*.12))
   end
  end
- if event.revived then self:_pulse(pose.Position,ICE,2.35,now,.28) end
+ if event.revived then self:_pulse(pose.Position,ICE,2.35,now,.28);self:_sound(pose.Position,'reprint',now) end
  if event.shot and not record.events.dead then
   local emitter=drone.view:FindFirstChild('Emmiter',true)
   if emitter and emitter:IsA('BasePart') then
    local critical=source:GetAttribute('Critical')==true or now-(source:GetAttribute('LastCritAt') or -100)<.15
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
+   if now-(source:GetAttribute('ShotAt') or 0)<.35 then self:_sound(emitter.Position,'shot',now) end
   end
  end
  self.work:courier(drone,record,now)
@@ -482,6 +495,7 @@ function P:renderDrone(drone,_dt,now)
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)
+ if self.audio and self.audio.forgetDrone then self.audio:forgetDrone(drone.source) end
  local record=self.drones[drone]
  if record then self:_removeScan(record);self.work:destroyDrone(record);self.drones[drone]=nil end
 end
@@ -691,6 +705,11 @@ function P:renderTurret(record,dt,now)
   if now-activateAt<.5 then self:_sentryAudio(record.eye.Position,'ignite',now);self:_pulse(record.eye.Position,WHITE,4.5,now,.3) end
  end
  local charging=source:GetAttribute('Telegraph')==true and awake
+ if self.audio and self.audio.setLoop then
+  if charging and source:GetAttribute('MotionPaused')~=true and (source:GetAttribute('FireAt') or 0)>now then
+   self.audio:setLoop(record,'combat_charge',record.eye.Position,.85,1)
+  else self.audio:stopLoop(record) end
+ end
  local aim=source:GetAttribute('Aim')
  local followingShot=now-record.shotAt<.35
  local look=(charging or followingShot) and aim or source:GetAttribute('WatchPosition') or source:GetAttribute('WakeAim') or aim
@@ -781,6 +800,7 @@ function P:renderTurret(record,dt,now)
 end
 function P:destroyTurret(record)
  if not record then return end
+ if self.audio and self.audio.stopLoop then self.audio:stopLoop(record) end
  for part,original in pairs(record.hidden) do if part.Parent then part.LocalTransparencyModifier=original end end
  record.endpoint:Destroy();record.cue:Destroy();record.view:Destroy();self.turrets[record.source]=nil
 end
@@ -825,10 +845,15 @@ function P:update(_dt,now)
   if age>=item.duration or not item.part.Parent then
    item.part:Destroy();table.remove(self.fragments,i)
   else
-   local y,_landed,flight=F.fragment(age,item.floor-item.frame.Position.Y,item.velocity.Y,26)
+   local y,landed,flight=F.fragment(age,item.floor-item.frame.Position.Y,item.velocity.Y,26)
    local drift=Vector3.new(item.velocity.X*flight,y,item.velocity.Z*flight)
    local rotation=item.spin*flight
    item.part.CFrame=CFrame.new(item.frame.Position+drift)*item.frame.Rotation*CFrame.Angles(rotation.X,rotation.Y,rotation.Z)
+   if landed and not item.landed then
+    item.landed=true
+    -- One sound exactly at first contact; a stalled render skips old impacts.
+    if age-flight<.2 then self:_sound(item.part.Position,item.priority and 'metal_land' or 'rubble',now) end
+   end
    local fade=math.clamp((age-item.duration*.6)/(item.duration*.4),0,1)
    item.part.Transparency=item.transparency+(1-item.transparency)*fade
   end

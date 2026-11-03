@@ -52,4 +52,18 @@ check('new resources are grounded with health independent of their footprint',fu
  local weak=Mining.resource(75,'Crystal',1);local hard=Mining.resource(75,'Crystal',8)
  assert(weak.work==195 and hard.work==1560 and weak.size==hard.size)
 end)
+check('landing receipts describe real contacts and stop advancing at rest',function()
+ local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ steps(90)
+ local serials={};local found=false
+ for id,drop in pairs(pickups) do if drop.owner==p.player.UserId then
+  found=true;local part=drop.part
+  assert((part:GetAttribute('GroundImpactSerial') or 0)>=1)
+  assert(part:GetAttribute('GroundImpactAt')>0 and part:GetAttribute('GroundImpactSpeed')>1)
+  assert(part:GetAttribute('GroundImpactPosition').Y==drop.floor)
+  serials[id]=part:GetAttribute('GroundImpactSerial')
+ end end
+ assert(found);steps(120)
+ for id,serial in pairs(serials) do assert(pickups[id].part:GetAttribute('GroundImpactSerial')==serial) end
+end)
 print(checks..' production pickup server checks with API doubles; not Studio validation')

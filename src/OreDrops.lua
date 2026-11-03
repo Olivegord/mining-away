@@ -27,13 +27,18 @@ function O.step(s,target,dt,attract)
   local drag=math.exp(-dt*4);s.vx*=drag;s.vz*=drag;s.vy-=24*dt
  end
  local x,y,z=s.x+s.vx*dt,s.y+s.vy*dt,s.z+s.vz*dt
- if y<s.floor then y=s.floor;s.vy=math.abs(s.vy)>.8 and math.abs(s.vy)*.22 or 0 end
+ local impactSpeed=0
+ if y<s.floor then
+  -- Return the real downward contact once; resting floor clamps are silent.
+  if s.vy < -1 then impactSpeed=-s.vy end
+  y=s.floor;s.vy=math.abs(s.vy)>.8 and math.abs(s.vy)*.22 or 0
+ end
  -- Test the full segment as well as its end, so low-FPS homing cannot skip
  -- through the owner and enter a repeated overshoot loop.
  local ex,ey,ez=x-s.x,y-s.y,z-s.z;local length=ex*ex+ey*ey+ez*ez
  local t=length>0 and math.clamp((dx*ex+dy*ey+dz*ez)/length,0,1) or 0
  local near=math.sqrt((dx-ex*t)^2+(dy-ey*t)^2+(dz-ez*t)^2)
  s.x,s.y,s.z=x,y,z
- return pulling and near<=O.PICKUP_DISTANCE
+ return pulling and near<=O.PICKUP_DISTANCE,impactSpeed
 end
 return O

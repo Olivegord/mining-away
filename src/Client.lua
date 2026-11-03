@@ -14,7 +14,7 @@ local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local pickupView=PickupView.new(world,localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
-local orbitalBurns={};local burnShakeAt=0
+local orbitalBurns={};local roleAudio={};local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
@@ -22,11 +22,20 @@ end)
 RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
  local camera=workspace.CurrentCamera
  local now=workspace:GetServerTimeNow()
+ for source,name in pairs(roleAudio) do
+  if not source.Parent or now>(source:GetAttribute('AudioUntil') or 0) then soundscape:stopLoop(source);roleAudio[source]=nil
+  else
+   local progress=math.clamp((now-(source:GetAttribute('AudioAt') or now))/1.4,0,1)
+   soundscape:setLoop(source,name,source.Position,.65+.35*progress,.75+.55*progress)
+  end
+ end
  for source,record in pairs(orbitalBurns) do
-  if not source.Parent then record.connection:Disconnect();orbitalBurns[source]=nil
+  if not source.Parent then soundscape:stopLoop(source);record.connection:Disconnect();orbitalBurns[source]=nil
   else
    local ended=source:GetAttribute('EndedAt')~=nil
    local active=not ended and now-(source:GetAttribute('ContactAt') or 0)<.3
+   if active then soundscape:setLoop(source,'orbital_hum',source:GetAttribute('Position'),1,1)
+   else soundscape:stopLoop(source) end
    local visibility=ended and 'fading' or active and 'active' or 'stale'
    if record.visibility~=visibility then
     record.visibility=visibility
@@ -46,6 +55,13 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
  end
 end)
 local function roleImpact(source)
+ if source:IsA('BasePart') then
+  local at=source:GetAttribute('AudioAt');local now=workspace:GetServerTimeNow()
+  local loop=source:GetAttribute('AudioLoop')
+  if (loop=='orbital_charge' or loop=='swarm_charge') and AudioFeedback.fresh(at,now,2.6) then roleAudio[source]=loop end
+  local cue=source:GetAttribute('AudioCue')
+  if cue=='plant' and AudioFeedback.fresh(at,now,.35) then soundscape:play(cue,source.Position) end
+ end
  if source:IsA('Folder') and source:GetAttribute('OrbitalBurn') then
   if orbitalBurns[source] then return end
   local record={effects={}}
@@ -54,7 +70,8 @@ local function roleImpact(source)
   end
   for _,part in ipairs(source:GetDescendants()) do track(part) end
   record.connection=source.DescendantAdded:Connect(track)
-  orbitalBurns[source]=record;soundscape:play('orbital',source:GetAttribute('Position'))
+  orbitalBurns[source]=record
+  if AudioFeedback.fresh(source:GetAttribute('ContactAt'),workspace:GetServerTimeNow(),.35) then soundscape:play('orbital',source:GetAttribute('Position')) end
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
@@ -82,6 +99,7 @@ local TacticalHUD=require(RS.Shared:WaitForChild('TacticalHUD'))
 local colors={Blue=Color3.fromRGB(99,198,246),Red=Color3.fromRGB(243,117,112),Green=Color3.fromRGB(122,219,163),Dart=Color3.fromRGB(87,220,255),Striker=Color3.fromRGB(255,210,86),Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
 for _,name in ipairs(DroneConfig.TypeOrder) do colors[name]=DroneConfig.Types[name].Color end
 local gui=Instance.new('ScreenGui');gui.Name='MiningAwayHUD';gui.ResetOnSpawn=false;gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=12;gui.Parent=player:WaitForChild('PlayerGui')
+soundscape:bindUI(gui)
 local safeRoot=U.frame(gui,UDim2.fromScale(0,0),UDim2.fromScale(1,1));safeRoot.Name='SafeContent';safeRoot.BackgroundTransparency=1
 local historical={ScreenGui=true,IngameGui=true,lowPolyUI=true}
 local function isolate(g) if g:IsA('ScreenGui') and historical[g.Name] then g.Enabled=false end end
@@ -1059,6 +1077,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
+ soundscape:play(state.status=='rejected' and 'denied' or 'command')
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
@@ -1249,3 +1268,4 @@ connect(gui.Destroying,function()
  localFX:Destroy()
 end)
 
+ for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

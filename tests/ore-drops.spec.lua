@@ -23,4 +23,16 @@ check('blocked or out-of-range pickups cannot arrive and never fall through bed'
   for _=1,300 do assert(not O.step(s,{x=50,y=1,z=0},1/60,not blocked));assert(s.y>=s.floor) end
  end
 end)
+check('real falls report contact speed while settled ore is silent',function()
+ for _,fps in ipairs({30,60,144}) do
+  local s=drop();s.y=4;s.vy=7
+  local hits=0
+  for _=1,4*fps do
+   local before=s.vy;local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false)
+   if speed and speed>0 then assert(before<1 and s.y==s.floor and s.vy>=0);hits+=1 end
+  end
+  assert(hits>=1 and hits<=3,'unbounded floor chatter at '..fps)
+  for _=1,fps do local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false);assert(speed==0) end
+ end
+end)
 print(checks..' production ore trajectory checks; not engine physics')

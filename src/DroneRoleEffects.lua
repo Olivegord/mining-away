@@ -105,6 +105,7 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  local green=Color3.fromRGB(152,231,158)
  local value=part();if not value then return end
  value.Name=planted and 'CrystalSeedBloom' or 'CrystalSeedFall';value.Transparency=1
+ if planted then value:SetAttribute('AudioCue','plant');value:SetAttribute('AudioAt',workspace:GetServerTimeNow()) end
  value.Position=planted and target or from
  local tip=Instance.new('Attachment');tip.Parent=value
  local dust=Instance.new('ParticleEmitter');dust.Texture='rbxasset://textures/particles/sparkles_main.dds'
@@ -218,6 +219,7 @@ local function targetSight(owner: number,target: any)
  local value=part();if not value then group:Destroy();return end
  local radius=math.clamp((target.radius or 1)+.7,1.4,8)
  value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
+ value:SetAttribute('AudioLoop','orbital_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
  value.Color=Color3.fromRGB(242,38,44);value.Transparency=.8
  value.Size=Vector3.new(.035,radius*2,radius*2)
  value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
@@ -276,6 +278,7 @@ function Effects.Ability(owner: number,event: any,template: Model?)
   if event.ability=='Orbital' then targetSight(owner,event.target);return end
   local value=part();if not value then return end
   value.Name='GadgetCharge';value.Shape=Enum.PartType.Ball;value.Size=Vector3.one*.45
+  value:SetAttribute('AudioLoop','swarm_charge');value:SetAttribute('AudioAt',workspace:GetServerTimeNow());value:SetAttribute('AudioUntil',workspace:GetServerTimeNow()+2.6)
   value.Color=event.ability=='Orbital' and Color3.fromRGB(240,173,88) or Color3.fromRGB(178,202,151)
   value.Transparency=.5;value.Position=location(event.target)+Vector3.new(0,5,0)
   markers[owner]=value;Debris:AddItem(value,2.6)

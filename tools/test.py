@@ -6,7 +6,7 @@ for p in sorted((ROOT/'src').glob('*.lua')):
 print('PASS all source Luau syntax checks')
 subprocess.run([sys.executable,str(ROOT/'tests/ui_text.spec.py')],check=True)
 subprocess.run([str(luau/'luau-analyze'),*[str(ROOT/'src'/f'{n}.lua') for n in ['Rules','Config','Mining','Profile','Cards','Persistence']]],check=True)
-for name in ['feel','mining','feedback','sentry','ui-layout','map-layout','rules','profile','cards','persistence','progression']:
+for name in ['feel','mining','feedback','audio-feedback','sentry','ui-layout','map-layout','rules','profile','cards','persistence','progression']:
  subprocess.run([str(luau/'luau'),str(ROOT/'tests'/f'{name}.spec.lua')],check=True)
 f=ROOT/'tests/generated-server.spec.lua'
 f.write_text((ROOT/'tests/mock-roblox.lua').read_text()+'\n'+bundle()+'\n'+(ROOT/'tests/server.integration.lua').read_text())

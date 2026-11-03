@@ -26,6 +26,36 @@ local CUES = {
  wake={id='9126066421',volume=.3,duration=1,pitch=.65,cooldown=.5,fallback='action_get_up.mp3'},
  ignite={id='9126066421',volume=.27,duration=1,pitch=1.2,cooldown=.25,fallback='action_get_up.mp3'},
  impact={id='9125871199',volume=.45,duration=2,pitch=.7,cooldown=.15,fallback='impact_explosion_03.mp3'},
+ rubble={ids={'9125869504','9125869495','9125869138'},volume=.24,duration=1.2,pitch=1.12,cooldown=.055,range=60,maxVoices=4,fallback='action_jump_land.mp3'},
+ metal_land={id='9125871199',volume=.22,duration=1,pitch=.78,cooldown=.08,fallback='action_jump_land.mp3'},
+ charge={id='9119816710',volume=.17,duration=3,cooldown=.1,range=58,priority=3},
+ breaker_charge={id='9114583503',volume=.2,duration=5,pitch=.7,cooldown=.1,range=65,priority=4},
+ repair_charge={id='9119816710',volume=.11,duration=3,pitch=1.4,cooldown=.1,range=48,priority=3},
+ grow_charge={id='9118941971',volume=.12,duration=1,pitch=.8,cooldown=.1,range=48,priority=2},
+ orbital_charge={id='9119816710',volume=.24,duration=3,pitch=.65,cooldown=.1,range=80,priority=4},
+ swarm_charge={id='9114583503',volume=.14,duration=5,pitch=1.3,cooldown=.1,range=60,priority=3},
+ combat_charge={id='9119816710',volume=.16,duration=3,pitch=.9,cooldown=.1,range=65,priority=4},
+ flight={id='9118941667',volume=.065,duration=1,pitch=.85,cooldown=.1,range=42,priority=1},
+ cutting_hum={id='9118614717',volume=.12,duration=3,pitch=.85,cooldown=.1,range=60,priority=2},
+ orbital_hum={id='9118612324',volume=.22,duration=3,pitch=.6,cooldown=.1,range=80,priority=4},
+ healing={id='9118941971',volume=.075,duration=1,pitch=1.45,cooldown=.1,range=45,priority=2},
+ transfer={id='9118941667',volume=.08,duration=1,pitch=1.25,cooldown=.1,range=42,priority=2},
+ laser_start={id='9126066421',volume=.14,duration=.5,pitch=1.3,cooldown=.08,fallback='action_get_up.mp3'},
+ laser_stop={id='9118941971',volume=.085,duration=.45,pitch=.7,cooldown=.12,fallback='volume_slider.ogg'},
+ dive={id='9118941667',volume=.21,duration=.55,pitch=.65,cooldown=.1,fallback='action_get_up.mp3'},
+ heal={id='91735091370012',volume=.12,duration=.8,pitch=1.4,cooldown=.15,fallback='volume_slider.ogg'},
+ plant={id='91735091370012',volume=.15,duration=.9,pitch=.85,cooldown=.18,fallback='volume_slider.ogg'},
+ parcel_latch={id='9126066421',volume=.18,duration=.5,pitch=.8,cooldown=.1,fallback='action_get_up.mp3'},
+ unload={id='9118941971',volume=.15,duration=.55,pitch=.9,cooldown=.15,fallback='action_jump_land.mp3'},
+ courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
+ swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
+ shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
+ shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
+ reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
+ resonance={id='91735091370012',volume=.12,duration=.8,pitch=.65,cooldown=.14,fallback='volume_slider.ogg'},
+ command={id='9126066421',volume=.12,duration=.5,pitch=1.12,cooldown=.12,fallback='volume_slider.ogg'},
+ denied={id='9118941971',volume=.1,duration=.4,pitch=.65,cooldown=.25,fallback='volume_slider.ogg'},
+ full={id='9126066421',volume=.12,duration=.6,pitch=.7,cooldown=2,fallback='volume_slider.ogg'},
 }
 local function fade(object,duration,volume)
  local tween=TweenService:Create(object,TweenInfo.new(duration,Enum.EasingStyle.Sine),{Volume=volume})
@@ -38,10 +68,11 @@ function Soundscape.new(effectParent)
  local folder=Instance.new('SoundGroup');folder.Name='DroneBlowerSoundscape';folder.Volume=1;folder.Parent=SoundService
  local self=setmetatable({folder=folder,effectParent=effectParent,tracks={},bank={},cooldowns={},
   voices=0,closed=false,musicMuted=false,effectsMuted=false,combat=false,menu=false,
+  loops={},loopCount=0,active={},cueVoices={},droneStates={},
   nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
  self.musicGroup=group(folder,'Music',.14)
  self.effectsGroup=group(folder,'Actions',.65)
- local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=-3;eq.HighGain=-12;eq.Parent=self.effectsGroup
+ local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=-2;eq.HighGain=-7;eq.Parent=self.effectsGroup
  local compressor=Instance.new('CompressorSoundEffect');compressor.Name='ActionPeakControl'
  compressor.Threshold=-18;compressor.Ratio=5;compressor.Attack=.01;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
  local preload={}
@@ -51,11 +82,11 @@ function Soundscape.new(effectParent)
   table.insert(self.tracks,sound);table.insert(preload,sound)
  end
  -- Reuse one loaded template per asset, even when several cues share a clip.
- for _,cue in pairs(CUES) do if not self.bank[cue.id] then
-  local sound=Instance.new('Sound');sound.Name='Toolbox_'..cue.id;sound.SoundId=cue.localSound or 'rbxassetid://'..cue.id
+ for _,cue in pairs(CUES) do for _,id in ipairs(cue.ids or {cue.id}) do if not self.bank[id] then
+  local sound=Instance.new('Sound');sound.Name='Toolbox_'..id;sound.SoundId=cue.localSound or 'rbxassetid://'..id
   sound.Volume=0;sound.SoundGroup=self.effectsGroup;sound.Parent=folder
-  self.bank[cue.id]=sound;table.insert(preload,sound)
- end end
+  self.bank[id]=sound;table.insert(preload,sound)
+ end end end
  for _,sound in ipairs(preload) do task.spawn(function()
   local ok,err=pcall(function()
    ContentProvider:PreloadAsync({sound},function(_,status)
@@ -68,7 +99,7 @@ function Soundscape.new(effectParent)
  end) end
  -- No audio download blocks the HUD, player input or drone rendering.
  task.spawn(function()
-  while not self.closed do self:_musicStep();task.wait(.25) end
+  while not self.closed do self:_musicStep();self:update();task.wait(.1) end
  end)
  return self
 end
@@ -106,36 +137,135 @@ function Soundscape:toggleMusic()
 end
 function Soundscape:toggleEffects()
  self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or .65
+ if self.effectsMuted then
+  for key in pairs(self.loops) do self:stopLoop(key,true) end
+  local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
+ end
  return not self.effectsMuted
 end
-function Soundscape:play(name,position)
- local cue=CUES[name];local now=os.clock()
- if self.closed or self.effectsMuted or not cue or self.voices>=12 or now<(self.cooldowns[name] or 0) then return end
- if position and workspace.CurrentCamera and (position-workspace.CurrentCamera.CFrame.Position).Magnitude>110 then return end
- self.cooldowns[name]=now+cue.cooldown
- local template=self.bank[cue.id];local ready=template and template.IsLoaded
+function Soundscape:_distance(position)
+ return position and workspace.CurrentCamera and (position-workspace.CurrentCamera.CFrame.Position).Magnitude or 0
+end
+function Soundscape:_voice(name,position,looped)
+ local cue=CUES[name];local id=cue.ids and cue.ids[self.random:NextInteger(1,#cue.ids)] or cue.id
+ local template=self.bank[id];local ready=template and template.IsLoaded
+ -- A missing sustained clip stays silent; never loop a generic fallback beep.
+ if looped and not ready then return nil end
  local sound=ready and template:Clone() or Instance.new('Sound')
  sound.Name=name;sound.SoundGroup=self.effectsGroup
- if not ready then sound.SoundId='rbxasset://sounds/'..cue.fallback end
- local volume=cue.volume/math.sqrt(1+self.voices*.25)
+ if not ready then sound.SoundId='rbxasset://sounds/'..(cue.fallback or 'action_get_up.mp3') end
  sound.Volume=0
  sound.PlaybackSpeed=(cue.pitch or 1)*(position and self.random:NextNumber(.96,1.04) or 1)
- sound.Looped=false;sound.PlayOnRemove=false
+ sound.Looped=looped;sound.PlayOnRemove=false
  local anchor
  if position then
   anchor=Instance.new('Part');anchor.Name='ActionAudio';anchor.Size=Vector3.one*.05
   anchor.Anchored=true;anchor.Transparency=1;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Position=position;anchor.Parent=self.effectParent
-  sound.RollOffMode=Enum.RollOffMode.InverseTapered;sound.RollOffMinDistance=5;sound.RollOffMaxDistance=65
+  sound.RollOffMode=Enum.RollOffMode.InverseTapered;sound.RollOffMinDistance=6;sound.RollOffMaxDistance=cue.range or 65
  end
  sound.Parent=anchor or self.folder;self.voices+=1
- sound.Destroying:Once(function() self.voices=math.max(0,self.voices-1) end)
+ self.cueVoices[name]=(self.cueVoices[name] or 0)+1
+ self.active[sound]=anchor or false
+ sound.Destroying:Once(function()
+  self.active[sound]=nil;self.voices=math.max(0,self.voices-1)
+  self.cueVoices[name]=math.max(0,(self.cueVoices[name] or 0)-1)
+ end)
+ return sound,anchor
+end
+function Soundscape:play(name,position,options)
+ local cue=CUES[name];local now=os.clock()
+ if self.closed or self.effectsMuted or not cue or self.voices>=22 or now<(self.cooldowns[name] or 0) then return end
+ if (self.cueVoices[name] or 0)>=(cue.maxVoices or 5) then return end
+ if position and self:_distance(position)>(cue.range or 65) then return end
+ self.cooldowns[name]=now+cue.cooldown
+ local sound,anchor=self:_voice(name,position,false);if not sound then return end
+ local volume=cue.volume/math.sqrt(1+self.voices*.07)*(options and options.level or 1)
+ if options and options.pitch then sound.PlaybackSpeed*=options.pitch end
  sound.Ended:Once(function() if anchor then anchor:Destroy() else sound:Destroy() end end)
  sound:Play();fade(sound,.025,volume)
- if name=='cutting' or name=='orbital' or name=='sale' then
-  task.delay(math.max(.05,cue.duration-.25),function() if sound.Parent then fade(sound,.22,0) end end)
- end
+ task.delay(math.max(.05,cue.duration-.22),function() if sound.Parent then fade(sound,.18,0) end end)
  Debris:AddItem(anchor or sound,cue.duration+.05)
+end
+function Soundscape:stopLoop(key,immediate)
+ local loop=self.loops[key];if not loop then return end
+ self.loops[key]=nil;self.loopCount=math.max(0,self.loopCount-1)
+ if immediate or not loop.sound.Parent then (loop.anchor or loop.sound):Destroy()
+ else fade(loop.sound,.12,0);Debris:AddItem(loop.anchor or loop.sound,.14) end
+end
+function Soundscape:setLoop(key,name,position,level,pitch)
+ local cue=CUES[name];local loop=self.loops[key];local now=os.clock()
+ if self.closed or self.effectsMuted or not cue or typeof(position)~='Vector3' or self:_distance(position)>(cue.range or 65) or (level or 1)<=0 then self:stopLoop(key);return end
+ if loop and (loop.name~=name or not loop.sound.Parent) then self:stopLoop(key);loop=nil end
+ if not loop then
+  -- Six spatial beds, with priority and proximity eviction, leave room for
+  -- impacts/rewards. A swarm never creates an unbounded choir of motors.
+  if self.loopCount>=6 then
+   local worstKey,worstScore
+   for candidate,item in pairs(self.loops) do
+    local score=(CUES[item.name].priority or 1)*100-self:_distance(item.anchor.Position)
+    if not worstScore or score<worstScore then worstKey=candidate;worstScore=score end
+   end
+   local score=(cue.priority or 1)*100-self:_distance(position)
+   if not worstScore or score<=worstScore+5 then return end
+   self:stopLoop(worstKey)
+  end
+  if self.voices>=22 then return end
+  local sound,anchor=self:_voice(name,position,true);if not sound then return end
+  loop={sound=sound,anchor=anchor,name=name,seen=now,step=now};self.loops[key]=loop;self.loopCount+=1
+  sound:Play()
+ end
+ local dt=math.clamp(now-loop.step,1/240,.1);loop.step=now;loop.seen=now
+ if loop.anchor then loop.anchor.Position=position end
+ local volume=cue.volume*(level or 1)/math.sqrt(1+self.loopCount*.12)
+ loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*14))
+ loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)
+end
+function Soundscape:update()
+ local now=os.clock()
+ for key,loop in pairs(self.loops) do
+  -- Stop even if an interrupted renderer never gets another cleanup callback.
+  if now-loop.seen>.3 or not loop.sound.Parent then self:stopLoop(key) end
+ end
+end
+function Soundscape:updateDrone(source,position,now)
+ local record=self.droneStates[source]
+ if not record then record={workKey={},flightKey={}};self.droneStates[source]=record end
+ local function a(name) return source:GetAttribute(name) end
+ local state=a('State');local hp=a('HP') or 0
+ local sample={state=state,life=a('Life'),dead=hp<=0 or state=='Destroyed' or state=='Reprinting',
+  paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt')}
+ local cues,mode=AudioFeedback.drone(record,sample,now)
+ for _,name in ipairs(cues) do self:play(name,position) end
+ if mode then
+  local start,duration
+  if state=='Warmup' then start=a('WarmupStart');duration=a('WarmupDuration')
+  elseif state=='RepairCharge' then start=a('RepairChargeAt');duration=a('RepairChargeDuration')
+  elseif state=='BreakerWindup' then start=a('BreakerPhaseAt');duration=.8 end
+  local q=start and duration and math.clamp((now-start)/math.max(.01,duration),0,1) or .6
+  self:setLoop(record.workKey,mode,position,.65+.35*q,.8+.4*q)
+ else self:stopLoop(record.workKey) end
+ local velocity=a('Velocity');local speed=typeof(velocity)=='Vector3' and velocity.Magnitude or 0
+ if not sample.dead and not sample.paused and AudioFeedback.fresh(sample.at,now) and speed>2 then
+  self:setLoop(record.flightKey,'flight',position,math.clamp(speed/18,.2,1),.85+math.min(speed,30)/65)
+ else self:stopLoop(record.flightKey) end
+end
+function Soundscape:forgetDrone(source)
+ local record=self.droneStates[source];if not record then return end
+ self:stopLoop(record.workKey);self:stopLoop(record.flightKey);self.droneStates[source]=nil
+end
+function Soundscape:bindUI(root)
+ if self.uiConnection then self.uiConnection:Disconnect() end
+ local function bind(object)
+  if not object:IsA('GuiButton') then return end
+  -- Instance-owned connections disappear with rebuilt menus. Do not retain
+  -- every historical button in the soundscape's lifetime connection list.
+  object.Activated:Connect(function()
+   if object.Active and object:GetAttribute('Enabled')~=false then self:play('click') end
+  end)
+ end
+ for _,object in ipairs(root:GetDescendants()) do bind(object) end
+ self.uiConnection=root.DescendantAdded:Connect(bind)
 end
 function Soundscape:observeProfile(previous,current)
  -- Joining/reconnecting is silent. Only replicated, confirmed changes make a reward cue.
@@ -144,15 +274,27 @@ function Soundscape:observeProfile(previous,current)
  self.confirmedProfile=current
  if not previous then return end
  local before,after=previous.run,current.run
+ local shopChanged=false
+ for id,level in pairs(after.shopLevels or {}) do if level>((before.shopLevels or {})[id] or 0) then shopChanged=true;break end end
  if before.id~=after.id then
   if #current.fleet>#previous.fleet then self:play('prestige') end
  elseif #after.cards>#before.cards then self:play('upgrade')
  elseif (after.packIndex or 0)>(before.packIndex or 0) then self:play('pack')
+ elseif shopChanged then self:play('upgrade')
  elseif (after.saleEarnings or 0)>(before.saleEarnings or 0) then self:play('sale') end
+ if before.id==after.id then
+  local function cargo(run) local total=0;for _,units in pairs(run.cargo or {}) do total+=units end;return total end
+  local capacity=current.capacity or 40
+  if cargo(before)<(previous.capacity or 40) and cargo(after)>=capacity then self:play('full') end
+ end
 end
 function Soundscape:destroy()
  self.closed=true
  if self.musicTween then self.musicTween:Cancel() end
+ if self.uiConnection then self.uiConnection:Disconnect() end
+ for key in pairs(self.loops) do self:stopLoop(key,true) end
+ local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
+ self.droneStates={}
  self.folder:Destroy()
 end
 return Soundscape

@@ -31,7 +31,7 @@ function V.new(root,parent,audio)
   trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
   local glints=sparkle(a,view.Color);glints.Enabled=false
   local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=3;glow.Brightness=.6;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
-  self.records[source]={view=view,pos=position,trail=trail,glints=glints,glow=glow,size=source.Size,seed=source:GetAttribute('PickupId')}
+  self.records[source]={view=view,pos=position,trail=trail,glints=glints,glow=glow,size=source.Size,seed=source:GetAttribute('PickupId'),ground=source:GetAttribute('GroundImpactSerial') or 0}
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
  table.insert(self.connections,root.DescendantAdded:Connect(function(source) task.defer(add,source) end))
@@ -57,6 +57,12 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera;local glints,lights=0,0
  for source,r in pairs(self.records) do
   if source.Parent then
+   -- A server contact receipt, including its exact position, survives render
+   -- interpolation. Never guess a landing from the smoothed visual's height.
+   if AudioFeedback.serial(r,'ground',source:GetAttribute('GroundImpactSerial') or 0,source:GetAttribute('GroundImpactAt'),now) and self.audio then
+    local point=source:GetAttribute('GroundImpactPosition')
+    if typeof(point)=='Vector3' then self.audio:play('rubble',point,{level=math.clamp((source:GetAttribute('GroundImpactSpeed') or 1)/12,.25,1),pitch=.9+(r.seed%5)*.055}) end
+   end
    local velocity=source:GetAttribute('Velocity') or Vector3.zero
    local predicted=(source:GetAttribute('Position') or source.Position)+velocity*math.clamp(now-(source:GetAttribute('SnapshotAt') or now),0,.1)
    r.pos=r.pos:Lerp(predicted,1-math.exp(-math.min(dt,.1)*24))
