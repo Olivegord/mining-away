@@ -20,6 +20,8 @@ server_check=(ROOT/'tests/performance-server.integration.lua').read_text()
 fx_setup=(ROOT/'tests/special-fx.setup.lua').read_text()
 fx_check=(ROOT/'tests/performance-fx.integration.lua').read_text()
 view_check=(ROOT/'tests/performance-logistics-view.integration.lua').read_text()
+presentation=(ROOT/'src/Presentation.lua').read_text()
+impact=presentation[presentation.index('function P:resourceImpact('):presentation.index('function P:update(')]
 results={}
 with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
     tmp=pathlib.Path(directory)
@@ -35,11 +37,13 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
         metrics={}
         methods=view[view.index(' function self:step('):view.index(' return self\nend\nreturn View')]
         view_setup="\nlocal player={};local UIS={};local C={}\nlocal ctx={world=Instance.new('Folder'),localFX=Instance.new('Folder'),hidden=function()return false end}\nctx.world.Parent=workspace;ctx.localFX.Parent=workspace\nlocal self={visuals={},connections={},scanAt=0}\nlocal trigger,targetCycle,carrierReturn,bar,layer=Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame')\n"
-        for kind,source in [
+        fixtures=[
             ('server',mock+'\nmath.randomseed(42)\n'+setup+'\nfunction runService:IsStudio()return true end\n'+server+'\n'+server_check),
             ('fx',fx_setup+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
             ('logistics',fx_setup+view_setup+'\n'+methods+'\n'+view_check),
-        ]:
+        ]
+        if name=='after':fixtures.append(('fracture',mock+'\nlocal P={}\n'+impact+'\n'+(ROOT/'tests/performance-fracture.integration.lua').read_text()))
+        for kind,source in fixtures:
             path=tmp/(name+'-'+kind+'.lua');path.write_text(source)
             subprocess.run([str(args.luau/'luau-compile'),str(path)],stdout=subprocess.DEVNULL,check=True)
             run=subprocess.run([str(args.luau/'luau'),str(path)],capture_output=True,text=True)
