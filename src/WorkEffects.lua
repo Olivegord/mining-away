@@ -5,6 +5,8 @@ local Players=game:GetService('Players')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
 local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
+local SMOKE='rbxasset://textures/particles/smoke_main.dds'
+local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local YELLOW=Color3.fromRGB(255,208,69)
 local ENERGY_TAIL=1.8
 local function part(parent,name)
@@ -38,15 +40,15 @@ local function particle(parent,name,color)
  -- TimeScale .2 and must not silently slow newly authored work effects.
  local p=Instance.new('ParticleEmitter')
  p.Name=name;p.Enabled=false;p.Rate=0
- -- A soft plain disc instead of stars/smoke: the energy reads as light,
- -- including at small screen sizes. Keep the original asset templates intact.
+ -- Small discs are the neutral energy cue; contacts use fine sparks and
+ -- fractures use matte smoke. Keep the original asset templates intact.
  p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
  p.Color=ColorSequence.new(color);p.LightEmission=.8;p.LightInfluence=0;p.Brightness=1.8
  p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
  p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
- p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.new(0,-.6,0);p.WindAffectsDrag=true
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.4),NumberSequenceKeypoint.new(.2,.65),NumberSequenceKeypoint.new(1,0)})
+ p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.new(0,-.6,0);p.WindAffectsDrag=false
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.26),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.55,.42),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
@@ -104,9 +106,23 @@ function W:burst(position,normal,color,count,now)
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
  local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(2,5)
  sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-.8,0)
- sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.7,.08),NumberSequenceKeypoint.new(.18,1.05,.15),NumberSequenceKeypoint.new(1,0)})
+ sparks.Texture=SPARK;sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-40,40)
+ sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.18,.36,.04),NumberSequenceKeypoint.new(1,0)})
  sparks.SpreadAngle=Vector2.new(65,65)
  sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
+end
+-- A low, irregular puff separates a fracture from bright collectible ore.
+function W:fracture(position,normal,color,count,now)
+ if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
+ local anchor=part(self.parent,'RockFractureSmoke');anchor.CFrame=facing(position,normal)
+ local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.12))
+ dust.Texture=SMOKE;dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
+ dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(.3,.9);dust.Drag=3
+ dust.Acceleration=Vector3.new(0,.35,0);dust.SpreadAngle=Vector2.new(85,85)
+ dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-55,55)
+ dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.24,.04),NumberSequenceKeypoint.new(.35,.56,.1),NumberSequenceKeypoint.new(1,.78,.12)})
+ dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.15,.4),NumberSequenceKeypoint.new(1,1)})
+ dust:Emit(count>20 and 14 or 6);table.insert(self.bursts,{part=anchor,untilAt=now+1.3})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -138,12 +154,14 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.sparks.Brightness=1;fx.sparks.LightEmission=.55
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Brightness=.8;fx.glow.LightEmission=.4
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.3)
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.13)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  fx.impact.Texture=SPARK;fx.impact.Squash=NumberSequence.new(.55)
+  fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
   fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(2,4)
   fx.impact.Drag=2.4;fx.impact.Acceleration=Vector3.new(0,-2,0);fx.impact.SpreadAngle=Vector2.new(80,80)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.35,.03),NumberSequenceKeypoint.new(.15,.55,.05),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.15,.22,.03),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(.7,.45),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
@@ -187,11 +205,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=charging or working
  local resonance=sample.style=='Resonance'
  fx.impact.Color=ColorSequence.new(resonance and (beam.tint or WHITE) or YELLOW)
- -- Smooth low-frequency sideways acceleration gives each tool its own
- -- turbulence without moving contacts or inventing damage events.
- local noise=math.noise(now*(resonance and 2.5 or .8),origin.X*.11,origin.Z*.11)
- local turbulence=resonance and 1 or .25
- fx.impact.Acceleration=Vector3.new(noise*turbulence,resonance and -.6 or -2,math.noise(origin.Z*.17,now*.9)*turbulence)
+ -- Random emission directions give individual sparks variety without a
+ -- shared lateral force pushing the whole cloud like wind.
+ fx.impact.Acceleration=Vector3.new(0,resonance and -.6 or -2,0)
  fx.impact.Drag=resonance and 2 or 2.4
  fx.impact.Rate=continuous and (resonance and 10 or 12) or 0;fx.impact.Enabled=working and continuous
  if point and normal then
@@ -245,7 +261,7 @@ function W:flight(drone,record,dt,now)
    local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66))
    jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(4,8);jet.Drag=3.5
    jet.Lifetime=NumberRange.new(.6,1.1);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=.7;jet.Brightness=1.4
-   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.34),NumberSequenceKeypoint.new(1,0)})
+   jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(1,0)})
    table.insert(record.rockets,{attachment=nozzle,jet=jet})
   end
  end
@@ -271,7 +287,7 @@ function W:flight(drone,record,dt,now)
    local wisp=particle(a,'FlightWisp',drone.emitter.Color)
    wisp.EmissionDirection=Enum.NormalId.Bottom
    wisp.Lifetime=NumberRange.new(.6,1.1);wisp.Speed=NumberRange.new(.15,.35);wisp.Acceleration=Vector3.new(0,-.12,0);wisp.Drag=2.2
-   wisp.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.07),NumberSequenceKeypoint.new(.55,.26),NumberSequenceKeypoint.new(1,.35)})
+   wisp.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.04),NumberSequenceKeypoint.new(.55,.12),NumberSequenceKeypoint.new(1,.16)})
    wisp.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.82),NumberSequenceKeypoint.new(1,1)})
    wisp.LightEmission=.15;wisp.Brightness=.8;wisp.Rate=3;fx.wisp=wisp;self.flightCount+=1;table.insert(fx.objects,a)
   end
@@ -402,17 +418,18 @@ function W:courier(drone,record,now)
 end
 -- A monochrome beam with alternating opaque/clear bands. Shift the sequence
 -- along its normalized length, so the pulse remains fast at every frame rate.
--- Fourteen or fewer keys stay inside Roblox's twenty-key NumberSequence limit.
+-- Two broad bands give the ramp more scale without hiding the physical core.
+-- Ten or fewer keys stay inside Roblox's twenty-key NumberSequence limit.
 function W.orbitalTransparency(now)
  local phase=(now*7)%1
  local function opacity(t)
-  local x=(t*3+phase)%1
+  local x=(t*2+phase)%1
   if x<.22 then return .04 elseif x<.32 then return .04+.96*(x-.22)/.1
   elseif x<.88 then return 1 else return 1-.96*(x-.88)/.12 end
  end
  local keys={NumberSequenceKeypoint.new(0,opacity(0))}
  for i=-1,4 do for _,point in ipairs({{0,.04},{.22,.04},{.32,1},{.88,1}}) do
-  local t=(i+point[1]-phase)/3
+  local t=(i+point[1]-phase)/2
   if t>0 and t<1 then table.insert(keys,NumberSequenceKeypoint.new(t,point[2])) end
  end end
  table.insert(keys,NumberSequenceKeypoint.new(1,opacity(1)))
@@ -432,14 +449,9 @@ function W:orbital(now)
     local ramp=Instance.new('Beam');ramp.Name='DescendingWhiteClearEnergy'
     ramp.Attachment0=bottom;ramp.Attachment1=top;ramp.FaceCamera=true;ramp.Segments=48
     ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=1.6
-    ramp.Width0=1.8;ramp.Width1=1.8;ramp.Parent=holder
-    local hidden={}
-    for _,column in ipairs(group:GetChildren()) do
-     if column:IsA('BasePart') and (column.Name=='MeltCore' or column.Name=='MeltHalo') then
-      hidden[column]=column.LocalTransparencyModifier or 0;column.LocalTransparencyModifier=1
-     end
-    end
-    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,nextRamp=0,hidden=hidden}
+    ramp.Width0=3.2;ramp.Width1=3.2;ramp.Parent=holder
+    -- The replicated cylinder stays visible through the clear ramp bands.
+    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,nextRamp=0}
     self:energyBloom()
    end
   end end
@@ -449,11 +461,9 @@ function W:orbital(now)
   local ended=group:GetAttribute('EndedAt')
   local strength=ended and (1-progress(now,ended,.48))^2 or 1
   if not group.Parent or typeof(position)~='Vector3' or strength<.002 then
-   for column,value in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=value end end
    record.holder:Destroy();self.orbitals[group]=nil
   else
    local camera=workspace.CurrentCamera
-   for column in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=1 end end
    local contactAt=group:GetAttribute('ContactAt')
    -- A yielding save or a stalled contact stream must not leave a cosmetic
    -- strike drilling after authoritative work has paused.
@@ -461,7 +471,7 @@ function W:orbital(now)
    local height=math.max(260,(camera and camera.CFrame.Position.Y or position.Y)-position.Y+180)
    record.holder.CFrame=CFrame.new(position)
    record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
-   record.ramp.Width0=1.8*strength;record.ramp.Width1=record.ramp.Width0
+   record.ramp.Width0=3.2*strength;record.ramp.Width1=record.ramp.Width0
    if now>=record.nextRamp then record.nextRamp=now+.04;record.ramp.Transparency=W.orbitalTransparency(now) end
   end
  end
@@ -477,7 +487,6 @@ function W:destroy()
  for beam in pairs(self.miningBeams) do self:destroyMining(beam) end
  for _,item in ipairs(self.bursts) do item.part:Destroy() end;self.bursts={}
  for _,record in pairs(self.orbitals) do
-  for column,value in pairs(record.hidden) do if column.Parent then column.LocalTransparencyModifier=value end end
   record.holder:Destroy()
  end;self.orbitals={}
  if self.ownsBloom and self.bloom then self.bloom:Destroy() end;self.bloom=nil

@@ -834,7 +834,7 @@ function P:resourceImpact(resource,event,now)
   local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
   if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
  end
- self.work:burst(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
+ self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
  -- Retain the exact authored crystal silhouette in a short, weighted shower.
  -- Spawning from the fracture surface makes a break read as a release of
  -- material, rather than the final quarter-sized rock simply disappearing.

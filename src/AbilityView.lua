@@ -75,10 +75,10 @@ function View.start(options)
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
   local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
-  sparks.Texture='rbxasset://textures/ui/VR/circleWhite.png';sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.1;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
+  sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.WindAffectsDrag=false;sparks.Drag=2.4;sparks.Squash=NumberSequence.new(.6);sparks.Rotation=NumberRange.new(-180,180);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.1;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
   sparks.Lifetime=NumberRange.new(.25,.5);sparks.Speed=NumberRange.new(1,2);sparks.Acceleration=Vector3.new(0,-4,0)
   sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
-  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(1,0)})
+  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.09),NumberSequenceKeypoint.new(1,0)})
   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.45,.5),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0}
  end

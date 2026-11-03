@@ -8,8 +8,8 @@ local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
  p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
  p.LightEmission=.7;p.LightInfluence=0;p.Brightness=1;p.Rate=1.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
- p.SpreadAngle=Vector2.new(180,180)
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.32,.08),NumberSequenceKeypoint.new(.3,.45,.1),NumberSequenceKeypoint.new(1,0)})
+ p.SpreadAngle=Vector2.new(180,180);p.WindAffectsDrag=false
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.3,.2,.03),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end

@@ -8,7 +8,7 @@ local camera=Instance.new('Camera');camera.CFrame=CFrame.new(0,20,0);workspace.C
 check('moving monochrome transparency stays ordered and bounded at every frame rate',function()
  for _,fps in ipairs({30,60,144}) do for frame=0,fps*2 do
   local sequence=WorkEffects.orbitalTransparency(frame/fps)
-  assert(#sequence>=13 and #sequence<=15 and sequence[1].Time==0 and sequence[#sequence].Time==1)
+  assert(#sequence>=9 and #sequence<=10 and sequence[1].Time==0 and sequence[#sequence].Time==1)
   for i,key in ipairs(sequence) do
    assert(key.Value>=0 and key.Value<=1)
    if i>1 then assert(key.Time>sequence[i-1].Time,'duplicate or unordered ramp key') end
@@ -17,15 +17,15 @@ check('moving monochrome transparency stays ordered and bounded at every frame r
  local first=WorkEffects.orbitalTransparency(0);local moved=WorkEffects.orbitalTransparency(.025)
  assert(math.abs(first[2].Time-moved[2].Time)>.001,'ramp did not move')
 end)
-check('break energy uses round glowing discs and bounded burst cleanup',function()
+check('small utility sparks preserve bounded burst cleanup',function()
  local work=WorkEffects.new(root)
  for n=1,30 do work:burst(Vector3.zero,Vector3.yAxis,Color3.new(1,1,0),38,100) end
  assert(#work.bursts==work.maxBursts)
  local emitter=work.bursts[1].part:FindFirstChildWhichIsA('ParticleEmitter')
- assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and emitter.LightEmission>=.5 and emitter.LightEmission<1)
+ assert(emitter.Texture=='rbxasset://textures/particles/sparkles_main.dds' and emitter.LightEmission>=.5 and emitter.LightEmission<1)
  assert(emitter.Brightness>=1 and emitter.Brightness<=2,'common burst became an overbright white mass')
  assert(emitter.TimeScale==1 and emitter.FlipbookLayout==Enum.ParticleFlipbookLayout.None and not emitter.LockedToPart)
- assert(emitter.Size[2].Value-emitter.Size[2].Envelope>=.7 and emitter.Size[2].Value+emitter.Size[2].Envelope<=1.2)
+ assert(emitter.Size[2].Value+emitter.Size[2].Envelope<=.4 and not emitter.WindAffectsDrag)
  assert(emitter.Emitted==38 and emitter.Rate==0 and emitter.Lifetime.Min>=1 and emitter.Lifetime.Max==1.6)
  assert(emitter.Speed.Max<=5 and emitter.Drag>=1.8,'break particles spread too far')
  assert(work.bursts[1].untilAt>=100+emitter.Lifetime.Max)
@@ -61,7 +61,7 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  work:mining(beam,sample,Vector3.zero,Vector3.yAxis,1,0,100)
  local impact=assert(beam.work and beam.work.impact,'zoom swallowed nearby work effects')
  assert(impact.Enabled and impact.TimeScale==1 and impact.FlipbookLayout==Enum.ParticleFlipbookLayout.None)
- assert(impact.Size[2].Value-impact.Size[2].Envelope>=.5 and impact.Size[2].Value+impact.Size[2].Envelope<=.85+.000001)
+ assert(impact.Size[2].Value+impact.Size[2].Envelope<=.25 and not impact.WindAffectsDrag and impact.Acceleration.X==0 and impact.Acceleration.Z==0)
  assert(impact.Brightness>=1 and impact.Brightness<=2 and impact.LightInfluence==0 and impact.LightEmission>=.5 and impact.LightEmission<1)
  assert(#beam.work.spheres==3 and beam.work.spheres[1].part.Transparency>=.5)
  local coreColor=beam.work.spheres[1].part.Color
@@ -101,10 +101,17 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  assert(group.EnergyCleanup>=4.4)
  local afterglow=0
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
-  if emitter.Name=='OrbitalAfterglow' then afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted==2) end
+  assert(not emitter.WindAffectsDrag and emitter.Acceleration.X==0 and emitter.Acceleration.Z==0,'shared wind in orbital cloud')
+  if emitter.Name=='OrbitalAfterglow' then
+   afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted>=260 and emitter.Emitted<=360)
+   assert(emitter.Shape==Enum.ParticleEmitterShape.Cylinder and emitter.ShapeStyle==Enum.ParticleEmitterShapeStyle.Volume)
+   assert(emitter.Parent:IsA('BasePart') and emitter.Parent.Size.X==260 and emitter.Parent.Size.Y==emitter.Parent.Size.Z)
+   assert(emitter.Parent.EnergyTween==nil,'afterglow carrier collapses before its particles finish')
+   assert(emitter.Rate==0 and not emitter.Enabled and not emitter.LockedToPart and emitter.Speed.Max<.5)
+  end
   assert(group.EnergyCleanup>emitter.Lifetime.Max)
  end end
- assert(afterglow==12)
+ assert(afterglow==1)
  source:Destroy()
  DroneRoleEffects.Ability(992,{kind='orbital',target={x=0,y=2,z=0}},nil)
  source=workspace:FindFirstChild('DroneRoleServerEffects');group=source:FindFirstChild('OrbitalMelt');tick=delayedEnergy[#delayedEnergy]
@@ -118,16 +125,16 @@ check('orbital extends above high camera and collapses on authoritative end',fun
  local core=Instance.new('Part');core.Name='MeltCore';core.LocalTransparencyModifier=.2;core.Parent=group
  local work=WorkEffects.new(root);camera.CFrame=CFrame.new(0,400,0);work:update(10)
  local fx=assert(work.orbitals[group]);assert(fx.top.Position.Y>=580)
- assert(core.LocalTransparencyModifier==1,'solid source washed out the clear ramp gaps')
+ assert(core.LocalTransparencyModifier==.2,'physical cylinder was hidden by the ramp');assert(fx.ramp.Width0==3.2)
  camera.CFrame=CFrame.new(0,400,0);work:update(10.1);assert(fx.top.Position.Y>=580)
  assert(fx.ramp.Color.R==1 and fx.ramp.Color.G==1 and fx.ramp.Color.B==1)
  group:SetAttribute('ContactAt',9);work:update(10.1);assert(not fx.ramp.Enabled,'stale strike kept drilling')
  core.LocalTransparencyModifier=0
  group:SetAttribute('ContactAt',10.1);work:update(10.1);assert(fx.ramp.Enabled,'fresh contact failed to resume')
- assert(core.LocalTransparencyModifier==1,'resume restored a solid column over the clear gaps')
- group:SetAttribute('EndedAt',10.1);work:update(10.34);assert(fx.ramp.Width0<.5)
+ assert(core.LocalTransparencyModifier==0,'resume hid the physical cylinder')
+ group:SetAttribute('EndedAt',10.1);work:update(10.34);assert(fx.ramp.Width0<1)
  work:update(10.7);assert(work.orbitals[group]==nil and fx.holder.Parent==nil)
- assert(core.LocalTransparencyModifier==.2,'source visibility was not restored after collapse')
+ assert(core.LocalTransparencyModifier==0,'ramp cleanup changed physical source visibility')
  work:destroy();source:Destroy();camera.CFrame=CFrame.new(0,20,0)
 end)
 check('nearby character feels the impact at far camera zoom and reduced motion opts out',function()
@@ -147,6 +154,12 @@ check('real fracture creates authored mesh chunks and honors pool limit',functio
  local resource={source=source,view=view,baseColor=Color3.new(.5,.7,1)}
  renderer:resourceImpact(resource,'stage',100);assert(#renderer.fragments==3)
  renderer:resourceImpact(resource,'break',100.5);assert(#renderer.fragments==12)
+ for _,burst in ipairs(renderer.work.bursts) do
+  local dust=burst.part:FindFirstChildWhichIsA('ParticleEmitter')
+  assert(dust.Texture=='rbxasset://textures/particles/smoke_main.dds' and dust.LightEmission==0,'rock fracture still looks like collectible light')
+  assert(dust.Acceleration.X==0 and dust.Acceleration.Z==0 and not dust.WindAffectsDrag)
+  assert(dust.Speed.Max<=1 and dust.Emitted<=14 and burst.untilAt>=100+dust.Lifetime.Max)
+ end
  for _,fragment in ipairs(renderer.fragments) do
   assert(fragment.part:IsA('UnionOperation'),'lost original rock geometry')
   assert(fragment.velocity.Y>0 and fragment.duration>=.75 and not fragment.part.CanQuery)
