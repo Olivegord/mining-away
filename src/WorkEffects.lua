@@ -140,7 +140,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
-   if sample.paused or not sample.alive then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
+   if not sample.alive then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
    if not sample.alive or now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
   end
   return
@@ -390,7 +390,14 @@ function W:courier(drone,record,now)
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and .7 or 0,q,0,GOLD)
- if pickup then W.drawCylinder(fx.tether,mount,backpack,.045+.025*q,.5-.2*q) else fx.tether.Transparency=1 end
+ if pickup then
+  fx.tetherVFX=fx.tetherVFX or BeamVFX.new(fx.root,'Courier',GOLD)
+  if fx.tetherVFX then
+   fx.tether.Transparency=1;BeamVFX.draw(fx.tetherVFX,mount,backpack,now,.45+.55*q,nil,nil)
+  else W.drawCylinder(fx.tether,mount,backpack,.045+.025*q,.5-.2*q) end
+ else
+  fx.tether.Transparency=1;BeamVFX.destroy(fx.tetherVFX);fx.tetherVFX=nil
+ end
  if fx.sparks then
   fx.sparks.Rate=pickup and 4+q*5 or unload and 6 or 0;fx.sparks.Enabled=not paused and (pickup or unload)
   if paused then fx.sparks:Clear() end
@@ -451,7 +458,8 @@ function W:orbital(now)
     ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=1.6
     ramp.Width0=3.2;ramp.Width1=3.2;ramp.Parent=holder
     -- The local physical cylinder stays visible through the clear ramp bands.
-    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp}
+    self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,
+     vfx=BeamVFX.new(holder,'Orbital',Color3.fromRGB(171,111,255))}
     self:energyBloom()
    end
   end end
@@ -473,6 +481,9 @@ function W:orbital(now)
    record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
    record.ramp.Width0=3.2*strength;record.ramp.Width1=record.ramp.Width0
    record.ramp.Transparency=W.orbitalTransparency(now)
+   if record.ramp.Enabled then
+    BeamVFX.draw(record.vfx,position+Vector3.yAxis*.12,position+Vector3.yAxis*height,now,strength,nil,now-(group:GetAttribute('StartedAt') or now))
+   else BeamVFX.hide(record.vfx,true) end
   end
  end
 end

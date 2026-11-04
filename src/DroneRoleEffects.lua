@@ -26,7 +26,7 @@ local function clear(map,owner)
 end
 local function point(p) return Vector3.new(p.x,p.y,p.z) end
 function Effects.Beam(from,to,color,width,lifetime)
- record('Beam',{From=from,Position=to,Color=color,Width=width or .18,Duration=lifetime or .16},(lifetime or .16)+.2)
+ record('Beam',{From=from,Position=to,Color=color,Width=width or .18,Duration=lifetime or .16},(lifetime or .16)+.85)
 end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
@@ -65,7 +65,7 @@ function Effects.Ability(owner,event,template)
  elseif kind=='orbitalEnd' then endBurn(owner)
  elseif kind=='charge' then
   clear(markers,owner)
-  markers[owner]=record('AbilityCharge',{Owner=owner,Ability=event.ability,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius},2.6)
+  markers[owner]=record('AbilityCharge',{Owner=owner,Ability=event.ability,Duration=event.duration or 1.4,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius},2.6)
  elseif kind=='orbital' then
   clear(markers,owner)
   local node=burns[owner]

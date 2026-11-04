@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='mining-audio-checks-') as directory:
         'server': bundle(),
         'client': client_bundle(),
         'pickups': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/pickups-server.integration.lua').read_text(),
-        'fragments': mock + '\n' + module_bundle(('Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation')) + '\n' + (ROOT / 'tests/audio-fragments.integration.lua').read_text(),
+        'fragments': mock + '\n' + (ROOT / 'tests/energy-effects.setup.lua').read_text() + '\n' + module_bundle(('BeamVFX', 'Mining', 'Feedback', 'SentryMotion', 'WorkEffects', 'Presentation')) + '\n' + (ROOT / 'tests/audio-fragments.integration.lua').read_text(),
     }
     for name, source in sources.items():
         path = pathlib.Path(directory) / (name + '.lua')

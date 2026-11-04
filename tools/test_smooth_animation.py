@@ -10,7 +10,7 @@ source='\n'.join([
  (ROOT/'tests/mock-roblox.lua').read_text(),
  (ROOT/'tests/energy-effects.setup.lua').read_text(),
  (ROOT/'tests/smooth-animation.setup.lua').read_text(),
- module_bundle(('MotionBuffer','DroneRoleEffects','RoleVisuals','RoleEffectView')),
+ module_bundle(('BeamVFX','MotionBuffer','DroneRoleEffects','RoleVisuals','RoleEffectView')),
  (ROOT/'tests/smooth-animation.integration.lua').read_text(),
 ])
 ability=(ROOT/'src/AbilityView.lua').read_text()

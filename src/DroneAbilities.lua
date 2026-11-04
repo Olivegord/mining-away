@@ -59,7 +59,7 @@ function A.begin(state,kind,now,ctx)
  state.sequence+=1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=list[1].id,target=point(list[1]),
   token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+A.CHARGE_SECONDS,expires=now+2.5}
- event(ctx,'charge',{ability=kind,target=list[1],expires=now+2.5})
+ event(ctx,'charge',{ability=kind,target=list[1],expires=now+2.5,duration=A.CHARGE_SECONDS})
  return true,'Gadget charging'
 end
 function A.confirm(state,token,now,ctx)
