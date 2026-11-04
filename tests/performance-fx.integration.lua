@@ -1,7 +1,9 @@
 -- Count writes in the actual production FX module, never a copied implementation.
 local writes=0;local originalWrite=IT.__newindex;local effectRoot
+local visualProperties={CFrame=true,Position=true,Size=true,Transparency=true,Color=true,
+ Width0=true,Width1=true,CurveSize0=true,CurveSize1=true,Enabled=true}
 IT.__newindex=function(object,key,value)
- if effectRoot and object:IsDescendantOf(effectRoot) and (key=='CFrame' or key=='Position' or key=='Size' or key=='Transparency' or key=='Color') then writes+=1 end
+ if effectRoot and object:IsDescendantOf(effectRoot) and visualProperties[key] then writes+=1 end
  return originalWrite(object,key,value)
 end
 local world=Instance.new('Folder');world.Parent=workspace

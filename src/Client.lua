@@ -770,6 +770,7 @@ for _,source in ipairs(world:GetDescendants()) do observe(source) end
 local function destroyDrone(d)
  droneIndex[tostring(d.source:GetAttribute('DroneId'))]=nil
  if d.healBeam then d.healBeam:Destroy() end
+ BeamVFX.destroy(d.healVFX)
  if d.healMuzzle then d.healMuzzle:Destroy() end
  if d.healTarget then d.healTarget:Destroy() end
  presentation:destroyDrone(d)
@@ -970,7 +971,10 @@ local function renderHealing(now)
    and (d.source:GetAttribute('HP') or 0)>0 and target and (target.source:GetAttribute('HP') or 0)>0
    and d.emitter.Parent and target.emitter.Parent
   if active then table.insert(candidates,{drone=d,target=target})
-  elseif d.healBeam then d.healBeam.Transparency=1 end
+  else
+   if d.healBeam then d.healBeam.Transparency=1 end
+   BeamVFX.destroy(d.healVFX);d.healVFX=nil
+  end
  end
  table.sort(candidates,function(a,b) return tostring(a.drone.source:GetAttribute('DroneId'))<tostring(b.drone.source:GetAttribute('DroneId')) end)
  local count=#candidates
@@ -991,8 +995,13 @@ local function renderHealing(now)
   local visible=d.healVisible==true and d.healCheckedTarget==target and now-(d.healCheckedAt or 0)<.2
   local charging=d.source:GetAttribute('State')=='RepairCharge'
   local q=charging and math.clamp((now-(d.source:GetAttribute('RepairChargeAt') or now))/(d.source:GetAttribute('RepairChargeDuration') or .4),0,1) or 1
-  if visible then WorkEffects.drawCylinder(d.healBeam,d.emitter.Position,target.emitter.Position,charging and .025+.035*q or .13,charging and (.8-.35*q) or .12)
-  else d.healBeam.Transparency=1 end
+  if visible then
+   d.healVFX=d.healVFX or BeamVFX.new(d.view,'Repair',Color3.fromRGB(141,209,151))
+   if d.healVFX then
+    d.healBeam.Transparency=1
+    BeamVFX.draw(d.healVFX,d.emitter.Position,target.emitter.Position,now,charging and .18+.25*q or 1,charging and q or nil,nil)
+   else WorkEffects.drawCylinder(d.healBeam,d.emitter.Position,target.emitter.Position,charging and .025+.035*q or .13,charging and (.8-.35*q) or .12) end
+  else d.healBeam.Transparency=1;BeamVFX.hide(d.healVFX,true) end
  end
 end
 

@@ -33,6 +33,11 @@ jobs:
         run: python3 tools/test_gadgets.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate committed mining and delayed observer snapshots
         run: python3 tools/test_mining_flight.py "$RUNNER_TEMP/mining-away-luau"
+      - name: Validate beam phases, energy lifetimes and shared observer animation
+        run: |
+          python3 tools/test_beam_vfx.py "$RUNNER_TEMP/mining-away-luau"
+          python3 tools/test_energy_effects.py "$RUNNER_TEMP/mining-away-luau"
+          python3 tools/test_smooth_animation.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate sole-game release and consolidation guards
         run: python3 tests/single-game.spec.py
       - name: Export source payload for the existing editable game

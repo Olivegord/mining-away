@@ -103,6 +103,7 @@ function P:destroyMiningBeam(beam)
  if not beam then return end
  if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
  self.work:destroyMining(beam)
+ BeamVFX.destroy(beam.vfx);BeamVFX.destroy(beam.branchVFX)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
@@ -191,6 +192,12 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local visible=valid and width>.001
  beam.visibility=(beam.visibility or 0)+((visible and 1 or 0)-(beam.visibility or 0))*(1-math.exp(-dt*24))
  beam.core.Transparency=1;beam.halo.Transparency=1
+ local charging=sample.alive and sample.charging and not sample.paused
+ if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
+ if beam.vfx then
+  BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
+  BeamVFX.hide(beam.vfx)
+ end
  if visible then
   local origin=beam.origin.WorldPosition
   if beam.vertical then
@@ -202,6 +209,17 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   local workerScale=.58;local alpha=beam.visibility
   WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
   WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
+  if beam.vfx then
+   beam.halo.Transparency=1
+   local releaseAt=style=='Percussion' and (sample.pulseAt or sample.since) or sample.since
+   BeamVFX.draw(beam.vfx,origin,tip,now,width*alpha,nil,now-(releaseAt or now),1+pulse*.15)
+  end
+ elseif charging and beam.vfx then
+  local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
+  local origin=beam.origin.WorldPosition
+  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil)
+ elseif beam.vfx then
+  BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
@@ -222,13 +240,22 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif visible and newPulse and style=='Resonance' then self:_sound(point,'resonance',now)
  end
  beam.secondary.Transparency=1
+ BeamVFX.hide(beam.branchVFX,true)
+ local branchDrawn=false
  if visible and sample.active and sample.secondaryPart and sample.secondaryKey then
   local secondary,secondaryNormal=self:_surface(beam,beam.secondarySurface,branchOrigin(beam,sample.secondaryPart,point,normal),sample.secondaryPart,sample.secondarySource,now,sample.serverSource,noQuery,beam.vertical)
   if secondary and secondaryNormal then
    beam.secondaryPoint.Position=secondary;beam.secondary.Color=sample.secondaryColor or tint
    WorkEffects.drawCylinder(beam.secondary,branchOrigin(beam,sample.secondaryPart,point,normal),secondary,(style=='Resonance' and .11+.04*pulse or .085)*width*.58,.35)
+   if not beam.branchVFX then beam.branchVFX=BeamVFX.new(beam.holder,'Branch',sample.secondaryColor or tint,false) end
+   if beam.branchVFX then
+    beam.secondary.Transparency=1;BeamVFX.style(beam.branchVFX,'Branch',sample.secondaryColor or tint)
+    BeamVFX.draw(beam.branchVFX,branchOrigin(beam,sample.secondaryPart,point,normal),secondary,now,width,nil,nil)
+    branchDrawn=true
+   end
   end
  end
+ if not branchDrawn then BeamVFX.destroy(beam.branchVFX);beam.branchVFX=nil end
 end
 -- Collect a frame before spending any rays. Oldest-due primary contacts are
 -- given at least half of six contact slots and scheduled first. Branches receive
@@ -783,6 +810,13 @@ function P:renderTurret(record,dt,now)
  record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.02+shotFlash*.1
  record.core.Width1=.012+warm*.02+shotFlash*.07
  if aiming then record.endpoint.Position=aim end
+ if record.beam.Enabled then
+  record.vfx=record.vfx or BeamVFX.new(record.view,'Sentry',HOT)
+  if record.vfx then
+   BeamVFX.draw(record.vfx,record.eye.Position,aim,now,shotFlash,charging and warm or nil,now-record.shotAt)
+   record.core.Enabled=false -- retain the thin warning line until the shot
+  end
+ elseif record.vfx then BeamVFX.destroy(record.vfx);record.vfx=nil end
  if charging and aiming then
   if record.markAim~=aim then
    record.markAim=aim

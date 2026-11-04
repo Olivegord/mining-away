@@ -39,6 +39,7 @@ function VM:Dot(b) return self.X*b.X+self.Y*b.Y+self.Z*b.Z end
 function VM:Cross(b) return setmetatable({X=self.Y*b.Z-self.Z*b.Y,Y=self.Z*b.X-self.X*b.Z,Z=self.X*b.Y-self.Y*b.X},VM) end
 local Vector3={new=function(x,y,z) return setmetatable({X=x or 0,Y=y or 0,Z=z or 0},VM) end}
 Vector3.zero=Vector3.new();Vector3.one=Vector3.new(1,1,1);Vector3.yAxis=Vector3.new(0,1,0)
+Vector3.zAxis=Vector3.new(0,0,1)
 local Vector2={new=function(x,y) return {X=x,Y=y} end}
 local CF={};CF.__index=CF
 local CFrame={}
@@ -47,6 +48,9 @@ function CFrame.new(x,y,z)
 end
 function CFrame.lookAt(x,y) local cf=CFrame.new(x);if (y-x).Magnitude>0 then cf.LookVector=(y-x).Unit end;return cf end
 function CFrame.Angles(...) return CFrame.new() end
+function CFrame.fromMatrix(position,right,up,back)
+ local cf=CFrame.new(position);cf.RightVector=right;cf.UpVector=up;cf.LookVector=-back;return cf
+end
 CF.__mul=function(a,b)
  if getmetatable(b)==VM then return a.Position+b end
  return CFrame.new(a.Position+b.Position)
@@ -64,6 +68,7 @@ local Color3={new=function(r,g,b) return setmetatable({X=r,Y=g,Z=b},VM) end}
 function Color3.fromRGB(r,g,b) return Color3.new(r/255,g/255,b/255) end
 local UDim2={fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end,new=function(...) return {...} end}
 local NumberSequence={new=function(x) return x end};local ColorSequence=NumberSequence
+local NumberSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
 local NumberRange=NumberSequence
 local Enum=setmetatable({},{__index=function(t,k) local v=setmetatable({},{__index=function(_,x) return x end});rawset(t,k,v);return v end})
 local IM={};local IT={}

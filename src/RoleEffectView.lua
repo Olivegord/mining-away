@@ -23,14 +23,14 @@ function View.new()
     self.records[node]=nil
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
-    if typeof(position)=='Vector3' and type(at)=='number' then
+    if typeof(position)=='Vector3' and type(at)=='number' and now>=at then
      MotionBuffer.push(r.samples,at,CFrame.new(position))
      local pose=MotionBuffer.pose(r.samples,now)
      -- Do not replay completed strikes to a late joiner.
      if not ended or r.started then
       if not r.ended then
        RoleVisuals.setTime(at)
-       RoleVisuals.Ability(owner,{kind='orbital',target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z}})
+       RoleVisuals.Ability(owner,{kind='orbital',startedAt=node:GetAttribute('StartedAt') or at,target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z}})
        r.started=true
        if ended then RoleVisuals.setTime(ended);RoleVisuals.Ability(owner,{kind='orbitalEnd'});r.ended=true end
       end
@@ -48,7 +48,7 @@ function View.new()
     if kind=='Charge' then ready=ready and type(node:GetAttribute('Impact'))=='boolean' end
     if kind=='Breaker' then ready=ready and type(node:GetAttribute('Phase'))=='string' end
     if kind=='AbilityCharge' or kind=='AbilityPulse' then ready=ready and type(node:GetAttribute('Ability'))=='string' end
-    if ready and type(at)=='number' and typeof(position)=='Vector3' then
+    if ready and type(at)=='number' and typeof(position)=='Vector3' and now>=at then
      r.started=true
      local age=now-at
      local expires=node:GetAttribute('ExpiresAt') or at+1
@@ -63,7 +63,7 @@ function View.new()
       elseif kind=='Grow' then RoleVisuals.Grow(from,position,node:GetAttribute('Planted'))
       elseif kind=='Breaker' then RoleVisuals.BreakerPhase(from,position,node:GetAttribute('Phase'))
       elseif kind=='AbilityCharge' or kind=='AbilityPulse' then
-       RoleVisuals.Ability(owner,{kind=kind=='AbilityCharge' and 'charge' or node:GetAttribute('Ability'),ability=node:GetAttribute('Ability'),target={x=position.X,y=position.Y,z=position.Z,ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
+       RoleVisuals.Ability(owner,{kind=kind=='AbilityCharge' and 'charge' or node:GetAttribute('Ability'),ability=node:GetAttribute('Ability'),duration=node:GetAttribute('Duration') or 1.4,target={x=position.X,y=position.Y,z=position.Z,ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
       end
      end
     end
