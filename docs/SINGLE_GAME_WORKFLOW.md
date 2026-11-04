@@ -2,9 +2,9 @@
 
 The only working/playable document is:
 
-`build/Drone Blower revolution - editable workspace.rbxl`
+`build/DRONE_GAME.rbxl`
 
-It belongs to the existing **Drone Blower revolution** Roblox place `136098934779395`. Keep this document's native map and all authored assets. The plain `Drone Blower revolution.rbxl` was a generated copy built from an older capture. It is retired. Do not open or regenerate it as another working game.
+The owner renamed the retained editable document **DRONE_GAME** after installing PR #3. It belongs to the existing **Drone Blower revolution** Roblox place `136098934779395`. Keep this document's native map and all authored assets. The plain `Drone Blower revolution.rbxl` was a generated copy built from an older capture. It is retired. Do not open or regenerate it as another working game.
 
 ## Consolidate the local Studio files
 

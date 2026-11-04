@@ -1,6 +1,6 @@
 # Drone Blower revolution
 
-**One game file only:** `build/Drone Blower revolution - editable workspace.rbxl`, place **136098934779395**. Open, edit, install and save that same native document. The plain `Drone Blower revolution.rbxl` is a retired duplicate and must not be recreated. Immutable files in `assets/` are reference inputs, not alternate games.
+**One game file only:** `build/DRONE_GAME.rbxl`, place **136098934779395**. Open, edit, install and save that same native document. The plain `Drone Blower revolution.rbxl` is a retired duplicate and must not be recreated. Immutable files in `assets/` are reference inputs, not alternate games.
 
 Run `python3 tools/consolidate_game.py --previous-commit bdb76e2` from the local project to apply the current Sources to a native file containing that exact previous revision and safely remove the redundant generated copy. If Sources already match, omit the previous-commit argument. Unknown editor changes or a missing native editable file stop the operation without deleting anything. Close the redundant Studio document after its unique edits are reconciled; keep only the canonical document open.
 
@@ -19,7 +19,7 @@ Latest polish: orbital columns shrink into noisy full-height embers; the former 
 Latest mining pass: [blackening rock layers, large boulders, sustained orbital melting, powered breaker hits and the always-open 10× health test field beside Quartz](docs/review/MINING_IMPACT.md). Full backpacks permit mining and pause pickup. The owner-requested Play session is running; project files and review builds can continue to be saved while they test. Earlier [collectible mining and hardware upgrades](docs/review/MINING_EXPERIENCE.md) remain.
 
 
-**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. There is no separate playable preservation build; capture-preservation checks run only in temporary test fixtures. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it to the canonical document in Edit mode, then save that same file. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
+**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/DRONE_GAME.rbxl` to inspect the baked map. There is no separate playable preservation build; capture-preservation checks run only in temporary test fixtures. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it to the canonical document in Edit mode, then save that same file. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
 
 November 1 correction: [visible depot shops and standalone upgrades](docs/review/SHOP_VISIBILITY_CORRECTION.md). Spawn is beside central Quartz, the nearest field. N-Gon is inspiration; explicit combo cards are removed.
 
@@ -67,7 +67,7 @@ The [expanded valley and sparse hub review](docs/review/EXPANDED_MAP.md), [Alaba
 
 ## Open the game
 
-Use only **build/Drone Blower revolution - editable workspace.rbxl**, the canonical document for **Drone Blower revolution** (136098934779395). The immutable base is assets/drone-blower-revolution-base.rbxl. Studio uses isolated temporary Preview profiles. The owner will start the next run themselves.
+Use only **build/DRONE_GAME.rbxl**, the canonical document for **Drone Blower revolution** (136098934779395). The immutable base is assets/drone-blower-revolution-base.rbxl. Studio uses isolated temporary Preview profiles. The owner will start the next run themselves.
 
 A fresh profile owns one permanent drone. Click individual ores to assign work; additional explicit selections queue while workers are busy. Each worker has its own 40-unit starting hold. Click **Unload** (or U) to send loaded workers to the depot; payment occurs after their arrival. Recall cancels work. The first earned-currency pack costs 40 credits.
 
@@ -139,7 +139,7 @@ python3 tests/geometry.spec.py
 python3 tools/release.py
 ```
 
-`release.py` packages only `build/Drone Blower revolution - editable workspace.rbxl`, source text in `build/drone-blower-revolution-review.zip`, and exact `build/revision.json`. It requires the actual canonical native file; it never manufactures a replacement from a capture. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
+`release.py` packages only `build/DRONE_GAME.rbxl`, source text in `build/drone-blower-revolution-review.zip`, and exact `build/revision.json`. It requires the actual canonical native file; it never manufactures a replacement from a capture. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
 
 The new tests cover original-equation 30/60/120/144 Hz motion, growth/three stages, all domain boundaries, actual-server/API-double behavior, real persistence logic with a fault-injecting storage double, source asset preservation and finite progression models. They replace the old three-drone baseline expectations. See [docs/review/VALIDATION.md](docs/review/VALIDATION.md), [progression model](docs/review/PROGRESSION_SIMULATION.md), [geometry/layout review](docs/review/ORIGINAL_GEOMETRY_AND_LAYOUT.md), and [UI review](docs/UI_REVIEW.md).
 

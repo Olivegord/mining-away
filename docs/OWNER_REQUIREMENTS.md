@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 3 latest — install PR #3 and name the one game DRONE_GAME
+
+Install PR #3 into the existing editable native game, remove its verified generated duplicate, and rename the retained local file to `build/DRONE_GAME.rbxl`. Preserve the map, original assets and all unrelated/backup scripts. Update future build/install/release paths to that name; the existing Roblox place identity remains `136098934779395`. Leave Play stopped.
+
 ## Latest — exactly one canonical game forever
 
 The owner reports two competing Mining Away instances: the editable workspace and the other generated build. Keep **only** `build/Drone Blower revolution - editable workspace.rbxl` as the working/playable game for place `136098934779395`. Consolidate any unique edits into that native document before closing and deleting the redundant generated copy. All future source installs, saves and release packages must use the same canonical file; fix tooling that regenerates alternative game files. Do not recreate the editable map from an older capture or silently substitute another file if the real native document is unavailable. Immutable source assets remain references. This authorizes removal of the redundant game copy; it does not authorize deleting the Roblox experience or publishing a new one.

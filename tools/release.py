@@ -176,7 +176,7 @@ def main() -> None:
     metadata = {
         "project": "Olivegord/mining-away",
         "place_id": ACTIVE_PLACE_ID,
-        "target": "Drone Blower revolution",
+        "target": "DRONE_GAME",
         "source_commit": revision,
         "source_dirty": dirty,
         "place": output.name,

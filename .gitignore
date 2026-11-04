@@ -23,3 +23,4 @@ tests/generated-server-motion.spec.lua
 tests/generated-client-intent.spec.lua
 
 tests/generated-world-fern.spec.lua
+reference/local-place-history-*.zip

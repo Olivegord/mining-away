@@ -22,7 +22,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "tools"))
 import build
 
-CANONICAL_NAME = "Drone Blower revolution - editable workspace.rbxl"
+CANONICAL_NAME = "DRONE_GAME.rbxl"
 LEGACY_NAME = "Drone Blower revolution.rbxl"
 PACKAGE_NAME = "drone-blower-revolution-review.zip"
 
