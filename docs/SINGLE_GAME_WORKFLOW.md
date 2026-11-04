@@ -10,7 +10,7 @@ It belongs to the existing **Drone Blower revolution** Roblox place `13609893477
 
 First identify the editable workspace document in Studio by its exact local file path. Keep its native map and reconcile any unsaved or unique edits from the other open document into it. A matching place ID or controller name alone does not distinguish the two copies. Save the editable document to its existing canonical path and close the redundant Studio document.
 
-From that same local repository, apply the current source and remove the verified generated duplicate:
+First bring the reviewed source and consolidation tooling from PR #3 into that same local repository, preserving any other local edits. Then apply the current Sources and remove the verified generated duplicate:
 
 ```sh
 python3 tools/consolidate_game.py --previous-commit bdb76e2

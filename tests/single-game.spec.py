@@ -284,6 +284,24 @@ class SingleGameWorkflow(unittest.TestCase):
         self.assertFalse(self.package.exists())
         self.assertEqual(self.canonical.read_bytes(), self.native_fixture)
 
+    def test_consolidation_refreshes_native_and_removes_exact_prior_native_package(self):
+        self.install_native()
+        self.legacy.write_bytes(self.current_fixture)
+        previous = self.stage_source_update()
+        # This is the exact native file the owner had before its allowlisted
+        # Sources are refreshed. Its authored Part property differs from capture.
+        with zipfile.ZipFile(self.package, "w") as archive:
+            archive.writestr(LEGACY_NAME, self.current_fixture)
+            archive.writestr(CANONICAL_NAME, self.native_fixture)
+        self.tool("consolidate_game.py", "--previous-payload", str(previous))
+        updated = self.canonical.read_bytes()
+        self.assertNotEqual(updated, self.native_fixture)
+        self.assert_native_preserved(self.native_fixture, updated)
+        self.assertFalse(self.legacy.exists())
+        self.assertFalse(self.package.exists())
+        self.tool("refresh_editable.py")
+        self.assertEqual(self.canonical.read_bytes(), updated)
+
     def test_unknown_archived_geometry_blocks_every_pending_deletion(self):
         self.install_native()
         self.legacy.write_bytes(self.current_fixture)

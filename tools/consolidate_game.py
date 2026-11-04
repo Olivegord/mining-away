@@ -88,9 +88,15 @@ def verify_archived_source(archive, item, previous_commit, previous):
 def consolidate(previous_commit=None, previous_payload=None, destination=CANONICAL_OUTPUT):
     """Refresh/validate the canonical native file, then preflight every deletion."""
     destination = pathlib.Path(destination)
+    assert destination.is_file(), 'Canonical native editable workspace is required; refusing a capture fallback: ' + str(destination)
+    assert not destination.is_symlink(), 'Refusing to consolidate a symlinked canonical place'
+    canonical_before = destination.read_bytes()
+    canonical_before_sha256 = digest(canonical_before)
     refreshed = refresh(previous_commit=previous_commit, previous_payload=previous_payload, destination=destination)
+    assert canonical_before_sha256 == refreshed['before_sha256'], 'Canonical place changed before refresh; review the new native save before consolidation'
     canonical = destination.read_bytes()
-    assert digest(canonical) == refreshed['after_sha256'], 'Canonical place changed after refresh'
+    canonical_sha256 = digest(canonical)
+    assert canonical_sha256 == refreshed['after_sha256'], 'Canonical place changed after refresh'
     payload = live_source_payload()['sources']
     previous = verified_previous_sources(previous_commit, previous_payload)
     duplicate = destination.parent / LEGACY_OUTPUT.name
@@ -124,10 +130,17 @@ def consolidate(previous_commit=None, previous_payload=None, destination=CANONIC
             historical = ROOT / 'assets/mining-away-base.rbxl'
             if historical.is_file():
                 immutable_hashes.add(digest(historical.read_bytes()))
+            # The reviewed pre-refresh native file can have newer geometry than
+            # the immutable capture. Its exact bytes are safe in a stale ZIP:
+            # refresh preserved that geometry and retained its previous Sources
+            # in the non-playable recovery backup. Do not generalize this trust
+            # to other native maps that merely share a filename or script set.
+            known_native_hashes = {canonical_sha256, canonical_before_sha256}
             for item in places:
                 assert item.file_size <= 128 * 1024 * 1024, 'Oversized native file in release package; preserve archive for review'
                 archived = archive.read(item)
-                if digest(archived) == digest(canonical) or digest(archived) in immutable_hashes:
+                archived_sha256 = digest(archived)
+                if archived_sha256 in known_native_hashes or archived_sha256 in immutable_hashes:
                     pass
                 else:
                     verify(archived)
@@ -152,7 +165,7 @@ def consolidate(previous_commit=None, previous_payload=None, destination=CANONIC
         path.unlink()
         deleted.append({'path': str(path), 'sha256': digest(data), 'bytes': len(data), 'reason': reason})
     report = {'place_id': ACTIVE_PLACE_ID, 'canonical_place': str(destination),
-              'canonical_sha256': digest(canonical), 'refresh': refreshed,
+              'canonical_sha256': canonical_sha256, 'canonical_before_sha256': canonical_before_sha256, 'refresh': refreshed,
               'deleted_paths': [item['path'] for item in deleted], 'deleted': deleted,
               'kept_canonical_packages': kept_packages,
               'policy': 'Canonical native map retained; only verified generated duplicates removed. Immutable source assets unchanged. No native map reconstruction or Roblox publication.'}
