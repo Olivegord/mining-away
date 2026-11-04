@@ -1,8 +1,14 @@
 # Drone Blower revolution
 
+**One game file only:** `build/Drone Blower revolution - editable workspace.rbxl`, place **136098934779395**. Open, edit, install and save that same native document. The plain `Drone Blower revolution.rbxl` is a retired duplicate and must not be recreated. Immutable files in `assets/` are reference inputs, not alternate games.
+
+Run `python3 tools/consolidate_game.py --previous-commit bdb76e2` from the local project to apply the current Sources to a native file containing that exact previous revision and safely remove the redundant generated copy. If Sources already match, omit the previous-commit argument. Unknown editor changes or a missing native editable file stop the operation without deleting anything. Close the redundant Studio document after its unique edits are reconciled; keep only the canonical document open.
+
+`python3 tools/build.py` validates the existing canonical file. Use `--previous-commit` or `--previous-payload` for a guarded source refresh. After committing, `python3 tools/release.py` refreshes/packages only that file, stamping its exact revision and checksum. It fails if the real native file is absent. CI exports Sources only; it never rebuilds a competing game from a reference capture. See [single-game workflow](docs/SINGLE_GAME_WORKFLOW.md).
+
 New review candidate: [seven special miners, four-bay carriers, flying backpack and orbital storage](docs/review/SPECIAL_DRONES_LOGISTICS.md). This update builds on the current game branch and preserves its map, cards, mineral shops, mining roles and audio. Full storage launches pay the matching mineral currencies; carriers keep mining cleared fields after you leave. Optional auto-launch unlocks after the first shipment.
 
-Run `python3 tools/test_special_logistics.py /path/to/luau` for the current feature checks, then `python3 tests/live-build.spec.py` for exact source-only capture preservation. Open `build/Drone Blower revolution.rbxl` after rebuilding. This cloud update has not been installed into an existing Studio session or visually playtested; historical screenshots below do not show the new drones.
+Run `python3 tools/test_special_logistics.py /path/to/luau` for the current feature checks, then `python3 tests/live-build.spec.py` for exact source-only capture preservation. Open only the canonical editable workspace after updating it in place. This cloud update has not been installed into an existing Studio session or visually playtested; historical screenshots below do not show the new drones.
 
 Latest cloud candidate: [committed mining flight and vivid 3D cards](docs/review/COMMITTED_MINING_FLIGHT.md). Healthy saves keep flight moving while work pauses; stations and shell-to-core jobs stay committed; breakers physically recover overhead; cards have nine vivid mechanic families and larger art. New source/renderer/saving regressions and deterministic live-capture builds run in CI. Engine feel, visual/multiplayer acceptance and the requested Catch a Brainrot video study remain **NOT VERIFIED**; the video players buffered without visual frames.
 
@@ -13,7 +19,7 @@ Latest polish: orbital columns shrink into noisy full-height embers; the former 
 Latest mining pass: [blackening rock layers, large boulders, sustained orbital melting, powered breaker hits and the always-open 10× health test field beside Quartz](docs/review/MINING_IMPACT.md). Full backpacks permit mining and pause pickup. The owner-requested Play session is running; project files and review builds can continue to be saved while they test. Earlier [collectible mining and hardware upgrades](docs/review/MINING_EXPERIENCE.md) remain.
 
 
-**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. The separate source-only preservation build keeps the immutable capture intact. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it in Edit mode, then use File → Download a Copy. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
+**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/Drone Blower revolution - editable workspace.rbxl` to inspect the baked map. There is no separate playable preservation build; capture-preservation checks run only in temporary test fixtures. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it to the canonical document in Edit mode, then save that same file. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
 
 November 1 correction: [visible depot shops and standalone upgrades](docs/review/SHOP_VISIBILITY_CORRECTION.md). Spawn is beside central Quartz, the nearest field. N-Gon is inspiration; explicit combo cards are removed.
 
@@ -21,11 +27,11 @@ Current November 1 work: [mineral shops and tutorial-based upgrade cells](docs/r
 
 The active game is the existing Roblox place **136098934779395**, in this same [Olivegord/mining-away repository](https://github.com/Olivegord/mining-away). The owner corrected the target on October 31: the older local Mining Away build is historical, not the current playable artifact. Preserve the captured live map, assets, card UI, tactical HUD, role drones, audio and discoveries.
 
-The verified native capture is `assets/drone-blower-revolution-base.rbxl` (SHA-256 `b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd`). `python3 tools/build.py` builds `build/Drone Blower revolution.rbxl`. The builder changes only Source for the two live controllers and five exact-path live modules; all other raw chunks and untouched Source values remain byte-identical, including script enablement, geometry, terrain, lighting and ServerStorage backups. Names alone are unsafe because the capture contains same-name backup scripts.
+The verified native capture is `assets/drone-blower-revolution-base.rbxl` (SHA-256 `b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd`). `python3 tools/build.py` validates or refreshes the existing canonical native document; it does not rebuild from this reference capture. The builder changes only Source for the two live controllers and five exact-path live modules; all other raw chunks and untouched Source values in the existing native document remain byte-identical, including script enablement, geometry, terrain, lighting and ServerStorage backups. Names alone are unsafe because the capture contains same-name backup scripts.
 
-For reproduction, use Python 3.9+ and the `zstd` command (verified installed version 1.5.7; alternatively the Python `zstandard` package). After committing the final source, `python3 tools/release.py` writes the same active place, `build/drone-blower-revolution-review.zip`, and `build/revision.json` with the source commit, capture checksum, output checksum and place ID. It refuses dirty releases unless `--allow-dirty` explicitly labels an unfinished review build. `python3 tools/build.py --source-payload /absolute/path/payload.json` exports the same seven exact-path sources for controlled edits to the existing Studio place. Neither command publishes or creates an experience.
+For reproduction, use Python 3.9+ and the `zstd` command (verified installed version 1.5.7; alternatively the Python `zstandard` package). After committing the final source, `python3 tools/release.py` validates/refreshes the same canonical place and writes `build/drone-blower-revolution-review.zip`, and `build/revision.json` with the source commit, capture checksum, output checksum and place ID. It refuses dirty releases unless `--allow-dirty` explicitly labels an unfinished review build. `python3 tools/build.py --source-payload /absolute/path/payload.json` exports the same seven exact-path sources for controlled edits to the existing Studio place. Neither command publishes or creates an experience.
 
-The capture remains immutable. Rebuilding backs up an existing output as `.rbxl.previous` and atomically replaces the generated file. The historical asset and builder remain available only as explicit reference fixtures (`--legacy-reference`), with a separate reference output path; they must not replace the active game.
+The capture remains immutable. Refreshing retains a non-playable `.rbxl.previous` recovery file and atomically updates the same canonical native document. Capture builders are temporary test-fixture APIs only; normal build/release commands cannot generate another game in `build/`. Review ZIPs exclude immutable `.rbxl` inputs and contain exactly one playable file.
 
 The owner will test this integrated candidate themselves and requested no further test runs. The latest backpack/swarm behavior is described immediately below; later historical sections retain obsolete hold/card descriptions for reference. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
 
@@ -61,7 +67,7 @@ The [expanded valley and sparse hub review](docs/review/EXPANDED_MAP.md), [Alaba
 
 ## Open the game
 
-Use **build/Drone Blower revolution.rbxl**, or the existing connected **Drone Blower revolution** place (136098934779395). The immutable base is assets/drone-blower-revolution-base.rbxl. Studio uses isolated temporary Preview profiles. The owner will start the next run themselves.
+Use only **build/Drone Blower revolution - editable workspace.rbxl**, the canonical document for **Drone Blower revolution** (136098934779395). The immutable base is assets/drone-blower-revolution-base.rbxl. Studio uses isolated temporary Preview profiles. The owner will start the next run themselves.
 
 A fresh profile owns one permanent drone. Click individual ores to assign work; additional explicit selections queue while workers are busy. Each worker has its own 40-unit starting hold. Click **Unload** (or U) to send loaded workers to the depot; payment occurs after their arrival. Recall cancels work. The first earned-currency pack costs 40 credits.
 
@@ -120,7 +126,7 @@ The builder changes only the two controller source properties and Script/LocalSc
 
 Active guards clone the actual `construct` meshes (`bottemseg`, `lowerseg`, `upperseg`, `topseg`, `eye`, `eyecase`, `spawnEye`) and rig. The complete original/editor history remains in the source and full ServerStorage template. Only redundant editor `AnimSaves` history is omitted from live guard clones: the original construct has 3,444 instances, 3,429 of which are that editor hierarchy. This avoids replicating thousands of unused objects per enemy without deleting the source animation data.
 
-Rollback is opening the unchanged asset base, or checking out the baseline commit. The builder refuses unknown base checksums and identical input/output paths, and backs up an existing generated place as `.rbxl.previous`. Do not patch the unavailable live place with this hash-locked builder.
+Rollback restores reviewed Sources into the same canonical native document. Do not open a source capture as a second game. A `.rbxl.previous` file is recovery data, not an alternate playable release.
 
 ## Reproduce and inspect
 
@@ -133,7 +139,7 @@ python3 tests/geometry.spec.py
 python3 tools/release.py
 ```
 
-`release.py` builds the single `build/Mining Away.rbxl`, full tracked-source `build/mining-away-review.zip`, and exact `build/revision.json`. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
+`release.py` packages only `build/Drone Blower revolution - editable workspace.rbxl`, source text in `build/drone-blower-revolution-review.zip`, and exact `build/revision.json`. It requires the actual canonical native file; it never manufactures a replacement from a capture. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
 
 The new tests cover original-equation 30/60/120/144 Hz motion, growth/three stages, all domain boundaries, actual-server/API-double behavior, real persistence logic with a fault-injecting storage double, source asset preservation and finite progression models. They replace the old three-drone baseline expectations. See [docs/review/VALIDATION.md](docs/review/VALIDATION.md), [progression model](docs/review/PROGRESSION_SIMULATION.md), [geometry/layout review](docs/review/ORIGINAL_GEOMETRY_AND_LAYOUT.md), and [UI review](docs/UI_REVIEW.md).
 

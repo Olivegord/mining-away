@@ -1,5 +1,9 @@
 # Owner requirements
 
+## Latest — exactly one canonical game forever
+
+The owner reports two competing Mining Away instances: the editable workspace and the other generated build. Keep **only** `build/Drone Blower revolution - editable workspace.rbxl` as the working/playable game for place `136098934779395`. Consolidate any unique edits into that native document before closing and deleting the redundant generated copy. All future source installs, saves and release packages must use the same canonical file; fix tooling that regenerates alternative game files. Do not recreate the editable map from an older capture or silently substitute another file if the real native document is unavailable. Immutable source assets remain references. This authorizes removal of the redundant game copy; it does not authorize deleting the Roblox experience or publishing a new one.
+
 ## November 3 latest — specialist balance, animation and identity
 
 Rework all seven new specialist miners: Bubbler, Halver, Gridcutter, Singularity, Starforge, Frostbite and Resonator. Their fixed-duration whole-rock deletion is overpowered; they must remove bounded chunks and respect resource hardness. Repeated strikes should show persistent progress before a final earned break. Research animation principles and apply readable anticipation, decisive contact, continuous motion, overlapping tool action and controlled recovery. Give every unique specialist a recognizable mechanical silhouette, beyond a color swap or small accessories on the same body. Preserve the authored base drone, original travel and overhead mining station. Server timing/damage remains authoritative; clients render the shared animation each frame. See [rework and research](review/SPECIALIST_REWORK.md).

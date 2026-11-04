@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Source-only builds of the captured Drone Blower revolution place.
-Keep the historical autosave builder only for explicit reference-fixture tests.
-Never import or execute embedded scripts, or publish a Roblox place.
+"""Refresh the one existing native editable game, or export its Sources.
+Capture builders are explicit temporary preservation-test fixtures only.
+Never manufacture a competing playable file, execute embedded scripts or publish.
 """
 import argparse,hashlib,json,pathlib,struct,shutil,subprocess,tempfile
 from functools import lru_cache
@@ -12,7 +12,9 @@ EXPECTED='480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b'
 ACTIVE_PLACE_ID=136098934779395
 ACTIVE_EXPECTED='b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd'
 ACTIVE_BASE=ROOT/'assets/drone-blower-revolution-base.rbxl'
-ACTIVE_OUTPUT=ROOT/'build/Drone Blower revolution.rbxl'
+CANONICAL_OUTPUT=ROOT/'build/Drone Blower revolution - editable workspace.rbxl'
+ACTIVE_OUTPUT=CANONICAL_OUTPUT
+LEGACY_OUTPUT=ROOT/'build/Drone Blower revolution.rbxl'
 @lru_cache(maxsize=1)
 def native_zstd():
  """Reuse an installed decoder; do not spawn a process for every place chunk."""
@@ -161,9 +163,12 @@ def script_inventory(cs):
   if cls in ('Script','LocalScript','ModuleScript'):
    result.append({'path':full_path(ref),'class':cls,'cid':cid,'index':index,'ref':ref,'source':sources[cid][index]})
  return result
-def build_live(original=ACTIVE_BASE,out=ACTIVE_OUTPUT):
- """Patch seven exact Source values; every other chunk remains byte-identical."""
+def build_live(original=ACTIVE_BASE,out=None):
+ """Capture-preservation test fixture only; never create an alternate game."""
+ assert out is not None,'Capture fixtures need an explicit temporary output; refresh the canonical editable workspace for the game'
  original=pathlib.Path(original);out=pathlib.Path(out)
+ assert (ROOT/'build').resolve() not in out.resolve().parents,'Capture fixtures cannot write playable files into build; refresh the canonical editable workspace'
+ assert (ROOT/'assets').resolve() not in out.resolve().parents and not out.is_symlink(),'Cannot write a fixture over source assets or a symlink'
  assert original.resolve()!=out.resolve(),'Input and output must differ'
  assert out.resolve()!=(ROOT/'assets/mining-away-base.rbxl').resolve(),'Cannot overwrite historical source'
  data=original.read_bytes()
@@ -200,7 +205,9 @@ def build_live(original=ACTIVE_BASE,out=ACTIVE_OUTPUT):
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2)+'\n')
  return report
 def build(original,out):
- """Historical reference fixture only. The active release uses build_live()."""
+ """Historical reference test fixture only; never an active game output."""
+ assert (ROOT/'build').resolve() not in out.resolve().parents,'Historical fixtures cannot write playable files into build'
+ assert (ROOT/'assets').resolve() not in out.resolve().parents and not out.is_symlink(),'Cannot write a fixture over source assets or a symlink'
  assert out.resolve()!=ACTIVE_OUTPUT.resolve(),'Historical builder cannot overwrite the active review place'
  assert original.resolve()!=out.resolve(),'Input and output must differ'
  out.parent.mkdir(parents=True,exist_ok=True)
@@ -264,9 +271,12 @@ def build(original,out):
  (out.parent/'build-report.json').write_text(json.dumps(report,indent=2));return report
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('original',nargs='?',type=pathlib.Path);p.add_argument('--output',type=pathlib.Path)
- p.add_argument('--legacy-reference',action='store_true',help='Build the historical reference fixture, never the active game')
+ p.add_argument('--legacy-reference',action='store_true',help='Retired: historical capture builds are temporary test fixtures only')
  p.add_argument('--source-payload',type=pathlib.Path,help='Write a source-only exact-path JSON payload for the existing active place')
  p.add_argument('--editor-layout-script',type=pathlib.Path,help='Write a Command Bar script that applies the layout directly in Studio Edit')
+ previous=p.add_mutually_exclusive_group()
+ previous.add_argument('--previous-commit',help='Exact previous Sources installed in the canonical editable workspace')
+ previous.add_argument('--previous-payload',type=pathlib.Path,help='Exact previously installed source payload')
  a=p.parse_args()
  if a.editor_layout_script:
   a.editor_layout_script.parent.mkdir(parents=True,exist_ok=True);a.editor_layout_script.write_text(editor_layout_script())
@@ -275,5 +285,9 @@ if __name__=='__main__':
   a.source_payload.parent.mkdir(parents=True,exist_ok=True);a.source_payload.write_text(json.dumps(live_source_payload(),ensure_ascii=False))
   print(str(a.source_payload))
  elif a.legacy_reference:
-  print(json.dumps(build(a.original or ROOT/'assets/mining-away-base.rbxl',a.output or ROOT/'build/reference/historical-mining-away.rbxl'),indent=2))
- else:print(json.dumps(build_live(a.original or ACTIVE_BASE,a.output or ACTIVE_OUTPUT),indent=2))
+  p.error('Historical capture builds are temporary test fixtures only; the sole game is the existing editable workspace')
+ else:
+  if a.original or (a.output and a.output.resolve()!=CANONICAL_OUTPUT.resolve()):
+   p.error('The sole game is '+str(CANONICAL_OUTPUT)+'; alternate place inputs/outputs are not supported')
+  from refresh_editable import refresh
+  print(json.dumps(refresh(previous_commit=a.previous_commit,previous_payload=a.previous_payload),indent=2))

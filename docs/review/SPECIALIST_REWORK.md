@@ -1,5 +1,7 @@
 # Specialist mining rework
 
+**Delivery correction:** the owner now requires one canonical game, `build/Drone Blower revolution - editable workspace.rbxl`. The previous plain generated review file and its ZIP have been retired. Install these same committed Sources into the existing native editable document; do not open or recreate a second game. See [single-game workflow](../SINGLE_GAME_WORKFLOW.md).
+
 Applies to the seven new miners in **Drone Blower revolution**, place `136098934779395`. Includes the latest combined `bdb76e2f521f4c3728e855ff59ab95f75be77656` source, retaining its shared client timelines, particle refinements, preview crew, performance corrections, map, original assets and persistent fleet. This supersedes the fixed-duration whole-rock behavior in `SPECIAL_DRONES_LOGISTICS.md`.
 
 ## Damage and rewards
@@ -50,4 +52,4 @@ The final specialist runner passes 10 profile/logistics domain checks, 21 produc
 
 The broad legacy `tools/test.py` command stops on its existing HUD typography guard: an 11px Backpack label violates that guard's 16px rule. This exact failure reproduces on unchanged `33ea151`; it is not a specialist regression. Later legacy stages are not reported as passing. The old full-bundle standalone lint preamble also lacks Roblox type declarations required by the current role modules; new-module lint is recorded separately. The performance regression now requires motion on every display frame and keeps geometry/subscription/distance bounds, replacing its old 30Hz held-pose assertion.
 
-This environment has no connected Roblox Studio tool. Automated source/API-double checks do **not** establish native visual quality, real multiplayer behavior or player satisfaction. No Roblox publication or Studio Play start is part of this pass. The generated source-preserving review build is available for the owner/integration chat to install. The other chat's broader client-role smoothing is integrated at `bdb76e2`; the specialist rework adds to those files without restoring server-driven cosmetic animation.
+This environment has no connected Roblox Studio tool. Automated source/API-double checks do **not** establish native visual quality, real multiplayer behavior or player satisfaction. No Roblox publication or Studio Play start is part of this pass. The committed Sources are available for installation into the sole native editable game; its actual Mac file is absent from this cloud checkout. The other chat's broader client-role smoothing is integrated at `bdb76e2`; the specialist rework adds to those files without restoring server-driven cosmetic animation.
