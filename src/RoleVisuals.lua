@@ -5,6 +5,8 @@ local TweenService = game:GetService("TweenService")
 
 local Effects = {}
 local animations={}
+local beamTimelines={}
+local chargeTimelines={}
 local eventAt=nil
 local function clock() return eventAt or workspace:GetServerTimeNow() end
 function Effects.setTime(at) eventAt=at end
@@ -13,6 +15,24 @@ local function animate(value,duration,style,direction,properties)
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
 end
 function Effects.step(now)
+ for rig,t in pairs(beamTimelines) do
+  local age=now-t.at
+  if not rig.root.Parent or age>t.duration+rig.profile.tail then
+   BeamVFX.destroy(rig);beamTimelines[rig]=nil
+  elseif age<0 then BeamVFX.hide(rig)
+  elseif age<t.duration then
+   local expansion=math.min(1,age/.035)
+   local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
+   BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
+  else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
+ end
+ for group,t in pairs(chargeTimelines) do
+  if not group.Parent then BeamVFX.destroy(t.rig);chargeTimelines[group]=nil
+  else
+   local q=math.clamp((now-t.at)/t.duration,0,1)
+   BeamVFX.draw(t.rig,t.position,t.position-Vector3.yAxis,now,0,q,nil)
+  end
+ end
  for value,animation in pairs(animations) do
   if not value.Parent then animations[value]=nil
   else
@@ -70,25 +90,27 @@ local function part(): Part?
 	return value
 end
 
-function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?)
+function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?, style: string?)
 	local delta = to - from
 	if delta.Magnitude < 0.05 then
 		return
 	end
-	local value = part()
-	if not value then
-		return
-	end
 	local duration = lifetime or 0.16
 	local thickness = width or 0.18
-	value.Color = color
-	value.Size = Vector3.new(thickness, thickness, delta.Magnitude)
-	value.CFrame = CFrame.lookAt(from:Lerp(to, 0.5), to)
-	animate(value,duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{
-		Transparency = 1,
-		Size = Vector3.new(0.02, 0.02, delta.Magnitude),
-	})
-	Debris:AddItem(value, duration + 0.05)
+	local at=clock();local now=workspace:GetServerTimeNow()
+	local profile=BeamVFX.styles[style or 'Lance'] or BeamVFX.styles.Lance
+	if now-at>duration+profile.tail then return end
+	local rig=BeamVFX.new(folder(),style or 'Lance',color)
+	if rig then
+	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body}
+	elseif now-at<duration then
+	 -- Saturated cosmetic budget retains a simple readable shot.
+	 local value=part();if not value then return end
+	 value.Color=color;value.Size=Vector3.new(thickness*.35,thickness*.35,delta.Magnitude)
+	 value.CFrame=CFrame.lookAt(from:Lerp(to,.5),to);value.Transparency=.45
+	 animate(value,math.max(.01,duration-(now-at)),Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=1})
+	 Debris:AddItem(value,math.max(.01,duration-(now-at))+.05)
+	end
 end
 
 function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?)
@@ -114,14 +136,14 @@ end
 
 function Effects.Heal(from: Vector3, to: Vector3)
 	local color = Color3.fromRGB(99, 255, 164)
-	Effects.Beam(from, to, color, 0.22, 0.2)
+	Effects.Beam(from, to, color, 0.14, 0.2,'Repair')
 	Effects.Pulse(to, color, 0.5, 2.5, 0.24)
 end
 
 function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	local color = Color3.fromRGB(255, 137, 70)
 	if impact then
-		Effects.Beam(position, target, color, 0.42, 0.2)
+		Effects.Beam(position, target, color, 0.3, 0.2,'Combat')
 		Effects.Pulse(target, color, .7, 4.2, 0.28)
 	else
 		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.5, 3.4, 0.8)
@@ -201,13 +223,8 @@ local function clearMarker(owner: any)
  if old then old:Destroy() end
 end
 local function location(p: any): Vector3 return Vector3.new(p.x,p.y,p.z) end
-local function column(position: Vector3,height: number,width: number,color: Color3,duration: number,transparency: number)
- local value=part();if not value then return end
- value.Shape=Enum.PartType.Cylinder;value.Color=color;value.Transparency=transparency
- value.Size=Vector3.new(height,width,width)
- value.CFrame=CFrame.new(position+Vector3.new(0,height*.5,0))*CFrame.Angles(0,0,math.pi/2)
- animate(value,duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=1,Size=Vector3.new(height,.02,.02)})
- Debris:AddItem(value,duration+.05)
+local function column(position: Vector3,height: number,width: number,color: Color3,duration: number)
+ Effects.Beam(position+Vector3.yAxis*height,position,color,width,duration,'Resonance')
 end
 local burns: {[any]: Folder} = {}
 local function clearBurn(owner: any)
@@ -264,7 +281,7 @@ local function watchBurn(owner: any,group: Folder)
   Debris:AddItem(group,ORBITAL_TAIL)
  end)
 end
-local function targetSight(owner: any,target: any)
+local function targetSight(owner: any,target: any,duration: number?)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
  local value=part();if not value then group:Destroy();return end
  local radius=math.clamp((target.radius or 1)+.7,1.4,8)
@@ -274,6 +291,10 @@ local function targetSight(owner: any,target: any)
  value.Size=Vector3.new(.035,radius*2,radius*2)
  value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
  value.Parent=group
+ local rig=BeamVFX.new(group,'Orbital',Color3.fromRGB(172,113,255))
+ if rig then
+  chargeTimelines[group]={rig=rig,at=clock(),duration=duration or 1.4,position=location(target)+Vector3.new(0,2.5,0)}
+ end
  animate(value,1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.74})
  Debris:AddItem(group,2.6)
 end
@@ -283,6 +304,7 @@ local function sustainedStrike(owner: any,event: any)
  if not group then
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
+  group:SetAttribute('StartedAt',event.startedAt or clock())
   for index,width in ipairs({2.25,.65}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
@@ -316,9 +338,16 @@ local function sustainedStrike(owner: any,event: any)
  end
  local position=location(event.target)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',clock())
+ local fresh=workspace:GetServerTimeNow()-clock()<=.3
+ local suspended=not fresh
+ if group:GetAttribute('Suspended')~=suspended then
+  group:SetAttribute('Suspended',suspended)
+  for _,v in ipairs(group:GetDescendants()) do if v:IsA('ParticleEmitter') then v.Enabled=fresh end end
+ end
  for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
   local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   value.CFrame=pose
+  value.Transparency=not fresh and 1 or (value:GetAttribute('BurnTransparency') or value.Transparency)
  end end
  group:SetAttribute('Placed',true)
 end
@@ -333,7 +362,7 @@ function Effects.Ability(owner: any,event: any,template: Model?)
  elseif kind=='orbitalEnd' then clearBurn(owner)
  elseif kind=='charge' then
   clearMarker(owner)
-  if event.ability=='Orbital' then targetSight(owner,event.target);return end
+  if event.ability=='Orbital' then targetSight(owner,event.target,event.duration);return end
   local value=part();if not value then return end
   value.Name='GadgetCharge';value.Shape=Enum.PartType.Ball;value.Size=Vector3.one*.45
   value:SetAttribute('AudioLoop','swarm_charge');value:SetAttribute('AudioAt',clock());value:SetAttribute('AudioUntil',clock()+2.6)
@@ -345,7 +374,7 @@ function Effects.Ability(owner: any,event: any,template: Model?)
   sustainedStrike(owner,event)
  elseif kind=='relay' then
   local position=location(event.target)
-  column(position,9,.18,Color3.fromRGB(176,218,255),.3,.65)
+  column(position,9,.18,Color3.fromRGB(176,218,255),.3)
   Effects.Pulse(position,Color3.fromRGB(176,218,255),.2,1.7,.3)
  elseif kind=='scrapStart' then clearMarker(owner)
  elseif kind=='recycle' then Effects.Pulse(location(event.target),Color3.fromRGB(173,222,146),.4,2.8,.4)
@@ -354,6 +383,9 @@ function Effects.Ability(owner: any,event: any,template: Model?)
 end
 
 function Effects.destroy()
+ for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
+ for _,t in pairs(chargeTimelines) do BeamVFX.destroy(t.rig) end
+ table.clear(beamTimelines);table.clear(chargeTimelines)
  table.clear(animations);table.clear(markers);table.clear(burns);table.clear(swarms)
  eventAt=nil
  local root=workspace:FindFirstChild('DroneRoleClientEffects');if root then root:Destroy() end

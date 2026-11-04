@@ -35,6 +35,17 @@ local function line(p,a,b,width,alpha)
  if (b-a).Magnitude<.001 then p.Transparency=1;return end
  p.Size=Vector3.new(width,width,math.max(.025,(b-a).Magnitude));p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Transparency=clamp(alpha)
 end
+local function energyLine(e,p,a,b,width,alpha,style)
+ line(p,a,b,width,alpha)
+ e.beams=e.beams or {}
+ local r=e.beams[p]
+ if alpha>=.98 or (b-a).Magnitude<.015 then BeamVFX.hide(r,true);return end
+ if not r then r=BeamVFX.new(e.folder,style,p.Color,p.Name=='ScanHead');e.beams[p]=r end
+ if r then
+  p.Transparency=1
+  BeamVFX.draw(r,a,b,e.visualNow,1-math.clamp(alpha,0,1),nil,e.contactAge,width/r.profile.body)
+ end
+end
 local function showRing(value,cf,radius,alpha)
  for i,p in ipairs(value.parts) do
   local a,b=(i-1)*TAU/#value.parts,i*TAU/#value.parts
@@ -135,7 +146,7 @@ local function halverPose(e,t,age)
   p.CFrame=CFrame.new(top+Vector3.new(side*gap,.15*charge,0))*e.cf.Rotation*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
   p.Size=Vector3.new(.09,e.radius*.28,e.radius*1.35);p.Transparency=.15+reset*.85
  end
- line(e.cut,top+Vector3.new(0,0,-e.radius*.65),top+Vector3.new(0,0,e.radius*.65),.04,.9-cut*.8+reset*.9)
+ energyLine(e,e.cut,top+Vector3.new(0,0,-e.radius*.65),top+Vector3.new(0,0,e.radius*.65),.07,.9-cut*.8+reset*.9,'Lance')
  ballistic(e,age,'slab')
 end
 local function gridPose(e,t,age)
@@ -146,10 +157,10 @@ local function gridPose(e,t,age)
   local a=axis and Vector3.new(-r,0,coordinate) or Vector3.new(coordinate,0,-r)
   local b=axis and Vector3.new(r,0,coordinate) or Vector3.new(coordinate,0,r)
   local visible=smooth((scan-(i-1)/7)*7)
-  line(p,top+a,top+a:Lerp(b,visible),.035,1-visible*(1-out)*.8)
+  energyLine(e,p,top+a,top+a:Lerp(b,visible),.055,1-visible*(1-out)*.8,'Gridcutter')
  end
  local x=-r+scan*r*2
- line(e.scanner,top+Vector3.new(x,.04,-r),top+Vector3.new(x,.04,r),.07,.18+out*.82)
+ energyLine(e,e.scanner,top+Vector3.new(x,.04,-r),top+Vector3.new(x,.04,r),.10,.18+out*.82,'Gridcutter')
  hideParts(e.fragments)
  if age then
   for i,p in ipairs(e.fragments) do
@@ -166,6 +177,15 @@ local function singularityPose(e,t,age)
  local diameter=r*.46*grow*(1-close*.85)
  e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
  showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,t*.7,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
+ -- Keep the authored gravity well and chips. A pair of tightening hooks and
+ -- two sharp cuts give this small well a different vocabulary from heat rays.
+ e.gravityVFX=e.gravityVFX or BeamVFX.new(e.folder,'Singularity',purple)
+ if e.gravityVFX then
+  BeamVFX.draw(e.gravityVFX,center,center-Vector3.yAxis,e.visualNow,0,math.min(1,t/e.impact),age,math.min(1.4,r*.7))
+  local strength=1-fade(e,age)
+  for _,v in ipairs(e.gravityVFX.all) do v.Width0*=strength;v.Width1*=strength end
+  if e.gravityVFX.orb then e.gravityVFX.orb.Transparency=1 end -- existing EventHorizon owns the dark center
+ end
  hideParts(e.fragments)
  if age then
   for i,p in ipairs(e.fragments) do
@@ -184,7 +204,7 @@ local function starforgePose(e,t,age)
  local diameter=r*(.2+.35*heat)*(1-cool*.8)
  e.sun.Position=center;e.sun.Size=Vector3.one*math.max(.025,diameter);e.sun.Transparency=cool
  e.corona.Position=center;e.corona.Size=e.sun.Size*1.35;e.corona.Transparency=.82+cool*.18
- for i,p in ipairs(e.rays) do line(p,center,facePoint(e,i*2),.035,.95-heat*.65+cool*.75) end
+ for i,p in ipairs(e.rays) do energyLine(e,p,center,facePoint(e,i*2),.065,.95-heat*.65+cool*.75,'Starforge') end
  e.rock.Color=e.color:Lerp(hot,heat*.25*(1-cool))
  hideParts(e.fragments)
  if age then
@@ -320,6 +340,7 @@ function FX.new(world,options)
     local impacted=done>0 and done>=e.start
     local depleted=impacted and v:GetAttribute('EffectDepleted')==true
     local age=impacted and math.max(0,visualNow-done) or nil
+    e.visualNow=visualNow;e.contactAge=age
     -- The ordinary fracture queue owns surviving crystal size/pose immediately
     -- after the accepted hit. Keep only local chips/tool recovery over that view.
     e.view.LocalTransparencyModifier=(not impacted or depleted) and 1 or e.originalTransparency

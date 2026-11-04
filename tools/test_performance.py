@@ -8,7 +8,7 @@ import pathlib
 import subprocess
 import tarfile
 import tempfile
-from build import ROOT, bundle
+from build import ROOT, bundle, module_bundle
 
 parser=argparse.ArgumentParser()
 parser.add_argument('luau',type=pathlib.Path)
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
         view_setup="\nlocal player={};local UIS={};local C={}\nlocal ctx={world=Instance.new('Folder'),localFX=Instance.new('Folder'),hidden=function()return false end}\nctx.world.Parent=workspace;ctx.localFX.Parent=workspace\nlocal self={visuals={},connections={},scanAt=0}\nlocal trigger,targetCycle,carrierReturn,bar,layer=Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame')\n"
         fixtures=[
             ('server',mock+'\nmath.randomseed(42)\n'+setup+'\nfunction runService:IsStudio()return true end\n'+server+'\n'+server_check),
-            ('fx',fx_setup+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
+            ('fx',fx_setup+'\n'+module_bundle(('BeamVFX',))+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
             ('logistics',fx_setup+'\nlocal MotionBuffer=(function()\n'+(ROOT/'src/MotionBuffer.lua').read_text()+'\nend)()\n'+view_setup+'\n'+methods+'\n'+view_check),
         ]
         if name=='after':fixtures.append(('fracture',mock+'\nlocal P={}\n'+impact+'\n'+(ROOT/'tests/performance-fracture.integration.lua').read_text()))
