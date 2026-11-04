@@ -427,7 +427,7 @@ end
 -- along its normalized length, so the pulse remains fast at every frame rate.
 -- Two broad bands give the ramp more scale without hiding the physical core.
 -- Ten or fewer keys stay inside Roblox's twenty-key NumberSequence limit.
-function W.orbitalTransparency(now)
+function W.orbitalTransparency(now,minimum)
  local phase=(now*7)%1
  local function opacity(t)
   local x=(t*2+phase)%1
@@ -440,6 +440,9 @@ function W.orbitalTransparency(now)
   if t>0 and t<1 then table.insert(keys,NumberSequenceKeypoint.new(t,point[2])) end
  end end
  table.insert(keys,NumberSequenceKeypoint.new(1,opacity(1)))
+ if minimum then
+  for i,key in ipairs(keys) do keys[i]=NumberSequenceKeypoint.new(key.Time,minimum+(1-minimum)*key.Value) end
+ end
  return NumberSequence.new(keys)
 end
 function W:orbital(now)
@@ -455,8 +458,8 @@ function W:orbital(now)
     local top=Instance.new('Attachment');top.Parent=holder
     local ramp=Instance.new('Beam');ramp.Name='DescendingWhiteClearEnergy'
     ramp.Attachment0=bottom;ramp.Attachment1=top;ramp.FaceCamera=true;ramp.Segments=48
-    ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=1.6
-    ramp.Width0=3.2;ramp.Width1=3.2;ramp.Parent=holder
+    ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=.7
+    ramp.Width0=2.4;ramp.Width1=2.4;ramp.Parent=holder
     -- The local physical cylinder stays visible through the clear ramp bands.
     self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,
      vfx=BeamVFX.new(holder,'Orbital',Color3.fromRGB(171,111,255))}
@@ -479,9 +482,11 @@ function W:orbital(now)
    local height=math.max(260,(camera and camera.CFrame.Position.Y or position.Y)-position.Y+180)
    record.holder.CFrame=CFrame.new(position)
    record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
-   record.ramp.Width0=3.2*strength;record.ramp.Width1=record.ramp.Width0
-   record.ramp.Transparency=W.orbitalTransparency(now)
-   if record.ramp.Enabled then
+   record.ramp.Width0=2.4*strength;record.ramp.Width1=record.ramp.Width0
+   record.ramp.Transparency=W.orbitalTransparency(now,.7)
+   if ended then
+    BeamVFX.after(record.vfx,position+Vector3.yAxis*.12,position+Vector3.yAxis*height,now,now-ended)
+   elseif record.ramp.Enabled then
     BeamVFX.draw(record.vfx,position+Vector3.yAxis*.12,position+Vector3.yAxis*height,now,strength,nil,now-(group:GetAttribute('StartedAt') or now))
    else BeamVFX.hide(record.vfx,true) end
   end

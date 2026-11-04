@@ -125,7 +125,7 @@ check('orbital extends above high camera and collapses on authoritative end',fun
  local core=Instance.new('Part');core.Name='MeltCore';core.LocalTransparencyModifier=.2;core.Parent=group
  local work=WorkEffects.new(root);camera.CFrame=CFrame.new(0,400,0);work:update(10)
  local fx=assert(work.orbitals[group]);assert(fx.top.Position.Y>=580)
- assert(core.LocalTransparencyModifier==.2,'physical cylinder was hidden by the ramp');assert(fx.ramp.Width0==3.2)
+ assert(core.LocalTransparencyModifier==.2,'physical cylinder was hidden by the ramp');assert(fx.ramp.Width0==2.4)
  camera.CFrame=CFrame.new(0,400,0);work:update(10.1);assert(fx.top.Position.Y>=580)
  assert(fx.ramp.Color.R==1 and fx.ramp.Color.G==1 and fx.ramp.Color.B==1)
  group:SetAttribute('ContactAt',9);work:update(10.1);assert(not fx.ramp.Enabled,'stale strike kept drilling')

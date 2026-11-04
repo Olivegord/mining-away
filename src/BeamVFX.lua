@@ -76,7 +76,7 @@ local function pair(root,name,color,opacity)
  local a,b=attachment(root,name..'From'),attachment(root,name..'To')
  return {a=a,b=b,beam=ribbon(root,name,a,b,color,opacity)}
 end
-function B.new(parent,style,color,detail)
+function B.new(parent,style,color,detail,chargeLens)
  local priority=style=='Orbital' or style=='Singularity'
  local limit=B.limits.rigs-(priority and 0 or B.limits.reservedRigs)
  if live>=limit or not parent then return nil end
@@ -96,10 +96,12 @@ function B.new(parent,style,color,detail)
   end
  end)
  -- Detail leases are acquired only near the viewer, and returned on culling.
- r.wantDetail=detail~=false
+ r.wantDetail=detail~=false;r.wantChargeLens=chargeLens~=false
  return r
 end
+local releaseRich,acquireRich,hideRich,drawRich
 local function freeDetail(r)
+ if releaseRich then releaseRich(r) end
  if not r.detail then return end
  for _,p in ipairs(r.paths) do p.beam:Destroy();p.a:Destroy();p.b:Destroy() end
  for _,p in ipairs(r.stars) do p.beam:Destroy();p.b:Destroy() end
@@ -133,6 +135,7 @@ local function addDetail(r)
 end
 function B.hide(r,releaseDetail)
  if not r or r.destroyed then return end
+ if hideRich then hideRich(r) end
  for _,v in ipairs(r.all) do v.Enabled=false end
  if r.orb then r.orb.Transparency=1 end
  if releaseDetail then freeDetail(r) end
@@ -142,6 +145,7 @@ function B.destroy(r)
 end
 function B.style(r,style,color)
  if not r or r.destroyed or (r.style==style and r.color==color) then return end
+ if releaseRich then releaseRich(r) end
  r.style=style;r.profile=B.styles[style] or B.styles.Cutter;r.color=color
  r.body.Color=ColorSequence.new(color);r.core.Color=ColorSequence.new(color:Lerp(WHITE,.65))
  if r.paths then for i=1,3 do r.paths[i].beam.Color=ColorSequence.new(color) end end
@@ -152,6 +156,173 @@ local function pose(a,position,tangent)
  -- Beam curves use the attachment's X axis, not its LookVector.
  a.CFrame=CFrame.fromMatrix(position,tangent,up,back)
 end
+-- The supplied motion reference uses a refracting lens as the main silhouette.
+-- Only major effects lease this rig; every pose is an absolute timestamp sample.
+local richLive=0
+local richLimit=4
+local GLASS_COLOR=Color3.fromRGB(245,250,255)
+local CYAN=Color3.fromRGB(108,238,255)
+local VIOLET=Color3.fromRGB(166,64,255)
+local LENS_COLORS={Color3.fromRGB(255,255,0),Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
+local function visualPart(parent,name,material,color,shape)
+ local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false
+ p.Transparency=1;p.Size=Vector3.one*.02;p.Material=material;p.Color=color
+ if shape then p.Shape=shape end;p.Parent=parent;return p
+end
+local function richPath(r,name,color,opacity)
+ local p=pair(r.rich.root,name,color,opacity or ARC)
+ p.beam.Width1=0;r.rich.paths[#r.rich.paths+1]=p;return p
+end
+releaseRich=function(r)
+ if r.rich then r.rich.root:Destroy();r.rich=nil end
+end
+acquireRich=function(r)
+ if r.rich or not r.wantChargeLens or richLive>=richLimit or r.style=='Repair' or r.style=='Courier' or r.style=='Branch' then return end
+ local folder=Instance.new('Folder');folder.Name='RefractionChoreography';folder.Parent=r.root
+ local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},lastEmission=nil}
+ r.rich=h;richLive+=1
+ local counted=true;folder.Destroying:Connect(function() if counted then counted=false;richLive-=1 end end)
+ h.glass=visualPart(folder,'ClearGlassDistortion',Enum.Material.Glass,GLASS_COLOR,Enum.PartType.Ball)
+ h.glass.Reflectance=0
+ -- Glass + Highlight is a native renderer technique, verified in this Studio.
+ -- Keep it local and optional: above-one transparency is engine-dependent.
+ h.mask=Instance.new('Highlight');h.mask.Name='ChromaticDistortionMask'
+ h.mask.DepthMode=Enum.HighlightDepthMode.Occluded;h.mask.OutlineTransparency=.999
+ h.mask.FillTransparency=1;h.mask.FillColor=Color3.fromRGB(255,255,0);h.mask.Enabled=false;h.mask.Parent=h.glass
+ h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.SmoothPlastic,DARK,Enum.PartType.Ball)
+ for i=1,4 do
+  h.comets[i]={path=richPath(r,'GatheringComet'..i,i%2==0 and CYAN or VIOLET),
+   head=visualPart(folder,'CometHead',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
+ end
+ for i=1,3 do
+  h.sweeps[i]={ink=richPath(r,'DarkSweptLobe'..i,Color3.fromRGB(27,8,59),NumberSequence.new(.18)),
+   rim=richPath(r,'VioletSweptRim'..i,VIOLET,NumberSequence.new(.24))}
+  h.sweeps[i].ink.beam.LightEmission=0
+ end
+ for i=1,4 do h.bolts[i]=richPath(r,'DischargeArc'..i,i%2==0 and CYAN or VIOLET,NumberSequence.new(.3)) end
+ for i=1,10 do
+  local p=visualPart(folder,'OrbitingMineralChip',Enum.Material.Slate,Color3.fromRGB(44,38,62))
+  h.debris[i]=p
+ end
+ h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor';h.vapor.Texture='rbxasset://textures/particles/smoke_main.dds'
+ h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
+ h.vapor.LightEmission=.35;h.vapor.LightInfluence=0;h.vapor.Brightness=1
+ h.vapor.Lifetime=NumberRange.new(.5,1.3);h.vapor.Speed=NumberRange.new(1,3.5);h.vapor.Drag=3
+ h.vapor.SpreadAngle=Vector2.new(180,180);h.vapor.Acceleration=Vector3.new(0,.7,0);h.vapor.WindAffectsDrag=false
+ h.vapor.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.35,1.9),NumberSequenceKeypoint.new(1,2.8)})
+ h.vapor.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.18,.62),NumberSequenceKeypoint.new(1,1)})
+ h.vapor.Rotation=NumberRange.new(-180,180);h.vapor.RotSpeed=NumberRange.new(-55,55)
+ h.particleSource=attachment(r.root,'LensParticleSource');h.vapor.Parent=h.particleSource
+ h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks';h.sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
+ h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN);h.sparks.LightEmission=.8;h.sparks.LightInfluence=0;h.sparks.Brightness=1.5
+ h.sparks.Lifetime=NumberRange.new(.25,.65);h.sparks.Speed=NumberRange.new(4,11);h.sparks.Drag=4;h.sparks.SpreadAngle=Vector2.new(180,180)
+ h.sparks.Acceleration=Vector3.new(0,-2,0);h.sparks.WindAffectsDrag=false;h.sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.11),NumberSequenceKeypoint.new(.15,.24),NumberSequenceKeypoint.new(1,0)})
+ h.sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(1,1)});h.sparks.Parent=h.particleSource
+ -- Emitters are outside the detail Folder because their parent is an Attachment.
+ folder.Destroying:Connect(function() h.particleSource:Destroy() end)
+end
+hideRich=function(r)
+ local h=r.rich;if not h then return end
+ h.glass.Transparency=1;h.mask.Enabled=false;h.core.Transparency=1
+ for _,p in ipairs(h.paths) do p.beam.Enabled=false end
+ for _,p in ipairs(h.debris) do p.Transparency=1 end
+ for _,p in ipairs(h.comets) do p.head.Transparency=1 end
+ h.vapor.Enabled=false;h.sparks.Enabled=false
+end
+local function curve(path,a,b,ta,tb,bend,width)
+ if width<=.002 then
+  if path.beam.Enabled then path.beam.Enabled=false end
+  return
+ end
+ pose(path.a,a,ta);pose(path.b,b,tb)
+ path.beam.CurveSize0=bend;path.beam.CurveSize1=bend
+ path.beam.Width0=width
+ if not path.beam.Enabled then path.beam.Enabled=true end
+end
+-- Reference choreography: orbiting inflow first, one brief lens swell late
+-- in charge, contraction, then complete handoff to the released beam.
+-- q is authoritative charge progress. No layer owns or extends gameplay time.
+function B.lensEnvelope(q)
+ if q==nil or q<.64 or q>=.95 then return 0 end
+ if q<.76 then return smooth((q-.64)/.12) end
+ return 1-smooth((q-.76)/.19)
+end
+drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
+ local h=r.rich;if not h then return end
+ if charge==nil or charge<0 or charge>=1 or afterAge then hideRich(r);return end
+ local q=charge
+ local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
+ local s=major*(scale or 1)
+ local camera=workspace.CurrentCamera
+ local right=camera and camera.CFrame.RightVector or Vector3.new(1,0,0)
+ local vertical=camera and camera.CFrame.UpVector or Vector3.yAxis
+ local eye=camera and camera.CFrame.Position-from or Vector3.zAxis*40
+ local toward=eye.Magnitude>.01 and eye.Unit or Vector3.zAxis
+ local inflow=smooth(q/.12)*(1-smooth((q-.62)/.26))
+ local lens=B.lensEnvelope(q)
+ local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
+ local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
+ local radius=s*(.65+3.85*lens)
+ -- The single surface goes clear -> chromatic -> clear, so nested Glass
+ -- cannot hide the color layer. It stays exactly on the emitting attachment.
+ h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
+ h.mask.Enabled=lens>.002
+ h.glass.Transparency=lens>.002 and (1+2*lens) or 1
+ local colorPulse=smooth((q-.70)/.045)*(1-smooth((q-.87)/.06))
+ local colorAt=clamp((q-.73)/.17)*3
+ local index=math.min(3,math.floor(colorAt)+1)
+ h.mask.FillColor=LENS_COLORS[index]:Lerp(LENS_COLORS[index+1],colorAt-(index-1))
+ h.mask.FillTransparency=1+1.2*colorPulse
+ h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.9*smooth(q/.65))
+ h.core.Transparency=alive>.02 and 0 or 1
+ h.particleSource.Position=toward*s*.8
+ -- The bright heads travel toward the origin, with tails behind. As the
+ -- distortion expands these streaks die down, leaving its silhouette clear.
+ for i,item in ipairs(h.comets) do
+  local angle=q*(11+i*.6)+i*TAU/4
+  local orbit=s*(2.4+2.8*(1-((q*2+i*.23)%1)))
+  local a=Vector3.new(math.cos(angle)*orbit,math.sin(angle*.8+i)*orbit*.65,math.sin(angle)*orbit)
+  local b=Vector3.new(math.cos(angle-1.45)*orbit*1.4,math.sin((angle-1.45)*.8+i)*orbit*.65,math.sin(angle-1.45)*orbit*1.4)
+  local ta=Vector3.new(-math.sin(angle),.3,math.cos(angle)).Unit
+  local tb=Vector3.new(-math.sin(angle-1.45),-.2,math.cos(angle-1.45)).Unit
+  curve(item.path,a,b,ta,tb,orbit*.7,.22*s*inflow)
+  item.head.CFrame=CFrame.new(from+a);item.head.Size=Vector3.one*(.16+.1*(i%2))*s
+  item.head.Transparency=1-.95*inflow
+ end
+ for i,item in ipairs(h.sweeps) do
+  local a=q*9+i*TAU/3
+  local x=Vector3.new(math.cos(a),.15*math.sin(a*2),math.sin(a)).Unit
+  local y=Vector3.new(math.cos(a+1.7),.2,math.sin(a+1.7)).Unit
+  local reach=s*(4.5-2*q)
+  local start=x*reach*.45;local finish=y*reach*1.7+Vector3.yAxis*.5*s
+  local ta=(y+Vector3.yAxis*.4).Unit;local tb=(-x+Vector3.yAxis*.15).Unit
+  curve(item.ink,start,finish,ta,tb,reach*1.1,1.1*s*pressure)
+  curve(item.rim,start+Vector3.yAxis*.045*s,finish,ta,tb,reach*1.1,.15*s*pressure)
+ end
+ for i,path in ipairs(h.bolts) do
+  local angle=i*TAU/4+math.floor(q*35)*.73
+  local x=Vector3.new(math.cos(angle),.2,math.sin(angle)).Unit
+  local y=Vector3.new(math.cos(angle+1),.4,math.sin(angle+1)).Unit
+  local reach=s*(1.8+.4*math.sin(q*73+i))
+  curve(path,x*.2*s,y*reach,(x+Vector3.yAxis).Unit,(-y+Vector3.yAxis).Unit,reach*.5,.045*s*pressure)
+ end
+ for i,p in ipairs(h.debris) do
+  local angle=q*3+i*2.39996
+  local rr=s*(3.8+(i%4)*.7)*(1-.25*q)
+  local position=Vector3.new(math.cos(angle)*rr,(math.sin(q*3+i)*.7+q*.8)*s,math.sin(angle)*rr)
+  p.CFrame=CFrame.new(from+position)*CFrame.Angles(q*4+i,q*5+i,q*3)
+  local size=(.18+(i%4)*.1)*s;p.Size=Vector3.new(size,size*.65,size*1.4)
+  p.Transparency=1-alive*.92
+ end
+ -- Sparse early motes yield to the circle, then stop entirely at release.
+ -- Never emit catch-up batches after a late observer or paused render loop.
+ if inflow>.05 then
+  if h.lastEmission and now>=h.lastEmission+.08 then
+   h.vapor:Emit(1);h.sparks:Emit(2);h.lastEmission=now
+  elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
+ else h.lastEmission=nil end
+end
+
 -- width is the caller's authoritative-envelope result. Charge never changes
 -- contact timing. releaseAge is from the server start, never local creation.
 function B.draw(r,from,to,now,width,charge,releaseAge,scale)
@@ -173,6 +344,9 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  r.body.Width0=thickness;r.body.Width1=thickness*p.taper;r.body.Enabled=width>.002
  r.core.Width0=p.core*width*scale;r.core.Width1=p.core*width*scale*.6;r.core.Enabled=width>.002
  if not r.detail then return end
+ if charge~=nil and charge>=0 and charge<1 then
+  acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale)
+ else releaseRich(r) end
  local gather,glint=0,0
  if charge~=nil then gather,glint=B.charge(charge) end
  local release=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.18))^2 or 0
@@ -180,7 +354,8 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local radius=p.orbit*scale*(charge~=nil and (1.25-.6*gather) or .7)
  if r.orb then
   r.orb.Position=from;r.orb.Size=Vector3.one*math.max(.025,radius*gather*.8)
-  r.orb.Transparency=charge~=nil and .08 or 1
+  r.orb.Transparency=charge~=nil and 0 or 1
+  if r.rich then r.orb.Transparency=1 end
   r.orb.Color=DARK:Lerp(DARK_GLOW,gather*.6)
  end
  local angle=now*p.spin+(charge or 0)*2
@@ -242,7 +417,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
   path.beam.Width0=star*.22;path.beam.Width1=0;path.beam.Enabled=star>.008 and not reduced
  end
 end
-function B.counts() return live,details end
+function B.counts() return live,details,richLive end
 -- Main geometry, fine trace, star and flecks have separate shutdown clocks.
 -- Reuse the rig; no emitter/Part allocation occurs when a cast ends.
 function B.after(r,from,to,now,age,scale)

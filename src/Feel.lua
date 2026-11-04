@@ -1,6 +1,6 @@
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=4.2,WorkClearance=2,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,WorkHeight=7.2,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -229,7 +229,7 @@ function F.smoothSwarm(previous,desired,dt)
  return (previous or Vector3.zero):Lerp(desired,1-math.exp(-math.min(dt,.1)*10))
 end
 function F.stationOffset(slot,geode,height)
- height=height or (geode and 5 or F.WorkHeight)
+ height=height or (geode and 8 or F.WorkHeight)
  if not geode then return 0,height,0 end
  -- Geodes share three small slots over the shell footprint, never behind the rock.
  local angle=2*math.pi*((slot or 1)-1)/3
@@ -237,7 +237,7 @@ function F.stationOffset(slot,geode,height)
 end
 function F.mineGoal(resourcePosition,slot,geode,fullSize)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
- -- just above that real volume instead of embedding it in the shell.
+ -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)

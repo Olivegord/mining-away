@@ -179,7 +179,8 @@ local function singularityPose(e,t,age)
  showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,t*.7,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
  -- Keep the authored gravity well and chips. A pair of tightening hooks and
  -- two sharp cuts give this small well a different vocabulary from heat rays.
- e.gravityVFX=e.gravityVFX or BeamVFX.new(e.folder,'Singularity',purple)
+ -- This is a resource gravity well, not a laser emitter: no charge lens here.
+ e.gravityVFX=e.gravityVFX or BeamVFX.new(e.folder,'Singularity',purple,nil,false)
  if e.gravityVFX then
   BeamVFX.draw(e.gravityVFX,center,center-Vector3.yAxis,e.visualNow,0,math.min(1,t/e.impact),age,math.min(1.4,r*.7))
   local strength=1-fade(e,age)

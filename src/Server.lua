@@ -188,12 +188,13 @@ local function includePurchasedSpecials(p: any,fleet: any)
  end
  return fleet
 end
-local function roleTestFleet(p: any)
+local function roleTestFleet(p: any,starterOnly: boolean?)
  p.testRoll=(p.testRoll or 0)+1
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
  local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
- for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' then table.insert(order,name) end end
+ local optional={Starforge=true,Frostbite=true,Resonator=true}
+ for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
  for i,name in ipairs(order) do
   counts[name]=(counts[name] or 0)+1
   local role=RoleConfig.StudioRoles[name]
@@ -203,7 +204,7 @@ local function roleTestFleet(p: any)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
- p.player:SetAttribute('MA_TestLoadoutLabel','All drone types · Plot Scanner · max backpack')
+ p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Plot Scanner · max backpack')
  return includePurchasedSpecials(p,fleet)
 end
 local function randomTestFleet(p: any)
@@ -229,6 +230,8 @@ local function spawnDrone(p,owned,slot)
  local roleName=owned.role or owned.type
  local role=RoleConfig.StudioRoles[roleName]
  local flightHeight=owned.flightHeight or (role and role.height) or Feel.FollowHeight
+ -- Runtime presentation lift; never rewrite a permanent drone's base traits.
+ if roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local pos=home+Vector3.new(0,flightHeight,0)+Feel.formation(slot,#runtimeFleet(p))
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or colors.Blue)
  model,body,emitter=RoleConfig.decorate(model,roleName)
@@ -1917,7 +1920,7 @@ addPlayer=function(pl)
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
  if preview then
-  p.testFleet=roleTestFleet(p)
+  p.testFleet=roleTestFleet(p,true)
   local equipment=data(p).logistics;equipment.backpack=true
   if #equipment.carriers==0 then
    table.insert(equipment.carriers,{id=tostring(pl.UserId)..':carrier:'..equipment.nextCarrier,droneIds={}})

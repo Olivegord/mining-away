@@ -196,7 +196,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
-  BeamVFX.hide(beam.vfx)
+  -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
  if visible then
   local origin=beam.origin.WorldPosition

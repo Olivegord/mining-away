@@ -1,5 +1,12 @@
 # Owner requirements
 
+## November 4 latest — reference-timed lasers, higher crew and lean starting loadout
+
+Use the supplied `sailent_sfx_7681643165253717261.mp4` as the motion reference, not an unordered collection of effects. The clear Glass distortion and color-distortion circle are the priority. They belong at the laser's emitting origin, briefly during charge; they must not remain around the impact during firing. Analyze the combination and handoff before modifying it. Include gameplay particles and provide a video of the completed lasers.
+
+Raise most drones so more beam is visible. Remove the assistant-added Starforge, Frostbite and Resonator from the default preview crew while keeping the owner's Bubbler, Halver, Gridcutter and Singularity ideas. Preserve permanent ownership and purchased drones. Verify performance, including repeated activation and cleanup. Routine native installation, saving and recording remain confined to `build/DRONE_GAME.rbxl`; no publishing.
+
+
 ## November 3 latest — install PR #3 and name the one game DRONE_GAME
 
 Install PR #3 into the existing editable native game, remove its verified generated duplicate, and rename the retained local file to `build/DRONE_GAME.rbxl`. Preserve the map, original assets and all unrelated/backup scripts. Update future build/install/release paths to that name; the existing Roblox place identity remains `136098934779395`. Leave Play stopped.

@@ -29,8 +29,9 @@ function Effects.step(now)
  for group,t in pairs(chargeTimelines) do
   if not group.Parent then BeamVFX.destroy(t.rig);chargeTimelines[group]=nil
   else
-   local q=math.clamp((now-t.at)/t.duration,0,1)
-   BeamVFX.draw(t.rig,t.position,t.position-Vector3.yAxis,now,0,q,nil)
+   local q=(now-t.at)/t.duration
+   if q>=0 and q<1 then BeamVFX.draw(t.rig,t.position,t.position-Vector3.yAxis,now,0,q,nil)
+   else BeamVFX.hide(t.rig,true) end
   end
  end
  for value,animation in pairs(animations) do
@@ -293,7 +294,9 @@ local function targetSight(owner: any,target: any,duration: number?)
  value.Parent=group
  local rig=BeamVFX.new(group,'Orbital',Color3.fromRGB(172,113,255))
  if rig then
-  chargeTimelines[group]={rig=rig,at=clock(),duration=duration or 1.4,position=location(target)+Vector3.new(0,2.5,0)}
+  local camera=workspace.CurrentCamera
+  local height=math.max(260,(camera and camera.CFrame.Position.Y or target.y)-target.y+180)
+  chargeTimelines[group]={rig=rig,at=clock(),duration=duration or 1.4,position=location(target)+Vector3.yAxis*height}
  end
  animate(value,1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.74})
  Debris:AddItem(group,2.6)
@@ -305,11 +308,11 @@ local function sustainedStrike(owner: any,event: any)
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
   group:SetAttribute('StartedAt',event.startedAt or clock())
-  for index,width in ipairs({2.25,.65}) do
+  for index,width in ipairs({2.25,.32}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
-   value.Color=ORBITAL_COLOR
-   value.Transparency=index==1 and .9 or .6;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
+   value.Color=index==1 and Color3.fromRGB(155,94,245) or ORBITAL_COLOR
+   value.Transparency=index==1 and .94 or .82;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
    value:SetAttribute('BurnTransparency',value.Transparency)
    if index==2 then
     local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
