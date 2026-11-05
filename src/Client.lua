@@ -14,12 +14,14 @@ local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 -- Renderer cues follow the same observed charge/release as the visual. Reuse
 -- the bounded spatial audio mixer and existing reduced-motion camera path.
-BeamVFX.onCue=function(kind,position,now,pulse)
- if kind=='pulse' then
-  soundscape:play('laser_pulse',position,{pitch=.9+pulse*.12,level=1-pulse*.065})
- else
-  soundscape:play('laser_pressure',position)
-  soundscape:play('laser_crackle',position)
+soundscape.chargeFromRenderer=true
+BeamVFX.onCharge=function(r,position,now,q)
+ soundscape:setLoop(r,'charge',position,.45+.5*q,.75+.4*q)
+end
+BeamVFX.onChargeEnd=function(r) soundscape:stopLoop(r) end
+BeamVFX.onCue=function(kind,position,now)
+ if kind=='launch' then
+  soundscape:play('laser_start',position)
   presentation:kick(position,.028,now)
  end
 end

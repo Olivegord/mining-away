@@ -41,7 +41,9 @@ check('warmup has an honest arrival gate and a separate replicated phase',functi
  snapshotDrone(d);assert(d.model:GetAttribute('State')=='Warmup')
  local warmAt=d.warmAt;p.busy=true;tick(d,120);p.busy=false
  assert(math.abs((now-d.warmAt)-(now-2-warmAt))<1e-5 and r.hp==hp)
- tick(d,90);assert(d.mining and d.state=='Mine' and r.hp<hp)
+ tick(d,90);assert(not d.mining and r.hp==hp,'longer charge damaged the rock early')
+ snapshotDrone(d);assert(d.model:GetAttribute('WarmupDuration')==d.stats.warmup and d.stats.warmup==3.2)
+ tick(d,math.ceil(d.stats.warmup/C.Tick));assert(d.mining and d.state=='Mine' and r.hp<hp)
 end)
 check('queued orders and nearby owner travel never replace a running job',function()
  local pl,p,roles=fixture();local d=roles.Striker;roles.Charger.hp=0

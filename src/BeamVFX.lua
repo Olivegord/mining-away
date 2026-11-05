@@ -86,6 +86,7 @@ function B.new(parent,style,color,detail,chargeLens)
  local counted=true
  root.Destroying:Connect(function()
   if counted then
+   if B.onChargeEnd then B.onChargeEnd(r) end
    LaunchAftermath.cancel(r)
    counted=false;r.destroyed=true;live-=1
    if live==0 and B.clearChargeCache then B.clearChargeCache() end
@@ -177,6 +178,10 @@ end
 local GLASS_COLOR=Color3.fromRGB(245,250,255)
 local CYAN=Color3.fromRGB(108,238,255)
 local VIOLET=Color3.fromRGB(166,64,255)
+-- Thresholded native distortion: black + saturated blue, red/yellow, green.
+-- Nonzero retained channels preserve black regions instead of washing the
+-- entire lens in one emissive color. Verified against native comparisons.
+local LENS_COLORS={Color3.new(1,1,.55),Color3.new(.35,.5,1),Color3.new(1,.55,1),Color3.new(1,.45,.6),Color3.new(1,.55,1)}
 local function visualPart(parent,name,material,color,shape)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false
  p.Transparency=1;p.Size=Vector3.one*.02;p.Material=material;p.Color=color
@@ -188,6 +193,7 @@ local function richPath(r,name,color,opacity)
 end
 releaseRich=function(r)
  local h=r.rich;if not h then return end
+ if B.onChargeEnd then B.onChargeEnd(r) end
  hideRich(r);r.rich=nil
  if h.leased then h.leased=false;richLive-=1 end
  if h.particleSource then
@@ -265,17 +271,17 @@ local function curve(path,a,b,ta,tb,bend,width)
  path.beam.Width0=width
  if not path.beam.Enabled then path.beam.Enabled=true end
 end
--- Six shrink-only pulses. Each reset is instantaneous and smaller, with no
--- animated swell. Shortening intervals build toward authoritative release.
+-- Reference rhythm: blue collapse, larger red/yellow pop, then progressively
+-- smaller green collapses. Shape shrinks; contrast stays hard until capture.
 -- q is authoritative charge progress. No layer owns or extends gameplay time.
-local pulseStarts={.32,.51,.66,.78,.875,.95,1}
-local pulseSizes={1,.82,.65,.49,.34,.2}
+local pulseStarts={.5,.64,.765,.86,.94,1}
+local pulseSizes={.65,1.2,.9,.62,.4}
 function B.lensEnvelope(q)
  if q==nil or q<pulseStarts[1] or q>=1 then return 0,0,1 end
  for i=1,#pulseSizes do
   if q<pulseStarts[i+1] then
    local t=(q-pulseStarts[i])/(pulseStarts[i+1]-pulseStarts[i])
-   return pulseSizes[i]*(1-t)^1.35,i,t
+   return pulseSizes[i]*(1-smooth((t-.12)/.88)),i,t
   end
  end
  return 0,0,1
@@ -283,6 +289,7 @@ end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local h=r.rich;if not h then return end
  if charge==nil or charge<0 or charge>=1 or afterAge then hideRich(r);return end
+ if B.onCharge then B.onCharge(r,from,now,charge) end
  if h.startup then StartupFX.update(h.startup,CFrame.new(from),charge);return end
  local q=charge
  local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
@@ -296,13 +303,12 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local lens,pulse,pulseAge=B.lensEnvelope(q)
  if h.lastPulse~=pulse then
   h.lastPulse=pulse
-  if pulse>0 and pulseAge<.35 and B.onCue then B.onCue('pulse',from,now,pulse) end
  end
  if h.tint~=r.color then
-  h.tint=r.color;h.glass.Color=r.color:Lerp(WHITE,.8)
+  h.tint=r.color;h.glass.Color=GLASS_COLOR
   h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
   for i,item in ipairs(h.comets) do
-   local color=LaunchAftermath.palette(r.color,i)
+   local color=r.color:Lerp(WHITE,i%2==0 and .3 or 0)
    item.path.beam.Color=ColorSequence.new(color);item.head.Color=color
   end
  end
@@ -310,18 +316,16 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
  local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
  local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
- local radius=s*(.025+4.475*lens)
+ local radius=s*(.025+6.75*lens)
  -- The single surface goes clear -> chromatic -> clear, so nested Glass
  -- cannot hide the color layer. It stays exactly on the emitting attachment.
  h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
  h.mask.Enabled=lens>.002
- h.glass.Transparency=lens>.002 and (1+2*lens) or 1
- local colorPulse=math.min(1,lens*2)
- local popColor=LaunchAftermath.palette(r.color,math.max(1,pulse))
- -- The above-one-transparency distortion subtracts its mask tint. Use the
- -- complementary input so the rendered pop has the beam/fragment hue.
- h.mask.FillColor=Color3.new(1-popColor.R,1-popColor.G,1-popColor.B)
- h.mask.FillTransparency=1+1.2*colorPulse
+ h.glass.Transparency=lens>.002 and 3 or 1
+ -- No pastel rainbow tween or brightness fade: each pop is a separate
+ -- saturated distortion state, remaining legible as its diameter collapses.
+ h.mask.FillColor=LENS_COLORS[math.max(1,pulse)]
+ h.mask.FillTransparency=lens>.002 and 6 or 1
  h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.9*smooth(q/.65))
  h.core.Transparency=alive>.02 and 0 or 1
  h.particleSource.Position=toward*s*.8
@@ -395,7 +399,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  -- Regular lens charges hand their ring to the independent aftermath clock.
  if r.wantChargeLens and not r.startupStyle and r.style~='Repair' and r.style~='Courier' and r.style~='Branch' then
   PlaneBurst.hide(r.plane)
- else PlaneBurst.draw(r.plane,direction,releaseAge and releaseAge/.26,scale) end
+ else PlaneBurst.draw(r.plane,direction,releaseAge and releaseAge/1.1,scale) end
  for i=1,2 do
   local path=r.paths[i];path.beam.Enabled=false
   if charge==nil and (r.style=='Resonance' or r.style=='Repair') then

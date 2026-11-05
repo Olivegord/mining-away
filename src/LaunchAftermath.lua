@@ -4,9 +4,12 @@ local A={}
 local active,pool={},{}
 local connection
 local BLUE=Color3.fromRGB(114,201,255)
-local highlights={0,.16,.32}
+-- Chromatic refraction visibly separates RGB channels; carry those saturated
+-- output hues into the dust rather than tinting all fragments beam-blue.
+local popColors={Color3.new(0,0,1),Color3.new(0,1,1),Color3.new(1,0,1),
+ Color3.new(0,1,0),Color3.new(1,1,0),Color3.new(1,0,0)}
 function A.palette(color,index)
- return (color or BLUE):Lerp(Color3.new(1,1,1),highlights[(index-1)%3+1])
+ return popColors[(index-1)%#popColors+1]
 end
 local function part(parent,name)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
@@ -23,7 +26,7 @@ local function create()
   e.SpreadAngle=Vector2.new(40,40);e.Color=ColorSequence.new(BLUE)
   e.LightEmission=.25;e.LightInfluence=0;e.Brightness=1.1
   e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.32,1.25),NumberSequenceKeypoint.new(1,2.2)})
-  e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.85),NumberSequenceKeypoint.new(.12,.56),NumberSequenceKeypoint.new(.55,.7),NumberSequenceKeypoint.new(1,1)})
+  e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(.12,.68),NumberSequenceKeypoint.new(.55,.8),NumberSequenceKeypoint.new(1,1)})
   e.Rotation=NumberRange.new(-180,180);e.RotSpeed=NumberRange.new(-18,18);e.Parent=a
   f.smoke[i]={a=a,e=e}
  end
@@ -35,7 +38,7 @@ local function create()
 end
 local function retire(f)
  if f.owner then f.owner.aftermath=nil end
- f.owner=nil;f.phase=nil;f.lastEmission=nil
+ f.owner=nil;f.phase=nil;f.lastEmission=nil;f.emissionSector=0
  for _,s in ipairs(f.smoke) do s.e:Clear();s.e.Acceleration=Vector3.zero end
  for _,p in ipairs(f.chips) do p.Transparency=1 end
  PlaneBurst.hide(f.plane);f.root.Parent=nil
@@ -66,14 +69,14 @@ function A.step(now)
    -- Brief pressure impulse acts on particles already emitted during charge.
    local pressure=180*math.exp(-math.max(0,age)*35)
    for _,s in ipairs(f.smoke) do s.e.Acceleration=s.radial*pressure; s.e.Drag=7 end
-   PlaneBurst.draw(f.plane,f.direction,age/.26,f.scale)
+   PlaneBurst.draw(f.plane,f.direction,age/1.1,f.scale)
    for n,p in ipairs(f.chips) do
     local t=age-(n%3)*.004
-    local life=.55+(n%4)*.07
+    local life=1.25+(n%4)*.07
     if t>=0 and t<life then
      local offset=PullMotion.discharge(n,t)*f.scale
      p.CFrame=CFrame.new(f.root.Position+f.right*offset.X+f.direction*(-offset.Y)+f.up*offset.Z)
-     p.Transparency=math.clamp((t-.16)/(life-.16),0,1)
+     p.Transparency=math.clamp((t-.45)/(life-.45),0,1)
     else p.Transparency=1 end
    end
   end
@@ -97,7 +100,7 @@ function A.charge(owner,origin,direction,now,q,scale)
   f.color=color
   for _,s in ipairs(f.smoke) do s.e.Color=ColorSequence.new(color) end
   for i,p in ipairs(f.chips) do p.Color=A.palette(color,i) end
-  for _,r in ipairs(f.plane.rays) do r.beam.Color=ColorSequence.new(A.palette(color,2)) end
+  for _,r in ipairs(f.plane.rays) do r.beam.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.2)) end
  end
  f.direction=direction
  local ref=math.abs(direction.Y)>.95 and Vector3.zAxis or Vector3.yAxis
@@ -108,8 +111,9 @@ function A.charge(owner,origin,direction,now,q,scale)
   s.a.Position=s.radial*(.12+.45*q)*f.scale
   s.e.Acceleration=s.radial*.15
  end
- if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.13) then
-  for _,s in ipairs(f.smoke) do s.e:Emit(1) end
+ if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.24) then
+  for i=1,3 do f.smoke[((f.emissionSector or 0)+i-1)%6+1].e:Emit(1) end
+  f.emissionSector=((f.emissionSector or 0)+3)%6
   f.lastEmission=now
  end
 end

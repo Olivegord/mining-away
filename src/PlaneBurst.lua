@@ -26,8 +26,8 @@ function Plane.draw(f,normal,t,scale)
  if not t or t<0 or t>=1 then Plane.hide(f);return end
  local ref=math.abs(normal.Y)>.95 and Vector3.zAxis or Vector3.yAxis
  local right=normal:Cross(ref).Unit;local up=right:Cross(normal).Unit
- local reach=(.12+1.9*(1-math.exp(-t*10)))*scale
- local strength=(1-t)^1.5
+ local reach=(.12+1.75*(1-math.exp(-t*40))+.65*t)*scale
+ local strength=(1-t)^.8
  for i,r in ipairs(f.rays) do
   local angle=(i-1)*math.pi/2
   local radial0=right*math.cos(angle)+up*math.sin(angle)

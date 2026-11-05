@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 4 latest — restore the original color pop's purpose and give the sequence time
+
+Consult the original supplied video: the owner says the color pop has lost its point. Restore its sharp black-and-saturated distortion contrast and clear collapses/resets, instead of an unreadable blended glow. The overall animation should be much longer, starting with the inward swirl. The expanding circle and downward radial particles should linger while continuing to move. Dust must contain the colors visibly present in the pop, while smoke stays beam-blue. Replace the earlier short generic sound layers with fitting laser charging/ignition sounds. Preserve the thin lasers and tiny screen shake, and keep firing hop removed.
+
 ## November 4 latest — fast blue pressure burst, shrink-only pulses and sound
 
 The owner finds the aftermath too floaty. The expanding disk must launch much faster, brake much faster and remain closer to the emitter. Tiny electric fragments must spread in a broad radial cone with a fast initial impulse, jitter and strong braking, with no gravity or continued falling. Match fragment and pulse colors; smoke and related regular-laser effects must match the blue beam. Replace the swell/collapse pulses with more iterations that only shrink, instantly resetting to a progressively smaller full size each time. Add tiny screen shake and synchronized sounds. This supersedes the preceding purple-smoke, gravity and three-swell choices.

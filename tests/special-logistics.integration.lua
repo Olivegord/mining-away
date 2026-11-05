@@ -191,7 +191,7 @@ specialCheck('fresh line of sight at the impact defeats an otherwise cached clea
 end)
 specialCheck('recall cancels choreography without payout and releases its reservation',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Halver');local r=specialRock(p,d)
- specialTicks(d,1.2);local job=assert(d.specialJob);local before=pendingOre(p)
+ local job=specialWaitForJob(d);local before=pendingOre(p)
  specialInput(pl,p,'Recall');assert(not d.target and not d.specialJob and not r.slots[d.id])
  specialEq(r.part:GetAttribute('EffectCancelledSerial'),job.serial);specialTicks(d,9)
  specialEq(r.paid,false);specialEq(pendingOre(p),before)
@@ -247,7 +247,7 @@ specialCheck('yielding save freezes the lethal recovery without retaining damage
 end)
 specialCheck('special workers use ordinary shared shell mining and cannot instantly remove geodes',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Singularity');local r=specialRock(p,d,'Geode',10000,0)
- local hp=r.hp;specialTicks(d,1.4);assert(r.hp<hp and not r.paid);assert(not d.specialJob)
+ local hp=r.hp;specialTicks(d,d.stats.warmup+.6);assert(r.hp<hp and not r.paid);assert(not d.specialJob)
  specialEq(r.part:GetAttribute('EffectType'),nil)
 end)
 local function specialState(p) return data(p).run.logistics end
@@ -388,7 +388,7 @@ specialCheck('reconnect preserves permanent types carriers loadout and typed in-
 end)
 specialCheck('a teammate finishing an unfinished special target grants ordinary yield and cancels its effect',function()
  local pl,p=specialOwner();local special=specialBuy(pl,p,'Bubbler');local target=specialRock(p,special,'Crystal',20000,11)
- specialTicks(special,1.2);local job=assert(special.specialJob)
+ local job=specialWaitForJob(special)
  local miner=p.drones[1];local primary=makeResource(patches[1],target.position+Vector3.new(4,0,0),'Crystal',1000,10,3);primary.readyAt=now
  assert(assignOre(p,miner,primary));miner.pos=Feel.mineGoal(primary.position,miner.targetSlot,false,primary.fullSize);miner.goal=miner.pos
  local before=pendingOre(p);specialEq(secondaryMining(miner,primary,99999,6),target.id)

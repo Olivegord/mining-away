@@ -51,12 +51,14 @@ for i=1,18 do
  local points={p}
  for step=1,180 do
   local t=step/OUT_RATE
-  if step%5==0 and t<.5 then
+  if step%5==0 and t<1.4 then
    local kick=angle+step*1.73
-   v+=Vector3.new(math.cos(kick),0,math.sin(kick))*(1-t/.5)*6
+   v+=Vector3.new(math.cos(kick),0,math.sin(kick))*(.45+5.5*math.exp(-t*7))
   end
-  -- No gravity: the cone rapidly loses its initial momentum to drag.
-  v-=v*15/OUT_RATE
+  -- Strong initial braking hands off to a small persistent outward current.
+  -- There is no gravitational acceleration or ballistic fall in the tail.
+  local drift=Vector3.new(math.cos(angle)*.55,-.32,math.sin(angle)*.55)
+  v+=(drift-v)*(t<.12 and 15 or 6)/OUT_RATE
   p+=v/OUT_RATE;points[#points+1]=p
  end
  discharge[i]=points

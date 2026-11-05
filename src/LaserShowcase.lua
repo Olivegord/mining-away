@@ -9,7 +9,7 @@ local definitions={
  {name='HALVER',role='Halver',color=Color3.fromRGB(255,179,77)},
  {name='GRIDCUTTER',role='Gridcutter',color=Color3.fromRGB(255,92,109)},
 }
-local period,charge,attack=5.5,.8,4.5 -- Only 0.2 seconds between work and the next charge.
+local period,charge,attack=7.9,3.2,4.5 -- Longer readable charge, still only 0.2 seconds idle.
 local function clean(model)
  for _,v in ipairs(model:GetDescendants()) do
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('SurfaceGui') or v:IsA('Sound') then v:Destroy()

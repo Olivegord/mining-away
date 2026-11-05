@@ -14,9 +14,6 @@ local TRACKS = {
  {name='The City',id='1835929012'},
 }
 local CUES = {
- laser_pulse={id='9126066421',volume=.045,duration=.12,pitch=1.1,cooldown=.025,range=48,maxVoices=3,fallback='volume_slider.ogg'},
- laser_pressure={id='9118612324',volume=.12,duration=.32,pitch=1.45,cooldown=.075,range=60,maxVoices=3,fallback='action_get_up.mp3'},
- laser_crackle={id='9118614717',volume=.065,duration=.28,pitch=1.65,cooldown=.075,range=48,maxVoices=3,fallback='volume_slider.ogg'},
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.055,duration=.3,pitch=1.45,cooldown=.09,fallback='volume_slider.ogg'},
@@ -35,7 +32,7 @@ local CUES = {
  breaker_fracture={id='9125869138',volume=.35,duration=1.1,pitch=1.05,cooldown=.12,range=85,maxVoices=4,fallback='action_jump_land.mp3'},
  rubble={ids={'9125869504','9125869495','9125869138'},volume=.32,duration=1.2,pitch=1.12,cooldown=.055,range=75,maxVoices=4,fallback='action_jump_land.mp3'},
  metal_land={id='9125871199',volume=.22,duration=1,pitch=.78,cooldown=.08,fallback='action_jump_land.mp3'},
- charge={id='9119816710',volume=.3,duration=3,cooldown=.1,range=75,priority=3},
+ charge={id='139131445232833',volume=.18,duration=3.05,cooldown=.1,range=65,priority=3},
  breaker_charge={id='9114583503',volume=.28,duration=5,pitch=.7,cooldown=.1,range=80,priority=4},
  repair_charge={id='9119816710',volume=.2,duration=3,pitch=1.4,cooldown=.1,range=65,priority=3},
  grow_charge={id='9118941971',volume=.22,duration=1,pitch=.8,cooldown=.1,range=65,priority=2},
@@ -47,7 +44,7 @@ local CUES = {
  orbital_hum={id='9118612324',volume=.27,duration=3,pitch=.6,cooldown=.1,range=95,priority=4},
  healing={id='9118941971',volume=.14,duration=1,pitch=1.45,cooldown=.1,range=65,priority=2},
  transfer={id='9118941667',volume=.17,duration=1,pitch=1.25,cooldown=.1,range=60,priority=2},
- laser_start={id='9126066421',volume=.14,duration=.5,pitch=1.3,cooldown=.08,fallback='action_get_up.mp3'},
+ laser_start={id='139620337204036',volume=.17,duration=.85,pitch=1.15,cooldown=.18,range=65,maxVoices=3},
  laser_stop={id='9118941971',volume=.085,duration=.45,pitch=.7,cooldown=.12,fallback='volume_slider.ogg'},
  dive={id='9118941667',volume=.21,duration=.55,pitch=.65,cooldown=.1,fallback='action_get_up.mp3'},
  heal={id='91735091370012',volume=.12,duration=.8,pitch=1.4,cooldown=.15,fallback='volume_slider.ogg'},
@@ -269,6 +266,9 @@ function Soundscape:updateDrone(source,position,now)
  local sample={state=state,life=a('Life'),dead=hp<=0 or state=='Destroyed' or state=='Reprinting',
   paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt')}
  local cues,mode=AudioFeedback.drone(record,sample,now)
+ -- The production beam renderer owns this rising tone for both real drones
+ -- and preview displays. Avoid a second charge loop from the state observer.
+ if mode=='charge' and self.chargeFromRenderer then mode=nil end
  for _,name in ipairs(cues) do self:play(name,position) end
  if mode then
   local start,duration

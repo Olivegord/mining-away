@@ -20,7 +20,7 @@ check('charge gathers compresses and changes silhouette before release',function
  assert(full>.99 and compressed<.4)
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
- BeamVFX.draw(r,from,to,10,0,.93,nil)
+ BeamVFX.draw(r,from,to,10,0,.965,nil)
  assert(r.rich and r.rich.core.Transparency==0 and not r.core.Enabled)
  assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
  local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
@@ -149,7 +149,7 @@ check('charge lens stays at the moving emitter briefly and never survives releas
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
  local h=assert(r.rich);assert(h.glass.Transparency==1 and not h.mask.Enabled,'lens appeared during early inflow')
- BeamVFX.draw(r,moving,to,60.1,0,.93,nil)
+ BeamVFX.draw(r,moving,to,60.1,0,.965,nil)
  near((h.glass.Position-moving).Magnitude,0);assert(h.mask.Parent==h.glass)
  assert(h.glass.Material==Enum.Material.Glass and not h.glass.CanQuery and h.glass.Transparency>1 and h.mask.Enabled)
  assert(h.mask.FillTransparency>1, 'color lens failed to appear')
@@ -182,20 +182,21 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('six shrink-only resets decrease in size and accelerate into a compact circular spread',function()
+check('reference color pops keep hard contrast through collapse and the compact ring keeps moving',function()
  local r=BeamVFX.new(root,'Cutter',color)
- local starts={.32,.51,.66,.78,.875,.95,1};local previousPeak=math.huge;local previousDuration=math.huge
+ local starts={.5,.64,.765,.86,.94,1};local previousDuration=math.huge
  near(BeamVFX.lensEnvelope(.3),0);near(BeamVFX.lensEnvelope(1),0)
- for i=1,6 do
+ for i=1,5 do
   local interval={starts[i],starts[i+1]};local peak=BeamVFX.lensEnvelope(interval[1])
-  assert(peak<previousPeak and interval[2]-interval[1]<previousDuration)
-  previousPeak=peak;previousDuration=interval[2]-interval[1]
+  assert(peak>=.4 and interval[2]-interval[1]<previousDuration)
+  previousDuration=interval[2]-interval[1]
   local last=math.huge
   for frame=0,10 do
    local q=interval[1]+(interval[2]-interval[1])*frame/11
    BeamVFX.draw(r,from,to,100+q,0,q,nil,1)
-   assert(r.rich.glass.Size.X<last,'pulse failed to collapse continuously')
+   assert(r.rich.glass.Size.X<=last,'pulse grew during its collapse')
    last=r.rich.glass.Size.X
+   near(r.rich.glass.Transparency,3);near(r.rich.mask.FillTransparency,6)
    assert(r.orb.Transparency==1,'spherical release returned')
   end
  end
@@ -206,10 +207,15 @@ check('six shrink-only resets decrease in size and accelerate into a compact cir
   assert(ray.beam.Enabled and not ray.beam.FaceCamera)
   near(ray.a.Position.Y,0);near(ray.b.Position.Y,0)
   near(ray.a.Position.Magnitude,ray.b.Position.Magnitude)
-  assert(ray.a.Position.Magnitude>1.5 and ray.a.Position.Magnitude<2.02,'ring must snap out but remain compact')
+  assert(ray.a.Position.Magnitude>1.4 and ray.a.Position.Magnitude<2.02,'ring must snap out but remain compact')
   assert(ray.beam.CurveSize0>0,'ring became flat triangular rays')
  end
  LaunchAftermath.step(101.7)
+ local radius=aftermath.plane.rays[1].a.Position.Magnitude
+ assert(aftermath.plane.rays[1].beam.Enabled,'ring disappeared instead of lingering')
+ LaunchAftermath.step(101.95)
+ assert(aftermath.plane.rays[1].a.Position.Magnitude>radius+.1,'ring tail stopped moving')
+ LaunchAftermath.step(102.2)
  for _,ray in ipairs(aftermath.plane.rays) do assert(not ray.beam.Enabled) end
  BeamVFX.destroy(r)
 end)
@@ -228,18 +234,19 @@ check('launch keeps smoke and electrical fragments alive after lens and drone ri
  assert(f.chips[1].Transparency<1 and f.chips[1].Position.Y<from.Y)
  assert(smoke.Emitted==emitted,'release repeatedly emitted a burst')
  local before=f.chips[1].Position
- LaunchAftermath.step(110.8);assert((f.chips[1].Position-before).Magnitude<.15,'fragments failed to brake')
+ LaunchAftermath.step(111.4);assert(f.chips[1].Transparency<1 and (f.chips[1].Position-before).Magnitude>.2,'fragments failed to linger and keep moving')
  LaunchAftermath.step(112.2)
  assert(not f.root.Parent and smoke.Cleared)
  for _,p in ipairs(f.chips) do assert(p.Transparency==1) end
 end)
-check('electrical spray is broad radial impulse without gravitational fall and shares beam palette',function()
+check('electrical spray keeps drifting without gravity and carries chromatic pulse hues',function()
  for i=1,18 do
   local early=PullMotion.discharge(i,.05);local late=PullMotion.discharge(i,.5);local endp=PullMotion.discharge(i,1.2)
   assert(early.Magnitude>.75,'launch is too slow')
   assert(math.sqrt(early.X^2+early.Z^2)>math.abs(early.Y)*1.45,'spray collapsed to a downward column')
-  assert(math.abs(endp.Y-late.Y)<.005,'gravity kept fragments falling')
-  assert(endp.Magnitude<3,'dust spread escaped compact budget')
+  assert(math.abs(endp.Y-late.Y)<.4,'dust accelerated into a gravitational fall')
+  assert((endp-late).Magnitude>.3,'dust tail stopped moving')
+  assert(endp.Magnitude<4,'dust spread escaped compact budget')
  end
  local owner={color=color};LaunchAftermath.charge(owner,from,-Vector3.yAxis,125,.5,1)
  local f=assert(owner.aftermath)
@@ -250,15 +257,18 @@ check('electrical spray is broad radial impulse without gravitational fall and s
  assert(f.smoke[1].e.Color==color)
  local r=BeamVFX.new(root,'Cutter',color);local cues={}
  BeamVFX.onCue=function(kind,_,_,pulse) cues[#cues+1]=kind..pulse end
- for _,q in ipairs({.32,.51,.66,.78,.875,.95}) do
+ local chargeUpdates,chargeEnds=0,0
+ BeamVFX.onCharge=function() chargeUpdates+=1 end;BeamVFX.onChargeEnd=function() chargeEnds+=1 end
+ for _,q in ipairs({.5,.64,.765,.86,.94}) do
   BeamVFX.draw(r,from,to,126+q,0,q,nil)
-  local _,pulse=BeamVFX.lensEnvelope(q);local expected=LaunchAftermath.palette(color,pulse)
-  near(r.rich.mask.FillColor.R,1-expected.R);near(r.rich.mask.FillColor.B,1-expected.B)
+  local tint=r.rich.mask.FillColor
   BeamVFX.draw(r,from,to,126+q+.001,0,q+.001,nil)
+  near(r.rich.mask.FillColor.R,tint.R);near(r.rich.mask.FillColor.G,tint.G);near(r.rich.mask.FillColor.B,tint.B)
  end
  BeamVFX.draw(r,from,to,127,1,nil,0);BeamVFX.draw(r,from,to,127.01,1,nil,.01)
- assert(#cues==7 and cues[7]=='launch1','pulse or release audio repeated per frame')
- BeamVFX.onCue=nil;BeamVFX.destroy(r)
+ assert(#cues==1 and cues[1]=='launch1','release audio repeated per frame')
+ assert(chargeUpdates==10 and chargeEnds==1,'charge tone failed to track visual lifecycle')
+ BeamVFX.onCue=nil;BeamVFX.onCharge=nil;BeamVFX.onChargeEnd=nil;BeamVFX.destroy(r)
 end)
 check('aftermath budget cancellation late receipts and reduced-effects cleanup',function()
  local owners={}
