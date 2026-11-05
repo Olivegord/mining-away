@@ -12,6 +12,7 @@ local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
+local rockDamage=RockDamage.new()
 -- Renderer cues follow the same observed charge/release as the visual. Reuse
 -- the bounded spatial audio mixer and existing reduced-motion camera path.
 soundscape.chargeFromRenderer=true
@@ -740,6 +741,7 @@ local function registerResource(source)
  view.Reflectance=0;view.Parent=localFX;hidePart(source)
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
+ rockDamage:register(resources[source])
 end
 local function registerTurret(source)
  if turrets[source] or not source:IsA('Model') or not (source:GetAttribute('Turret') or source:GetAttribute('TurretId')) then return end
@@ -797,7 +799,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -805,7 +807,7 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
- -- geometry writes. Growth and queued black/shrink/break stages still animate.
+ -- geometry writes. Growth, damped settling and fracture stages still animate.
  if r.settled and not r.dirty then return end
  r.dirty=false
  local s=r.source;local view=r.view
@@ -825,22 +827,39 @@ local function renderResource(r,now)
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
- local period=Feel.stageScale(stage,stageCount)
+ local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
+ local targetPeriod=Feel.resourceScale(stage,stageCount,scarBase,scarStage)
+ local poseStage=scarStage or stage
+ if event=='stage' then
+  r.layerFrom=r.layerScale or Feel.stageScale(stage-1,stageCount)
+  r.layerStageFrom=r.layerStage or math.max(0,stage-1);r.layerAt=now
+ end
+ local settling=r.layerAt and Feel.layerProgress(now-r.layerAt) or 1
+ local period=(r.layerFrom or targetPeriod)+(targetPeriod-(r.layerFrom or targetPeriod))*settling
+ r.layerScale=period;r.layerStage=(r.layerStageFrom or poseStage)+(poseStage-(r.layerStageFrom or poseStage))*settling
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
-  view.Size=full*math.max(.005,growth*period)
+  local displaySize=full*math.max(.005,growth*period)
+  view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
-  if type(ground)=='number' then view.CFrame=Feel.groundedRockFrame(pos,view.Size,ground,stage,seed)
-  else view.CFrame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
-  local darkness=r.visual.scorched and 1 or Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
-  view.Color=r.baseColor:Lerp(Color3.fromRGB(7,8,10),darkness)
+  local frame
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,r.layerStage,seed)
+  else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
+  view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
+  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
+  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52)
+  if not r.riseShown and now-spawnAt>.12 then
+   r.riseShown=true
+   if now-spawnAt<.65 then presentation:resourceRise(r,now) end
+  end
  else view.Transparency=1 end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now) end
- r.settled=now>=readyAt and #r.visual.queue==0
+ rockDamage:update(r,now)
+ r.settled=now>=readyAt and #r.visual.queue==0 and (settling>=1 or r.visual.broken)
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -1063,6 +1082,7 @@ connect(RunService.RenderStepped,function(dt)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
+ rockDamage:step(now)
  specialMiningFX:step(now,dt)
  for _,t in pairs(turrets) do
   if fieldUnlocked(t.source.Parent) and (t.source:GetAttribute('HP') or 0)>0 then
@@ -1356,7 +1376,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- commandView:destroy();pickupView:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ commandView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

@@ -125,6 +125,18 @@ for _,p in ipairs(crowded) do p:SetAttribute('EffectCancelledSerial',1) end
 ctrl:step(now+.2,1/60);assert(ctrl.count==0,'crowded cancellation frees all geometry')
 for _,p in ipairs(crowded) do dispose(p) end;checks+=1
 local streamed=resource('Gridcutter',now);ctrl:step(now+.1,1/60);dispose(streamed);assert(ctrl.count==0,'stream out cleanup');checks+=1
+local converted=resource('Bubbler',now);ctrl:step(now+.1,1/60)
+local liveBubble=assert(ctrl.active[converted]);local unionView=views[converted]
+local cutView=Instance.new('MeshPart');cutView.CFrame=unionView.CFrame;cutView.Size=unionView.Size
+cutView.Color=unionView.Color;cutView.Material=unionView.Material;cutView.LocalTransparencyModifier=unionView.LocalTransparencyModifier;cutView.Parent=visibleRoot
+views[converted]=cutView;unionView:Destroy()
+local convertedAt=now+durations.Bubbler*.68;converted:SetAttribute('EffectDoneAt',convertedAt)
+ctrl:step(convertedAt+.12,1/60)
+assert(ctrl.active[converted]==liveBubble and liveBubble.view==cutView and ctrl.count>0,'one-time Union to MeshPart conversion preserves bubble tail')
+assert(cutView.LocalTransparencyModifier==.2 and liveBubble.rock.Transparency==1,'converted cut stays visible beneath its existing tail')
+ctrl:step(convertedAt+1.2,1/60)
+assert(not ctrl.active[converted] and ctrl.count==0 and cutView.LocalTransparencyModifier==.2,'converted view releases original visibility lease normally')
+dispose(converted);checks+=1
 local final=resource('Frostbite',now);ctrl:step(now+.1,1/60);ctrl:destroy();assert(ctrl.destroyed and views[final].LocalTransparencyModifier==.2 and final.LocalTransparencyModifier==1,'destroy restores visible view only');checks+=1
 print(checks..' specialist chunk FX lifecycle and 30/60/144 FPS timeline checks passed (API doubles; rendering NOT VERIFIED)')
 

@@ -864,6 +864,15 @@ function P:cameraOffset(now)
  local strength=(self.shakeStrength or 0)*envelope
  return CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
 end
+function P:resourceRise(resource,now)
+ if self.closed then return end
+ local view=resource.view
+ local ground=resource.source:GetAttribute('GroundY') or self:_floor(view.Position,resource.source)
+ local at=Vector3.new(view.Position.X,ground+.05,view.Position.Z)
+ -- A single low dust displacement connects the two-second growth to the bed.
+ -- Late observers and mature rocks never replay this.
+ self.work:fracture(at,Vector3.yAxis,resource.baseColor,5,now)
+end
 function P:resourceImpact(resource,event,now)
  if self.closed or (event~='stage' and event~='break') then return end
  local breaking=event=='break'
@@ -881,7 +890,7 @@ function P:resourceImpact(resource,event,now)
  -- Retain the exact authored crystal silhouette in a short, weighted shower.
  -- Spawning from the fracture surface makes a break read as a release of
  -- material, rather than the final quarter-sized rock simply disappearing.
- local amount=breaking and 9 or 3
+ local amount=breaking and 9 or 6
  local full=resource.source:GetAttribute('FullSize') or view.Size
  if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do

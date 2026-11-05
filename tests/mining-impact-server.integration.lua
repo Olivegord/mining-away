@@ -20,7 +20,7 @@ check('full bag accepts manual orders and continues actual miner damage',functio
  release(d);p.tokens=7;p.bucketAt=now;command.OnServerEvent:Fire(pl,'MineOre',r.id)
  assert(d.target==r,'full bag rejected explicit mining order')
  d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.velocity=Vector3.zero
- for _=1,90 do realTime+=C.Tick;now=realTime;mineDrone(d,p,f,C.Tick) end
+ for _=1,math.ceil((d.stats.warmup+1)/C.Tick) do realTime+=C.Tick;now=realTime;mineDrone(d,p,f,C.Tick) end
  assert(r.hp<490 and d.mining,'mining stopped when backpack was full')
  assert(hitResource(d,r,10000));assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==40)
 end)
@@ -55,10 +55,10 @@ check('boulders preserve original crystal identity and seven monotonic size chan
  end
  assert(r.part:GetAttribute('StageCount')==7 and r.stage==7)
 end)
-check('each ordinary and large layer becomes black before shrinking, without duplicate cues',function()
+check('ordinary and large layers retain mineral color and fracture without duplicate cues',function()
  for _,count in ipairs({3,7}) do
   assert(Feel.stageDarkness(100,100,0,count)==0)
-  local almost=100*(1-.9/(count+1));assert(Feel.stageDarkness(almost,100,0,count)==1)
+  local almost=100*(1-.9/(count+1));assert(Feel.stageDarkness(almost,100,0,count)<=.16)
   local visual=Feel.newStagePresentation(0,false,0,count);local scorch,crack,broken=0,0,0
   for n=0,150 do
    local event=Feel.updateStagePresentation(visual,count,true,n*.02,count)
@@ -66,9 +66,36 @@ check('each ordinary and large layer becomes black before shrinking, without dup
    elseif event=='stage' then crack+=1;assert(not visual.scorched)
    elseif event=='break' then broken+=1 end
   end
-  assert(scorch==count and crack==count and broken==1)
+  assert(scorch==0 and crack==count and broken==1)
   local late=Feel.newStagePresentation(count,false,0,count);assert(late.stage==count)
  end
+end)
+check('physical scar history belongs only to accepted server contacts',function()
+ local _,p,d,f=fixture();local r=node(d,f,810,7)
+ d.role='Charger'
+ local before=r.hp
+ assert(not hitResource(d,r,-1,false,nil,d.pos,'Breaker'))
+ assert(r.part:GetAttribute('SmashDents')==nil and r.hp==before)
+ for n=1,3 do
+  assert(hitResource(d,r,12,false,nil,d.pos,'Breaker'))
+  assert(r.part:GetAttribute('SmashDents')==n and r.part:GetAttribute('DamageAt')==now)
+ end
+ assert(r.part:GetAttribute('DamageDepth')>0 and r.part:GetAttribute('DamageDepth')<1)
+ d.role='Bubbler'
+ d.specialJob={targetId=r.id,startedAt=now-10,duration=1,impact=.5,damage=20,serial=1}
+ assert(hitResource(d,r,99999,false,nil,nil,'Special'))
+ assert(r.part:GetAttribute('BubbleBites')==1)
+ assert(not hitResource(d,r,99999,false,nil,nil,'Special'))
+ assert(r.part:GetAttribute('BubbleBites')==1,'replayed special made a phantom cavity')
+end)
+check('editable native crystal template survives missing replicated template',function()
+ local _,_,d,f=fixture()
+ local replicated=RS:FindFirstChild('Crystal');local saved=scene.crystalTemplate
+ local native=replicated:Clone();native.Name='PhysicalOriginal';native.Parent=workspace
+ scene.crystalTemplate=native;replicated.Parent=nil
+ local r=node(d,f,100)
+ assert(r.part.ClassName=='UnionOperation','authored native crystal replaced by a cube')
+ replicated.Parent=RS;scene.crystalTemplate=saved;native:Destroy()
 end)
 check('powered dive accelerates downwards at every render rate and stops at contact',function()
  local start,impact=Vector3.new(1,12,3),Vector3.new(1,2,3)

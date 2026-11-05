@@ -279,14 +279,14 @@ local function finishEditableMap(root,map,fields,home)
  -- Native Roblox surfaces provide readable material changes without global
  -- gloss: studded plastic trim, rough ore beds, paved lanes and metal machines.
  for _,part in ipairs(map:GetDescendants()) do if part:IsA('BasePart') then
-  if part.Name=='HubPad' then nativeFinish(part,Enum.Material.Concrete)
-  elseif part.Name=='MainTestLane' or part.Name=='FieldTestLane' then nativeFinish(part,Enum.Material.Pavement)
+  if part.Name=='HubPad' then nativeFinish(part,Enum.Material.Concrete);part.Color=Color3.fromRGB(179,175,139)
+  elseif part.Name=='MainTestLane' or part.Name=='FieldTestLane' then nativeFinish(part,Enum.Material.Sandstone);part.Color=Color3.fromRGB(210,185,128)
   elseif part.Name:match('Pad$') then nativeFinish(part,Enum.Material.DiamondPlate)
   elseif part.Name=='Printer' or part.Name=='PackStation' or part.Name=='PrestigeStation' then nativeFinish(part,Enum.Material.Metal)
   else part.Reflectance=0 end
  end end
  local baseplate=workspace:FindFirstChild('Baseplate')
- if baseplate and baseplate:IsA('BasePart') then nativeFinish(baseplate,Enum.Material.Plastic,true) end
+ if baseplate and baseplate:IsA('BasePart') then nativeFinish(baseplate,Enum.Material.Grass);baseplate.Color=Color3.fromRGB(86,142,74) end
  local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
  if spawn then nativeFinish(spawn,Enum.Material.Plastic,true) end
  local converter=workspace:FindFirstChild('Converter')
@@ -298,12 +298,12 @@ local function finishEditableMap(root,map,fields,home)
  if converterName then for _,text in ipairs(converterName:GetDescendants()) do if text:IsA('TextLabel') and text.Text=='SELL YOUR CARGO' then text.Text='DEPOSIT FOR LAUNCH' end end end
  local lane=map:FindFirstChild('FieldTestLane',true)
  local finishes={Enum.Material.Sandstone,Enum.Material.Ground,Enum.Material.Slate,Enum.Material.Rock,Enum.Material.Grass}
- local beds={Color3.fromRGB(164,157,133),Color3.fromRGB(139,112,116),Color3.fromRGB(111,127,145),Color3.fromRGB(129,117,143),Color3.fromRGB(106,131,117)}
+ local beds={Color3.fromRGB(192,170,113),Color3.fromRGB(173,111,86),Color3.fromRGB(100,143,165),Color3.fromRGB(146,117,167),Color3.fromRGB(104,154,101)}
  for id,cfg in ipairs(Config.Fields) do
   local model=fields:FindFirstChild(cfg.Key);local part=model:FindFirstChild('Field')
   nativeFinish(part,finishes[id] or Enum.Material.Slate);part.Color=beds[id] or beds[1]
   local border=model:FindFirstChild('Border')
-  if border and border:IsA('BasePart') then nativeFinish(border,Enum.Material.Plastic,true) end
+  if border and border:IsA('BasePart') then nativeFinish(border,Enum.Material.Plastic,true);border.Color=(beds[id] or beds[1]):Lerp(Color3.fromRGB(50,70,53),.5) end
   if lane and lane:IsA('BasePart') and not model:FindFirstChild('DepotApproach') then
    local nearEdge=part.Position.Z-part.Size.Z/2
    local laneEdge=lane.Position.Z+lane.Size.Z/2
@@ -314,6 +314,111 @@ local function finishEditableMap(root,map,fields,home)
    end
   end
  end
+end
+-- Dress the actual editable map, after the starter plot has reached its final
+-- position. The old landscape planner belongs to the historical capture and
+-- must not be used to cover this native map with a second world.
+function W.landscapeEditable(scene)
+ if not scene.root:GetAttribute('EditableMap') then return end
+ local previous=scene.map:FindFirstChild('QuarryLandscape')
+ if previous and previous:GetAttribute('LandscapeVersion')==1 then return end
+ if previous then previous:Destroy() end
+ local landscape=Instance.new('Folder');landscape.Name='QuarryLandscape';landscape:SetAttribute('LandscapeVersion',1)
+ local base=workspace:FindFirstChild('Baseplate')
+ local floor=base and base.Position.Y+base.Size.Y/2 or 0
+ local grass=Color3.fromRGB(102,155,77)
+ local earth=Color3.fromRGB(120,99,70)
+ local chalk=Color3.fromRGB(184,170,131)
+ local foliage={Color3.fromRGB(84,143,67),Color3.fromRGB(159,124,63),Color3.fromRGB(71,133,126),Color3.fromRGB(113,115,160),Color3.fromRGB(62,133,89)}
+ local keepClear={}
+ for _,field in ipairs(scene.fields) do table.insert(keepClear,{part=field.part,padding=5}) end
+ -- Treat every existing floor, building and lane as occupied. Decorations
+ -- never cover a shop, mining footprint, display station or authored route.
+ for _,part in ipairs(scene.map:GetDescendants()) do
+  if part:IsA('BasePart') and part.Transparency<1 then table.insert(keepClear,{part=part,padding=3}) end
+ end
+ local converter=workspace:FindFirstChild('Converter')
+ if converter and converter:IsA('BasePart') then table.insert(keepClear,{part=converter,padding=6}) end
+ local function clear(x,z,w,d)
+  -- The home effects previews are client-only and appear after this server
+  -- pass. Reserve their two-column apron before any trees are planted.
+  if math.abs(x-(scene.home.X+61))<w/2+25 and math.abs(z-(scene.home.Z-2))<d/2+35 then return false end
+  if base and (math.abs(x-base.Position.X)+w/2>base.Size.X/2-5 or math.abs(z-base.Position.Z)+d/2>base.Size.Z/2-5) then return false end
+  for _,entry in ipairs(keepClear) do
+   local part=entry.part;local localPoint=part.CFrame:PointToObjectSpace(Vector3.new(x,part.Position.Y,z))
+   -- Project the candidate's two diagonal corners into the original part's
+   -- frame. This also conservatively clears any rotated authored footprint.
+   local a=part.CFrame:PointToObjectSpace(Vector3.new(x+w/2,part.Position.Y,z+d/2))-localPoint
+   local b=part.CFrame:PointToObjectSpace(Vector3.new(x-w/2,part.Position.Y,z+d/2))-localPoint
+   local ex,ez=math.max(math.abs(a.X),math.abs(b.X)),math.max(math.abs(a.Z),math.abs(b.Z))
+   if math.abs(localPoint.X)<part.Size.X/2+ex+entry.padding and math.abs(localPoint.Z)<part.Size.Z/2+ez+entry.padding then return false end
+  end
+  return true
+ end
+ local function piece(parent,name,x,z,w,h,d,tint,material,top,collide)
+  local p=W.part(parent,name,Vector3.new(x,top-h/2,z),Vector3.new(w,h,d),tint,material)
+  p.CanCollide=collide==true;p.CanQuery=collide==true;p.CastShadow=h>.4
+  p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
+  return p
+ end
+ local function terrace(parent,x,z,w,d,h,tint)
+  if not clear(x,z,w,d) then return false end
+  piece(parent,'EarthBank',x,z,w,h,d,earth,Enum.Material.Ground,floor+h,true)
+  piece(parent,'GrassShelf',x,z,w+.08,.22,d+.08,tint,Enum.Material.Grass,floor+h+.12,true)
+  piece(parent,'ExposedStratum',x,z-d/2-.06,w-.8,.65,.16,chalk,Enum.Material.Sandstone,floor+h*.56,false)
+  return true
+ end
+ for index,field in ipairs(scene.fields) do
+  if field.cfg.TestField then continue end
+  local p=field.part;local biome=Instance.new('Folder');biome.Name=field.cfg.Key..'Landscape'
+  local x,z=p.Position.X,p.Position.Z;local halfX,halfZ=p.Size.X/2,p.Size.Z/2
+  local tint=foliage[index] or grass
+  -- Stacked rectangular cuts show local geology instead of an empty grey
+  -- plane. Their fronts remain outside the rock and player travel footprint.
+  local ridgeX,ridgeZ=x,z+halfZ+29
+  local width,depth=p.Size.X+7,22
+  if index==1 then ridgeX=x-halfX-27;ridgeZ=z;width=20;depth=p.Size.Z-16 end
+  if terrace(biome,ridgeX,ridgeZ,width,depth,3.4,tint:Lerp(grass,.55)) then
+   local upperX=ridgeX+(index==1 and -3 or 3);local upperZ=ridgeZ+3
+   terrace(biome,upperX,upperZ,width-7,depth-7,7+index*.65,tint:Lerp(grass,.4))
+   tree(biome,upperX-width*.2,upperZ,14+index,tint,floor+7+index*.65,.3*index)
+   tree(biome,upperX+width*.23,upperZ+2,11+index,tint:Lerp(grass,.25),floor+7+index*.65,1.2+index)
+  end
+  -- A low grassy shoulder and two hand-placed trees form a compact grove.
+  -- A failed clearance candidate is simply omitted, never pushed into a lane.
+  for side=-1,1,2 do
+   local tx,tz=x+side*(halfX+19),z+halfZ-8
+   if clear(tx,tz,15,15) then
+    piece(biome,'GroveSoil',tx,tz,15,.3,15,grass:Lerp(tint,.18),Enum.Material.Grass,floor+.24,false)
+    tree(biome,tx,tz,12+index*.7,tint,floor,.5+index*side)
+    for bush=1,3 do
+     piece(biome,'LowBrush',tx+side*(3+bush),tz-5+bush*.7,3.2,1.2+bush*.25,2.7,tint:Lerp(grass,.25),Enum.Material.SmoothPlastic,floor+1.2+bush*.25,false)
+    end
+   end
+  end
+  -- Cobalt gets a shallow settling pond on its far outside shoulder; it is
+  -- cosmetic, with a grounded stone lip and no deep-water movement trap.
+  if field.cfg.Key=='Cobalt' then
+   local px,pz=x+halfX+23,z+halfZ+9
+   if clear(px,pz,20,16) then
+    piece(biome,'SettlingPondBank',px,pz,20,.6,16,chalk,Enum.Material.Slate,floor+.55,true)
+    piece(biome,'SettlingPondWater',px,pz,17,.12,13,Color3.fromRGB(59,157,176),Enum.Material.SmoothPlastic,floor+.62,false)
+    for n=1,3 do piece(biome,'PondReed',px+6+n*.5,pz-4, .3,1+n*.4,.3,foliage[5],Enum.Material.SmoothPlastic,floor+1+n*.4,false) end
+   end
+  end
+  biome.Parent=landscape
+ end
+ -- Backdrop behind the depot, leaving its machines and forward sightline open.
+ for _,side in ipairs({-1,1}) do
+  local x,z=scene.home.X+side*70,scene.home.Z-25
+  if terrace(landscape,x,z,24,28,2.2,grass) then
+   tree(landscape,x-side*4,z,17,foliage[1],floor+2.2,side*.6)
+   tree(landscape,x+side*6,z+5,12,foliage[1]:Lerp(chalk,.12),floor+2.2,side*1.1)
+  end
+ end
+ landscape.Parent=scene.map
+ scene.root:SetAttribute('LandscapeDirection','Sunlit parts-built mineral quarry')
+ scene.root:SetAttribute('LandscapePartCount',#landscape:GetDescendants())
 end
 local function restoreMiningFX()
  local rs=game:GetService('ReplicatedStorage')
@@ -363,6 +468,7 @@ function W.placeStart(scene)
  W.ensureImpactField(scene.root,scene.root:FindFirstChild('Fields'))
  for _,field in ipairs(scene.fields) do if field.cfg.TestField then field.center=field.part.Position end end
  scene.root:SetAttribute('StarterField','Quartz');scene.root:SetAttribute('StarterSpawn',scene.spawnPosition)
+ W.landscapeEditable(scene)
 end
 function W.initialize(): any
  restoreMiningFX()

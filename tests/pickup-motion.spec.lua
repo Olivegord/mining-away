@@ -34,4 +34,20 @@ check('expiry fades monotonically to invisibility and collection settles exactly
  local start,scale=M.collection(0);assert(start==0 and scale==1)
  local finish,zero=M.collection(1);assert(finish==1 and zero==0)
 end)
+check('angular momentum is continuous at landing and then stops',function()
+ local landed=.7
+ assert(math.abs(M.tumble(landed,landed)-M.tumble(landed,nil))<1e-8)
+ assert(math.abs(M.tumble(landed+.00001,landed)-M.tumble(landed,landed))<.0001)
+ assert(M.tumble(landed+.1,landed)>M.tumble(landed,landed))
+ assert(math.abs(M.tumble(5,landed)-M.tumble(10,landed))<1e-8)
+end)
+check('rotated reward fragments keep their lowest corner above the floor',function()
+ assert(math.abs(M.supportHeight(.48,.58,.44,0,0,0)-.29)<1e-8)
+ assert(math.abs(M.supportHeight(.48,.58,.44,math.pi*.5,0,0)-.22)<1e-8)
+ assert(math.abs(M.supportHeight(.48,.58,.44,0,0,math.pi*.5)-.24)<1e-8)
+ for i=1,100 do
+  local height=M.supportHeight(.48,.58,.44,i*.17,i*.28,i*.31)
+  assert(height>=.22-1e-8 and height<=math.sqrt(.48*.48+.58*.58+.44*.44)*.5+1e-8)
+ end
+end)
 print(checks..' production render-trajectory checks; not native visual acceptance')

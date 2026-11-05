@@ -4,6 +4,13 @@ local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local Debris=game:GetService('Debris')
 local V={};V.__index=V
+local function backpack(owner,fallback)
+ local character=owner and owner.Character
+ local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
+ if torso then return torso.CFrame:PointToWorldSpace(Vector3.new(0,.3,.8)),torso end
+ local hr=character and character:FindFirstChild('HumanoidRootPart')
+ return hr and hr.Position or fallback,nil
+end
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
  p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
@@ -48,6 +55,8 @@ function V.new(root,parent,audio)
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,trail=trail,glints=glints,glow=glow,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
+  local contactAt=source:GetAttribute('GroundImpactAt')
+  if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -64,9 +73,10 @@ function V.new(root,parent,audio)
   if math.abs(now-(receipt.at or 0))>.7 then return end
   local rootPart=player.Character and player.Character:FindFirstChild('HumanoidRootPart');if not rootPart then return end
   local r=self.byId[receipt.pickupId]
-  if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
+  if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
+  local target=backpack(player,rootPart.Position)
   local anchor=Instance.new('Part');anchor.Name='CollectedMineral';anchor.Size=Vector3.one*.05;anchor.Transparency=1
-  anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=rootPart.Position;anchor.Parent=parent
+  anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=target;anchor.Parent=parent
   local a=Instance.new('Attachment');a.Parent=anchor
   local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(4)
   Debris:AddItem(anchor,burst.Lifetime.Max+.15)
@@ -76,34 +86,46 @@ function V.new(root,parent,audio)
 end
 function V:update(dt,now)
  local camera=workspace.CurrentCamera;local glints,lights=0,0
+ local player=Players.LocalPlayer
+ local reduced=player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
    local collectedAt=source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
-    r.collectAt=now;r.collectFrom=r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
     r.collectTarget=source:GetAttribute('CollectedPosition')
    end
   end
   local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt);local scale=1;local done=false
   if r.collectAt then
    local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
-   local owner=Players:GetPlayerByUserId(r.owner);local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
-   local target=hr and hr.Position+Vector3.new(0,.15,0) or r.collectTarget or r.collectFrom
-   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,math.sin(math.clamp(t,0,1)*math.pi)*.55,0)
+   local owner=Players:GetPlayerByUserId(r.owner)
+   local target=backpack(owner,r.collectTarget or r.collectFrom)
+   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,math.sin(math.clamp(t,0,1)*math.pi)*.18,0)
    opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1));scale=math.max(.04,shrink);done=t>=1
-   r.trail.Enabled=t<.8
+   r.trail.Enabled=not reduced and t<.8
   elseif source.Parent and not r.removedAt then
-   -- Exact authoritative contact cues survive the render interpolation buffer.
-   if AudioFeedback.serial(r,'ground',source:GetAttribute('GroundImpactSerial') or 0,source:GetAttribute('GroundImpactAt'),now) and self.audio then
+   -- Landing pose is persistent state, even when its timestamp arrives too
+   -- late to replay a sound. A streamed/stalled observer must still settle.
+   local contactAt=source:GetAttribute('GroundImpactAt')
+   if not r.landAge and type(contactAt)=='number' and contactAt>0 then
+    r.landAge=math.max(0,contactAt-r.born)
+   end
+   -- Queue the authoritative hit until the buffered picture reaches contact.
+   if AudioFeedback.serial(r,'ground',source:GetAttribute('GroundImpactSerial') or 0,contactAt,now) then
     local point=source:GetAttribute('GroundImpactPosition')
-    if typeof(point)=='Vector3' then self.audio:play('rubble',point,{level=math.clamp((source:GetAttribute('GroundImpactSpeed') or 1)/12,.25,1),pitch=.9+(r.seed%5)*.055}) end
+    if typeof(point)=='Vector3' then r.contact={at=(contactAt or now)+PickupMotion.DELAY,point=point,speed=source:GetAttribute('GroundImpactSpeed') or 1} end
+   end
+   if r.contact and now>=r.contact.at then
+    if self.audio and now-r.contact.at<.35 then self.audio:play('rubble',r.contact.point,{level=math.clamp(r.contact.speed/12,.25,1),pitch=.9+(r.seed%5)*.055}) end
+    r.contact=nil
    end
    sample(r,source,now)
    local x,y,z=PickupMotion.position(r.samples,now)
    if x then r.pos=Vector3.new(x,y,z) end
    opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
    local latest=r.samples[#r.samples]
-   r.trail.Enabled=latest and latest.homing and r.velocity.Magnitude>10 and opacity>.1 or false
+   r.trail.Enabled=not reduced and latest and latest.homing and r.velocity.Magnitude>10 and opacity>.1 or false
   else
    r.removedAt=r.removedAt or now
    -- Destruction can replicate just before its receipt. Keep a tiny grace
@@ -119,15 +141,24 @@ function V:update(dt,now)
    Debris:AddItem(r.view,math.max(r.glints.Lifetime.Max,r.trail.Lifetime)+.1)
    self.byId[r.seed]=nil;self.records[source]=nil
   else
-   local age=math.max(0,now-r.born)
-   -- Fast tumble settles to a fixed pose. No perpetual size bob or floor jitter.
-   local tumble=(1-math.exp(-age*2.5))*1.4
-   r.view.CFrame=CFrame.new(r.pos)*CFrame.Angles(r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8)
+   local age=math.max(0,now-PickupMotion.DELAY-r.born)
+   local tumble=PickupMotion.tumble(age,r.landAge)
+   local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
+   local position=r.pos
+   local latest=r.samples[#r.samples]
+   if not r.collectAt and latest and latest.floor then
+    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
+    -- Lift the entire trajectory by the rotated support extent, preserving
+    -- the small rebound instead of clamping it away under the visible mesh.
+    position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+   end
+   r.drawPosition=position
+   r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
    r.view.Size=r.size*scale;r.view.Transparency=1-opacity
    local distance=camera and (camera.CFrame.Position-r.pos).Magnitude or math.huge
-   r.glints.Enabled=not r.removedAt and not r.collectAt and opacity>.15 and distance<55 and glints<16
+   r.glints.Enabled=not reduced and not r.removedAt and not r.collectAt and opacity>.15 and distance<45 and glints<8
    if r.glints.Enabled then glints+=1 end
-   r.glow.Enabled=opacity>.05 and distance<24 and lights<4
+   r.glow.Enabled=not reduced and opacity>.05 and distance<24 and lights<2
    if r.glow.Enabled then lights+=1;r.glow.Brightness=.18*opacity end
   end
  end

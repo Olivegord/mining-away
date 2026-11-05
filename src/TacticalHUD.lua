@@ -155,6 +155,10 @@ function HUD.new(refs: any)
  plain(refs.resources)
  self.coins=card(refs.resources,'CreditsCounter',C.blue);self.coins.BackgroundTransparency=0
  self.cargo=card(refs.resources,'CargoCounter',C.green);self.cargo.BackgroundTransparency=0
+ self.cargoStroke=self.cargo:FindFirstChildOfClass('UIStroke')
+ if interfaceKit then
+  self.cargoIcon=interfaceKit.icon(self.cargo,'cargo',UDim2.fromOffset(6,5),UDim2.fromOffset(22,22),C.text)
+ end
  refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.SourceSansBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
  for _,name in ipairs({'Icon_coin','Icon_crystal'}) do local icon=refs.resources:FindFirstChild(name);if icon then icon.Visible=false end end
  self.creditCaption=text(self.coins,'Caption',0,0,58,26,11,Color3.fromRGB(35,38,40));self.creditCaption.BackgroundTransparency=0;self.creditCaption.BackgroundColor3=C.line;self.creditCaption.Text='Credits';self.creditCaption.TextXAlignment=Enum.TextXAlignment.Center
@@ -231,9 +235,9 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
  if fighting then status='Fleet fighting'
+ elseif full then status='Bag full · return home'
  elseif working>0 then status=string.format('%d / %d miners assigned',working,activity.miners)
  elseif delivering>0 then status=string.format('%d hauling · %d miners ready',delivering,activity.miners)
- elseif full then status='Backpack full · deposit for launch'
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
  elseif living<total then status=string.format('%d / %d ready',living,total)
  elseif activity.miners>0 then status=string.format('%d miners · %d support',activity.miners,activity.support)
@@ -283,21 +287,32 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
  -- One small counter row. No permanent objectives, test banner or portraits.
- local rw=math.min(390,w-164)
- r.resources.Size=UDim2.fromOffset(rw,30);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
+ local rw=math.max(140,math.min(390,w-164))
+ r.resources.Size=UDim2.fromOffset(rw,32);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
  local cw=math.floor((rw-6)*.38)
- self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,30)
- self.cargo.Position=UDim2.fromOffset(cw+6,0);self.cargo.Size=UDim2.fromOffset(rw-cw-6,30)
+ self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,32)
+ self.cargo.Position=UDim2.fromOffset(cw+6,0);self.cargo.Size=UDim2.fromOffset(rw-cw-6,32)
  self.creditCaption.Visible=false;self.cargoCaption.Visible=false
  r.credits.Position=UDim2.fromOffset(9,0);r.credits.Size=UDim2.new(1,-18,1,0);r.credits.TextSize=16
- r.cargoText.Position=UDim2.fromOffset(9,0);r.cargoText.Size=UDim2.new(1,-18,1,0);r.cargoText.TextSize=16
- if w<500 then r.credits.Text=r.credits.Text:gsub('^Quartz ','Q ');r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Pack '):gsub(' / ','/') end
- r.cargoTrack.Position=UDim2.new(0,0,1,-3);r.cargoTrack.Size=UDim2.new(1,0,0,3)
+ local inset=self.cargoIcon and 32 or 9
+ r.cargoText.Position=UDim2.fromOffset(inset,0);r.cargoText.Size=UDim2.new(1,-inset-8,1,-3);r.cargoText.TextSize=16
+ if self.cargoIcon then r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','') end
+ if w<500 then r.credits.Text=r.credits.Text:gsub('^Quartz ','Q '):gsub('%.0([kMB])','%1');r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Bag '):gsub(' / ','/') end
+ r.cargoTrack.Position=UDim2.new(0,3,1,-5);r.cargoTrack.Size=UDim2.new(1,-6,0,3)
+ -- A single brief rim response ties an actual backpack increase to this
+ -- meter. It does not add floating numbers or claim a pending pickup paid out.
+ local now=os.clock()
+ if self.lastCargo and backpackUnits>self.lastCargo then self.cargoChangedAt=now end
+ self.lastCargo=backpackUnits
+ local pulse=math.clamp(1-(now-(self.cargoChangedAt or -10))/.45,0,1)
+ self.cargo.BackgroundColor3=(full and C.red:Lerp(C.panel,.35) or C.green):Lerp(C.text,pulse*.16)
+ r.cargoText.TextColor3=full and C.gold or C.text
+ if self.cargoStroke then self.cargoStroke.Color=full and C.gold or C.line:Lerp(C.gold,pulse);self.cargoStroke.Thickness=full and 2 or 2+pulse*.5 end
  self.testMode.Visible=false;r.objective.Visible=false
  for i,button in {r.fleet,r.cards} do
   button.Position=UDim2.fromOffset(w-102+(i-1)*48,6);button.Size=UDim2.fromOffset(44,44);button.Visible=not hidden
   local caption=i==1 and r.fleetText or r.cardsText
-  caption.TextSize=12;caption.Position=UDim2.fromOffset(0,28);caption.Size=UDim2.new(1,0,0,16)
+  caption.TextSize=14;caption.Position=UDim2.fromOffset(0,27);caption.Size=UDim2.new(1,0,0,17)
   for _,icon in button:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then
    icon.Position=UDim2.fromOffset(10,0);icon.Size=UDim2.fromOffset(24,24)
   end end

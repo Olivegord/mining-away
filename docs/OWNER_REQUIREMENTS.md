@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 4 latest — physical mining and a cohesive small world
+
+The owner requests a substantial game-feel improvement: Bubbler visibly subtracts portions of rocks, Smasher leaves progressively larger/deeper dents, rocks never turn fully black, and shrinking has visible material-loss feedback. Improve spawning, pickup physics, gameplay readability, the grey ground and mismatched sky. Study Roblox game/UI examples and actively fix visible inconsistencies. Preserve the same canonical native document, authored assets, permanent progression and server authority. See [physical mining integration](review/PHYSICAL_MINING.md), [damage](review/PHYSICAL_ROCK_DAMAGE.md), [geometry recovery](review/CRYSTAL_GEOMETRY_RECOVERY.md), [world](review/PHYSICAL_WORLD.md) and [pickups/UI](review/PHYSICAL_PICKUPS_UI.md).
+
 ## November 4 latest — much less grating laser audio
 
 The owner asks for a much less grating laser noise. Use a softer, lower-pitched charge and ignition with restrained upper frequencies and a quieter sustained cutting bed. Preserve visual/gameplay timing and unrelated crystal, impact and UI audio.

@@ -11,7 +11,7 @@ VM.__index=function(v,k) if k=='Magnitude' then return math.sqrt(v.X*v.X+v.Y*v.Y
 VM.__add=function(a,b) return setmetatable({X=a.X+b.X,Y=a.Y+b.Y,Z=a.Z+b.Z},VM) end
 VM.__sub=function(a,b) return setmetatable({X=a.X-b.X,Y=a.Y-b.Y,Z=a.Z-b.Z},VM) end
 VM.__unm=function(a) return setmetatable({X=-a.X,Y=-a.Y,Z=-a.Z},VM) end
-VM.__mul=function(a,b) if type(a)=='number' then a,b=b,a end;return setmetatable({X=a.X*b,Y=a.Y*b,Z=a.Z*b},VM) end
+VM.__mul=function(a,b) if type(a)=='number' then a,b=b,a end;if type(b)=='table' then return setmetatable({X=a.X*b.X,Y=a.Y*b.Y,Z=a.Z*b.Z},VM) end;return setmetatable({X=a.X*b,Y=a.Y*b,Z=a.Z*b},VM) end
 VM.__div=function(a,b) return a*(1/b) end
 function VM:Lerp(b,t)
  local value=self+(b-self)*t

@@ -298,7 +298,10 @@ end
 local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
- local template=RS:FindFirstChild('Crystal');template=template and template:FindFirstChild('Mesh',true)
+ -- The editable map keeps the authored crystal in Workspace. Looking only in
+ -- ReplicatedStorage silently replaced every live mineral with a cube.
+ local template=scene.crystalTemplate or RS:FindFirstChild('Crystal')
+ template=template and (template:IsA('BasePart') and template or template:FindFirstChild('Mesh',true))
  local part
  if template and template:IsA('BasePart') then part=template:Clone()
  else part=World.part(field.model,'Crystal',position,Vector3.one,field.color,Enum.Material.Neon) end
@@ -312,7 +315,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
- part.Color=shell and Color3.fromRGB(96,85,117) or field.color;part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0;part.Parent=field.model
+ part.Color=shell and Color3.fromRGB(96,85,117) or field.color;part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
+ if part:IsA('PartOperation') then part.UsePartColor=true end
+ part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
   slots={},limit=shell and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed)
@@ -327,32 +332,31 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local boulder=not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Include;clearance.FilterDescendantsInstances={scene.map}
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
- local spot
- for attempt=1,(plan and 1 or 18) do
-  local inset=(kind=='Geode' or boulder) and 7 or 3
-  local localPos=Vector3.new(seed:NextNumber(-field.part.Size.X/2+inset,field.part.Size.X/2-inset),0,seed:NextNumber(-field.part.Size.Z/2+inset,field.part.Size.Z/2-inset))
-  local candidate=plan and plan.spot or field.part.CFrame:PointToWorldSpace(localPos);local valid=true
-  for _,r in ipairs(field.resources) do if not r.paid and (Vector3.new(candidate.X,0,candidate.Z)-Vector3.new(r.position.X,0,r.position.Z)).Magnitude<math.max((kind=='Geode' or boulder) and 9 or 4,r.fullSize.X*.5+3) then valid=false;break end end
-  if valid then
-   for _,t in ipairs(field.turrets) do
-    if (Vector3.new(candidate.X,0,candidate.Z)-Vector3.new(t.body.Position.X,0,t.body.Position.Z)).Magnitude<(kind=='Geode' and 9 or 7) then valid=false;break end
-   end
-  end
-  if valid then
-   -- Query only the map's solid scenery, above the complete crystal volume.
-   -- Decorative parts are non-queryable; field beds/nodes/guards are outside
-   -- this filter. Start above the current cliffs so an inside-origin ray cannot
-   -- miss an outcrop that would bury the resource. Sampling remains bounded.
-   local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)
-   if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then valid=false end
-  end
-  if valid then spot=candidate;break end
+ local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
+ local visualSize=mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local radius=ResourcePlacement.radius(visualSize,visualSize,visualSize,kind)
+ local occupied={}
+ for _,r in ipairs(field.resources) do if not r.paid then
+  local p=field.part.CFrame:PointToObjectSpace(r.position)
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind)}
+ end end
+ for _,t in ipairs(field.turrets) do
+  local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
  end
- if not spot then return false end
- if prepareOnly then return true,1,{spot=spot,field=field.id} end
- local mineral=Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
+ local preferred
+ if plan then local p=field.part.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
+ local selected=ResourcePlacement.sample(field.part.Size.X,field.part.Size.Z,radius,occupied,
+  function(a,b) return seed:NextNumber(a,b) end,function(x,z)
+   local candidate=field.part.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
+   local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)
+   return workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance)==nil
+  end,preferred)
+ if not selected then return false end
+ local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
- local resource=makeResource(field,spot,kind,work+10,field.cfg.Ore*(boulder and Mining.BOULDER_WORK or 1),mineral.size*(boulder and Mining.BOULDER_SIZE or 1),boulder and 7 or 3)
+ local resource=makeResource(field,spot,kind,work+10,field.cfg.Ore*(boulder and Mining.BOULDER_WORK or 1),visualSize,boulder and 7 or 3)
  return true,kind=='Geode' and 5 or 1,resource
 end
 local function seedField(field)
@@ -468,7 +472,7 @@ local function award(d: any,r: any,completedSpecial: boolean?)
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
   chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=Enum.Material.Rock
-  -- A depleted rock is nearly black. Restore the mineral hue on its reward.
+  -- Rewards retain their material hue independently of fracture shading.
   chip.Color=r.field.color
   chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
   chip:SetAttribute('Owner',d.owner);chip:SetAttribute('RunId',profile.run.id);chip:SetAttribute('Units',n);chip:SetAttribute('Mineral',material)
@@ -476,7 +480,7 @@ local function award(d: any,r: any,completedSpecial: boolean?)
   chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',Vector3.new(vx,vy,vz));chip:SetAttribute('SnapshotAt',now)
   chip.Parent=pickupFolder
   pickups[pickupSerial]={part=chip,owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,
-   x=position.X,y=position.Y,z=position.Z,vx=vx,vy=vy,vz=vz,age=0,spawnAt=now,floor=ground+.22}
+   x=position.X,y=position.Y,z=position.Z,vx=vx,vy=vy,vz=vz,age=0,spawnAt=now,floor=ground+.22,fieldPart=r.field.part}
  end
  p.dirty=true;p.publishDirty=true
 end
@@ -486,6 +490,21 @@ local function pickupStep(dt)
   if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.spawnAt,now) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
   elseif healthy(p) then
+   -- A chip can roll off a raised ore bed. Sample the real map floor only
+   -- outside its original footprint, at bounded intervals while moving.
+   if drop.fieldPart and now>=(drop.floorQueryAt or 0) then
+    local localPoint=drop.fieldPart.CFrame:PointToObjectSpace(Vector3.new(drop.x,drop.y,drop.z))
+    local outside=math.abs(localPoint.X)>drop.fieldPart.Size.X*.5 or math.abs(localPoint.Z)>drop.fieldPart.Size.Z*.5
+    drop.floorQueryAt=now+.25
+    if outside and (not drop.floorQueryX or (drop.x-drop.floorQueryX)^2+(drop.z-drop.floorQueryZ)^2>.25) then
+     local include={scene.map};local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
+     for _,field in ipairs(scene.fields) do table.insert(include,field.part) end
+     local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include;query.RespectCanCollide=true
+     local hit=workspace:Raycast(Vector3.new(drop.x,drop.y+2,drop.z),Vector3.new(0,-66,0),query)
+     if hit then drop.floor=hit.Position.Y+.22;drop.part:SetAttribute('FloorY',drop.floor) end
+     drop.floorQueryX=drop.x;drop.floorQueryZ=drop.z
+    end
+   end
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
    local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),testPerks) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
@@ -498,7 +517,7 @@ local function pickupStep(dt)
     drop.groundSerial=(drop.groundSerial or 0)+1
     drop.part:SetAttribute('GroundImpactAt',now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
-    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.y,drop.z))
+    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.floor,drop.z))
     drop.part:SetAttribute('GroundImpactSerial',drop.groundSerial)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,hr.Parent,{pickupFolder,droneFolder}) then
@@ -599,6 +618,24 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local previous=r.stage
  local revealed=nil
  local broken=R.damage(r,amount)
+ -- Persistent cosmetic history is emitted only by accepted authoritative hits.
+ -- Observers/late joiners reconstruct the same cavities without authorizing
+ -- damage from local CSG geometry, bubbles or collision debris.
+ if special and d.role=='Bubbler' then
+  r.bubbleBites=math.min(6,(r.bubbleBites or 0)+1);r.part:SetAttribute('BubbleBites',r.bubbleBites)
+ elseif contactKind=='Breaker' and d.role=='Charger' then
+  r.smashDents=math.min(6,(r.smashDents or 0)+1);r.part:SetAttribute('SmashDents',r.smashDents)
+ end
+ if (special and d.role=='Bubbler') or (contactKind=='Breaker' and d.role=='Charger') then
+  if not r.damageBaseScale then
+   r.damageBaseScale=Feel.stageScale(previous,r.stageCount);r.damageBaseStage=previous
+   r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',previous)
+  end
+  local depth=math.clamp(1-r.hp/math.max(1,r.maxHP-10),0,1)
+  r.smashPressure=(r.smashDents or 0)>=6 and math.floor(depth*6+1e-7)/6 or 0
+  r.part:SetAttribute('DamageDepth',depth)
+  r.part:SetAttribute('DamageAt',now)
+ end
  if special then
   job.impacted=true
   r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
@@ -607,8 +644,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
-  r.part.Size=r.fullSize*Feel.stageScale(r.stage,r.stageCount)
-  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)
+  r.part.Size=r.fullSize*Feel.resourceScale(r.stage,r.stageCount,r.damageBaseScale,r.damageBaseStage)
+  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed)
  end
  r.part:SetAttribute('HP',actual)
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
@@ -1035,6 +1072,23 @@ local function publishBreakerPhase(d,job)
  model:SetAttribute('ImpactSerial',d.impactSerial or 0);model:SetAttribute('ImpactAt',d.impactAt or 0)
  model:SetAttribute('State',d.state);model:SetAttribute('SnapshotAt',now)
 end
+local function breakerSurface(r)
+ local ground=r.part:GetAttribute('GroundY') or r.position.Y-r.fullSize.Y*.5
+ local _,top=Feel.groundedRockFrame(r.position,r.part.Size,ground,r.damageBaseStage or r.stage,r.stageSeed)
+ local contact=Vector3.new(r.position.X,top,r.position.Z)
+ local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
+ local origin=contact+Vector3.new(0,2,0)
+ local hit=workspace:Raycast(origin,Vector3.new(0,-r.part.Size.Magnitude-3,0),query)
+ if hit then contact=hit.Position end
+ if (r.smashDents or 0)>0 then
+  -- The center of the same nested ellipsoid rendered by RockDamage. The
+  -- authority keeps its original query collider; contact intent follows the
+  -- earned bowl floor so later strokes do not hover above an existing dent.
+  local dent=r.part.CFrame:PointToWorldSpace(Vector3.new(.025,.31-.05*math.min(6,r.smashDents)-.09*(r.smashPressure or 0),.015)*r.part.Size)
+  contact=Vector3.new(contact.X,math.max(ground+.08,math.min(contact.Y,dent.Y)),contact.Z)
+ end
+ return contact
+end
 local function breakerDrone(d,p,hr,field,dt)
  d.mining=false
  local job=d.breaker
@@ -1069,7 +1123,7 @@ local function breakerDrone(d,p,hr,field,dt)
   job=DroneRoles.newBreaker(r.id,now);d.breaker=job
   job.windup=math.max(.08,d.stats.warmup)
   job.station=committedStation(d,r)+Vector3.new(0,2,0)
-  job.contact=Vector3.new(r.position.X,select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),r.position.Z)
+  job.contact=breakerSurface(r);job.contactStage=r.stage;job.contactDents=r.smashDents;job.contactPressure=r.smashPressure
   local lowest=0;local pivot=d.model:GetPivot()
   for _,part in ipairs(d.model:GetDescendants()) do if part:IsA('BasePart') and part.Transparency<1 then
    local cf=part.CFrame;local half=part.Size*.5
@@ -1083,7 +1137,9 @@ local function breakerDrone(d,p,hr,field,dt)
  -- A teammate may chip the shared crystal while this weight descends or
  -- rests on it. Follow the real current surface instead of hovering over its
  -- previous size or letting the body penetrate a newly rotated fragment.
- job.contact=Vector3.new(r.position.X,select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)),r.position.Z)
+ if job.contactStage~=r.stage or job.contactDents~=r.smashDents or job.contactPressure~=r.smashPressure then
+  job.contact=breakerSurface(r);job.contactStage=r.stage;job.contactDents=r.smashDents;job.contactPressure=r.smashPressure
+ end
  job.impact=job.contact+Vector3.new(0,job.impactClearance,0)
  local phase=job.phase;local pose=DroneRoles.breakerPose(job,now)
  local goal=job.station+Vector3.new(0,pose.lift,0)
@@ -1561,8 +1617,11 @@ local function abilityContext(p,fieldId,operator)
  local function targetRecord(r)
   if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
-  return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.fullSize.X*.5*Feel.stageScale(r.stage,r.stageCount)),x=r.position.X,y=top,z=r.position.Z}
+  -- Scars retain a larger shell and its original fracture orientation. Ability
+  -- targeting must describe that current authoritative body, not the old
+  -- quarter-scale/rotating presentation that ordinary unscarred rocks use.
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed))
+  return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=r.position.X,y=top,z=r.position.Z}
  end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
@@ -1577,14 +1636,13 @@ local function abilityContext(p,fieldId,operator)
   targets=function(id,kind)
    local list={};if not valid(id) then return list end
    for _,r in ipairs(patches[id].resources) do
-    local free=true;for droneId in pairs(r.slots) do local worker=drones[droneId];if not worker or worker.owner~=p.player.UserId then free=false end end
-    if free and not r.paid and r.hp>0 and now>=r.readyAt and r.part.Parent then
-     local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
+    local target=targetRecord(r)
+    if target then
      -- Survey the same vertical path that the authoritative orbital hit uses.
      -- A taller blocked crystal must not starve reachable work forever. Tiny
      -- scrap miners keep their normal nearby target list and contact checks.
-     if kind~='Orbital' or abilityLineOfSight(p,Vector3.new(r.position.X,top+DroneAbilities.ORBITAL_ORIGIN_HEIGHT,r.position.Z),r) then
-      table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.fullSize.X*.5*Feel.stageScale(r.stage,r.stageCount)),x=r.position.X,y=top,z=r.position.Z})
+     if kind~='Orbital' or abilityLineOfSight(p,Vector3.new(target.x,target.y+DroneAbilities.ORBITAL_ORIGIN_HEIGHT,target.z),r) then
+      table.insert(list,target)
      end
     end
    end

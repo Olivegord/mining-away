@@ -1,7 +1,7 @@
 -- Render-only sampling of authoritative pickup snapshots. A short interpolation
 -- buffer preserves acceleration, gravity and floor contacts without chasing a
 -- succession of network targets. It never decides collection or grants ore.
-local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=38}
+local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=38,AIR_DRAG=.9,GROUND_DRAG=14}
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function axis(a,b,va,vb,t,span)
  local slope=(b-a)/span
@@ -30,7 +30,8 @@ function M.position(samples,now)
  local x,y,z
  if s.homing then x=s.x+s.vx*dt;y=s.y+s.vy*dt;z=s.z+s.vz*dt
  else
-  local drag=(1-math.exp(-4*dt))/4
+  local coefficient=(s.floor and s.y<=s.floor+.001 and math.abs(s.vy)<.8) and M.GROUND_DRAG or M.AIR_DRAG
+  local drag=(1-math.exp(-coefficient*dt))/coefficient
   x=s.x+s.vx*drag;y=s.y+s.vy*dt-.5*M.GRAVITY*dt*dt;z=s.z+s.vz*drag
  end
  return x,math.max(s.floor or -math.huge,y),z
@@ -39,6 +40,21 @@ function M.opacity(now,fadeAt,expiresAt)
  if type(expiresAt)~='number' or type(fadeAt)~='number' then return 1 end
  local t=clamp((now-fadeAt)/math.max(.001,expiresAt-fadeAt),0,1)
  return 1-t*t*(3-2*t)
+end
+function M.tumble(age,landAge)
+ age=math.max(0,age)
+ -- Angular momentum carries across contact, then friction arrests the spin.
+ -- Sampling absolute age keeps landing poses equal at all render rates.
+ if type(landAge)~='number' or age<=landAge then return age*4.8 end
+ return math.max(0,landAge)*4.8+(1-math.exp(-(age-landAge)*8))*.6
+end
+function M.supportHeight(sx,sy,sz,rx,ry,rz)
+ -- Vertical extent of a box rotated Rx * Ry * Rz. Keep the collectible's
+ -- authored mesh above its contact plane while it tumbles and settles.
+ local a=math.cos(rx)*math.sin(rz)+math.sin(rx)*math.sin(ry)*math.cos(rz)
+ local b=math.cos(rx)*math.cos(rz)-math.sin(rx)*math.sin(ry)*math.sin(rz)
+ local c=-math.sin(rx)*math.cos(ry)
+ return (math.abs(a)*sx+math.abs(b)*sy+math.abs(c)*sz)*.5
 end
 function M.collection(t)
  t=clamp(t,0,1)

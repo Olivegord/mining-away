@@ -63,6 +63,23 @@ check('no living mining worker prevents gadget deployment',function()
  for _,d in ipairs(p.drones) do d.hp=0 end
  input(pl,'Orbital','begin');assert(not p.ability.charge)
 end)
+check('abilities follow the current retained shell after an authoritative physical hit',function()
+ local _,p=fixture();local d=p.drones[1]
+ local r=makeResource(patches[1],patches[1].center,'Crystal',1000,10,4);r.readyAt=now
+ release(d);d.role='Charger';d.field=1;d.target=r;d.targetSlot=1;r.slots[d.id]=1
+ d.pos=Feel.mineGoal(r.position,1,false,r.fullSize)
+ assert(hitResource(d,r,800,false,nil,d.pos,'Breaker'))
+ assert(r.stage==3 and r.damageBaseStage==0 and r.part:GetAttribute('SmashDents')==1)
+ assert(math.abs(r.part.Size.X-3.28)<1e-7,'scarred shell uses retained scale')
+ local context=abilityContext(p,1,d);local live=assert(context.target(r.id,1))
+ local expectedY=r.part.Position.Y+r.part.Size.Y*.5
+ assert(math.abs(live.radius-1.64)<1e-7 and math.abs(live.y-expectedY)<1e-7,'live target still used obsolete quarter size or tilt')
+ for _,kind in ipairs({'Orbital','Scrap'}) do
+  local surveyed
+  for _,target in ipairs(context.targets(1,kind)) do if target.id==r.id then surveyed=target end end
+  assert(surveyed and surveyed.radius==live.radius and surveyed.y==live.y,'survey and live contact disagree on physical shell')
+ end
+end)
 check('scrap mining uses real hit path and persistence-busy periods preserve deployment',function()
  local pl,p=fixture();data(p).run.shopLevels.violet_scrap=1
  for _,r in ipairs(patches[1].resources) do r.paid=true;r.hp=0 end

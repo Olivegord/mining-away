@@ -34,8 +34,8 @@ end
 -- The original crystal silhouette remains; every tilted/shrinking stage rests
 -- on the same bed. This is the Y row of CFrame.Angles' XYZ rotation matrix.
 function F.groundedRockFrame(position,size,ground,stage,seed)
- local ax=stage==0 and 0 or math.rad(math.sin(seed+stage*3.17)*40)
- local az=stage==0 and 0 or math.rad(math.sin(seed*1.33+stage*5.19)*40)
+ local ax=math.rad(math.sin(seed+stage*3.17)*40)*math.min(1,stage)
+ local az=math.rad(math.sin(seed*1.33+stage*5.19)*40)*math.min(1,stage)
  local yaw=seed*.01
  local cx,sx,cy,sy,cz,sz=math.cos(ax),math.sin(ax),math.cos(yaw),math.sin(yaw),math.cos(az),math.sin(az)
  local half=(math.abs(cx*sz+sx*sy*cz)*size.X+math.abs(cx*cz-sx*sy*sz)*size.Y+math.abs(sx*cy)*size.Z)*.5
@@ -250,8 +250,17 @@ end
 function F.stageDarkness(hp,maxHP,stage,count)
  count=math.clamp(math.floor(count or 3),1,7)
  local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
- -- Black well before the layer gives way, then expose fresh mineral beneath.
- return math.clamp(progress/.82,0,1)^.8
+ -- Keep the mineral readable as pressure accumulates; fresh fracture faces
+ -- and missing volume carry the damage, never a fully black replacement.
+ return .16*progress^.8
+end
+function F.layerProgress(elapsed)
+ -- Critically damped settling, sampled from elapsed time at any frame rate.
+ if elapsed<=0 then return 0 end
+ if elapsed>=.22 then return 1 end
+ local t=elapsed/.035
+ local endT=.22/.035
+ return (1-(1+t)*math.exp(-t))/(1-(1+endT)*math.exp(-endT))
 end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
@@ -270,6 +279,13 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
+function F.resourceScale(stage,count,scarBase,scarStage)
+ if type(scarBase)~='number' then return F.stageScale(stage,count) end
+ -- Once real cavities remove material, do not double-count the lost volume
+ -- with a quarter-size collapse. Never enlarge an already chipped resource.
+ local progress=math.clamp((stage-(scarStage or 0))/math.max(1,(count or 3)-(scarStage or 0)),0,1)
+ return scarBase*(1-.18*progress)
+end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
  -- TweenInfo.new(2) originally used Roblox's default Quad.Out easing.
@@ -304,12 +320,11 @@ function F.newStagePresentation(stage,broken,now,count)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
 function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
- local scorch=count~=nil
+ local layered=count~=nil
  count=count or 3
  local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
  if target>p.knownStage and not p.knownBreak then
   for stage=p.knownStage+1,target do
-   if scorch then table.insert(p.queue,{scorch=true}) end
    table.insert(p.queue,{stage=stage})
   end
   p.knownStage=target
@@ -322,8 +337,7 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  if p.queue[1].broken and now<p.queue[1].notBefore then return nil end
  local event=table.remove(p.queue,1)
  if event.broken then p.broken=true;return 'break' end
- if event.scorch then p.scorched=true;p.nextAt=now+.075;return 'scorch' end
- p.scorched=false;p.stage=event.stage;p.nextAt=now+(scorch and .075 or .09)
+ p.scorched=false;p.stage=event.stage;p.nextAt=now+(layered and .14 or .09)
  return 'stage'
 end
 return F

@@ -14,13 +14,14 @@ for frame=1,3600 do renderResource(record,2.1+frame/60) end
 assert(reads==before,'mature unchanged rocks repeatedly read replicated attributes')
 source:SetAttribute('HP',100);source:SetAttribute('Stage',2)
 local initial=record.view.Size.X
-renderResource(record,63);assert(not record.settled and record.visual.scorched and record.view.Size.X==initial)
+renderResource(record,63);assert(not record.settled and not record.visual.scorched and record.view.Size.X==initial)
+renderResource(record,63.035);assert(record.view.Size.X<initial and record.view.Size.X>initial*.75,'fracture snapped instead of settling')
 for frame=1,30 do renderResource(record,63+frame/60) end
-assert(record.settled and record.visual.stage==2 and #cues==2,'skipped or repeated queued black/shrink stages')
+assert(record.settled and record.visual.stage==2 and #cues==2,'skipped or repeated settling stages')
 source:SetAttribute('HP',0);source:SetAttribute('BreakSerial',1)
 for frame=1,60 do renderResource(record,64+frame/60) end
 assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(cues[#cues]=='break' and #cues==4,'break must occur exactly once after final fracture')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==4)
-print('PASS production resource renderer: idle fast path, live HP invalidation, queued black/shrink/break animation, no duplicate effects over 7200 stable frames')
+print('PASS production resource renderer: idle fast path, live HP invalidation, continuous shrink/break animation, no duplicate effects over 7200 stable frames')

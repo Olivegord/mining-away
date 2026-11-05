@@ -110,16 +110,24 @@ local function ballistic(e,age,style)
  end
 end
 local function bubblePose(e,t,age)
- local r=e.radius;local fill=smooth(t/(e.impact*.73));local release=smooth((t-e.impact*.78)/(e.impact*.22))
- local cap=e.center+Vector3.new(0,e.size.Y*.42,0)
- local lift=age and math.min(age,.5) or 0
- local floating=cap+Vector3.new(lift*.18,r*(1-math.exp(-lift*9))*.58,0)
- local pop=age and smooth((age-.32)/.09) or 0
+ local r=e.radius;local fill=smooth(t/(e.impact*.88))
+ local cutPoint,cutDiameter
+ if RockDamage then cutPoint,cutDiameter=RockDamage.bite(e.biteIndex,e.biteDepthBand)
+ else
+  local angle=(e.biteIndex-1)*2.39996323+.35
+  cutPoint=Vector3.new(math.cos(angle)*.23,.10+(e.biteIndex%2)*.035,math.sin(angle)*.23);cutDiameter=.60
+ end
+ -- The large bubble is the actual spherical subtraction stencil, in the
+ -- crystal's local coordinates. It stops hovering over an unrelated top cap.
+ local cap=e.cf:PointToWorldSpace(cutPoint*e.size)
+ local lift=age and math.min(age,.48) or 0
+ local floating=cap+Vector3.new(lift*.18,r*(1-math.exp(-lift*8))*.65,0)
+ local pop=age and smooth((age-.42)/.09) or 0
  for i,p in ipairs(e.bubbles) do
   local side=i-2
-  local position=cap+Vector3.new(side*r*.65*(1-fill),r*.4*(1-fill),side*r*.2*(1-fill))
-  position=position:Lerp(floating,release)
-  local diameter=r*(i==2 and .82 or .27)*fill*(1+pop*.5)
+  local position=cap+Vector3.new(side*r*.48*(1-fill),r*.5*(1-fill),side*r*.2*(1-fill))
+  if age then position=floating+Vector3.new(side*r*.15,math.abs(side)*r*.13,side*r*.08) end
+  local diameter=(i==2 and cutDiameter*r*2 or r*.20)*fill*(1+pop*.35)
   local stretch=age and .28*math.exp(-age*8) or .09*math.sin(fill*math.pi)
   p.Position=position;p.Size=safeSize(Vector3.new(diameter*(1-stretch*.4),diameter*(1+stretch),diameter*(1-stretch*.4)));p.Transparency=.64+pop*.36
   local glint=e.glints[i];glint.Position=position+Vector3.new(-diameter*.23,diameter*.27,-diameter*.12)
@@ -128,10 +136,14 @@ local function bubblePose(e,t,age)
  hideParts(e.fragments)
  if age then
   for i,p in ipairs(e.fragments) do
-   local a=i*2.399963;local spread=math.max(0,age-.32)
-   local origin=floating+Vector3.new(math.cos(a),0,math.sin(a))*r*.1
-   p.CFrame=CFrame.new(origin+Vector3.new(math.cos(a)*spread*1.6,spread*1.4-5*spread*spread,math.sin(a)*spread*1.6))*e.cf.Rotation
-   p.Size=safeSize(Vector3.one*r*.14*(1-fade(e,age)*.6));p.Transparency=age<.32 and 1 or fade(e,age)
+   local a=i*2.399963;local spread=math.max(0,age-.42)
+   local origin=floating+Vector3.new(math.cos(a)*r*.13,(i%3-1)*r*.10,math.sin(a)*r*.13)
+   -- Actual ore-colored contents detach with the bubble, then acquire
+   -- ballistic weight when its skin ruptures. Cosmetic chips grant no ore.
+   local offset=Vector3.new(math.cos(a)*spread*2.4,spread*(1.4+i%3*.3)-9*spread*spread,math.sin(a)*spread*2.4)
+   p.CFrame=CFrame.new(origin+offset)*e.cf.Rotation*CFrame.Angles(spread*i*.3,spread,0)
+   p.Size=safeSize(Vector3.one*r*(.18+(i%2)*.04)*(1-fade(e,age)*.5))
+   p.Transparency=age<.42 and .05 or fade(e,age)
   end
  end
 end
@@ -217,7 +229,7 @@ local function starforgePose(e,t,age)
 end
 local function frostbitePose(e,t,age)
  local freeze=smooth(t/(e.impact*.8));local shatter=age and smooth(age/.16) or 0
- e.shell.CFrame=e.cf;e.shell.Size=safeSize(e.size*(1.006+.022*freeze))
+ e.shell.CFrame=e.rockFrame;e.shell.Size=safeSize(e.rockSize*(1.006+.022*freeze))
  e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
  local wave=age and (1-math.exp(-age*18)) or 0
  showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and clamp(.2+age/.7) or 1)
@@ -240,7 +252,7 @@ local function resonatorPose(e,t,age)
  -- One low-amplitude recoil at contact replaces whole-rock high-frequency jitter.
  if age then
   local recoil=math.sin(math.pi*clamp(age/.26))*math.exp(-age*8)*.018
-  e.rock.CFrame=e.cf*CFrame.Angles(0,recoil,0)
+  e.rock.CFrame=e.rockFrame*CFrame.Angles(0,recoil,0)
  end
  ballistic(e,age,'dust')
 end
@@ -342,8 +354,12 @@ function FX.new(world,options)
         e={owner=self,resource=v,view=view,kind=kind,folder=effectFolder,parts={}}
        end
        e.serial=serial;e.start=start;e.duration=duration;e.impact=math.clamp(v:GetAttribute('EffectImpact') or .68,.1,.95)
-       e.center=view.Position;e.cf=view.CFrame;e.size=size;e.color=view.Color;e.material=view.Material
-       e.radius=math.max(size.X,size.Y,size.Z)*.5;e.originalTransparency=view.LocalTransparencyModifier
+       e.rockFrame=view.CFrame;e.rockSize=size
+       if RockDamage then e.cf,e.size=RockDamage.basePose(view) else e.cf=view.CFrame;e.size=size end
+       e.center=e.cf.Position;e.color=view.Color;e.material=view.Material
+       e.biteIndex=math.clamp((v:GetAttribute('BubbleBites') or 0)+(done>0 and done>=start and 0 or 1),1,6)
+       e.biteDepthBand=RockDamage and RockDamage.depthBand(v:GetAttribute('BubbleBites') or 0,v:GetAttribute('SmashDents') or 0,v:GetAttribute('DamageDepth')) or 0
+       e.radius=math.max(e.size.X,e.size.Y,e.size.Z)*.5;e.originalTransparency=view.LocalTransparencyModifier
        e.lastPhase=nil;e.lastAge=nil;e.contactAge=nil
        e.tail=math.min(TAIL,duration*(1-e.impact)*.98)
        if #e.parts==0 then build(e) end
@@ -354,6 +370,11 @@ function FX.new(world,options)
    end
   end
   for v,e in pairs(self.active) do
+   -- The first physical cut converts the old UnionOperation render into a
+   -- MeshPart. Keep the ongoing bubble/tool tail and its original visibility
+   -- lease attached to the resource's current local view across that swap.
+   local latest=options.resolve and options.resolve(v) or nil
+   if latest and latest.Parent and latest~=e.view then e.view=latest end
    if not v.Parent or not e.view.Parent or not v:GetAttribute('ResourceId') then remove(v)
    elseif e.tombstone then e.view.LocalTransparencyModifier=1
    elseif (v:GetAttribute('EffectCancelledSerial') or 0)>=e.serial then
@@ -367,6 +388,9 @@ function FX.new(world,options)
     local impacted=done>0 and done>=e.start
     local depleted=impacted and v:GetAttribute('EffectDepleted')==true
     local age=impacted and math.max(0,visualNow-done) or nil
+    if e.kind=='Bubbler' and impacted and RockDamage then
+     e.biteDepthBand=RockDamage.depthBand(v:GetAttribute('BubbleBites') or 0,v:GetAttribute('SmashDents') or 0,v:GetAttribute('DamageDepth'))
+    end
     e.visualNow=visualNow;e.contactAge=age
     -- The ordinary fracture queue owns surviving crystal size/pose immediately
     -- after the accepted hit. Keep only local chips/tool recovery over that view.
@@ -379,7 +403,7 @@ function FX.new(world,options)
      local t=impacted and math.min(1,e.impact+age/e.duration) or math.min(e.impact,clamp((visualNow-e.start)/e.duration))
      if t~=e.lastPhase or age~=e.lastAge then
       e.lastPhase=t;e.lastAge=age;self.poseUpdates+=1
-      e.rock.CFrame=e.cf;e.rock.Size=e.size;e.rock.Color=e.color;e.rock.Transparency=impacted and 1 or 0
+      e.rock.CFrame=e.rockFrame;e.rock.Size=e.rockSize;e.rock.Color=e.color;e.rock.Transparency=impacted and 1 or 0
       poses[e.kind](e,t,age)
      end
      if visualNow-e.start>e.duration+3 then remove(v) end

@@ -85,4 +85,18 @@ check('partial pickup receipts identify the real fragment and retain expiry of t
  local receipt=Http:JSONDecode(pl:GetAttribute('MA_Collect'));assert(receipt.units==1 and receipt.pickupId and receipt.exhausted==false)
  local drop=assert(pickups[receipt.pickupId]);assert(drop.units>0 and drop.part:GetAttribute('ExpiresAt')==drop.spawnAt+OreDrops.LIFETIME)
 end)
+check('ore leaving a raised field falls to the actual outside map floor',function()
+ local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ local drop;for _,v in pairs(pickups) do if v.owner==p.player.UserId then drop=v;break end end
+ assert(drop);drop.x=r.field.part.Position.X+r.field.part.Size.X*.5+2;drop.y=drop.floor;drop.vx=2;drop.vy=0;drop.vz=0
+ local original=workspace.Raycast;local queries=0
+ workspace.Raycast=function(_,from,_,params)
+  if params and params.FilterType==Enum.RaycastFilterType.Include then queries+=1;return {Position=Vector3.new(from.X,0,from.Z)} end
+  return nil
+ end
+ steps(90);workspace.Raycast=original
+ assert(drop.floor==.22 and drop.part:GetAttribute('FloorY')==.22 and math.abs(drop.y-.22)<.01,'chip hovered on its old raised plane')
+ assert(queries>=1 and queries<=6,'stationary ore repeatedly queried the map')
+ assert(pendingOre(p)==10,'terrain contact changed reward units')
+end)
 print(checks..' production pickup server checks with API doubles; not Studio validation')

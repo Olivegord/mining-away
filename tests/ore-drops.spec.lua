@@ -29,11 +29,30 @@ check('real falls report contact speed while settled ore is silent',function()
   local hits=0
   for _=1,4*fps do
    local before=s.vy;local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false)
-   if speed and speed>0 then assert(before<1 and s.y==s.floor and s.vy>=0);hits+=1 end
+   if speed and speed>0 then assert(before<1 and s.y>=s.floor and s.y-s.floor<.25 and s.vy>=0);hits+=1 end
   end
   assert(hits>=1 and hits<=3,'unbounded floor chatter at '..fps)
   for _=1,fps do local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false);assert(speed==0) end
  end
+end)
+check('impact energy and scatter distance agree across frame rates',function()
+ local reference
+ for _,fps in ipairs({30,60,144}) do
+  local s=drop();s.y=4;s.vx=6;s.vz=-2;s.vy=7
+  local firstImpact
+  for _=1,2*fps do local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false);if speed>0 then firstImpact=firstImpact or speed end end
+  assert(firstImpact and math.abs(firstImpact-math.sqrt(7*7+2*O.GRAVITY*3.8))<1e-6)
+  assert(s.y==s.floor and s.vy==0 and math.abs(s.vx)<.01 and math.abs(s.vz)<.01)
+  if reference then assert(math.abs(s.x-reference)<.015,'contact friction varies with FPS') else reference=s.x end
+ end
+end)
+check('ground friction stops fragments without silently erasing flight momentum',function()
+ local s=drop();s.y=4;s.vx=6;s.vy=0
+ O.step(s,{x=70,y=1,z=0},.05,false)
+ assert(s.x>.29 and s.x<.3 and s.y<4)
+ s.y=s.floor;s.vy=0
+ local before=s.vx;O.step(s,{x=70,y=1,z=0},.05,false)
+ assert(s.vx<before*.51 and s.y==s.floor)
 end)
 check('fade is monotonic and expiry never depends on attraction or bag space',function()
  local born=40;local before=0
