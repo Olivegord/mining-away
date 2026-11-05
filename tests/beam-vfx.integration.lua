@@ -86,6 +86,41 @@ check('shared caps culling parent removal and repeated activation release leases
  end
  local a,b=BeamVFX.counts();assert(a==0 and b==0)
 end)
+check('visible charge paths are continuous across former reset boundaries',function()
+ local r=BeamVFX.new(root,'Cutter',color)
+ for frame=1,998 do
+  local q=frame/1000
+  BeamVFX.draw(r,from,to,60+q,0,q,nil)
+  local h=r.rich;local before={}
+  for i,path in ipairs(h.paths) do before[i]={a=path.a.Position,b=path.b.Position,on=path.beam.Enabled} end
+  BeamVFX.draw(r,from,to,60+q+.00001,0,q+.00001,nil)
+  for i,path in ipairs(h.paths) do
+   if before[i].on and path.beam.Enabled then
+    assert((path.a.Position-before[i].a).Magnitude<.01,'visible path head teleported')
+    assert((path.b.Position-before[i].b).Magnitude<.01,'visible path tail teleported')
+   end
+  end
+ end
+ BeamVFX.draw(r,from,to,61,1,nil,0)
+ local opacity=r.body.Transparency
+ for i=1,60 do BeamVFX.draw(r,from,to,61+i/60,1,nil,i/60);assert(r.body.Transparency==opacity,'stepped body opacity') end
+ BeamVFX.destroy(r)
+end)
+check('repeated charges reuse detached rigs without keeping active leases or particles',function()
+ local r=BeamVFX.new(root,'Cutter',color)
+ local previous
+ for i=1,200 do
+  BeamVFX.draw(r,from,to,70+i,0,.4,nil)
+  local h=r.rich
+  if previous then assert(h==previous,'charge rebuilt instead of reusing') end
+  previous=h
+  BeamVFX.draw(r,from,to,70+i+.1,1,nil,0)
+  assert(r.rich==nil and h.root.Parent==nil and not h.sparks.Enabled and not h.vapor.Enabled)
+  local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=4)
+ end
+ BeamVFX.destroy(r)
+ local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached==0,'last rig removal retained cache')
+end)
 check('charge lens stays at the moving emitter briefly and never survives release',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local moving=Vector3.new(9,8,3)

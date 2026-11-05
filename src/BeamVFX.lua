@@ -30,21 +30,12 @@ B.styles={
  Starforge={body=.12,core=.035,taper=.28,orbit=.3,spin=2.7,star=.32,tail=.8},
  Singularity={body=.09,core=.02,taper=.4,orbit=.55,spin=-3,star=.32,tail=.9},
 }
-local profiles={}
 local function sequence(a,b,c,d)
  return NumberSequence.new({NumberSequenceKeypoint.new(0,a),NumberSequenceKeypoint.new(.12,b),
   NumberSequenceKeypoint.new(.86,c),NumberSequenceKeypoint.new(1,d)})
 end
--- Shared immutable sequences, selected by elapsed time. No sequence allocation
--- in the render loop; hard longitudinal gaps don't fill every layer with white.
-for frame=0,15 do
- local p=frame/16
- local cut=.34+(frame%4)*.022
- profiles[frame+1]=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.12,.18+.08*math.sin(p*TAU)),
-  NumberSequenceKeypoint.new(cut-.015,.22),NumberSequenceKeypoint.new(cut,1),
-  NumberSequenceKeypoint.new(cut+.055,1),NumberSequenceKeypoint.new(cut+.07,.26),
-  NumberSequenceKeypoint.new(.86,.32),NumberSequenceKeypoint.new(1,.8)})
-end
+-- A stable soft body: moving hard transparency cuts read as dropped frames.
+local BODY=sequence(.45,.2,.3,.8)
 local CORE=sequence(.18,.04,.12,.32)
 local EDGE=sequence(.85,.4,.72,1)
 local INK=sequence(1,.42,.65,1)
@@ -91,13 +82,15 @@ function B.new(parent,style,color,detail,chargeLens)
  root.Parent=parent
  local r={root=root,all={},style=style,color=color,profile=B.styles[style] or B.styles.Cutter}
  r.a=attachment(root,'Source');r.b=attachment(root,'Contact')
- r.body=ribbon(root,'TaperedBody',r.a,r.b,color,profiles[1]);r.all[#r.all+1]=r.body
+ r.body=ribbon(root,'TaperedBody',r.a,r.b,color,BODY);r.all[#r.all+1]=r.body
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
+ r.body.Segments=1;r.core.Segments=1
  live+=1
  local counted=true
  root.Destroying:Connect(function()
   if counted then
    counted=false;r.destroyed=true;live-=1
+   if live==0 and B.clearChargeCache then B.clearChargeCache() end
    if r.detail then details-=1;r.detail=false end
   end
  end)
@@ -129,6 +122,7 @@ local function addDetail(r)
  end
  for i=1,4 do
   local p=pair(r.root,i<=2 and 'OrbitRibbon' or i==3 and 'EdgeFilament' or 'DarkCut',r.color,i<=2 and ARC or i==3 and EDGE or INK)
+  if i>=3 then p.beam.Segments=1 end
   if i==4 then p.beam.Color=ColorSequence.new(Color3.fromRGB(22,15,37));p.beam.LightEmission=0;p.beam.Brightness=1 end
   r.paths[i]=p;r.all[#r.all+1]=p.beam
  end
@@ -170,6 +164,11 @@ end
 -- Only major effects lease this rig; every pose is an absolute timestamp sample.
 local richLive=0
 local richLimit=4
+local richPool={} -- At most four detached cached rigs, in addition to four active leases.
+function B.clearChargeCache()
+ for _,h in ipairs(richPool) do h.root:Destroy() end
+ table.clear(richPool)
+end
 local GLASS_COLOR=Color3.fromRGB(245,250,255)
 local CYAN=Color3.fromRGB(108,238,255)
 local VIOLET=Color3.fromRGB(166,64,255)
@@ -184,14 +183,32 @@ local function richPath(r,name,color,opacity)
  p.beam.Width1=0;r.rich.paths[#r.rich.paths+1]=p;return p
 end
 releaseRich=function(r)
- if r.rich then r.rich.root:Destroy();r.rich=nil end
+ local h=r.rich;if not h then return end
+ hideRich(r);r.rich=nil
+ if h.leased then h.leased=false;richLive-=1 end
+ if h.particleSource then
+  h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
+ end
+ h.lastEmission=nil;h.root.Parent=nil
+ if #richPool>=richLimit then table.remove(richPool,1).root:Destroy() end
+ richPool[#richPool+1]=h
 end
 acquireRich=function(r)
  if r.rich or not r.wantChargeLens or richLive>=richLimit or r.style=='Repair' or r.style=='Courier' or r.style=='Branch' then return end
+ local key=r.startupStyle or 'Refraction'
+ for i=#richPool,1,-1 do
+  local h=richPool[i]
+  if h.key==key then
+   table.remove(richPool,i);r.rich=h;h.leased=true;richLive+=1
+   h.root.Parent=r.root
+   if h.particleSource then h.particleSource.Parent=r.root end
+   return
+  end
+ end
  local folder=Instance.new('Folder');folder.Name='RefractionChoreography';folder.Parent=r.root
- local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},lastEmission=nil}
+ local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},lastEmission=nil,key=key,leased=true}
  r.rich=h;richLive+=1
- local counted=true;folder.Destroying:Connect(function() if counted then counted=false;richLive-=1 end end)
+ folder.Destroying:Connect(function() if h.leased then h.leased=false;richLive-=1 end end)
  if r.startupStyle then
   h.startup=StartupFX.create(folder,r.startupStyle,1)
   return
@@ -214,7 +231,7 @@ acquireRich=function(r)
   h.sweeps[i].ink.beam.LightEmission=0
  end
  for i=1,4 do h.bolts[i]=richPath(r,'DischargeArc'..i,i%2==0 and CYAN or VIOLET,NumberSequence.new(.3)) end
- for i=1,10 do
+ for i=1,6 do
   local p=visualPart(folder,'OrbitingMineralChip',Enum.Material.Slate,Color3.fromRGB(44,38,62))
   h.debris[i]=p
  end
@@ -237,7 +254,7 @@ acquireRich=function(r)
 end
 hideRich=function(r)
  local h=r.rich;if not h then return end
- if h.startup then releaseRich(r);return end
+ if h.startup then StartupFX.hide(h.startup);return end
  h.glass.Transparency=1;h.mask.Enabled=false;h.core.Transparency=1
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
@@ -295,18 +312,23 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  -- The bright heads travel toward the origin, with tails behind. As the
  -- distortion expands these streaks die down, leaving its silhouette clear.
  for i,item in ipairs(h.comets) do
-  local angle=q*(11+i*.6)+i*TAU/4
-  local orbit=s*(2.4+2.8*(1-((q*2+i*.23)%1)))
-  local a=Vector3.new(math.cos(angle)*orbit,math.sin(angle*.8+i)*orbit*.65,math.sin(angle)*orbit)
-  local b=Vector3.new(math.cos(angle-1.45)*orbit*1.4,math.sin((angle-1.45)*.8+i)*orbit*.65,math.sin(angle-1.45)*orbit*1.4)
-  local ta=Vector3.new(-math.sin(angle),.3,math.cos(angle)).Unit
-  local tb=Vector3.new(-math.sin(angle-1.45),-.2,math.cos(angle-1.45)).Unit
-  curve(item.path,a,b,ta,tb,orbit*.7,.22*s*inflow)
-  item.head.CFrame=CFrame.new(from+a);item.head.Size=Vector3.one*(.16+.1*(i%2))*s
-  item.head.Transparency=1-.95*inflow
+  -- One inward sweep per charge. Nothing wraps while it is visible.
+  local t=clamp((q-(i-1)*.045)/.72)
+  local travel=t*t*(2-t)
+  local angle=i*TAU/4+travel*2.7
+  local orbit=s*(.12+5*(1-travel))
+  local trail=orbit+s*(.5+.7*math.sin(t*math.pi))
+  local a=Vector3.new(math.cos(angle)*orbit,math.sin(angle*.8+i)*orbit*.45,math.sin(angle)*orbit)
+  local b=Vector3.new(math.cos(angle-.9)*trail,math.sin((angle-.9)*.8+i)*trail*.45,math.sin(angle-.9)*trail)
+  local ta=Vector3.new(-math.sin(angle),.15,math.cos(angle)).Unit
+  local tb=Vector3.new(-math.sin(angle-.9),-.15,math.cos(angle-.9)).Unit
+  local visible=inflow*smooth(t/.12)*(1-smooth((t-.82)/.18))
+  curve(item.path,a,b,ta,tb,trail*.45,.3*s*visible)
+  item.head.CFrame=CFrame.new(from+a);item.head.Size=Vector3.one*math.max(.01,(.22+.1*(i%2))*s*visible)
+  item.head.Transparency=1-.95*visible
  end
  for i,item in ipairs(h.sweeps) do
-  local a=q*9+i*TAU/3
+  local a=2.8*smooth(q)+i*TAU/3
   local x=Vector3.new(math.cos(a),.15*math.sin(a*2),math.sin(a)).Unit
   local y=Vector3.new(math.cos(a+1.7),.2,math.sin(a+1.7)).Unit
   local reach=s*(4.5-2*q)
@@ -316,17 +338,18 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
   curve(item.rim,start+Vector3.yAxis*.045*s,finish,ta,tb,reach*1.1,.15*s*pressure)
  end
  for i,path in ipairs(h.bolts) do
-  local angle=i*TAU/4+math.floor(q*35)*.73
+  local angle=i*TAU/4+2.4*smooth(q)
   local x=Vector3.new(math.cos(angle),.2,math.sin(angle)).Unit
   local y=Vector3.new(math.cos(angle+1),.4,math.sin(angle+1)).Unit
-  local reach=s*(1.8+.4*math.sin(q*73+i))
+  local reach=s*(1.8+.4*math.sin(q*TAU*2+i))
   curve(path,x*.2*s,y*reach,(x+Vector3.yAxis).Unit,(-y+Vector3.yAxis).Unit,reach*.5,.045*s*pressure)
  end
  for i,p in ipairs(h.debris) do
-  local angle=q*3+i*2.39996
+  local drift=smooth(q/.8)
+  local angle=drift*.75+i*2.39996
   local rr=s*(3.8+(i%4)*.7)*(1-.25*q)
-  local position=Vector3.new(math.cos(angle)*rr,(math.sin(q*3+i)*.7+q*.8)*s,math.sin(angle)*rr)
-  p.CFrame=CFrame.new(from+position)*CFrame.Angles(q*4+i,q*5+i,q*3)
+  local position=Vector3.new(math.cos(angle)*rr,(math.sin(drift*2+i)*.4+drift*1.1)*s,math.sin(angle)*rr)
+  p.CFrame=CFrame.new(from+position)*CFrame.Angles(i*.7+drift*.2,i,drift*.15)
   local size=(.18+(i%4)*.1)*s;p.Size=Vector3.new(size,size*.65,size*1.4)
   p.Transparency=1-alive*.92
  end
@@ -355,8 +378,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local side=direction:Cross(reference).Unit;local up=side:Cross(direction).Unit
  r.root.CFrame=CFrame.new(from);r.a.Position=Vector3.zero;r.b.Position=delta
  local p=r.profile
- local frame=math.floor((now*12)%16)+1
- if frame~=r.frame then r.frame=frame;r.body.Transparency=profiles[frame] end
+ -- Keep body opacity stable; release pressure carries the width motion.
  local launchPressure=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.14))^2 or 0
  local thickness=p.body*width*scale*(1+launchPressure*.35)
  r.body.Width0=thickness;r.body.Width1=thickness*p.taper;r.body.Enabled=width>.002
@@ -392,7 +414,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
    r.orb.Transparency=0
   end
  end
- local angle=now*p.spin+(charge or 0)*2
+ local angle=charge~=nil and smooth(charge)*2.4 or 2.4+(releaseAge or now)*p.spin*.35
  -- Two deliberately separated hooked arcs, not a full glowing shell.
  for i=1,2 do
   local path=r.paths[i];local a=angle+(i-1)*math.pi;local b=a+1.9
@@ -457,7 +479,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
   path.beam.Width0=star*.22;path.beam.Width1=0;path.beam.Enabled=star>.008 and not reduced
  end
 end
-function B.counts() return live,details,richLive end
+function B.counts() return live,details,richLive,#richPool end
 -- Main geometry, fine trace, star and flecks have separate shutdown clocks.
 -- Reuse the rig; no emitter/Part allocation occurs when a cast ends.
 function B.after(r,from,to,now,age,scale)

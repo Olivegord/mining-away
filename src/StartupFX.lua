@@ -18,7 +18,7 @@ end
 local function line(root,color)
  local a,b=attachment(root),attachment(root)
  local beam=Instance.new('Beam');beam.Attachment0=a;beam.Attachment1=b
- beam.FaceCamera=true;beam.Segments=12;beam.LightEmission=1;beam.LightInfluence=0
+ beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=1;beam.LightInfluence=0
  beam.Color=ColorSequence.new(color);beam.Transparency=NumberSequence.new(1)
  beam.Enabled=false;beam.Parent=root
  return {a=a,b=b,beam=beam}
@@ -60,6 +60,7 @@ end
 local function arc(l,a,b,ta,tb,bend,width,alpha)
  draw(l,a,b,width,alpha)
  if not l.beam.Enabled then return end
+ l.beam.Segments=12
  pose(l.a,a,ta);pose(l.b,b,tb)
  l.beam.CurveSize0=bend;l.beam.CurveSize1=bend;l.beam.Width1=0
  local opacity=math.floor(math.clamp(alpha,0,1)*32+.5)
@@ -85,6 +86,12 @@ function FX.create(parent,style,seed)
  end
  return f
 end
+function FX.hide(f)
+ f.root.Transparency=1
+ for _,l in ipairs(f.arcs) do l.beam.Enabled=false end
+ for _,l in ipairs(f.rays) do l.beam.Enabled=false end
+ for _,g in ipairs(f.glints) do for _,l in ipairs(g.rays) do l.beam.Enabled=false end end
+end
 function FX.destroy(f)
  f.root:Destroy()
 end
@@ -95,7 +102,7 @@ function FX.update(f,pose,p)
  -- expanding sweep. The exact same star silhouette returns at larger scale.
  -- Absolute phase sampling also lets late observers enter without replaying it.
  local fade=math.min(1,p/.1,(1-p)/.16)
- local turn=f.phase+p*TAU*1.2
+ local turn=f.phase+smooth(p)*2.4
  local collapse=1-.5*math.clamp((p-.72)/.28,0,1)
  local radius=(2.4-.45*p)*collapse
  if f.style=='Stars' then
@@ -103,26 +110,30 @@ function FX.update(f,pose,p)
   local settle=smooth((p-.81)/.19)
   local ring=(1.1+3.6*burst)*(1-.22*settle)
   for i,l in ipairs(f.arcs) do
-   local lane=(i-1)%6;local angle=p*12+lane*TAU/3
+   local lane=(i-1)%6;local angle=2.4*smooth(p)+lane*TAU/3
    local r=ring*(lane<3 and 1 or .72);local height=lane<3 and -.35 or .6
    local function pt(t) return Vector3.new(math.cos(t)*r,height+math.sin(t*2)*.35,math.sin(t)*r) end
    local function tangent(t) return Vector3.new(-math.sin(t),0,math.cos(t)) end
    arc(l,pt(angle),pt(angle+2.1),tangent(angle),tangent(angle+2.1),r*.85,
-    (i<=6 and .65 or .22)*burst,burst*(i<=6 and .6 or 1))
+    (i<=6 and .65 or .22)*burst*(1-smooth((p-.91)/.09)),burst*(1-smooth((p-.91)/.09))*(i<=6 and .6 or 1))
   end
   local pop=0
   for i=0,3 do pop=math.max(pop,pulse(p,.025+i*.175,.11)*(1+i*.12)) end
-  flash(f.glints[1],Vector3.zero,.35+1.6*pop,math.min(1,pop),-12+math.floor(p/.175)*16)
-  local reuse=smooth((p-.79)/.055)
+  flash(f.glints[1],Vector3.zero,.35+1.6*pop,math.min(1,pop),-12+60*smooth(p))
+  local reuse=smooth((p-.79)/.055)*(1-smooth((p-.93)/.07))
   flash(f.glints[2],Vector3.new(0,ring*.85,0),1.65*reuse,reuse,0)
-  local angle=p*12+.7
+  local angle=2.4*smooth(p)+.7
   flash(f.glints[3],Vector3.new(math.cos(angle)*ring,-.35,math.sin(angle)*ring),1.45*reuse,reuse,0)
  elseif f.style=='Ignition' then
-  -- An amber turbine: a level segmented ring tightens as six sparks pull into the emitter.
+  -- Three tapered curved sweeps with continuous eased travel, no polygon cage.
   for i,l in ipairs(f.arcs) do
-   local a=turn+(i-1)*TAU/12;local b=a+.32
-   local function point(t) return Vector3.new(math.cos(t)*radius,-.65,math.sin(t)*radius) end
-   draw(l,point(a),point(b),.065,fade*(.45+.35*p))
+   local lane=(i-1)%3
+   local a=turn+lane*TAU/3;local b=a+1.55
+   local r=radius*(i<=6 and 1 or .72)
+   local function point(t) return Vector3.new(math.cos(t)*r,-.65,math.sin(t)*r) end
+   local function tangent(t) return Vector3.new(-math.sin(t),0,math.cos(t)) end
+   arc(l,point(a),point(b),tangent(a),tangent(b),r*.55,
+    i<=3 and .18 or .055,fade*(i<=3 and .8 or .25))
   end
   for i,g in ipairs(f.glints) do
    local pop=pulse(p,.1+(i-1)*.23,.2)
@@ -133,12 +144,12 @@ function FX.update(f,pose,p)
   -- of a six-segment wire helix. Radius surges once before snapping inward.
   local surge=smooth((p-.64)/.12);local snap=smooth((p-.91)/.09)
   local r=(3.8-1.3*p+1.8*surge)*(1-.8*snap)
-  local power=smooth(p/.12)*(1-.6*snap)
+  local power=smooth(p/.12)*(1-snap)
   f.root.Shape=Enum.PartType.Ball;f.root.Material=Enum.Material.SmoothPlastic
   f.root.Color=Color3.fromRGB(17,8,35);f.root.Size=Vector3.one*(.2+(1.5+surge*1.4)*(1-snap))
   f.root.Transparency=1-power
   for i,l in ipairs(f.arcs) do
-   local lane=(i-1)%6;local angle=p*16+lane*TAU/3
+   local lane=(i-1)%6;local angle=3.6*smooth(p)+lane*TAU/3
    local rr=r*(lane<3 and 1 or .65);local y=lane<3 and -1.1 or 1.5
    local a=Vector3.new(math.cos(angle)*rr,y,math.sin(angle)*rr)
    local b=Vector3.new(math.cos(angle+2.6)*rr*.3,y*.2,math.sin(angle+2.6)*rr*.3)
@@ -147,7 +158,7 @@ function FX.update(f,pose,p)
    arc(l,a,b,ta,tb,rr*1.25,(i<=6 and 1.3 or .26)*power,power)
   end
   for i,g in ipairs(f.glints) do
-   local angle=p*16+(i-1)*TAU/3
+   local angle=3.6*smooth(p)+(i-1)*TAU/3
    flash(g,Vector3.new(math.cos(angle)*r,-.5,math.sin(angle)*r),.45+.55*surge,power*.8,0)
   end
  end
@@ -158,7 +169,7 @@ function FX.update(f,pose,p)
   local t=math.clamp((p-.72)/.28,0,1)
   local inner,outer=1+t*5,1.6+t*5
   if f.style=='Ignition' then
-   local t=(p*2+(i-1)/6)%1;inner=.3+(1-t)*1.7;outer=inner+.4
+   local t=smooth(math.clamp((p-(i-1)*.045)/.75,0,1));inner=.08+(1-t)*2.3;outer=inner+.4*(1-t)
   end
   local function point(r) return Vector3.new(math.cos(a)*r,math.sin(a*2)*.3,math.sin(a)*r) end
   draw(l,point(inner),point(outer),.12, f.style=='Ignition' and fade*.75 or finish*.8)
