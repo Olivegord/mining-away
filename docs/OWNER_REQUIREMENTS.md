@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 4 latest — fast blue pressure burst, shrink-only pulses and sound
+
+The owner finds the aftermath too floaty. The expanding disk must launch much faster, brake much faster and remain closer to the emitter. Tiny electric fragments must spread in a broad radial cone with a fast initial impulse, jitter and strong braking, with no gravity or continued falling. Match fragment and pulse colors; smoke and related regular-laser effects must match the blue beam. Replace the swell/collapse pulses with more iterations that only shrink, instantly resetting to a progressively smaller full size each time. Add tiny screen shake and synchronized sounds. This supersedes the preceding purple-smoke, gravity and three-swell choices.
+
 ## November 4 latest — persistent launch aftermath and accelerating color pulses
 
 The regular laser's purple cloud must survive the color pop and be pushed outward by release. Keep the color alive with tiny cube/rectangle fragments emitted downward in a cone; reuse the cheap force-based particle motion with electrical jitter. Add a circular expanding radial plane at launch. These tails must fade independently instead of disappearing with the charge lens. The color pop has three swells and collapses: medium, larger, then smaller; progressively shorter collapse times build anticipation. Preserve the thin lasers and removed firing hop.

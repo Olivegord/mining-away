@@ -44,17 +44,19 @@ end
 local discharge={}
 local OUT_RATE=120
 for i=1,18 do
- local angle=i*2.399963;local speed=6+(i%5)*.7
+ local angle=i*2.399963;local speed=11+(i%5)*1.1
  local p=Vector3.zero
- local v=Vector3.new(math.cos(angle)*(2.2+i%3*.65),-speed,math.sin(angle)*(2.2+i%3*.65))
+ local radial=24+(i%3)*4
+ local v=Vector3.new(math.cos(angle)*radial,-speed,math.sin(angle)*radial)
  local points={p}
  for step=1,180 do
   local t=step/OUT_RATE
-  if step%8==0 and t<.6 then
+  if step%5==0 and t<.5 then
    local kick=angle+step*1.73
-   v+=Vector3.new(math.cos(kick),0,math.sin(kick))*(1-t/.6)*2.4
+   v+=Vector3.new(math.cos(kick),0,math.sin(kick))*(1-t/.5)*6
   end
-  v+=(Vector3.new(0,-5,0)-v*2.2)/OUT_RATE
+  -- No gravity: the cone rapidly loses its initial momentum to drag.
+  v-=v*15/OUT_RATE
   p+=v/OUT_RATE;points[#points+1]=p
  end
  discharge[i]=points

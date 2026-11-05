@@ -177,7 +177,6 @@ end
 local GLASS_COLOR=Color3.fromRGB(245,250,255)
 local CYAN=Color3.fromRGB(108,238,255)
 local VIOLET=Color3.fromRGB(166,64,255)
-local LENS_COLORS={Color3.fromRGB(255,255,0),Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
 local function visualPart(parent,name,material,color,shape)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false
  p.Transparency=1;p.Size=Vector3.one*.02;p.Material=material;p.Color=color
@@ -194,7 +193,7 @@ releaseRich=function(r)
  if h.particleSource then
   h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
  end
- h.lastEmission=nil;h.root.Parent=nil
+ h.lastEmission=nil;h.lastPulse=nil;h.root.Parent=nil
  if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
@@ -266,17 +265,20 @@ local function curve(path,a,b,ta,tb,bend,width)
  path.beam.Width0=width
  if not path.beam.Enabled then path.beam.Enabled=true end
 end
--- Medium pulse, larger crest, then a smaller faster pulse. Each collapse
--- finishes before the next, and the final one lands exactly on release.
+-- Six shrink-only pulses. Each reset is instantaneous and smaller, with no
+-- animated swell. Shortening intervals build toward authoritative release.
 -- q is authoritative charge progress. No layer owns or extends gameplay time.
+local pulseStarts={.32,.51,.66,.78,.875,.95,1}
+local pulseSizes={1,.82,.65,.49,.34,.2}
 function B.lensEnvelope(q)
- if q==nil or q<.36 or q>=1 then return 0 end
- local start,peak,finish,height
- if q<.65 then start,peak,finish,height=.36,.46,.65,.72
- elseif q<.87 then start,peak,finish,height=.65,.72,.87,1
- else start,peak,finish,height=.87,.905,1,.43 end
- if q<peak then return height*smooth((q-start)/(peak-start)) end
- return height*(1-smooth((q-peak)/(finish-peak)))
+ if q==nil or q<pulseStarts[1] or q>=1 then return 0,0,1 end
+ for i=1,#pulseSizes do
+  if q<pulseStarts[i+1] then
+   local t=(q-pulseStarts[i])/(pulseStarts[i+1]-pulseStarts[i])
+   return pulseSizes[i]*(1-t)^1.35,i,t
+  end
+ end
+ return 0,0,1
 end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local h=r.rich;if not h then return end
@@ -291,7 +293,19 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local eye=camera and camera.CFrame.Position-from or Vector3.zAxis*40
  local toward=eye.Magnitude>.01 and eye.Unit or Vector3.zAxis
  local inflow=smooth(q/.12)*(1-smooth((q-.62)/.26))
- local lens=B.lensEnvelope(q)
+ local lens,pulse,pulseAge=B.lensEnvelope(q)
+ if h.lastPulse~=pulse then
+  h.lastPulse=pulse
+  if pulse>0 and pulseAge<.35 and B.onCue then B.onCue('pulse',from,now,pulse) end
+ end
+ if h.tint~=r.color then
+  h.tint=r.color;h.glass.Color=r.color:Lerp(WHITE,.8)
+  h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
+  for i,item in ipairs(h.comets) do
+   local color=LaunchAftermath.palette(r.color,i)
+   item.path.beam.Color=ColorSequence.new(color);item.head.Color=color
+  end
+ end
  local delta=to-from
  LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
  local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
@@ -303,9 +317,10 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  h.mask.Enabled=lens>.002
  h.glass.Transparency=lens>.002 and (1+2*lens) or 1
  local colorPulse=math.min(1,lens*2)
- local colorAt=clamp((q-.36)/.64)*3
- local index=math.min(3,math.floor(colorAt)+1)
- h.mask.FillColor=LENS_COLORS[index]:Lerp(LENS_COLORS[index+1],colorAt-(index-1))
+ local popColor=LaunchAftermath.palette(r.color,math.max(1,pulse))
+ -- The above-one-transparency distortion subtracts its mask tint. Use the
+ -- complementary input so the rendered pop has the beam/fragment hue.
+ h.mask.FillColor=Color3.new(1-popColor.R,1-popColor.G,1-popColor.B)
  h.mask.FillTransparency=1+1.2*colorPulse
  h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.9*smooth(q/.65))
  h.core.Transparency=alive>.02 and 0 or 1
@@ -359,6 +374,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  if charge~=nil and charge>=0 and charge<1 then
   acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale)
  else
+  if r.rich and releaseAge and releaseAge>=0 and releaseAge<=.16 and B.onCue then B.onCue('launch',from,now,1) end
   LaunchAftermath.fire(r,from,direction,now,releaseAge)
   releaseRich(r)
  end
@@ -379,7 +395,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  -- Regular lens charges hand their ring to the independent aftermath clock.
  if r.wantChargeLens and not r.startupStyle and r.style~='Repair' and r.style~='Courier' and r.style~='Branch' then
   PlaneBurst.hide(r.plane)
- else PlaneBurst.draw(r.plane,direction,releaseAge and releaseAge/.65,scale) end
+ else PlaneBurst.draw(r.plane,direction,releaseAge and releaseAge/.26,scale) end
  for i=1,2 do
   local path=r.paths[i];path.beam.Enabled=false
   if charge==nil and (r.style=='Resonance' or r.style=='Repair') then

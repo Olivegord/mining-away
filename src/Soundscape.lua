@@ -14,6 +14,9 @@ local TRACKS = {
  {name='The City',id='1835929012'},
 }
 local CUES = {
+ laser_pulse={id='9126066421',volume=.045,duration=.12,pitch=1.1,cooldown=.025,range=48,maxVoices=3,fallback='volume_slider.ogg'},
+ laser_pressure={id='9118612324',volume=.12,duration=.32,pitch=1.45,cooldown=.075,range=60,maxVoices=3,fallback='action_get_up.mp3'},
+ laser_crackle={id='9118614717',volume=.065,duration=.28,pitch=1.65,cooldown=.075,range=48,maxVoices=3,fallback='volume_slider.ogg'},
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.055,duration=.3,pitch=1.45,cooldown=.09,fallback='volume_slider.ogg'},

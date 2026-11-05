@@ -13,7 +13,11 @@ VM.__sub=function(a,b) return setmetatable({X=a.X-b.X,Y=a.Y-b.Y,Z=a.Z-b.Z},VM) e
 VM.__unm=function(a) return setmetatable({X=-a.X,Y=-a.Y,Z=-a.Z},VM) end
 VM.__mul=function(a,b) if type(a)=='number' then a,b=b,a end;return setmetatable({X=a.X*b,Y=a.Y*b,Z=a.Z*b},VM) end
 VM.__div=function(a,b) return a*(1/b) end
-function VM:Lerp(b,t) return self+(b-self)*t end
+function VM:Lerp(b,t)
+ local value=self+(b-self)*t
+ if self.R~=nil then value.R=value.X;value.G=value.Y;value.B=value.Z end
+ return value
+end
 function VM:Cross(b) return setmetatable({X=self.Y*b.Z-self.Z*b.Y,Y=self.Z*b.X-self.X*b.Z,Z=self.X*b.Y-self.Y*b.X},VM) end
 function VM:Dot(b) return self.X*b.X+self.Y*b.Y+self.Z*b.Z end
 local Vector3={new=function(x,y,z) return setmetatable({X=x or 0,Y=y or 0,Z=z or 0},VM) end};Vector3.zero=Vector3.new();Vector3.one=Vector3.new(1,1,1)

@@ -12,6 +12,17 @@ local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
 local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';localFX.Parent=workspace
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
+-- Renderer cues follow the same observed charge/release as the visual. Reuse
+-- the bounded spatial audio mixer and existing reduced-motion camera path.
+BeamVFX.onCue=function(kind,position,now,pulse)
+ if kind=='pulse' then
+  soundscape:play('laser_pulse',position,{pitch=.9+pulse*.12,level=1-pulse*.065})
+ else
+  soundscape:play('laser_pressure',position)
+  soundscape:play('laser_crackle',position)
+  presentation:kick(position,.028,now)
+ end
+end
 local pickupView=PickupView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new()
 local previousShake=CFrame.new();local shakeCamera=nil
