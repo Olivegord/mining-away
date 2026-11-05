@@ -190,8 +190,11 @@ check('charge lens leases and emissions remain bounded across repeated hide and 
  end
  local _,_,count=BeamVFX.counts();assert(count==4,'lens rig cap exceeded')
  local r=rigs[1];local h=assert(r.rich)
- BeamVFX.hide(r);BeamVFX.draw(r,from,to,61.1,0,.35,nil)
- assert((h.sparks.Emitted or 0)>0,'per-frame hide prevented charge particles')
+ BeamVFX.hide(r,false);assert(not r.rich and r.detail,'hidden charge kept a lease or lost retained detail')
+ BeamVFX.draw(r,from,to,61.1,0,.35,nil)
+ assert(r.rich==h,'hidden charge failed to reuse pooled rig')
+ BeamVFX.draw(r,from,to,61.2,0,.4,nil)
+ assert((h.sparks.Emitted or 0)>0,'reused charge failed to emit particles')
  local emitted=h.sparks.Emitted or 0
  BeamVFX.draw(r,from,to,161,0,.4,nil)
  assert((h.sparks.Emitted or 0)-emitted<=2,'late sample dumped skipped particles')

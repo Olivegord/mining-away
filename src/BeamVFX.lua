@@ -135,7 +135,8 @@ local function addDetail(r)
 end
 function B.hide(r,releaseDetail)
  if not r or r.destroyed then return end
- if hideRich then hideRich(r) end
+ -- A hidden charge must return its lease even when base detail is retained.
+ if releaseRich then releaseRich(r) end
  for _,v in ipairs(r.all) do v.Enabled=false end
  if r.orb then r.orb.Transparency=1 end
  if releaseDetail then freeDetail(r) end
