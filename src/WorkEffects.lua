@@ -210,6 +210,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Acceleration=Vector3.new(0,resonance and -.6 or -2,0)
  fx.impact.Drag=resonance and 2 or 2.4
  fx.impact.Rate=continuous and (resonance and 10 or 12) or 0;fx.impact.Enabled=working and continuous
+ if working and fx.releaseAt~=sample.since then
+  fx.releaseAt=sample.since
+  if sample.since and now>=sample.since and now-sample.since<.15 then
+   fx.impact:Emit(12);fx.sparks:Emit(5)
+  end
+ end
  if point and normal then
   beam.marker.CFrame=facing(point+normal*.2,normal)
   if fx.contact then

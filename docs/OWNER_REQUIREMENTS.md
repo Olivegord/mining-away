@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 4 latest — complete regular-beam collapse, repeated stars and home preview
+
+The regular drone's color-distortion circle must visibly collapse into its emitting origin, then produce a large bright launch flash that immediately spawns the beam. Do not cut the collapse off or confuse this with Bubbler's star charge. Use only the first animation in `sailent_sfx_7669407009757777182.mp4` for the repeated flashing-star reference: distinct central flashes during charge, then reuse that star shape at larger scale in the burst. Rework the weak spiral and increase effect scale while retaining bounded rendering cost.
+
+Add fake stationary drones and indestructible display rocks beside the home base, looping their beam/attack animations so the owner can review them without chasing the gameplay fleet. Remove the long gap between one attack ending and the next charge starting. Give the effects stronger physical weight, volume and decisive release instead of hollow outlines. These displays must not affect owned drones, resource health, rewards or progression. Keep all prior integrations and the one canonical native game.
+
 ## November 4 latest — integrate remaining cloud work and fire on release
 
 Include all draft PR work and the completed flashing-star cloud task in this same game. The new color-circle charge must hand directly to the released beam: remove the additional two-second active beam width warmup. This supersedes older requirements below to retain that ramp. Keep the server's charge/card timing, immediate full-width release, and existing stop fade. Integrate cloud effects against the current architecture and canonical native file rather than restoring its outdated prototype build.

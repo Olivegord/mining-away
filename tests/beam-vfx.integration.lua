@@ -20,10 +20,10 @@ check('charge gathers compresses and changes silhouette before release',function
  assert(full>.99 and compressed<.4)
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
- BeamVFX.draw(r,from,to,10,0,.76,nil)
+ BeamVFX.draw(r,from,to,10,0,.93,nil)
  assert(r.rich and r.rich.core.Transparency==0 and not r.core.Enabled)
  assert(r.paths[1].beam.CurveSize0>0 and r.paths[1].a.CFrame~=r.paths[1].b.CFrame)
- local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.9,nil);assert(r.rich.glass.Size.X<size)
+ local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
  BeamVFX.draw(r,from,to,10.2,1,nil,0)
  assert(r.orb.Transparency==1 and r.stars[1].beam.Enabled and r.stars[1].beam.Width1==0)
  assert(#r.stars==4 and r.paths[4].beam.LightEmission==0,'dark seam must use normal blending')
@@ -91,13 +91,13 @@ check('charge lens stays at the moving emitter briefly and never survives releas
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
  local h=assert(r.rich);assert(h.glass.Transparency==1 and not h.mask.Enabled,'lens appeared during early inflow')
- BeamVFX.draw(r,moving,to,60.1,0,.76,nil)
+ BeamVFX.draw(r,moving,to,60.1,0,.93,nil)
  near((h.glass.Position-moving).Magnitude,0);assert(h.mask.Parent==h.glass)
  assert(h.glass.Material==Enum.Material.Glass and not h.glass.CanQuery and h.glass.Transparency>1 and h.mask.Enabled)
  assert(h.mask.FillTransparency>1, 'color lens failed to appear')
  local expanded=h.glass.Size.X
- BeamVFX.draw(r,moving,to,60.15,0,.9,nil);assert(h.glass.Size.X<expanded)
- BeamVFX.draw(r,moving,to,60.2,0,.96,nil)
+ BeamVFX.draw(r,moving,to,60.15,0,.985,nil);assert(h.glass.Size.X<expanded)
+ BeamVFX.draw(r,moving,to,60.2,0,.9999,nil)
  assert(h.glass.Transparency==1 and not h.mask.Enabled,'lens survived pre-release collapse')
  BeamVFX.draw(r,moving,to,60.3,1,nil,0)
  assert(r.rich==nil and h.root.Parent==nil,'charge decoration survived beam release')
@@ -119,14 +119,31 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  local _,_,count=BeamVFX.counts();assert(count==4)
  for _,r in ipairs(rigs) do
   BeamVFX.draw(r,from,to,60.1,1,nil,0)
-  assert(not r.rich and r.body.Enabled);near(r.body.Width0,.3)
+  assert(not r.rich and r.body.Enabled);near(r.body.Width0,.405)
   BeamVFX.destroy(r)
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
+check('lens contracts to a point and its large flash continues into the beam',function()
+ local r=BeamVFX.new(root,'Cutter',color)
+ local last=math.huge
+ for _,q in ipairs({.79,.84,.9,.95,.98,.999}) do
+  BeamVFX.draw(r,from,to,100+q,0,q,nil,1.6)
+  assert(r.rich.glass.Size.X<last,'lens was cut off instead of shrinking')
+  last=r.rich.glass.Size.X
+ end
+ assert(last<.03 and r.orb.Material==Enum.Material.Neon and r.orb.Size.X>3)
+ local before=r.orb.Size.X
+ BeamVFX.draw(r,from,to,101,1,nil,0,1.6)
+ assert(not r.rich and r.body.Enabled and r.orb.Transparency==0)
+ assert(math.abs(r.orb.Size.X-before)<.01,'release cut off the flash')
+ BeamVFX.draw(r,from,to,101.2,1,nil,.2,1.6)
+ assert(r.orb.Transparency==1 and not r.stars[1].beam.Enabled)
+ BeamVFX.destroy(r)
+end)
 check('resource gravity wells cannot acquire the emitter-only charge lens',function()
  local r=BeamVFX.new(root,'Singularity',color,nil,false)
- BeamVFX.draw(r,from,to,60,0,.76,nil)
+ BeamVFX.draw(r,from,to,60,0,.93,nil)
  assert(r.detail and not r.rich,'resource well gained a laser-origin bubble')
  BeamVFX.destroy(r)
 end)
@@ -144,7 +161,7 @@ check('charge lens leases and emissions remain bounded across repeated hide and 
  BeamVFX.draw(r,from,to,161,0,.4,nil)
  assert((h.sparks.Emitted or 0)-emitted<=2,'late sample dumped skipped particles')
  BeamVFX.hide(r,true);assert(r.rich==nil and h.root.Parent==nil)
- BeamVFX.draw(r,from,to,162,0,.76,nil);assert(r.rich)
+ BeamVFX.draw(r,from,to,162,0,.93,nil);assert(r.rich)
  for _,v in ipairs(rigs) do BeamVFX.destroy(v) end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0,'lens lease leaked')
 end)
@@ -187,13 +204,22 @@ check('actual mining envelope surface contact target life and paused work remain
   if blocked then return {Instance=target,Position=origin+delta*.5} end
   return nil
  end
- local s={alive=true,isMining=true,active=true,contact=true,key='ore',life=1,part=target,serverSource=target,since=300,style='Cutter',warmupStart=299,warmupDuration=1}
+ local s={alive=true,isMining=true,active=true,contact=true,key='ore',life=1,part=target,serverSource=target,since=300,style='Cutter',droneRole='Striker',warmupStart=299,warmupDuration=1}
  s.active=false;s.charging=true
- p:beginFrame();p:renderMiningBeam(b,s,299.76)
+ p:beginFrame();p:renderMiningBeam(b,s,299.93)
  assert(b.vfx.rich and b.vfx.rich.mask.Enabled and not b.vfx.body.Enabled)
- s.active=true;s.charging=false
  p:beginFrame();p:renderMiningBeam(b,s,300)
- near(b.vfx.body.Width0,.3);assert(p.beamRays<=12)
+ near(b.vfx.body.Width0,.972);assert(b.vfx.body.Enabled and not b.vfx.rich)
+ assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
+ s.paused=true;p:beginFrame();p:renderMiningBeam(b,s,300.02)
+ assert(not b.vfx or not b.vfx.body.Enabled,'paused prediction survived')
+ s.paused=false;s.droneRole='Bubbler';p:beginFrame();p:renderMiningBeam(b,s,300.03)
+ assert(not b.vfx or not b.vfx.body.Enabled,'specialist predicted a continuous beam')
+ s.droneRole='Striker';p:beginFrame();p:renderMiningBeam(b,s,300.16)
+ assert(not b.vfx or not b.vfx.body.Enabled,'prediction extended past its bounded receipt window')
+ s.active=true;s.charging=false
+ p:beginFrame();p:renderMiningBeam(b,s,300.17)
+ near(b.vfx.body.Width0,.72);assert(p.beamRays<=12)
  assert(not b.vfx.rich,'release kept the charge rig')
  near((b.vfx.root.Position+b.vfx.b.Position).Y,1)
  s.paused=true;s.active=false;s.charging=false

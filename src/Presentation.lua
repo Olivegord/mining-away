@@ -170,11 +170,19 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery,beam.vertical) end
  local valid=point~=nil and normal~=nil
+ -- The server already supplied the charge deadline. Bridge only the small
+ -- snapshot gap for continuous miners, cosmetically, with a verified contact.
+ -- Never feed prediction into damage, work particles, audio or the fade state.
+ local deadline=(sample.warmupStart or 0)+(sample.warmupDuration or .8)
+ local predicted=sample.droneRole=='Striker' and sample.isMining and sample.alive
+  and sample.charging and not sample.active and not sample.paused and valid
+  and (sample.warmupStart or 0)>0 and now>=deadline and now<deadline+.15
  -- A break attribute can precede its contact snapshot. A released beam is
  -- already full width; only its existing stop fade needs reconstruction.
  if final and beam.envelope.key~=sample.key then beam.envelope=F.newBeam() end
  local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=part~=nil and part.Parent~=nil and part.Transparency<1,
   key=sample.key,life=sample.life,active=sample.active,since=sample.since})
+ if predicted then width=1 end
  if valid then
   beam.endpoint.Position=point;beam.marker.Position=point+normal*.07
   if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
@@ -212,13 +220,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
   if beam.vfx then
    beam.halo.Transparency=1
-   local releaseAt=style=='Percussion' and (sample.pulseAt or sample.since) or sample.since
-   BeamVFX.draw(beam.vfx,origin,tip,now,width*alpha,nil,now-(releaseAt or now),1+pulse*.15)
+   local releaseAt=predicted and deadline or (style=='Percussion' and (sample.pulseAt or sample.since) or sample.since)
+   BeamVFX.draw(beam.vfx,origin,tip,now,width*alpha,nil,now-(releaseAt or now),BeamVFX.MiningScale+pulse*.15)
   end
  elseif charging and beam.vfx then
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
-  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil)
+  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end

@@ -2,6 +2,11 @@
 -- Native tapered ribbons form the four-point glint; curved ribbons follow
 -- explicit world-space paths. Neither depends on bloom or uploaded textures.
 local B={}
+B.MiningScale=2.4
+function B.recoil(age)
+ if not age or age<0 or age>=.4 then return 0 end
+ return .95*(1-math.exp(-age*90))*math.exp(-age*12)
+end
 B.startupStyles={Bubbler='Stars',Starforge='Stars',Halver='Ignition',Singularity='Coil',Resonator='Coil'}
 local WHITE=Color3.fromRGB(247,250,255)
 local DARK=Color3.fromRGB(19,9,32)
@@ -116,7 +121,7 @@ local function addDetail(r)
  local limit=B.limits.details-(priority and 0 or B.limits.reservedDetails)
  if r.detail or not r.wantDetail or details>=limit then return end
  r.detail=true;details+=1;r.paths={};r.stars={}
- if r.style=='Orbital' or r.style=='Singularity' then
+ if r.style=='Orbital' or r.style=='Singularity' or r.style=='Cutter' then
   local orb=Instance.new('Part');orb.Name='ChargedDarkCore';orb.Shape=Enum.PartType.Ball
   orb.Material=Enum.Material.SmoothPlastic;orb.Color=DARK
   orb.Anchored=true;orb.CanCollide=false;orb.CanTouch=false;orb.CanQuery=false;orb.CastShadow=false
@@ -253,9 +258,9 @@ end
 -- in charge, contraction, then complete handoff to the released beam.
 -- q is authoritative charge progress. No layer owns or extends gameplay time.
 function B.lensEnvelope(q)
- if q==nil or q<.64 or q>=.95 then return 0 end
- if q<.76 then return smooth((q-.64)/.12) end
- return 1-smooth((q-.76)/.19)
+ if q==nil or q<.64 or q>=1 then return 0 end
+ if q<.79 then return smooth((q-.64)/.15) end
+ return 1-smooth((q-.79)/.21)
 end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local h=r.rich;if not h then return end
@@ -273,14 +278,14 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local lens=B.lensEnvelope(q)
  local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
  local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
- local radius=s*(.65+3.85*lens)
+ local radius=s*(.025+4.475*lens)
  -- The single surface goes clear -> chromatic -> clear, so nested Glass
  -- cannot hide the color layer. It stays exactly on the emitting attachment.
  h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
  h.mask.Enabled=lens>.002
  h.glass.Transparency=lens>.002 and (1+2*lens) or 1
- local colorPulse=smooth((q-.70)/.045)*(1-smooth((q-.87)/.06))
- local colorAt=clamp((q-.73)/.17)*3
+ local colorPulse=smooth((q-.70)/.045)*(1-smooth((q-.975)/.025))
+ local colorAt=clamp((q-.73)/.24)*3
  local index=math.min(3,math.floor(colorAt)+1)
  h.mask.FillColor=LENS_COLORS[index]:Lerp(LENS_COLORS[index+1],colorAt-(index-1))
  h.mask.FillTransparency=1+1.2*colorPulse
@@ -339,6 +344,7 @@ end
 function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  if not r or r.destroyed or not r.root.Parent then return end
  width=clamp(width);scale=scale or 1
+ if charge and charge>=1 and width==0 then B.hide(r,true);return end
  local near=B.near(from,r.style=='Orbital' and 340 or 110)
  local reduced=B.reduced()
  if not near or reduced then freeDetail(r) else addDetail(r) end
@@ -351,7 +357,8 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local p=r.profile
  local frame=math.floor((now*12)%16)+1
  if frame~=r.frame then r.frame=frame;r.body.Transparency=profiles[frame] end
- local thickness=p.body*width*scale
+ local launchPressure=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.14))^2 or 0
+ local thickness=p.body*width*scale*(1+launchPressure*.35)
  r.body.Width0=thickness;r.body.Width1=thickness*p.taper;r.body.Enabled=width>.002
  r.core.Width0=p.core*width*scale;r.core.Width1=p.core*width*scale*.6;r.core.Enabled=width>.002
  if not r.detail then return end
@@ -367,6 +374,10 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local gather,glint=0,0
  if charge~=nil then gather,glint=B.charge(charge) end
  local release=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.18))^2 or 0
+ -- The shrinking chromatic lens becomes the launch flash. The same native
+ -- core and curved shock front span the boundary; firing never cuts them off.
+ local launch=r.style=='Cutter' and not r.startupStyle
+ local flash=launch and (charge and smooth((charge-.94)/.06) or release) or 0
  local energy=charge~=nil and gather or width
  local radius=p.orbit*scale*(charge~=nil and (1.25-.6*gather) or .7)
  if r.orb then
@@ -374,6 +385,12 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
   r.orb.Transparency=charge~=nil and 0 or 1
   if r.rich then r.orb.Transparency=1 end
   r.orb.Color=DARK:Lerp(DARK_GLOW,gather*.6)
+  r.orb.Material=Enum.Material.SmoothPlastic
+  if flash>.002 then
+   r.orb.Material=Enum.Material.Neon;r.orb.Color=WHITE
+   r.orb.Size=Vector3.one*math.max(.025,2.2*scale*flash)
+   r.orb.Transparency=0
+  end
  end
  local angle=now*p.spin+(charge or 0)*2
  -- Two deliberately separated hooked arcs, not a full glowing shell.
@@ -404,6 +421,12 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
    elseif r.style=='Cutter' or r.style=='Combat' or r.style=='Sentry' then
     path.beam.Enabled=release>.01 -- quiet sustained worker/threat silhouette
    end
+  end
+  if flash>.002 then
+   local burstRadius=scale*(.6+1.8*(1-flash))
+   pose(path.a,center+x*burstRadius,ta);pose(path.b,center+y*burstRadius,tb)
+   path.beam.CurveSize0=burstRadius*.72;path.beam.CurveSize1=burstRadius*.72
+   path.beam.Width0=.35*scale*flash;path.beam.Width1=0;path.beam.Enabled=true
   end
  end
  -- Parallel rim + normally blended dark seam. Endpoint offsets shrink to

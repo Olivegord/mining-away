@@ -903,7 +903,11 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
+ local kick=0
+ if not motionPaused and not BeamVFX.reduced() and (state=='Mine' or state=='Attack') then
+  kick=BeamVFX.recoil(now-(s:GetAttribute(state=='Attack' and 'ShotAt' or 'BeamSince') or 0))
+ end
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+kick,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now)
@@ -953,7 +957,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,
@@ -1038,6 +1042,7 @@ end
 
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
+local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  roleEffectView:step(now)
@@ -1057,6 +1062,7 @@ connect(RunService.RenderStepped,function(dt)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  presentation:update(dt,now)
+ laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
 end)
 
@@ -1337,7 +1343,7 @@ connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  commandView:destroy();pickupView:destroy();roleEffectView:destroy();impactConnection:Disconnect()
- specialMiningFX:destroy();logisticsView:destroy()
+ specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

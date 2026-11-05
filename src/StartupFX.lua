@@ -6,14 +6,19 @@ local palettes={Stars=Color3.fromRGB(105,224,255),Ignition=Color3.fromRGB(255,17
 FX.MaxActive=4 -- Shared with refraction rigs by BeamVFX.
 FX.MaxDistance=110
 local opacities={}
-for i=0,32 do opacities[i]=NumberSequence.new(1-i/32) end
+local arcOpacities={}
+for i=0,32 do
+ opacities[i]=NumberSequence.new(1-i/32)
+ local alpha=i/32
+ arcOpacities[i]=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.15,1-alpha),NumberSequenceKeypoint.new(.75,1-alpha*.8),NumberSequenceKeypoint.new(1,1)})
+end
 local function attachment(root)
  local a=Instance.new('Attachment');a.Parent=root;return a
 end
 local function line(root,color)
  local a,b=attachment(root),attachment(root)
  local beam=Instance.new('Beam');beam.Attachment0=a;beam.Attachment1=b
- beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=1;beam.LightInfluence=0
+ beam.FaceCamera=true;beam.Segments=12;beam.LightEmission=1;beam.LightInfluence=0
  beam.Color=ColorSequence.new(color);beam.Transparency=NumberSequence.new(1)
  beam.Enabled=false;beam.Parent=root
  return {a=a,b=b,beam=beam}
@@ -27,21 +32,38 @@ local function draw(l,a,b,width,alpha)
  if l.opacity~=opacity then l.opacity=opacity;l.beam.Transparency=opacities[opacity] end
 end
 local function glint(root,color)
- local a=attachment(root)
- local gui=Instance.new('BillboardGui');gui.Name='StartupGlint';gui.Adornee=a
- gui.AlwaysOnTop=false;gui.LightInfluence=0;gui.Brightness=1.5;gui.MaxDistance=FX.MaxDistance;gui.Parent=root
- local function sprite(texture,tint)
-  local i=Instance.new('ImageLabel');i.BackgroundTransparency=1;i.Size=UDim2.fromScale(1,1)
-  i.Image=texture;i.ImageColor3=tint;i.ImageTransparency=1;i.Parent=gui;return i
+ local g={rays={}}
+ for i=1,4 do
+  local l=line(root,Color3.new(1,1,1));l.beam.Name='ChargeStar'
+  g.rays[i]=l
  end
- local glow=sprite('rbxasset://textures/particles/flare_main.dds',color)
- local star=sprite('rbxasset://textures/particles/sparkles_main.dds',Color3.new(1,1,1))
- return {a=a,gui=gui,star=star,glow=glow}
+ return g
 end
 local function flash(g,pos,size,alpha,rotation)
- g.a.Position=pos;g.gui.Enabled=alpha>.01;g.gui.Size=UDim2.fromScale(size,size)
- g.star.ImageTransparency=1-alpha;g.star.Rotation=rotation
- g.glow.ImageTransparency=1-alpha*.3
+ local camera=workspace.CurrentCamera
+ local right=camera and camera.CFrame.RightVector or Vector3.new(1,0,0)
+ local up=camera and camera.CFrame.UpVector or Vector3.yAxis
+ local a=math.rad(rotation);local x=right*math.cos(a)+up*math.sin(a)
+ local y=up*math.cos(a)-right*math.sin(a)
+ for i,l in ipairs(g.rays) do
+  local axis=i==1 and x or i==2 and y or i==3 and -x or -y
+  draw(l,pos,pos+axis*size*(i%2==1 and 1 or .8),size*.46,alpha)
+  l.beam.Width1=0
+ end
+end
+local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
+local function pose(a,position,tangent)
+ local ref=math.abs(tangent.Y)>.95 and Vector3.zAxis or Vector3.yAxis
+ local back=tangent:Cross(ref).Unit
+ a.CFrame=CFrame.fromMatrix(position,tangent,back:Cross(tangent).Unit,back)
+end
+local function arc(l,a,b,ta,tb,bend,width,alpha)
+ draw(l,a,b,width,alpha)
+ if not l.beam.Enabled then return end
+ pose(l.a,a,ta);pose(l.b,b,tb)
+ l.beam.CurveSize0=bend;l.beam.CurveSize1=bend;l.beam.Width1=0
+ local opacity=math.floor(math.clamp(alpha,0,1)*32+.5)
+ if l.arcOpacity~=opacity then l.arcOpacity=opacity;l.beam.Transparency=arcOpacities[opacity] end
 end
 local function pulse(p,start,duration)
  local t=(p-start)/duration
@@ -57,6 +79,10 @@ function FX.create(parent,style,seed)
  for i=1,12 do f.arcs[i]=line(root,palettes[style]) end
  for i=1,6 do f.rays[i]=line(root,palettes[style]) end
  for i=1,3 do f.glints[i]=glint(root,palettes[style]) end
+ -- Reuse the same bounded curves as broad dark lobes plus luminous rims.
+ if style~='Ignition' then
+  for i=1,6 do f.arcs[i].beam.Color=ColorSequence.new(Color3.fromRGB(8,12,28));f.arcs[i].beam.LightEmission=0 end
+ end
  return f
 end
 function FX.destroy(f)
@@ -64,25 +90,33 @@ function FX.destroy(f)
 end
 function FX.update(f,pose,p)
  f.root.CFrame=CFrame.new(pose.Position)
- -- Small enough to preserve the hull silhouette; fade out before the active beam takes over.
+ f.root.Transparency=1
+ -- First supplied animation: four separated central flashes, then a decisive
+ -- expanding sweep. The exact same star silhouette returns at larger scale.
+ -- Absolute phase sampling also lets late observers enter without replaying it.
  local fade=math.min(1,p/.1,(1-p)/.16)
  local turn=f.phase+p*TAU*1.2
  local collapse=1-.5*math.clamp((p-.72)/.28,0,1)
  local radius=(2.4-.45*p)*collapse
  if f.style=='Stars' then
-  -- Two cyan crescents and three individually timed white four-point flashes.
+  local burst=smooth((p-.72)/.065)
+  local settle=smooth((p-.81)/.19)
+  local ring=(1.1+3.6*burst)*(1-.22*settle)
   for i,l in ipairs(f.arcs) do
-   local segment=(i-1)%6;local side=math.floor((i-1)/6)*math.pi
-   local a=turn+side+segment*.2;local b=a+.22
-   local function point(t) return Vector3.new(math.cos(t)*radius,math.sin(t)*.45,math.sin(t)*radius) end
-   draw(l,point(a),point(b),.035+.05*segment/5,fade*(.25+.65*segment/5))
+   local lane=(i-1)%6;local angle=p*12+lane*TAU/3
+   local r=ring*(lane<3 and 1 or .72);local height=lane<3 and -.35 or .6
+   local function pt(t) return Vector3.new(math.cos(t)*r,height+math.sin(t*2)*.35,math.sin(t)*r) end
+   local function tangent(t) return Vector3.new(-math.sin(t),0,math.cos(t)) end
+   arc(l,pt(angle),pt(angle+2.1),tangent(angle),tangent(angle+2.1),r*.85,
+    (i<=6 and .65 or .22)*burst,burst*(i<=6 and .6 or 1))
   end
-  for i,g in ipairs(f.glints) do
-   local a=turn*.45+(i-1)*TAU/3
-   local pop=pulse(p,.04+(i-1)*.27,.25)
-   local pos=Vector3.new(math.cos(a)*radius,i==1 and 1.85 or .15,math.sin(a)*radius)
-   flash(g,pos,.3+pop*1.45,pop,0)
-  end
+  local pop=0
+  for i=0,3 do pop=math.max(pop,pulse(p,.025+i*.175,.11)*(1+i*.12)) end
+  flash(f.glints[1],Vector3.zero,.35+1.6*pop,math.min(1,pop),-12+math.floor(p/.175)*16)
+  local reuse=smooth((p-.79)/.055)
+  flash(f.glints[2],Vector3.new(0,ring*.85,0),1.65*reuse,reuse,0)
+  local angle=p*12+.7
+  flash(f.glints[3],Vector3.new(math.cos(angle)*ring,-.35,math.sin(angle)*ring),1.45*reuse,reuse,0)
  elseif f.style=='Ignition' then
   -- An amber turbine: a level segmented ring tightens as six sparks pull into the emitter.
   for i,l in ipairs(f.arcs) do
@@ -95,31 +129,39 @@ function FX.update(f,pose,p)
    flash(g,Vector3.new(0,-.2,0),.25+pop*.65,pop*.55,i*30)
   end
  else
-  -- A violet double helix, visibly different from the star/turbine styles.
+  -- Three smooth tightening spirals with dark bodies and bright edges, instead
+  -- of a six-segment wire helix. Radius surges once before snapping inward.
+  local surge=smooth((p-.64)/.12);local snap=smooth((p-.91)/.09)
+  local r=(3.8-1.3*p+1.8*surge)*(1-.8*snap)
+  local power=smooth(p/.12)*(1-.6*snap)
+  f.root.Shape=Enum.PartType.Ball;f.root.Material=Enum.Material.SmoothPlastic
+  f.root.Color=Color3.fromRGB(17,8,35);f.root.Size=Vector3.one*(.2+(1.5+surge*1.4)*(1-snap))
+  f.root.Transparency=1-power
   for i,l in ipairs(f.arcs) do
-   local segment=(i-1)%6;local side=math.floor((i-1)/6)*math.pi
-   local t=segment/6
-   local function point(v)
-    local a=turn+side+v*TAU
-    return Vector3.new(math.cos(a)*radius*.7,(v-.5)*3,math.sin(a)*radius*.7)
-   end
-   draw(l,point(t),point(t+1/6),.055,fade*(.45+.35*t))
+   local lane=(i-1)%6;local angle=p*16+lane*TAU/3
+   local rr=r*(lane<3 and 1 or .65);local y=lane<3 and -1.1 or 1.5
+   local a=Vector3.new(math.cos(angle)*rr,y,math.sin(angle)*rr)
+   local b=Vector3.new(math.cos(angle+2.6)*rr*.3,y*.2,math.sin(angle+2.6)*rr*.3)
+   local ta=Vector3.new(-math.sin(angle),.15,math.cos(angle)).Unit
+   local tb=Vector3.new(-math.sin(angle+2.6),-.2,math.cos(angle+2.6)).Unit
+   arc(l,a,b,ta,tb,rr*1.25,(i<=6 and 1.3 or .26)*power,power)
   end
   for i,g in ipairs(f.glints) do
-   local a=turn+(i-1)*TAU/3;local pop=pulse(p,.08+(i-1)*.25,.24)
-   flash(g,Vector3.new(math.cos(a)*radius*.7,(i-2)*.9,math.sin(a)*radius*.7),.2+pop*.65,pop*.65,45)
+   local angle=p*16+(i-1)*TAU/3
+   flash(g,Vector3.new(math.cos(angle)*r,-.5,math.sin(angle)*r),.45+.55*surge,power*.8,0)
   end
  end
  -- A restrained finishing pulse. Ignition sparks travel inward; the other styles flare outward.
- local finish=pulse(p,.77,.22)
+ local finish=pulse(p,.72,.28)
  for i,l in ipairs(f.rays) do
   local a=f.phase+(i-1)*TAU/6
-  local inner,outer=.6+finish*.55,1+finish*1.5
+  local t=math.clamp((p-.72)/.28,0,1)
+  local inner,outer=1+t*5,1.6+t*5
   if f.style=='Ignition' then
    local t=(p*2+(i-1)/6)%1;inner=.3+(1-t)*1.7;outer=inner+.4
   end
   local function point(r) return Vector3.new(math.cos(a)*r,math.sin(a*2)*.3,math.sin(a)*r) end
-  draw(l,point(inner),point(outer),.055, f.style=='Ignition' and fade*.75 or finish*.8)
+  draw(l,point(inner),point(outer),.12, f.style=='Ignition' and fade*.75 or finish*.8)
  end
 end
 return FX
