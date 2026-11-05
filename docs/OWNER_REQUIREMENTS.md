@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 4 latest — integrate remaining cloud work and fire on release
+
+Include all draft PR work and the completed flashing-star cloud task in this same game. The new color-circle charge must hand directly to the released beam: remove the additional two-second active beam width warmup. This supersedes older requirements below to retain that ramp. Keep the server's charge/card timing, immediate full-width release, and existing stop fade. Integrate cloud effects against the current architecture and canonical native file rather than restoring its outdated prototype build.
+
 ## November 4 latest — reference-timed lasers, higher crew and lean starting loadout
 
 Use the supplied `sailent_sfx_7681643165253717261.mp4` as the motion reference, not an unordered collection of effects. The clear Glass distortion and color-distortion circle are the priority. They belong at the laser's emitting origin, briefly during charge; they must not remain around the impact during firing. Analyze the combination and handoff before modifying it. Include gameplay particles and provide a video of the completed lasers.

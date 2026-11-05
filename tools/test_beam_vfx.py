@@ -16,6 +16,7 @@ source = '\n'.join([
     (ROOT / 'tests/smooth-animation.setup.lua').read_text(),
     module_bundle(modules),
     (ROOT / 'tests/beam-vfx.integration.lua').read_text(),
+    (ROOT / 'tests/startup-fx.spec.lua').read_text(),
 ])
 client = (ROOT / 'src/Client.lua').read_text()
 healing = client[client.index('local healCursor=0'):client.index('-- The carried inventory belongs')]

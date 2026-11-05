@@ -170,8 +170,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery,beam.vertical) end
  local valid=point~=nil and normal~=nil
- -- A break attribute can precede its contact snapshot. Reconstruct the same
- -- original ramp from BeamSince instead of restarting a two-second warmup.
+ -- A break attribute can precede its contact snapshot. A released beam is
+ -- already full width; only its existing stop fade needs reconstruction.
  if final and beam.envelope.key~=sample.key then beam.envelope=F.newBeam() end
  local width=F.beamStep(beam.envelope,{now=now,alive=sample.alive,valid=part~=nil and part.Parent~=nil and part.Transparency<1,
   key=sample.key,life=sample.life,active=sample.active,since=sample.since})
@@ -190,12 +190,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local pulse,newPulse=F.miningCue(beam.miningCue,sample,now)
  if style=='Cutter' then pulse=0;newPulse=false end
  local visible=valid and width>.001
- beam.visibility=(beam.visibility or 0)+((visible and 1 or 0)-(beam.visibility or 0))*(1-math.exp(-dt*24))
+ beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local charging=sample.alive and sample.charging and not sample.paused
  if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
+  BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
  if visible then

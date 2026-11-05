@@ -104,6 +104,26 @@ check('charge lens stays at the moving emitter briefly and never survives releas
  BeamVFX.after(r,moving,to,60.4,.1);assert(r.rich==nil,'afterglow recreated the bubble')
  BeamVFX.destroy(r)
 end)
+check('cloud startup variants share the lens budget and hand off directly to firing',function()
+ assert(BeamVFX.startupStyles.Bubbler=='Stars' and BeamVFX.startupStyles.Halver=='Ignition' and BeamVFX.startupStyles.Singularity=='Coil')
+ assert(not BeamVFX.startupStyles.Blue and not BeamVFX.startupStyles.Striker,'basic miner lost the reference lens')
+ local rigs={}
+ for i,style in ipairs({'Stars','Ignition','Coil','Stars','Ignition','Coil'}) do
+  local r=assert(BeamVFX.new(root,'Cutter',color));rigs[i]=r;BeamVFX.startup(r,style)
+  BeamVFX.draw(r,from,to,60,0,.5,nil)
+  if i<=4 then
+   assert(r.rich.startup.style==style and not r.rich.glass)
+   near((r.rich.startup.root.Position-from).Magnitude,0)
+  else assert(not r.rich,'startup bypassed shared cap') end
+ end
+ local _,_,count=BeamVFX.counts();assert(count==4)
+ for _,r in ipairs(rigs) do
+  BeamVFX.draw(r,from,to,60.1,1,nil,0)
+  assert(not r.rich and r.body.Enabled);near(r.body.Width0,.3)
+  BeamVFX.destroy(r)
+ end
+ local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
+end)
 check('resource gravity wells cannot acquire the emitter-only charge lens',function()
  local r=BeamVFX.new(root,'Singularity',color,nil,false)
  BeamVFX.draw(r,from,to,60,0,.76,nil)
@@ -168,8 +188,13 @@ check('actual mining envelope surface contact target life and paused work remain
   return nil
  end
  local s={alive=true,isMining=true,active=true,contact=true,key='ore',life=1,part=target,serverSource=target,since=300,style='Cutter',warmupStart=299,warmupDuration=1}
- p:beginFrame();p:renderMiningBeam(b,s,301)
- near(b.vfx.body.Width0,.3*.75*b.visibility);assert(p.beamRays<=12)
+ s.active=false;s.charging=true
+ p:beginFrame();p:renderMiningBeam(b,s,299.76)
+ assert(b.vfx.rich and b.vfx.rich.mask.Enabled and not b.vfx.body.Enabled)
+ s.active=true;s.charging=false
+ p:beginFrame();p:renderMiningBeam(b,s,300)
+ near(b.vfx.body.Width0,.3);assert(p.beamRays<=12)
+ assert(not b.vfx.rich,'release kept the charge rig')
  near((b.vfx.root.Position+b.vfx.b.Position).Y,1)
  s.paused=true;s.active=false;s.charging=false
  p:beginFrame();p:renderMiningBeam(b,s,301.01)

@@ -98,15 +98,14 @@ function F.beamStep(record: any,sample: any)
  record.life=sample.life
  if sample.active then
   if not record.active then
-   -- First discovery may be a late join: reconstruct the current server envelope.
-   -- A subsequent target/life change always grows from zero without a frame pop.
+   -- Charging already finished on the server. Release immediately, including
+   -- late joins and new targets; do not append a second cosmetic warmup.
    local since=now
    if type(sample.since)=='number' and finite(sample.since) then since=math.min(sample.since,now) end
    record.startAt=record.ever and now or since
    record.startWidth=record.width;record.active=true;record.hideAt=nil;record.ever=true
   end
-  local t=math.clamp((now-record.startAt)/2,0,1)
-  record.width=record.startWidth+(1-record.startWidth)*(1-(1-t)^2)
+  record.width=1
  else
   if record.active or record.hideAt==nil then record.hideAt=now;record.hideWidth=record.width end
   record.active=false

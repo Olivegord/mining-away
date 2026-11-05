@@ -68,6 +68,9 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
+ # The shared beam renderer owns startup leases in every production/test bundle.
+ if 'BeamVFX' in names and 'StartupFX' not in names:
+  names=tuple(n for name in names for n in (('StartupFX','BeamVFX') if name=='BeamVFX' else (name,)))
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')

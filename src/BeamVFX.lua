@@ -2,6 +2,7 @@
 -- Native tapered ribbons form the four-point glint; curved ribbons follow
 -- explicit world-space paths. Neither depends on bloom or uploaded textures.
 local B={}
+B.startupStyles={Bubbler='Stars',Starforge='Stars',Halver='Ignition',Singularity='Coil',Resonator='Coil'}
 local WHITE=Color3.fromRGB(247,250,255)
 local DARK=Color3.fromRGB(19,9,32)
 local DARK_GLOW=Color3.fromRGB(48,20,68)
@@ -150,6 +151,10 @@ function B.style(r,style,color)
  r.body.Color=ColorSequence.new(color);r.core.Color=ColorSequence.new(color:Lerp(WHITE,.65))
  if r.paths then for i=1,3 do r.paths[i].beam.Color=ColorSequence.new(color) end end
 end
+function B.startup(r,style)
+ if not r or r.destroyed or r.startupStyle==style then return end
+ releaseRich(r);r.startupStyle=style
+end
 local function pose(a,position,tangent)
  local reference=math.abs(tangent.Y)>.95 and Vector3.zAxis or Vector3.yAxis
  local back=tangent:Cross(reference).Unit;local up=back:Cross(tangent).Unit
@@ -182,6 +187,10 @@ acquireRich=function(r)
  local h={root=folder,paths={},comets={},sweeps={},bolts={},debris={},lastEmission=nil}
  r.rich=h;richLive+=1
  local counted=true;folder.Destroying:Connect(function() if counted then counted=false;richLive-=1 end end)
+ if r.startupStyle then
+  h.startup=StartupFX.create(folder,r.startupStyle,1)
+  return
+ end
  h.glass=visualPart(folder,'ClearGlassDistortion',Enum.Material.Glass,GLASS_COLOR,Enum.PartType.Ball)
  h.glass.Reflectance=0
  -- Glass + Highlight is a native renderer technique, verified in this Studio.
@@ -223,6 +232,7 @@ acquireRich=function(r)
 end
 hideRich=function(r)
  local h=r.rich;if not h then return end
+ if h.startup then releaseRich(r);return end
  h.glass.Transparency=1;h.mask.Enabled=false;h.core.Transparency=1
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
@@ -250,6 +260,7 @@ end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local h=r.rich;if not h then return end
  if charge==nil or charge<0 or charge>=1 or afterAge then hideRich(r);return end
+ if h.startup then StartupFX.update(h.startup,CFrame.new(from),charge);return end
  local q=charge
  local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
  local s=major*(scale or 1)
@@ -347,6 +358,12 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  if charge~=nil and charge>=0 and charge<1 then
   acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale)
  else releaseRich(r) end
+ if r.rich and r.rich.startup then
+  -- The selected cloud style is the charge silhouette, not another overlay.
+  for _,v in ipairs(r.all) do if v.Enabled then v.Enabled=false end end
+  if r.orb then r.orb.Transparency=1 end
+  return
+ end
  local gather,glint=0,0
  if charge~=nil then gather,glint=B.charge(charge) end
  local release=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.18))^2 or 0
