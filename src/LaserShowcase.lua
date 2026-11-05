@@ -74,6 +74,7 @@ function Showcase.new(world,parent,config)
    BeamVFX.destroy(s.rig);s.rig=nil;s.cycle=nil
   end
   self.special:destroy();self.special=nil;self.presentation:destroy();self.presentation=nil
+  BeamVFX.clearChargeCache()
  end
  function self:step(now,dt)
   if not self.root then
@@ -83,7 +84,7 @@ function Showcase.new(world,parent,config)
   if not BeamVFX.near(self.center,85) or BeamVFX.reduced() then self:suspend();return end
   if not self.presentation then
    self.presentation=Presentation.new({parent=self.root})
-   self.special=DroneFX.new(self.root,{maxDistance=100})
+   self.special=DroneFX.new(self.root,{maxDistance=100,reuseGeometry=true})
    self.special.folder.Name='HomePreviewSpecialEffects'
   end
   for _,s in ipairs(self.stations) do
@@ -113,12 +114,13 @@ function Showcase.new(world,parent,config)
    s.beam.marker.Position=tip
    if t<charge then BeamVFX.draw(s.rig,from,from-Vector3.yAxis,now,0,t/charge,nil,BeamVFX.MiningScale)
    elseif active and not special then BeamVFX.draw(s.rig,from,tip,now,1,nil,t-charge,BeamVFX.MiningScale)
-   else BeamVFX.hide(s.rig,true) end
+   else BeamVFX.hide(s.rig,false) end
    self.presentation.work:mining(s.beam,{alive=true,isMining=not special,active=active and not special,charging=t<charge,
     paused=false,warmupStart=start,warmupDuration=charge,key=s.index,life=1,style='Cutter',since=start+charge},tip,Vector3.yAxis,active and not special and 1 or 0,0,now)
   end
   self.special:step(now,dt)
-  self.presentation.work:update(now)
+  -- These stations only own mining emitters. The main presentation already
+  -- updates orbital attacks; running it here duplicates those world effects.
  end
  function self:destroy() self:suspend();if self.root then self.root:Destroy() end end
  return self

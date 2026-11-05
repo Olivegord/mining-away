@@ -127,3 +127,31 @@ for _,p in ipairs(crowded) do dispose(p) end;checks+=1
 local streamed=resource('Gridcutter',now);ctrl:step(now+.1,1/60);dispose(streamed);assert(ctrl.count==0,'stream out cleanup');checks+=1
 local final=resource('Frostbite',now);ctrl:step(now+.1,1/60);ctrl:destroy();assert(ctrl.destroyed and views[final].LocalTransparencyModifier==.2 and final.LocalTransparencyModifier==1,'destroy restores visible view only');checks+=1
 print(checks..' specialist chunk FX lifecycle and 30/60/144 FPS timeline checks passed (API doubles; rendering NOT VERIFIED)')
+
+-- Fixed preview stations reuse geometry across cycles without changing the
+-- production stream/depletion policy, and release every retained object.
+dispose(final)
+local preview=DroneFX.new(world,{resolve=function(source) return views[source] end,reuseGeometry=true})
+local display=resource('Gridcutter',now);preview:step(now+.1,1/60)
+local first=assert(preview.active[display]);local heldCount=preview.count
+for serial=1,12 do
+ local start=now+(serial-1)*5.5
+ if serial>1 then
+  display:SetAttribute('EffectStartedAt',start);display:SetAttribute('EffectDoneAt',0);display:SetAttribute('EffectSerial',serial)
+  preview:step(start+.1,1/60)
+  assert(preview.active[display]==first,'preview reuses original effect geometry')
+ end
+ preview:step(start+1,1/60)
+ display:SetAttribute('EffectDoneAt',start+durations.Gridcutter*.68)
+ preview:step(start+durations.Gridcutter*.68+1.2,1/60)
+ assert(not preview.active[display] and preview.cached[display]==first,'completed preview becomes hidden cache')
+ assert(preview.count==heldCount,'retained geometry remains within original budget')
+ for _,p in ipairs(first.parts) do assert(p.Transparency==1,'cached parts are invisible') end
+ for _,rig in pairs(first.beams or {}) do for _,beam in ipairs(rig.all) do assert(not beam.Enabled,'cached beams are disabled') end end
+end
+dispose(display);assert(preview.count==0 and not next(preview.cached),'streaming out releases retained preview geometry')
+local nextDisplay=resource('Halver',now);preview:step(now+.1,1/60)
+nextDisplay:SetAttribute('EffectDoneAt',now+2.5);preview:step(now+4,1/60)
+preview:destroy();assert(preview.count==0 and not next(preview.cached),'suspending releases retained geometry')
+dispose(nextDisplay)
+print('Preview reuse, bounded residency, visibility, stream-out and suspension checks passed')

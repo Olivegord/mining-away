@@ -39,7 +39,7 @@ local function energyLine(e,p,a,b,width,alpha,style)
  line(p,a,b,width,alpha)
  e.beams=e.beams or {}
  local r=e.beams[p]
- if alpha>=.98 or (b-a).Magnitude<.015 then BeamVFX.hide(r,true);return end
+ if alpha>=.98 or (b-a).Magnitude<.015 then BeamVFX.hide(r,not e.owner.reuseGeometry);return end
  if not r then r=BeamVFX.new(e.folder,style,p.Color,p.Name=='ScanHead');e.beams[p]=r end
  if r then
   p.Transparency=1
@@ -243,7 +243,7 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 
 function FX.new(world,options)
  options=options or {}
- local self={world=world,tracked={},dirty={},retry={},active={},completed={},count=0,connections={},destroyed=false,poseUpdates=0}
+ local self={world=world,tracked={},dirty={},retry={},active={},cached={},completed={},count=0,connections={},destroyed=false,poseUpdates=0,reuseGeometry=options.reuseGeometry==true}
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)
@@ -258,11 +258,18 @@ function FX.new(world,options)
   self.count=math.max(0,self.count-#e.parts);e.parts={}
   if e.folder then e.folder:Destroy();e.folder=nil end
  end
- local function remove(v)
+ local function remove(v,retain)
   local e=self.active[v]
   if e then
    if e.view.Parent then e.view.LocalTransparencyModifier=e.originalTransparency end
-   freeGeometry(e);self.active[v]=nil
+   if retain and options.reuseGeometry and not self.destroyed and v.Parent and not e.retired and nearby(v) then
+    -- Only the fixed home displays opt in. Retained geometry counts against
+    -- the same budget and is freed when its source streams out or we suspend.
+    hideParts(e.parts)
+    if e.beams then for _,rig in pairs(e.beams) do BeamVFX.hide(rig,false) end end
+    self.cached[v]=e
+   else freeGeometry(e) end
+   self.active[v]=nil
   end
  end
  -- A final hit is irreversible. Recall/death may cancel its cosmetic tail,
@@ -286,6 +293,7 @@ function FX.new(world,options)
  self.connections[#self.connections+1]=world.DescendantAdded:Connect(observe)
  self.connections[#self.connections+1]=world.DescendantRemoving:Connect(function(v)
   remove(v)
+  if self.cached[v] then freeGeometry(self.cached[v]);self.cached[v]=nil end
   if self.tracked[v] then self.tracked[v]:Disconnect();self.tracked[v]=nil end
   self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil
  end)
@@ -312,16 +320,25 @@ function FX.new(world,options)
      if done>0 and done>=start and now-done>TAIL then
       self.completed[v]=serial -- A late joiner never replays an old contact.
      elseif not nearby(v) then self.retry[v]=now+.2
-     elseif self.count+MAX_EFFECT_PARTS<=MAX_PARTS then
+     elseif self.cached[v] or self.count+MAX_EFFECT_PARTS<=MAX_PARTS then
       local view=options.resolve and options.resolve(v) or (not options.resolve and v or nil)
       if view and view.Parent and view.Transparency<.99 then
        local full=v:GetAttribute('FullSize') or v.Size
        if type(full)=='number' then full=Vector3.one*full end
        local size=view.Size.Magnitude>.05 and view.Size or full
-       local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder
-       e={owner=self,resource=v,view=view,kind=kind,serial=serial,start=start,duration=duration,impact=math.clamp(v:GetAttribute('EffectImpact') or .68,.1,.95),folder=effectFolder,parts={},center=view.Position,cf=view.CFrame,size=size,color=view.Color,material=view.Material,radius=math.max(size.X,size.Y,size.Z)*.5,originalTransparency=view.LocalTransparencyModifier}
+       e=self.cached[v];self.cached[v]=nil
+       if e and (e.kind~=kind or e.view~=view) then freeGeometry(e);e=nil end
+       if not e then
+        local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder
+        e={owner=self,resource=v,view=view,kind=kind,folder=effectFolder,parts={}}
+       end
+       e.serial=serial;e.start=start;e.duration=duration;e.impact=math.clamp(v:GetAttribute('EffectImpact') or .68,.1,.95)
+       e.center=view.Position;e.cf=view.CFrame;e.size=size;e.color=view.Color;e.material=view.Material
+       e.radius=math.max(size.X,size.Y,size.Z)*.5;e.originalTransparency=view.LocalTransparencyModifier
+       e.lastPhase=nil;e.lastAge=nil;e.contactAge=nil
        e.tail=math.min(TAIL,duration*(1-e.impact)*.98)
-       build(e);self.active[v]=e;view.LocalTransparencyModifier=1
+       if #e.parts==0 then build(e) end
+       self.active[v]=e;view.LocalTransparencyModifier=1
       elseif done<=0 then self.retry[v]=now+.1 end
      else self.retry[v]=now+.1 end
     end
@@ -348,7 +365,7 @@ function FX.new(world,options)
     if age and age>=e.tail then
      if depleted then
       if not e.retired then freeGeometry(e);e.retired=true end
-     else self.completed[v]=e.serial;remove(v) end
+     else self.completed[v]=e.serial;remove(v,true) end
     elseif not e.retired then
      local t=impacted and math.min(1,e.impact+age/e.duration) or math.min(e.impact,clamp((visualNow-e.start)/e.duration))
      if t~=e.lastPhase or age~=e.lastAge then
@@ -364,6 +381,7 @@ function FX.new(world,options)
  function self:destroy()
   if self.destroyed then return end;self.destroyed=true
   for v in pairs(self.active) do remove(v) end
+  for v,e in pairs(self.cached) do freeGeometry(e);self.cached[v]=nil end
   for _,connection in pairs(self.tracked) do connection:Disconnect() end
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked);table.clear(self.completed)

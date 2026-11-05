@@ -89,7 +89,12 @@ local function roleImpact(source)
   end
  end
 end
-local impactConnection=workspace.DescendantAdded:Connect(function(source) if source:IsA('BasePart') or source:IsA('Folder') then task.defer(roleImpact,source) end end)
+local impactConnection=workspace.DescendantAdded:Connect(function(source)
+ -- Cosmetic parts are parented beneath this local container; none carry
+ -- authoritative role events. Do not schedule a task for every lens fragment.
+ if source:IsDescendantOf(localFX) then return end
+ if source:IsA('BasePart') or source:IsA('Folder') then task.defer(roleImpact,source) end
+end)
 local existingRoleFX=workspace:FindFirstChild('DroneRoleClientEffects')
 if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do roleImpact(source) end end
 

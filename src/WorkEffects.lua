@@ -204,7 +204,8 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=charging and (1+3*q) or 2;fx.sparks.Enabled=charging or working
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=charging or working
  local resonance=sample.style=='Resonance'
- fx.impact.Color=ColorSequence.new(resonance and (beam.tint or WHITE) or YELLOW)
+ local impactColor=resonance and (beam.tint or WHITE) or YELLOW
+ if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
  fx.impact.Acceleration=Vector3.new(0,resonance and -.6 or -2,0)
