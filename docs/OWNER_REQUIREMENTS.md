@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 4 latest — original flash, hard color cuts and overlapping ignition
+
+Restore the color pop to its original appearance and timing before the pulse revisions, keeping every other accepted change. Colors must remain distinct and switch sharply, never interpolate smoothly. Bring back the tiny dark/violet swirling shapes shown in the owner screenshot with more organic inward motion. Start the beam and its release effects before the final color switches finish, removing the gap. The brief overlap supersedes the earlier requirement that the lens completely disappear before ignition. Preserve the longer inward charge, blue smoke, moving planar ring and electric dust aftermath, fine lasers, sounds, tiny shake and removed firing hop.
+
 ## November 4 latest — restore the original color pop's purpose and give the sequence time
 
 Consult the original supplied video: the owner says the color pop has lost its point. Restore its sharp black-and-saturated distortion contrast and clear collapses/resets, instead of an unreadable blended glow. The overall animation should be much longer, starting with the inward swirl. The expanding circle and downward radial particles should linger while continuing to move. Dust must contain the colors visibly present in the pop, while smoke stays beam-blue. Replace the earlier short generic sound layers with fitting laser charging/ignition sounds. Preserve the thin lasers and tiny screen shake, and keep firing hop removed.

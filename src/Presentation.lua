@@ -226,7 +226,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif charging and beam.vfx then
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
-  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale)
+  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale,sample.warmupDuration)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end

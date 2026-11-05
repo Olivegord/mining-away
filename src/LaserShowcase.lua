@@ -111,7 +111,7 @@ function Showcase.new(world,parent,config)
    if not s.rig then s.rig=BeamVFX.new(s.beam.holder,s.def.role=='Combat' and 'Combat' or 'Cutter',s.def.color);BeamVFX.startup(s.rig,BeamVFX.startupStyles[s.def.role]) end
    local from=s.beam.origin.WorldPosition;local tip=Vector3.new(from.X,s.rock.Position.Y+s.rock.Size.Y*.5,from.Z)
    s.beam.marker.Position=tip
-   if t<charge then BeamVFX.draw(s.rig,from,from-Vector3.yAxis,now,0,t/charge,nil,BeamVFX.MiningScale)
+   if t<charge then BeamVFX.draw(s.rig,from,from-Vector3.yAxis,now,0,t/charge,nil,BeamVFX.MiningScale,charge)
    elseif active and not special then BeamVFX.draw(s.rig,from,tip,now,1,nil,t-charge,BeamVFX.MiningScale)
    else BeamVFX.hide(s.rig,false) end
    self.presentation.work:mining(s.beam,{alive=true,isMining=not special,active=active and not special,charging=t<charge,

@@ -178,10 +178,7 @@ end
 local GLASS_COLOR=Color3.fromRGB(245,250,255)
 local CYAN=Color3.fromRGB(108,238,255)
 local VIOLET=Color3.fromRGB(166,64,255)
--- Thresholded native distortion: black + saturated blue, red/yellow, green.
--- Nonzero retained channels preserve black regions instead of washing the
--- entire lens in one emissive color. Verified against native comparisons.
-local LENS_COLORS={Color3.new(1,1,.55),Color3.new(.35,.5,1),Color3.new(1,.55,1),Color3.new(1,.45,.6),Color3.new(1,.55,1)}
+local LENS_COLORS={Color3.fromRGB(255,255,0),Color3.fromRGB(0,255,255),Color3.fromRGB(255,0,255),Color3.fromRGB(255,255,0)}
 local function visualPart(parent,name,material,color,shape)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false;p.CastShadow=false
  p.Transparency=1;p.Size=Vector3.one*.02;p.Material=material;p.Color=color
@@ -193,13 +190,13 @@ local function richPath(r,name,color,opacity)
 end
 releaseRich=function(r)
  local h=r.rich;if not h then return end
- if B.onChargeEnd then B.onChargeEnd(r) end
+ if B.onChargeEnd and not h.launched then B.onChargeEnd(r) end
  hideRich(r);r.rich=nil
  if h.leased then h.leased=false;richLive-=1 end
  if h.particleSource then
   h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
  end
- h.lastEmission=nil;h.lastPulse=nil;h.root.Parent=nil
+ h.lastEmission=nil;h.lastPulse=nil;h.launched=nil;h.root.Parent=nil
  if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
@@ -234,6 +231,12 @@ acquireRich=function(r)
  for i=1,8 do
   h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
    head=visualPart(folder,'InwardSpark',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
+ end
+ for i=1,3 do
+  local edge=richPath(r,'InwardTendrilEdge'..i,VIOLET,ARC)
+  local ink=richPath(r,'InwardTendrilInk'..i,DARK,ARC)
+  ink.beam.LightEmission=0
+  h.sweeps[i]={edge=edge,ink=ink}
  end
  h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor';h.vapor.Texture='rbxasset://textures/particles/smoke_main.dds'
  h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
@@ -271,22 +274,29 @@ local function curve(path,a,b,ta,tb,bend,width)
  path.beam.Width0=width
  if not path.beam.Enabled then path.beam.Enabled=true end
 end
--- Reference rhythm: blue collapse, larger red/yellow pop, then progressively
--- smaller green collapses. Shape shrinks; contrast stays hard until capture.
--- q is authoritative charge progress. No layer owns or extends gameplay time.
-local pulseStarts={.5,.64,.765,.86,.94,1}
-local pulseSizes={.65,1.2,.9,.62,.4}
+-- Original pre-revision flash, preserved independently of the longer inflow.
 function B.lensEnvelope(q)
- if q==nil or q<pulseStarts[1] or q>=1 then return 0,0,1 end
- for i=1,#pulseSizes do
-  if q<pulseStarts[i+1] then
-   local t=(q-pulseStarts[i])/(pulseStarts[i+1]-pulseStarts[i])
-   return pulseSizes[i]*(1-smooth((t-.12)/.88)),i,t
-  end
- end
- return 0,0,1
+ if q==nil or q<.64 or q>=1 then return 0 end
+ if q<.79 then return smooth((q-.64)/.15) end
+ return 1-smooth((q-.79)/.21)
 end
-drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
+function B.flashProgress(q,duration)
+ duration=math.max(.01,duration or .8)
+ return 1-(1-q)*duration/math.min(.8,duration)-.1
+end
+local function drawFlash(h,from,flashQ,s)
+ local lens=B.lensEnvelope(flashQ)
+ local radius=s*(.025+4.475*lens)
+ h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
+ h.mask.Enabled=lens>.002
+ h.glass.Transparency=lens>.002 and (1+2*lens) or 1
+ local colorPulse=smooth((flashQ-.70)/.045)*(1-smooth((flashQ-.975)/.025))
+ local colorAt=clamp((flashQ-.73)/.24)*3
+ local index=math.min(4,math.floor(colorAt)+1)
+ h.mask.FillColor=LENS_COLORS[index]
+ h.mask.FillTransparency=1+1.2*colorPulse
+end
+drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDuration)
  local h=r.rich;if not h then return end
  if charge==nil or charge<0 or charge>=1 or afterAge then hideRich(r);return end
  if B.onCharge then B.onCharge(r,from,now,charge) end
@@ -300,10 +310,8 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local eye=camera and camera.CFrame.Position-from or Vector3.zAxis*40
  local toward=eye.Magnitude>.01 and eye.Unit or Vector3.zAxis
  local inflow=smooth(q/.12)*(1-smooth((q-.62)/.26))
- local lens,pulse,pulseAge=B.lensEnvelope(q)
- if h.lastPulse~=pulse then
-  h.lastPulse=pulse
- end
+ local flashQ=B.flashProgress(q,chargeDuration)
+ h.flashDuration=math.min(.8,math.max(.01,chargeDuration or .8))
  if h.tint~=r.color then
   h.tint=r.color;h.glass.Color=GLASS_COLOR
   h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
@@ -316,16 +324,9 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
  local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
  local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
- local radius=s*(.025+6.75*lens)
  -- The single surface goes clear -> chromatic -> clear, so nested Glass
  -- cannot hide the color layer. It stays exactly on the emitting attachment.
- h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
- h.mask.Enabled=lens>.002
- h.glass.Transparency=lens>.002 and 3 or 1
- -- No pastel rainbow tween or brightness fade: each pop is a separate
- -- saturated distortion state, remaining legible as its diameter collapses.
- h.mask.FillColor=LENS_COLORS[math.max(1,pulse)]
- h.mask.FillTransparency=lens>.002 and 6 or 1
+ drawFlash(h,from,flashQ,s)
  h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.9*smooth(q/.65))
  h.core.Transparency=alive>.02 and 0 or 1
  h.particleSource.Position=toward*s*.8
@@ -344,6 +345,27 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
   item.head.Size=Vector3.one*math.max(.01,.25*s*visible)
   item.head.Transparency=1-visible
  end
+ -- Small ink curls have separate arrivals and deform along attracted paths.
+ -- No shared orbit angle or reset: each short ribbon is drawn into the mouth.
+ for i,item in ipairs(h.sweeps) do
+  local start=.035+(i-1)*.12
+  local finish=.72+(i-1)*.065
+  local t=clamp((q-start)/(finish-start))
+  local _,_,captured=PullMotion.sample(i*2,0)
+  local progress=t*captured
+  local a,va=PullMotion.sample(i*2,progress)
+  local b,vb=PullMotion.sample(i*2,math.max(0,progress-.09-.018*i))
+  local visible=smooth(t/.12)*(1-smooth((t-.82)/.18))
+  local head=a*s*2;local tail=b*s*2
+  local span=(tail-head).Magnitude
+  if span>.002 and va.Magnitude>.01 and vb.Magnitude>.01 then
+   local breadth=s*(.52+.1*math.sin(t*11+i*2.1))*visible
+   curve(item.edge,head,tail,-va.Unit,-vb.Unit,span/3,breadth)
+   curve(item.ink,head,tail,-va.Unit,-vb.Unit,span/3,breadth*.66)
+  else
+   item.edge.beam.Enabled=false;item.ink.beam.Enabled=false
+  end
+ end
  -- Fine charge motes stop at release; the separately owned smoke persists.
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
@@ -355,7 +377,7 @@ end
 
 -- width is the caller's authoritative-envelope result. Charge never changes
 -- contact timing. releaseAge is from the server start, never local creation.
-function B.draw(r,from,to,now,width,charge,releaseAge,scale)
+function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
  if not r or r.destroyed or not r.root.Parent then return end
  width=clamp(width);scale=scale or 1
  if charge and charge>=1 and width==0 then B.hide(r,true);return end
@@ -376,11 +398,22 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  r.core.Width0=p.core*width*scale*B.WidthScale;r.core.Width1=p.core*width*scale*.6*B.WidthScale;r.core.Enabled=width>.002
  if not r.detail then return end
  if charge~=nil and charge>=0 and charge<1 then
-  acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale)
+  acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale,nil,chargeDuration)
  else
-  if r.rich and releaseAge and releaseAge>=0 and releaseAge<=.16 and B.onCue then B.onCue('launch',from,now,1) end
+  local h=r.rich
+  if h and not h.launched then
+   h.launched=true
+   if B.onChargeEnd then B.onChargeEnd(r) end
+   if releaseAge and releaseAge>=0 and releaseAge<=.16 and B.onCue then B.onCue('launch',from,now,1) end
+  end
   LaunchAftermath.fire(r,from,direction,now,releaseAge)
-  releaseRich(r)
+  -- Ignition overlaps the final color cuts by 80 ms at normal charge speed.
+  -- Only the lens remains: inflow and charge audio end on authoritative release.
+  if h and not h.startup and releaseAge and releaseAge>=0 and releaseAge<h.flashDuration*.1 then
+   hideRich(r)
+   local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
+   drawFlash(h,from,.9+releaseAge/h.flashDuration,major*scale)
+  else releaseRich(r) end
  end
  if r.rich and r.rich.startup then
   -- The selected cloud style is the charge silhouette, not another overlay.

@@ -115,6 +115,8 @@ check('repeated charges reuse detached rigs without keeping active leases or par
   if previous then assert(h==previous,'charge rebuilt instead of reusing') end
   previous=h
   BeamVFX.draw(r,from,to,70+i+.1,1,nil,0)
+  assert(r.rich==h and r.body.Enabled and h.mask.Enabled,'missing ignition overlap')
+  BeamVFX.draw(r,from,to,70+i+.19,1,nil,.09)
   assert(r.rich==nil and h.root.Parent==nil and not h.sparks.Enabled and not h.vapor.Enabled)
   local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=6)
  end
@@ -144,7 +146,7 @@ check('mixed startup styles and overlapping lenses stay warm across preview cycl
  for _,r in ipairs(rigs) do BeamVFX.destroy(r) end
  local a,b,c,d=BeamVFX.counts();assert(a==0 and b==0 and c==0 and d==0)
 end)
-check('charge lens stays at the moving emitter briefly and never survives release',function()
+check('charge lens follows emitter and overlaps ignition for only 80 milliseconds',function()
  local r=BeamVFX.new(root,'Cutter',color)
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
@@ -156,9 +158,12 @@ check('charge lens stays at the moving emitter briefly and never survives releas
  local expanded=h.glass.Size.X
  BeamVFX.draw(r,moving,to,60.15,0,.985,nil);assert(h.glass.Size.X<expanded)
  BeamVFX.draw(r,moving,to,60.2,0,.9999,nil)
- assert(h.glass.Transparency==1 and not h.mask.Enabled,'lens survived pre-release collapse')
+ assert(h.mask.Enabled,'pop finished before ignition')
  BeamVFX.draw(r,moving,to,60.3,1,nil,0)
- assert(r.rich==nil and h.root.Parent==nil,'charge decoration survived beam release')
+ assert(r.rich==h and h.mask.Enabled and r.body.Enabled,'pop and laser did not overlap')
+ for _,path in ipairs(h.paths) do assert(not path.beam.Enabled,'inflow survived ignition') end
+ BeamVFX.draw(r,moving,to,60.39,1,nil,.09)
+ assert(r.rich==nil and h.root.Parent==nil,'lens outlived its short ignition overlap')
  BeamVFX.after(r,moving,to,60.4,.1);assert(r.rich==nil,'afterglow recreated the bubble')
  BeamVFX.destroy(r)
 end)
@@ -182,27 +187,31 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('reference color pops keep hard contrast through collapse and the compact ring keeps moving',function()
+check('original flash shape and duration with hard colors and overlapping ignition',function()
  local r=BeamVFX.new(root,'Cutter',color)
- local starts={.5,.64,.765,.86,.94,1};local previousDuration=math.huge
- near(BeamVFX.lensEnvelope(.3),0);near(BeamVFX.lensEnvelope(1),0)
- for i=1,5 do
-  local interval={starts[i],starts[i+1]};local peak=BeamVFX.lensEnvelope(interval[1])
-  assert(peak>=.4 and interval[2]-interval[1]<previousDuration)
-  previousDuration=interval[2]-interval[1]
-  local last=math.huge
-  for frame=0,10 do
-   local q=interval[1]+(interval[2]-interval[1])*frame/11
-   BeamVFX.draw(r,from,to,100+q,0,q,nil,1)
-   assert(r.rich.glass.Size.X<=last,'pulse grew during its collapse')
-   last=r.rich.glass.Size.X
-   near(r.rich.glass.Transparency,3);near(r.rich.mask.FillTransparency,6)
-   assert(r.orb.Transparency==1,'spherical release returned')
+ near(BeamVFX.lensEnvelope(.64),0);near(BeamVFX.lensEnvelope(.79),1);near(BeamVFX.lensEnvelope(1),0)
+ for _,sample in ipairs({{.75,1,1,0},{.80,1,1,0},{.82,0,1,1},{.88,0,1,1},{.90,1,0,1},{.96,1,0,1},{.98,1,1,0}}) do
+  BeamVFX.draw(r,from,to,99,0,.999,nil,1,.8)
+  if sample[1]<.9 then BeamVFX.draw(r,from,to,99,0,sample[1]+.1,nil,1,.8)
+  else BeamVFX.draw(r,from,to,99,1,nil,(sample[1]-.9)*.8,1) end
+  local c=r.rich.mask.FillColor
+  near(c.R,sample[2]);near(c.G,sample[3]);near(c.B,sample[4])
+ end
+ for _,duration in ipairs({.8,1.6,3.2}) do
+  for _,remaining in ipairs({.3,.25,.168,.1,.02,.001}) do
+   local q=1-remaining/duration
+   local oldQ=.9-remaining/.8
+   near(BeamVFX.flashProgress(q,duration),oldQ)
+   BeamVFX.draw(r,from,to,100+q,0,q,nil,1,duration)
+   local lens=BeamVFX.lensEnvelope(oldQ)
+   near(r.rich.glass.Size.X,.4*(.025+4.475*lens))
+   near(r.rich.glass.Transparency,lens>.002 and 1+2*lens or 1)
+   assert(r.rich.mask.FillTransparency<=2.200001,'revised high-contrast flash survived rollback')
   end
  end
  local aftermath=assert(r.aftermath)
  BeamVFX.draw(r,from,to,101,1,nil,.04,1)
- assert(not r.rich and r.body.Enabled and r.body.Width0<.17)
+ assert(r.rich and r.rich.mask.Enabled and r.body.Enabled and r.body.Width0<.17)
  for _,ray in ipairs(aftermath.plane.rays) do
   assert(ray.beam.Enabled and not ray.beam.FaceCamera)
   near(ray.a.Position.Y,0);near(ray.b.Position.Y,0)
@@ -225,7 +234,7 @@ check('launch keeps smoke and electrical fragments alive after lens and drone ri
  local f=assert(r.aftermath);local smoke=f.smoke[1].e;assert(smoke.Emitted>0)
  smoke.Cleared=false
  BeamVFX.draw(r,from,to,110.3,1,nil,0,1)
- assert(not r.rich and not r.aftermath and not smoke.Cleared)
+ assert(r.rich and r.rich.mask.Enabled and not r.aftermath and not smoke.Cleared)
  assert(smoke.Acceleration.Magnitude>10,'existing smoke got no pressure impulse')
  local emitted=smoke.Emitted
  BeamVFX.destroy(r)
@@ -261,9 +270,7 @@ check('electrical spray keeps drifting without gravity and carries chromatic pul
  BeamVFX.onCharge=function() chargeUpdates+=1 end;BeamVFX.onChargeEnd=function() chargeEnds+=1 end
  for _,q in ipairs({.5,.64,.765,.86,.94}) do
   BeamVFX.draw(r,from,to,126+q,0,q,nil)
-  local tint=r.rich.mask.FillColor
   BeamVFX.draw(r,from,to,126+q+.001,0,q+.001,nil)
-  near(r.rich.mask.FillColor.R,tint.R);near(r.rich.mask.FillColor.G,tint.G);near(r.rich.mask.FillColor.B,tint.B)
  end
  BeamVFX.draw(r,from,to,127,1,nil,0);BeamVFX.draw(r,from,to,127.01,1,nil,.01)
  assert(#cues==1 and cues[1]=='launch1','release audio repeated per frame')
@@ -358,7 +365,7 @@ check('actual mining envelope surface contact target life and paused work remain
  p:beginFrame();p:renderMiningBeam(b,s,299.93)
  assert(b.vfx.rich and b.vfx.rich.mask.Enabled and not b.vfx.body.Enabled)
  p:beginFrame();p:renderMiningBeam(b,s,300)
- near(b.vfx.body.Width0,.162);assert(b.vfx.body.Enabled and not b.vfx.rich)
+ near(b.vfx.body.Width0,.162);assert(b.vfx.body.Enabled and b.vfx.rich and b.vfx.rich.mask.Enabled)
  assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
  s.paused=true;p:beginFrame();p:renderMiningBeam(b,s,300.02)
  assert(not b.vfx or not b.vfx.body.Enabled,'paused prediction survived')
