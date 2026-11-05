@@ -47,7 +47,7 @@ local function particle(parent,name,color)
  p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
  p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
  p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
- p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.new(0,-.6,0);p.WindAffectsDrag=false
+ p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.zero;p.WindAffectsDrag=false
  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.26),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.55,.42),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
@@ -64,13 +64,14 @@ local function spheres(parent,color)
  return out
 end
 local function drawSpheres(record,now,strength,charge,pulse,color)
+ if BeamVFX.reduced() then strength=0 end
  for _,sphere in ipairs(record.spheres) do
-  local breathing=1+.16*math.sin(now*4+sphere.index*.85)
-  local size=sphere.size*(record.scale or 1)*(.75+.25*charge)*breathing*(1+pulse*.12)
+  local breathing=1+.035*math.sin(now*2.4+sphere.index*.85)
+  local size=sphere.size*(record.scale or 1)*(.38+.18*charge)*breathing*(1+pulse*.08)
   sphere.part.Size=Vector3.one*math.max(.01,size)
   sphere.part.CFrame=record.anchor.CFrame*CFrame.new(0,0,-.08)
   sphere.part.Color=sphere.index==1 and color:Lerp(WHITE,.18) or color
-  local opacity=({.45,.22,.08})[sphere.index]
+  local opacity=({.30,.10,.025})[sphere.index]
   sphere.part.Transparency=1-math.clamp(strength,0,1)*opacity
  end
 end
@@ -101,23 +102,23 @@ function W:energyBloom()
  self.bloom=bloom;self.ownsBloom=existing==nil
 end
 function W:burst(position,normal,color,count,now)
- if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
- local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(2,5)
- sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=1.8;sparks.Acceleration=Vector3.new(0,-.8,0)
+ local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(9,14)
+ sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=11;sparks.Acceleration=Vector3.zero
  sparks.Texture=SPARK;sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-40,40)
- sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.18,.36,.04),NumberSequenceKeypoint.new(1,0)})
+ sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.06,.19,.02),NumberSequenceKeypoint.new(1,0)})
  sparks.SpreadAngle=Vector2.new(65,65)
  sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
 -- A low, irregular puff separates a fracture from bright collectible ore.
 function W:fracture(position,normal,color,count,now)
- if #self.bursts>=self.maxBursts or not cameraNear(position,140) then return end
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  local anchor=part(self.parent,'RockFractureSmoke');anchor.CFrame=facing(position,normal)
  local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.12))
  dust.Texture=SMOKE;dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
- dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(.3,.9);dust.Drag=3
+ dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(3,6);dust.Drag=9
  dust.Acceleration=Vector3.new(0,.35,0);dust.SpreadAngle=Vector2.new(85,85)
  dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-55,55)
  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.24,.04),NumberSequenceKeypoint.new(.35,.56,.1),NumberSequenceKeypoint.new(1,.78,.12)})
@@ -132,7 +133,7 @@ end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
  local working=sample.active and sample.isMining and not sample.paused and point~=nil and width>.001
- local visible=sample.alive and sample.isMining and (charging or working or width>.001) and cameraNear(beam.origin.WorldPosition,95)
+ local visible=not BeamVFX.reduced() and sample.alive and sample.isMining and (charging or working or width>.001) and cameraNear(beam.origin.WorldPosition,95)
  local fx=beam.work
  if not visible then
   if fx then
@@ -159,9 +160,9 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
   fx.impact.Texture=SPARK;fx.impact.Squash=NumberSequence.new(.55)
   fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
-  fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(2,4)
-  fx.impact.Drag=2.4;fx.impact.Acceleration=Vector3.new(0,-2,0);fx.impact.SpreadAngle=Vector2.new(80,80)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.15,.22,.03),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(7,12)
+  fx.impact.Drag=10;fx.impact.Acceleration=Vector3.new(0,-.6,0);fx.impact.SpreadAngle=Vector2.new(80,80)
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.06,.16,.02),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(.7,.45),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
@@ -201,16 +202,16 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  local strength=charging and (.25+.75*q) or width
  drawSpheres(fx,now,strength,q,pulse,beam.tint or WHITE)
  local continuous=sample.style~='Percussion'
- fx.sparks.Rate=charging and (1+3*q) or 2;fx.sparks.Enabled=charging or working
- fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=charging or working
+ fx.sparks.Rate=2;fx.sparks.Enabled=working
+ fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
  local resonance=sample.style=='Resonance'
  local impactColor=resonance and (beam.tint or WHITE) or YELLOW
  if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
- fx.impact.Acceleration=Vector3.new(0,resonance and -.6 or -2,0)
- fx.impact.Drag=resonance and 2 or 2.4
- fx.impact.Rate=continuous and (resonance and 10 or 12) or 0;fx.impact.Enabled=working and continuous
+ fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-.6,0)
+ fx.impact.Drag=resonance and 9 or 10
+ fx.impact.Rate=continuous and (resonance and 7 or 9) or 0;fx.impact.Enabled=working and continuous
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
@@ -243,6 +244,7 @@ end
 function W:destroyCourier(record)
  if record.courier then
   if record.courier.detailed then self.courierCount=math.max(0,self.courierCount-1) end
+  BeamVFX.destroy(record.courier.tetherVFX)
   record.courier.root:Destroy();record.courier=nil
  end
 end
@@ -267,12 +269,12 @@ function W:flight(drone,record,dt,now)
    local nozzle=Instance.new('Attachment');nozzle.Name='BreakerRocket';nozzle.Position=Vector3.new(side*.4,.35,0);nozzle.Parent=root
    local jet=particle(nozzle,'RocketExhaust',Color3.fromRGB(255,178,66))
    jet.EmissionDirection=Enum.NormalId.Top;jet.SpreadAngle=Vector2.new(9,9);jet.Speed=NumberRange.new(4,8);jet.Drag=3.5
-   jet.Lifetime=NumberRange.new(.6,1.1);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=.7;jet.Brightness=1.4
+   jet.Lifetime=NumberRange.new(.16,.32);jet.Acceleration=Vector3.new(0,1.2,0);jet.Rate=20;jet.LightEmission=.7;jet.Brightness=1.4
    jet.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(1,0)})
    table.insert(record.rockets,{attachment=nozzle,jet=jet})
   end
  end
- for _,rocket in ipairs(record.rockets or {}) do rocket.jet.Enabled=powered end
+ for _,rocket in ipairs(record.rockets or {}) do rocket.jet.Enabled=powered and not BeamVFX.reduced() end
  local fx=record.flight
  if not fx then
   fx={objects={},trails={},position=root.Position,life=source:GetAttribute('Life')};record.flight=fx
@@ -282,7 +284,7 @@ function W:flight(drone,record,dt,now)
    local a=Instance.new('Attachment');a.Name='FlightTrailTop';a.Position=Vector3.new(side*span,-.03,span*.65);a.Parent=root
    local b=Instance.new('Attachment');b.Name='FlightTrailBottom';b.Position=a.Position-Vector3.new(0,.065,0);b.Parent=root
    local trail=Instance.new('Trail');trail.Name='DroneFlightTrail';trail.Attachment0=a;trail.Attachment1=b
-   trail.Lifetime=.65;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.2
+   trail.Lifetime=.28;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.2
    trail.Color=ColorSequence.new(drone.emitter.Color)
    trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(.45,.8),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root
@@ -307,11 +309,11 @@ function W:flight(drone,record,dt,now)
  local reset=fx.life~=source:GetAttribute('Life') or distance>8 or not alive
  for _,trail in ipairs(fx.trails) do
   if reset then trail:Clear() end
-  trail.Enabled=alive and not paused and speed>.6 and not reset
+  trail.Enabled=alive and not paused and not BeamVFX.reduced() and speed>.6 and not reset
  end
  if fx.wisp then
   if reset then fx.wisp:Clear() end
-  fx.wisp.Enabled=alive and not paused and cameraNear(root.Position,100)
+  fx.wisp.Enabled=alive and not paused and not BeamVFX.reduced() and cameraNear(root.Position,100)
   fx.wisp.Rate=1+math.min(3,speed*.25)
  end
  fx.position=root.Position;fx.life=source:GetAttribute('Life')
@@ -319,7 +321,7 @@ end
 function W:repair(drone,record,now)
  local s=drone.source;local charging=s:GetAttribute('State')=='RepairCharge'
  local healing=s:GetAttribute('Healing')==true
- local active=s:GetAttribute('Role')=='Medic' and not record.events.dead and s:GetAttribute('MotionPaused')~=true and s:GetAttribute('WorkPaused')~=true and (charging or healing) and cameraNear(drone.pos,90)
+ local active=not BeamVFX.reduced() and s:GetAttribute('Role')=='Medic' and not record.events.dead and s:GetAttribute('MotionPaused')~=true and s:GetAttribute('WorkPaused')~=true and (charging or healing) and cameraNear(drone.pos,90)
  local fx=record.repair
  if not active then
   if fx then
@@ -363,7 +365,7 @@ function W:courier(drone,record,now)
    local top=Instance.new('Attachment');top.Position=Vector3.new(side*.38,.025,.25);top.Parent=drive
    local bottom=Instance.new('Attachment');bottom.Position=Vector3.new(side*.38,-.025,.25);bottom.Parent=drive
    local trail=Instance.new('Trail');trail.Name='LoadedFlightTrail';trail.Attachment0=top;trail.Attachment1=bottom
-   trail.Lifetime=.6;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.25
+   trail.Lifetime=.32;trail.MinLength=.04;trail.FaceCamera=true;trail.LightEmission=.25
    trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
@@ -376,7 +378,7 @@ function W:courier(drone,record,now)
  if busy then fx.lastAt=now end
  local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
- for _,trail in ipairs(fx.trails) do trail.Enabled=state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
+ for _,trail in ipairs(fx.trails) do trail.Enabled=not BeamVFX.reduced() and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local backpack=backpackPosition(source)
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
  if sale>fx.sale and typeof(sell)=='Vector3' and now-(source:GetAttribute('CourierSaleAt') or 0)<.7 then self:burst(sell+Vector3.new(0,1,0),Vector3.yAxis,GOLD,18,now) end
@@ -406,7 +408,7 @@ function W:courier(drone,record,now)
   fx.tether.Transparency=1;BeamVFX.destroy(fx.tetherVFX);fx.tetherVFX=nil
  end
  if fx.sparks then
-  fx.sparks.Rate=pickup and 4+q*5 or unload and 6 or 0;fx.sparks.Enabled=not paused and (pickup or unload)
+  fx.sparks.Rate=pickup and 4+q*5 or unload and 6 or 0;fx.sparks.Enabled=not paused and not BeamVFX.reduced() and (pickup or unload)
   if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
@@ -479,7 +481,7 @@ function W:orbital(now)
   local ended=group:GetAttribute('EndedAt')
   local strength=ended and (1-progress(now,ended,.48))^2 or 1
   if not group.Parent or typeof(position)~='Vector3' or strength<.002 then
-   record.holder:Destroy();self.orbitals[group]=nil
+   BeamVFX.destroy(record.vfx);record.holder:Destroy();self.orbitals[group]=nil
   else
    local camera=workspace.CurrentCamera
    local contactAt=group:GetAttribute('ContactAt')
@@ -510,7 +512,7 @@ function W:destroy()
  for beam in pairs(self.miningBeams) do self:destroyMining(beam) end
  for _,item in ipairs(self.bursts) do item.part:Destroy() end;self.bursts={}
  for _,record in pairs(self.orbitals) do
-  record.holder:Destroy()
+  BeamVFX.destroy(record.vfx);record.holder:Destroy()
  end;self.orbitals={}
  if self.ownsBloom and self.bloom then self.bloom:Destroy() end;self.bloom=nil
 end

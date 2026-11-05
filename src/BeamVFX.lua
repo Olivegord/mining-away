@@ -154,6 +154,7 @@ function B.style(r,style,color)
  r.style=style;r.profile=B.styles[style] or B.styles.Cutter;r.color=color
  r.body.Color=ColorSequence.new(color);r.core.Color=ColorSequence.new(color:Lerp(WHITE,.65))
  if r.paths then for i=1,3 do r.paths[i].beam.Color=ColorSequence.new(color) end end
+ if r.plane then for _,ray in ipairs(r.plane.rays) do ray.beam.Color=ColorSequence.new(color:Lerp(WHITE,.2)) end end
 end
 function B.startup(r,style)
  if not r or r.destroyed or r.startupStyle==style then return end
@@ -442,6 +443,13 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
    path.beam.CurveSize0=length*.33;path.beam.CurveSize1=length*.33
    path.beam.Width0=p.core*width*scale*.65*B.WidthScale;path.beam.Width1=0
    path.beam.Enabled=width>.02
+  elseif charge==nil and (r.style=='Cutter' or r.style=='Combat' or r.style=='Lance' or r.style=='Sentry' or r.style=='Starforge') then
+   local t=(now*1.7+(i-1)*.5)%1
+   local visibility=math.sin(math.pi*t)^2
+   path.a.Position=delta*t;path.b.Position=delta*math.min(1,t+.055)
+   path.beam.CurveSize0=0;path.beam.CurveSize1=0
+   path.beam.Width0=p.core*width*scale*B.WidthScale*visibility;path.beam.Width1=0
+   path.beam.Enabled=width>.02 and visibility>.02
   elseif charge==nil and r.style=='Courier' then
    local t=1-((now*.8+(i-1)*.5)%1)
    path.a.Position=delta*t;path.b.Position=delta*math.max(0,t-.12)

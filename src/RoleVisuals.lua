@@ -7,6 +7,8 @@ local Effects = {}
 local animations={}
 local beamTimelines={}
 local chargeTimelines={}
+local pulseTimelines={}
+local pulseCount=0
 local eventAt=nil
 local function clock() return eventAt or workspace:GetServerTimeNow() end
 function Effects.setTime(at) eventAt=at end
@@ -15,6 +17,18 @@ local function animate(value,duration,style,direction,properties)
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
 end
 function Effects.step(now)
+ for root,t in pairs(pulseTimelines) do
+  local q=(now-t.at)/t.duration
+  if not root.Parent or q>=1 then root:Destroy();pulseTimelines[root]=nil;pulseCount-=1
+  elseif q<0 or BeamVFX.reduced() then PlaneBurst.hide(t.plane)
+  else
+   -- Attack pressure is immediate and strongly braked. A contracting target
+   -- mark instead accelerates into contact; neither is an expanding ball.
+   local u=t.last>=t.first and (1-math.exp(-q*14))*.88+.12*q or q*q*q
+   local radius=(t.first+(t.last-t.first)*u)*.5
+   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,(1-q)^.7*.8,.035+.055*(1-q))
+  end
+ end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
   if not rig.root.Parent or age>t.duration+rig.profile.tail then
@@ -115,24 +129,14 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 end
 
 function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?)
-	local value = part()
-	if not value then
-		return
-	end
-	local duration = lifetime or 0.3
-	local first = startSize or 0.8
-	local last = endSize or 5
-	value.Shape = Enum.PartType.Ball
-	value.Color = color
-	-- Keep the event readable without an opaque neon sphere washing out its rock.
-	value.Transparency = 0.42
-	value.Size = Vector3.one * first
-	value.Position = position
-	animate(value,duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{
-		Transparency = 1,
-		Size = Vector3.one * last,
-	})
-	Debris:AddItem(value, duration + 0.05)
+ local duration=math.max(.01,lifetime or .3)
+ local at=clock()
+ if pulseCount>=24 or workspace:GetServerTimeNow()-at>=duration or not BeamVFX.near(position,140) or BeamVFX.reduced() then return end
+ local value=part();if not value then return end
+ pulseCount+=1
+ value.Name='RolePressureFront';value.Transparency=1;value.Size=Vector3.one*.025;value.Position=position
+ pulseTimelines[value]={at=at,duration=duration,first=startSize or .8,last=endSize or 5,plane=PlaneBurst.create(value,color)}
+ Debris:AddItem(value,duration+.05)
 end
 
 function Effects.Heal(from: Vector3, to: Vector3)
@@ -153,6 +157,7 @@ end
 
 -- Seeding dust falls from the actual grower; the bloom confirms a real spawn.
 function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
+ if BeamVFX.reduced() then return end
  local green=Color3.fromRGB(152,231,158)
  local value=part();if not value then return end
  value.Name=planted and 'CrystalSeedBloom' or 'CrystalSeedFall';value.Transparency=1
@@ -161,9 +166,9 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  local tip=Instance.new('Attachment');tip.Parent=value
  local dust=Instance.new('ParticleEmitter');dust.Texture=SPARK
  dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=.95;dust.LightInfluence=0
- dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(.5,1.5)
+ dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(planted and 3 or 1,planted and 5 or 2)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
- dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=1.8;dust.WindAffectsDrag=false
+ dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=planted and 8 or 3;dust.WindAffectsDrag=false
  dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.02),NumberSequenceKeypoint.new(.2,.24,.03),NumberSequenceKeypoint.new(1,0)})
  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.45,.55),NumberSequenceKeypoint.new(1,1)})
@@ -182,20 +187,20 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
  elseif phase=='Impact' then
   local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
   Effects.Pulse(target,Color3.fromRGB(244,207,142),.35,3.2,.18)
-  local shock=part()
+  local shock=not BeamVFX.reduced() and part() or nil
   if shock then
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
-   shock.Transparency=.68;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
+   shock.Transparency=1;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
    local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
    local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';dust.Texture=SMOKE
    dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
    dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
-   dust.Speed=NumberRange.new(.6,1.6);dust.Drag=3;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
+   dust.Speed=NumberRange.new(4,7);dust.Drag=10;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
    dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-50,50)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
    dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
    dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
-   animate(shock,.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Size=Vector3.new(.055,8,8),Transparency=1})
+   Effects.Pulse(target,amber,.6,5.2,.65)
    Debris:AddItem(shock,1.8)
   end
   -- The actual fracture creates authored crystal fragments in Presentation.
@@ -389,7 +394,8 @@ function Effects.destroy()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
  for _,t in pairs(chargeTimelines) do BeamVFX.destroy(t.rig) end
  table.clear(beamTimelines);table.clear(chargeTimelines)
- table.clear(animations);table.clear(markers);table.clear(burns);table.clear(swarms)
+ table.clear(animations)
+ for root in pairs(pulseTimelines) do root:Destroy() end;table.clear(pulseTimelines);pulseCount=0;table.clear(markers);table.clear(burns);table.clear(swarms)
  eventAt=nil
  local root=workspace:FindFirstChild('DroneRoleClientEffects');if root then root:Destroy() end
 end

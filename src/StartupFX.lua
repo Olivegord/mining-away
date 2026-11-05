@@ -23,7 +23,7 @@ function FX.create(parent,style,seed)
  local root=Instance.new('Part');root.Name='LaserStartup_'..style
  root.Anchored=true;root.Transparency=1;root.Size=Vector3.one*.025
  root.CanCollide=false;root.CanTouch=false;root.CanQuery=false;root.CastShadow=false;root.Parent=parent
- local f={root=root,style=style,arcs={},rays={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
+ local f={root=root,style=style,seed=seed or 1,arcs={},rays={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
  for i=1,8 do f.arcs[i]=line(root,color);f.rays[i]=line(root,Color3.new(1,1,1));f.rays[i].beam.Segments=1 end
  for i=1,4 do f.glints[1].rays[i]=line(root,Color3.new(1,1,1));f.glints[1].rays[i].beam.Segments=1 end
  return f
@@ -38,30 +38,43 @@ function FX.destroy(f) f.root:Destroy() end
 function FX.update(f,origin,q)
  f.root.CFrame=CFrame.new(origin.Position)
  for i,l in ipairs(f.arcs) do
-  local a,va,captured=PullMotion.sample(i,q)
-  local b,vb=PullMotion.sample(i,math.max(0,q-.13))
-  local alpha=smooth(q/.035)*(1-smooth((q-captured+.035)/.035))
+  local timing=f.style=='Ignition' and q^.82 or f.style=='Coil' and q^1.12 or q
+  local a,va,captured=PullMotion.sample(i,timing)
+  local b,vb=PullMotion.sample(i,math.max(0,timing-.13))
+  local alpha=smooth(q/.035)*(1-smooth((timing-captured+.035)/.035))
   local span=(b-a).Magnitude
+  local breadth=f.style=='Coil' and .075 or f.style=='Ignition' and .045 or .035
   l.beam.Enabled=alpha>.01 and span>.002 and va.Magnitude>.01 and vb.Magnitude>.01
   local head=f.rays[i];head.beam.Enabled=l.beam.Enabled
   if l.beam.Enabled then
    pose(l.a,a*.62,-va.Unit);pose(l.b,b*.62,-vb.Unit)
    l.beam.CurveSize0=span*.62/3;l.beam.CurveSize1=span*.62/3
-   l.beam.Width0=.065*alpha;l.beam.Width1=0;l.beam.Transparency=fades[math.floor(alpha*32+.5)]
+   l.beam.Width0=breadth*alpha;l.beam.Width1=0;l.beam.Transparency=fades[math.floor(alpha*32+.5)]
    head.a.Position=a*.62;head.b.Position=(a-va.Unit*.075)*.62
    head.beam.Width0=.09*alpha;head.beam.Width1=0;head.beam.Transparency=fades[math.floor(alpha*32+.5)]
   end
  end
- -- One central glint, increasing as the inward streams are consumed.
+ -- Stars have distinct short flashes with quiet gaps. Ignition forms one
+ -- compressed hot slit; Coil stays dark between its inward strands. These
+ -- silhouettes belong to specialists and never replace the regular color pop.
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.new(1,0,0)
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
  local light=smooth((q-.38)/.48)*(1-smooth((q-.9)/.1))
+ if f.style=='Stars' then
+  light=0
+  for _,at in ipairs({.28,.53,.73,.91}) do
+   local u=(q-at)/.065
+   if u>=0 and u<1 then light=math.max(light,math.sin(u*math.pi)*(at==.91 and 1.5 or .7+at*.3)) end
+  end
+ elseif f.style=='Ignition' then light=smooth((q-.64)/.2)*(1-smooth((q-.94)/.06))
+ else light=light*.28 end
  for i,l in ipairs(f.glints[1].rays) do
   local axis=i==1 and right or i==2 and up or i==3 and -right or -up
-  l.a.Position=Vector3.zero;l.b.Position=axis*(.12+.24*light)
+  local aspect=f.style=='Ignition' and (i%2==1 and 1.65 or .35) or 1
+  l.a.Position=Vector3.zero;l.b.Position=axis*(.10+.42*light)*aspect
   l.beam.Width0=.055*light;l.beam.Width1=0;l.beam.Enabled=light>.01
-  l.beam.Transparency=fades[math.floor(light*32+.5)]
+  l.beam.Transparency=fades[math.floor(math.clamp(light,0,1)*32+.5)]
  end
  PlaneBurst.draw(f.plane,-Vector3.yAxis,(q-.86)/.14,.8)
 end

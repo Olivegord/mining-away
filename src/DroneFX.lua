@@ -27,9 +27,8 @@ local function fragments(e,n,color,material,shape)
  return result
 end
 local function ring(e,n,color,width)
- local result={parts={},width=width or .045}
- for i=1,n do result.parts[i]=part(e,'WaveSegment',Vector3.one,color) end
- return result
+ local root=part(e,'PressurePlane',Vector3.one*.025,color)
+ return {root=root,plane=PlaneBurst.create(root,color),width=width or .045}
 end
 local function line(p,a,b,width,alpha)
  if (b-a).Magnitude<.001 then p.Transparency=1;return end
@@ -47,10 +46,8 @@ local function energyLine(e,p,a,b,width,alpha,style)
  end
 end
 local function showRing(value,cf,radius,alpha)
- for i,p in ipairs(value.parts) do
-  local a,b=(i-1)*TAU/#value.parts,i*TAU/#value.parts
-  line(p,cf:PointToWorldSpace(Vector3.new(math.cos(a)*radius,0,math.sin(a)*radius)),cf:PointToWorldSpace(Vector3.new(math.cos(b)*radius,0,math.sin(b)*radius)),value.width,alpha)
- end
+ value.root.CFrame=cf
+ PlaneBurst.pose(value.plane,Vector3.yAxis,radius,1-clamp(alpha),value.width)
 end
 local function hideParts(values) for _,p in ipairs(values) do p.Transparency=1 end end
 local function proxy(e)
@@ -116,29 +113,30 @@ local function bubblePose(e,t,age)
  local r=e.radius;local fill=smooth(t/(e.impact*.73));local release=smooth((t-e.impact*.78)/(e.impact*.22))
  local cap=e.center+Vector3.new(0,e.size.Y*.42,0)
  local lift=age and math.min(age,.5) or 0
- local floating=cap+Vector3.new(lift*.45,math.sin(lift*math.pi)*r*.85,0)
- local pop=age and smooth((age-.44)/.18) or 0
+ local floating=cap+Vector3.new(lift*.18,r*(1-math.exp(-lift*9))*.58,0)
+ local pop=age and smooth((age-.32)/.09) or 0
  for i,p in ipairs(e.bubbles) do
   local side=i-2
   local position=cap+Vector3.new(side*r*.65*(1-fill),r*.4*(1-fill),side*r*.2*(1-fill))
   position=position:Lerp(floating,release)
   local diameter=r*(i==2 and .82 or .27)*fill*(1+pop*.5)
-  p.Position=position;p.Size=Vector3.one*math.max(.025,diameter);p.Transparency=.55+pop*.45
+  local stretch=age and .28*math.exp(-age*8) or .09*math.sin(fill*math.pi)
+  p.Position=position;p.Size=safeSize(Vector3.new(diameter*(1-stretch*.4),diameter*(1+stretch),diameter*(1-stretch*.4)));p.Transparency=.64+pop*.36
   local glint=e.glints[i];glint.Position=position+Vector3.new(-diameter*.23,diameter*.27,-diameter*.12)
   glint.Size=Vector3.one*math.max(.025,diameter*.05);glint.Transparency=.18+pop*.82
  end
  hideParts(e.fragments)
  if age then
   for i,p in ipairs(e.fragments) do
-   local a=i*2.399963;local spread=math.max(0,age-.5)
+   local a=i*2.399963;local spread=math.max(0,age-.32)
    local origin=floating+Vector3.new(math.cos(a),0,math.sin(a))*r*.1
    p.CFrame=CFrame.new(origin+Vector3.new(math.cos(a)*spread*1.6,spread*1.4-5*spread*spread,math.sin(a)*spread*1.6))*e.cf.Rotation
-   p.Size=safeSize(Vector3.one*r*.14*(1-fade(e,age)*.6));p.Transparency=fade(e,age)
+   p.Size=safeSize(Vector3.one*r*.14*(1-fade(e,age)*.6));p.Transparency=age<.32 and 1 or fade(e,age)
   end
  end
 end
 local function halverPose(e,t,age)
- local charge=smooth(t/(e.impact*.7));local cut=smooth((t-e.impact*.8)/(e.impact*.2));local reset=recovery(age)
+ local charge=smooth(t/(e.impact*.7));local cut=clamp((t-e.impact*.8)/(e.impact*.2))^3;local reset=recovery(age)
  local gap=e.radius*(1.1+.15*charge-.76*cut+.9*reset)
  local top=e.center+Vector3.new(0,e.size.Y*.4,0)
  for i,p in ipairs(e.jaws) do
@@ -167,7 +165,7 @@ local function gridPose(e,t,age)
    local x1=(i-1)%3-1;local z1=math.floor((i-1)/3)-1
    local origin=top+Vector3.new(x1*r*.56,0,z1*r*.56)
    p.Size=safeSize(Vector3.new(r*.48,r*.18,r*.48)*(1-out*.65))
-   p.CFrame=CFrame.new(origin+Vector3.new(x1*age*.85,age*1.8-age*age*5,z1*age*.85))*e.cf.Rotation*CFrame.Angles(z1*age*.5,0,x1*age*.5);p.Transparency=out
+   p.CFrame=CFrame.new(origin+Vector3.new(x1*(1-math.exp(-age*12))*.42,age*1.8-age*age*5,z1*(1-math.exp(-age*12))*.42))*e.cf.Rotation*CFrame.Angles(z1*age*.5,0,x1*age*.5);p.Transparency=out
   end
  end
 end
@@ -176,7 +174,7 @@ local function singularityPose(e,t,age)
  local center=e.center+Vector3.new(0,e.size.Y*.5+r*.55,0)
  local diameter=r*.46*grow*(1-close*.85)
  e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
- showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,t*.7,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
+ showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
  -- Keep the authored gravity well and chips. A pair of tightening hooks and
  -- two sharp cuts give this small well a different vocabulary from heat rays.
  -- This is a resource gravity well, not a laser emitter: no charge lens here.
@@ -190,12 +188,13 @@ local function singularityPose(e,t,age)
  hideParts(e.fragments)
  if age then
   for i,p in ipairs(e.fragments) do
-   -- Each chip has one continuous inward spiral, with no modulo wrap.
-   local u=smooth((age-(i-1)*.018)/.7);local a=i*2.399963+u*TAU*.9
-   local radius=r*.55*(1-u)
+   local u=clamp((age-(i-1)*.012)/.62)
+   local path,_,captured=PullMotion.sample(i,u)
    local origin=facePoint(e,i)
-   local target=center+Vector3.new(math.cos(a)*radius,-r*.4*(1-u),math.sin(a)*radius)
-   p.Position=origin:Lerp(target,smooth(u*3));p.Size=Vector3.one*math.max(.025,r*.17*(1-u));p.Transparency=math.max(u,fade(e,age))
+   local target=center+path*r*.18
+   p.Position=origin:Lerp(target,smooth(u*5))
+   local consumed=smooth((u-captured+.08)/.08)
+   p.Size=Vector3.one*math.max(.025,r*.14*(1-consumed));p.Transparency=math.max(consumed,fade(e,age))
   end
  end
 end
@@ -220,17 +219,23 @@ local function frostbitePose(e,t,age)
  local freeze=smooth(t/(e.impact*.8));local shatter=age and smooth(age/.16) or 0
  e.shell.CFrame=e.cf;e.shell.Size=safeSize(e.size*(1.006+.022*freeze))
  e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
- local wave=age and smooth(age/.45) or 0
- showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and (1-math.sin(math.pi*wave)*.65) or 1)
+ local wave=age and (1-math.exp(-age*18)) or 0
+ showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and clamp(.2+age/.7) or 1)
  ballistic(e,age,'ice')
 end
 local function resonatorPose(e,t,age)
  for i,value in ipairs(e.rings) do
-  local from=e.impact*(.08+(i-1)*.19)
+   local from=e.impact*(.08+(i-1)*.19)
   local phase=clamp((t-from)/(e.impact*.55))
   local strength=math.sin(math.pi*phase)^2
-  local center=e.center+Vector3.new(0,(i-2)*e.radius*.22,0)
-  showRing(value,CFrame.new(center)*CFrame.Angles(i==2 and math.pi/2 or .13,0,(i-2)*.16),e.radius*(.7+.75*smooth(phase)),1-strength*.65)
+  local center=e.center+Vector3.new(0,(i-2)*e.radius*.12,0)
+  local radius=e.radius*(1.45-.7*phase*phase)
+  if age then
+   local a=math.max(0,age-(i-1)*.045)
+   radius=e.radius*(.55+.9*(1-math.exp(-a*18))+.15*a)
+   strength=age<(i-1)*.045 and 0 or (1-clamp(a/.72))^.7
+  end
+  showRing(value,CFrame.new(center),radius,1-strength*.65)
  end
  -- One low-amplitude recoil at contact replaces whole-rock high-frequency jitter.
  if age then
@@ -243,10 +248,11 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 
 function FX.new(world,options)
  options=options or {}
- local self={world=world,tracked={},dirty={},retry={},active={},cached={},completed={},count=0,connections={},destroyed=false,poseUpdates=0,reuseGeometry=options.reuseGeometry==true}
+ local self={world=world,tracked={},dirty={},retry={},active={},cached={},completed={},count=0,effectSlots=0,connections={},destroyed=false,poseUpdates=0,reuseGeometry=options.reuseGeometry==true}
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)
+  if BeamVFX.reduced() then return false end
   if focusPosition then local delta=focusPosition-v.Position;if delta:Dot(delta)<=maxDistance*maxDistance then return true end end
   local camera=workspace.CurrentCamera
   if not camera then return true end
@@ -256,7 +262,7 @@ function FX.new(world,options)
  local folder=Instance.new('Folder');folder.Name='MiningAwayDroneFX';folder.Parent=workspace;self.folder=folder
  local function freeGeometry(e)
   self.count=math.max(0,self.count-#e.parts);e.parts={}
-  if e.folder then e.folder:Destroy();e.folder=nil end
+  if e.folder then e.folder:Destroy();e.folder=nil;self.effectSlots=math.max(0,self.effectSlots-1) end
  end
  local function remove(v,retain)
   local e=self.active[v]
@@ -266,6 +272,9 @@ function FX.new(world,options)
     -- Only the fixed home displays opt in. Retained geometry counts against
     -- the same budget and is freed when its source streams out or we suspend.
     hideParts(e.parts)
+    if e.ring then PlaneBurst.hide(e.ring.plane) end
+    for _,ring in ipairs(e.rings or {}) do PlaneBurst.hide(ring.plane) end
+    BeamVFX.hide(e.gravityVFX,false)
     if e.beams then for _,rig in pairs(e.beams) do BeamVFX.hide(rig,false) end end
     self.cached[v]=e
    else freeGeometry(e) end
@@ -320,7 +329,7 @@ function FX.new(world,options)
      if done>0 and done>=start and now-done>TAIL then
       self.completed[v]=serial -- A late joiner never replays an old contact.
      elseif not nearby(v) then self.retry[v]=now+.2
-     elseif self.cached[v] or self.count+MAX_EFFECT_PARTS<=MAX_PARTS then
+     elseif self.cached[v] or (self.effectSlots<8 and self.count+MAX_EFFECT_PARTS<=MAX_PARTS) then
       local view=options.resolve and options.resolve(v) or (not options.resolve and v or nil)
       if view and view.Parent and view.Transparency<.99 then
        local full=v:GetAttribute('FullSize') or v.Size
@@ -329,7 +338,7 @@ function FX.new(world,options)
        e=self.cached[v];self.cached[v]=nil
        if e and (e.kind~=kind or e.view~=view) then freeGeometry(e);e=nil end
        if not e then
-        local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder
+        local effectFolder=Instance.new('Folder');effectFolder.Name=kind..'_'..serial;effectFolder.Parent=self.folder;self.effectSlots+=1
         e={owner=self,resource=v,view=view,kind=kind,folder=effectFolder,parts={}}
        end
        e.serial=serial;e.start=start;e.duration=duration;e.impact=math.clamp(v:GetAttribute('EffectImpact') or .68,.1,.95)

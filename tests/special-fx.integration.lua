@@ -155,3 +155,23 @@ nextDisplay:SetAttribute('EffectDoneAt',now+2.5);preview:step(now+4,1/60)
 preview:destroy();assert(preview.count==0 and not next(preview.cached),'suspending releases retained geometry')
 dispose(nextDisplay)
 print('Preview reuse, bounded residency, visibility, stream-out and suspension checks passed')
+-- Curved pressure fronts must also disappear when their transparent carrier is
+-- cached. Counting Parts alone no longer bounds the Beam/Attachment overhead.
+for _,kind in ipairs({'Singularity','Frostbite','Resonator'}) do
+ local review=DroneFX.new(world,{resolve=function(source)return views[source]end,reuseGeometry=true})
+ local p=resource(kind,now);review:step(now+.8,1/60)
+ local e=assert(review.active[p]);p:SetAttribute('EffectDoneAt',now+durations[kind]*.68)
+ review:step(now+durations[kind]*.68+1.2,1/60)
+ assert(review.cached[p]==e)
+ for _,node in ipairs(e.folder:GetDescendants()) do
+  if node:IsA('Beam') then assert(not node.Enabled,'cached curved wave is still visible') end
+ end
+ review:destroy();dispose(p);assert(review.effectSlots==0)
+end
+local crowd=DroneFX.new(world,{resolve=function(source)return views[source]end})
+local resources={}
+for i=1,30 do resources[i]=resource('Resonator',now) end
+crowd:step(now+.4,1/60);assert(crowd.effectSlots==8,'specialist rigs exceed the total instance budget')
+for _,p in ipairs(resources)do dispose(p)end
+assert(crowd.effectSlots==0);crowd:destroy()
+print('PASS cached curved waves disappear and specialist leases stay bounded')

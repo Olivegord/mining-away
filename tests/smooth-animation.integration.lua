@@ -1,7 +1,9 @@
+local camera=Instance.new('Camera');camera.CFrame=CFrame.new(0,20,0);workspace.CurrentCamera=camera
 local checks=0
 local function check(name,fn) fn();checks+=1;print('PASS smooth animation '..name) end
 local function near(a,b) assert(math.abs(a-b)<1e-5,tostring(a)..' differs from '..tostring(b)) end
 local function state() return assert(workspace:FindFirstChild('DroneRoleState')) end
+local function pulseRadius(root) return root:FindFirstChild('PlanarReleaseFrom').Position.Magnitude end
 local function visuals() return assert(workspace:FindFirstChild('DroneRoleClientEffects')) end
 local function reset()
  RoleVisuals.setTime(nil);RoleVisuals.destroy()
@@ -35,8 +37,8 @@ check('two observers and a late join evaluate identical authoritative pulse time
   local client=RoleEffectView.new();realTime=start;client:step(start)
   realTime=200.3;client:step(realTime)
   local parts=visuals():GetChildren();assert(#parts==1,'receipt replayed or disappeared')
-  if size then near(parts[1].Size.X,size) else size=parts[1].Size.X end
-  near(parts[1].Size.X,1+4*(1-(1-.3/.8)^2))
+  if size then near(pulseRadius(parts[1]),size) else size=pulseRadius(parts[1]) end
+  assert(pulseRadius(parts[1])>2 and pulseRadius(parts[1])<2.5,'pressure should reach most of its radius early, with travel remaining')
   client:step(realTime);assert(#visuals():GetChildren()==1,'receipt replayed on next frame')
   client:destroy()
  end
@@ -46,9 +48,9 @@ check('each display frame advances a local pulse at 30 60 and 144 fps',function(
  for _,fps in ipairs({30,60,144}) do
   realTime=300;DroneRoleEffects.Pulse(Vector3.zero,Color3.new(1,1,1),1,5,1)
   local client=RoleEffectView.new();client:step(300)
-  local part=visuals():GetChildren()[1];local previous=part.Size.X
-  for i=1,fps do realTime=300+i/fps;client:step(realTime);assert(part.Size.X>previous,'held pose between frames');previous=part.Size.X end
-  near(part.Size.X,5);client:destroy();reset()
+  local part=visuals():GetChildren()[1];local previous=pulseRadius(part)
+  for i=1,fps-1 do realTime=300+i/fps;client:step(realTime);assert(pulseRadius(part)>previous,'held pose between frames');previous=pulseRadius(part) end
+  assert(pulseRadius(part)<2.5);client:step(301);assert(not part.Parent,'pressure front did not expire');client:destroy();reset()
  end
 end)
 check('late join skips old impacts and ended orbitals',function()
@@ -119,3 +121,12 @@ check('render teardown disconnects all state observers',function()
  assert(not next(client.records))
 end)
 print(checks..' production state/client timeline checks; API doubles, no Studio Play')
+
+check('curved pressure fronts have a separate hard cap and teardown releases it',function()
+ reset();realTime=900
+ for i=1,100 do RoleVisuals.Pulse(Vector3.zero,Color3.new(0,1,1),.2,3,.8) end
+ assert(#visuals():GetChildren()==24,'pulse child geometry bypassed its budget')
+ RoleVisuals.step(901);assert(#visuals():GetChildren()==0)
+ RoleVisuals.Pulse(Vector3.zero,Color3.new(0,1,1),.2,3,.8);assert(#visuals():GetChildren()==1)
+ reset()
+end)

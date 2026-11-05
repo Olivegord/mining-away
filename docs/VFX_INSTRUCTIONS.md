@@ -4,6 +4,8 @@ Read this before changing drone beams, charge effects, launch effects, particle 
 
 Implementation baseline: `b00e1d26f2c18a74644d5e6d7e04a5f94229a01a`. “Implemented” means a response was built and installed, not that the owner approved its visual quality. Numerical values below describe this revision; they are tuning choices, not independently requested requirements.
 
+Subsequent broad overhaul: see [VFX overhaul](review/VFX_OVERHAUL.md) for the November 4 pass across specialist choreography, role pressure waves, contact particles, beam flow and flight trails. It preserves the resolved regular flash/charge/release direction below. The review records changed budgets, exact saved verification and remaining native validation limits; it is not owner approval.
+
 ## What the owner is asking for
 
 The effect should feel deliberate, forceful and physically connected from anticipation through aftermath. Study the reference in motion, especially its easing, suction, color contrast and handoff into the laser. The owner repeatedly rejected effects that were sloppy, choppy, floaty, weightless, unreadable or built from the same spinning beams and ugly parts. More geometry and more layers do not by themselves answer that criticism.

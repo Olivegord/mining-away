@@ -32,7 +32,7 @@ local function create()
  end
  for i=1,18 do
   local p=part(root,'ElectricColorFragment');p.Material=Enum.Material.Neon;p.Color=A.palette(BLUE,i)
-  p.Size=Vector3.new(.045+(i%3)*.012,.065+(i%4)*.025,.045);f.chips[i]=p
+  p.Size=Vector3.new(.035+(i%3)*.009,.035,.075+(i%4)*.025);f.chips[i]=p
  end
  return f
 end
@@ -75,7 +75,13 @@ function A.step(now)
     local life=1.25+(n%4)*.07
     if t>=0 and t<life then
      local offset=PullMotion.discharge(n,t)*f.scale
-     p.CFrame=CFrame.new(f.root.Position+f.right*offset.X+f.direction*(-offset.Y)+f.up*offset.Z)
+     local position=f.root.Position+f.right*offset.X+f.direction*(-offset.Y)+f.up*offset.Z
+     local nextOffset=PullMotion.discharge(n,math.min(1.5,t+.008))*f.scale
+     local velocity=nextOffset-offset
+     local direction=f.right*velocity.X-f.direction*velocity.Y+f.up*velocity.Z
+     if direction.Magnitude>.0001 then
+      p.CFrame=CFrame.lookAt(position,position+direction, f.direction)*CFrame.Angles(0,0,n*2.399963)
+     else p.CFrame=CFrame.new(position) end
      p.Transparency=math.clamp((t-.45)/(life-.45),0,1)
     else p.Transparency=1 end
    end

@@ -22,12 +22,12 @@ function Plane.hide(f) for _,r in ipairs(f.rays) do r.beam.Enabled=false end end
 function Plane.destroy(f)
  for _,r in ipairs(f.rays) do r.a:Destroy();r.b:Destroy();r.beam:Destroy() end
 end
-function Plane.draw(f,normal,t,scale)
- if not t or t<0 or t>=1 then Plane.hide(f);return end
+-- Shared circular geometry for shock fronts, contracting telegraphs and wells.
+-- Radius is sampled by the owning timeline; the four tangents never rotate.
+function Plane.pose(f,normal,reach,strength,width)
+ if strength<=.008 or reach<=.001 then Plane.hide(f);return end
  local ref=math.abs(normal.Y)>.95 and Vector3.zAxis or Vector3.yAxis
  local right=normal:Cross(ref).Unit;local up=right:Cross(normal).Unit
- local reach=(.12+1.75*(1-math.exp(-t*40))+.65*t)*scale
- local strength=(1-t)^.8
  for i,r in ipairs(f.rays) do
   local angle=(i-1)*math.pi/2
   local radial0=right*math.cos(angle)+up*math.sin(angle)
@@ -37,9 +37,14 @@ function Plane.draw(f,normal,t,scale)
   r.a.CFrame=CFrame.fromMatrix(radial0*reach,tangent0,radial0,tangent0:Cross(radial0))
   r.b.CFrame=CFrame.fromMatrix(radial1*reach,tangent1,radial1,tangent1:Cross(radial1))
   r.beam.CurveSize0=reach*.55228475;r.beam.CurveSize1=reach*.55228475
-  r.beam.Width0=(.08+.22*(1-t))*scale;r.beam.Width1=r.beam.Width0
-  r.beam.Transparency=opacity[math.floor(strength*32+.5)]
+  r.beam.Width0=width;r.beam.Width1=width
+  r.beam.Transparency=opacity[math.floor(math.clamp(strength,0,1)*32+.5)]
   r.beam.Enabled=strength>.008
  end
+end
+function Plane.draw(f,normal,t,scale)
+ if not t or t<0 or t>=1 then Plane.hide(f);return end
+ local reach=(.12+1.75*(1-math.exp(-t*40))+.65*t)*scale
+ Plane.pose(f,normal,reach,(1-t)^.8,(.08+.22*(1-t))*scale)
 end
 return Plane

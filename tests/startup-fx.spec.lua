@@ -35,3 +35,21 @@ for _,style in ipairs({'Stars','Ignition','Coil'}) do
  end
  print('PASS inward force motion, planar spread, bounded startup and cleanup '..style..' at 30/60/144 FPS (API doubles)')
 end
+-- Pressure geometry stays on the chosen plane and remains smooth at every
+-- display rate. Specialist flashes have deliberate dark gaps, not a steady glow.
+local plane=PlaneBurst.create(parent,Color3.new(0,1,1))
+for _,normal in ipairs({Vector3.yAxis,Vector3.xAxis,Vector3.new(1,2,3).Unit}) do
+ for _,radius in ipairs({.1,1,3}) do
+  PlaneBurst.pose(plane,normal,radius,.7,.05)
+  for _,ray in ipairs(plane.rays) do
+   assert(math.abs(ray.a.Position:Dot(normal))<1e-6 and math.abs(ray.b.Position:Dot(normal))<1e-6)
+   assert(math.abs(ray.a.Position.Magnitude-radius)<1e-6 and ray.beam.Enabled)
+  end
+ end
+end
+PlaneBurst.destroy(plane)
+local stars=StartupFX.create(parent,'Stars',1)
+StartupFX.update(stars,CFrame.new(),.30);assert(stars.glints[1].rays[1].beam.Enabled)
+StartupFX.update(stars,CFrame.new(),.43);assert(not stars.glints[1].rays[1].beam.Enabled)
+StartupFX.destroy(stars)
+print('PASS arbitrary contact planes and distinct specialist flash gaps (API doubles)')
