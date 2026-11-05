@@ -1,5 +1,7 @@
 # Owner requirements
 
+For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
+
 ## November 4 latest — original flash, hard color cuts and overlapping ignition
 
 Restore the color pop to its original appearance and timing before the pulse revisions, keeping every other accepted change. Colors must remain distinct and switch sharply, never interpolate smoothly. Bring back the tiny dark/violet swirling shapes shown in the owner screenshot with more organic inward motion. Start the beam and its release effects before the final color switches finish, removing the gap. The brief overlap supersedes the earlier requirement that the lens completely disappear before ignition. Preserve the longer inward charge, blue smoke, moving planar ring and electric dust aftermath, fine lasers, sounds, tiny shake and removed firing hop.

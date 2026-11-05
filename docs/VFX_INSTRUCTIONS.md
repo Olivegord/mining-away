@@ -1,0 +1,85 @@
+# VFX instructions — owner feedback and implementation
+
+Read this before changing drone beams, charge effects, launch effects, particle aftermath or their sound/camera feedback. It consolidates the owner's critiques in the November 4, 2026 beam iteration. Read [OWNER_REQUIREMENTS.md](OWNER_REQUIREMENTS.md) first; new explicit owner instructions override this snapshot. Historical review documents describe experiments, including rejected ones, and must not silently override the final direction below.
+
+Implementation baseline: `b00e1d26f2c18a74644d5e6d7e04a5f94229a01a`. “Implemented” means a response was built and installed, not that the owner approved its visual quality. Numerical values below describe this revision; they are tuning choices, not independently requested requirements.
+
+## What the owner is asking for
+
+The effect should feel deliberate, forceful and physically connected from anticipation through aftermath. Study the reference in motion, especially its easing, suction, color contrast and handoff into the laser. The owner repeatedly rejected effects that were sloppy, choppy, floaty, weightless, unreadable or built from the same spinning beams and ugly parts. More geometry and more layers do not by themselves answer that criticism.
+
+Primary reference: `/Users/sorenwidman/Downloads/sailent_sfx_7681643165253717261.mp4`. The owner said both “look at what makes the effect good and not just copy frames” and “just copy the video.” Apply these together: match its actual motion and sequence closely rather than inventing extra stages or reproducing disconnected still-frame shapes.
+
+The owner also supplied a small image of dark/violet curls beneath a drone and said these could work if made more organic. Its original temporary path was `/var/folders/qd/j6sbn3793wb55vb8xvjtjzr80000gn/T/codex-clipboard-1965080f-0c20-4674-9b50-01c3ca9b51b4.png`; it may not survive cleanup. This request permits small organic curls, not a return to large spinning sculptures.
+
+## Critiques, requirements and the responses implemented
+
+| Owner's critique or request | Direction to preserve | Implemented response |
+| --- | --- | --- |
+| All the existing beams looked horrible and sloppy because of choppy spinning parts. | Smooth, readable motion; stop using rigid spinning decoration as the main effect. | Removed oversized looping sculptures, orbiting debris and the spherical launch treatment. Removed stepped beam-body opacity. Curved paths use continuous samples and pooled render objects. |
+| The first implementation was best; subsequent revisions were worse. | Recover the preferred starting point without wiping out unrelated improvements. | Identified the other chat's first installation as `765a107`; restored smaller proportions and the inward/planar direction. That commit predates the chromatic lens, so it was not used as a whole-file rollback for the later flash request. |
+| “The particles just swirl in and get sucked up and then it lasers”; no initial drift. | Inward motion must begin immediately and converge on the emitter. | `PullMotion` caches eight trajectories with inward and tangential initial velocity, central attraction and drag. Trails follow prior positions along those trajectories. No initial outward drift or prescribed endless orbit. |
+| Be more creative and use physics-based pulls. | Shape motion through forces, momentum and capture, keeping the cost small. | Cosmetic point masses are simulated once and interpolated from authoritative charge progress. This is local force-based animation, not server physics, collidable debris or gameplay force. |
+| All lasers should be much finer and skinnier. | Keep thin bodies and fine cores across laser families. | Narrowed beam layers, including support/specialist and orbital treatment. Shared beam width scale is `0.4`; the regular sustained body is about `0.12` studs at scale 1. |
+| Remove the little jump animation. | No firing hop or recoil displacement of the drone. | Removed the added firing hop from gameplay flight and the home preview. The original subtle hover remains; it is separate from the removed firing jump. |
+| Replace the explosion with a plane-based spread like the video. | Release should read as pressure across a circular plane. | `PlaneBurst` uses four fixed cubic quadrants perpendicular to the shot. The ring expands; its attachments do not orbit, and it does not billboard toward the camera. |
+| Effects disappear at release, including the growing cloud; show the aftermath. | Smoke, ring and fragments need their own continuing lifetimes. | `LaunchAftermath` owns the launched tails independently of the charge lens and emitting drone. Ending a short attack or returning the lens to its pool does not erase an already launched tail. |
+| Push the existing cloud away like real smoke when the laser starts. | Release must act on the cloud that was already gathering. | Existing smoke receives a short radial acceleration impulse and drag. It is not cleared and replaced at ignition. Sparse charge emission keeps the longer buildup from obscuring the pop. |
+| Shoot tiny cubes/rectangles downward in a cone to carry the pop's color. | Small colored fragments should spread broadly around the shot direction. | Eighteen tiny cuboids launch with radial and axial velocity. Their sideways spread is greater than their downward travel; the result is a broad cone, not a straight downward column. |
+| Reuse the physics-based particles for cheap electrical jitter. | Fast impulses with irregular lateral motion, not expensive physical objects. | Cached discharge trajectories receive small lateral velocity kicks and drag. Fragments are noncolliding local visual parts; no constraints or per-frame random rebuilding. |
+| The disk and particles are too floaty; the disk must move much faster, brake faster and stay closer. | Decisive initial acceleration followed by strong braking, with compact travel. | Ring radius uses a rapid exponential expansion followed by a small continuing expansion. Dust launches at roughly 24–32 studs/second radially and 11–15.4 axially, then brakes strongly. |
+| The particles fall; they should have no gravity. | Keep electrical dust suspended in a slowly moving outward cone after its initial impulse. | Removed gravity and ballistic falling. Drag approaches a small outward/downward current; downward displacement comes from the launch/current, not accumulating gravitational acceleration. |
+| Sparks do not contain the pop's colors. This was raised repeatedly. | Preserve distinct saturated chromatic fragments; do not tint the entire spray beam-blue. | Dust uses blue, cyan, magenta, green, yellow and red. It includes the restored flash's yellow/cyan/magenta inputs; smoke and ring use the beam's palette separately. Native samples observed all six dust colors in the preceding retained aftermath revision. |
+| Smoke and related effects should match the beam: blue. | Regular-laser smoke should be blue, not the earlier purple cloud. | Smoke takes the owning beam color; regular preview blue is RGB `(114,201,255)`. The ring uses that color with a small white mix. The requested dark/violet curls and multicolor pop/dust remain distinct accents. |
+| The ring and downward particles should linger and keep moving. | Strong braking must not become a frozen tail or abrupt disappearance. | Ring continues expanding during its 1.1-second fade, ending near 2.52 studs radius at scale 1. Fragments continue moving and jittering for about 1.25–1.46 seconds. Smoke can persist up to 1.8 seconds. |
+| Add tiny screen shake and sound; later, replace the sounds with something fitting a laser turning on. | Restrained, synchronized charge/ignition feedback. | Replaced generic pulse/pressure/crackle layers with a rising charge loop and laser ignition clip. Launch requests a `0.028`-stud camera impulse before distance attenuation, respecting reduced motion. Existing spatial mixing, cooldowns, mute controls and voice limits remain. |
+| The whole animation can be longer, beginning with the inward swirl. | Give anticipation room without stretching the original brief color pop into a long glow. | Effective base warmup is 3.2 seconds through a runtime multiplier; saved base traits remain 0.8 seconds and startup cards still shorten warmup. The preview uses 3.2 seconds charge, 4.5 seconds attack and 0.2 seconds rest. Longer warmup adds pre-attack downtime; active DPS is unchanged. |
+| “The color pop lost its point”; restore how the flash originally looked and its original timing, keeping all other changes. | Restore only the pop, not the whole effect system or an unrelated old build. | Recovered the original single flash curve from the saved pre-revision planar payload. Removed later repeated threshold/pulse redesigns. Restored its proportions and Glass/Highlight envelopes, with the original approximately 0.288-second duration independent of the longer inflow. |
+| The pop must still have distinct colors and must not animate smoothly between them. | Hard color switches; smooth geometry does not imply blended color. | Removed color interpolation. Mask inputs switch yellow → cyan → magenta → yellow. The native distortion's visible output also depends on scene and renderer; property values alone do not prove the desired look. |
+| Bring back the tiny swirling things, but make them organic. | Small irregular curls that deform and get pulled in. | Added three dark/violet tapered curls with separate arrival times, force-derived paths and smoothly varying breadth. They have no shared rigid rotation, spinning part or visible loop reset. |
+| Start the beam and related animations before the color switching has fully finished so there is less of a gap. | Overlap anticipation and release instead of waiting for every charge layer to vanish. | Shifted the unchanged flash curve 80 ms later relative to ignition. Beam, planar ring, dust and launch feedback start while the final color cuts finish. Inward paths and charge audio end on release; only the lens remains for the brief overlap. |
+
+## Color-pop history: do not confuse experiments with current instructions
+
+The owner first described a medium swell/collapse, then a larger swell/collapse, then smaller/faster collapses to build anticipation. A three-peak version was implemented. They then asked for faster, shrink-only repetitions, with each new full-size reset smaller than the previous one. A six-pulse version was implemented and rejected as unreadable. They requested the old look revised so it could collapse and reset larger a few times; further thresholded and repeated-pop attempts were also rejected.
+
+The final rollback instruction was explicit: restore the original flash and timing, keeping all the other work. The subsequent instructions retained distinct, unblended colors and added a short overlap with laser ignition. **The current baseline is the restored single flash, hard color cuts and ignition overlap. Do not reintroduce the three-, five- or six-pulse experiments based on earlier messages.** Their motivation—readable anticipation, contrast and a meaningful collapse—still matters, but their discarded implementations are not standing requirements.
+
+The original single-flash envelope begins at normalized flash time `0.64`, peaks at `0.79`, and finishes at `1`. Its normal duration is 0.288 seconds, with regular maximum diameter about 1.8 studs. At the current baseline it begins approximately 0.208 seconds before ignition and finishes 0.080 seconds after ignition. The geometric easing remains smooth; palette changes are discrete. Charges shorter than 0.8 seconds compress the flash and overlap proportionally.
+
+## Rules for the next VFX edit
+
+- Watch the supplied reference at normal speed and inspect easing around transitions. Identify which layer leads, follows, contracts, accelerates or survives release before changing it. Do not invent an initial drifting stage.
+- Treat charge, ignition and aftermath as one connected sequence. Smoke displacement, the planar impulse, colored dust, audio and tiny shake should communicate the same release event.
+- Preserve compact scale, thin lasers and readable silhouettes. Avoid large rotating structures, arbitrary orbiting parts, spherical release replacements, opaque clutter and broad featureless glow.
+- Keep geometric motion continuous and organic while preserving deliberate hard color cuts. Do not “smooth” those color switches into a rainbow tween.
+- Let the smoke and fragments outlive the flash and keep moving as they fade. Keep dust gravity-free, compact and broadly radial. Do not clear the existing smoke at ignition.
+- Keep changes scoped to the requested layer. A color-pop rollback must not revert smoke, ring, dust, audio, charge duration, narrow beams, removed hop or unrelated game work.
+- Preserve the original drone assets, gameplay feel and distinct specialist behavior. The ordinary laser's chromatic pop is not a blanket replacement for Bubbler/other specialist startup styles.
+- Sample cosmetic motion locally from replicated authoritative timing. Do not move damage/rewards to the client or change gameplay timing accidentally to repair a visual handoff.
+- Keep bounded reuse: four active rich charge rigs, six cached charge rigs, four active aftermath rigs and four cached aftermath rigs at this revision. Retain distance/reduced-effects handling, cancellation, idle disconnection and cleanup. Never replay missed bursts or audio cues for a late observer.
+- Use the existing home preview to inspect repeat cycles without chasing drones. It is cosmetic; display rocks and drones must not affect fleet ownership, resource health, rewards or progression.
+- Follow the root project rules: edit/save only `build/DRONE_GAME.rbxl`, verify selected document and existing source before installation, refresh only allowlisted Sources, preserve unrelated edits and record the integrated revision. No Roblox publishing is authorized.
+
+## Where the implementation lives
+
+| File | Responsibility |
+| --- | --- |
+| [BeamVFX.lua](../src/BeamVFX.lua) | Thin beam vocabulary, original flash, discrete color cuts, tiny curls, overlap, charge rig pooling and cue lifecycle. |
+| [PullMotion.lua](../src/PullMotion.lua) | Cached inward attraction and gravity-free electrical discharge trajectories. |
+| [PlaneBurst.lua](../src/PlaneBurst.lua) | Fixed circular plane, fast expansion, braking and continuing fade. |
+| [LaunchAftermath.lua](../src/LaunchAftermath.lua) | Existing smoke pressure response, saturated cuboid cone and independent pooled tail lifetimes. |
+| [StartupFX.lua](../src/StartupFX.lua) | Specialist startup vocabulary and inward motion. |
+| [Presentation.lua](../src/Presentation.lua), [LaserShowcase.lua](../src/LaserShowcase.lua) | Gameplay/preview rendering and charge-duration handoff. |
+| [Cards.lua](../src/Cards.lua) | Effective warmup scaling without rewriting permanent base traits. |
+| [Client.lua](../src/Client.lua), [Soundscape.lua](../src/Soundscape.lua) | One renderer-owned charge loop, ignition cue and small camera impulse. Charge asset `139131445232833`; ignition asset `139620337204036`. |
+
+## Verification and remaining limits
+
+At baseline `b00e1d2`, `python3 tools/test_beam_vfx.py` passed 22 production behavior checks plus startup/repair checks and client/server compilation. These include path continuity, repeated reuse, discrete palette values, original flash envelope, ignition overlap, independent tails, no-gravity cone behavior, cancellation and cue lifecycle. They use API doubles; they do not establish visual quality.
+
+The saved canonical native file matched all seven current allowlisted Sources. An 8.2-second Studio sample observed 491 rendered frames, five with beam and pop simultaneously enabled, the three exact unblended mask colors and enabled tiny curls. Console was empty. Earlier retained-aftereffect checks observed moving tails, all six dust hues and loaded/playing replacement audio. Those observations establish operation, not a subjective motion or listening endorsement. Full owner visual/audio acceptance, mobile/low-quality rendering and multiplayer appearance remain unverified.
+
+Review a complete charge → ignition → aftermath → next-charge cycle in the actual engine, including ordinary viewing distance. Check color readability, gap-free overlap, attached endpoints, compact motion, persistent moving tails and absence of hop/spinning clutter. Inspect busy scenes and reduced-effects behavior when changing budgets or layering. Do not describe a screenshot, source inspection or passing automated check as a motion or multiplayer playtest.
+
+Historical detail: [inward/planar changes](review/INWARD_PLANAR_BEAMS.md), [fast burst iteration](review/ELECTRIC_BEAM_POLISH.md), [longer charge and replacement sounds](review/REFERENCE_COLOR_POP.md), and [final flash rollback/overlap](review/ORIGINAL_FLASH_OVERLAP.md). The first three contain superseded settings; use the resolved direction in this file for future work.
