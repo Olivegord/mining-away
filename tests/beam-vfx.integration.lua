@@ -116,10 +116,33 @@ check('repeated charges reuse detached rigs without keeping active leases or par
   previous=h
   BeamVFX.draw(r,from,to,70+i+.1,1,nil,0)
   assert(r.rich==nil and h.root.Parent==nil and not h.sparks.Enabled and not h.vapor.Enabled)
-  local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=4)
+  local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=6)
  end
  BeamVFX.destroy(r)
  local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached==0,'last rig removal retained cache')
+end)
+check('mixed startup styles and overlapping lenses stay warm across preview cycles',function()
+ local rigs={}
+ for i=1,6 do
+  rigs[i]=BeamVFX.new(root,'Cutter',color)
+  BeamVFX.startup(rigs[i],({[2]='Stars',[3]='Coil',[5]='Ignition'})[i])
+ end
+ local seen={}
+ local function charge(i,cycle)
+  local r=rigs[i];BeamVFX.draw(r,from,to,cycle,0,.4,nil)
+  local h=assert(r.rich)
+  if cycle>2 then assert(seen[h],'mixed-style cache evicted a reusable rig') end
+  seen[h]=true
+ end
+ for cycle=1,100 do
+  -- The first and last lens overlap; the other styles use intervening slots.
+  charge(1,cycle);charge(6,cycle)
+  BeamVFX.hide(rigs[1],false);BeamVFX.hide(rigs[6],false)
+  for _,i in ipairs({2,3,4,5}) do charge(i,cycle);BeamVFX.hide(rigs[i],false) end
+  local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=6)
+ end
+ for _,r in ipairs(rigs) do BeamVFX.destroy(r) end
+ local a,b,c,d=BeamVFX.counts();assert(a==0 and b==0 and c==0 and d==0)
 end)
 check('charge lens stays at the moving emitter briefly and never survives release',function()
  local r=BeamVFX.new(root,'Cutter',color)

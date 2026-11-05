@@ -11,7 +11,7 @@ Changes in `BeamVFX` and `StartupFX`:
 - Replace Halver's straight polygon segments with tapered curved sweeps; remove repeating spark position resets.
 - Remove 12 Hz hard transparency changes from the beam body. Keep its release pressure and shrinking stop envelope.
 - Reduce floating chips from ten to six and use restrained lifted movement instead of multiple rapid rotation axes.
-- Reuse charge rigs in a shared pool: at most four active leases plus four detached cached rigs. Detached emitters are stopped and cleared; emission timestamps reset. Last beam destruction clears the cache. Straight bodies, cores and glints use one segment; actual curved paths retain twelve.
+- Reuse charge rigs in a shared pool: at most four active leases plus six detached cached rigs. Detached emitters are stopped and cleared; emission timestamps reset. Last beam destruction clears the cache. Straight bodies, cores and glints use one segment; actual curved paths retain twelve.
 
 Validation: `python3 tools/test_beam_vfx.py` passes all production behavior checks, generated client/server compilation, specialist phase/cleanup and repair integration. Added a dense adjacent-time path continuity check across former teleport boundaries and 200 repeated charge/release cycles verifying object reuse, lease release and final cleanup. These use API doubles and do not establish visual or multiplayer acceptance.
 
@@ -22,3 +22,5 @@ Coordination: the active “Open draft PR 4 in Studio” chat owns the simultane
 The integration chat installed `370f44e` plus its performance patch into the selected canonical Studio document. Native captures of that running client showed the regular/combat beams attached from emitter to rock, the chromatic lens at the emitting origin, and the coil's curved lobes with star glints. Pooled effects remained present in these snapshots. The actual window title was `/Users/sorenwidman/Documents/ChatGPT/Get Rich Quick/build/DRONE_GAME.rbxl - Roblox Studio`; it was raised through the app's native accessibility action for the timing investigation.
 
 This was screenshot inspection, not recorded motion or a multiplayer test. Dense adjacent-time continuity and repeated reuse were verified by the production-code tests described above. Full native motion, low-quality/mobile rendering and multiplayer visual acceptance remain unverified. The integration chat owns final clean-source equality, canonical save and measured performance evidence; no claim that smoothing alone fixes GPU or frame pacing spikes.
+
+The mixed preview cache holds six detached rigs because overlapping regular/Gridcutter charge lenses plus the three specialist styles can exceed four cached objects. A 100-cycle mixed-style regression verifies no cache eviction/recreation after warmup, including overlapping refraction leases. The active rich-effect limit remains four.

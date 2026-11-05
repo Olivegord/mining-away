@@ -165,7 +165,8 @@ end
 -- Only major effects lease this rig; every pose is an absolute timestamp sample.
 local richLive=0
 local richLimit=4
-local richPool={} -- At most four detached cached rigs, in addition to four active leases.
+local richPoolLimit=6 -- Mixed preview styles can need overlapping refraction rigs.
+local richPool={} -- Six detached cached rigs maximum; active lease limit stays four.
 function B.clearChargeCache()
  for _,h in ipairs(richPool) do h.root:Destroy() end
  table.clear(richPool)
@@ -191,7 +192,7 @@ releaseRich=function(r)
   h.vapor:Clear();h.sparks:Clear();h.particleSource.Parent=h.root
  end
  h.lastEmission=nil;h.root.Parent=nil
- if #richPool>=richLimit then table.remove(richPool,1).root:Destroy() end
+ if #richPool>=richPoolLimit then table.remove(richPool,1).root:Destroy() end
  richPool[#richPool+1]=h
 end
 acquireRich=function(r)
