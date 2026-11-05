@@ -32,7 +32,7 @@ local CUES = {
  breaker_fracture={id='9125869138',volume=.35,duration=1.1,pitch=1.05,cooldown=.12,range=85,maxVoices=4,fallback='action_jump_land.mp3'},
  rubble={ids={'9125869504','9125869495','9125869138'},volume=.32,duration=1.2,pitch=1.12,cooldown=.055,range=75,maxVoices=4,fallback='action_jump_land.mp3'},
  metal_land={id='9125871199',volume=.22,duration=1,pitch=.78,cooldown=.08,fallback='action_jump_land.mp3'},
- charge={id='139131445232833',volume=.18,duration=3.05,cooldown=.1,range=65,priority=3},
+ charge={id='139131445232833',volume=.12,duration=3.05,pitch=.74,cooldown=.1,range=65,priority=3,softLaser=true},
  breaker_charge={id='9114583503',volume=.28,duration=5,pitch=.7,cooldown=.1,range=80,priority=4},
  repair_charge={id='9119816710',volume=.2,duration=3,pitch=1.4,cooldown=.1,range=65,priority=3},
  grow_charge={id='9118941971',volume=.22,duration=1,pitch=.8,cooldown=.1,range=65,priority=2},
@@ -40,12 +40,12 @@ local CUES = {
  swarm_charge={id='9114583503',volume=.24,duration=5,pitch=1.3,cooldown=.1,range=75,priority=3},
  combat_charge={id='9119816710',volume=.25,duration=3,pitch=.9,cooldown=.1,range=80,priority=4},
  flight={id='9118941667',volume=.18,duration=1,pitch=.85,cooldown=.1,range=60,priority=1},
- cutting_hum={id='9118614717',volume=.24,duration=3,pitch=.85,cooldown=.1,range=80,priority=2},
+ cutting_hum={id='9118614717',volume=.13,duration=3,pitch=.70,cooldown=.1,range=80,priority=2,softLaser=true},
  orbital_hum={id='9118612324',volume=.27,duration=3,pitch=.6,cooldown=.1,range=95,priority=4},
  healing={id='9118941971',volume=.14,duration=1,pitch=1.45,cooldown=.1,range=65,priority=2},
  transfer={id='9118941667',volume=.17,duration=1,pitch=1.25,cooldown=.1,range=60,priority=2},
- laser_start={id='139620337204036',volume=.17,duration=.85,pitch=1.15,cooldown=.18,range=65,maxVoices=3},
- laser_stop={id='9118941971',volume=.085,duration=.45,pitch=.7,cooldown=.12,fallback='volume_slider.ogg'},
+ laser_start={id='139620337204036',volume=.115,duration=.85,pitch=.76,cooldown=.25,range=65,maxVoices=2,softLaser=true,attack=.07},
+ laser_stop={id='9118941971',volume=.06,duration=.45,pitch=.65,cooldown=.12,fallback='volume_slider.ogg',softLaser=true,attack=.06},
  dive={id='9118941667',volume=.21,duration=.55,pitch=.65,cooldown=.1,fallback='action_get_up.mp3'},
  heal={id='91735091370012',volume=.12,duration=.8,pitch=1.4,cooldown=.15,fallback='volume_slider.ogg'},
  plant={id='91735091370012',volume=.15,duration=.9,pitch=.85,cooldown=.18,fallback='volume_slider.ogg'},
@@ -181,6 +181,12 @@ function Soundscape:_voice(name,position,looped)
  if looped and not ready then return nil end
  local sound=ready and template:Clone() or Instance.new('Sound')
  sound.Name=name;sound.SoundGroup=self.effectsGroup
+ if cue.softLaser then
+  -- Remove the piercing upper bands on laser voices only. Shared templates
+  -- stay untouched, so crystal cracks and other jobs retain their character.
+  local eq=Instance.new('EqualizerSoundEffect');eq.Name='SoftLaserTone'
+  eq.LowGain=0;eq.MidGain=-9;eq.HighGain=-20;eq.Parent=sound
+ end
  if not ready then sound.SoundId='rbxasset://sounds/'..(cue.fallback or 'action_get_up.mp3') end
  sound.Volume=0
  sound.PlaybackSpeed=(cue.pitch or 1)*(position and self.random:NextNumber(.96,1.04) or 1)
@@ -211,7 +217,7 @@ function Soundscape:play(name,position,options)
  local volume=cue.volume/math.sqrt(1+self.voices*.07)*(options and options.level or 1)
  if options and options.pitch then sound.PlaybackSpeed*=options.pitch end
  sound.Ended:Once(function() if anchor then anchor:Destroy() else sound:Destroy() end end)
- sound:Play();fade(sound,.025,volume)
+ sound:Play();fade(sound,cue.attack or .025,volume)
  task.delay(math.max(.05,cue.duration-.22),function() if sound.Parent then fade(sound,.18,0) end end)
  Debris:AddItem(anchor or sound,cue.duration+.05)
 end
@@ -246,7 +252,7 @@ function Soundscape:setLoop(key,name,position,level,pitch)
  local dt=math.clamp(now-loop.step,1/240,.1);loop.step=now;loop.seen=now
  if loop.anchor then loop.anchor.Position=position end
  local volume=cue.volume*(level or 1)/math.sqrt(1+self.loopCount*.12)
- loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*14))
+ loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*(cue.softLaser and 8 or 14)))
  loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)
 end
 function Soundscape:update()
@@ -269,7 +275,9 @@ function Soundscape:updateDrone(source,position,now)
  -- The production beam renderer owns this rising tone for both real drones
  -- and preview displays. Avoid a second charge loop from the state observer.
  if mode=='charge' and self.chargeFromRenderer then mode=nil end
- for _,name in ipairs(cues) do self:play(name,position) end
+ for _,name in ipairs(cues) do
+  if name~='laser_start' or not self.chargeFromRenderer then self:play(name,position) end
+ end
  if mode then
   local start,duration
   if state=='Warmup' then start=a('WarmupStart');duration=a('WarmupDuration')

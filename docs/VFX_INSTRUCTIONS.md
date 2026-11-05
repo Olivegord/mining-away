@@ -6,6 +6,8 @@ Implementation baseline: `b00e1d26f2c18a74644d5e6d7e04a5f94229a01a`. “Implemen
 
 Subsequent broad overhaul: see [VFX overhaul](review/VFX_OVERHAUL.md) for the November 4 pass across specialist choreography, role pressure waves, contact particles, beam flow and flight trails. It preserves the resolved regular flash/charge/release direction below. The review records changed budgets, exact saved verification and remaining native validation limits; it is not owner approval.
 
+Latest audio correction: the owner found the laser grating. Charge, ignition, cutting hum and stop now receive laser-only EQ (mid −9 dB, high −20 dB), lower pitch and volume. Ignition has a 70 ms fade-in; the charge pitch rises only from about 0.65× to 0.74×. The existing assets are retained but their timbre is filtered; unrelated sound templates are unchanged. Renderer-owned ignition suppresses the redundant state-observer cue. Audio/beam regression suites and saved Source equality are checked; this is not a listening endorsement. See `build/soft-laser-native.json` for the saved checksum.
+
 ## What the owner is asking for
 
 The effect should feel deliberate, forceful and physically connected from anticipation through aftermath. Study the reference in motion, especially its easing, suction, color contrast and handoff into the laser. The owner repeatedly rejected effects that were sloppy, choppy, floaty, weightless, unreadable or built from the same spinning beams and ugly parts. More geometry and more layers do not by themselves answer that criticism.

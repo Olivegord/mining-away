@@ -16,7 +16,7 @@ local presentation=Presentation.new({parent=localFX,audio=soundscape})
 -- the bounded spatial audio mixer and existing reduced-motion camera path.
 soundscape.chargeFromRenderer=true
 BeamVFX.onCharge=function(r,position,now,q)
- soundscape:setLoop(r,'charge',position,.45+.5*q,.75+.4*q)
+ soundscape:setLoop(r,'charge',position,.45+.5*q,.88+.12*q)
 end
 BeamVFX.onChargeEnd=function(r) soundscape:stopLoop(r) end
 BeamVFX.onCue=function(kind,position,now)
