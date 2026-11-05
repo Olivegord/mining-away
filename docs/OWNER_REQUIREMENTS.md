@@ -1,5 +1,13 @@
 # Owner requirements
 
+## November 4 latest — persistent launch aftermath and accelerating color pulses
+
+The regular laser's purple cloud must survive the color pop and be pushed outward by release. Keep the color alive with tiny cube/rectangle fragments emitted downward in a cone; reuse the cheap force-based particle motion with electrical jitter. Add a circular expanding radial plane at launch. These tails must fade independently instead of disappearing with the charge lens. The color pop has three swells and collapses: medium, larger, then smaller; progressively shorter collapse times build anticipation. Preserve the thin lasers and removed firing hop.
+
+## November 4 latest — restore the first beam direction, match the clip, thin lasers, remove firing hop
+
+The owner rejected the large spinning sculptures, orbiting parts and spherical release. They identify the other integration chat's first installed beams as the preferred starting point; chat history verifies that installation as `765a107`. Match the supplied video's sequence directly: particles are already swirling inward, accelerate into the emitter, then the laser fires. The release spreads across a plane, not a spherical explosion. All laser bodies and cores should be much finer and skinnier. Remove the little firing jump from both gameplay drones and the home preview. Preserve performance fixes, the canonical game and server-owned timing; do not invent an initial drifting phase.
+
 ## November 4 latest — complete regular-beam collapse, repeated stars and home preview
 
 The regular drone's color-distortion circle must visibly collapse into its emitting origin, then produce a large bright launch flash that immediately spawns the beam. Do not cut the collapse off or confuse this with Bubbler's star charge. Use only the first animation in `sailent_sfx_7669407009757777182.mp4` for the repeated flashing-star reference: distinct central flashes during charge, then reuse that star shape at larger scale in the burst. Rework the weak spiral and increase effect scale while retaining bounded rendering cost.

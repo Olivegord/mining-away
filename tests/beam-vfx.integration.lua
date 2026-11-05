@@ -2,7 +2,7 @@
 function CF:VectorToObjectSpace(v) return self:PointToObjectSpace(self.Position+v) end
 function CF:VectorToWorldSpace(v) return self:PointToWorldSpace(v)-self.Position end
 local checks=0
-local function check(name,fn) fn();checks+=1;print('PASS beam VFX '..name) end
+local function check(name,fn) LaunchAftermath.clear();fn();LaunchAftermath.clear();checks+=1;print('PASS beam VFX '..name) end
 local function near(a,b) assert(math.abs(a-b)<1e-6,tostring(a)..' ~= '..tostring(b)) end
 local root=Instance.new('Folder');root.Parent=workspace
 local camera=Instance.new('Camera');camera.CFrame=CFrame.new(0,5,14);workspace.CurrentCamera=camera
@@ -22,7 +22,7 @@ check('charge gathers compresses and changes silhouette before release',function
  local r=BeamVFX.new(root,'Orbital',color)
  BeamVFX.draw(r,from,to,10,0,.93,nil)
  assert(r.rich and r.rich.core.Transparency==0 and not r.core.Enabled)
- assert(r.paths[1].beam.CurveSize0>0 and r.paths[1].a.CFrame~=r.paths[1].b.CFrame)
+ assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
  local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
  BeamVFX.draw(r,from,to,10.2,1,nil,0)
  assert(r.orb.Transparency==1 and r.stars[1].beam.Enabled and r.stars[1].beam.Width1==0)
@@ -35,7 +35,7 @@ check('display-rate-independent paths and widths at matching timestamps',functio
   local r=BeamVFX.new(root,'Cutter',color)
   for frame=0,fps do BeamVFX.draw(r,from,to,20+frame/fps,.5,nil,frame/fps) end
   if expected then near(r.paths[1].a.Position.X,expected) else expected=r.paths[1].a.Position.X end
-  near(r.body.Width0,.15);assert(r.body.Width1<r.body.Width0)
+  near(r.body.Width0,.15*BeamVFX.WidthScale);assert(r.body.Width1<r.body.Width0)
   near((r.root.Position+r.b.Position-to).Magnitude,0)
   assert(not r.stars[1].beam.Enabled,'late observer replayed ignition')
   BeamVFX.destroy(r)
@@ -177,27 +177,74 @@ check('cloud startup variants share the lens budget and hand off directly to fir
  local _,_,count=BeamVFX.counts();assert(count==4)
  for _,r in ipairs(rigs) do
   BeamVFX.draw(r,from,to,60.1,1,nil,0)
-  assert(not r.rich and r.body.Enabled);near(r.body.Width0,.405)
+  assert(not r.rich and r.body.Enabled);near(r.body.Width0,.405*BeamVFX.WidthScale)
   BeamVFX.destroy(r)
  end
  local a,b,c=BeamVFX.counts();assert(a==0 and b==0 and c==0)
 end)
-check('lens contracts to a point and its large flash continues into the beam',function()
+check('three lens pulses accelerate their collapse before a fine laser and circular spread',function()
  local r=BeamVFX.new(root,'Cutter',color)
- local last=math.huge
- for _,q in ipairs({.79,.84,.9,.95,.98,.999}) do
-  BeamVFX.draw(r,from,to,100+q,0,q,nil,1.6)
-  assert(r.rich.glass.Size.X<last,'lens was cut off instead of shrinking')
-  last=r.rich.glass.Size.X
+ near(BeamVFX.lensEnvelope(.46),.72);near(BeamVFX.lensEnvelope(.72),1);near(BeamVFX.lensEnvelope(.905),.43)
+ for _,q in ipairs({.36,.65,.87,1}) do near(BeamVFX.lensEnvelope(q),0) end
+ for _,interval in ipairs({{.46,.65},{.72,.87},{.905,1}}) do
+  local last=math.huge
+  for frame=0,10 do
+   local q=interval[1]+(interval[2]-interval[1])*frame/11
+   BeamVFX.draw(r,from,to,100+q,0,q,nil,1)
+   assert(r.rich.glass.Size.X<last,'pulse failed to collapse continuously')
+   last=r.rich.glass.Size.X
+   assert(r.orb.Transparency==1,'spherical release returned')
+  end
  end
- assert(last<.03 and r.orb.Material==Enum.Material.Neon and r.orb.Size.X>3)
- local before=r.orb.Size.X
- BeamVFX.draw(r,from,to,101,1,nil,0,1.6)
- assert(not r.rich and r.body.Enabled and r.orb.Transparency==0)
- assert(math.abs(r.orb.Size.X-before)<.01,'release cut off the flash')
- BeamVFX.draw(r,from,to,101.2,1,nil,.2,1.6)
- assert(r.orb.Transparency==1 and not r.stars[1].beam.Enabled)
+ local aftermath=assert(r.aftermath)
+ BeamVFX.draw(r,from,to,101,1,nil,.04,1)
+ assert(not r.rich and r.body.Enabled and r.body.Width0<.17)
+ for _,ray in ipairs(aftermath.plane.rays) do
+  assert(ray.beam.Enabled and not ray.beam.FaceCamera)
+  near(ray.a.Position.Y,0);near(ray.b.Position.Y,0)
+  near(ray.a.Position.Magnitude,ray.b.Position.Magnitude)
+  assert(ray.beam.CurveSize0>0,'ring became flat triangular rays')
+ end
+ LaunchAftermath.step(101.7)
+ for _,ray in ipairs(aftermath.plane.rays) do assert(not ray.beam.Enabled) end
  BeamVFX.destroy(r)
+end)
+check('launch keeps smoke and electrical fragments alive after lens and drone rig removal',function()
+ local r=BeamVFX.new(root,'Cutter',color)
+ BeamVFX.draw(r,from,to,110,0,.7,nil,1)
+ local f=assert(r.aftermath);local smoke=f.smoke[1].e;assert(smoke.Emitted>0)
+ smoke.Cleared=false
+ BeamVFX.draw(r,from,to,110.3,1,nil,0,1)
+ assert(not r.rich and not r.aftermath and not smoke.Cleared)
+ assert(smoke.Acceleration.Magnitude>10,'existing smoke got no pressure impulse')
+ local emitted=smoke.Emitted
+ BeamVFX.destroy(r)
+ LaunchAftermath.step(110.65)
+ assert(f.root.Parent==workspace and not smoke.Cleared,'short attack cut off its launched aftermath')
+ assert(f.chips[1].Transparency<1 and f.chips[1].Position.Y<from.Y)
+ assert(smoke.Emitted==emitted,'release repeatedly emitted a burst')
+ local before=f.chips[1].Position
+ LaunchAftermath.step(110.8);assert((f.chips[1].Position-before).Magnitude>.1)
+ LaunchAftermath.step(112.2)
+ assert(not f.root.Parent and smoke.Cleared)
+ for _,p in ipairs(f.chips) do assert(p.Transparency==1) end
+end)
+check('aftermath budget cancellation late receipts and reduced-effects cleanup',function()
+ local owners={}
+ for i=1,8 do owners[i]={};LaunchAftermath.charge(owners[i],from,-Vector3.yAxis,120,.7,1) end
+ local active=LaunchAftermath.counts();assert(active==4)
+ for _,owner in ipairs(owners) do LaunchAftermath.fire(owner,from,-Vector3.yAxis,120,.8) end
+ active=LaunchAftermath.counts();assert(active==0,'late observer replayed the launch')
+ LaunchAftermath.charge(owners[1],from,-Vector3.yAxis,121,.7,1)
+ LaunchAftermath.fire(owners[1],from,-Vector3.yAxis,121,0)
+ local p=Instance.new('Player');players.LocalPlayer=p;p:SetAttribute('ReducedEffects',true)
+ LaunchAftermath.step(121.1);active=LaunchAftermath.counts();assert(active==0)
+ players.LocalPlayer=nil;p:Destroy()
+ for _,fps in ipairs({30,60,144}) do
+  local at
+  for frame=0,fps do at=PullMotion.discharge(3,frame/fps) end
+  near((at-PullMotion.discharge(3,1)).Magnitude,0)
+ end
 end)
 check('resource gravity wells cannot acquire the emitter-only charge lens',function()
  local r=BeamVFX.new(root,'Singularity',color,nil,false)
@@ -270,7 +317,7 @@ check('actual mining envelope surface contact target life and paused work remain
  p:beginFrame();p:renderMiningBeam(b,s,299.93)
  assert(b.vfx.rich and b.vfx.rich.mask.Enabled and not b.vfx.body.Enabled)
  p:beginFrame();p:renderMiningBeam(b,s,300)
- near(b.vfx.body.Width0,.972);assert(b.vfx.body.Enabled and not b.vfx.rich)
+ near(b.vfx.body.Width0,.162);assert(b.vfx.body.Enabled and not b.vfx.rich)
  assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
  s.paused=true;p:beginFrame();p:renderMiningBeam(b,s,300.02)
  assert(not b.vfx or not b.vfx.body.Enabled,'paused prediction survived')
@@ -280,7 +327,7 @@ check('actual mining envelope surface contact target life and paused work remain
  assert(not b.vfx or not b.vfx.body.Enabled,'prediction extended past its bounded receipt window')
  s.active=true;s.charging=false
  p:beginFrame();p:renderMiningBeam(b,s,300.17)
- near(b.vfx.body.Width0,.72);assert(p.beamRays<=12)
+ near(b.vfx.body.Width0,.12);assert(p.beamRays<=12)
  assert(not b.vfx.rich,'release kept the charge rig')
  near((b.vfx.root.Position+b.vfx.b.Position).Y,1)
  s.paused=true;s.active=false;s.charging=false

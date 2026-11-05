@@ -908,11 +908,7 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- local kick=0
- if not motionPaused and not BeamVFX.reduced() and (state=='Mine' or state=='Attack') then
-  kick=BeamVFX.recoil(now-(s:GetAttribute(state=='Attack' and 'ShotAt' or 'BeamSince') or 0))
- end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+kick,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now)
@@ -1009,7 +1005,7 @@ local function renderHealing(now)
    if d.healVFX then
     d.healBeam.Transparency=1
     BeamVFX.draw(d.healVFX,d.emitter.Position,target.emitter.Position,now,charging and .18+.25*q or 1,charging and q or nil,nil)
-   else WorkEffects.drawCylinder(d.healBeam,d.emitter.Position,target.emitter.Position,charging and .025+.035*q or .13,charging and (.8-.35*q) or .12) end
+   else WorkEffects.drawCylinder(d.healBeam,d.emitter.Position,target.emitter.Position,charging and .01+.014*q or .052,charging and (.8-.35*q) or .12) end
   else d.healBeam.Transparency=1;BeamVFX.hide(d.healVFX,true) end
  end
 end

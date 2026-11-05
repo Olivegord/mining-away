@@ -2,11 +2,8 @@
 -- Native tapered ribbons form the four-point glint; curved ribbons follow
 -- explicit world-space paths. Neither depends on bloom or uploaded textures.
 local B={}
-B.MiningScale=2.4
-function B.recoil(age)
- if not age or age<0 or age>=.4 then return 0 end
- return .95*(1-math.exp(-age*90))*math.exp(-age*12)
-end
+B.MiningScale=1 -- Restore the first installed beam proportions.
+B.WidthScale=.4
 B.startupStyles={Bubbler='Stars',Starforge='Stars',Halver='Ignition',Singularity='Coil',Resonator='Coil'}
 local WHITE=Color3.fromRGB(247,250,255)
 local DARK=Color3.fromRGB(19,9,32)
@@ -89,6 +86,7 @@ function B.new(parent,style,color,detail,chargeLens)
  local counted=true
  root.Destroying:Connect(function()
   if counted then
+   LaunchAftermath.cancel(r)
    counted=false;r.destroyed=true;live-=1
    if live==0 and B.clearChargeCache then B.clearChargeCache() end
    if r.detail then details-=1;r.detail=false end
@@ -100,11 +98,13 @@ function B.new(parent,style,color,detail,chargeLens)
 end
 local releaseRich,acquireRich,hideRich,drawRich
 local function freeDetail(r)
+ LaunchAftermath.cancel(r)
  if releaseRich then releaseRich(r) end
  if not r.detail then return end
  for _,p in ipairs(r.paths) do p.beam:Destroy();p.a:Destroy();p.b:Destroy() end
  for _,p in ipairs(r.stars) do p.beam:Destroy();p.b:Destroy() end
  r.starSource:Destroy();r.starSource=nil
+ PlaneBurst.destroy(r.plane);r.plane=nil
  for i=#r.all,3,-1 do r.all[i]=nil end
  r.paths=nil;r.stars=nil;r.detail=false;details-=1
  if r.orb then r.orb:Destroy();r.orb=nil end
@@ -126,6 +126,7 @@ local function addDetail(r)
   if i==4 then p.beam.Color=ColorSequence.new(Color3.fromRGB(22,15,37));p.beam.LightEmission=0;p.beam.Brightness=1 end
   r.paths[i]=p;r.all[#r.all+1]=p.beam
  end
+ r.plane=PlaneBurst.create(r.root,r.color)
  r.starSource=attachment(r.root,'StarCenter')
  for i=1,4 do
   local a=attachment(r.root,'StarPoint'..i)
@@ -135,9 +136,11 @@ local function addDetail(r)
 end
 function B.hide(r,releaseDetail)
  if not r or r.destroyed then return end
+ LaunchAftermath.cancel(r)
  -- A hidden charge must return its lease even when base detail is retained.
  if releaseRich then releaseRich(r) end
  for _,v in ipairs(r.all) do v.Enabled=false end
+ if r.plane then PlaneBurst.hide(r.plane) end
  if r.orb then r.orb.Transparency=1 end
  if releaseDetail then freeDetail(r) end
 end
@@ -223,19 +226,9 @@ acquireRich=function(r)
  h.mask.DepthMode=Enum.HighlightDepthMode.Occluded;h.mask.OutlineTransparency=.999
  h.mask.FillTransparency=1;h.mask.FillColor=Color3.fromRGB(255,255,0);h.mask.Enabled=false;h.mask.Parent=h.glass
  h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.SmoothPlastic,DARK,Enum.PartType.Ball)
- for i=1,4 do
-  h.comets[i]={path=richPath(r,'GatheringComet'..i,i%2==0 and CYAN or VIOLET),
-   head=visualPart(folder,'CometHead',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
- end
- for i=1,3 do
-  h.sweeps[i]={ink=richPath(r,'DarkSweptLobe'..i,Color3.fromRGB(27,8,59),NumberSequence.new(.18)),
-   rim=richPath(r,'VioletSweptRim'..i,VIOLET,NumberSequence.new(.24))}
-  h.sweeps[i].ink.beam.LightEmission=0
- end
- for i=1,4 do h.bolts[i]=richPath(r,'DischargeArc'..i,i%2==0 and CYAN or VIOLET,NumberSequence.new(.3)) end
- for i=1,6 do
-  local p=visualPart(folder,'OrbitingMineralChip',Enum.Material.Slate,Color3.fromRGB(44,38,62))
-  h.debris[i]=p
+ for i=1,8 do
+  h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
+   head=visualPart(folder,'InwardSpark',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
  end
  h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor';h.vapor.Texture='rbxasset://textures/particles/smoke_main.dds'
  h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
@@ -273,13 +266,17 @@ local function curve(path,a,b,ta,tb,bend,width)
  path.beam.Width0=width
  if not path.beam.Enabled then path.beam.Enabled=true end
 end
--- Reference choreography: orbiting inflow first, one brief lens swell late
--- in charge, contraction, then complete handoff to the released beam.
+-- Medium pulse, larger crest, then a smaller faster pulse. Each collapse
+-- finishes before the next, and the final one lands exactly on release.
 -- q is authoritative charge progress. No layer owns or extends gameplay time.
 function B.lensEnvelope(q)
- if q==nil or q<.64 or q>=1 then return 0 end
- if q<.79 then return smooth((q-.64)/.15) end
- return 1-smooth((q-.79)/.21)
+ if q==nil or q<.36 or q>=1 then return 0 end
+ local start,peak,finish,height
+ if q<.65 then start,peak,finish,height=.36,.46,.65,.72
+ elseif q<.87 then start,peak,finish,height=.65,.72,.87,1
+ else start,peak,finish,height=.87,.905,1,.43 end
+ if q<peak then return height*smooth((q-start)/(peak-start)) end
+ return height*(1-smooth((q-peak)/(finish-peak)))
 end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local h=r.rich;if not h then return end
@@ -295,6 +292,8 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  local toward=eye.Magnitude>.01 and eye.Unit or Vector3.zAxis
  local inflow=smooth(q/.12)*(1-smooth((q-.62)/.26))
  local lens=B.lensEnvelope(q)
+ local delta=to-from
+ LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
  local pressure=smooth((q-.36)/.26)*(1-smooth((q-.85)/.13))
  local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
  local radius=s*(.025+4.475*lens)
@@ -303,63 +302,34 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge)
  h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
  h.mask.Enabled=lens>.002
  h.glass.Transparency=lens>.002 and (1+2*lens) or 1
- local colorPulse=smooth((q-.70)/.045)*(1-smooth((q-.975)/.025))
- local colorAt=clamp((q-.73)/.24)*3
+ local colorPulse=math.min(1,lens*2)
+ local colorAt=clamp((q-.36)/.64)*3
  local index=math.min(3,math.floor(colorAt)+1)
  h.mask.FillColor=LENS_COLORS[index]:Lerp(LENS_COLORS[index+1],colorAt-(index-1))
  h.mask.FillTransparency=1+1.2*colorPulse
  h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.35+.9*smooth(q/.65))
  h.core.Transparency=alive>.02 and 0 or 1
  h.particleSource.Position=toward*s*.8
- -- The bright heads travel toward the origin, with tails behind. As the
- -- distortion expands these streaks die down, leaving its silhouette clear.
+ -- The video's streams are moving inward immediately. Their curvature is
+ -- generated by attraction acting on momentum, not an orbit angle animation.
  for i,item in ipairs(h.comets) do
-  -- One inward sweep per charge. Nothing wraps while it is visible.
-  local t=clamp((q-(i-1)*.045)/.72)
-  local travel=t*t*(2-t)
-  local angle=i*TAU/4+travel*2.7
-  local orbit=s*(.12+5*(1-travel))
-  local trail=orbit+s*(.5+.7*math.sin(t*math.pi))
-  local a=Vector3.new(math.cos(angle)*orbit,math.sin(angle*.8+i)*orbit*.45,math.sin(angle)*orbit)
-  local b=Vector3.new(math.cos(angle-.9)*trail,math.sin((angle-.9)*.8+i)*trail*.45,math.sin(angle-.9)*trail)
-  local ta=Vector3.new(-math.sin(angle),.15,math.cos(angle)).Unit
-  local tb=Vector3.new(-math.sin(angle-.9),-.15,math.cos(angle-.9)).Unit
-  local visible=inflow*smooth(t/.12)*(1-smooth((t-.82)/.18))
-  curve(item.path,a,b,ta,tb,trail*.45,.3*s*visible)
-  item.head.CFrame=CFrame.new(from+a);item.head.Size=Vector3.one*math.max(.01,(.22+.1*(i%2))*s*visible)
-  item.head.Transparency=1-.95*visible
+  local a,va,captured=PullMotion.sample(i,q)
+  local b,vb=PullMotion.sample(i,math.max(0,q-.13))
+  local visible=smooth(q/.035)*(1-smooth((q-captured+.035)/.035))
+  local head=a*s*2.6;local tail=b*s*2.6
+  local span=(tail-head).Magnitude
+  if va.Magnitude>.01 and vb.Magnitude>.01 and span>.002 then
+   curve(item.path,head,tail,-va.Unit,-vb.Unit,span/3,.22*s*visible)
+  else item.path.beam.Enabled=false end
+  item.head.CFrame=CFrame.new(from+head)
+  item.head.Size=Vector3.one*math.max(.01,.25*s*visible)
+  item.head.Transparency=1-visible
  end
- for i,item in ipairs(h.sweeps) do
-  local a=2.8*smooth(q)+i*TAU/3
-  local x=Vector3.new(math.cos(a),.15*math.sin(a*2),math.sin(a)).Unit
-  local y=Vector3.new(math.cos(a+1.7),.2,math.sin(a+1.7)).Unit
-  local reach=s*(4.5-2*q)
-  local start=x*reach*.45;local finish=y*reach*1.7+Vector3.yAxis*.5*s
-  local ta=(y+Vector3.yAxis*.4).Unit;local tb=(-x+Vector3.yAxis*.15).Unit
-  curve(item.ink,start,finish,ta,tb,reach*1.1,1.1*s*pressure)
-  curve(item.rim,start+Vector3.yAxis*.045*s,finish,ta,tb,reach*1.1,.15*s*pressure)
- end
- for i,path in ipairs(h.bolts) do
-  local angle=i*TAU/4+2.4*smooth(q)
-  local x=Vector3.new(math.cos(angle),.2,math.sin(angle)).Unit
-  local y=Vector3.new(math.cos(angle+1),.4,math.sin(angle+1)).Unit
-  local reach=s*(1.8+.4*math.sin(q*TAU*2+i))
-  curve(path,x*.2*s,y*reach,(x+Vector3.yAxis).Unit,(-y+Vector3.yAxis).Unit,reach*.5,.045*s*pressure)
- end
- for i,p in ipairs(h.debris) do
-  local drift=smooth(q/.8)
-  local angle=drift*.75+i*2.39996
-  local rr=s*(3.8+(i%4)*.7)*(1-.25*q)
-  local position=Vector3.new(math.cos(angle)*rr,(math.sin(drift*2+i)*.4+drift*1.1)*s,math.sin(angle)*rr)
-  p.CFrame=CFrame.new(from+position)*CFrame.Angles(i*.7+drift*.2,i,drift*.15)
-  local size=(.18+(i%4)*.1)*s;p.Size=Vector3.new(size,size*.65,size*1.4)
-  p.Transparency=1-alive*.92
- end
- -- Sparse early motes yield to the circle, then stop entirely at release.
+ -- Fine charge motes stop at release; the separately owned smoke persists.
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
   if h.lastEmission and now>=h.lastEmission+.08 then
-   h.vapor:Emit(1);h.sparks:Emit(2);h.lastEmission=now
+   h.sparks:Emit(2);h.lastEmission=now
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
  else h.lastEmission=nil end
 end
@@ -382,13 +352,16 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local p=r.profile
  -- Keep body opacity stable; release pressure carries the width motion.
  local launchPressure=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.14))^2 or 0
- local thickness=p.body*width*scale*(1+launchPressure*.35)
+ local thickness=p.body*width*scale*B.WidthScale*(1+launchPressure*.35)
  r.body.Width0=thickness;r.body.Width1=thickness*p.taper;r.body.Enabled=width>.002
- r.core.Width0=p.core*width*scale;r.core.Width1=p.core*width*scale*.6;r.core.Enabled=width>.002
+ r.core.Width0=p.core*width*scale*B.WidthScale;r.core.Width1=p.core*width*scale*.6*B.WidthScale;r.core.Enabled=width>.002
  if not r.detail then return end
  if charge~=nil and charge>=0 and charge<1 then
   acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale)
- else releaseRich(r) end
+ else
+  LaunchAftermath.fire(r,from,direction,now,releaseAge)
+  releaseRich(r)
+ end
  if r.rich and r.rich.startup then
   -- The selected cloud style is the charge silhouette, not another overlay.
   for _,v in ipairs(r.all) do if v.Enabled then v.Enabled=false end end
@@ -398,59 +371,30 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
  local gather,glint=0,0
  if charge~=nil then gather,glint=B.charge(charge) end
  local release=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.18))^2 or 0
- -- The shrinking chromatic lens becomes the launch flash. The same native
- -- core and curved shock front span the boundary; firing never cuts them off.
- local launch=r.style=='Cutter' and not r.startupStyle
- local flash=launch and (charge and smooth((charge-.94)/.06) or release) or 0
+ -- Restore the first version's small emitting glint. Release spreads in
+ -- a fixed plane perpendicular to the laser; nothing turns into a bright ball.
  local energy=charge~=nil and gather or width
- local radius=p.orbit*scale*(charge~=nil and (1.25-.6*gather) or .7)
- if r.orb then
-  r.orb.Position=from;r.orb.Size=Vector3.one*math.max(.025,radius*gather*.8)
-  r.orb.Transparency=charge~=nil and 0 or 1
-  if r.rich then r.orb.Transparency=1 end
-  r.orb.Color=DARK:Lerp(DARK_GLOW,gather*.6)
-  r.orb.Material=Enum.Material.SmoothPlastic
-  if flash>.002 then
-   r.orb.Material=Enum.Material.Neon;r.orb.Color=WHITE
-   r.orb.Size=Vector3.one*math.max(.025,2.2*scale*flash)
-   r.orb.Transparency=0
-  end
- end
- local angle=charge~=nil and smooth(charge)*2.4 or 2.4+(releaseAge or now)*p.spin*.35
- -- Two deliberately separated hooked arcs, not a full glowing shell.
+ local radius=p.orbit*scale
+ if r.orb then r.orb.Transparency=1 end
+ -- Regular lens charges hand their ring to the independent aftermath clock.
+ if r.wantChargeLens and not r.startupStyle and r.style~='Repair' and r.style~='Courier' and r.style~='Branch' then
+  PlaneBurst.hide(r.plane)
+ else PlaneBurst.draw(r.plane,direction,releaseAge and releaseAge/.65,scale) end
  for i=1,2 do
-  local path=r.paths[i];local a=angle+(i-1)*math.pi;local b=a+1.9
-  local center=direction*.06
-  local x=side*math.cos(a)+up*math.sin(a);local y=side*math.cos(b)+up*math.sin(b)
-  local ta=side*-math.sin(a)+up*math.cos(a);local tb=side*-math.sin(b)+up*math.cos(b)
-  pose(path.a,center+x*radius,ta);pose(path.b,center+y*radius,tb)
-  path.beam.CurveSize0=radius*.72;path.beam.CurveSize1=radius*.72
-  path.beam.Width0=math.max(.001,p.body*.11*energy*scale);path.beam.Width1=0
-  path.beam.Enabled=energy>.02 and p.orbit>0
-  if charge==nil then
-   if r.style=='Resonance' or r.style=='Repair' then
-    -- Paired longitudinal waves carry support/resonance, with both ends
-    -- fixed to their real contacts rather than orbiting an unrelated center.
-    local bend=(i==1 and 1 or -1)*.16*math.sin(now*(r.style=='Repair' and 1.3 or 3))
-    pose(path.a,Vector3.zero,(direction+side*bend).Unit)
-    pose(path.b,delta,(direction-side*bend).Unit)
-    path.beam.CurveSize0=length*.33;path.beam.CurveSize1=length*.33
-    path.beam.Width0=p.core*width*scale*.65;path.beam.Width1=0
-   elseif r.style=='Courier' then
-    -- Two short gold transfer ticks travel toward the cargo mount.
-    local t=1-((now*.8+(i-1)*.5)%1)
-    path.a.Position=delta*t;path.b.Position=delta*math.max(0,t-.12)
-    path.beam.CurveSize0=0;path.beam.CurveSize1=0
-    path.beam.Width0=.035*energy*scale;path.beam.Width1=.012*energy*scale
-   elseif r.style=='Cutter' or r.style=='Combat' or r.style=='Sentry' then
-    path.beam.Enabled=release>.01 -- quiet sustained worker/threat silhouette
-   end
-  end
-  if flash>.002 then
-   local burstRadius=scale*(.6+1.8*(1-flash))
-   pose(path.a,center+x*burstRadius,ta);pose(path.b,center+y*burstRadius,tb)
-   path.beam.CurveSize0=burstRadius*.72;path.beam.CurveSize1=burstRadius*.72
-   path.beam.Width0=.35*scale*flash;path.beam.Width1=0;path.beam.Enabled=true
+  local path=r.paths[i];path.beam.Enabled=false
+  if charge==nil and (r.style=='Resonance' or r.style=='Repair') then
+   local bend=(i==1 and 1 or -1)*.12*math.sin(now*1.3)
+   pose(path.a,Vector3.zero,(direction+side*bend).Unit)
+   pose(path.b,delta,(direction-side*bend).Unit)
+   path.beam.CurveSize0=length*.33;path.beam.CurveSize1=length*.33
+   path.beam.Width0=p.core*width*scale*.65*B.WidthScale;path.beam.Width1=0
+   path.beam.Enabled=width>.02
+  elseif charge==nil and r.style=='Courier' then
+   local t=1-((now*.8+(i-1)*.5)%1)
+   path.a.Position=delta*t;path.b.Position=delta*math.max(0,t-.12)
+   path.beam.CurveSize0=0;path.beam.CurveSize1=0
+   path.beam.Width0=.035*energy*scale*B.WidthScale;path.beam.Width1=.012*energy*scale*B.WidthScale
+   path.beam.Enabled=width>.02
   end
  end
  -- Parallel rim + normally blended dark seam. Endpoint offsets shrink to
@@ -461,12 +405,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale)
   path.beam.CurveSize0=0;path.beam.CurveSize1=0
   path.beam.Width0=thickness*(i==3 and .08 or .14);path.beam.Width1=0
   path.beam.Enabled=width>.02
-  if charge~=nil and (r.style=='Orbital' or r.style=='Singularity') then
-   local a=angle+i*1.7
-   local x=side*math.cos(a)+up*math.sin(a)
-   path.a.Position=x*radius*.35;path.b.Position=x*radius*1.4+direction*radius*.18
-   path.beam.Width0=radius*.22*gather;path.beam.Width1=0;path.beam.Enabled=gather>.02
-  end
+
  end
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or side

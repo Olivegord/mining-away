@@ -466,7 +466,7 @@ function W:orbital(now)
     local ramp=Instance.new('Beam');ramp.Name='DescendingWhiteClearEnergy'
     ramp.Attachment0=bottom;ramp.Attachment1=top;ramp.FaceCamera=true;ramp.Segments=48
     ramp.Color=ColorSequence.new(Color3.new(1,1,1));ramp.LightEmission=1;ramp.LightInfluence=0;ramp.Brightness=.7
-    ramp.Width0=2.4;ramp.Width1=2.4;ramp.Parent=holder
+    ramp.Width0=.72;ramp.Width1=.72;ramp.Parent=holder
     -- The local physical cylinder stays visible through the clear ramp bands.
     self.orbitals[group]={holder=holder,bottom=bottom,top=top,ramp=ramp,
      vfx=BeamVFX.new(holder,'Orbital',Color3.fromRGB(171,111,255))}
@@ -489,7 +489,7 @@ function W:orbital(now)
    local height=math.max(260,(camera and camera.CFrame.Position.Y or position.Y)-position.Y+180)
    record.holder.CFrame=CFrame.new(position)
    record.bottom.Position=Vector3.zero;record.top.Position=Vector3.new(0,height,0)
-   record.ramp.Width0=2.4*strength;record.ramp.Width1=record.ramp.Width0
+   record.ramp.Width0=.72*strength;record.ramp.Width1=record.ramp.Width0
    record.ramp.Transparency=W.orbitalTransparency(now,.7)
    if ended then
     BeamVFX.after(record.vfx,position+Vector3.yAxis*.12,position+Vector3.yAxis*height,now,now-ended)

@@ -244,7 +244,7 @@ local function clearBurn(owner: any)
   local trail=part()
   if trail then
    trail.Name='OrbitalResidualColumn';trail.Transparency=1;trail.Shape=Enum.PartType.Cylinder
-   trail.Size=Vector3.new(ORBITAL_HEIGHT,2.25,2.25);trail.CFrame=core.CFrame;trail.Parent=old
+   trail.Size=Vector3.new(ORBITAL_HEIGHT,.68,.68);trail.CFrame=core.CFrame;trail.Parent=old
    local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
    embers.Texture=ENERGY;embers.Enabled=false;embers.Rate=0;embers.LightEmission=.8;embers.LightInfluence=0;embers.Brightness=1.1
    embers.Color=ColorSequence.new(ORBITAL_COLOR)
@@ -308,7 +308,7 @@ local function sustainedStrike(owner: any,event: any)
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
   group:SetAttribute('StartedAt',event.startedAt or clock())
-  for index,width in ipairs({2.25,.32}) do
+  for index,width in ipairs({.68,.12}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
    value.Color=index==1 and Color3.fromRGB(155,94,245) or ORBITAL_COLOR

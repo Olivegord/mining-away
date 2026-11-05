@@ -215,7 +215,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
    beam.endY=beam.endY and math.max(point.Y,beam.endY+(point.Y-beam.endY)*(1-math.exp(-dt*20))) or point.Y
   end
   local tip=beam.vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
-  local workerScale=.58;local alpha=beam.visibility
+  local workerScale=.23;local alpha=beam.visibility
   WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
   WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
   if beam.vfx then
@@ -815,9 +815,9 @@ function P:renderTurret(record,dt,now)
  record.flare.Enabled=false
  local aiming=typeof(aim)=='Vector3'
  record.beam.Enabled=awake and now>=activateAt and aiming and (charging or shotFlash>.01)
- record.beam.Width0=.035+warm*.07+shotFlash*.32;record.beam.Width1=.035+warm*.07+shotFlash*.22
- record.core.Enabled=record.beam.Enabled;record.core.Width0=.012+warm*.02+shotFlash*.1
- record.core.Width1=.012+warm*.02+shotFlash*.07
+ record.beam.Width0=.014+warm*.028+shotFlash*.128;record.beam.Width1=.014+warm*.028+shotFlash*.088
+ record.core.Enabled=record.beam.Enabled;record.core.Width0=.005+warm*.008+shotFlash*.04
+ record.core.Width1=.005+warm*.008+shotFlash*.028
  if aiming then record.endpoint.Position=aim end
  if record.beam.Enabled then
   record.vfx=record.vfx or BeamVFX.new(record.view,'Sentry',HOT)

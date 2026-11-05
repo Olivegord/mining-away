@@ -105,8 +105,7 @@ function Showcase.new(world,parent,config)
    if special and t>=charge+attack*.68 and (s.rock:GetAttribute('EffectDoneAt') or 0)==0 then
     s.rock:SetAttribute('EffectDoneAt',start+charge+attack*.68)
    end
-   local kick=active and not special and BeamVFX.recoil(t-charge) or 0
-   s.model:PivotTo(CFrame.new(s.pos+Vector3.new(0,12+math.sin(now*1.4+s.index)*.12+kick,0)))
+   s.model:PivotTo(CFrame.new(s.pos+Vector3.new(0,12+math.sin(now*1.4+s.index)*.12,0)))
    SpecialDroneMotion.step(s.motion,s.source,s.rock,now)
    if not s.beam then s.beam=self.presentation:createMiningBeam(s.model,s.emitter);s.beam.tint=s.def.color end
    if not s.rig then s.rig=BeamVFX.new(s.beam.holder,s.def.role=='Combat' and 'Combat' or 'Cutter',s.def.color);BeamVFX.startup(s.rig,BeamVFX.startupStyles[s.def.role]) end
