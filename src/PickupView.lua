@@ -80,7 +80,10 @@ function V.new(root,parent,audio)
   local a=Instance.new('Attachment');a.Parent=anchor
   local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(4)
   Debris:AddItem(anchor,burst.Lifetime.Max+.15)
-  if audio and os.clock()-self.lastSound>.09 then self.lastSound=os.clock();audio:play('pickup',rootPart.Position) end
+  if audio and os.clock()-self.lastSound>.09 then
+   local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
+   self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
+  end
  end))
  return self
 end

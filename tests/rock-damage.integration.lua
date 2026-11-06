@@ -109,4 +109,10 @@ deep.source:SetAttribute('DamageDepth',.84);pressure:update(deep,26);pressure:st
 assert(pressure.operations==operations,'same depth band does not recompute')
 assert(RockDamage.depthBand(5,5,.9)==0 and RockDamage.depthBand(6,0,1)==6,'bounded six-band extension')
 pressure:destroy();checks+=1
+local cube=resource(2,1);cube.source.ClassName='Part';cube.view.ClassName='Part';cube.source:SetAttribute('CubicRock',true)
+local assetCount=assets.created;local cubicDamage=RockDamage.new()
+cubicDamage:update(cube,30);cubicDamage:step(30)
+assert(cube.view:GetAttribute('PhysicalDamageKey')=='2:1' and cubicDamage.failures==0,'cube accepts both bite and dent subtraction')
+assert(assets.created==assetCount and cube.source.ClassName=='Part','cube damage must not rebuild the historical crystal mesh or replace authority')
+cubicDamage:destroy();checks+=1
 print('PASS '..checks..' physical rock damage queue/ownership checks (API double; native topology not established)')

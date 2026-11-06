@@ -49,6 +49,28 @@ function F.fragment(age,groundDrop,vy,gravity)
  if age<impact then return vy*age-.5*gravity*age*age,false,age end
  return floor,true,impact
 end
+function F.rubble(age,groundDrop,vy,gravity)
+ -- Piecewise ballistic arcs conserve downward speed at impact, then lose
+ -- energy to restitution/friction. Sampling time directly is frame-rate safe.
+ local floor=math.min(0,groundDrop);local y=0;local elapsed=0
+ local travel=0;local horizontal=1;local lastImpact=0;local strength=0
+ local function drift(t) return (1-math.exp(-.7*t))/.7 end
+ for bounce=0,4 do
+  local impact=(vy+math.sqrt(vy*vy+2*gravity*math.max(0,y-floor)))/gravity
+  local t=math.max(0,age-elapsed)
+  if t<impact then
+   return y+vy*t-.5*gravity*t*t,travel+horizontal*drift(t),bounce,lastImpact,strength,false,0
+  end
+  travel+=horizontal*drift(impact);horizontal*=math.exp(-.7*impact)*.57
+  elapsed+=impact;strength=math.max(0,gravity*impact-vy);lastImpact=elapsed
+  y=floor;vy=strength*.32
+  if vy<1.4 or bounce==4 then
+   local rest=math.max(0,age-elapsed)
+   return floor,travel+horizontal*(1-math.exp(-9*rest))/9,bounce+1,lastImpact,strength,true,rest
+  end
+ end
+ return floor,travel,5,lastImpact,strength,true,0
+end
 -- Stable, size-normalised anchor on the *queried rendered part* surface.
 -- A cached anchor transforms with crystal shrink and tilt between bounded raycasts.
 function F.surfaceAnchor(point,size)

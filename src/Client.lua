@@ -827,6 +827,11 @@ local function renderResource(r,now)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
+ if r.audioHealth and health<r.audioHealth and not broken and not event and now>=(r.nextCutSound or 0) then
+  soundscape:play('rock_cut',view.Position,{pitch=math.clamp(1.15-full.X*.025,.8,1.1)})
+  r.nextCutSound=now+.24
+ end
+ r.audioHealth=health
  local stage=r.visual.stage
  local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
  local targetPeriod=Feel.resourceScale(stage,stageCount,scarBase,scarStage)
@@ -858,7 +863,7 @@ local function renderResource(r,now)
   end
  else view.Transparency=1 end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
- elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now) end
+ elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');soundscape:play('rock_body',view.Position,{pitch=math.clamp(1.1-full.X*.03,.7,1)});presentation:resourceImpact(r,event,now) end
  rockDamage:update(r,now)
  r.settled=now>=readyAt and #r.visual.queue==0 and (settling>=1 or r.visual.broken)
 end
@@ -1104,7 +1109,11 @@ end)
 local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'Evade  [Q]',function() command:FireServer('Evade') end,palette.accent);evade.Visible=false
 local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() command:FireServer('TestLoadout') end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
-local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Deposit [U]',function() command:FireServer('Deposit') end,palette.paper)
+local function cargoAction()
+ local ready=(player:GetAttribute('StorageUnits') or 0)>=(player:GetAttribute('StorageCapacity') or 120) and (player:GetAttribute('LaunchCargoUnits') or 0)==0
+ command:FireServer(ready and 'LaunchStorage' or 'Deposit')
+end
+local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Deposit [U]',cargoAction,palette.paper)
 unload.Name='ReturnCargo';unload.Visible=false
 local enemyHUD=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(300,58),palette.panel,12);enemyHUD.Name='SentryHealth';enemyHUD.Visible=false
 local enemyTitle=label(enemyHUD,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),'PYRAMID SENTRY',12,palette.white,true)
@@ -1149,7 +1158,9 @@ local function stationAction(station)
   return nil
  elseif kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' Quartz'),pending() and 'Choose' or 'Pack'
  elseif kind=='Prestige' then return openPrestige,'Grow your fleet','Review the milestone and your next permanent drone','Review'
- elseif kind=='Sell' then return function() command:FireServer('Deposit') end,'Deposit backpack','Fill orbital storage, then launch for currency','Deposit'
+ elseif kind=='Sell' then
+  local ready=(player:GetAttribute('StorageUnits') or 0)>=(player:GetAttribute('StorageCapacity') or 120) and (player:GetAttribute('LaunchCargoUnits') or 0)==0
+  return cargoAction,ready and 'Storage ready!' or 'Deposit backpack',ready and 'Launch your full ore capsule' or 'Fill orbital storage, then launch for currency',ready and 'Launch' or 'Deposit'
  end
  return nil
 end
@@ -1207,8 +1218,7 @@ local function assignField(target)
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
    if logisticsView and logisticsView.selected and type(fieldId)=='number' then requestPlot(fieldId);return end
-   if player:GetAttribute('AutomationMineEnabled')==true and type(fieldId)=='number' then requestPlot(fieldId)
-   else commandView:request(resourceId) end
+   commandView:request(resourceId)
    return
   end
   local owner=node:GetAttribute('Owner')
@@ -1236,7 +1246,7 @@ connect(UIS.InputBegan,function(input,processed)
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
-   if not (consumableView and consumableView:click(point,false)) then assignField(mouse.Target) end
+   if not (consumableView and consumableView:click(point,false)) then commandView:beginDrag();assignField(mouse.Target) end
   end
   return
  end
@@ -1246,7 +1256,7 @@ connect(UIS.InputBegan,function(input,processed)
  if key==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false
  elseif not modal.Visible and key==Enum.KeyCode.M then openShop(activeShop)
  elseif not modal.Visible and (key==Enum.KeyCode.R or key==Enum.KeyCode.F or key==Enum.KeyCode.ButtonB) then if not logisticsView:recall() then command:FireServer('Recall') end
- elseif not modal.Visible and key==Enum.KeyCode.U then command:FireServer('Deposit')
+ elseif not modal.Visible and key==Enum.KeyCode.U then cargoAction()
  elseif not modal.Visible and key==Enum.KeyCode.L then command:FireServer('LaunchStorage')
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
@@ -1259,6 +1269,9 @@ connect(UIS.InputBegan,function(input,processed)
   local fields={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5}
   if fields[key] then requestPlot(fields[key]) end
  end
+end)
+connect(UIS.InputEnded,function(input)
+ if input.UserInputType==Enum.UserInputType.MouseButton1 then commandView:endDrag() end
 end)
 local hudClock=0
 local availabilitySignature=''

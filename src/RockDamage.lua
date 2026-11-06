@@ -1,4 +1,4 @@
--- Cosmetic CSG of the authored crystal. Accepted server hits provide the
+-- Cosmetic CSG of cubic rocks and retained crystal previews. Server hits provide the
 -- persistent counts; this module cannot grant damage, ore or reservations.
 local R={MAX_CUTS=6}
 local CANONICAL=4
@@ -71,12 +71,13 @@ function R.new(options)
   state.requested=key;state.generation+=1
   if bubbles+dents==0 then return end
   -- Only the local render clone is touched, never the replicated source.
-  if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') then return end
+  if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
   self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,generation=state.generation,key=key,at=now}
  end
  local function execute(record,request,state)
   local geometry=game:GetService('GeometryService')
-  if CrystalGeometry and not self.templateAttempted then
+  local cubic=record.source:GetAttribute('CubicRock')==true
+  if not cubic and CrystalGeometry and not self.templateAttempted then
    self.templateAttempted=true
    local editable
    local made,template=pcall(function()
@@ -104,11 +105,12 @@ function R.new(options)
    end
   end
   if self.closed or self.records[record]~=state then return end
-  -- Always use original authored geometry, never normalize a legacy union
+  -- Cubic resources use their pristine server Part. For retained crystal
+  -- previews, use original geometry; never normalize a legacy union
   -- by re-unioning it: old URL-backed operands can resolve to a plain box.
   -- CrystalGeometry recovers the original asset's collision hull surface;
   -- intact rocks retain their original render, only damaged rocks use it.
-  local template=options.template and options.template(record) or self.template or record.source
+  local template=cubic and record.source or (options.template and options.template(record) or self.template or record.source)
   local base=template:Clone();clean(base)
   base.CFrame=CFrame.new();base.Size=Vector3.one*CANONICAL
   local cutters={}
@@ -140,7 +142,7 @@ function R.new(options)
    local offset=result.CFrame.Position/CANONICAL
    local priorPivot=view.PivotOffset
    local swapped,swapError=pcall(function()
-    if view:IsA('PartOperation') and result:IsA('MeshPart') then
+    if (view:IsA('Part') and cubic) or (view:IsA('PartOperation') and result:IsA('MeshPart')) then
      -- Native verification found SubstituteGeometry(MeshPart) reports success
      -- but keeps the old union render. Convert the local view once, retaining
      -- its logical record and metadata; later cuts use stable ApplyMesh.

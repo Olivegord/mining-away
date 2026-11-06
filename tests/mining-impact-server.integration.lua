@@ -12,7 +12,7 @@ local function fixture(fieldId)
 end
 local function node(d,field,hp,stages)
  local r=makeResource(field,field.center,'Crystal',hp or 100,10,3,stages);r.readyAt=now
- release(d);d.pos=Feel.mineGoal(r.position,1,false,r.fullSize);d.target=r;d.targetSlot=1;d.field=field.id;r.slots[d.id]=1
+ release(d);d.pos=Feel.mineGoal(r.position,1,r.limit>1,r.fullSize);d.target=r;d.targetSlot=1;d.field=field.id;r.slots[d.id]=1
  return r
 end
 check('full bag accepts manual orders and continues actual miner damage',function()
@@ -44,10 +44,10 @@ check('test field is always open beside Quartz and all rock work is exactly tenf
  end
  local r=node(d,f,100,7);assert(hitResource(d,r,100));assert(r.hp==800)
 end)
-check('boulders preserve original crystal identity and seven monotonic size changes',function()
+check('cubic boulders offer three work slots and seven monotonic size changes',function()
  local _,p,d,f=fixture();local boulder
  for _,r in ipairs(f.resources) do if r.stageCount==7 then boulder=r;break end end
- assert(boulder and boulder.fullSize.X>=5.2 and boulder.ore==f.cfg.Ore*3)
+ assert(boulder and boulder.fullSize.X>=5.2 and boulder.ore==f.cfg.Ore*3 and boulder.limit==3)
  local r=node(d,f,810,7);local size=r.part.Size.X
  for stage=1,7 do
   local nextActual=r.maxHP*(1-stage/8)-.01;local amount=r.hp+10-nextActual
@@ -88,13 +88,14 @@ check('physical scar history belongs only to accepted server contacts',function(
  assert(not hitResource(d,r,99999,false,nil,nil,'Special'))
  assert(r.part:GetAttribute('BubbleBites')==1,'replayed special made a phantom cavity')
 end)
-check('editable native crystal template survives missing replicated template',function()
+check('runtime cubes preserve the original native crystal template untouched',function()
  local _,_,d,f=fixture()
  local replicated=RS:FindFirstChild('Crystal');local saved=scene.crystalTemplate
  local native=replicated:Clone();native.Name='PhysicalOriginal';native.Parent=workspace
  scene.crystalTemplate=native;replicated.Parent=nil
  local r=node(d,f,100)
- assert(r.part.ClassName=='UnionOperation','authored native crystal replaced by a cube')
+ assert(r.part.ClassName=='Part' and r.part:GetAttribute('CubicRock')==true)
+ assert(native.ClassName==replicated.ClassName and native.Parent==workspace and scene.crystalTemplate==native,'native reference asset was changed')
  replicated.Parent=RS;scene.crystalTemplate=saved;native:Destroy()
 end)
 check('powered dive accelerates downwards at every render rate and stops at contact',function()

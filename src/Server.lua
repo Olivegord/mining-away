@@ -68,6 +68,9 @@ local function publish(p)
   autoMine=autoMine or (DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
  end
  p.player:SetAttribute('BackpackUnits',copy.cargoUnits);p.player:SetAttribute('BackpackCapacity',copy.capacity)
+ p.player:SetAttribute('StorageUnits',Logistics.bagUnits(copy.run.logistics.storage))
+ p.player:SetAttribute('StorageCapacity',Logistics.CAPACITY)
+ p.player:SetAttribute('LaunchCargoUnits',Logistics.bagUnits(copy.run.logistics.launchCargo))
  p.player:SetAttribute('AutomationMineEnabled',autoMine);p.player:SetAttribute('AutomationHaulEnabled',autoHaul)
  p.player:SetAttribute('QueuedOreCount',#(p.oreQueue or {}))
  p.player:SetAttribute('QueuedOreIds',Http:JSONEncode(p.oreQueue or {}))
@@ -104,7 +107,7 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
   local part=d.specialRecovery.part
   part:SetAttribute('EffectPausedAt',0);part:SetAttribute('EffectCancelledSerial',d.specialRecovery.serial)
  end
- d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil
+ d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil;d.manualTarget=nil
  d.specialClear=nil;d.specialQueryAt=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
@@ -282,7 +285,7 @@ local function los(a,b,target,ignore)
  return hit==nil or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target))
 end
 local function abilityLineOfSight(p,from,r)
- return los(from,r.position,r.part,{droneFolder,p.player.Character})
+ return los(from,r.part.Position,r.part,{droneFolder,p.player.Character})
 end
 local resourceSerial=0
 local function nodeUsage(field)
@@ -300,17 +303,11 @@ end
 local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
- -- The editable map keeps the authored crystal in Workspace. Looking only in
- -- ReplicatedStorage silently replaced every live mineral with a cube.
- local template=scene.crystalTemplate or RS:FindFirstChild('Crystal')
- template=template and (template:IsA('BasePart') and template or template:FindFirstChild('Mesh',true))
- local part
- if template and template:IsA('BasePart') then part=template:Clone()
- else part=World.part(field.model,'Crystal',position,Vector3.one,field.color,Enum.Material.Neon) end
- for _,v in ipairs(part:GetDescendants()) do
-  if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Sound') then v:Destroy()
-  elseif v:IsA('ParticleEmitter') or v:IsA('Beam') or v:IsA('Trail') then v.Enabled=false end
- end
+ -- The owner requested cubic mineable rocks. Keep the authored crystal asset
+ -- intact in the native map; only runtime resource bodies change shape.
+ local part=Instance.new('Part');part.Shape=Enum.PartType.Block
+ part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+ part:SetAttribute('CubicRock',true)
  local shell=kind=='Geode';local size=visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
  local fullSize=Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
@@ -321,7 +318,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=shell and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=(shell or (stageCount or 3)>3) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed)
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=now,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
@@ -332,7 +329,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
  local boulder=not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
- local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Include;clearance.FilterDescendantsInstances={scene.map}
+ local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
+ local excluded={field.model,droneFolder}
+ for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
+ clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
  local visualSize=mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
@@ -351,8 +351,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local selected=ResourcePlacement.sample(field.part.Size.X,field.part.Size.Z,radius,occupied,
   function(a,b) return seed:NextNumber(a,b) end,function(x,z)
    local candidate=field.part.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
-   local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)
-   return workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance)==nil
+   -- Authored trees also live outside Map. Check the footprint and overhead
+   -- flight space against the actual world, including those branches.
+   for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
+    local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)+offset*visualSize
+    if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
+   end
+   return true
   end,preferred)
  if not selected then return false end
  local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
@@ -538,8 +543,10 @@ local function pickupStep(dt)
     if accepted>0 then
      drop.units-=accepted;p.dirty=true;p.publishDirty=true
      p.collectSerial=(p.collectSerial or 0)+1
+     p.collectTotal=(p.collectTotal or 0)+accepted
+     p.player:SetAttribute('CollectedOreTotal',p.collectTotal)
      local color=drop.part.Color
-     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,x=drop.x,y=drop.y,z=drop.z,
+     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,x=drop.x,y=drop.y,z=drop.z,
       r=math.floor(color.R*255),g=math.floor(color.G*255),b=math.floor(color.B*255)}))
      if drop.units==0 then
       drop.part:SetAttribute('Units',0);drop.part:SetAttribute('CollectedPosition',target);drop.part:SetAttribute('CollectedAt',now)
@@ -610,8 +617,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
-  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.kind=='Geode',primary.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
- elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' then r.consumableWorked=true end
@@ -709,6 +716,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   for _,id in ipairs(workers) do
    local worker=drones[id]
    if worker and worker.target==r then
+    local manual=worker.manualTarget~=nil
     if worker.specialJob and not special then
      r.part:SetAttribute('EffectCancelledSerial',worker.specialJob.serial);r.part:SetAttribute('EffectType',nil)
     end
@@ -720,6 +728,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
      for _,nextRock in ipairs(revealed) do
       if not next(nextRock.slots) then
        worker.target=nextRock;worker.targetSlot=1;nextRock.slots[id]=1
+       worker.manualTarget=manual and nextRock.id or nil
        worker.lingerUntil=nil;worker.lingerGoal=nil;worker.state='Travel'
        updateSlots(nextRock);break
       end
@@ -741,8 +750,9 @@ local function chooseResource(d: any,field: any): ()
  local best,score=nil,math.huge
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id]) then
-   local used=0;for _ in pairs(r.slots) do used=used+1 end
-   if used<r.limit then
+   local used=0;local foreign=false
+   for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
+   if used<r.limit and not foreign then
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
@@ -947,7 +957,7 @@ end
 local function committedStation(d,r)
  if d.workTargetId~=r.id then
   d.workTargetId=r.id
-  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)
+  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)
  end
  return d.workStation
 end
@@ -1031,10 +1041,10 @@ local function followRole(d,p,hr,dt,state)
  d.mining=false;d.state=state or 'Follow'
  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
 end
-local function roleNodes(p,field)
+local function roleNodes(p,field,worker)
  local list={}
  for _,r in ipairs(field.resources) do
-  local eligible=true;local count=0
+  local eligible=not worker or not r.blockedUntil or now>=(r.blockedUntil[worker.id] or 0);local count=0
   for id in pairs(r.slots) do count+=1;local worker=drones[id];if not worker or worker.owner~=p.player.UserId then eligible=false end end
   if r.part.Parent then table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,kind=r.kind,x=r.position.X,y=r.position.Y,z=r.position.Z,readyAt=r.readyAt,paid=r.paid,eligible=eligible and count<r.limit}) end
  end
@@ -1125,7 +1135,7 @@ local function breakerDrone(d,p,hr,field,dt)
  -- Owning a breaker earns autonomous heavy-rock work after the owner chooses
  -- an ore/plot. The ordinary miner still needs the earned Plot Scanner.
  if not d.target and (p.workField==field.id or d.deployedCarrier) then
-  local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
+  local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field,d),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
   local r=node and resources[node.id]
   if r then
    local occupied={};for _,slot in pairs(r.slots) do occupied[slot]=true end
@@ -1141,9 +1151,13 @@ local function breakerDrone(d,p,hr,field,dt)
  end
  job=d.breaker
  if not job then
+  local station=committedStation(d,r)+Vector3.new(0,2,0)
+  if not abilityLineOfSight(p,station,r) then
+   r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6;release(d);return
+  end
   job=DroneRoles.newBreaker(r.id,now);d.breaker=job
   job.windup=math.max(.08,d.stats.warmup)
-  job.station=committedStation(d,r)+Vector3.new(0,2,0)
+  job.station=station
   job.contact=breakerSurface(r);job.contactStage=r.stage;job.contactDents=r.smashDents;job.contactPressure=r.smashPressure
   local lowest=0;local pivot=d.model:GetPivot()
   for _,part in ipairs(d.model:GetDescendants()) do if part:IsA('BasePart') and part.Transparency<1 then
@@ -1189,6 +1203,9 @@ local function breakerDrone(d,p,hr,field,dt)
    d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
    d.goal=job.station;d.intentGoal=job.station;publishBreakerPhase(d,job)
    RoleEffects.BreakerPhase(d.pos,job.contact,'Impact')
+  else
+   r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6
+   release(d)
   end
   d.breaker=job
  elseif event=='missed' or event=='canceled' then release(d) end
@@ -1441,35 +1458,45 @@ logistics=Logistics.new({C=C,R=R,W=World,root=root,origin=home,profiles=profiles
  end,
  canMine=playerCanMine,canDeploy=playerCanMine,isWorker=function(d) return DroneRoles.isWorker(d.role) end})
 local function assignOre(p: any,d: any,r: any): boolean
- if d.carrierId or not DroneRoles.isWorker(d.role) then return false end
- local occupied={};for _,slot in pairs(r.slots) do occupied[slot]=true end
+ if d.carrierId or not DroneRoles.isWorker(d.role) or d.target==r then return false end
+ local occupied={};for id,slot in pairs(r.slots) do
+  if not drones[id] or drones[id].owner~=p.player.UserId then return false end
+  occupied[slot]=true
+ end
  local slot=1;while slot<=r.limit and occupied[slot] do slot+=1 end
  if slot>r.limit then return false end
- local old=d.field;release(d);spend(d)
- d.autoField=nil;d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil;p.workField=r.field.id
+ local old=d.field;local resume=d.autoField~=nil;release(d);spend(d)
+ d.autoField=resume and r.field.id or nil;d.manualTarget=r.id
+ d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil;p.workField=r.field.id
  r.slots[d.id]=slot;updateSlots(r)
  if old~=d.field then dropFieldIfEmpty(p,old) end
  return true
 end
 local function dispatchOreQueue(p: any)
- if not healthy(p) or not characterRoot(p) or activeAssault(p) then return end
- local queue=p.oreQueue or {};local index=1
+ if not healthy(p) or not characterRoot(p) or activeAssault(p) then return {} end
+ local assigned={};local queue=p.oreQueue or {};local index=1
  while index<=#queue do
   local r=resources[queue[index]]
   if not r or r.paid or r.hp<=0 or not r.part.Parent or not playerCanMine(p,r.field) then table.remove(queue,index);p.publishDirty=true
+  elseif now<r.readyAt or not nearMiningField(characterRoot(p).Position,r.field) then index+=1
   else
    local best,distance=nil,math.huge
    for _,d in ipairs(p.drones) do
-    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) and not d.target and not d.breaker and (not d.lingerUntil or now>=d.lingerUntil) then
-     local n=(d.pos-r.position).Magnitude
+    -- An explicit order may redirect automatic cutting/travel. Never cancel
+    -- another manual order, a committed slam, or a specialist's physical job.
+    local available=not d.target or (d.autoField and not d.manualTarget)
+    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) and available and d.target~=r and not d.breaker and not d.specialJob and not d.specialRecovery
+     and (not r.blockedUntil or now>=(r.blockedUntil[d.id] or 0)) then
+     local n=(d.pos-r.position).Magnitude+(d.target and 10000 or 0)
      if n<distance then best,distance=d,n end
     end
    end
-   if not best then break end
-   if assignOre(p,best,r) then table.remove(queue,index);p.publishDirty=true else index+=1 end
+   if not best then index+=1
+   elseif assignOre(p,best,r) then assigned[r.id]=best;table.remove(queue,index);p.publishDirty=true else index+=1 end
   end
  end
  p.oreQueue=queue
+ return assigned
 end
 local function serviceDeliveries(p: any)
  if not healthy(p) or not characterRoot(p) or now<(p.nextDeliveryAction or 0) then return end
@@ -1880,7 +1907,6 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
   p.oreQueue=p.oreQueue or {}
-  for _,d in ipairs(p.drones) do if d.target==r then reply('accepted','Already mining this rock',r,d);return end end
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
     table.remove(p.oreQueue,index);p.publishDirty=true;reply('canceled','Queued order canceled',r)
@@ -1892,12 +1918,18 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if now<r.readyAt then reply('rejected','Rock is still growing',r);return end
   local hasWorker=false;for _,d in ipairs(p.drones) do if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) then hasWorker=true;break end end
   if not hasWorker then reply('rejected','A miner or breaker is needed',r);return end
-  local used=0;for _ in pairs(r.slots) do used+=1 end
-  if used>=r.limit then reply('rejected','Another crew is working this rock',r);return end
+  local used=0;local mine
+  for workerId in pairs(r.slots) do
+   used+=1;local worker=drones[workerId]
+   if not worker or worker.owner~=pl.UserId then reply('rejected','Another crew is working this rock',r);return end
+   mine=worker
+  end
+  if used>=r.limit then reply('accepted','Crew already working this rock',r,mine);return end
   if #p.oreQueue>=16 then reply('rejected','16 orders queued. Click a queued rock to cancel it',r);return end
   if r.field.cfg.Turrets>0 and r.field.e.phase=='Cleared' then grantClear(p,r.field) end
-  p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true;dispatchOreQueue(p)
-  for _,d in ipairs(p.drones) do if d.target==r then reply('accepted','Miner sent',r,d);return end end
+  p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true
+  local sent=dispatchOreQueue(p)
+  if sent[r.id] then reply('accepted',used>0 and 'Helper sent' or 'Miner sent',r,sent[r.id]);return end
   reply('queued','Queued · next available worker',r)
  elseif action=='ReturnCargo' then
   if payload~=nil and (type(payload)~='string' or #payload>160) then return end
@@ -1924,7 +1956,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
     end
    end
    if assigned==0 then commandReply(pl,payload,'rejected','Click individual ores, or install Plot Scanner for an available worker',field);notice(p,'Click ores first. Plot Scanner unlocks plot orders.');return end
-   p.workField=field.id;p.oreQueue={};commandReply(pl,payload,'accepted','Plot survey assigned',field)
+   if p.workField~=field.id then p.oreQueue={} end
+   p.workField=field.id;commandReply(pl,payload,'accepted','Plot survey assigned',field)
   else
    local fleet={}
    for _,d in ipairs(p.drones) do

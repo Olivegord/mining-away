@@ -1,5 +1,5 @@
--- The same world gesture grows from one rock to an entire field as automation
--- is earned. Color and outlines carry feedback without floating instructions.
+-- Rock clicks stay precise after automation. Drag to paint a work queue;
+-- empty field ground still assigns automatic workers to the whole plot.
 local Players=game:GetService('Players')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
@@ -12,11 +12,14 @@ function V.new(ctx)
  local self=setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
  self.fields={};return self
 end
-function V:request(id)
+function V:beginDrag() self.dragging=true;self.visited={} end
+function V:endDrag() self.dragging=false;self.visited=nil end
+function V:request(id,paint)
  local profile=self.ctx.profile();if not profile or not profile.run then return end
+ if self.visited then self.visited[id]=true end
  local at=os.clock();if self.pending[id] and at-self.pending[id].at<1 then return end
  local request=Http:GenerateGUID(false);self.pending[id]={at=at,request=request}
- self.ctx.command:FireServer('MineOre',{requestId=request,runId=profile.run.id,resourceId=id,toggle=true})
+ self.ctx.command:FireServer('MineOre',{requestId=request,runId=profile.run.id,resourceId=id,toggle=not paint})
 end
 function V:reply(state)
  for id,pending in pairs(self.pending) do if pending.request==state.requestId then self.pending[id]=nil end end
@@ -84,13 +87,17 @@ function V:update(dt,now)
    if not h then
     h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
    end
-   h.Enabled=visible and automatic and (hoverField==id or assigned[id]==true)
+   h.Enabled=visible and automatic and ((not hover and hoverField==id) or assigned[id]==true)
    local color=assigned[id] and GREEN or BLUE
-   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hoverField==id and .91 or .97;h.OutlineTransparency=hoverField==id and .02 or .38
+   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=not hover and hoverField==id and .94 or 1;h.OutlineTransparency=not hover and hoverField==id and .08 or .65
   end
  end end
  for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
+ if not visible then self:endDrag() end
+ if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
+  self.nextPaint=os.clock()+.12;self:request(hover,true)
+ end
  if hover and records[hover] then table.insert(marked,hover) end
  for id in pairs(self.queued) do if id~=hover then table.insert(marked,id) end end
  for id in pairs(working) do if id~=hover and not self.queued[id] then table.insert(marked,id) end end
@@ -104,7 +111,7 @@ function V:update(dt,now)
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
-  if visible and not automatic and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
+  if visible and r and r.view.Parent and (r.source:GetAttribute('HP') or 0)>0 and used<24 then
    used+=1
    local h=self.pool[used]
    if not h then
@@ -121,8 +128,30 @@ function V:update(dt,now)
   end
  end
  for index=used+1,#self.pool do self.pool[index].Enabled=false end
+ -- One contextual readout, never a field of floating health bars.
+ local focused=hover and records[hover]
+ if focused and visible and focused.view.Parent and (focused.source:GetAttribute('HP') or 0)>0 then
+  if not self.meter then
+   local gui=Instance.new('BillboardGui');gui.Name='FocusedRock';gui.Size=UDim2.fromOffset(132,34)
+   gui.AlwaysOnTop=true;gui.MaxDistance=100;gui.Parent=ctx.parent
+   local title=Instance.new('TextLabel');title.Name='Mineral';title.Size=UDim2.new(1,0,0,22)
+   title.BackgroundTransparency=1;title.Font=Enum.Font.GothamBold;title.TextSize=13
+   title.TextColor3=Color3.new(1,1,1);title.TextStrokeColor3=Color3.fromRGB(20,25,32);title.TextStrokeTransparency=.1;title.Parent=gui
+   local track=Instance.new('Frame');track.Name='Health';track.Position=UDim2.fromOffset(5,24);track.Size=UDim2.new(1,-10,0,7)
+   track.BackgroundColor3=Color3.fromRGB(25,31,38);track.BorderSizePixel=0;track.Parent=gui
+   local round=Instance.new('UICorner');round.CornerRadius=UDim.new(0,4);round.Parent=track
+   local fill=Instance.new('Frame');fill.Name='Remaining';fill.BorderSizePixel=0;fill.BackgroundColor3=GREEN;fill.Parent=track
+   round:Clone().Parent=fill
+   self.meter=gui;self.title=title;self.health=fill
+  end
+  local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
+  self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
+  self.title.Text=tostring(s:GetAttribute('Mineral') or 'Rock')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
+ elseif self.meter then self.meter.Enabled=false end
 end
 function V:destroy()
+ if self.meter then self.meter:Destroy() end
  if self.worker then self.worker:Destroy() end;for _,h in ipairs(self.pool) do h:Destroy() end
  for _,h in pairs(self.fields) do h:Destroy() end
 end

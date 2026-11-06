@@ -16,7 +16,10 @@ local TRACKS = {
 local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
- pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.055,duration=.3,pitch=1.45,cooldown=.09,fallback='volume_slider.ogg'},
+ pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
+ rock_cut={ids={'9125869504','9125869138'},volume=.075,duration=.28,pitch=1.4,cooldown=.18,range=48,maxVoices=2,fallback='action_jump_land.mp3'},
+ rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
+ rock_body={id='9125869495',volume=.19,duration=.65,pitch=.58,cooldown=.12,range=75,maxVoices=2,fallback='action_jump_land.mp3'},
  pack={id='9126066421',volume=.25,duration=1,pitch=.8,cooldown=.4,fallback='volume_slider.ogg'},
  upgrade={id='91735091370012',pitch=.8,volume=.12,duration=4,cooldown=.45,fallback='volume_slider.ogg'},
  prestige={id='91735091370012',volume=.16,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},

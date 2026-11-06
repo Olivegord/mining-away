@@ -1,9 +1,10 @@
 local checks=0
 local function check(name,fn) fn();checks+=1;print('PASS refinement intent '..name) end
-check('one rock gesture naturally targets the field after automation unlock',function()
+check('rock clicks stay precise after automation; ground selects the field',function()
  assignField(resource);assert(#commandView.calls==1 and commandView.calls[1]=='rock' and #command.calls==0)
  player:SetAttribute('AutomationMineEnabled',true);assignField(resource)
- assert(#commandView.calls==1 and #command.calls==1 and command.calls[1].action=='Patch' and command.calls[1].payload==1)
+ assert(#commandView.calls==2 and commandView.calls[2]=='rock' and #command.calls==0)
+ requestPlot(1);assert(#command.calls==1 and command.calls[1].action=='Patch' and command.calls[1].payload==1)
  assert(notice.Text=='','upgrade should not create a mode instruction')
 end)
 check('locked background field click stays quiet and sends no impossible order',function()

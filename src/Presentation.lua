@@ -1,4 +1,4 @@
--- Client-only authored-asset animation. No remotes, damage, rewards or simulation.
+-- Client-only animation and cosmetic debris. No remotes, damage or rewards.
 -- Feedback is bundled immediately before this module by tools/build.py.
 local P={};P.__index=P
 local F=Feedback
@@ -411,7 +411,7 @@ function P:_floor(position,exclude)
  local result=workspace:Raycast(position+Vector3.new(0,1,0),Vector3.new(0,-100,0),params)
  return result and result.Position.Y or position.Y-9
 end
-function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority)
+function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock)
  if self.closed then return end
  if #self.fragments>=self.maxFragments then
   if not priority then return end
@@ -420,7 +420,8 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
   for i,item in ipairs(self.fragments) do if not item.priority then replace=i;break end end
   self.fragments[replace].part:Destroy();table.remove(self.fragments,replace)
  end
- local part=template:Clone();if not part then return end
+ local part=rock and Instance.new('Part') or template:Clone();if not part then return end
+ if rock then part.Size=template.Size;part.Material=Enum.Material.Rock;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
  for _,object in ipairs(part:GetDescendants()) do
   if object:IsA('BasePart') or object:IsA('LuaSourceContainer') or object:IsA('JointInstance')
@@ -428,12 +429,13 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
    or object:IsA('Trail') or object:IsA('ParticleEmitter') or object:IsA('Sound')
    or object:IsA('BillboardGui') or object:IsA('SurfaceGui') then object:Destroy() end
  end
- passive(part);part.CastShadow=false;part.Name='AuthoredDebris';part.Size=part.Size*scale;part.CFrame=frame
+ passive(part);part.CastShadow=false;part.Name=rock and 'RockDebris' or 'AuthoredDebris';part.Size=part.Size*scale;part.CFrame=frame
  part.Color=color;part.Transparency=transparency;part.Parent=self.parent
- local ground=floor+part.Size.Y*.3
- local landing=(velocity.Y+math.sqrt(velocity.Y^2+52*math.max(0,frame.Position.Y-ground)))/26
+ local ground=floor+(rock and part.Size.Magnitude*.5 or part.Size.Y*.3)
+ local gravity=rock and 72 or 26
+ local landing=(velocity.Y+math.sqrt(velocity.Y^2+2*gravity*math.max(0,frame.Position.Y-ground)))/gravity
  table.insert(self.fragments,{part=part,frame=frame,start=now,velocity=velocity,spin=spin,
-  floor=ground,transparency=transparency,duration=math.max(duration or 1.5,landing+.35),priority=priority})
+  floor=ground,transparency=transparency,duration=math.max(duration or 1.5,landing+(rock and 1.25 or .35)),priority=priority,rock=rock})
 end
 function P:registerDrone(drone,now)
  if self.closed or self.drones[drone] then return end
@@ -887,23 +889,21 @@ function P:resourceImpact(resource,event,now)
   if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
  end
  self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
- -- Retain the exact authored crystal silhouette in a short, weighted shower.
- -- Spawning from the fracture surface makes a break read as a release of
- -- material, rather than the final quarter-sized rock simply disappearing.
- local amount=breaking and 9 or 6
+ -- Solid cubic rubble has weight; bright collectible ore is a separate reward.
+ local amount=breaking and 12 or 5
  local full=resource.source:GetAttribute('FullSize') or view.Size
  if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do
   local angle=i*2.399963+now*.1
-  local size=(breaking and (.10+(i%3)*.026) or .055)*full.X
+  local size=math.clamp((breaking and (.11+(i%3)*.033) or .065)*full.X,.15,1.1)
   local scale=math.clamp(size/math.max(.01,view.Size.X),.03,.62)
   local radius=math.min(full.X*.18,.65)
   local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
   local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
-  local speed=breaking and (3.5+i%3*1.4) or (1.8+i*.4)
+  local speed=breaking and (6+i%3*2.3) or (2.4+i*.65)
   self:_fragment(view,frame,resource.baseColor,0,scale,
-   Vector3.new(math.cos(angle)*speed,breaking and (4.8+i%4*1.1) or 2.4+i*.45,math.sin(angle)*speed),
-   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 1.15 or .75)
+   Vector3.new(math.cos(angle)*speed,breaking and (9+i%4*1.8) or 5+i*.65,math.sin(angle)*speed),
+   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true)
  end
 end
 function P:update(_dt,now)
@@ -914,14 +914,28 @@ function P:update(_dt,now)
   if age>=item.duration or not item.part.Parent then
    item.part:Destroy();table.remove(self.fragments,i)
   else
-   local y,landed,flight=F.fragment(age,item.floor-item.frame.Position.Y,item.velocity.Y,26)
-   local drift=Vector3.new(item.velocity.X*flight,y,item.velocity.Z*flight)
-   local rotation=item.spin*flight
-   item.part.CFrame=CFrame.new(item.frame.Position+drift)*item.frame.Rotation*CFrame.Angles(rotation.X,rotation.Y,rotation.Z)
-   if landed and not item.landed then
-    item.landed=true
-    -- One sound exactly at first contact; a stalled render skips old impacts.
-    if age-flight<.2 then self:_sound(item.part.Position,item.priority and 'metal_land' or 'rubble',now) end
+   if item.rock then
+    local y,travel,bounces,impactAt,speed,settled,rest=F.rubble(age,item.floor-item.frame.Position.Y,item.velocity.Y,72)
+    local rotation=item.spin*travel
+    local turn=item.frame.Rotation*CFrame.Angles(rotation.X,rotation.Y,rotation.Z)
+    if settled then
+     local flatten=math.clamp(rest/.2,0,1);local _,yaw=turn:ToOrientation()
+     turn=turn:Lerp(CFrame.Angles(0,yaw,0),flatten)
+     y-=(item.part.Size.Magnitude-item.part.Size.Y)*.5*flatten
+    end
+    item.part.CFrame=CFrame.new(item.frame.Position+Vector3.new(item.velocity.X*travel,y,item.velocity.Z*travel))*turn
+    if bounces>(item.bounces or 0) then
+     item.bounces=bounces
+     if age-impactAt<.12 and self.audio then self.audio:play('rock_clack',item.part.Position,{level=math.clamp(speed/22,.15,.75),pitch=math.clamp(1.2-item.part.Size.X*.2,.75,1.15)}) end
+    end
+   else
+    local y,landed,flight=F.fragment(age,item.floor-item.frame.Position.Y,item.velocity.Y,26)
+    local rotation=item.spin*flight
+    item.part.CFrame=CFrame.new(item.frame.Position+Vector3.new(item.velocity.X*flight,y,item.velocity.Z*flight))*item.frame.Rotation*CFrame.Angles(rotation.X,rotation.Y,rotation.Z)
+    if landed and not item.landed then
+     item.landed=true
+     if age-flight<.2 then self:_sound(item.part.Position,item.priority and 'metal_land' or 'rubble',now) end
+    end
    end
    local fade=math.clamp((age-item.duration*.6)/(item.duration*.4),0,1)
    item.part.Transparency=item.transparency+(1-item.transparency)*fade

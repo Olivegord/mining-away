@@ -155,6 +155,10 @@ function HUD.new(refs: any)
  plain(refs.resources)
  self.coins=card(refs.resources,'CreditsCounter',C.blue);self.coins.BackgroundTransparency=0
  self.cargo=card(refs.resources,'CargoCounter',C.green);self.cargo.BackgroundTransparency=0
+ self.gain=text(self.cargo,'CollectedGain',0,33,120,20,16,C.gold);self.gain.TextStrokeTransparency=.15;self.gain.TextStrokeColor3=C.line
+ self.gain.TextXAlignment=Enum.TextXAlignment.Right;self.gain.Visible=false
+ self.cargoScale=Instance.new('UIScale');self.cargoScale.Parent=self.cargo
+ self.collectedTotal=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
  self.cargoStroke=self.cargo:FindFirstChildOfClass('UIStroke')
  if interfaceKit then
   self.cargoIcon=interfaceKit.icon(self.cargo,'cargo',UDim2.fromOffset(6,5),UDim2.fromOffset(22,22),C.text)
@@ -228,6 +232,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local backpackUnits=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
  local backpackCapacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
  local full=backpackUnits>=backpackCapacity
+ local storageReady=(Players.LocalPlayer:GetAttribute('StorageUnits') or 0)>=(Players.LocalPlayer:GetAttribute('StorageCapacity') or 120) and (Players.LocalPlayer:GetAttribute('LaunchCargoUnits') or 0)==0
  local hp,maximum=activity.hp,activity.maximum
  local hidden=r.modal.Visible
  local busy=working>0 or delivering>0 or full or living<total
@@ -235,7 +240,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
  if fighting then status='Fleet fighting'
- elseif full then status='Bag full · return home'
+ elseif full then status=storageReady and 'Storage ready · launch at home' or 'Bag full · return home'
  elseif working>0 then status=string.format('%d / %d miners assigned',working,activity.miners)
  elseif delivering>0 then status=string.format('%d hauling · %d miners ready',delivering,activity.miners)
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
@@ -249,7 +254,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local character=Players.LocalPlayer.Character;local root=character and character:FindFirstChild('HumanoidRootPart')
  local converter=workspace:FindFirstChild('Converter')
  local atDepot=root and converter and converter:IsA('BasePart') and (root.Position-converter.Position).Magnitude<18
- local canUnload=backpackUnits>0 and atDepot and not fighting
+ local canUnload=(backpackUnits>0 or storageReady) and atDepot and not fighting
  local showRecall=working>0 or delivering>0
  local actions=(showRecall and 1 or 0)+(fighting and 1 or 0)+(canUnload and 1 or 0)
  local bw=touch and 90 or 100
@@ -281,9 +286,9 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.test.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  r.recall.Text=touch and 'Recall' or 'Recall [R]'
  r.evade.Text=touch and 'Evade' or 'Evade [Q]'
- if r.unload then r.unload.Text=touch and 'Deposit' or 'Deposit [U]' end
+ if r.unload then r.unload.Text=(storageReady and 'Launch' or 'Deposit')..(touch and '' or ' [U]') end
  self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
- self.hint.Text='Click to send your drones'
+ self.hint.Text=touch and 'Tap a rock to send a drone' or 'Click a rock · drag to queue'
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
  -- One small counter row. No permanent objectives, test banner or portraits.
@@ -299,9 +304,20 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  if self.cargoIcon then r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','') end
  if w<500 then r.credits.Text=r.credits.Text:gsub('^Quartz ','Q '):gsub('%.0([kMB])','%1');r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Bag '):gsub(' / ','/') end
  r.cargoTrack.Position=UDim2.new(0,3,1,-5);r.cargoTrack.Size=UDim2.new(1,-6,0,3)
- -- A single brief rim response ties an actual backpack increase to this
- -- meter. It does not add floating numbers or claim a pending pickup paid out.
+ -- Aggregate confirmed pickups beside the existing meter. Changes in cargo
+ -- alone do not invent collection receipts when a courier or deposit runs.
  local now=os.clock()
+ local collected=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
+ if collected>self.collectedTotal then
+  self.gainUnits=(now-(self.gainAt or -10)<.65 and (self.gainUnits or 0) or 0)+collected-self.collectedTotal
+  self.gainAt=now;self.gain.Text='+'..self.gainUnits..' ore'
+ end
+ self.collectedTotal=collected
+ local age=now-(self.gainAt or -10);local gainFade=math.clamp((age-.5)/.35,0,1)
+ self.gain.Visible=age<.85;self.gain.Position=UDim2.new(1,-120,1,2-age*8)
+ self.gain.TextTransparency=gainFade;self.gain.TextStrokeTransparency=.15+.85*gainFade
+ local reduced=Players.LocalPlayer:GetAttribute('ReducedMotion')==true or Players.LocalPlayer:GetAttribute('MA_ReducedMotion')==true
+ self.cargoScale.Scale=1+(reduced and 0 or math.sin(math.clamp(age/.26,0,1)*math.pi)*.045)
  if self.lastCargo and backpackUnits>self.lastCargo then self.cargoChangedAt=now end
  self.lastCargo=backpackUnits
  local pulse=math.clamp(1-(now-(self.cargoChangedAt or -10))/.45,0,1)

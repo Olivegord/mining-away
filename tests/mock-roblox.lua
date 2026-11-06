@@ -36,7 +36,7 @@ CF.__mul=function(a,b) local c=CFrame.new(a:PointToWorldSpace(b.Position));c.yaw
 function CF:Lerp(b,t) local c=CFrame.new(self.Position:Lerp(b.Position,t));c.yaw=self.yaw+(b.yaw-self.yaw)*t;return c end
 local Color3={new=function(r,g,b) return setmetatable({X=r,Y=g,Z=b,R=r,G=g,B=b},VM) end}
 function Color3.fromRGB(r,g,b) return Color3.new(r/255,g/255,b/255) end
-local UDim2={fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end}
+local UDim2={fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end,new=function(...) return {...} end}
 local UDim={new=function(scale,offset) return {Scale=scale,Offset=offset} end}
 local NumberSequence={new=function(x) return x end};local ColorSequence=NumberSequence
 local Enum=setmetatable({},{__index=function(t,k) local v=setmetatable({},{__index=function(_,x) return x end});rawset(t,k,v);return v end})

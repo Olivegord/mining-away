@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 5 latest — the basic mining should feel better; cubic rocks
+
+The owner explicitly redirects this pass away from progression: make directing drones, breaking rocks and collecting feel much better and more Roblox-like. They request more physics-based rock effects, more varied satisfying rock noises, and a return to **cubic mineable rocks**. This supersedes the earlier requirement to retain the crystal silhouette for runtime resources; preserve the actual authored crystal asset and all other native geometry. Keep existing consumables, but do not add prospecting, research, crafting or other progression systems for this pass. See [core mining implementation and verification](review/CORE_MINING_FEEL.md).
+
 ## November 5 latest — research progression and make discoveries usable equipment
 
 The owner asks for gameplay improvements grounded in research into progression, tycoon and chance-based games. Bee Swarm Simulator is an exemplar, not the only reference. They specifically suggest replacing simple multiplier pickups with better consumable rock drops, such as an orbital laser stored in a new backpack slot and placed deliberately in the world. Preserve the existing game, fleet, assets, logistics and server authority. See [research and implemented consumable loop](PROGRESSION_AND_CONSUMABLES_RESEARCH.md); its exact drop rates, pocket sizes and balance values are implementation proposals requiring playtesting.

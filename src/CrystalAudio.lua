@@ -44,7 +44,7 @@ function CrystalAudio:_layer(anchor: BasePart, name: string, volume: number, pit
 	sound.RollOffMode = Enum.RollOffMode.InverseTapered
 	sound.RollOffMinDistance = 10; sound.RollOffMaxDistance = MAX_DISTANCE
 	local eq = Instance.new('EqualizerSoundEffect')
-	eq.Name = 'StoneTexture'; eq.LowGain = bass; eq.MidGain = -4; eq.HighGain = -16; eq.Parent = sound
+	eq.Name = 'StoneTexture'; eq.LowGain = bass; eq.MidGain = -2; eq.HighGain = -9; eq.Parent = sound
 	sound.Parent = anchor
 	self.voices += 1
 	sound.Destroying:Once(function() self.voices = math.max(0, self.voices - 1) end)
@@ -89,10 +89,9 @@ function CrystalAudio:play(position: Vector3, event: string, stage: number, geod
 	local pitch = (geode and .82 or 1) * self.random:NextNumber(.92, 1.08)
 	local weight = geode and 1.14 or 1
 	if breaking then
-  -- A single rounded rubble layer replaces the sharp pop + bright triple stack.
-  self:_layer(anchor, crunch, .15 * weight, .82 * pitch, geode and 1.2 or .95, .025, 1, .55)
+  self:_layer(anchor, crunch, .22 * weight, .82 * pitch, geode and 1.2 or .95, .025, 1, .55)
  else
-  self:_layer(anchor, crunch, (.045 + math.clamp(stage,1,3)*.008) * weight, .9 * pitch, .48, .04, -2, .3)
+  self:_layer(anchor, crunch, (.085 + math.clamp(stage,1,7)*.009) * weight, (.86+math.min(stage,7)*.025) * pitch, .48, .04, -2, .3)
 	end
 end
 
