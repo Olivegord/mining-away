@@ -1,6 +1,6 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
-local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6}
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -24,6 +24,11 @@ function M.resource(roll: number,kind: string,hardness: number?)
  local work=(mass-10)*(hardness or 1)*M.HEALTH_MULTIPLIER
  local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
  return {maxHP=work+10,work=work,size=size,mass=mass}
+end
+-- Cumulative base ore released by real layer fractures. The rest belongs to
+-- the final collapse; crossing several layers at once never duplicates ore.
+function M.extractedOre(ore: number,stage: number,count: number): number
+ return math.floor(ore*M.EXTRACTION_SHARE*math.clamp(stage/math.max(1,count),0,1))
 end
 function M.efficiency(kind: string,nodeKind: string): number
  return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1

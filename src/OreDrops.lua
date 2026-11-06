@@ -2,8 +2,8 @@
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.60,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38,
  AIR_DRAG=.9,GROUND_DRAG=14,RESTITUTION=.28}
-function O.partition(units)
- local out={};local count=math.min(4,units)
+function O.partition(units,limit)
+ local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
  for i=1,count do out[i]=math.floor(units/count)+(i<=units%count and 1 or 0) end
  return out

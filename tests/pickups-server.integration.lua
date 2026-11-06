@@ -17,6 +17,43 @@ check('break scatters conserved owner-only ore and cannot pay twice',function()
  steps(100);assert(Pro.cargoUnits(data(p))==10 and pendingOre(p)==0)
  steps(100);assert(Pro.cargoUnits(data(p))==10)
 end)
+check('real layer breaks release ore before death and the collapse pays only the remainder',function()
+ local _,p,d,r=fixture();assert(hitResource(d,r,30));assert(not r.paid and r.stage==1)
+ assert(pendingOre(p)==1 and r.extractedOre==1)
+ for _,drop in pairs(pickups) do if drop.owner==d.owner then assert(drop.y>r.part.Position.Y) end end
+ assert(hitResource(d,r,.01));assert(pendingOre(p)==1,'same-layer hit repeated extraction')
+ steps(100);assert(Pro.cargoUnits(data(p))==1 and not r.paid,'no useful collection before collapse')
+ assert(hitResource(d,r,30));assert(pendingOre(p)==2 and r.extractedOre==3)
+ assert(hitResource(d,r,500));assert(pendingOre(p)==9 and r.extractedOre==10)
+ assert(not hitResource(d,r,500));steps(100);assert(Pro.cargoUnits(data(p))==10)
+end)
+check('skipped boulder layers and fractional yield conserve the full payout with bounded fragments',function()
+ local _,p,d,r=fixture();r.stageCount=7;r.ore=101;d.stats.yieldMultiplier=1.25
+ data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ for _=1,20 do if r.paid then break end;assert(hitResource(d,r,8)) end
+ assert(r.paid and r.extractedOre==101 and pendingOre(p)==126)
+ assert(math.abs(data(p).run.yieldRemainders.Quartz-.25)<1e-7)
+ local n=0;for _,drop in pairs(pickups) do if drop.owner==d.owner then n+=1 end end
+ assert(n<=4,'layer extraction grew unbounded physical pickups')
+end)
+check('specialist final bonus still uses the whole rock after extraction',function()
+ local _,p,d,r=fixture();d.role='Bubbler';r.ore=11
+ for _=1,4 do
+  d.specialJob={targetId=r.id,startedAt=now-2,duration=1,impact=.5,damage=1000}
+  assert(hitResource(d,r,1000,false,nil,nil,'Special'))
+ end
+ assert(r.paid and r.extractedOre==11 and pendingOre(p)==13)
+ assert(math.abs(data(p).run.yieldRemainders.Quartz-.75)<1e-7,'lost whole-rock specialist bonus')
+end)
+check('geode shells and rejected hits never extract ore',function()
+ local _,p,d,r=fixture();r.kind='Geode'
+ assert(hitResource(d,r,30));assert(r.stage>0 and pendingOre(p)==0 and not r.extractedOre)
+ assert(hitResource(d,r,500));assert(pendingOre(p)==0)
+ local _,q,e,s=fixture();s.slots[e.id]=nil
+ assert(not hitResource(e,s,30));assert(pendingOre(q)==0 and not s.extractedOre)
+ s.slots[e.id]=1;q.busy=true;assert(not hitResource(e,s,30));q.busy=false
+ assert(pendingOre(q)==0 and not s.extractedOre)
+end)
 check('another nearby player cannot attract or steal the owners fragments',function()
  local pl,p,d,r=fixture();local _,q=fixture();assert(hitResource(d,r,500))
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(70,3,0)));steps(100)

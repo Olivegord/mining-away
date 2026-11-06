@@ -97,26 +97,28 @@ end
 local function specialUntil(d,at)
  while now+C.Tick<at-1e-7 do specialTicks(d,C.Tick) end
 end
-specialCheck('all seven miners take four authoritative chunks and pay once only on depletion',function()
+specialCheck('all seven miners extract from four authoritative chunks and retain their final yield bonus',function()
  for _,kind in ipairs(DroneCatalog.Order) do if kind~='Laser' then
   local pl,p=specialOwner();local d=specialBuy(pl,p,kind);local r=specialRock(p,d,'Crystal',210,11)
   local hp=r.hp;local before=pendingOre(p)
   specialTicks(d,.3);specialEq(r.hp,hp);assert(not d.specialJob)
   local previousSerial=0
   for cycle=1,4 do
+   local earned=pendingOre(p)
    local job=specialWaitForJob(d,previousSerial)
    specialEq(job.serial,previousSerial+1);previousSerial=job.serial
    specialEq(r.part:GetAttribute('EffectType'),kind);specialEq(r.part:GetAttribute('EffectDrone'),d.id)
    assert(math.abs(job.duration-DroneCatalog.Types[kind].Duration)<1e-6)
    specialEq(r.part:GetAttribute('EffectImpact'),.68)
    specialUntil(d,job.startedAt+job.duration*job.impact)
-   specialEq(r.hp,hp);specialEq(pendingOre(p),before)
+   specialEq(r.hp,hp);specialEq(pendingOre(p),earned)
    specialTicks(d,C.Tick*2)
    specialEq(r.hp,hp-50);hp=r.hp
    assert(r.part:GetAttribute('EffectDoneAt')>=job.startedAt+job.duration*job.impact)
    specialEq(r.part:GetAttribute('EffectDepleted'),cycle==4)
    if cycle<4 then
     assert(not r.paid and d.specialJob==job and r.slots[d.id])
+    specialEq(pendingOre(p)-before,Mining.extractedOre(11,r.stage,r.stageCount))
     local after=r.hp
     specialEq(hitResource(d,r,999999,false,nil,nil,'Special'),false)
     specialEq(r.hp,after)
@@ -277,6 +279,7 @@ specialCheck('deposit stores typed ore and space launch pays its frozen manifest
 end)
 specialCheck('carrier reward overflow stays typed and fills the next capsule without losing ore',function()
  local pl,p=specialOwner();local d=p.drones[1];local cap=Logistics.CAPACITY
+ specialInput(pl,p,'AutoLaunch',false)
  specialEq(logistics:deposit(p,'Cobalt',cap-4),cap-4)
  local field=patches[1];local r=makeResource(field,field.center,'Crystal',100,13,3)
  d.deployedCarrier=true;award(d,r,false);d.deployedCarrier=false
@@ -286,18 +289,27 @@ specialCheck('carrier reward overflow stays typed and fills the next capsule wit
  specialEq(specialState(p).storage.Quartz,9);specialEq(Logistics.bagUnits(specialState(p).pendingCargo),0)
  specialEq(Logistics.bagUnits(specialState(p).launchCargo)+Logistics.bagUnits(specialState(p).storage),cap+9)
 end)
-specialCheck('automatic launches unlock after the first manual shipment and preserve refill during flight',function()
+specialCheck('first full storage auto-launches and preserves refill during flight without a manual prerequisite',function()
  local pl,p=specialOwner();local cap=Logistics.CAPACITY
- specialInput(pl,p,'AutoLaunch',true);specialEq(data(p).logistics.autoLaunch,false)
- logistics:deposit(p,'Quartz',cap);specialInput(pl,p,'LaunchStorage');specialRuntime(p,6.2)
- specialEq(data(p).logistics.launches,1);specialInput(pl,p,'AutoLaunch',true);specialEq(data(p).logistics.autoLaunch,true)
+ specialEq(data(p).logistics.autoLaunch,true);specialEq(data(p).logistics.launches,0)
  logistics:deposit(p,'Quartz',cap);specialRuntime(p,.1);specialEq(Logistics.bagUnits(specialState(p).launchCargo),cap)
- logistics:deposit(p,'Ruby',cap);specialRuntime(p,6.2);specialEq(data(p).logistics.launches,2)
+ logistics:deposit(p,'Ruby',cap);specialRuntime(p,6.2);specialEq(data(p).logistics.launches,1)
  specialEq(Logistics.bagUnits(specialState(p).launchCargo),cap);specialRuntime(p,6.2)
- specialEq(data(p).logistics.launches,3);specialEq(Logistics.bagUnits(specialState(p).launchCargo),0)
+ specialEq(data(p).logistics.launches,2);specialEq(Logistics.bagUnits(specialState(p).launchCargo),0)
+end)
+specialCheck('manual launching can be selected before the first shipment and still requires the depot',function()
+ local pl,p=specialOwner();local cap=Logistics.CAPACITY
+ specialInput(pl,p,'AutoLaunch',false);specialEq(data(p).logistics.autoLaunch,false)
+ logistics:deposit(p,'Quartz',cap);specialRuntime(p,7)
+ specialEq(Logistics.bagUnits(specialState(p).storage),cap);specialEq(data(p).logistics.launches,0)
+ pl.Character:PivotTo(CFrame.new(patches[4].center+Vector3.new(1000,0,0)))
+ specialInput(pl,p,'AutoLaunch',true);specialEq(data(p).logistics.autoLaunch,false)
+ pl.Character:PivotTo(CFrame.new(home+Vector3.new(0,4,0)));specialInput(pl,p,'AutoLaunch',true)
+ specialRuntime(p,.1);specialEq(Logistics.bagUnits(specialState(p).launchCargo),cap)
 end)
 specialCheck('flying backpack reaches the owner before pickup and keeps cargo when storage fills',function()
  local pl,p=specialOwner();specialInput(pl,p,'BuyBackpack');assert(data(p).logistics.backpack)
+ specialInput(pl,p,'AutoLaunch',false)
  local bagCap=Ca.capacity(data(p));local storageCap=Logistics.CAPACITY
  data(p).run.cargo={Quartz=bagCap-7,Ruby=7};specialState(p).storage={Quartz=storageCap-4}
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)));specialRuntime(p,.1)

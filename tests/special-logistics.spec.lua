@@ -12,6 +12,12 @@ local function profile(uid)
  local p=Profile.new(uid or 71001,123);p.run.wallet.Quartz=1000000;p.run.credits=p.run.wallet.Quartz;return p
 end
 local depot={atDepot=true,activeEncounter=false}
+check('new owners auto-launch from their first shipment while saved manual preferences survive',function()
+ local p=profile();assert(p.logistics.autoLaunch and p.logistics.launches==0)
+ p.logistics.autoLaunch=false
+ local restored,err=Profile.migrate(Profile.clone(p),p.userId);assert(restored,err)
+ eq(restored.logistics.autoLaunch,false);assert(Profile.validate(restored,p.userId))
+end)
 check('schema-six migration preserves original identities traits material wallets and paid choices',function()
  local p=profile();local id=p.fleet[1].id;local speed=p.fleet[1].base.maxStep60
  p.run.cargo={Ruby=7};p.run.wallet.Ruby=23

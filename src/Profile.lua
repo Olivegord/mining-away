@@ -25,7 +25,7 @@ local function run(uid,index)
  Shops.fresh(state);return state
 end
 local function logisticsOwnership()
- return {carriers={},nextCarrier=1,backpack=false,autoLaunch=false,launches=0}
+ return {carriers={},nextCarrier=1,backpack=false,autoLaunch=true,launches=0}
 end
 local function cargoId(p,id)
  if type(id)~='string' or #id>160 then return false end

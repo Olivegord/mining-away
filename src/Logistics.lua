@@ -345,7 +345,6 @@ function L.new(ctx: any): any
   elseif action=='AutoLaunch' then
    if type(value)~='boolean' then return true end
    if not ctx.inHome(p) then return reject('Return to the depot to change automatic launching.') end
-   if saved.logistics.launches==0 then return reject('Complete one manual storage launch to unlock automatic launching.') end
    request(p,'auto',function(copy: any) copy.logistics.autoLaunch=value;return true,{enabled=value} end,function() announce(p,value and 'Automatic storage launching enabled.' or 'Automatic storage launching disabled.') end)
   elseif action=='LoadCarrier' then
    if type(value)~='table' or type(value.carrierId)~='string' or type(value.droneIds)~='table' then return true end
@@ -392,7 +391,7 @@ function L.new(ctx: any): any
       if request(p,'launchFinish',function(copy: any) return L.finishLaunch(copy,ctx.prices) end,function() rt.jet.Transparency=1;rt.capsule:SetAttribute('Manifest',0);move(rt.capsule,rt.capsuleBase,true);announce(p,'Cargo reached space. Matching mineral balances credited.') end,'logisticsPay:'..saved.run.id..':'..(saved.logistics.launches+1)) then continue end
      end
     else rt.jet.Transparency=1;rt.capsule:SetAttribute('Manifest',0);move(rt.capsule,rt.capsuleBase) end
-    if healthy(p) and saved.logistics.autoLaunch and saved.logistics.launches>0 and L.bagUnits(state.launchCargo)==0 and L.bagUnits(state.storage)>=capacity then
+    if healthy(p) and saved.logistics.autoLaunch and L.bagUnits(state.launchCargo)==0 and L.bagUnits(state.storage)>=capacity then
      if request(p,'autoLaunch',function(copy: any) return L.beginLaunch(copy,capacity) end,function() rt.capsule:SetAttribute('LaunchedAt',ctx.getClock()) end) then continue end
     end
     local bp=rt.backpack

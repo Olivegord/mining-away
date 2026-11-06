@@ -1,5 +1,7 @@
 # Mining satisfaction
 
+November 6: the owner reports that the installed controls/cube/audio pass still does not make the game fun, and rules out insufficient mining control. [The extraction-loop candidate](review/EXTRACTION_LOOP.md) connects actual layer loss to collectible ore and removes the first-manual-shipment gate for new profiles. Total base ore stays conserved. Native observation motivating this change found 264 collected ore, a full 120-unit backpack, full 120-unit storage, waiting couriers and zero spendable Quartz. Automated validation establishes conservation and delivery behavior; it cannot establish enjoyment.
+
 November 5 follow-up: [progression, tycoon and chance research](PROGRESSION_AND_CONSUMABLES_RESEARCH.md) leads to collected, placeable Orbital Beacons and Scrap Capsules in separate backpack pockets. This replaces the old multiplier discovery rewards. The report separates source evidence, implementation choices, simulated drop pacing and outstanding playtest questions.
 
 Latest cloud candidate: [committed flight, outer-layer breaker/exposed-layer cutter mechanics and shell-to-core continuation](review/COMMITTED_MINING_FLIGHT.md). The report records current work-only estimates and cloud validation limits. Its current behavior supersedes historical fleet-freeze and identical-damage descriptions below; engine feel and fun remain unverified.

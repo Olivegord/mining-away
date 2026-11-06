@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — diagnose the underlying mining loop
+
+After trying the installed cube/physics/audio pass, the owner still finds the game unfun and explicitly says the problem is **not lack of player control over mining**. Bee Swarm Simulator is an example of an enjoyable experience, not a request to copy it. Keep the focus on useful consequences and the rhythm of mining/collection rather than another input scheme or progression system. The next candidate releases existing ore at actual rock-layer fractures, retaining a larger final collapse payout, and defaults new profiles to automatic full-storage launches. Existing saved manual preferences remain intact. These are implementation hypotheses, not owner acceptance or proof of fun. See [extraction loop and evidence](review/EXTRACTION_LOOP.md).
+
 ## November 5 latest — the basic mining should feel better; cubic rocks
 
 The owner explicitly redirects this pass away from progression: make directing drones, breaking rocks and collecting feel much better and more Roblox-like. They request more physics-based rock effects, more varied satisfying rock noises, and a return to **cubic mineable rocks**. This supersedes the earlier requirement to retain the crystal silhouette for runtime resources; preserve the actual authored crystal asset and all other native geometry. Keep existing consumables, but do not add prospecting, research, crafting or other progression systems for this pass. See [core mining implementation and verification](review/CORE_MINING_FEEL.md).

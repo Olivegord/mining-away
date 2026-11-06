@@ -459,12 +459,18 @@ local function pendingOre(p)
  local count=0;for _ in pairs(nodes) do count+=1 end
  return units,count
 end
-local function award(d: any,r: any,completedSpecial: boolean?)
- local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) then return end
+local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolean?)
+ local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) or r.kind=='Geode' then return end
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
- local special=completedSpecial and d.specialJob and d.specialJob.targetId==r.id and DroneCatalog.Types[d.role]
- local amount=r.ore*d.stats.yieldMultiplier*(special and (special.Yield or 1) or 1)*discoveries:Multiplier(p.player,'Yield')+(profile.run.yieldRemainders[material] or 0)
+ local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount) or r.ore
+ local base=math.max(0,target-(r.extractedOre or 0));if base==0 then return end
+ local special=not extraction and completedSpecial and d.specialJob and d.specialJob.targetId==r.id and DroneCatalog.Types[d.role]
+ -- Keep the existing whole-rock specialist bonus on the final collapse.
+ -- Partial extraction advances one shared ledger, independent of worker.
+ local bonus=special and r.ore*((special.Yield or 1)-1) or 0
+ local amount=(base+bonus)*d.stats.yieldMultiplier*discoveries:Multiplier(p.player,'Yield')+(profile.run.yieldRemainders[material] or 0)
  local units=math.floor(amount);profile.run.yieldRemainders[material]=amount-units
+ r.extractedOre=target;r.part:SetAttribute('ExtractedOre',target)
  if d.deployedCarrier and logistics then
   local accepted=logistics:deposit(p,material,units)
   local pending=profile.run.logistics.pendingCargo
@@ -473,7 +479,11 @@ local function award(d: any,r: any,completedSpecial: boolean?)
  end
  local ground=r.part:GetAttribute('GroundY') or r.field.part.Position.Y+r.field.part.Size.Y*.5
  local _,nodes=pendingOre(p)
- if nodes>=OreDrops.MAX_NODES then
+ local nodeDrops=0
+ for _,drop in pairs(pickups) do
+  if drop.owner==d.owner and drop.runId==profile.run.id and drop.nodeId==r.id then nodeDrops+=1 end
+ end
+ if nodes>=OreDrops.MAX_NODES or nodeDrops>=4 then
   -- Full bags never stop mining. Coalesce further rewards of this mineral
   -- into one existing physical fragment without losing an integer ore unit.
   for _,drop in pairs(pickups) do
@@ -482,10 +492,12 @@ local function award(d: any,r: any,completedSpecial: boolean?)
    end
   end
  end
- for index,n in ipairs(OreDrops.partition(units)) do
+ for index,n in ipairs(OreDrops.partition(units,4-nodeDrops)) do
   pickupSerial+=1
   local vx,vy,vz=OreDrops.scatter(index,pickupSerial)
-  local position=Vector3.new(r.position.X,ground+.65,r.position.Z)
+  -- Ore leaves the material being removed, then follows the same weighted
+  -- scatter, landing and owner-only collection as a final-break reward.
+  local position=extraction and r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.22,0) or Vector3.new(r.position.X,ground+.65,r.position.Z)
   local chip=r.part:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
@@ -669,6 +681,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed)
  end
  r.part:SetAttribute('HP',actual)
+ if not broken and r.kind~='Geode' and r.stage>previous then award(recipient,r,false,true) end
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end

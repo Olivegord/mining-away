@@ -114,11 +114,10 @@ function View.start(ctx)
    launch=U.button(card,UDim2.fromOffset(14,112),UDim2.fromOffset(contentWidth-28,38),'Launch full storage [L]',function() send('LaunchStorage') end,C.mineral)
    U.button(body,UDim2.fromOffset(0,170),UDim2.fromOffset(contentWidth,40),'Deposit backpack [U]',function() send('Deposit') end,C.accent)
    auto=U.button(body,UDim2.fromOffset(0,220),UDim2.fromOffset(contentWidth,40),'Auto-launch: OFF',function()
-    if (owned().launches or 0)==0 then say('Launch your first full capsule at the depot to unlock automatic launches.');return end
     send('AutoLaunch',not owned().autoLaunch)
    end,C.paper)
    local helpHeight=contentWidth<340 and 180 or 128
-   U.text(body,UDim2.fromOffset(4,272),UDim2.fromOffset(contentWidth-8,helpHeight),'Ore keeps its mineral type. Deposit it into storage, then launch a full capsule to receive those currencies after liftoff. Carriers send ore to storage; the flying backpack fetches your full bag. Opt into auto-launch after your first launch for an unattended outpost.',15,C.muted)
+   U.text(body,UDim2.fromOffset(4,272),UDim2.fromOffset(contentWidth-8,helpHeight),'Ore keeps its mineral type. Full storage launches automatically and pays after liftoff. Carriers send ore to storage; the flying backpack fetches your full bag. Switch auto-launch off here if you want to launch capsules yourself.',15,C.muted)
    body.CanvasSize=UDim2.fromOffset(0,282+helpHeight)
   else
    local first=shopCard(0,'Carrier • four bays','Choose four permanent miners, send the carrier to a cleared field, and leave them working.',1500,C.accent,nil,'BuyCarrier',nil,false)
