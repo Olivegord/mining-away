@@ -21,8 +21,9 @@ end
 local function click(pl,p,r)
  p.tokens=10;p.bucketAt=now;command.OnServerEvent:Fire(pl,'MineOre',r.id)
 end
-check('three explicit clicks recruit helpers without restarting existing work',function()
+check('three explicit clicks recruit same-type helpers without restarting existing work',function()
  local pl,p,f,w=fixture();local r=rock(f,7)
+ for _,d in ipairs(w) do d.role='Striker' end
  click(pl,p,r);local first
  for _,d in ipairs(w) do if d.target==r then first=d end end
  assert(first);first.warmAt=now-1
@@ -61,6 +62,41 @@ check('shared boulders never allow another player to steal a work slot',function
  local pl2,p2,_,w2=fixture();r.paid=false;r.hp=990
  click(pl2,p2,r);assert(not w2[1].target and #p2.oreQueue==0)
  chooseResource(w2[1],f);assert(w2[1].target~=r)
+end)
+check('manual and automatic assignments cannot mix drone types on one rock',function()
+ local pl,p,f,w=fixture();local a,b=rock(f,7),rock(f,7,12);local miner=w[1];local breaker
+ for _,d in ipairs(w) do if d.role=='Charger' then breaker=d end end
+ assert(breaker and assignOre(p,miner,a) and assignOre(p,breaker,b))
+ assert(not assignOre(p,breaker,a) and breaker.target==b)
+ p.tokens=10;p.bucketAt=now
+ command.OnServerEvent:Fire(pl,'AssignSlot',{requestId='single-type',runId=data(p).run.id,droneId=breaker.id,life=breaker.life,fieldId=f.id,resourceId=a.id})
+ assert(breaker.target==b and not a.slots[breaker.id] and b.slots[breaker.id])
+ for _,n in ipairs(roleNodes(p,f,breaker)) do if n.id==a.id then assert(not n.eligible) end end
+ release(breaker);chooseResource(breaker,f);assert(breaker.target==b)
+ local hp=a.hp;assert(not hitResource(breaker,a,100,false,nil,breaker.pos,'Breaker') and a.hp==hp)
+ release(miner);assert(assignOre(p,breaker,a),'last release did not make the rock available to another type')
+end)
+check('queued help skips a nearer incompatible type and keeps the current miner working',function()
+ local pl,p,f,w=fixture();local a=rock(f,7);local miner=w[1];local helper=w[2]
+ helper.role='Striker';assert(assignOre(p,miner,a));miner.warmAt=now-1
+ helper.pos=a.position+Vector3.new(0,12,0)
+ for i=3,#w do w[i].pos=a.position end
+ click(pl,p,a)
+ assert(helper.target==a and miner.warmAt==now-1 and #p.oreQueue==0)
+ for id in pairs(a.slots)do assert(DroneRoles.canonical(drones[id].role)=='Striker')end
+end)
+check('autonomous orbital and scrap jobs obey the same single-type rule',function()
+ local _,p,f,w=fixture();local miner=w[1];local a,b=rock(f,7),rock(f,7,12);local orbiter,scrapper
+ for _,d in ipairs(p.drones)do if d.role=='Orbiter' then orbiter=d elseif d.role=='Scrapper' then scrapper=d end end
+ assert(orbiter and scrapper and assignOre(p,miner,a))
+ local ctx=abilityContext(p,f.id,orbiter)
+ for _,n in ipairs(ctx.targets(f.id,'Orbital'))do assert(n.id~=a.id)end
+ release(miner)
+ p.ability={runId=data(p).run.id,charge={actorId=orbiter.id,targetId=b.id,expires=now+2}}
+ assert(not assignOre(p,miner,b));p.ability.charge=nil
+ p.ability.burn={actorId=orbiter.id,targetId=b.id,remaining=1};assert(not sameRockType(miner,b));p.ability.burn=nil
+ p.ability.swarm={actorId=scrapper.id,expires=now+1,bots={{targetId=b.id}}};assert(not sameRockType(miner,b))
+ p.ability.swarm=nil;assert(assignOre(p,miner,b))
 end)
 check('blocked breaker releases reservation and skips the same rock',function()
  local _,p,f,w=fixture();local d

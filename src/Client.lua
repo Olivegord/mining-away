@@ -27,6 +27,7 @@ BeamVFX.onCue=function(kind,position,now)
  end
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
+local fractureView=FractureView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new()
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
@@ -808,7 +809,7 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
- -- geometry writes. Growth, damped settling and fracture stages still animate.
+ -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
  r.dirty=false
  local s=r.source;local view=r.view
@@ -827,7 +828,7 @@ local function renderResource(r,now)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
- if r.audioHealth and health<r.audioHealth and not broken and not event and now>=(r.nextCutSound or 0) then
+ if r.audioHealth and health<r.audioHealth and not broken and not event and now>=(r.nextCutSound or 0) and now-(s:GetAttribute('FractureAt') or 0)>.18 then
   soundscape:play('rock_cut',view.Position,{pitch=math.clamp(1.15-full.X*.025,.8,1.1)})
   r.nextCutSound=now+.24
  end
@@ -835,14 +836,7 @@ local function renderResource(r,now)
  local stage=r.visual.stage
  local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
  local targetPeriod=Feel.resourceScale(stage,stageCount,scarBase,scarStage)
- local poseStage=scarStage or stage
- if event=='stage' then
-  r.layerFrom=r.layerScale or Feel.stageScale(stage-1,stageCount)
-  r.layerStageFrom=r.layerStage or math.max(0,stage-1);r.layerAt=now
- end
- local settling=r.layerAt and Feel.layerProgress(now-r.layerAt) or 1
- local period=(r.layerFrom or targetPeriod)+(targetPeriod-(r.layerFrom or targetPeriod))*settling
- r.layerScale=period;r.layerStage=(r.layerStageFrom or poseStage)+(poseStage-(r.layerStageFrom or poseStage))*settling
+ local period=targetPeriod
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
   local displaySize=full*math.max(.005,growth*period)
@@ -852,7 +846,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,r.layerStage,seed)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
@@ -865,7 +859,7 @@ local function renderResource(r,now)
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');soundscape:play('rock_body',view.Position,{pitch=math.clamp(1.1-full.X*.03,.7,1)});presentation:resourceImpact(r,event,now) end
  rockDamage:update(r,now)
- r.settled=now>=readyAt and #r.visual.queue==0 and (settling>=1 or r.visual.broken)
+ r.settled=now>=readyAt
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -1087,6 +1081,7 @@ connect(RunService.RenderStepped,function(dt)
  roleEffectView:step(now)
  presentation:beginFrame()
  pickupView:update(dt,now)
+ fractureView:update(now)
  for _,r in pairs(resources) do renderResource(r,now) end
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
@@ -1402,7 +1397,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- commandView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ commandView:destroy();pickupView:destroy();fractureView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

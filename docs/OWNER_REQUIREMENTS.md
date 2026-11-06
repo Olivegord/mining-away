@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — interacting rocks, snap shrink and visible currency arcs
+
+The owner subsequently supplied [taw's automation-game essay](https://t-a-w.blogspot.com/2026/07/how-to-make-great-automation-game.html), then explicitly rejected our complementary-worker interpretation: **keep this a simple Roblox mining game; only one type of drone may work on a rock at a time**. The proposed Smasher-to-miner handoff is removed. Do not restore that relay, require paired drone types, or turn the loop into factory management. Same-type helpers may use existing boulder slots; different types select different rocks.
+
+The owner requests closing the game when work is done to avoid lag: stop Play, save the canonical file and close Studio after checks.
+
+The owner rejects earlier ore release as a sufficient mining-loop improvement: it changes reward timing. Change the actual interaction between mining jobs and rocks. They explicitly reject rocks animating smaller with a spinning motion: **snap smaller, retaining orientation**. Currency must launch **up and away in a visible arc**, clearing the rock before attraction. This supersedes all older tilted/damped shrink and queued intermediate-stage animation requirements. The selected gameplay candidate makes collapse chunks strike nearby rocks, prepare intact neighbors and trigger bounded cascades through weakened neighbors. Heavy Smasher breaks launch a wider volley. This is an implemented candidate, not an owner endorsement. See [rock interactions and verification](review/ROCK_INTERACTIONS.md).
+
 ## November 6 latest — diagnose the underlying mining loop
 
 After trying the installed cube/physics/audio pass, the owner still finds the game unfun and explicitly says the problem is **not lack of player control over mining**. Bee Swarm Simulator is an example of an enjoyable experience, not a request to copy it. Keep the focus on useful consequences and the rhythm of mining/collection rather than another input scheme or progression system. The next candidate releases existing ore at actual rock-layer fractures, retaining a larger final collapse payout, and defaults new profiles to automatic full-storage launches. Existing saved manual preferences remain intact. These are implementation hypotheses, not owner acceptance or proof of fun. See [extraction loop and evidence](review/EXTRACTION_LOOP.md).

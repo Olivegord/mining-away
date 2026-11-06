@@ -398,12 +398,14 @@ specialCheck('reconnect preserves permanent types carriers loadout and typed in-
  specialEq(specialState(p).backpackCargo.Emerald,3);specialRuntime(p,6)
  specialEq(data(p).run.wallet.Ruby,ruby+Logistics.CAPACITY);specialEq(data(p).logistics.launches,1)
 end)
-specialCheck('a teammate finishing an unfinished special target grants ordinary yield and cancels its effect',function()
+specialCheck('different drone types cannot share special work; environmental collapse still cancels it safely',function()
  local pl,p=specialOwner();local special=specialBuy(pl,p,'Bubbler');local target=specialRock(p,special,'Crystal',20000,11)
  local job=specialWaitForJob(special)
  local miner=p.drones[1];local primary=makeResource(patches[1],target.position+Vector3.new(4,0,0),'Crystal',1000,10,3);primary.readyAt=now
  assert(assignOre(p,miner,primary));miner.pos=Feel.mineGoal(primary.position,miner.targetSlot,false,primary.fullSize);miner.goal=miner.pos
- local before=pendingOre(p);specialEq(secondaryMining(miner,primary,99999,6),target.id)
+ local before=pendingOre(p);specialEq(secondaryMining(miner,primary,99999,6),false)
+ assert(not target.paid and special.specialJob==job and special.target==target)
+ assert(hitResource(miner,target,99999,false,nil,miner.pos,'Fracture'))
  assert(target.paid and not special.specialJob and not special.target)
  specialEq(target.part:GetAttribute('EffectCancelledSerial'),job.serial);specialEq(target.part:GetAttribute('EffectType'),nil)
  specialEq(target.part:GetAttribute('EffectDoneAt'),0);specialEq(pendingOre(p)-before,11)

@@ -14,14 +14,16 @@ for frame=1,3600 do renderResource(record,2.1+frame/60) end
 assert(reads==before,'mature unchanged rocks repeatedly read replicated attributes')
 source:SetAttribute('HP',100);source:SetAttribute('Stage',2)
 local initial=record.view.Size.X
-renderResource(record,63);assert(not record.settled and not record.visual.scorched and record.view.Size.X==initial)
-renderResource(record,63.035);assert(record.view.Size.X<initial and record.view.Size.X>initial*.75,'fracture snapped instead of settling')
+local orientation=record.view.CFrame.LookVector
+renderResource(record,63);assert(record.settled and not record.visual.scorched and record.view.Size.X==initial*.5,'layer loss did not snap immediately')
+assert((record.view.CFrame.LookVector-orientation).Magnitude<1e-8,'mining rotated the rock')
+renderResource(record,63.035);assert(record.view.Size.X==initial*.5,'rock kept shrinking between damage events')
 for frame=1,30 do renderResource(record,63+frame/60) end
-assert(record.settled and record.visual.stage==2 and #cues==2,'skipped or repeated settling stages')
+assert(record.settled and record.visual.stage==2 and #cues==1,'one observed fracture replayed extra animations')
 source:SetAttribute('HP',0);source:SetAttribute('BreakSerial',1)
 for frame=1,60 do renderResource(record,64+frame/60) end
 assert(record.settled and record.visual.broken and record.view.Transparency==1)
-assert(cues[#cues]=='break' and #cues==4,'break must occur exactly once after final fracture')
+assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
-assert(reads==before and #cues==4)
-print('PASS production resource renderer: idle fast path, live HP invalidation, continuous shrink/break animation, no duplicate effects over 7200 stable frames')
+assert(reads==before and #cues==2)
+print('PASS production resource renderer: immediate size snaps, fixed rotation, idle fast path and no duplicate effects over 7200 stable frames')

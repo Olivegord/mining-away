@@ -31,16 +31,11 @@ function F.approachWork(position,goal,maxStep60,dt)
  local step=math.min(distance*F.alpha(.065,dt),math.max(0,maxStep60)*1.45*60*dt,distance)
  return position+delta/distance*step
 end
--- The original crystal silhouette remains; every tilted/shrinking stage rests
--- on the same bed. This is the Y row of CFrame.Angles' XYZ rotation matrix.
-function F.groundedRockFrame(position,size,ground,stage,seed)
- local ax=math.rad(math.sin(seed+stage*3.17)*40)*math.min(1,stage)
- local az=math.rad(math.sin(seed*1.33+stage*5.19)*40)*math.min(1,stage)
- local yaw=seed*.01
- local cx,sx,cy,sy,cz,sz=math.cos(ax),math.sin(ax),math.cos(yaw),math.sin(yaw),math.cos(az),math.sin(az)
- local half=(math.abs(cx*sz+sx*sy*cz)*size.X+math.abs(cx*cz-sx*sy*sz)*size.Y+math.abs(sx*cy)*size.Z)*.5
- local center=Vector3.new(position.X,ground+half-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(ax,yaw,az),ground+half*2-.06
+-- Cubes keep their original orientation for their entire lifetime. Mining
+-- snaps the size and grounded height; it never tilts, spins or eases the rock.
+function F.groundedRockFrame(position,size,ground,_stage,seed)
+ local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
+ return CFrame.new(center)*CFrame.Angles(0,seed*.01,0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -254,14 +249,6 @@ function F.stageDarkness(hp,maxHP,stage,count)
  -- and missing volume carry the damage, never a fully black replacement.
  return .16*progress^.8
 end
-function F.layerProgress(elapsed)
- -- Critically damped settling, sampled from elapsed time at any frame rate.
- if elapsed<=0 then return 0 end
- if elapsed>=.22 then return 1 end
- local t=elapsed/.035
- local endT=.22/.035
- return (1-(1+t)*math.exp(-t))/(1-(1+endT)*math.exp(-endT))
-end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
  -- A powered weight gains speed all the way down. It has no arrival brake:
@@ -320,24 +307,15 @@ function F.newStagePresentation(stage,broken,now,count)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
 function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
- local layered=count~=nil
  count=count or 3
  local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
- if target>p.knownStage and not p.knownBreak then
-  for stage=p.knownStage+1,target do
-   table.insert(p.queue,{stage=stage})
-  end
-  p.knownStage=target
+ if p.knownBreak then return nil end
+ if broken then
+  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={}
+  return 'break'
  end
- -- Keep an already-fractured source visible briefly so its final authoritative
- -- hit can resolve into the neighboring crystal before the source disappears.
- -- This is a cosmetic hold only; server rewards/slots retire immediately.
- if broken and not p.knownBreak then table.insert(p.queue,{broken=true,notBefore=now+.12});p.knownBreak=true end
- if #p.queue==0 or now<p.nextAt then return nil end
- if p.queue[1].broken and now<p.queue[1].notBefore then return nil end
- local event=table.remove(p.queue,1)
- if event.broken then p.broken=true;return 'break' end
- p.scorched=false;p.stage=event.stage;p.nextAt=now+(layered and .14 or .09)
+ if target<=p.knownStage then return nil end
+ p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
 end
 return F

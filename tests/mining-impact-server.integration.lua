@@ -66,7 +66,7 @@ check('ordinary and large layers retain mineral color and fracture without dupli
    elseif event=='stage' then crack+=1;assert(not visual.scorched)
    elseif event=='break' then broken+=1 end
   end
-  assert(scorch==0 and crack==count and broken==1)
+  assert(scorch==0 and crack==0 and broken==1,'a final break replayed fake intermediate mining stages')
   local late=Feel.newStagePresentation(count,false,0,count);assert(late.stage==count)
  end
 end)

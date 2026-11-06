@@ -2,6 +2,8 @@
 
 Read this before changing drone beams, charge effects, launch effects, particle aftermath or their sound/camera feedback. It consolidates the owner's critiques in the November 4, 2026 beam iteration. Read [OWNER_REQUIREMENTS.md](OWNER_REQUIREMENTS.md) first; new explicit owner instructions override this snapshot. Historical review documents describe experiments, including rejected ones, and must not silently override the final direction below.
 
+**November 6 override for rocks:** the owner rejects shrinking/spinning animations. Resource size and grounded height snap to the authoritative stage immediately, with a fixed upright orientation; skipped stages and final breaks do not replay synthetic shrink steps. Keep the existing spawn growth and original drone charge sequence. Currency starts above/outside the current rock footprint, launches up/out, and cannot home during its initial arc. See [rock interactions](review/ROCK_INTERACTIONS.md). Historical settling/tilting directions below are superseded.
+
 Implementation baseline: `b00e1d26f2c18a74644d5e6d7e04a5f94229a01a`. “Implemented” means a response was built and installed, not that the owner approved its visual quality. Numerical values below describe this revision; they are tuning choices, not independently requested requirements.
 
 Subsequent broad overhaul: see [VFX overhaul](review/VFX_OVERHAUL.md) for the November 4 pass across specialist choreography, role pressure waves, contact particles, beam flow and flight trails. It preserves the resolved regular flash/charge/release direction below. The review records changed budgets, exact saved verification and remaining native validation limits; it is not owner approval.

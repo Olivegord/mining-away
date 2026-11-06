@@ -1,6 +1,6 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.60,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38,
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.85,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38,
  AIR_DRAG=.9,GROUND_DRAG=14,RESTITUTION=.28}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
@@ -10,8 +10,16 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- local speed=4.8+(serial%5)*.45
- return math.cos(angle)*speed,7.5+index*.65,math.sin(angle)*speed
+ local speed=10.5+(serial%5)*.65
+ return math.cos(angle)*speed,15+index*.7,math.sin(angle)*speed
+end
+function O.launch(index,serial,sx,sy,sz)
+ local vx,vy,vz=O.scatter(index,serial)
+ local speed=math.sqrt(vx*vx+vz*vz)
+ -- Outside the whole rotated footprint, above the top. The initial outward
+ -- arc clears even a large carved boulder before homing is allowed to begin.
+ local radius=math.sqrt(sx*sx+sz*sz)*.5+.4
+ return vx/speed*radius,sy*.5+.35,vz/speed*radius,vx,vy,vz
 end
 function O.expired(spawnAt,now) return now>=spawnAt+O.LIFETIME end
 function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_SECONDS))/O.FADE_SECONDS,0,1) end

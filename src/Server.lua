@@ -99,6 +99,32 @@ local function updateSlots(r)
  local count=0;for _ in pairs(r.slots) do count=count+1 end
  if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
 end
+local function sameRockType(d,r)
+ -- A rock hosts one drone type at a time, even when a boulder has spare
+ -- slots. Releasing its last worker leaves it available to any type again.
+ local role=DroneRoles.canonical(d.role)
+ for id in pairs(r.slots) do
+  local worker=drones[id]
+  if not worker or worker.owner~=d.owner or DroneRoles.canonical(worker.role)~=role then return false end
+ end
+ -- Autonomous orbital/scrap drones also occupy their real current job.
+ -- Player-placed consumables have no actor reservation and remain tools.
+ for _,p in pairs(profiles) do
+  local ability=p.ability
+  if ability and ability.runId==data(p).run.id then
+   local function conflicts(id,target)
+    local worker=id and drones[id]
+    return target==r.id and worker and worker.hp>0 and (worker.owner~=d.owner or DroneRoles.canonical(worker.role)~=role)
+   end
+   if ability.charge and now<=ability.charge.expires and conflicts(ability.charge.actorId,ability.charge.targetId) then return false end
+   if ability.burn and ability.burn.remaining>0 and conflicts(ability.burn.actorId,ability.burn.targetId) then return false end
+   if ability.swarm and now<ability.swarm.expires then
+    for _,bot in ipairs(ability.swarm.bots) do if conflicts(ability.swarm.actorId,bot.targetId) then return false end end
+   end
+  end
+ end
+ return true
+end
 local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: boolean?): ()
  if d.specialJob and d.target and not d.target.paid then
   d.target.part:SetAttribute('EffectCancelledSerial',d.specialJob.serial);d.target.part:SetAttribute('EffectType',nil)
@@ -494,10 +520,8 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
  end
  for index,n in ipairs(OreDrops.partition(units,4-nodeDrops)) do
   pickupSerial+=1
-  local vx,vy,vz=OreDrops.scatter(index,pickupSerial)
-  -- Ore leaves the material being removed, then follows the same weighted
-  -- scatter, landing and owner-only collection as a final-break reward.
-  local position=extraction and r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.22,0) or Vector3.new(r.position.X,ground+.65,r.position.Z)
+  local ox,oy,oz,vx,vy,vz=OreDrops.launch(index,pickupSerial,r.part.Size.X,r.part.Size.Y,r.part.Size.Z)
+  local position=r.part.Position+Vector3.new(ox,oy,oz)
   local chip=r.part:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
@@ -578,6 +602,80 @@ local function pickupStep(dt)
  end
 end
 local hitResource: any
+local fracture={folder=folder(root,'RockFragments'),shots={},serial=0}
+function fracture:launch(d,r,origin,context,heavy)
+ if r.kind=='Geode' then return end
+ local depth=context and context.depth or 0
+ if depth>=RockCascade.MAX_DEPTH then return end
+ local chain=context and context.chain or {remaining=RockCascade.MAX_HITS,visited={[r.id]=true}}
+ if chain.remaining<=0 then return end
+ local active,owned=0,0
+ for _,shot in pairs(fracture.shots) do active+=1;if shot.owner==d.owner then owned+=1 end end
+ local room=math.min(heavy and 3 or 2,chain.remaining,RockCascade.MAX_SHOTS-active,RockCascade.MAX_OWNER_SHOTS-owned)
+ if room<=0 then return end
+ local p=profiles[d.owner];if not healthy(p) then return end
+ local candidates={}
+ for _,other in ipairs(r.field.resources) do
+  local distance=(other.part.Position-origin).Magnitude
+  if other~=r and not chain.visited[other.id] and not other.paid and other.hp>0 and other.part.Parent and now>=other.readyAt and distance>1 and distance<=RockCascade.RANGE then
+   local allowed=true
+   for id in pairs(other.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then allowed=false;break end end
+   if allowed and los(origin,other.part.Position,other.part,{r.part,droneFolder,p.player.Character}) then
+    table.insert(candidates,{r=other,distance=distance,brittle=RockCascade.brittle(other.hp,other.maxHP)})
+   end
+  end
+ end
+ table.sort(candidates,function(a,b)
+  if a.brittle~=b.brittle then return a.brittle end
+  return a.distance==b.distance and a.r.id<b.r.id or a.distance<b.distance
+ end)
+ for i=1,math.min(room,#candidates) do
+  local target=candidates[i].r
+  local velocity,duration=RockCascade.launch(origin,target.part.Position)
+  fracture.serial+=1;chain.remaining-=1;chain.visited[target.id]=true
+  local part=Instance.new('Part');part.Name='RockFragment';part.Size=Vector3.one*math.clamp(r.fullSize.X*.18,.65,1.25)
+  part.Color=r.field.color;part.Position=origin;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.Transparency=1
+  part:SetAttribute('RockFragment',true);part:SetAttribute('FragmentId',fracture.serial);part:SetAttribute('Owner',d.owner)
+  part:SetAttribute('Origin',origin);part:SetAttribute('LaunchVelocity',velocity);part:SetAttribute('StartedAt',now)
+  part:SetAttribute('ExpiresAt',now+RockCascade.LIFETIME);part:SetAttribute('ImpactAt',0)
+  part:SetAttribute('TargetId',target.id);part:SetAttribute('ChainDepth',depth+1);part.Parent=fracture.folder
+  fracture.shots[fracture.serial]={part=part,owner=d.owner,actor=d,life=d.life,runId=data(p).run.id,field=r.field,
+   from=origin,pos=origin,velocity=velocity,started=now,duration=duration,target=target,source=r.part,sourceHP=r.maxHP,
+   context={chain=chain,depth=depth+1,consumable=r.consumableWorked==true}}
+ end
+end
+function fracture:step()
+ -- Snapshot the worklist: a struck rock can add another bounded wave, which
+ -- starts on the next tick rather than recursively resolving in this one.
+ local ids={};for id in pairs(fracture.shots) do table.insert(ids,id) end;table.sort(ids)
+ for _,id in ipairs(ids) do
+  local shot=fracture.shots[id];local p=profiles[shot.owner];local d=shot.actor
+  local age=now-shot.started
+  local valid=healthy(p) and data(p).run.id==shot.runId and d.hp>0 and d.life==shot.life and playerCanMine(p,shot.field)
+  if not valid or age>=RockCascade.LIFETIME then shot.part:Destroy();fracture.shots[id]=nil
+  else
+   local position=RockCascade.position(shot.from,shot.velocity,age)
+   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+   params.FilterDescendantsInstances={fracture.folder,shot.source,droneFolder,p.player.Character}
+   local contact=workspace:Raycast(shot.pos,position-shot.pos,params)
+   local target=contact and resources[contact.Instance:GetAttribute('ResourceId')]
+   local point=contact and contact.Position
+   if not contact and not shot.target.paid and shot.target.part.Parent then
+    point=RockCascade.contact(shot.pos,position,shot.target.part.CFrame,shot.target.part.Size)
+    if point then target=shot.target end
+   end
+   if point then
+    local accepted=false
+    if target and target.field==shot.field and (target==shot.target or not shot.context.chain.visited[target.id]) then
+     shot.context.chain.visited[target.id]=true
+     accepted=hitResource(d,target,RockCascade.damage(shot.sourceHP,target.maxHP),false,nil,shot.pos,'Fracture',shot.context)
+    end
+    shot.part:SetAttribute('ImpactPosition',point);shot.part:SetAttribute('HitRock',accepted==true);shot.part:SetAttribute('ImpactAt',now)
+    Debris:AddItem(shot.part,.3);fracture.shots[id]=nil
+   else shot.pos=position end
+  end
+ end
+end
 local function secondaryMining(d: any,primary: any,amount: number,radius: number)
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
@@ -592,7 +690,7 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
   for id in pairs(other.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then sameOwner=false end end
   -- A teammate may help a fully occupied node; no foreign reservation is
   -- displaced, and the worker holding the node receives its ore.
-  if sameOwner and not other.slots[d.id] then
+  if sameOwner and sameRockType(d,other) and not other.slots[d.id] then
    other.slots[d.id]=1
    local accepted=hitResource(d,other,amount,true,radius)
    other.slots[d.id]=nil;updateSlots(other)
@@ -602,9 +700,10 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end
  return false
 end
-hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?)
+hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if contactKind~='Fracture' and contactKind~='Consumable' and not sameRockType(d,r) then return false end
  local recipient=d
  local job=d.specialJob
  local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and job and not job.impacted and job.targetId==r.id and now>=job.startedAt+job.duration*job.impact
@@ -622,7 +721,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not abilityOrigin and not DroneRoles.isMiner(d.role) and not special and not shell then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
-  local carrierImpact=d.deployedCarrier and contactKind=='Breaker'
+  local carrierImpact=d.deployedCarrier and (contactKind=='Breaker' or contactKind=='Fracture')
   if (not carrierImpact and (not hr or not nearMiningField(hr.Position,r.field))) or not abilityLineOfSight(p,abilityOrigin,r) then return false end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then return false end end
  elseif secondary then
@@ -633,13 +732,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
- if contactKind=='Consumable' then r.consumableWorked=true end
+ if contactKind=='Consumable' or (fractureContext and fractureContext.consumable) then r.consumableWorked=true end
  local baseAmount=amount
- local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
+ local discoverySpeed=contactKind=='Fracture' and 1 or discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
- if r.kind=='Geode' or r.kind=='Core' then amount=amount*(d.stats.geodeMultiplier or 1) end
+ if contactKind~='Fracture' and (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
  if special then
   amount=DroneCatalog.capDamage(d.role,r.maxHP,amount)
   -- Quarter-work subtraction can leave a floating-point residue on minerals
@@ -649,8 +748,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
+ local fragmentOrigin=r.part.Position+Vector3.new(0,r.part.Size.Y*.35+.4,0)
  local revealed=nil
  local broken=R.damage(r,amount)
+ if contactKind=='Fracture' then
+  r.part:SetAttribute('FractureHits',(r.part:GetAttribute('FractureHits') or 0)+1)
+  r.part:SetAttribute('FractureAt',now)
+ end
  -- Persistent cosmetic history is emitted only by accepted authoritative hits.
  -- Observers/late joiners reconstruct the same cavities without authorizing
  -- damage from local CSG geometry, bubbles or collision debris.
@@ -681,12 +785,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed)
  end
  r.part:SetAttribute('HP',actual)
+ r.part:SetAttribute('Brittle',not broken and RockCascade.brittle(r.hp,r.maxHP))
  if not broken and r.kind~='Geode' and r.stage>previous then award(recipient,r,false,true) end
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
  if broken then
-  r.part:SetAttribute('BreakSerial',1);r.removeAt=now+2
+  r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)
    revealed={makeResource(r.field,r.position,'Core',core.maxHP,r.ore*4,core.size)}
@@ -697,6 +802,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,special==true)
+   fracture:launch(recipient,r,fragmentOrigin,fractureContext,contactKind=='Breaker')
    -- Tools never manufacture more tools, including rocks later finished by a
    -- normal drone. The rock's ordinary ore payout remains unchanged.
    if not r.consumableWorked then discoveries:TrySpawn(p.player,r.field.part,Vector3.new(r.position.X,r.part:GetAttribute('GroundY') or r.position.Y,r.position.Z),r.field.id) end
@@ -765,7 +871,7 @@ local function chooseResource(d: any,field: any): ()
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id]) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
-   if used<r.limit and not foreign then
+   if used<r.limit and not foreign and sameRockType(d,r) then
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
@@ -1057,7 +1163,7 @@ end
 local function roleNodes(p,field,worker)
  local list={}
  for _,r in ipairs(field.resources) do
-  local eligible=not worker or not r.blockedUntil or now>=(r.blockedUntil[worker.id] or 0);local count=0
+  local eligible=not worker or ((not r.blockedUntil or now>=(r.blockedUntil[worker.id] or 0)) and sameRockType(worker,r));local count=0
   for id in pairs(r.slots) do count+=1;local worker=drones[id];if not worker or worker.owner~=p.player.UserId then eligible=false end end
   if r.part.Parent then table.insert(list,{id=r.id,hp=r.hp,maxHP=r.maxHP,kind=r.kind,x=r.position.X,y=r.position.Y,z=r.position.Z,readyAt=r.readyAt,paid=r.paid,eligible=eligible and count<r.limit}) end
  end
@@ -1471,7 +1577,7 @@ logistics=Logistics.new({C=C,R=R,W=World,root=root,origin=home,profiles=profiles
  end,
  canMine=playerCanMine,canDeploy=playerCanMine,isWorker=function(d) return DroneRoles.isWorker(d.role) end})
 local function assignOre(p: any,d: any,r: any): boolean
- if d.carrierId or not DroneRoles.isWorker(d.role) or d.target==r then return false end
+ if d.carrierId or not DroneRoles.isWorker(d.role) or d.target==r or not sameRockType(d,r) then return false end
  local occupied={};for id,slot in pairs(r.slots) do
   if not drones[id] or drones[id].owner~=p.player.UserId then return false end
   occupied[slot]=true
@@ -1498,7 +1604,7 @@ local function dispatchOreQueue(p: any)
     -- An explicit order may redirect automatic cutting/travel. Never cancel
     -- another manual order, a committed slam, or a specialist's physical job.
     local available=not d.target or (d.autoField and not d.manualTarget)
-    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) and available and d.target~=r and not d.breaker and not d.specialJob and not d.specialRecovery
+    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) and available and d.target~=r and sameRockType(d,r) and not d.breaker and not d.specialJob and not d.specialRecovery
      and (not r.blockedUntil or now>=(r.blockedUntil[d.id] or 0)) then
      local n=(d.pos-r.position).Magnitude+(d.target and 10000 or 0)
      if n<distance then best,distance=d,n end
@@ -1680,6 +1786,7 @@ local function abilityContext(p,fieldId,operator,deployment)
  end
  local function targetRecord(r)
   if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
+  if not deployment and actor and not sameRockType(actor,r) then return nil end
   if deployment then
    local offset=r.position-deployment.position;local radius=Consumables.ITEMS[deployment.kind].radius
    if offset.X*offset.X+offset.Z*offset.Z>radius*radius then return nil end
@@ -1901,6 +2008,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not DroneRoles.isWorker(d.role) then reject('Choose the miner or breaker',field,d);return end
   if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
   if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
+  if not sameRockType(d,r) then reject('This rock is already assigned to another drone type or crew',field,d,r);return end
   if d.target==r and d.field==field.id and r.slots[d.id] then commandReply(pl,payload,'accepted','Already assigned',field,d,r,r.slots[d.id]);return end
   local occupied={};for _,v in pairs(r.slots) do occupied[v]=true end
   local slot=1;while slot<=r.limit and occupied[slot] do slot=slot+1 end
@@ -2142,6 +2250,7 @@ RunService.Heartbeat:Connect(function(dt: number)
    end
   end
   pickupStep(C.Tick)
+  fracture:step()
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   for _,field in ipairs(patches) do turretStep(field);encounterStep(field) end
