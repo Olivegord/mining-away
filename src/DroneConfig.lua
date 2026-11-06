@@ -358,17 +358,10 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
  return model,root,emitter
 end
 
--- Optional discoveries reward active collection without interrupting autonomous mining.
+-- Equipment drops are rolled by the saved consumable rules, not timed buffs.
 DroneConfig.Discoveries = {
- Chance = .18,
- MinSpawnInterval = 22,
- PickupLifetime = 10,
- BoostDuration = 10,
+ PickupLifetime = 30,
  CollectDistance = 7,
- MinSpawnDistance = 14,
- MaxSpawnDistance = 65,
- YieldMultiplier = 2,
- SpeedMultiplier = 2,
 }
 
 -- Active mining plots: preserve crystal geometry while scaling durability by tier.

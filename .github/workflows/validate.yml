@@ -29,6 +29,8 @@ jobs:
         run: command -v zstd || sudo apt-get install -y zstd
       - name: Validate current economy, persistence and active capture
         run: python3 tools/test_shops.py "$RUNNER_TEMP/mining-away-luau"
+      - name: Validate stored consumables, saved deployment and placement input
+        run: python3 tools/test_consumables.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate gadgets, swarm steering and production server
         run: python3 tools/test_gadgets.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate committed mining and delayed observer snapshots

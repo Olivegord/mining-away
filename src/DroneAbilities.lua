@@ -56,10 +56,18 @@ function A.begin(state,kind,now,ctx)
  if not ctx.valid(ctx.fieldId) then return false,'Use this beside an unlocked, unguarded plot' end
  local list=targets(ctx,ctx.fieldId,kind)
  if #list==0 then return false,'No grown crystals are ready' end
+ local chosen=list[1]
+ if kind=='Orbital' and ctx.placement then
+  local nearest=math.huge
+  for _,r in ipairs(list) do
+   local dx,dz=r.x-ctx.placement.x,r.z-ctx.placement.z;local squared=dx*dx+dz*dz
+   if squared<nearest then nearest=squared;chosen=r end
+  end
+ end
  state.sequence+=1
- state.charge={kind=kind,fieldId=ctx.fieldId,targetId=list[1].id,target=point(list[1]),
+ state.charge={kind=kind,fieldId=ctx.fieldId,targetId=chosen.id,target=point(chosen),
   token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+A.CHARGE_SECONDS,expires=now+2.5}
- event(ctx,'charge',{ability=kind,target=list[1],expires=now+2.5,duration=A.CHARGE_SECONDS})
+ event(ctx,'charge',{ability=kind,target=chosen,expires=now+2.5,duration=A.CHARGE_SECONDS})
  return true,'Gadget charging'
 end
 function A.confirm(state,token,now,ctx)
@@ -116,7 +124,11 @@ function A.step(state,now,dt,ctx,swarmContext)
    state.burn=nil;event(ctx,'orbitalEnd')
   else
    local slice=math.min(dt,.1,burn.remaining)
-   local accepted,broken=ctx.hit(target.id,burn.dps*slice,'Orbital',{x=target.x,y=target.y+A.ORBITAL_ORIGIN_HEIGHT,z=target.z})
+   local damage=burn.dps*slice
+   -- A complete four-second burn must not strand a microscopic floating-point
+   -- remainder. Never increase a real remaining hit budget or skip resistance.
+   if target.hp>damage and target.hp-damage<=math.max(1,target.maxHP)*1e-10 then damage=target.hp end
+   local accepted,broken=ctx.hit(target.id,damage,'Orbital',{x=target.x,y=target.y+A.ORBITAL_ORIGIN_HEIGHT,z=target.z})
    if not accepted then
     if not burn.accepted then state.cooldowns.Orbital=now end
     state.burn=nil;event(ctx,'orbitalEnd')

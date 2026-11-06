@@ -1,5 +1,7 @@
 # Mining satisfaction
 
+November 5 follow-up: [progression, tycoon and chance research](PROGRESSION_AND_CONSUMABLES_RESEARCH.md) leads to collected, placeable Orbital Beacons and Scrap Capsules in separate backpack pockets. This replaces the old multiplier discovery rewards. The report separates source evidence, implementation choices, simulated drop pacing and outstanding playtest questions.
+
 Latest cloud candidate: [committed flight, outer-layer breaker/exposed-layer cutter mechanics and shell-to-core continuation](review/COMMITTED_MINING_FLIGHT.md). The report records current work-only estimates and cloud validation limits. Its current behavior supersedes historical fleet-freeze and identical-damage descriptions below; engine feel and fun remain unverified.
 
 October 31, 2026. The owner prioritizes a substantially more enjoyable mining loop and cites bouncing/merging-ball and rock-paper-scissors particle videos. This document distinguishes research findings from our design interpretation. It does not claim that these mechanics cause addiction or establish retention results.

@@ -22,7 +22,7 @@ check('schema-six migration preserves original identities traits material wallet
  }}
  p.schemaVersion=6;p.purchasedDrones=nil;p.logistics=nil;p.run.logistics=nil
  local migrated,err=Profile.migrate(p,p.userId);assert(migrated,err)
- eq(migrated.schemaVersion,7);eq(migrated.purchasedDrones,0);eq(#migrated.fleet,1)
+ eq(migrated.schemaVersion,Profile.SCHEMA);eq(migrated.purchasedDrones,0);eq(#migrated.fleet,1)
  eq(migrated.fleet[1].id,id);eq(migrated.fleet[1].base.maxStep60,speed)
  eq(migrated.run.cargo.Ruby,7);eq(migrated.run.wallet.Ruby,23);eq(migrated.run.pendingOffer.id,'saved-paid-offer')
  eq(migrated.run.pendingOffer.choices[3].targetDroneId,id);assert(Profile.validate(migrated,p.userId))

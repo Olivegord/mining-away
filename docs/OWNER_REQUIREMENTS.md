@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 5 latest — research progression and make discoveries usable equipment
+
+The owner asks for gameplay improvements grounded in research into progression, tycoon and chance-based games. Bee Swarm Simulator is an exemplar, not the only reference. They specifically suggest replacing simple multiplier pickups with better consumable rock drops, such as an orbital laser stored in a new backpack slot and placed deliberately in the world. Preserve the existing game, fleet, assets, logistics and server authority. See [research and implemented consumable loop](PROGRESSION_AND_CONSUMABLES_RESEARCH.md); its exact drop rates, pocket sizes and balance values are implementation proposals requiring playtesting.
+
 ## November 4 latest — physical mining and a cohesive small world
 
 The owner requests a substantial game-feel improvement: Bubbler visibly subtracts portions of rocks, Smasher leaves progressively larger/deeper dents, rocks never turn fully black, and shrinking has visible material-loss feedback. Improve spawning, pickup physics, gameplay readability, the grey ground and mismatched sky. Study Roblox game/UI examples and actively fix visible inconsistencies. Preserve the same canonical native document, authored assets, permanent progression and server authority. See [physical mining integration](review/PHYSICAL_MINING.md), [damage](review/PHYSICAL_ROCK_DAMAGE.md), [geometry recovery](review/CRYSTAL_GEOMETRY_RECOVERY.md), [world](review/PHYSICAL_WORLD.md) and [pickups/UI](review/PHYSICAL_PICKUPS_UI.md).

@@ -16,8 +16,8 @@ with tempfile.TemporaryDirectory(prefix='special-logistics-checks-') as director
     hud=(ROOT/'src/TacticalHUD.lua').read_text()
     activity=hud[hud.index('function HUD.activity('):hud.index('function HUD:update(')]
     fixtures={
-        'server': (ROOT/'tests/mock-roblox.lua').read_text()+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\n'+bundle()+'\n'+(ROOT/'tests/special-logistics.integration.lua').read_text(),
-        'preview': (ROOT/'tests/mock-roblox.lua').read_text()+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\nfunction runService:IsStudio() return true end\n'+bundle()+'\n'+(ROOT/'tests/special-logistics-preview.integration.lua').read_text(),
+        'server': (ROOT/'tests/mock-roblox.lua').read_text()+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\n'+bundle()+'\n;(function()\n'+(ROOT/'tests/special-logistics.integration.lua').read_text()+'\nend)()',
+        'preview': (ROOT/'tests/mock-roblox.lua').read_text()+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\nfunction runService:IsStudio() return true end\n'+bundle()+'\n;(function()\n'+(ROOT/'tests/special-logistics-preview.integration.lua').read_text()+'\nend)()',
         'fx': (ROOT/'tests/special-fx.setup.lua').read_text()+'\n'+module_bundle(('RockDamage','BeamVFX'))+'\nlocal DroneFX=(function()\n'+(ROOT/'src/DroneFX.lua').read_text()+'\nend)()\n'+(ROOT/'tests/special-fx.integration.lua').read_text(),
         'hardware': (ROOT/'tests/special-fx.setup.lua').read_text()+'\n'+module_bundle(('DroneConfig','SpecialDroneMotion'))+'\n'+(ROOT/'tests/special-drone-motion.integration.lua').read_text(),
         'activity': (ROOT/'tests/mock-roblox.lua').read_text()+'\nlocal HUD={}\n'+activity+'\n'+(ROOT/'tests/fleet-activity.integration.lua').read_text(),

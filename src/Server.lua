@@ -25,6 +25,7 @@ local swarmGrid: any=nil
 local patches: {any}={}
 local resources: {[string]: any}={}
 local logistics: any=nil
+local consumableService: any=nil
 local loading: {[number]: any}={}
 -- At most one replacement Player may wait per user. A reconnect cannot acquire
 -- another lease until the retiring local session is saved and released.
@@ -147,6 +148,7 @@ local function leaveDroneField(p: any,d: any)
 end
 local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?,keepCarriers: boolean?): ()
  p.oreQueue={};p.workField=nil
+ if consumableService then consumableService:clear(p) end
  if p.ability then DroneAbilities.cancel(p.ability);RoleEffects.ClearAbility(p.player.UserId) end
  local runId=data(p).run.id
  for _,field in ipairs(patches) do
@@ -421,6 +423,7 @@ for _,f in ipairs(scene.fields) do
  end
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
  table.insert(patches,field);restoreTurrets(field);seedField(field)
+ field.model:SetAttribute('AlwaysUnlocked',field.cfg.AlwaysUnlocked==true)
 end
 -- Visible depot counters, shared with edit-time and in-session repair tooling.
 local shopStations=ShopStands.mount(scene.map,home,scene.packStation)
@@ -428,7 +431,17 @@ local prices={};for _,field in ipairs(patches) do prices[field.cfg.Material or f
 local discoveries=DiscoveryService.new(root,RoleConfig.Discoveries,function(player)
  local p=profiles[player.UserId];if not healthy(p) then return nil end
  local hr=characterRoot(p);if not hr then return nil end
- return {root=hr,runId=data(p).run.id}
+ return {root=hr,runId=data(p).run.id,
+  roll=function(tier,roll,choice)
+   local kind=Consumables.onRock(data(p).consumables,tier,roll,choice)
+   p.dirty=true;p.publishDirty=true
+   return kind,kind and Consumables.ITEMS[kind]
+  end,
+  collect=function(kind)
+   if not healthy(p) or not Consumables.collect(data(p).consumables,kind) then return false end
+   p.dirty=true;p.publishDirty=true;return true
+  end,
+  clearPath=function(position,part) return los(position,hr.Position,hr.Parent,{part,droneFolder}) end}
 end)
 local pickupFolder=folder(root,'OrePickups')
 local pickups={}
@@ -601,6 +614,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
+ if contactKind=='Consumable' then r.consumableWorked=true end
  local baseAmount=amount
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
@@ -660,7 +674,14 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     local a=n*math.pi/2;local shard=Mining.resource(seed:NextInteger(50,70),'Shard',r.hardness)
     table.insert(revealed,makeResource(r.field,r.position+Vector3.new(math.cos(a)*4,0,math.sin(a)*4),'Shard',shard.maxHP,r.ore,shard.size))
    end
-  else award(recipient,r,special==true);discoveries:TrySpawn(p.player,r.field.part);table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn) end
+   for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
+  else
+   award(recipient,r,special==true)
+   -- Tools never manufacture more tools, including rocks later finished by a
+   -- normal drone. The rock's ordinary ore payout remains unchanged.
+   if not r.consumableWorked then discoveries:TrySpawn(p.player,r.field.part,Vector3.new(r.position.X,r.part:GetAttribute('GroundY') or r.position.Y,r.position.Z),r.field.id) end
+   table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn)
+  end
  end
  if not secondary and not abilityOrigin then
   local secondaryId
@@ -1598,24 +1619,31 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  return true
 end
-local function abilityContext(p,fieldId,operator)
+local function abilityContext(p,fieldId,operator,deployment)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)
   return healthy(p) and hr~=nil and field~=nil and not activeAssault(p) and playerCanMine(p,field) and nearMiningField(hr.Position,field)
  end
- local active=p.ability and (p.ability.burn or p.ability.charge or p.ability.swarm)
+ local state=deployment and deployment.state or p.ability
+ local active=state and (state.burn or state.charge or state.swarm)
  local actor=operator or (active and active.actorId and drones[active.actorId])
  if not actor and not (active and active.actorId) then
   for _,d in ipairs(p.drones) do if d.hp>0 and (DroneRoles.isWorker(d.role) or DroneRoles.ability(d.role)) then actor=d;break end end
  end
  local hr=characterRoot(p);local origin=actor and actor.pos or (hr and hr.Position or home)
+ if deployment then origin=deployment.position+Vector3.new(0,1,0) end
  local function unlocked(kind)
+  if deployment then return kind==deployment.kind end
   if Shops.abilityUnlocked(data(p),kind) then return true end
   for _,d in ipairs(p.drones) do if d.hp>0 and DroneRoles.ability(d.role)==kind then return true end end
   return false
  end
  local function targetRecord(r)
   if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
+  if deployment then
+   local offset=r.position-deployment.position;local radius=Consumables.ITEMS[deployment.kind].radius
+   if offset.X*offset.X+offset.Z*offset.Z>radius*radius then return nil end
+  end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
   -- Scars retain a larger shell and its original fracture orientation. Ability
   -- targeting must describe that current authoritative body, not the old
@@ -1623,7 +1651,8 @@ local function abilityContext(p,fieldId,operator)
   local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed))
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=r.position.X,y=top,z=r.position.Z}
  end
- return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},perks=Ca.abilityPerks(data(p)),unlocked=unlocked,
+ return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},
+  placement=deployment and {x=origin.X,y=origin.Y,z=origin.Z},perks=deployment and {scrapBots=2} or Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
   -- During a burn inspect only its fixed target. The normal ctx.hit path still
@@ -1650,13 +1679,32 @@ local function abilityContext(p,fieldId,operator)
   end,
   hit=function(id,damage,_kind,from)
    local resource=resources[id]
-   if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' then return false end
+   if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' or not targetRecord(resource) then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
-   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z))
+   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil)
+   if accepted and deployment and Consumables.accept(data(p).consumables) then p.dirty=true;p.publishDirty=true end
    return accepted,resource.paid==true
   end,
-  emit=function(event) RoleEffects.Ability(p.player.UserId,event,scene.droneTemplate) end}
+  emit=function(event) RoleEffects.Ability(deployment and (tostring(p.player.UserId)..':tool') or p.player.UserId,event,scene.droneTemplate) end}
 end
+consumableService=ConsumableService.new({data=data,healthy=healthy,saveHealthy=function(p) return store:healthy(p.session) end,
+ notice=notice,transact=transact,abilities=DroneAbilities,effects=RoleEffects,root=root,now=function() return now end,
+ context=function(p,record) return abilityContext(p,record.fieldId,nil,record) end,
+ placement=function(p,payload)
+  if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or not R.finite(payload.x) or not R.finite(payload.z)
+   or math.abs(payload.x)>100000 or math.abs(payload.z)>100000 then return nil,'Choose a position inside a mining field' end
+  local field=patches[payload.fieldId];local hr=characterRoot(p)
+  if not field or not hr or activeAssault(p) or not playerCanMine(p,field) or not nearMiningField(hr.Position,field) then return nil,'Use tools beside an unlocked, unguarded field' end
+  local localPoint=field.part.CFrame:PointToObjectSpace(Vector3.new(payload.x,field.center.Y,payload.z))
+  if math.abs(localPoint.X)>field.part.Size.X*.5 or math.abs(localPoint.Z)>field.part.Size.Z*.5 then return nil,'Place the tool inside the field' end
+  local ground=field.part.CFrame:PointToWorldSpace(Vector3.new(localPoint.X,field.part.Size.Y*.5,localPoint.Z))
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include
+  params.FilterDescendantsInstances={field.part,workspace.Terrain}
+  local surface=workspace:Raycast(ground+Vector3.new(0,40,0),Vector3.new(0,-80,0),params)
+  if surface then ground=surface.Position end
+  if (hr.Position-ground).Magnitude>60 or not los(hr.Position,ground+Vector3.new(0,1.5,0),field.part,{droneFolder,p.player.Character}) then return nil,'Move closer to a clear placement spot' end
+  return ground
+ end})
 local function finishAbility(p,token,context)
  local charge=p.ability.charge
  local ok,reason=DroneAbilities.confirm(p.ability,token,now,context)
@@ -1754,6 +1802,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   logistics:command(p,action,payload)
  elseif action=='MiningAbility' then
   miningAbility(p,payload)
+ elseif action=='PlaceConsumable' then
+  consumableService:command(p,payload)
  elseif action=='BuyUpgrade' then
   buyShopUpgrade(p,pl,payload)
  elseif action=='DevFillBag' then
@@ -2006,6 +2056,7 @@ local function removePlayer(pl)
  while p.busy and os.clock()<deadline do task.wait(.1) end
  local released=false
  if not p.busy then
+  consumableService:clear(p)
   p.session.data.run.entitlements={}
   for attempt=1,3 do
    if p.session.readOnly then local recovered,result=store:reconcile(p.session);if recovered then resolveAfter(p,result) end end
@@ -2032,6 +2083,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,p in pairs(profiles) do
    recallFromField(p)
    dispatchOreQueue(p)
+   consumableService:step(p,C.Tick)
    if p.ability and p.busy then DroneAbilities.pause(p.ability,C.Tick)
    elseif p.ability and healthy(p) and (p.ability.charge or p.ability.burn or p.ability.swarm) then
     local work=p.ability.burn or p.ability.swarm or p.ability.charge

@@ -120,6 +120,7 @@ local pendingDroneSources={}
 local templateRetryQueued=false
 local profile=nil
 local logisticsView=nil
+local consumableView=nil
 local U=Interface
 local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
@@ -567,7 +568,7 @@ openPrestige=function()
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Every permanent drone and base trait\nCarriers, flying backpack and loadouts\nUnlocked plots and free reprinting',12,palette.text)
+ label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Permanent drones, traits and stored tools\nCarriers, flying backpack and loadouts\nUnlocked plots and free reprinting',12,palette.text)
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
@@ -1118,6 +1119,10 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
+consumableView=ConsumableView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,resources=resourceIndex,command=command,
+ profile=function() return profile end,hidden=menusVisible,
+ blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
+ onSelect=function() logisticsView.selected=nil end})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function nearbyInteraction()
  local hr=ownerRoot();if not hr then return nil end
@@ -1184,7 +1189,7 @@ local function requestPlot(id)
  command:FireServer('Patch',id)
 end
 local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
- profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil end,
+ profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (consumableView and consumableView:isSelecting()) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
@@ -1216,6 +1221,7 @@ end
 local mouse=player:GetMouse()
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
+ if consumableView and consumableView:click(position,true) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -1223,10 +1229,17 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if consumableView and consumableView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
- if input.UserInputType==Enum.UserInputType.MouseButton1 then if not tacticalHUD:blocksPoint(UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()) then assignField(mouse.Target) end;return end
+ if input.UserInputType==Enum.UserInputType.MouseButton1 then
+  local point=UIS:GetMouseLocation()
+  if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
+   if not (consumableView and consumableView:click(point,false)) then assignField(mouse.Target) end
+  end
+  return
+ end
  local key=input.KeyCode
  if key==Enum.KeyCode.O and not modal.Visible then logisticsView:toggle();return end
  if menusVisible() and not modal.Visible then return end
@@ -1384,6 +1397,7 @@ connect(gui.Destroying,function()
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
+ if consumableView then consumableView:destroy() end
  tacticalHUD:destroy()
  crystalAudio:destroy()
  soundscape:destroy()

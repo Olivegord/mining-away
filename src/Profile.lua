@@ -1,7 +1,8 @@
 local Shops=require('./Shops')
 local DroneCatalog=require('./DroneCatalog')
+local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=7,CONTENT=1}
+local P={SCHEMA=8,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -103,10 +104,11 @@ end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,nextDroneSerial=2,seed=seed,fleet={drone(uid,1,'Blue',seed)},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership()}
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,nextDroneSerial=2,seed=seed,fleet={drone(uid,1,'Blue',seed)},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
+ local toolsOK,toolsError=Consumables.validate(p.consumables);if not toolsOK then return false,toolsError end
  if not integer(p.prestiges) or not integer(p.purchasedDrones) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
  if not denseArray(p.fleet) or #p.fleet~=p.prestiges+1+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
@@ -121,6 +123,7 @@ function P.validate(p,uid)
  for key,value in pairs(p.clearedFields) do if not guardedFields[key] or value~=true then return false,'Invalid permanent plot unlock' end end
  local r=p.run
  if type(r)~='table' or not integer(r.index) or r.index~=p.prestiges+1 or r.id~=tostring(uid)..':run:'..r.index then return false,'Invalid current run' end
+ if p.consumables.pending and p.consumables.pending.runId~=r.id then return false,'Stale consumable reservation' end
  local logisticsOK,logisticsError=validateLogistics(p,ids);if not logisticsOK then return false,logisticsError end
  if type(r.abilityCooldowns)~='table' then return false,'Missing gadget cooldowns' end
  for key,value in pairs(r.abilityCooldowns) do if (key~='Orbital' and key~='Scrap') or not finite(value) or value<0 or value>=1e14 then return false,'Invalid gadget cooldown' end end
@@ -293,7 +296,14 @@ function P.migrate(raw,uid,seed)
   if p.run.logistics==nil then p.run.logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}} end
   p.schemaVersion=7
  end
+ if p.schemaVersion==7 then
+  if p.consumables==nil then p.consumables=Consumables.fresh() end
+  p.schemaVersion=8
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
+ -- An acknowledged save reserves the charge before any world damage. If the
+ -- server went away before its first accepted contact, return the unused tool.
+ Consumables.refund(p.consumables)
  return p
 end
 function P.receipt(p,operation,tx)
@@ -449,6 +459,7 @@ function P.prestige(p,tx,expectedRun,context)
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
  local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=drone(p.userId,serial,P.nextType(p),p.seed,p.prestiges+2)
+ Consumables.refund(p.consumables)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)
  local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,fleetCount=#p.fleet,prestiges=p.prestiges}
  P.record(p,'Prestige',tx,result);return true,result
