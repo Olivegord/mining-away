@@ -135,6 +135,19 @@ function U.icon(parent,kind,pos,size,color)
   shape(.45,.27,.10,.46,C.ink,.1);shape(.29,.45,.42,.10,C.ink,.1)
  elseif kind=='startup' then
   shape(.14,.14,.72,.72,tint,.9,nil,true);shape(.44,.28,.12,.30,C.ink,.1);shape(.44,.48,.27,.10,C.ink,.1,25)
+ elseif kind=='laser' or kind=='relay' then
+  shape(.16,.16,.31,.31,tint,.12,nil,true)
+  shape(.40,.42,.47,.12,tint,.12,45,true)
+  if kind=='relay' then shape(.44,.38,.39,.10,tint,.12,-16,true) end
+ elseif kind=='hammer' then
+  shape(.37,.38,.16,.48,tint,.12,30,true)
+  shape(.24,.18,.57,.24,tint,.12,30,true)
+ elseif kind=='seed' then
+  shape(.22,.22,.32,.48,tint,.4,-34,true);shape(.48,.17,.29,.44,tint,.4,35,true)
+  shape(.45,.48,.10,.34,C.ink,.15,12)
+ elseif kind=='swarm' then
+  shape(.31,.12,.38,.31,tint,.2,nil,true)
+  shape(.10,.51,.34,.31,tint,.2,nil,true);shape(.56,.51,.34,.31,tint,.2,nil,true)
  elseif kind=='flight' then
   shape(.22,.39,.56,.20,tint,.15,nil,true);shape(.34,.20,.15,.6,C.ink,.1,42);shape(.56,.27,.15,.54,C.ink,.1,-42)
  else

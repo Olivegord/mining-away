@@ -148,7 +148,7 @@ local function button(parent,pos,size,text,callback,color)
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
 local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop
-local activeShop,shopInfo='Quartz',nil
+local activeShop='Quartz'
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 U.icon(hud,'crystal',UDim2.fromOffset(9,10),UDim2.fromOffset(34,34),Color3.fromRGB(255,208,70))
 local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'Quartz 0',18,palette.text,true);creditsLabel.Name='Credits'
@@ -426,15 +426,15 @@ openPack=function()
  end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18
  enableAction(buy,allowed and affordable)
 end
-openShop=function(key,info)
+openShop=function(key)
  if not profile or not profile.run.wallet then return end
- activeShop=Shops.COLORS[key or activeShop] and (key or activeShop) or 'Quartz';shopInfo=info
+ activeShop=Shops.COLORS[key or activeShop] and (key or activeShop) or 'Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop',activeShop..' shop',allowed and 'Pick an upgrade. Info explains the full effect.' or reason,'crystal')
- ShopView.render(U,body,{profile=profile,shop=activeShop,width=l.bodyWidth-4,info=shopInfo,canBuy=allowed,
-  onShop=function(nextShop) openShop(nextShop) end,onInfo=function(id) openShop(activeShop,id) end,
+ local l=menu('shop',activeShop..' shop',allowed and (comma(Shops.balance(profile,activeShop))..' '..activeShop..' · Run upgrades') or reason,'crystal')
+ ShopView.render(U,body,{profile=profile,shop=activeShop,width=l.bodyWidth-4,canBuy=allowed,
+  onShop=function(nextShop) openShop(nextShop) end,
   onBuy=function(entry,level)
-   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=entry.id,level=level}) then openShop(activeShop,shopInfo) end
+   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=entry.id,level=level}) then openShop(activeShop) end
   end})
 end
 local function statTile(parent,x,y,width,title,value,color)
@@ -587,7 +587,7 @@ local function refreshModal()
  local savedScroll=body.CanvasPosition;local mode=modalMode
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
- elseif mode=='shop' then openShop(activeShop,shopInfo)
+ elseif mode=='shop' then openShop(activeShop)
  elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
