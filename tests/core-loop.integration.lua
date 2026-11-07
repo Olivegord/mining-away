@@ -31,10 +31,13 @@ local function mine()
 end
 local function sell() move(scene.converter.Position);input('Sell') end
 local firstId,firstBase,baseTime,improvedTime
-check('one miner zero money normal bag and no free automation or transport',function()
+check('one miner with the correct starter wallet, normal bag and no free automation or transport',function()
  assert(#p.drones==1 and #data(p).fleet==1 and not p.testFleet)
  assert(Ca.capacity(data(p))==40 and p.drones[1].stats.plotAuto==0)
- assert(data(p).run.wallet.Quartz==0 and not data(p).logistics.backpack and #data(p).logistics.carriers==0)
+ assert(data(p).run.wallet.Quartz==(preview and 100 or 0))
+ assert(data(p).run.saleEarnings==0 and not data(p).logistics.backpack and #data(p).logistics.carriers==0)
+ -- Continue the earned-economy scenarios from the live starting balance.
+ data(p).run.wallet.Quartz=0;data(p).run.credits=0
  firstId=p.drones[1].id;firstBase=Pro.clone(data(p).fleet[1].base)
  baseTime=mine();mine();mine();mine()
  assert(Pro.cargoUnits(data(p))==40 and data(p).run.wallet.Quartz==0)

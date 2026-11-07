@@ -34,7 +34,8 @@ local now=workspace:GetServerTimeNow()
 local elapsed,snapshotElapsed,autosaveElapsed=0,0,0
 local seed=Random.new()
 local instanceId=(game.JobId~='' and game.JobId or Http:GenerateGUID(false))
-local preview=RunService:IsStudio() or game.GameId==0
+local inStudio=RunService:IsStudio()
+local preview=inStudio or game.GameId==0
 -- Runtime-only test perks: never add cards, upgrades or fleet ownership to a save.
 local testPerks={scope='Fleet',effects={plotAuto=1,capacity=C.Capacity/Ca.BASE_CAPACITY-1}}
 local function previewPerks(p) return p and p.testFleet and testPerks or nil end
@@ -43,7 +44,11 @@ if preview then adapter=Persistence.previewAdapter('MiningAwayPreview:'..instanc
 else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataStore('MiningAwayProfiles_v2')) end
 local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
- newProfile=function(uid) return Pro.new(uid,seed:NextInteger(1,2147483000)) end,
+ newProfile=function(uid)
+  local profile=Pro.new(uid,seed:NextInteger(1,2147483000))
+  if inStudio then profile.run.wallet.Quartz=100;profile.run.credits=100 end
+  return profile
+ end,
  migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
 })
 root:SetAttribute('PersistenceMode',preview and 'PREVIEW • isolated temporary profiles' or 'DataStore • session-locked')

@@ -9,7 +9,7 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `30052902d7ecf1b7b738da32f7e7ade99c136a9a9d7c6f32e259d1a5a25949e2` | Hash of the integrated pack delivery and shop build. |
+| Native-file SHA-256 | `d388ff671c44e244a2f7f1c494e06a6184ec1a55e9299caba2191757c8b156c7` | Hash of the integrated pack delivery and shop build. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -55,7 +55,7 @@ Revision `88ba15d` connects the ordinary one-drone start to immediate selling, v
 - Mining power costs 20/40/80/160 Quartz and adds 50% base damage per level within the existing run cap.
 - A permanent ordinary Miner starts at 60 Quartz and scales by 1.8 with owned Miners. Purchased drone IDs survive prestige.
 - Prestige adds the existing earned drone and +25% permanent base mining power per prestige, clears run money/sales/modifiers, and retains permanent ownership.
-- Studio uses one drone, 40 capacity and zero starting money. Preview crews are explicit developer controls.
+- New Studio Play profiles start with one drone, 40 capacity and 100 Quartz for pack testing. Production profiles start at zero. Preview crews are explicit developer controls.
 - Compact purchase/prestige guidance and the Buy drones action connect the UI. Two observed HUD overlaps were corrected.
 - Stored Orbital/Scrap consumables, physical rock collapse interactions, snap-size cubic rocks, outward pickup arcs and one-type-per-rock behavior remain integrated.
 
