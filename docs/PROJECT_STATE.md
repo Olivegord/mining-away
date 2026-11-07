@@ -9,8 +9,8 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `afbedd3ca78c35719d0a69a1402d5b010f6a34074d4a1f627c9248129afd8987` | Hash of the November 6 gameplay build, unchanged by the documentation/sharing pass. |
-| Installed gameplay revision | `88ba15dfd928f880ee8bddefa54e153cfff20705` | Mine/sell/upgrade/prestige implementation. Later handoff/tooling commits need not change game Sources. |
+| Native-file SHA-256 | `0b79506bbd7f5e8cc9b259d0630757e6e0bea84f93d50e543eb16b0a63ad7ebd` | Hash of the native file after the Pack Shop Source refresh. |
+| Installed gameplay revision | Pack Shop refresh commit | Source-only refresh over gameplay revision `88ba15dfd928f880ee8bddefa54e153cfff20705`. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -48,6 +48,10 @@ Revision `88ba15d` connects the ordinary one-drone start to immediate selling, v
 - Stored Orbital/Scrap consumables, physical rock collapse interactions, snap-size cubic rocks, outward pickup arcs and one-type-per-rock behavior remain integrated.
 
 Server owns damage, rewards, persistent state, cards, purchases and prestige. Clients render replicated intent. Preserve fail-safe persistence; a load failure must not overwrite a valid profile with defaults. See [core-loop report](review/CORE_LOOP.md), [consumables](review/CONSUMABLE_GAMEPLAY.md), [rock interactions](review/ROCK_INTERACTIONS.md), and [architecture](game/architecture.md).
+
+## Pack Shop
+
+The depot pack counter now has its own Pack Shop sign and prompt. The compact shop screen shows the Quartz balance and a single purchase button with the price. A purchased pack still opens three saved cards and the player picks one. Mineral shops continue to sell their level upgrades. The native refresh checked that all non-Source data and unrelated scripts matched the prior file. The Pack Shop still needs a Studio playtest.
 
 ## What was actually tested
 
