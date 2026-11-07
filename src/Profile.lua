@@ -325,18 +325,18 @@ function P.buyDrone(p,kind,tx,expectedRun,context)
   return true,replay
  end
  if expectedRun~=p.run.id then return false,'Stale run' end
- if type(kind)~='string' or not specialTypes[kind] then return false,'Unknown special drone' end
+ if type(kind)~='string' or (kind~='Laser' and not specialTypes[kind]) then return false,'Unknown drone' end
  context=context or {}
  if not context.atDepot or context.activeEncounter then return false,'Visit the depot outside combat' end
- local definition=DroneCatalog.Types[kind]
- if not definition or not integer(definition.Price) or definition.Price<1 then return false,'Drone is unavailable' end
- if p.run.wallet.Quartz<definition.Price then return false,'Need '..definition.Price..' Quartz' end
+ local price=DroneCatalog.price(kind,p.fleet)
+ if not integer(price) or price<1 then return false,'Drone is unavailable' end
+ if p.run.wallet.Quartz<price then return false,'Need '..price..' Quartz' end
  if not integer(p.nextDroneSerial+1) or not integer(p.purchasedDrones+1) then return false,'Permanent serial limit exceeded' end
  local serial=p.nextDroneSerial
- local awarded=specialDrone(p.userId,serial,kind,p.seed)
- p.run.wallet.Quartz=p.run.wallet.Quartz-definition.Price;p.run.credits=p.run.wallet.Quartz
+ local awarded=kind=='Laser' and drone(p.userId,serial,'Blue',p.seed,1) or specialDrone(p.userId,serial,kind,p.seed)
+ p.run.wallet.Quartz=p.run.wallet.Quartz-price;p.run.credits=p.run.wallet.Quartz
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.purchasedDrones=p.purchasedDrones+1
- local result={droneId=awarded.id,droneType=kind,role=kind,price=definition.Price,currency='Quartz',fleetCount=#p.fleet,runId=p.run.id}
+ local result={droneId=awarded.id,droneType=kind,role=awarded.role,price=price,currency='Quartz',fleetCount=#p.fleet,runId=p.run.id}
  P.record(p,'BuyDrone',tx,result);return true,result
 end
 function P.cargoUnits(p)
@@ -425,16 +425,21 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
 function P.sell(p,prices,tx,expectedRun)
- local replay=P.receipt(p,'Sell',tx);if replay then return true,replay end
+ local replay=P.receipt(p,'Sell',tx);if replay then
+  if replay.runId~=expectedRun then return false,'Transaction ID already used' end
+  return true,replay
+ end
  if expectedRun~=p.run.id then return false,'Stale run' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
+ local units=P.cargoUnits(p);if units==0 then return false,'Backpack is empty' end
+ local manifest=clone(p.run.cargo)
  local amount=0
  for material,n in pairs(p.run.cargo) do local value=prices[material];if not finite(value) or value<0 then return false,'Unknown material value' end;amount=amount+n*value end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
  local deposited,depositError=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,depositError end
- p.run.cargo={};p.run.credits=p.run.credits+amount;p.run.saleEarnings=p.run.saleEarnings+amount
- local result={credits=amount,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
+ p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount
+ local result={credits=amount,earnings=amount,units=units,cargo=manifest,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
 local milestones={{earnings=160,field='Quartz',wins=0},{earnings=400,field='Quartz',wins=0},{earnings=2000,field='Cobalt',wins=1},{earnings=5000,field='Cobalt',wins=1},{earnings=11000,field='Violet',wins=1},{earnings=22000,field='Violet',wins=1},{earnings=42000,field='Emerald',wins=1}}
 P.MILESTONES=milestones
@@ -446,8 +451,8 @@ function P.nextType(p) return ({'Red','Green','Blue'})[(p.prestiges%3)+1] end
 function P.prestigePreview(p)
  local m=P.milestone(p);local wins=p.clearedFields[m.field] and 1 or 0
  local eligible=p.run.saleEarnings>=m.earnings and wins>=m.wins and p.run.pendingOffer==nil
- local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Earn more cumulative launch credits' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
- return {eligible=eligible,reason=reason,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed,p.prestiges+2).role,cards=#p.run.cards,runId=p.run.id}
+ local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Sell more ore this run' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
+ return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed,p.prestiges+2).role,cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)

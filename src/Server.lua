@@ -36,7 +36,8 @@ local seed=Random.new()
 local instanceId=(game.JobId~='' and game.JobId or Http:GenerateGUID(false))
 local preview=RunService:IsStudio() or game.GameId==0
 -- Runtime-only test perks: never add cards, upgrades or fleet ownership to a save.
-local testPerks=preview and {scope='Fleet',effects={plotAuto=1,capacity=C.Capacity/Ca.BASE_CAPACITY-1}} or nil
+local testPerks={scope='Fleet',effects={plotAuto=1,capacity=C.Capacity/Ca.BASE_CAPACITY-1}}
+local function previewPerks(p) return p and p.testFleet and testPerks or nil end
 local adapter
 if preview then adapter=Persistence.previewAdapter('MiningAwayPreview:'..instanceId)
 else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataStore('MiningAwayProfiles_v2')) end
@@ -56,7 +57,7 @@ local function publish(p)
  if not p.player.Parent then return end
  local copy={}
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
- copy.capacity=Ca.capacity(copy,testPerks);copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
+ copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
@@ -257,7 +258,7 @@ local function randomTestFleet(p: any)
  return includePurchasedSpecials(p,fleet)
 end
 local function spawnDrone(p,owned,slot)
- local stats=Ca.stats(data(p),owned,testPerks)
+ local stats=Ca.stats(data(p),owned,previewPerks(p))
  local roleName=owned.role or owned.type
  local role=RoleConfig.StudioRoles[roleName]
  local flightHeight=owned.flightHeight or (role and role.height) or Feel.FollowHeight
@@ -282,7 +283,7 @@ local function rebuildFleet(p)
 end
 local function refreshStats(p)
  for _,d in ipairs(p.drones) do
-  local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned,testPerks)
+  local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned,previewPerks(p))
   if d.hp>0 then d.hp=math.min(stats.maxHealth,math.max(1,d.hp+math.max(0,stats.maxHealth-old))) end
   d.stats=stats
  end
@@ -561,7 +562,7 @@ local function pickupStep(dt)
    end
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
-   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),testPerks) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
+   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p)) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
    if canCollect then
     if now>=(drop.queryAt or 0) then drop.clearPath=los(from,target,hr.Parent,{pickupFolder,droneFolder});drop.queryAt=now+.15 end
     canCollect=drop.clearPath==true
@@ -575,7 +576,7 @@ local function pickupStep(dt)
     drop.part:SetAttribute('GroundImpactSerial',drop.groundSerial)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,hr.Parent,{pickupFolder,droneFolder}) then
-    local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p),testPerks))
+    local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p),previewPerks(p)))
     if accepted>0 then
      drop.units-=accepted;p.dirty=true;p.publishDirty=true
      p.collectSerial=(p.collectSerial or 0)+1
@@ -1560,7 +1561,7 @@ local function transact(p: any,id: any,mutate: any,after: any,outcome: any)
 end
 local logisticsTerrain=MapLayout.plan(C.Fields,{home.X,home.Y,home.Z})
 logistics=Logistics.new({C=C,R=R,W=World,root=root,origin=home,profiles=profiles,drones=drones,patches=patches,
- data=data,Pro=Pro,Profile=Pro,Shops=Shops,capacityOf=function(profile) return Ca.capacity(profile,testPerks) end,healthy=healthy,characterRoot=characterRoot,inHome=atHome,
+ data=data,Pro=Pro,Profile=Pro,Shops=Shops,capacityOf=function(profile) return Ca.capacity(profile,previewPerks(profiles[profile.userId])) end,healthy=healthy,characterRoot=characterRoot,inHome=atHome,
  notice=notice,updateProfile=publish,getClock=function() return now end,transact=transact,
  atDepotStation=function(p) return atStation(p,scene.converter or scene.packStation,18) end,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
@@ -1668,7 +1669,17 @@ local function serviceDeliveries(p: any)
  end
 end
 local function sellBackpack(p: any)
- logistics:command(p,'Deposit')
+ if not atStation(p,scene.converter or scene.packStation,18) or activeAssault(p) then notice(p,'Return to SELL ORE to sell your backpack.');return end
+ if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
+ local tx,runId=Http:GenerateGUID(false),data(p).run.id
+ transact(p,'sell:'..tx,function(copy)
+  local ok,result=Pro.sell(copy,prices,tx,runId)
+  if ok then return result end;return nil,result
+ end,function(result)
+  local amounts={}
+  for _,key in ipairs(Shops.ORDER) do local n=result.cargo[key];if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end end
+  notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', '));p.publishDirty=true
+ end)
 end
 local function validPayload(payload)
  return type(payload)=='table' and type(payload.txId)=='string' and #payload.txId>=1 and #payload.txId<=100 and type(payload.runId)=='string' and #payload.runId<=100
@@ -1735,7 +1746,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end
  transact(p,'prestige:'..payload.txId,applyPrestige,function()
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
-  p.oreQueue={};RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);notice(p,'Prestige complete. One new permanent drone; a fresh run.')
+  p.oreQueue={};p.testFleet=nil;RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);notice(p,'Prestige complete · +1 permanent drone and +25% base mining power.')
  end)
 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
@@ -1928,7 +1939,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
  if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end
  if action=='BuyDrone' then
   local kind=type(payload)=='table' and payload.droneType or payload
-  if type(kind)~='string' or not DroneCatalog.Types[kind] or kind=='Laser' then return end
+  if type(kind)~='string' or not DroneCatalog.Types[kind] then return end
   if not atHome(p) or activeAssault(p) then notice(p,'Visit the depot to buy a permanent miner.');return end
   if type(payload)=='table' and (not validPayload(payload) or payload.runId~=data(p).run.id) then return end
   local txId=type(payload)=='table' and payload.txId or Http:GenerateGUID(false)
@@ -1943,7 +1954,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
     if p.testFleet then table.insert(p.testFleet,Pro.clone(owned)) end
     spawnDrone(p,owned,#p.drones+1)
    end
-   logistics:refresh(p);notice(p,kind..' added to your permanent fleet.');p.publishDirty=true
+   logistics:refresh(p);notice(p,DroneCatalog.Types[kind].Name..' added to your permanent fleet.');p.publishDirty=true
   end)
  elseif action=='BuyCarrier' or action=='BuyBackpack' or action=='LoadCarrier' or action=='CarrierPatch' or action=='RecallCarrier' or action=='Deposit' or action=='LaunchStorage' or action=='AutoLaunch' then
   logistics:command(p,action,payload)
@@ -1957,7 +1968,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not RunService:IsStudio() then return end
   local field=p.workField and patches[p.workField] or patches[1]
   local material=field.cfg.Material or field.cfg.Key or 'Quartz'
-  local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p),testPerks)-Pro.cargoUnits(data(p))),Ca.capacity(data(p),testPerks))
+  local added=Pro.addCargo(data(p),material,math.max(0,Ca.capacity(data(p),previewPerks(p))-Pro.cargoUnits(data(p))),Ca.capacity(data(p),previewPerks(p)))
   if added>0 then p.dirty=true;p.publishDirty=true end
  elseif action=='DevAddDrone' then
   if not RunService:IsStudio() or type(payload)~='table' or type(payload.role)~='string' then return end
@@ -1971,7 +1982,11 @@ local function commandPlayer(pl: any,action: any,payload: any)
   d.pos=Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0)
   d.goal=d.pos;d.model:PivotTo(CFrame.new(d.pos));snapshotDrone(d)
   pl:SetAttribute('MA_TestLoadoutLabel',tostring(#p.testFleet)..' preview drones')
-  p.publishDirty=true
+  refreshStats(p);p.publishDirty=true
+ elseif action=='NormalLoadout' then
+  if not preview then return end
+  leaveField(p);RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=nil;rebuildFleet(p);logistics:refresh(p)
+  notice(p,'Using your permanent fleet and earned upgrades.');p.publishDirty=true
  elseif action=='TestLoadout' or action=='RoleLoadout' then
   if not preview or now<(p.nextTestLoadout or 0) then return end
   p.nextTestLoadout=now+RoleConfig.Settings.RandomizeCooldown;pl:SetAttribute('MA_TestReadyAt',p.nextTestLoadout)
@@ -2181,14 +2196,6 @@ addPlayer=function(pl)
  profiles[pl.UserId]=p
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
- if preview then
-  p.testFleet=roleTestFleet(p,true)
-  local equipment=data(p).logistics;equipment.backpack=true
-  if #equipment.carriers==0 then
-   table.insert(equipment.carriers,{id=tostring(pl.UserId)..':carrier:'..equipment.nextCarrier,droneIds={}})
-   equipment.nextCarrier+=1
-  end
- end
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end

@@ -90,7 +90,7 @@ function HUD.styleWorldLabel(gui: BillboardGui)
  gui.AlwaysOnTop=false; gui.LightInfluence=0; gui.Adornee=anchor; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
  gui.StudsOffset=Vector3.zero; gui.ExtentsOffset=Vector3.zero
  gui.StudsOffsetWorldSpace=Vector3.new(0,anchor.Size.Y*.5+3,0)
- local names={PackStation='UPGRADE PACKS',PrestigeStation='FLEET UPLINK',Printer='DRONE PRINTER',Converter='SELL ORE'}
+ local names={PackStation='UPGRADE PACKS',PrestigeStation='PRESTIGE',Printer='DRONE PRINTER',Converter='SELL ORE'}
  for _,label in gui:GetChildren() do
   if not label:IsA('TextLabel') then continue end
   if field then label.Text=tostring(field)..'  '..string.upper(anchor.Parent.Name)
@@ -240,7 +240,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local status
  local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
  if fighting then status='Fleet fighting'
- elseif full then status=storageReady and 'Storage ready · launch at home' or 'Bag full · return home'
+ elseif full then status='Bag full · return to SELL ORE'
  elseif working>0 then status=string.format('%d / %d miners assigned',working,activity.miners)
  elseif delivering>0 then status=string.format('%d hauling · %d miners ready',delivering,activity.miners)
  elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
@@ -254,7 +254,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local character=Players.LocalPlayer.Character;local root=character and character:FindFirstChild('HumanoidRootPart')
  local converter=workspace:FindFirstChild('Converter')
  local atDepot=root and converter and converter:IsA('BasePart') and (root.Position-converter.Position).Magnitude<18
- local canUnload=(backpackUnits>0 or storageReady) and atDepot and not fighting
+ local canUnload=backpackUnits>0 and atDepot and not fighting
  local showRecall=working>0 or delivering>0
  local actions=(showRecall and 1 or 0)+(fighting and 1 or 0)+(canUnload and 1 or 0)
  local bw=touch and 90 or 100
@@ -281,17 +281,17 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    end
   end
  end
- r.test.Visible=Players.LocalPlayer:GetAttribute('MA_TestingEnabled')==true and not hidden
+ r.test.Visible=false -- Preview loadouts are available inside Fleet, away from the normal loop.
  r.test.Size=UDim2.fromOffset(math.min(208,w-24),32);r.test.Position=UDim2.fromOffset(w-math.min(208,w-24)-12,56)
  r.test.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  r.recall.Text=touch and 'Recall' or 'Recall [R]'
  r.evade.Text=touch and 'Evade' or 'Evade [Q]'
- if r.unload then r.unload.Text=(storageReady and 'Launch' or 'Deposit')..(touch and '' or ' [U]') end
+ if r.unload then r.unload.Text='Sell'..(touch and '' or ' [U]') end
  self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
  self.hint.Text=touch and 'Tap a rock to send a drone' or 'Click a rock · drag to queue'
  self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
  self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
- -- One small counter row. No permanent objectives, test banner or portraits.
+ -- One small counter row, a prestige shortcut and the next useful purchase.
  local rw=math.max(140,math.min(390,w-164))
  r.resources.Size=UDim2.fromOffset(rw,32);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
  local cw=math.floor((rw-6)*.38)
@@ -324,7 +324,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.cargo.BackgroundColor3=(full and C.red:Lerp(C.panel,.35) or C.green):Lerp(C.text,pulse*.16)
  r.cargoText.TextColor3=full and C.gold or C.text
  if self.cargoStroke then self.cargoStroke.Color=full and C.gold or C.line:Lerp(C.gold,pulse);self.cargoStroke.Thickness=full and 2 or 2+pulse*.5 end
- self.testMode.Visible=false;r.objective.Visible=false
+ self.testMode.Visible=false
+ r.prestige.Position=UDim2.fromOffset(12,46);r.prestige.Size=UDim2.fromOffset(math.min(244,w-136),32);r.prestige.Visible=not hidden
+ r.objective.Position=UDim2.fromOffset(12,84);r.objective.Size=UDim2.fromOffset(math.min(350,w-136),44);r.objective.Visible=not hidden and not fighting and h>=400
+ r.objectiveText.TextSize=12
  for i,button in {r.fleet,r.cards} do
   button.Position=UDim2.fromOffset(w-102+(i-1)*48,6);button.Size=UDim2.fromOffset(44,44);button.Visible=not hidden
   local caption=i==1 and r.fleetText or r.cardsText

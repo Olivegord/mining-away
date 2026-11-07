@@ -6,9 +6,10 @@ local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
  return {id=id,shop=shop,title=title,description=description,info=info,cost=cost,max=max or 1,effects=effects or {},unlock=unlock,role=role}
 end
 S.CATALOG={
- item('quartz_ruby','Quartz','Ruby expedition','Unlock Ruby field + shop.','Spend Quartz once to open Ruby for this run. Ruby purchases then spend Ruby. Guard clearances remain permanent.',80,1,nil,'Ruby'),
+ item('quartz_power','Quartz','Mining power','Mine 50% harder per level.','Adds 50% of base mining power to every mining drone per level. Four levels; stacks with cards up to the 4× run cap. Permanent prestige power applies on top. Resets on prestige.',20,4,{mining=.5}),
  item('quartz_scanner','Quartz','Plot scanner','Click a field; miners pick rocks.','Earn automatic target selection. Click a cleared field once; workers keep choosing ready crystals until you recall or leave. Does not empty your backpack.',40,1,{plotAuto=1}),
  item('quartz_backpack','Quartz','Fold-out backpack','Carry 20 more ore per level.','Adds 50% of the starting 40-unit backpack per level. Shared with capacity cards; total capacity is capped at 120. Whole final crystal drops are preserved.',30,3,{capacity=.5}),
+ item('quartz_ruby','Quartz','Ruby expedition','Unlock Ruby field + shop.','Spend Quartz once to open Ruby for this run. Ruby purchases then spend Ruby. Guard clearances remain permanent.',80,1,nil,'Ruby'),
  item('ruby_cobalt','Ruby','Cobalt expedition','Unlock Cobalt field + shop.','Opens Cobalt this run. Its pyramid guard must still be defeated before mining; buying access never bypasses combat.',144,1,nil,'Cobalt'),
  item('ruby_pack_speed','Ruby','Fast pack reveal','Pack opening animation is 2× faster.','Halves the reveal and stagger of your three saved cards. Does not change prices, odds, saved choices or network/save time. You still choose one.',48,1,{packSpeed=1}),
  item('ruby_rotors','Ruby','Passing lanes','Drones travel 25% faster per level.','Faster travel and courier trips, with the original eased arrival. Adds to speed cards up to the existing 3× flight cap.',36,2,{speed=.25}),

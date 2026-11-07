@@ -5,6 +5,7 @@ RoleEffects.BreakerPhase=function() end;discoveries.TrySpawn=function() end
 local uid=210000
 local function fixture()
  uid+=1;local pl=player(uid);players.PlayerAdded:Fire(pl);local p=profiles[uid];local f=patches[1]
+ command.OnServerEvent:Fire(pl,'RoleLoadout')
  pl.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
  for _,r in ipairs(f.resources) do r.paid=true;r.hp=0 end
  local workers={}

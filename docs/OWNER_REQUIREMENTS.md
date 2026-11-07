@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — restore the simple buy, sell, upgrade, prestige loop
+
+The owner clarifies: **“the core should be simple. this is a roblox game. buy sell, upgrade, prestige. thsi loop is non existent.”** This supersedes the earlier direction away from progression. Prioritize a connected, understandable loop from the actual one-drone start: mine and collect, sell directly for spendable minerals, buy visible improvements or a permanent miner, then prestige for permanent strength. Keep logistics optional. Do not add complementary-worker dependencies, digging systems or another complicated field mechanic. Studio should start with the actual player economy; preview crews remain explicit developer actions. Retain snap-size cubic rocks, outward currency arcs, one drone type per rock, original assets and accepted feedback. Close Studio when finished.
+
+The prices and prestige bonus in this pass are tuning choices, not an owner endorsement or proof of fun. See [core loop and verification](review/CORE_LOOP.md).
+
 ## November 6 latest — interacting rocks, snap shrink and visible currency arcs
 
 The owner subsequently supplied [taw's automation-game essay](https://t-a-w.blogspot.com/2026/07/how-to-make-great-automation-game.html), then explicitly rejected our complementary-worker interpretation: **keep this a simple Roblox mining game; only one type of drone may work on a rock at a time**. The proposed Smasher-to-miner handoff is removed. Do not restore that relay, require paired drone types, or turn the loop into factory management. Same-type helpers may use existing boulder slots; different types select different rocks.

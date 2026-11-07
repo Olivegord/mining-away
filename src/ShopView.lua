@@ -43,6 +43,8 @@ function V.render(U,parent,options)
   local title=U.text(cell,UDim2.fromOffset(12,10),UDim2.new(1,-24,0,42),entry.title,18,ink,true);title.TextYAlignment=Enum.TextYAlignment.Top
   local desc=U.text(cell,UDim2.fromOffset(12,55),UDim2.new(1,-24,0,44),entry.description,16,ink);desc.TextYAlignment=Enum.TextYAlignment.Top
   U.text(cell,UDim2.fromOffset(12,102),UDim2.new(1,-24,0,24),complete and 'Installed' or ('Level '..owned..' / '..entry.max),16,U.palette.muted)
+  if not complete and entry.id=='quartz_power' then desc.Text='Base mining power: '..(100+owned*50)..'% → '..(150+owned*50)..'%'
+  elseif not complete and entry.id=='quartz_backpack' then local current=p.capacity or 40;desc.Text='Backpack: '..current..' → '..math.min(120,current+20)..' ore' end
   local why=Shops.reason(p,entry);local available=not complete and not why and Shops.balance(p,key)>=cost and options.canBuy
   local buy=U.button(cell,UDim2.fromOffset(10,136),UDim2.new(1,-74,0,44),complete and 'Installed' or ('Buy · '..cost..' '..key),function() options.onBuy(entry,owned) end,color)
   buy.Name='BuyUpgrade';buy.TextSize=16;U.setEnabled(buy,available==true)

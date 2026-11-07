@@ -83,7 +83,7 @@ function View.start(ctx)
   local preview=action=='BuyDrone' and player:GetAttribute('MA_DevToolsEnabled')==true
   U.icon(card,'drone',UDim2.fromOffset(12,12),UDim2.fromOffset(32,32),color)
   text(card,54,10,contentWidth-(preview and 152 or 68),28,name,19)
-  if preview then U.button(card,UDim2.fromOffset(contentWidth-86,8),UDim2.fromOffset(72,36),'Preview',function() send('DevAddDrone',{role=key});say(name..' added to the temporary test crew.');setOpen(false) end,C.paper).TextSize=14 end
+  if preview then U.button(card,UDim2.fromOffset(contentWidth-86,8),UDim2.fromOffset(72,36),'Preview',function() send('DevAddDrone',{role=key=='Laser' and 'Striker' or key});say(name..' added to the temporary test crew.');setOpen(false) end,C.paper).TextSize=14 end
   U.text(card,UDim2.fromOffset(14,46),UDim2.fromOffset(contentWidth-28,cardHeight-96),description,15,C.muted)
   text(card,14,cardHeight-39,contentWidth-150,28,duration and string.format('%.1fs / cycle',duration) or 'Permanent equipment',13,color)
   local b=U.button(card,UDim2.fromOffset(contentWidth-136,cardHeight-44),UDim2.fromOffset(122,36),alreadyOwned and 'Owned' or compact(price)..' Quartz',function() purchase(action,key) end,color)
@@ -102,9 +102,7 @@ function View.start(ctx)
    local y=0
    for _,key in ipairs(DroneCatalog.Order) do
     local entry=DroneCatalog.Types[key]
-    if key~='Laser' then
-     y=y+shopCard(y,entry.Name,entry.Description,entry.Price,Color3.fromRGB(unpack(entry.Color)),entry.Duration,'BuyDrone',key,false)+8
-    end
+    y=y+shopCard(y,entry.Name,entry.Description,DroneCatalog.price(key,profile().fleet),Color3.fromRGB(unpack(entry.Color)),entry.Duration>0 and entry.Duration or nil,'BuyDrone',key,false)+8
    end
    body.CanvasSize=UDim2.fromOffset(0,y)
   elseif self.tab=='Storage' then
@@ -112,7 +110,7 @@ function View.start(ctx)
    text(card,14,10,contentWidth-28,28,'ORBITAL STORAGE',19,C.accent)
    storageSummary=U.text(card,UDim2.fromOffset(14,42),UDim2.fromOffset(contentWidth-28,62),'',16,C.text,true)
    launch=U.button(card,UDim2.fromOffset(14,112),UDim2.fromOffset(contentWidth-28,38),'Launch full storage [L]',function() send('LaunchStorage') end,C.mineral)
-   U.button(body,UDim2.fromOffset(0,170),UDim2.fromOffset(contentWidth,40),'Deposit backpack [U]',function() send('Deposit') end,C.accent)
+   U.button(body,UDim2.fromOffset(0,170),UDim2.fromOffset(contentWidth,40),'Deposit into storage',function() send('Deposit') end,C.accent)
    auto=U.button(body,UDim2.fromOffset(0,220),UDim2.fromOffset(contentWidth,40),'Auto-launch: OFF',function()
     send('AutoLaunch',not owned().autoLaunch)
    end,C.paper)
@@ -178,9 +176,11 @@ function View.start(ctx)
   if ctx.hidden() and self.open then setOpen(false) end
   layer.Visible=self.open;trigger.Visible=not ctx.hidden();bar.Visible=not ctx.hidden() and not self.open and #(owned().carriers or {})>0
   local touch=UIS.TouchEnabled;local short=view.Y<400
-  trigger.Position=UDim2.fromOffset(view.X-112,96);trigger.Size=UDim2.fromOffset(100,36)
+  local pockets=root:FindFirstChild('BackpackTools')
+  local yardTop=pockets and pockets.Visible and (pockets.Position.Y.Offset+pockets.Size.Y.Offset+8) or 96
+  trigger.Position=UDim2.fromOffset(view.X-132,yardTop);trigger.Size=UDim2.fromOffset(120,36)
   local stored=units(run().storage);local capacity=profile().storageCapacity or 120
-  trigger.Text=stored>=capacity and 'Storage full' or touch and 'Drone yard' or 'Drones [O]'
+  trigger.Text=stored>=capacity and 'Storage full' or touch and 'Buy drones' or 'Buy drones [O]'
   trigger.Visible=trigger.Visible and not (short and fighting)
   local w=math.min(490,view.X-24);local h=math.min(568,view.Y-24)
   if w~=width or h~=height then
@@ -226,11 +226,11 @@ function View.start(ctx)
   local compactTarget=anchor-50<138
   if compactTarget then bar.Visible=false end
   targetCycle.Visible=compactTarget and not ctx.hidden() and not self.open and #(owned().carriers or {})>0
-  targetCycle.Position=UDim2.fromOffset(view.X-112,138)
+  targetCycle.Position=UDim2.fromOffset(view.X-112,yardTop+42)
   targetCycle.Text='Fleet'
   for index,record in ipairs(owned().carriers or {}) do if record.id==self.selected then targetCycle.Text='Carrier '..index;break end end
   carrierReturn.Visible=self.selected~=nil and not ctx.hidden() and not self.open
-  carrierReturn.Position=UDim2.fromOffset(view.X-112,targetCycle.Visible and 180 or 138)
+  carrierReturn.Position=UDim2.fromOffset(view.X-112,yardTop+(targetCycle.Visible and 84 or 42))
   sheet.Position=UDim2.fromOffset((view.X-w)/2,(view.Y-h)/2)
   foot.Text=os.clock()<self.messageUntil and self.message or self.selected and 'Carrier selected • click a field to deploy • [R] returns it • [C] changes target' or 'Buy and load at the depot. Your permanent fleet stays with you.'
  end

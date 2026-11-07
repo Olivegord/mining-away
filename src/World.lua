@@ -292,10 +292,10 @@ local function finishEditableMap(root,map,fields,home)
  local converter=workspace:FindFirstChild('Converter')
  if converter and converter:IsA('BasePart') then
   nativeFinish(converter,Enum.Material.DiamondPlate)
-  for _,prompt in ipairs(converter:GetDescendants()) do if prompt:IsA('ProximityPrompt') then prompt.ActionText='Deposit cargo' end end
+  for _,prompt in ipairs(converter:GetDescendants()) do if prompt:IsA('ProximityPrompt') then prompt.ActionText='Sell ore' end end
  end
  local converterName=map:FindFirstChild('ConverterName',true)
- if converterName then for _,text in ipairs(converterName:GetDescendants()) do if text:IsA('TextLabel') and text.Text=='SELL YOUR CARGO' then text.Text='DEPOSIT FOR LAUNCH' end end end
+ if converterName then for _,text in ipairs(converterName:GetDescendants()) do if text:IsA('TextLabel') and (text.Text=='SELL YOUR CARGO' or text.Text=='DEPOSIT FOR LAUNCH') then text.Text='SELL ORE' end end end
  local lane=map:FindFirstChild('FieldTestLane',true)
  local finishes={Enum.Material.Sandstone,Enum.Material.Ground,Enum.Material.Slate,Enum.Material.Rock,Enum.Material.Grass}
  local beds={Color3.fromRGB(192,170,113),Color3.fromRGB(173,111,86),Color3.fromRGB(100,143,165),Color3.fromRGB(146,117,167),Color3.fromRGB(104,154,101)}
@@ -581,7 +581,7 @@ function W.initialize(): any
  if converter and converter:IsA('BasePart') then
   cleanSurface(converter,archive);converter.Color=P.metal;converter.Material=Enum.Material.Metal;converter:SetAttribute('Interaction','Sell')
   for _,v in ipairs(converter:GetChildren()) do if v:IsA('ProximityPrompt') then v:Destroy() end end
-  local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Deposit cargo';prompt.ObjectText='CONVERTER';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=converter
+  local prompt=Instance.new('ProximityPrompt');prompt.ActionText='Sell ore';prompt.ObjectText='CONVERTER';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=converter
   local p=converter.Position;local half=converter.Size/2
   block(map,'ConverterCollar',Vector3.new(p.X,p.Y+half.Y-.3,p.Z),Vector3.new(converter.Size.X+1,.6,converter.Size.Z+1),P.edge,Enum.Material.Metal)
   for _,dx in ipairs({-.34,.34}) do
@@ -589,7 +589,7 @@ function W.initialize(): any
   end
   block(map,'ConverterIntake',Vector3.new(p.X,p.Y,p.Z-half.Z-.3),Vector3.new(converter.Size.X*.5,converter.Size.Y*.42,.28),P.ink)
   block(map,'ConverterLight',Vector3.new(p.X,p.Y+half.Y*.42,p.Z-half.Z-.48),Vector3.new(converter.Size.X*.4,.18,.08),P.mint,Enum.Material.Neon)
-  local name=block(map,'ConverterName',Vector3.new(p.X,p.Y+half.Y+1,p.Z-half.Z-.2),Vector3.new(7,1.6,.22),P.ink);textFace(name,'CONVERTER','DEPOSIT FOR LAUNCH',P.mint)
+  local name=block(map,'ConverterName',Vector3.new(p.X,p.Y+half.Y+1,p.Z-half.Z-.2),Vector3.new(7,1.6,.22),P.ink);textFace(name,'CONVERTER','SELL ORE',P.mint)
   block(map,'OreChute',Vector3.new(p.X,p.Y-half.Y+.6,p.Z-half.Z-2),Vector3.new(converter.Size.X*.7,1.2,3.5),P.ledge,Enum.Material.Metal)
  end
  local fields={};local originals=workspace:FindFirstChild('Patches')

@@ -163,9 +163,10 @@ local fleetCount=label(fleetButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'F
 local runButton=button(hud,UDim2.new(1,-54,0,10),UDim2.fromOffset(46,44),'',function() if profile and profile.run.pendingOffer then openOffer() else openRunCards() end end,Color3.fromRGB(139,83,224));runButton.Name='OpenRunCards'
 U.icon(runButton,'cards',UDim2.fromOffset(13,2),UDim2.fromOffset(22,22),palette.accent)
 local runCount=label(runButton,UDim2.fromOffset(0,24),UDim2.new(1,0,0,17),'Cards',9,palette.text,true);runCount.TextXAlignment=Enum.TextXAlignment.Center
+local prestigeButton=button(safeRoot,UDim2.fromOffset(12,46),UDim2.fromOffset(218,32),'Prestige · 0 / 160',function() if openPrestige then openPrestige() end end,palette.accent);prestigeButton.Name='OpenPrestige';prestigeButton.TextSize=14
 local objectiveBox=U.panel(safeRoot,UDim2.fromOffset(16,108),UDim2.fromOffset(360,48),palette.panel,10);objectiveBox.Name='NextStep'
 U.icon(objectiveBox,'crystal',UDim2.fromOffset(9,9),UDim2.fromOffset(27,27),palette.mineral)
-local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks, collect ore, then launch full storage.',12,palette.text)
+local objective=label(objectiveBox,UDim2.fromOffset(43,5),UDim2.new(1,-52,1,-10),'Mine rocks → sell ore → buy upgrades.',12,palette.text)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
 local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,palette.text,true);notice.TextXAlignment=Enum.TextXAlignment.Center
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
@@ -463,7 +464,7 @@ openFleet=function()
   local half=(width-12)/2
   local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
   reroll.Name='RerollTestCrew'
-  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),'All drone types',function() command:FireServer('RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
+  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),profile.activeFleet and 'Permanent fleet' or 'All drone types',function() command:FireServer(profile.activeFleet and 'NormalLoadout' or 'RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
   if player:GetAttribute('MA_DevToolsEnabled')==true then
   local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
@@ -528,10 +529,10 @@ openFleet=function()
  label(nextDrone,UDim2.fromOffset(tileTextX,17),UDim2.new(1,-tileTextX-15,0,31),narrowTile and 'Next drone' or 'Next crewmate',narrowTile and 21 or 24,palette.text,true)
  label(nextDrone,UDim2.fromOffset(tileTextX,54),UDim2.new(1,-tileTextX-15,0,20),'+1 PERMANENT DRONE',10,palette.muted,true)
  local pre=profile.prestigePreview or {};local earned=pre.earnings or 0;local required=pre.saleRequired or 2000
- label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' launch credits earned',13,palette.text,true)
+ label(nextDrone,UDim2.fromOffset(16,97),UDim2.new(1,-32,0,24),comma(earned)..' / '..comma(required)..' sales this run',13,palette.text,true)
  local guardRequirement=(pre.winsRequired or 1)>0 and ((pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' · Unlocked' or ' · Defeat guards once')) or 'No sentry clear required'
  label(nextDrone,UDim2.fromOffset(16,130),UDim2.new(1,-32,0,22),guardRequirement,16,palette.muted)
- local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Review fleet milestone',openPrestige,palette.accent);review.Name='ReviewMilestone'
+ local review=button(nextDrone,UDim2.fromOffset(14,173),UDim2.new(1,-28,0,46),'Prestige · see rewards',openPrestige,palette.accent);review.Name='ReviewMilestone'
  local audioY=rosterY+math.ceil((#crew+1)/columns)*276
  local music=button(body,UDim2.fromOffset(3,audioY),UDim2.fromOffset((width-12)/2,44),soundscape.musicMuted and 'Music: off' or 'Music: on',function() soundscape:toggleMusic();openFleet() end,palette.paper)
  music.Name='ToggleMusic'
@@ -545,7 +546,7 @@ openRunCards=function()
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine crystals, deposit ore and launch full storage. Spend the minerals in their shops or choose one of three pack upgrades.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine rocks and sell your ore at SELL ORE. Spend the minerals in their shops or choose one of three pack upgrades.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   button(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,48),'View next pack',openPack,palette.accent)
  else
   for index,c in ipairs(profile.run.cards) do
@@ -559,28 +560,28 @@ openRunCards=function()
 end
 openPrestige=function()
  if not profile then return end
- local l=menu('prestige','One more drone. A new run.','Your drones and unlocked plots stay with you when you prestige.','prestige');local width=l.bodyWidth-6
+ local l=menu('prestige','Prestige: a stronger new run','Keep every drone. Gain permanent mining power. Restart your upgrades.','prestige');local width=l.bodyWidth-6
  local narrow=width<400
  local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
  U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),colors[pre.newType] or palette.mineral)
  label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),narrow and ('+1 permanent '..(pre.newRole or pre.newType or 'new')..' drone.\nKeep your whole crew.') or ('Gain one '..(pre.newRole or pre.newType or 'new')..' drone. Keep your whole crew.'),12,palette.text)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 '..(pre.newRole or pre.newType or 'new')..' drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Permanent drones, traits and stored tools\nCarriers, flying backpack and loadouts\nUnlocked plots and free reprinting',12,palette.text)
+ label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Permanent drones, traits and stored tools\nCarriers, flying backpack and loadouts\nGuard clearances and prestige mining power',12,palette.text)
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nBalances and all cargo, including launches\nPack prices and launch earnings',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Cards, shop upgrades and access\nBalances and all cargo, including launches\nPack prices and run sales',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
- progress(body,y,width,'Your permanent fleet milestone',comma(earnings)..' / '..comma(required)..' launch credits earned'..guardRequirement,earnings/math.max(1,required),palette.accent)
+ progress(body,y,width,'Sales toward prestige',comma(earnings)..' / '..comma(required)..' sales this run'..guardRequirement,earnings/math.max(1,required),palette.accent)
  local allowed,blocked=availability('Prestige')
  local can=pre.eligible==true and not pending() and allowed
- local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Start new run · +1 permanent drone' or 'Complete the fleet milestone'))
+ local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Prestige · +1 drone and +25% base power' or 'Complete the prestige requirements'))
  local confirm
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
   if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
@@ -1105,17 +1106,16 @@ local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'E
 local testLoadout=button(safeRoot,UDim2.new(1,-252,0,80),UDim2.fromOffset(236,44),'Random loadout · 2–5 [T]',function() command:FireServer('TestLoadout') end,Color3.fromRGB(139,83,224))
 testLoadout.Name='RandomLoadoutTester';testLoadout.Visible=false
 local function cargoAction()
- local ready=(player:GetAttribute('StorageUnits') or 0)>=(player:GetAttribute('StorageCapacity') or 120) and (player:GetAttribute('LaunchCargoUnits') or 0)==0
- command:FireServer(ready and 'LaunchStorage' or 'Deposit')
+ command:FireServer('Sell')
 end
-local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Deposit [U]',cargoAction,palette.paper)
+local unload=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(116,40),'Sell [U]',cargoAction,palette.paper)
 unload.Name='ReturnCargo';unload.Visible=false
 local enemyHUD=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(300,58),palette.panel,12);enemyHUD.Name='SentryHealth';enemyHUD.Visible=false
 local enemyTitle=label(enemyHUD,UDim2.fromOffset(12,0),UDim2.new(1,-24,1,0),'PYRAMID SENTRY',12,palette.white,true)
 local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(53,55,57));enemyHealth.Name='HealthTrack';enemyHealth.ClipsDescendants=true;enemyHealth.BackgroundTransparency=1;corner(enemyHealth,3)
 local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),palette.danger);enemyFill.Name='Fill';corner(enemyFill,3);U.gradient(enemyFill)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
-local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,context=context,enemy=enemyHUD,toast=toast,
+local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,objective=objectiveBox,prestige=prestigeButton,context=context,enemy=enemyHUD,toast=toast,
  credits=creditsLabel,cargoText=cargoText,cargoTrack=cargoTrack,fleet=fleetButton,cards=runButton,fleetText=fleetCount,cardsText=runCount,
  objectiveText=objective,contextTitle=contextTitle,contextDetail=contextDetail,contextButton=contextButton})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
@@ -1152,10 +1152,9 @@ local function stationAction(station)
   if profile then return function() openShop(key) end,key..' shop',Shops.unlocked(profile,key) and ('Spend '..key..' on upgrades') or 'Locked · buy access in the previous shop','Shop' end
   return nil
  elseif kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' Quartz'),pending() and 'Choose' or 'Pack'
- elseif kind=='Prestige' then return openPrestige,'Grow your fleet','Review the milestone and your next permanent drone','Review'
+ elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
-  local ready=(player:GetAttribute('StorageUnits') or 0)>=(player:GetAttribute('StorageCapacity') or 120) and (player:GetAttribute('LaunchCargoUnits') or 0)==0
-  return cargoAction,ready and 'Storage ready!' or 'Deposit backpack',ready and 'Launch your full ore capsule' or 'Fill orbital storage, then launch for currency',ready and 'Launch' or 'Deposit'
+  return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
  end
  return nil
 end
@@ -1311,7 +1310,7 @@ connect(RunService.Heartbeat,function(dt)
  elseif status:find('unavailable') then saveLabel.Text='PROFILE UNAVAILABLE'
  elseif status:find('saved') then saveLabel.Text='CREDITS · AUTOSAVED'
  else saveLabel.Text='SAVE PAUSED' end
- saveLabel.TextSize=16;saveLabel.Position=UDim2.fromOffset(12,42);saveLabel.TextXAlignment=Enum.TextXAlignment.Left
+ saveLabel.TextSize=12;saveLabel.Position=UDim2.new(1,-180,0,54);saveLabel.Size=UDim2.fromOffset(168,20);saveLabel.TextXAlignment=Enum.TextXAlignment.Right
  shopButton.Position=UDim2.new(1,-150,0,6);shopButton.Visible=not modal.Visible
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
@@ -1324,16 +1323,20 @@ connect(RunService.Heartbeat,function(dt)
   cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
-  local pre=profile.prestigePreview;local price=profile.nextPackPrice or 40
-  if pending() then objective.Text='Your paid pack is waiting.\nChoose your card at the depot.'
-  elseif amount>=capacity then objective.Text='Backpack full · mining continues.\nDeposit ore in orbital storage.'
-  elseif pre and pre.eligible then objective.Text='Your next permanent drone is ready!\nVisit the fleet uplink to prestige.'
-  elseif credits>=price then objective.Text='Upgrade ready · '..comma(price)..' Quartz.\nOpen your next pack at the depot.'
-  elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Click rocks to send workers.\nGold = queued · green = working.'
-  elseif pre and (pre.earnings or 0)>=(pre.saleRequired or 2000) and (pre.wins or 0)<(pre.winsRequired or 1) then objective.Text=string.format('Unlock %s to grow your crew.\nDefeat its guards once.',pre.field or 'Cobalt')
-  elseif pre and (pre.winsRequired or 1)>0 then objective.Text=string.format('Next drone: %s / %s launch credits earned.\n%s: %s.',comma(pre.earnings or 0),comma(pre.saleRequired or 2000),pre.field or 'Cobalt',(pre.wins or 0)>0 and 'Unlocked' or 'Defeat guards once')
-  elseif pre then objective.Text=string.format('Next drone: %s / %s launch credits earned.',comma(pre.earnings or 0),comma(pre.saleRequired or 160))
-  else objective.Text='Click a plot to automate mining.\nDeposit ore, then launch full storage.' end
+  local pre=profile.prestigePreview
+  local powerLevel=profile.run.shopLevels.quartz_power or 0
+  local powerCost=Shops.cost(Shops.BY_ID.quartz_power,powerLevel)
+  prestigeButton.Text=pre and pre.eligible and 'Prestige · READY' or ('Prestige · '..comma(pre and pre.earnings or 0)..' / '..comma(pre and pre.saleRequired or 160))
+  if pending() then objective.Text='Your paid pack is waiting.\nChoose one of your three cards.'
+  elseif amount>=capacity then objective.Text='Bag full → return to SELL ORE.\nSell, upgrade, then mine again.'
+  elseif pre and pre.eligible then objective.Text='Prestige ready → visit the uplink.\nKeep your drones; gain permanent power.'
+  elseif powerLevel==0 and credits>=powerCost then objective.Text='Buy Mining power in the Quartz shop.\n'..powerCost..' Quartz → 50% harder mining.'
+  elseif powerLevel==0 then objective.Text='Mine → sell at SELL ORE.\nFirst power upgrade: 20 Quartz.'
+  elseif #profile.fleet==1 then objective.Text='Buy a permanent Miner: 60 Quartz.\nOpen Buy drones at the depot.'
+  elseif player:GetAttribute('AutomationMineEnabled')~=true then objective.Text='Plot scanner: 40 Quartz.\nBuy it to keep your miners working.'
+  elseif powerLevel<4 then objective.Text='Next Mining power: '..powerCost..' Quartz.\nSell ore to upgrade and reach prestige.'
+  elseif pre and (pre.winsRequired or 0)>0 and (pre.wins or 0)<pre.winsRequired then objective.Text='Unlock '..pre.field..' and defeat its guards.\nThen prestige for a stronger new run.'
+  else objective.Text='Mine → sell → upgrade → prestige.\nBought drones stay with you.' end
  end
  local ownActive=false;local reprints={};local now=workspace:GetServerTimeNow()
  for source in pairs(drones) do
@@ -1358,7 +1361,7 @@ connect(RunService.Heartbeat,function(dt)
    local kind=station:GetAttribute('Interaction')
    if kind=='Pack' then title='Upgrade pack';detail=pending() and 'Your saved cards are ready' or '3 cards · choose 1'
    elseif kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
-   elseif kind=='Sell' then title='Deposit backpack';detail='Fill storage, then launch for currency' end
+   elseif kind=='Sell' then title='Sell ore';detail='Turn your backpack into spendable minerals' end
   end
   if action then contextAction=function() performStation(station) end;contextTitle.Text=title;contextDetail.Text=detail;contextButton.Text=(actionText or 'Use')..(touch and '' or ' [E]');context.Visible=true end
  end
@@ -1391,7 +1394,7 @@ connect(RunService.Heartbeat,function(dt)
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
  else modalSubtitle.Text=normalSubtitle;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and Color3.fromRGB(202,209,231) or palette.muted end
  tacticalHUD:update(view,world,ownActive)
- unload.Text=touch and 'Deposit' or 'Deposit [U]'
+ unload.Text=touch and 'Sell' or 'Sell [U]'
  logisticsView:update(view,ownActive)
 end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)

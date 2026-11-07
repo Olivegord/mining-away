@@ -3,7 +3,7 @@
 local Catalog = {
  Order = {'Laser','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'},
  Types = {
-  Laser = {Name='Laser',Price=0,Duration=0,Color={90,230,255},Description='The original overhead mining beam. Reliable and steady.'},
+  Laser = {Name='Miner',Price=60,Duration=0,Color={90,230,255},Description='One more permanent mining drone. Works a second rock and stays after prestige. Each additional Miner costs more.'},
   Bubbler = {Name='Bubbler',Price=1800,Duration=2.8,Impact=.68,Power=1.1,Chunk=.25,Yield=1.25,Color={120,225,255},Description='Captures and pops a mineral chunk per bubble cycle. Up to 25% rock health per hit; 1.25× ore on completion.'},
   Halver = {Name='Halver',Price=900,Duration=3.6,Impact=.68,Power=1.25,Chunk=.25,Yield=1.5,Color={190,140,255},Description='Clamps, splits and grinds a chunk each cycle. Up to 25% rock health per hit; 1.5× ore on completion.'},
   Gridcutter = {Name='Gridcutter',Price=1400,Duration=2.5,Impact=.68,Power=1.2,Chunk=.25,Yield=1.2,Color={255,100,130},Description='Cross-scans and shears a small cube lattice. Up to 25% rock health per hit; 1.2× ore on completion.'},
@@ -13,6 +13,13 @@ local Catalog = {
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
  },
 }
+function Catalog.price(kind,fleet)
+ local definition=Catalog.Types[kind];if not definition then return nil end
+ if kind~='Laser' then return definition.Price end
+ local miners=0
+ for _,d in ipairs(fleet or {}) do if (d.role or d.type)=='Striker' or (not d.role and d.type=='Blue') then miners+=1 end end
+ return math.floor(definition.Price*1.8^math.min(38,math.max(0,miners-1)))
+end
 local function finite(value) return type(value)=='number' and value==value and value>-math.huge and value<math.huge end
 function Catalog.cycle(kind,baseDPS,effectiveDPS)
  local definition=Catalog.Types[kind]

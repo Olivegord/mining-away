@@ -55,7 +55,6 @@ check('purchase receipts reject conflicting replay stale run foreign types missi
  eq(Profile.buyDrone(p,'Halver','stable-buy',p.run.id,depot),false)
  eq(Profile.buyDrone(p,'Bubbler','fresh-stale','foreign-run',depot),false)
  eq(Profile.buyDrone(p,'Unknown','bad-kind',p.run.id,depot),false)
- eq(Profile.buyDrone(p,'Laser','free-miner',p.run.id,depot),false)
  eq(Profile.buyDrone(p,'Bubbler','remote-buy',p.run.id,{atDepot=false}),false)
  eq(Profile.buyDrone(p,'Bubbler','combat-buy',p.run.id,{atDepot=true,activeEncounter=true}),false)
  p.run.wallet.Quartz=0;p.run.credits=0;eq(Profile.buyDrone(p,'Bubbler','no-funds',p.run.id,depot),false)
