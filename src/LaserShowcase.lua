@@ -36,15 +36,22 @@ function Showcase.new(world,parent,config)
   local home=world:GetAttribute('DepotHome')
   if not drone or not rock or typeof(home)~='Vector3' then return false end
   local root=Instance.new('Folder');root.Name='HomeEffectsPreview';root.Parent=parent;self.root=root
-  self.center=home+Vector3.new(61,0,0)
-  local sign=part(root,'PreviewTitle',Vector3.new(home.X+61,.14,home.Z+26),Vector3.new(24,.12,3),Color3.fromRGB(24,34,49))
+  -- The west side of the hub leaves the central walk and ramp approaches clear.
+  self.center=home+Vector3.new(-27,0,-31)
+  local params=RaycastParams.new()
+  params.FilterDescendantsInstances={parent}
+  params.RespectCanCollide=true
+  local function grounded(pos)
+   local hit=workspace:Raycast(pos+Vector3.yAxis*8,-Vector3.yAxis*32,params)
+   return Vector3.new(pos.X,hit and hit.Position.Y or home.Y,pos.Z)
+  end
+  local signPos=grounded(self.center+Vector3.zAxis*18)+Vector3.yAxis*.07
+  local sign=part(root,'PreviewTitle',signPos,Vector3.new(24,.12,3),Color3.fromRGB(24,34,49))
   label(sign,'EFFECTS PREVIEW  /  INFINITE ROCKS')
   for i,def in ipairs(definitions) do
-   local pos=home+Vector3.new(52+((i-1)%2)*18,0,16-math.floor((i-1)/2)*18)
-   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={parent,world}
-   local hit=workspace:Raycast(pos+Vector3.yAxis*20,-Vector3.yAxis*50,params)
-   local ground=hit and hit.Position.Y or home.Y
-   pos=Vector3.new(pos.X,ground,pos.Z)
+   local column=(i-1)%3
+   local row=math.floor((i-1)/3)
+   local pos=grounded(self.center+Vector3.new((column-1)*13,0,9-row*18))
    local station=Instance.new('Model');station.Name=def.name;station:SetAttribute('EffectsPreview',true);station.Parent=root
    part(station,'DisplayPad',pos+Vector3.yAxis*.06,Vector3.new(9,.12,9),Color3.fromRGB(41,49,58))
    local plaque=part(station,'Nameplate',pos+Vector3.new(0,.15,5.4),Vector3.new(9,.12,1.7),Color3.fromRGB(24,34,49));label(plaque,def.name)

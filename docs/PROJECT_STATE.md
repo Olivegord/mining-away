@@ -9,8 +9,8 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `afbedd3ca78c35719d0a69a1402d5b010f6a34074d4a1f627c9248129afd8987` | Hash of the November 6 gameplay build, unchanged by the documentation/sharing pass. |
-| Installed gameplay revision | `88ba15dfd928f880ee8bddefa54e153cfff20705` | Mine/sell/upgrade/prestige implementation. Later handoff/tooling commits need not change game Sources. |
+| Native-file SHA-256 | `e5c6c91a54fd31d05773119fc8d2d4710ecebf0acced27d3d29b4256c6d41b79` | Source-only showcase refresh of the tracked native file. |
+| Installed gameplay revision | `88ba15dfd928f880ee8bddefa54e153cfff20705` | Mine/sell/upgrade/prestige implementation. Showcase layout was subsequently updated in the client Source. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -63,3 +63,7 @@ Limits: no final native multiplayer/late-join pass, real DataStore reconnect/ser
 2. If the owner explicitly requests an online update, reconcile any newer shared-game edits, publish the canonical file to the existing DRONEREVOLUTION starting place, then record the actual published version/revision and verified destination here. Do not assume the instructions already completed this step.
 3. Let the owner judge the simple loop in play. Prioritize meaningful mining and purchases over more decorative changes. Complete real multiplayer and durable-save checks before claiming those outcomes.
 4. Keep Sources, the canonical native file and this handoff synchronized for every subsequent contribution. Never resolve a binary conflict by silently taking one contributor's map over another's.
+
+## Mining effects showcase
+
+The six cosmetic demos now form a 3 × 2 grid on the west side of the hub. Studio Play in DRONEREVOLUTION verified all six pad positions, infinite display-rock health, and no solid obstructions in the pad footprints. The open Studio place received a targeted client edit. The tracked native file was refreshed against its verified prior Sources with all non-Source chunks preserved. This change was not published to Roblox.
