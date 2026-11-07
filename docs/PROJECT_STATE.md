@@ -54,7 +54,7 @@ Earlier instructions named the historical place as the sole destination and trea
 - Rocks can drop useful stored consumables, including a placeable orbital laser. Avoid substituting generic timed multipliers for meaningful actions.
 - Bee Swarm Simulator is a reference for enjoyable play, not permission to copy its assets or introduce every mechanic it has.
 - Do not mistake earlier ore/reward timing or cosmetic tweaks for proof of an improved core loop. Automated correctness is not proof of fun.
-- Preserve the initial Studio open state: leave it open if it was already open when work began; close it after work only if the agent opened it from a closed state. Check initial state without launching Studio. Routine stop/install/save/restart and publication to the existing DRONEREVOLUTION place remain authorized. New experiences need an explicit request.
+- Preserve the initial Studio open state: leave it open if it was already open when work began; close it after work only if the agent opened it from a closed state. Check initial state without launching Studio. Always stop Play/Run and verify Edit mode before handing back; Studio may remain open, but no playtest or simulation may remain running. Routine stop/install/save/restart and publication to the existing DRONEREVOLUTION place remain authorized. New experiences need an explicit request.
 
 ## Current implementation
 

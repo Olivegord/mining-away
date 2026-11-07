@@ -4,7 +4,7 @@ For the consolidated beam/VFX direction, critique-to-implementation record and s
 
 ## November 6 latest — preserve the initial Studio open state
 
-Check and record whether Roblox Studio is already running before starting work, without launching it just to check. If it was already open, leave it open when finished. If it was closed and you open it for the task, close it when finished. Stop Play and save changes as needed before the handoff. This replaces the older unconditional close-Studio rule.
+Check and record whether Roblox Studio is already running before starting work, without launching it just to check. If it was already open, leave it open when finished. If it was closed and you open it for the task, close it when finished. Always stop Play/Run before the handoff and verify Studio is in Edit mode; never leave a playtest or simulation running, even when Studio must remain open. Save changes as needed before the handoff. This replaces the older unconditional close-Studio rule.
 
 ## November 6 latest — continuous slowdown, no restart
 
