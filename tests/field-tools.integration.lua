@@ -24,13 +24,18 @@ end
 local function collect(p,item)
  advance(.7);p.player.Character:PivotTo(CFrame.new(item.part.Position));assert(tools:collect(p,item));return item
 end
-local function input(p,action,extra)
+local function input(p,action,extra,hold)
  local s=tools:state(p);local payload={runId=s.runId,version=s.version}
  for k,v in pairs(extra or {}) do payload[k]=v end
- p.tokens=7;command.OnServerEvent:Fire(p.player,action,payload);return payload
+ p.tokens=7;command.OnServerEvent:Fire(p.player,action,payload)
+ if not hold and s.attack then advance(s.attack.at-now+.001);tools:step(.016) end
+ return payload
+end
+local function contact(item,r,point)
+ return {id=item.id,resourceId=r.id,point=point or r.part.Position+Vector3.new(0,r.part.Size.Y*.5,0)}
 end
 local function equip(p,item)
- local s=tools:state(p);for slot=1,3 do if s.slots[slot]==item then input(p,'EquipFieldTool',{slot=slot});assert(s.selected==slot);return end end
+ local s=tools:state(p);for slot=1,ToolRules.SLOTS do if s.slots[slot]==item then input(p,'EquipFieldTool',{slot=slot});assert(s.selected==slot);return end end
  error('item not in inventory')
 end
 check('first bowling drop, contact ownership and full ore bag remain independent',function()
@@ -53,7 +58,7 @@ end)
 check('swept flight takes the first blocking surface, never mines past a wall',function()
  local _,p=fixture();local ball=collect(p,discover(p,'BowlingBall'));equip(p,ball)
  local r=node(8);local wall=Instance.new('Part');wall.Parent=workspace
- advance(1);input(p,'UseFieldTool',{id=ball.id,aim=r.part.Position});assert(ball.state=='Flying')
+ advance(1);input(p,'UseFieldTool',contact(ball,r));assert(ball.state=='Flying')
  local old=workspace.Spherecast;local casts=0
  workspace.Spherecast=function(_,from,radius,delta)
   assert(radius==ToolRules.ITEMS.BowlingBall.radius and delta.Magnitude<20);casts+=1
@@ -65,8 +70,9 @@ end)
 check('ball permits exactly three touch recoveries then shatters on fourth impact',function()
  local _,p=fixture();local ball=collect(p,discover(p,'BowlingBall'));equip(p,ball)
  local from=p.player.Character.PrimaryPart.Position
+ local target=node(8)
  for throw=1,4 do
-  advance(1);input(p,'UseFieldTool',{id=ball.id,aim=from+Vector3.new(10,-2,0)})
+  advance(1);input(p,'UseFieldTool',contact(ball,target))
   assert(ball.state=='Flying' and ball.hp==4-throw)
   local before=ball.hp;input(p,'UseFieldTool',{id=ball.id,aim=from});assert(ball.hp==before,'duplicate spent durability')
   tools:impact(p,ball,from+Vector3.new(8,-2,0),Vector3.new(0,1,0),nil)
@@ -78,7 +84,7 @@ end)
 check('bowling contact dents the real rock, yields ore and never farms equipment',function()
  local _,p=fixture();local ball=collect(p,discover(p,'BowlingBall'));equip(p,ball)
  local r=node(4);local origin=r.part.Position+Vector3.new(0,3,0);local hp=r.hp
- advance(1);input(p,'UseFieldTool',{id=ball.id,aim=r.part.Position});tools:impact(p,ball,origin,Vector3.new(0,1,0),r)
+ advance(1);input(p,'UseFieldTool',contact(ball,r));tools:impact(p,ball,origin,Vector3.new(0,1,0),r)
  assert(r.hp<hp and r.consumableWorked and r.part:GetAttribute('BallDents')==1 and r.part:GetAttribute('BallDentPoint').Y>.48)
  assert(pendingOre(p)>0)
  local found=tools:state(p).found;rock(p,r);assert(tools:state(p).found==found)
@@ -86,9 +92,9 @@ end)
 check('jelly sticks, waits for its fuse, damages nearby rocks once and disappears',function()
  local _,p=fixture();local jelly=collect(p,discover(p,'JellyGrenade'));equip(p,jelly)
  local a,b,far=node(2),node(8),node(28);local ah,bh,fh=a.hp,b.hp,far.hp
- advance(1);input(p,'UseFieldTool',{id=jelly.id,aim=a.part.Position});assert(jelly.hp==0 and jelly.state=='Flying')
+ advance(1);input(p,'UseFieldTool',contact(jelly,a));assert(jelly.hp==0 and jelly.state=='Flying')
  tools:impact(p,jelly,a.part.Position+Vector3.new(0,a.part.Size.Y*.5+.01,0),Vector3.new(0,1,0),a)
- advance(1);tools:step(.05);assert(a.hp==ah and b.hp==bh and jelly.state=='Stuck')
+ advance(.18);tools:step(.05);assert(a.hp==ah and b.hp==bh and jelly.state=='Stuck')
  advance(.5);tools:step(.05);assert(a.hp<ah and b.hp<bh and far.hp==fh and not tools.items[jelly.id])
  ah,bh=a.hp,b.hp;advance(2);tools:step(.05);assert(a.hp==ah and b.hp==bh)
 end)
@@ -96,7 +102,7 @@ check('crowbar only wears on a valid reachable hit and breaks after twelve',func
  local _,p=fixture();local bar=collect(p,discover(p,'Crowbar'));equip(p,bar)
  local r=node(2,100000);local hp=r.hp
  input(p,'UseFieldTool',{id=bar.id,aim=r.part.Position,resourceId='unknown'});assert(bar.hp==12)
- for i=1,12 do advance(.6);input(p,'UseFieldTool',{id=bar.id,aim=r.part.Position,resourceId=r.id}) end
+ for i=1,12 do advance(.6);input(p,'UseFieldTool',contact(bar,r)) end
  assert(r.hp<hp and not tools.items[bar.id] and r.consumableWorked)
 end)
 check('stale versions, stale runs, foreign reservations and blocked hits are rejected',function()
@@ -115,7 +121,7 @@ check('death, prestige, disconnect and expiry clear temporary gear while fleet s
  assert(data(p).fleet[1].id==permanent)
  p.player.Character:FindFirstChildOfClass('Humanoid').Health=100
  local drop=discover(p,'BowlingBall');advance(ToolRules.WORLD_LIFETIME+1);tools:step(.05);assert(not tools.items[drop.id])
- local held=collect(p,discover(p,'BowlingBall'));data(p).run.id='next-run';tools:step(.05);assert(not tools.items[held.id])
+ tools:clear(p);local held=collect(p,discover(p,'BowlingBall'));data(p).run.id='next-run';tools:step(.05);assert(not tools.items[held.id])
  local held2=collect(p,discover(p,'BowlingBall'));players.PlayerRemoving:Fire(p.player);assert(not tools.items[held2.id])
 end)
 check('lasers and explosions hurt players including the owner, with cover and shields',function()
@@ -129,6 +135,45 @@ check('lasers and explosions hurt players including the owner, with cover and sh
  scene.hazards:blast(hr.Position,12,40);assert(h.Health==90,'explosion ignored cover');workspace.Raycast=ray
  scene.hazards:blast(hr.Position,12,40);assert(h.Health==50 and hr.LastImpulse,'owner explosion or impulse missing')
  hr.Position=home;advance(.4);scene.hazards:blast(home,12,40);assert(h.Health==50,'home safe area missing')
+end)
+check('ground and interior clicks do nothing; windup preserves the chosen face point',function()
+ local _,p=fixture();tools:previewLoadout(p);local s=tools:state(p);local r=node(3);local ball=s.slots[1];equip(p,ball)
+ input(p,'UseFieldTool',{id=ball.id,point=r.part.Position},true);assert(not s.attack)
+ input(p,'UseFieldTool',contact(ball,r,r.part.Position),true);assert(not s.attack)
+ local point=r.part.CFrame:PointToWorldSpace(r.part.Size*Vector3.new(.28,.5,.2))
+ input(p,'UseFieldTool',contact(ball,r,point),true);assert(s.attack and math.abs(s.attack.offset.X-.28)<1e-6 and ball.hp==4)
+ advance(.2);tools:step(.016);assert(ball.state=='Held' and ball.hp==4)
+ advance(.3);tools:step(.016);assert(ball.state=='Flying' and ball.hp==3)
+end)
+check('sword removes a real slice at click height and keeps its foot grounded',function()
+ local _,p=fixture();tools:previewLoadout(p);local sword=tools:state(p).slots[4];equip(p,sword)
+ local r=node(3);local size=r.part.Size;local foot=r.part.Position.Y-size.Y*.5
+ local point=r.part.CFrame:PointToWorldSpace(size*Vector3.new(.5,-.1,0))
+ input(p,'UseFieldTool',contact(sword,r,point))
+ assert(sword.hp==2 and math.abs(r.slice-.4)<1e-6 and r.part.Size.Y<=size.Y*.4)
+ assert(math.abs(r.part.Position.Y-r.part.Size.Y*.5-foot)<.001)
+end)
+check('molten steel damages only after contact, and lowers the rock with heat',function()
+ local _,p=fixture();tools:previewLoadout(p);local molten=tools:state(p).slots[8];equip(p,molten)
+ local r=node(3);local original=r.hp;local h=r.part.Size.Y
+ input(p,'UseFieldTool',contact(molten,r));assert(molten.state=='Flying' and r.hp==original)
+ tools:impact(p,molten,r.part.Position+Vector3.new(0,h*.5,0),Vector3.new(0,1,0),r)
+ advance(.25);tools:step(.016);advance(.25);tools:step(.016)
+ assert(r.hp<original and r.part.Size.Y<h and r.part:GetAttribute('MeltBand')>0)
+end)
+check('one inventory contains all eight preview items; dropped gadgets use the existing effects',function()
+ local _,p=fixture();tools:previewLoadout(p)
+ local s=tools:state(p);for i,kind in ipairs(ToolRules.ORDER) do assert(s.slots[i].kind==kind) end
+ local orbital=s.slots[6];equip(p,orbital);local r=node(4);local point=r.part.Position+Vector3.new(.2,r.part.Size.Y*.5,0)
+ input(p,'UseFieldTool',contact(orbital,r,point))
+ assert(p.supply and p.supply.temporary and p.supply.targetId==r.id and p.supply.position.X==point.X and not s.slots[6])
+ assert(not data(p).consumables.pending)
+ local emit=RoleEffects.Ability;RoleEffects.Ability=function() end
+ local hp=r.hp;consumableService:step(p,.016)
+ advance(1.6)
+ for _=1,20 do advance(.05);consumableService:step(p,.05) end
+ RoleEffects.Ability=emit
+ assert(r.hp<hp and (r.part:GetAttribute('MeltBand') or 0)>0,'orbital did not use the shared melt')
 end)
 check('runtime rocks become solid after growth and stop blocking on depletion',function()
  local _,p=fixture();local r=node(18);r.readyAt=now+.2

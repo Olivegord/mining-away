@@ -1,10 +1,16 @@
 -- Shared throw equations and temporary durability. Clients only preview them.
-local T={SLOTS=3,WORLD_LIFETIME=75,MAX_DROPS=36,MAX_OWNER_DROPS=6,MAX_DRY=6}
-T.ORDER={'BowlingBall','Crowbar','JellyGrenade'}
+local T={SLOTS=8,WORLD_LIFETIME=75,MAX_DROPS=36,MAX_OWNER_DROPS=6,MAX_DRY=6}
+T.ORDER={'BowlingBall','Crowbar','JellyGrenade','Greatsword','Scrap','Orbital','Sledgehammer','MoltenTongs'}
+T.SAVED={[5]='Scrap',[6]='Orbital'}
 T.ITEMS={
- BowlingBall={name='Bowling ball',short='Bowling ball',uses=4,gravity=420,speed=58,range=42,radius=1.05,color={95,109,222},cooldown=.65},
- Crowbar={name='Crowbar',short='Crowbar',uses=12,range=8,color={239,136,82},cooldown=.48},
- JellyGrenade={name='Jelly grenade',short='Jelly',uses=1,gravity=280,speed=52,range=38,radius=.5,color={144,225,99},cooldown=.65,fuse=1.35},
+ BowlingBall={name='Bowling ball',short='Bowling',uses=4,gravity=420,speed=58,range=42,radius=1.05,color={95,109,222},cooldown=.82,windup=.44},
+ Crowbar={name='Crowbar',short='Crowbar',uses=12,range=8,color={239,136,82},cooldown=.56,windup=.29,melee=true},
+ JellyGrenade={name='Jelly grenade',short='Jelly',uses=1,gravity=280,speed=52,range=38,radius=.5,color={144,225,99},cooldown=.62,windup=.16,fuse=.42},
+ Greatsword={name='Giant sword',short='Sword',uses=3,range=13,radius=.65,color={137,205,255},cooldown=.95,windup=.56,melee=true},
+ Sledgehammer={name='Sledgehammer',short='Hammer',uses=3,range=10,radius=.65,color={255,192,84},cooldown=.9,windup=.50,melee=true},
+ MoltenTongs={name='Molten steel tongs',short='Molten',uses=1,range=9,radius=.62,color={255,105,42},cooldown=.8,windup=.48,gravity=370,speed=50,molten=true},
+ Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.4,gadget=true},
+ Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.4,gadget=true},
 }
 function T.finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function T.vector(v) return typeof(v)=='Vector3' and math.abs(v.X)<=100000 and math.abs(v.Y)<=100000 and math.abs(v.Z)<=100000 end
@@ -28,8 +34,8 @@ function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)
  if (progress.found or 0)==0 then return progress.dry>=2 and 'BowlingBall' or nil end
  if progress.dry<T.MAX_DRY and roll>=.24 then return nil end
- -- Introduce all three, then vary the tool rather than handing out multipliers.
- if progress.found==1 then return 'Crowbar' elseif progress.found==2 then return 'JellyGrenade' end
+ -- Introduce each tool, then vary the tool rather than handing out multipliers.
+ if progress.found<#T.ORDER then return T.ORDER[progress.found+1] end
  return T.ORDER[1+math.floor(math.clamp(choice,0,.99999)*#T.ORDER)]
 end
 return T

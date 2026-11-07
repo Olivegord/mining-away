@@ -1,9 +1,9 @@
--- Custom equipment hotbar, matching ballistic preview, held tools and impact rubble.
+-- Custom equipment hotbar, held tools and impact rubble.
 local V={};V.__index=V
 function V.new(ctx)
  local UIS=game:GetService('UserInputService');local Http=game:GetService('HttpService')
  local players=game:GetService('Players');local player=players.LocalPlayer;local U=ctx.interface
- local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},arcs={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
+ local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
  local gui=Instance.new('Frame');gui.Name='TemporaryToolHotbar';gui.AnchorPoint=Vector2.new(.5,1);gui.BackgroundTransparency=1;gui.Active=true;gui.ZIndex=ctx.parent.ZIndex+2;gui.Parent=ctx.parent;self.gui=gui
  self.hint=U.text(gui,UDim2.fromOffset(0,-23),UDim2.new(1,0,0,20),'',13,U.palette.white,true);self.hint.TextXAlignment=Enum.TextXAlignment.Center
  for i=1,ToolRules.SLOTS do
@@ -25,7 +25,11 @@ function V.new(ctx)
    local item=self.state.slots[i];local kind=item and item.kind
    if kind~=slot.kind then
     if slot.model then slot.model:Destroy();slot.model=nil end
-    if kind and ToolRules.ITEMS[kind] then slot.model=ToolArt.create(kind,slot.icon) end
+    if kind and ToolRules.ITEMS[kind] then slot.model=ToolArt.create(kind,slot.icon)
+     local center,extent=slot.model:GetBoundingBox()
+     local target=center.Position;local distance=math.max(5,extent.Magnitude*1.8)
+     slot.icon.CurrentCamera.CFrame=CFrame.lookAt(target+Vector3.new(.44,.26,1).Unit*distance,target)
+    end
     slot.kind=kind
    end
   end
@@ -36,7 +40,7 @@ function V.new(ctx)
  pcall(function() starter:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end)
  local function add(part)
   if not part:IsA('BasePart') or self.world[part] or not ToolRules.ITEMS[part:GetAttribute('Kind')] then return end
-  local kind=part:GetAttribute('Kind');local model=ToolArt.create(kind,ctx.localFX)
+  local kind=part:GetAttribute('Kind');local model=ToolArt.create(kind,ctx.localFX,part:GetAttribute('State')=='Flying')
   model:PivotTo(part.CFrame);part.LocalTransparencyModifier=1
   self.world[part]={model=model,fill=ToolArt.bar(model.PrimaryPart,part:GetAttribute('HP') or 1,part:GetAttribute('MaxHP') or 1),kind=kind}
  end
@@ -59,16 +63,16 @@ end
 function V:input(input,processed)
  if processed or self.uis:GetFocusedTextBox() or self.ctx.hidden() then return false end
  local key=input.KeyCode
- local keys={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3}
+ local keys={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8}
  if keys[key] then self:equip(keys[key]);return true end
  if key==Enum.KeyCode.Backspace or key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then if self:selected() then self:unequip();return true end end
  if key==Enum.KeyCode.ButtonL1 then
-  for n=1,3 do local i=((self.state.selected or 0)+n-1)%3+1;local item=self.state.slots[i];if item and item.state=='Held' then self:equip(i);break end end;return true
+  for n=1,ToolRules.SLOTS do local i=((self.state.selected or 0)+n-1)%ToolRules.SLOTS+1;local item=self.state.slots[i];if item and item.state=='Held' then self:equip(i);break end end;return true
  end
  if self:selected() and (key==Enum.KeyCode.ButtonR2 or input.UserInputType==Enum.UserInputType.MouseButton1) then self:activate();return true end
  return false
 end
-function V:aim(screen)
+function V:contact(screen)
  local camera=workspace.CurrentCamera;local hr=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if not camera or not hr then return end
  local pointer=screen or self.uis:GetMouseLocation()
@@ -76,14 +80,13 @@ function V:aim(screen)
  local ray=center and camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) or camera:ScreenPointToRay(pointer.X,pointer.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={self.ctx.localFX,self.player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*180,params)
- return hit and hit.Position or ray.Origin+ray.Direction*45,hit and hit.Instance,hr,params
+ return hit and hit.Position,hit and hit.Instance
 end
 function V:activate(screen)
  local item=self:selected();if not item or item.state~='Held' or self.ctx.hidden() then return end
- local aim,target=self:aim(screen);if not aim then return end
+ local point,target=self:contact(screen);local id=target and target:GetAttribute('ResourceId');if not id then return end
  if not screen and self.uis.MouseEnabled and not self.uis.TouchEnabled and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
- self.swingAt=workspace:GetServerTimeNow()
- self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,aim=aim,resourceId=target and target:GetAttribute('ResourceId')})
+ self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,point=point,resourceId=id})
 end
 function V:click(screen) if not self:selected() then return false end;self:activate(screen);return true end
 function V:blocks(point)
@@ -97,15 +100,25 @@ function V:impact(source)
  local kind=source:GetAttribute('Kind');local position=source.Position
  local camera=workspace.CurrentCamera;if not camera or (camera.CFrame.Position-position).Magnitude>120 then return end
  local color=source:GetAttribute('Color') or Color3.fromRGB(160,150,135)
+ local cue=({BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
+  BowlingBallRelease='tool_throw',JellyGrenadeRelease='tool_throw',MoltenTongsRelease='tool_throw',JellyStick='tool_stick'})[kind]
+ if cue then self.ctx.audio:play(cue,position);return end
  if kind~='Drop' then
-  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
+  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
+ end
+ local slab=source:GetAttribute('Slab')
+ if slab and #self.chips<72 then
+  local p=Instance.new('Part');p.Name='SlicedRockSlab';p.Size=slab;p.Color=color;p.Material=Enum.Material.Rock
+  p.CanTouch=false;p.CanQuery=false;p.Position=position+Vector3.new(0,.28,0);p.Parent=self.ctx.localFX
+  p.AssemblyLinearVelocity=Vector3.new(13,12,-5);p.AssemblyAngularVelocity=Vector3.new(2,1,3)
+  self.chips[#self.chips+1]={part=p,at=now,expires=now+1.6}
  end
  local count=kind=='JellyGrenade' and 18 or kind=='BowlingBall' and 12 or kind=='Shatter' and 10 or 5
  for i=1,count do
   if #self.chips>=72 then break end
   local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble';p.Size=Vector3.one*(.16+(i%4)*.09)
-  p.Color=color;p.Material=kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
+  p.Color=color;p.Material=kind=='MoltenTongs' and Enum.Material.Neon or kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
   p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false;p.CFrame=CFrame.new(position+Vector3.new(math.cos(angle)*.6,.4,math.sin(angle)*.6));p.Parent=self.ctx.localFX
   p.AssemblyLinearVelocity=Vector3.new(math.cos(angle)*(8+i%7),13+i%9,math.sin(angle)*(8+i%7));p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
   self.chips[#self.chips+1]={part=p,at=now,expires=now+1.5}
@@ -118,13 +131,15 @@ function V:impact(source)
 end
 function V:layout(item,active)
  local size=self.ctx.parent.AbsoluteSize;local touch=self.uis.TouchEnabled and not self.uis.KeyboardEnabled
- local width=math.clamp(size.X-32,120,252);local cell=(width-12)/3;local height=size.Y<430 and 67 or 82
+ local width=math.clamp(size.X-24,120,544);local columns=(size.X<450 and size.Y>=430) and 4 or ToolRules.SLOTS
+ local cell=(width-(columns-1)*6)/columns;local height=size.Y<430 and 59 or 72
+ local totalHeight=math.ceil(ToolRules.SLOTS/columns)*(height+6)-6
  local bottom=touch and (size.X<550 and 98 or 18) or 12
- self.gui.Size=UDim2.fromOffset(width,height);self.gui.Position=UDim2.new(.5,0,1,-bottom);self.gui.Visible=not self.ctx.hidden()
+ self.gui.Size=UDim2.fromOffset(width,totalHeight);self.gui.Position=UDim2.new(.5,0,1,-bottom);self.gui.Visible=not self.ctx.hidden()
  for i,slot in ipairs(self.slots) do
-  local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset((i-1)*(cell+6),0)
+  local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset(((i-1)%columns)*(cell+6),math.floor((i-1)/columns)*(height+6))
   slot.icon.Size=UDim2.new(1,-8,0,height-35);slot.name.Position=UDim2.fromOffset(3,height-33)
-  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
+  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
   slot.fill.Size=UDim2.fromScale(entry and entry.hp/entry.maxHP or 0,1)
   slot.fill.BackgroundColor3=entry and entry.hp/entry.maxHP<=.25 and Color3.fromRGB(246,117,83) or Color3.fromRGB(156,231,102)
   slot.button.BackgroundColor3=self.state.selected==i and Color3.fromRGB(74,97,148) or Color3.fromRGB(45,49,63)
@@ -132,33 +147,12 @@ function V:layout(item,active)
   slot.button.Selectable=entry and entry.state=='Held' or false
  end
  self.use.Visible=active==true and touch
- self.use.Text=active and item.kind=='Crowbar' and 'Swing' or 'Throw';self.use.Position=UDim2.new(.5,-54,1,-bottom-height-68)
- self.hint.Text=active and (item.kind=='Crowbar' and ('Swing · '..item.hp..' hits left') or item.kind=='BowlingBall' and (math.max(0,item.hp-1)..' recoveries · Throw') or 'Sticks · one throw') or ''
-end
-function V:arc(item,active)
- if not active or not ToolRules.ITEMS[item.kind].gravity then for _,dot in ipairs(self.arcs) do dot.Transparency=1 end;return end
- local aim,_,hr,params=self:aim()
- local from=hr and ToolRules.origin(hr.Position,hr.CFrame.LookVector)
- local velocity=ToolRules.launch(item.kind,from,aim)
- local blocked=false;local previous=from
- for i=1,18 do
-  local dot=self.arcs[i]
-  if velocity and not dot then dot=Instance.new('Part');dot.Name='HeavyThrowArc';dot.Shape=Enum.PartType.Ball;dot.Size=Vector3.one*.16;dot.Color=Color3.fromRGB(255,230,146);dot.Material=Enum.Material.Neon;dot.Anchored=true;dot.CanCollide=false;dot.CanTouch=false;dot.CanQuery=false;dot.Parent=self.ctx.localFX;self.arcs[i]=dot end
-  if dot then
-   dot.Transparency=1
-   if velocity and not blocked then
-    local point=ToolRules.position(from,velocity,ToolRules.ITEMS[item.kind].gravity,i*.045)
-    local hit=workspace:Spherecast(previous,ToolRules.ITEMS[item.kind].radius,point-previous,params)
-    dot.Position=hit and hit.Position or point;dot.Transparency=.12+i*.025
-    if hit then blocked=true end;previous=point
-   end
-  end
- end
+ self.use.Text='Use';self.use.Position=UDim2.new(.5,-54,1,-bottom-totalHeight-68)
+ self.hint.Text=active and (ToolRules.ITEMS[item.kind].name..' · Click a spot on the rock') or ''
 end
 function V:step(dt,now)
  local item=self:selected();local active=type(item)=='table' and item.state=='Held' and not self.ctx.hidden()
  if now>=(self.hudAt or 0) then self.hudAt=now+.09;self:layout(item,active) end
- if now>=(self.arcAt or 0) then self.arcAt=now+.05;self:arc(item,active) end
  for source,r in pairs(self.world) do
   if not source.Parent then r.model:Destroy();self.world[source]=nil
   else
@@ -179,8 +173,12 @@ function V:step(dt,now)
   if kind and hand and ToolRules.ITEMS[kind] then
    if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};r.fill=ToolArt.bar(r.model.PrimaryPart,p:GetAttribute('HeldFieldToolHP') or 1,ToolRules.ITEMS[kind].uses);self.held[p]=r end
    r.fill.Size=UDim2.fromScale((p:GetAttribute('HeldFieldToolHP') or 0)/ToolRules.ITEMS[kind].uses,1)
-   local q=p==self.player and math.clamp((now-(self.swingAt or 0))/.35,0,1) or 1
-   r.model:PivotTo(hand.CFrame*CFrame.new(0,-.5,-.4)*CFrame.Angles(-math.sin(q*math.pi)*1.6,0,kind=='Crowbar' and -.3 or 0))
+   local wind=p:GetAttribute('ToolWindupUntil')
+   local release=p:GetAttribute('ToolSwingAt')
+   local elapsed=release and now-release or 10
+   local q=wind and math.clamp(1-(wind-now)/(ToolRules.ITEMS[kind].windup or .3),0,1) or 0
+   local recoil=not wind and elapsed>=0 and elapsed<.26 and math.sin(math.pi*elapsed/.26)^.65 or 0
+   r.model:PivotTo(hand.CFrame*CFrame.new(-q*.48,-.5+q*.92,-.4+q*.6-recoil*.85)*CFrame.Angles(q*1.85-recoil*2.1,0,q*.65-(kind=='Crowbar' and .3 or 0)))
   end
  end
  for p,r in pairs(self.held) do if not p.Parent then r.model:Destroy();self.held[p]=nil end end
@@ -196,7 +194,6 @@ end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for _,slot in ipairs(self.slots) do if slot.model then slot.model:Destroy() end end
- for _,p in ipairs(self.arcs) do p:Destroy() end
  for _,r in pairs(self.world) do r.model:Destroy() end
  for _,r in pairs(self.held) do r.model:Destroy() end
  for _,c in ipairs(self.chips) do c.part:Destroy() end

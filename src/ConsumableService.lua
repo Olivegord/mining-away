@@ -13,15 +13,16 @@ function S:clear(p)
  if ctx.saveHealthy(p) and Consumables.refund(ctx.data(p).consumables) then p.dirty=true;p.publishDirty=true end
  p.supply=nil;p.player:SetAttribute('MA_ConsumableActive',nil)
 end
-function S:command(p,payload)
+function S:command(p,payload,verifiedPosition,verifiedTarget)
  local ctx=self.ctx;local profile=ctx.data(p)
  if type(payload)~='table' or payload.runId~=profile.run.id or not Consumables.ITEMS[payload.kind]
   or type(payload.txId)~='string' or #payload.txId<1 or #payload.txId>100 then return end
  if p.supply or profile.consumables.pending then ctx.notice(p,'Your deployed tool is still working');return end
  if payload.version~=profile.consumables.version or profile.consumables.counts[payload.kind]<1 then ctx.notice(p,'Backpack changed; select an available tool');return end
- local position,reason=ctx.placement(p,payload)
+ local position,reason=verifiedPosition,nil
+ if not position then position,reason=ctx.placement(p,payload) end
  if not position then ctx.notice(p,reason);return end
- local record={kind=payload.kind,fieldId=payload.fieldId,position=position,runId=profile.run.id,txId=payload.txId}
+ local record={kind=payload.kind,fieldId=payload.fieldId,position=position,runId=profile.run.id,txId=payload.txId,targetId=verifiedTarget}
  record.state=ctx.abilities.new({},record.runId)
  -- Dry preflight has no effects, damage, inventory writes or cooldown cost.
  local context=ctx.context(p,record);context.emit=function() end
@@ -39,6 +40,18 @@ function S:command(p,payload)
   p.player:SetAttribute('MA_ConsumableActive',record.kind)
  end)
  if not started then ctx.notice(p,'Wait for the current save to finish') end
+end
+function S:drop(p,kind,target,point)
+ local ctx=self.ctx
+ if p.supply or ctx.data(p).consumables.pending then ctx.notice(p,'Your deployed tool is still working');return false end
+ local record={kind=kind,fieldId=target.field.id,position=point,targetId=target.id,runId=ctx.data(p).run.id,temporary=true}
+ record.state=ctx.abilities.new({},record.runId)
+ local context=ctx.context(p,record);context.emit=function() end
+ local ok,why=ctx.abilities.begin(record.state,kind,ctx.now(),context)
+ if not ok then ctx.notice(p,why);return false end
+ record.state=ctx.abilities.new({},record.runId);p.supply=record
+ p.player:SetAttribute('MA_ConsumableActive',kind)
+ return true
 end
 local function beacon(parent,record)
  local item=Consumables.ITEMS[record.kind]
@@ -60,7 +73,7 @@ function S:step(p,dt)
  local context=ctx.context(p,record)
  if not record.started then
   local ok,reason=ctx.abilities.begin(record.state,record.kind,ctx.now(),context)
-  if not ok then self:clear(p);ctx.notice(p,reason..' — tool returned');return end
+  if not ok then self:clear(p);ctx.notice(p,record.temporary and reason or (reason..' — tool returned'));return end
   record.started=true;record.beacon=beacon(ctx.root,record)
   ctx.notice(p,Consumables.ITEMS[record.kind].name..' placed')
  end

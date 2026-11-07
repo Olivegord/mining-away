@@ -2,7 +2,11 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
-## November 6 latest — temporary mining drops, physical throws and player damage
+## November 6 latest — click the rock surface and start Studio with the tools
+
+Click **where on the rock** to attack; remove the trajectory preview. Give the ball and crowbar heavier windups and the crowbar a metal pipe impact. Tighten jelly's stick and detonation. Add a giant sword that slices real rock geometry, plus a molten steel ball held in circular tongs that drops and melts the rock. Use more physical rock reactions and distinct sounds. Ore currency should visibly glow and sparkle. Scrap and Orbital are mining drops in the same hotbar; share the Orbital melt with other heat sources. Start a fresh Studio test with one of each tool.
+
+## November 6 earlier — temporary mining drops, physical throws and player damage
 
 Take inspiration from the surprise of Bee Swarm Simulator's drops. Mining rocks can drop temporary tools, while drones remain permanent. Touch drops to collect them in a custom hotbar with durability bars. A held bowling ball previews a steep gravity arc and falls fast; a hit can crater a rock. Touch the ball to recover it three times; it shatters on the final use. A one-use jelly grenade sticks to a rock, then explodes. The owner also suggests a crowbar. Make rocks solid enough for players to touch, add physical rubble, and make lasers and explosions able to hurt players. Keep the original map, drones and progression. Current implementation and publication evidence are in [project state](PROJECT_STATE.md).
 

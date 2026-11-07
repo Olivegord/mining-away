@@ -273,6 +273,7 @@ function F.resourceScale(stage,count,scarBase,scarStage)
  local progress=math.clamp((stage-(scarStage or 0))/math.max(1,(count or 3)-(scarStage or 0)),0,1)
  return scarBase*(1-.18*progress)
 end
+function F.rockShape(slice,heat) return Vector3.new(1,(slice or 1)*(1-.0625*(heat or 0)),1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
  -- TweenInfo.new(2) originally used Roblox's default Quad.Out easing.

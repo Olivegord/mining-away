@@ -57,7 +57,10 @@ function A.begin(state,kind,now,ctx)
  local list=targets(ctx,ctx.fieldId,kind)
  if #list==0 then return false,'No grown crystals are ready' end
  local chosen=list[1]
- if kind=='Orbital' and ctx.placement then
+ if kind=='Orbital' and ctx.selectedId then
+  chosen=nil;for _,r in ipairs(list) do if r.id==ctx.selectedId then chosen=r;break end end
+  if not chosen then return false,'That rock is out of reach' end
+ elseif kind=='Orbital' and ctx.placement then
   local nearest=math.huge
   for _,r in ipairs(list) do
    local dx,dz=r.x-ctx.placement.x,r.z-ctx.placement.z;local squared=dx*dx+dz*dz

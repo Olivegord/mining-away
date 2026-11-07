@@ -9,19 +9,29 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `12d4de699cc433ff997c0335626d71ed724810e9987f4570a7ee146cffd71169` | Temporary field tools and player damage; all non-Source chunks and unrelated Sources preserved. |
-| Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The commit containing the temporary field tools Sources and matching native snapshot. |
+| Native-file SHA-256 | `ebfa03a78fdb525344b4f04275c170af42fd112b771f189b452809b940c09a21` | Unified eight-tool hotbar, surface contact and melting; all non-Source chunks and unrelated Sources preserved. |
+| Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The commit containing the direct-click tool Sources and matching native snapshot. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Temporary tools installed November 6, 2026** | All seven Sources matched before publication and the hotbar and tool controllers were present afterward. Studio was already open and remains in Edit mode. This revision has not been played in Studio. |
-| Published Roblox version | **v24, verified** | Studio logged success for place `124078027733625` on November 6 at 9:35:56 PM Pacific and identified v24. This published the temporary tools and previous side-HUD follow-ups. Never reopen the history panel. |
+| Shared Studio entry point | **Direct-click tools installed November 6, 2026** | All seven Sources matched before publishing. Studio remains open in Edit; the new revision has not been played in Studio. |
+| Published Roblox version | **v25, verified** | Studio logged successful publication of place `124078027733625` on November 6 at 10:08:01 PM Pacific and identified v25. Never reopen the history panel. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — temporary mining tools and player damage
+## Latest follow-up — click the rock, heavier tools, shared hotbar
+
+Equip a tool in slots **1–8**, then click the spot on a nearby rock. The server validates the rock, face point, range, cover, ownership and run; it retains the point through the windup. No arc preview or ground click auto-targeting. Bowling has a .44 s windup, quick downward flight and its three recoveries. Crowbar hits chip the selected face with a [Creator Store pipe impact](https://create.roblox.com/store/asset/9113500863). Jelly has a .42 s contact fuse and heat damage. The sword removes a grounded slice at the clicked height and launches the detached slab. Sledgehammer dents and chips nearby rocks. The circular tongs drop a hot steel ball above the chosen spot; contact burns the rock over 1.75 s. Orbital, molten steel, jelly and heat-producing drones share the bounded melt bands, glowing color, lower collider and top cavity.
+
+Scrap Capsule and Orbital Laser drop as temporary hotbar items and use the existing six-bot and orbital deployments. Previously saved charges are still accessible in the same hotbar with their durable transaction rules. A fresh **Studio** playtest grants one each of the eight tools at initial spawn; production players earn drops from mining. The ore pickups now use neon mineral colors, nearby stars and glints, stronger bounded lights and a collection burst.
+
+Validation: 15 tool/hazard logic scenarios and the core loop in both configurations pass with API doubles, including the real Studio-only starter grant, exact click bounds, delayed contact, slicer, molten steel and Orbital melt. Legacy gadget, rock damage, cascade, physical mining and five isolated pickup renderer checks pass. The aggregate pickup runner stops earlier at an unchanged ore magnet math assertion in the prior revision; this pass changes pickup appearance and leaves the ore trajectory code unchanged. No new native Play or device simulation was started. Visual feel, input and multiplayer still need a native test. Build preservation used `python3 tools/build.py --previous-commit 5f88114469dcebb914f7d454ce6643c41c1f1a68` and retained all authored map and backup scripts.
+
+Native publication: the pre-export integration branch matched origin, and the open Studio document matched its seven Sources. An older Play session was stopped before the export. All three Script Sync roots reported `SyncedAsRoot`. New server and client length/fingerprint pairs were `(461655, 1810625032)` and `(546645, 1745913583)`. The Studio log at `2026-11-07T06:08:01Z` records `Publish succeeded for placeId 124078027733625`, `Add publish notes to v25` and `Published new changes in "DRONEREVOLUTION" to Roblox.` The same Studio entry point, universe **10774898335**, was confirmed in Edit. No Version History panel was used.
+
+## Earlier follow-up — temporary mining tools and player damage
 
 The second eligible drone-mined rock drops a **bowling ball**. Later breaks introduce the **crowbar** and **jelly grenade**, then vary the drop, with a six-break ceiling after the first. Drops hop out of rocks, last 75 seconds in the world, and are collected by their owner on contact into three hotbar slots with tool models and durability bars. Press **1–3** or select a slot; click to use it, use the touch action, or cycle with **LB** and use **RT** on a gamepad. The custom hotbar replaces the stock Roblox backpack interface. Existing Orbital Beacon and Scrap Capsule pockets and progression are retained. These field tools are temporary runtime gear; death, prestige and disconnect clear them without changing saved drone ownership.
 

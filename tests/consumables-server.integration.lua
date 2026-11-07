@@ -20,10 +20,10 @@ local function input(pl,kind,extra)
  for k,v in pairs(extra or {}) do payload[k]=v end
  command.OnServerEvent:Fire(pl,'PlaceConsumable',payload);return payload
 end
-check('three actual rock breaks drop equipment at the broken rock without a multiplier',function()
+check('legacy discovery pickup preserves earned stock without a multiplier',function()
  local pl,p=fixture();local d=p.drones[1]
  data(p).run.cargo.Quartz=Ca.capacity(data(p))
- for i=1,3 do local r=node();assert(hitResource(d,r,10000,false,nil,r.position+Vector3.new(0,34,0)));if i<3 then assert(not discoveries.states[pl]) end end
+ for i=1,3 do local r=node();discoveries:TrySpawn(pl,r.field.part,r.position,1);if i<3 then assert(not discoveries.states[pl]) end end
  local drop=assert(discoveries.states[pl]);assert(drop.kind=='Orbital' and drop.part:GetAttribute('OwnerUserId')==pl.UserId)
  assert(math.abs(drop.origin.X-patches[1].center.X)<1e-7 and discoveries:Multiplier(pl,'Speed')==1 and discoveries:Multiplier(pl,'Yield')==1)
  advance(.8);assert(not discoveries.states[pl] and data(p).consumables.counts.Orbital==1)
@@ -32,7 +32,7 @@ check('three actual rock breaks drop equipment at the broken rock without a mult
 end)
 check('drops belong to the miner; collection waits through a save and requires clear reach',function()
  local a,p=fixture();local b,q=fixture();local r=node();local d=p.drones[1]
- data(p).consumables.misses=2;assert(hitResource(d,r,10000,false,nil,r.position+Vector3.new(0,34,0)))
+ data(p).consumables.misses=2;discoveries:TrySpawn(a,r.field.part,r.position,1)
  a.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(25,3,0)));advance(.8)
  assert(discoveries.states[a] and data(q).consumables.counts.Orbital==0)
  a.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)));p.busy=true;advance(.3)
@@ -115,7 +115,7 @@ check('disconnect refunds an unused saved reservation and destroys active deploy
 end)
 check('expired world equipment cleans up and retains the earned guarantee',function()
  local pl,p=fixture();local r=node();data(p).consumables.misses=2
- assert(hitResource(p.drones[1],r,10000,false,nil,r.position+Vector3.new(0,34,0)))
+ discoveries:TrySpawn(pl,r.field.part,r.position,1)
  pl.Character:PivotTo(CFrame.new(home));local state=assert(discoveries.states[pl])
  realTime=state.expires+.1;discoveries:Step();assert(not discoveries.states[pl] and data(p).consumables.misses>=3)
  assert(Consumables.onRock(data(p).consumables,1,.999,.999)=='Orbital')

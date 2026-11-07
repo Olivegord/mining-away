@@ -57,7 +57,7 @@ IT.__newindex=function(i,k,v)
 end
 local Instance={}
 function Instance.new(class)
- local i=setmetatable({_p={ClassName=class,Name=class,Position=Vector3.zero,CFrame=CFrame.new(),Size=Vector3.one,Color=Color3.new(1,1,1),Transparency=0,CanQuery=true,CanCollide=true,Enabled=true},_children={},_attrs={},_signals={}},IT)
+ local i=setmetatable({_p={ClassName=class,Name=class,Position=Vector3.zero,CFrame=CFrame.new(),Size=Vector3.one,Color=Color3.new(1,1,1),Transparency=0,CanQuery=true,CanCollide=true,Enabled=true,Destroying=signal()},_children={},_attrs={},_signals={}},IT)
  if class=='RemoteEvent' then i.OnServerEvent=signal() end
  if class=='ProximityPrompt' then
   i.PromptButtonHoldBegan=signal();i.PromptButtonHoldEnded=signal();i.Triggered=signal()
@@ -81,7 +81,7 @@ function IM:GetAttributes() return table.clone(self._attrs) end
 function IM:GetAttribute(k) return self._attrs[k] end
 function IM:GetAttributeChangedSignal(k) self._signals[k]=self._signals[k] or signal();return self._signals[k] end
 function IM:IsDescendantOf(other) local p=self.Parent;while p do if p==other then return true end;p=p.Parent end;return false end
-function IM:Destroy() for _,c in ipairs(self:GetChildren()) do c:Destroy() end;self.Parent=nil;self._destroyed=true end
+function IM:Destroy() self.Destroying:Fire();for _,c in ipairs(self:GetChildren()) do c:Destroy() end;self.Parent=nil;self._destroyed=true end
 function IM:GetPivot() return self.PrimaryPart and self.PrimaryPart.CFrame or self.CFrame end
 function IM:PivotTo(cf)
  local delta=cf*self:GetPivot():Inverse()

@@ -120,7 +120,6 @@ local pendingDroneSources={}
 local templateRetryQueued=false
 local profile=nil
 local logisticsView=nil
-local consumableView=nil
 local toolView=nil
 local U=Interface
 local palette=U.palette
@@ -791,7 +790,8 @@ local function renderResource(r,now)
  local period=targetPeriod
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
-  local displaySize=full*math.max(.005,growth*period)
+  local heat=s:GetAttribute('MeltBand') or 0
+  local displaySize=full*math.max(.005,growth*period)*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -802,7 +802,7 @@ local function renderResource(r,now)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
-  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52)
+  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   if not r.riseShown and now-spawnAt>.12 then
    r.riseShown=true
    if now-spawnAt<.65 then presentation:resourceRise(r,now) end
@@ -1075,14 +1075,10 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  openFleet=openFleet,openCards=function() if pending() and not sealedPack() then openOffer() else openRunCards() end end,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
-consumableView=ConsumableView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,resources=resourceIndex,command=command,
- profile=function() return profile end,hidden=menusVisible,
- blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
- onSelect=function() logisticsView.selected=nil;if toolView then toolView:unequip() end end})
 toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
  audio=soundscape,presentation=presentation,hidden=menusVisible,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) or (toolView and toolView:blocks(point-game:GetService('GuiService'):GetGuiInset())) end,
- onSelect=function() consumableView:select(nil);logisticsView.selected=nil end})
+ onSelect=function() logisticsView.selected=nil end})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
@@ -1138,7 +1134,7 @@ local function requestPlot(id)
  command:FireServer('Patch',id)
 end
 local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
- profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (consumableView and consumableView:isSelecting()) or (toolView and toolView:selected()~=nil) end,
+ profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
@@ -1170,7 +1166,6 @@ local mouse=player:GetMouse()
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
- if consumableView and consumableView:click(position,true) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -1179,14 +1174,13 @@ connect(UIS.TouchTapInWorld,function(position,processed)
 end)
 connect(UIS.InputBegan,function(input,processed)
  if toolView and toolView:input(input,processed) then return end
- if consumableView and consumableView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
-   if not (consumableView and consumableView:click(point,false)) then commandView:beginDrag();assignField(mouse.Target) end
+   commandView:beginDrag();assignField(mouse.Target)
   end
   return
  end
@@ -1311,7 +1305,6 @@ connect(gui.Destroying,function()
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
- if consumableView then consumableView:destroy() end
  if toolView then toolView:destroy() end
  tacticalHUD:destroy()
  crystalAudio:destroy()

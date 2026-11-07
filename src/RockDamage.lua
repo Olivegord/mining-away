@@ -15,7 +15,7 @@ function R.depthBand(bubbles,dents,depth)
  if count(bubbles)<R.MAX_CUTS and count(dents)<R.MAX_CUTS then return 0 end
  return math.clamp(math.floor(math.clamp(tonumber(depth) or 0,0,1)*6+1e-7),0,6)
 end
-function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount)
+function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount,heat,dentWidth,meltPoint)
  local result={}
  for i=1,count(bubbles) do
   local center,diameter=R.bite(i,count(bubbles)>=R.MAX_CUTS and depthBand or 0)
@@ -31,9 +31,12 @@ function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount)
  if ballPoint then
   local axis='Y';if math.abs(ballPoint.X)>math.abs(ballPoint[axis]) then axis='X' end
   if math.abs(ballPoint.Z)>math.abs(ballPoint[axis]) then axis='Z' end
-  local width=.65+.05*math.clamp(ballCount or 1,1,4);local depth=.48+.05*math.clamp(ballCount or 1,1,4)
+  local width=(dentWidth or .65)+.035*math.clamp(ballCount or 1,1,4);local depth=width*.78
   local size=Vector3.new(axis=='X' and depth or width,axis=='Y' and depth or width,axis=='Z' and depth or width)
   result[#result+1]={center=ballPoint,size=size,kind='BowlingBall'}
+ end
+ if heat and heat>0 then
+  result[#result+1]={center=meltPoint or Vector3.new(0,.52,0),size=Vector3.new(.48+.12*heat,.35+.1*heat,.48+.12*heat),kind='Melt'}
  end
  return result
 end
@@ -74,13 +77,14 @@ function R.new(options)
   local bubbles=count(source:GetAttribute('BubbleBites'));local dents=count(source:GetAttribute('SmashDents'))
   local band=R.depthBand(bubbles,dents,source:GetAttribute('DamageDepth'))
   local ball=source:GetAttribute('BallDentPoint');local ballCount=source:GetAttribute('BallDents') or 0
-  local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')
+  local heat=source:GetAttribute('MeltBand') or 0
+  local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')..(heat>0 and ':heat'..heat or '')
   if key==state.requested then return end
   state.requested=key;state.generation+=1
-  if bubbles+dents==0 and not ball then return end
+  if bubbles+dents==0 and not ball and heat==0 then return end
   -- Only the local render clone is touched, never the replicated source.
   if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
-  self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,generation=state.generation,key=key,at=now}
+  self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,heat=heat,meltPoint=source:GetAttribute('MeltPoint'),dentWidth=source:GetAttribute('DentWidth'),generation=state.generation,key=key,at=now}
  end
  local function execute(record,request,state)
   local geometry=game:GetService('GeometryService')
@@ -122,7 +126,7 @@ function R.new(options)
   local base=template:Clone();clean(base)
   base.CFrame=CFrame.new();base.Size=Vector3.one*CANONICAL
   local cutters={}
-  for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount)) do
+  for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount,request.heat,request.dentWidth,request.meltPoint)) do
    local cutter=Instance.new('Part');cutter.Shape=Enum.PartType.Ball
    cutter.Size=spec.size*CANONICAL;cutter.CFrame=CFrame.new(spec.center*CANONICAL)
    cutter.Anchored=true;cutter.CanCollide=false;cutter.CanTouch=false;cutter.CanQuery=false

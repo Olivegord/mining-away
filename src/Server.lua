@@ -87,6 +87,7 @@ local function publish(p)
  end
  copy.saveMode=preview and 'Preview — temporary profiles' or 'Saved profile';copy.pendingTransaction=p.busy or p.session.readOnly or false
  p.player:SetAttribute('MA_Profile',Http:JSONEncode(copy))
+ if scene.fieldTools then scene.fieldTools:refreshStock(p) end
  p.player:SetAttribute('MA_SaveStatus',p.session.lost and 'Session lost — progress paused' or (p.session.readOnly and 'Save uncertain — reconciling' or (preview and 'PREVIEW • not saved across restarts' or 'Saved • autosave active')))
 end
 local function characterRoot(p: any): any
@@ -761,12 +762,36 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if secondary then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
+ local shapeChanged=false
  local fragmentOrigin=r.part.Position+Vector3.new(0,r.part.Size.Y*.35+.4,0)
  local revealed=nil
  local broken=R.damage(r,amount)
- if contactKind=='FieldTool' and fractureContext and fractureContext.toolKind=='BowlingBall' then
+ local tool=fractureContext and fractureContext.toolKind
+ if tool=='Greatsword' and not r.slice then
+  r.slice=math.clamp(.5+r.part.CFrame:PointToObjectSpace(fractureContext.point).Y/r.part.Size.Y,.35,.65);r.part:SetAttribute('SliceScale',r.slice);shapeChanged=true
+  r.damageBaseScale=r.damageBaseScale or Feel.stageScale(previous,r.stageCount);r.damageBaseStage=r.damageBaseStage or previous
+  r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',r.damageBaseStage)
+ end
+ if tool=='Melt' or tool=='JellyGrenade' or (special and d.role=='Starforge') or (not abilityOrigin and d.mining and d.role=='Striker') then
+  local rate=tool=='Melt' and 5 or tool=='JellyGrenade' and 1.6 or special and 2 or .9
+  r.heat=math.min(1,(r.heat or 0)+amount/math.max(1,r.maxHP-10)*rate)
+  local heat=math.floor(r.heat*4+1e-6)
+  if heat~=(r.heatBand or 0) then
+   r.heatBand=heat
+   local contact=fractureContext and fractureContext.point
+   if contact then
+    local q=r.part.CFrame:PointToObjectSpace(contact)/r.part.Size
+    r.part:SetAttribute('MeltPoint',Vector3.new(math.clamp(q.X,-.4,.4),.52,math.clamp(q.Z,-.4,.4)))
+   end
+   r.part:SetAttribute('MeltBand',heat);shapeChanged=true
+   if not broken then RoleEffects.Pulse(r.part.Position+Vector3.new(0,r.part.Size.Y*.5,0),Color3.fromRGB(255,125,56),.35,math.min(4,r.part.Size.X),.24) end
+  end
+ end
+ if contactKind=='FieldTool' and (tool=='BowlingBall' or tool=='Crowbar' or tool=='Sledgehammer') then
   r.ballDents=math.min(4,(r.ballDents or 0)+1)
-  local point=r.part.CFrame:PointToObjectSpace(abilityOrigin)/r.part.Size
+  local point=r.part.CFrame:PointToObjectSpace(fractureContext.point or abilityOrigin)/r.part.Size
+  if tool=='Sledgehammer' then point=Vector3.new(0,.5,0) end
+  r.part:SetAttribute('DentWidth',tool=='Crowbar' and .44 or tool=='Sledgehammer' and .85 or .72)
   r.part:SetAttribute('BallDentPoint',Vector3.new(math.clamp(point.X,-.53,.53),math.clamp(point.Y,-.53,.53),math.clamp(point.Z,-.53,.53)))
   r.part:SetAttribute('BallDentSerial',(r.part:GetAttribute('BallDentSerial') or 0)+1);r.part:SetAttribute('BallDents',r.ballDents)
   r.damageBaseScale=r.damageBaseScale or Feel.stageScale(previous,r.stageCount);r.damageBaseStage=r.damageBaseStage or previous
@@ -803,9 +828,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  local actual=r.paid and 0 or r.hp+10
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
- if r.stage~=previous then
+ if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  r.part.Size=r.fullSize*Feel.resourceScale(r.stage,r.stageCount,r.damageBaseScale,r.damageBaseStage)
+  r.part.Size=r.fullSize*Feel.resourceScale(r.stage,r.stageCount,r.damageBaseScale,r.damageBaseStage)*Feel.rockShape(r.slice,r.heatBand)
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed)
  end
  r.part:SetAttribute('HP',actual)
@@ -830,7 +855,6 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    -- Tools never manufacture more tools, including rocks later finished by a
    -- normal drone. The rock's ordinary ore payout remains unchanged.
    if not r.consumableWorked then
-    discoveries:TrySpawn(p.player,r.field.part,Vector3.new(r.position.X,r.part:GetAttribute('GroundY') or r.position.Y,r.position.Z),r.field.id)
     if scene.fieldTools then scene.fieldTools:onRock(p,r) end
    end
    table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn)
@@ -1837,7 +1861,11 @@ local function abilityContext(p,fieldId,operator,deployment)
   for _,d in ipairs(p.drones) do if d.hp>0 and (DroneRoles.isWorker(d.role) or DroneRoles.ability(d.role)) then actor=d;break end end
  end
  local hr=characterRoot(p);local origin=actor and actor.pos or (hr and hr.Position or home)
- if deployment then origin=deployment.position+Vector3.new(0,1,0) end
+ if deployment then
+  origin=deployment.position+Vector3.new(0,1,0)
+  if deployment.temporary then actor={id=tostring(p.player.UserId)..':drop-gadget',owner=p.player.UserId,hp=1,life=1,role='Striker',pos=origin,
+   owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}} end
+ end
  local function unlocked(kind)
   if deployment then return kind==deployment.kind end
   if Shops.abilityUnlocked(data(p),kind) then return true end
@@ -1856,10 +1884,11 @@ local function abilityContext(p,fieldId,operator,deployment)
   -- targeting must describe that current authoritative body, not the old
   -- quarter-scale/rotating presentation that ordinary unscarred rocks use.
   local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed))
-  return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=r.position.X,y=top,z=r.position.Z}
+  local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
+  return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},
-  placement=deployment and {x=origin.X,y=origin.Y,z=origin.Z},perks=deployment and {scrapBots=2} or Ca.abilityPerks(data(p)),unlocked=unlocked,
+  placement=deployment and {x=origin.X,y=origin.Y,z=origin.Z},selectedId=deployment and deployment.targetId,perks=deployment and {scrapBots=2} or Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
   -- During a burn inspect only its fixed target. The normal ctx.hit path still
@@ -1888,9 +1917,9 @@ local function abilityContext(p,fieldId,operator,deployment)
    local resource=resources[id]
    if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' or not targetRecord(resource) then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
-   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil)
+   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z)} or nil)
    if accepted then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
-   if accepted and deployment and Consumables.accept(data(p).consumables) then p.dirty=true;p.publishDirty=true end
+   if accepted and deployment and not deployment.temporary and Consumables.accept(data(p).consumables) then p.dirty=true;p.publishDirty=true end
    return accepted,resource.paid==true
   end,
   emit=function(event) RoleEffects.Ability(deployment and (tostring(p.player.UserId)..':tool') or p.player.UserId,event,scene.droneTemplate) end}
@@ -1917,18 +1946,30 @@ scene.toolRandom=Random.new()
 scene.fieldTools=ToolRules.Service.new({world=root,players=profiles,resources=resources,debris=Debris,healthy=healthy,
  root=characterRoot,run=function(p) return data(p).run.id end,encode=function(v) return Http:JSONEncode(v) end,
  now=function() return now end,random=function() return scene.toolRandom:NextNumber() end,notice=notice,hazards=scene.hazards,
- clear=function(from,to,character) return los(from,to,nil,{droneFolder,character}) end,
+ stock=function(p,kind) return data(p).consumables.counts[kind] or 0 end,
+ eligible=function(p,r,position)
+  if now<r.readyAt or not playerCanMine(p,r.field) or not nearMiningField(position,r.field) or activeAssault(p) then return false end
+  for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return false end end
+  return true
+ end,
+ gadget=function(p,item,target,point)
+  if not item.saved then return consumableService:drop(p,item.kind,target,point) end
+  local profile=data(p)
+  consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
+  return true
+ end,
+ clear=function(from,to,character,target) return los(from,to,target,{droneFolder,character}) end,
  cast=function(from,to,radius,character)
   if (to-from).Magnitude<1e-6 then return nil end
   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
   params.FilterDescendantsInstances={droneFolder,character,root.FieldTools,root.ToolImpacts}
   return workspace:Spherecast(from,radius,to-from,params)
  end,
- hit=function(p,r,amount,origin,kind)
+ hit=function(p,r,amount,origin,kind,point)
   -- Equipment works without borrowing a live drone or changing its orders.
   local actor={id=tostring(p.player.UserId)..':field-tool',owner=p.player.UserId,hp=1,life=1,role='Striker',pos=origin,
    owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
-  return hitResource(actor,r,amount,false,nil,origin,'FieldTool',{consumable=true,toolKind=kind})
+  return hitResource(actor,r,amount,false,nil,origin,'FieldTool',{consumable=true,toolKind=kind,point=point})
  end})
 local function finishAbility(p,token,context)
  local charge=p.ability.charge
@@ -2271,6 +2312,7 @@ addPlayer=function(pl)
   local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0);local firstField=scene.fields[1].center
   scene.fieldTools:clear(p);p.hazardAt={}
   leaveField(p,nil,nil,true);ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
+  if inStudio and not p.previewToolsGranted then p.previewToolsGranted=true;scene.fieldTools:previewLoadout(p) end
  end
  p.connection=pl.CharacterAdded:Connect(character)
  rebuildFleet(p);logistics:create(p);publish(p)

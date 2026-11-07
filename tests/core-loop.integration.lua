@@ -35,6 +35,11 @@ check('one miner with the correct starter wallet, normal bag and no free automat
  assert(#p.drones==1 and #data(p).fleet==1 and not p.testFleet)
  assert(Ca.capacity(data(p))==40 and p.drones[1].stats.plotAuto==0)
  assert(data(p).run.wallet.Quartz==(preview and 100 or 0))
+ local hotbar=pl:GetAttribute('MA_FieldTools')
+ if preview then
+  local slots=Http:JSONDecode(hotbar).slots
+  for i,kind in ipairs(ToolRules.ORDER) do assert(slots[i].kind==kind) end
+ else assert(not hotbar,'production player received preview tools') end
  assert(data(p).run.saleEarnings==0 and not data(p).logistics.backpack and #data(p).logistics.carriers==0)
  -- Continue the earned-economy scenarios from the live starting balance.
  data(p).run.wallet.Quartz=0;data(p).run.credits=0

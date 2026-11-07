@@ -425,6 +425,7 @@ function F.resourceScale(stage,count,scarBase,scarStage)
  local progress=math.clamp((stage-(scarStage or 0))/math.max(1,(count or 3)-(scarStage or 0)),0,1)
  return scarBase*(1-.18*progress)
 end
+function F.rockShape(slice,heat) return Vector3.new(1,(slice or 1)*(1-.0625*(heat or 0)),1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
  -- TweenInfo.new(2) originally used Roblox's default Quad.Out easing.
@@ -901,6 +902,12 @@ local CUES = {
  breaker_contact={id='9125869495',volume=.46,duration=.7,pitch=.68,cooldown=.12,range=85,maxVoices=4,fallback='action_jump_land.mp3'},
  breaker_fracture={id='9125869138',volume=.35,duration=1.1,pitch=1.05,cooldown=.12,range=85,maxVoices=4,fallback='action_jump_land.mp3'},
  rubble={ids={'9125869504','9125869495','9125869138'},volume=.32,duration=1.2,pitch=1.12,cooldown=.055,range=75,maxVoices=4,fallback='action_jump_land.mp3'},
+ tool_pipe={ids={'9113500863','9113500510','9113500760'},volume=.42,duration=1.2,pitch=.94,cooldown=.1,range=68,fallback='action_jump_land.mp3'},
+ tool_slice={id='9125869138',volume=.36,duration=.72,pitch=1.4,cooldown=.1,range=68,fallback='action_jump_land.mp3'},
+ tool_sizzle={id='9118614717',volume=.24,duration=1.45,pitch=.94,cooldown=.1,range=58,fallback='action_jump_land.mp3'},
+ tool_stick={id='9126066421',volume=.19,duration=.4,pitch=1.36,cooldown=.1,range=50,fallback='volume_slider.ogg'},
+ tool_throw={id='9118941667',volume=.2,duration=.5,pitch=.85,cooldown=.1,range=64,fallback='action_jump_land.mp3'},
+ tool_windup={id='9114583503',volume=.15,duration=.52,pitch=1.3,cooldown=.12,range=54,fallback='action_jump_land.mp3'},
  metal_land={id='9125871199',volume=.22,duration=1,pitch=.78,cooldown=.08,fallback='action_jump_land.mp3'},
  charge={id='139131445232833',volume=.12,duration=3.05,pitch=.74,cooldown=.1,range=65,priority=3,softLaser=true},
  breaker_charge={id='9114583503',volume=.28,duration=5,pitch=.7,cooldown=.1,range=80,priority=4},
@@ -3738,7 +3745,7 @@ function R.depthBand(bubbles,dents,depth)
  if count(bubbles)<R.MAX_CUTS and count(dents)<R.MAX_CUTS then return 0 end
  return math.clamp(math.floor(math.clamp(tonumber(depth) or 0,0,1)*6+1e-7),0,6)
 end
-function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount)
+function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount,heat,dentWidth,meltPoint)
  local result={}
  for i=1,count(bubbles) do
   local center,diameter=R.bite(i,count(bubbles)>=R.MAX_CUTS and depthBand or 0)
@@ -3754,9 +3761,12 @@ function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount)
  if ballPoint then
   local axis='Y';if math.abs(ballPoint.X)>math.abs(ballPoint[axis]) then axis='X' end
   if math.abs(ballPoint.Z)>math.abs(ballPoint[axis]) then axis='Z' end
-  local width=.65+.05*math.clamp(ballCount or 1,1,4);local depth=.48+.05*math.clamp(ballCount or 1,1,4)
+  local width=(dentWidth or .65)+.035*math.clamp(ballCount or 1,1,4);local depth=width*.78
   local size=Vector3.new(axis=='X' and depth or width,axis=='Y' and depth or width,axis=='Z' and depth or width)
   result[#result+1]={center=ballPoint,size=size,kind='BowlingBall'}
+ end
+ if heat and heat>0 then
+  result[#result+1]={center=meltPoint or Vector3.new(0,.52,0),size=Vector3.new(.48+.12*heat,.35+.1*heat,.48+.12*heat),kind='Melt'}
  end
  return result
 end
@@ -3797,13 +3807,14 @@ function R.new(options)
   local bubbles=count(source:GetAttribute('BubbleBites'));local dents=count(source:GetAttribute('SmashDents'))
   local band=R.depthBand(bubbles,dents,source:GetAttribute('DamageDepth'))
   local ball=source:GetAttribute('BallDentPoint');local ballCount=source:GetAttribute('BallDents') or 0
-  local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')
+  local heat=source:GetAttribute('MeltBand') or 0
+  local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')..(heat>0 and ':heat'..heat or '')
   if key==state.requested then return end
   state.requested=key;state.generation+=1
-  if bubbles+dents==0 and not ball then return end
+  if bubbles+dents==0 and not ball and heat==0 then return end
   -- Only the local render clone is touched, never the replicated source.
   if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
-  self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,generation=state.generation,key=key,at=now}
+  self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,heat=heat,meltPoint=source:GetAttribute('MeltPoint'),dentWidth=source:GetAttribute('DentWidth'),generation=state.generation,key=key,at=now}
  end
  local function execute(record,request,state)
   local geometry=game:GetService('GeometryService')
@@ -3845,7 +3856,7 @@ function R.new(options)
   local base=template:Clone();clean(base)
   base.CFrame=CFrame.new();base.Size=Vector3.one*CANONICAL
   local cutters={}
-  for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount)) do
+  for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount,request.heat,request.dentWidth,request.meltPoint)) do
    local cutter=Instance.new('Part');cutter.Shape=Enum.PartType.Ball
    cutter.Size=spec.size*CANONICAL;cutter.CFrame=CFrame.new(spec.center*CANONICAL)
    cutter.Anchored=true;cutter.CanCollide=false;cutter.CanTouch=false;cutter.CanQuery=false
@@ -7370,240 +7381,20 @@ end
 return View
 
 end)()
-local Consumables = (function()
--- Earned field tools live in their own backpack pockets, never in ore cargo.
--- Pure rules shared by profile validation, server drops and the placement UI.
-local C={STACK=3,MAX_DRY=8,ORDER={'Orbital','Scrap'}}
-C.ITEMS={
- Orbital={name='Orbital Beacon',short='Orbital',radius=12,color={246,108,83},description='Place beside a tough rock. Melts the nearest ready rock in 4 seconds.'},
- Scrap={name='Scrap Capsule',short='Scrap bots',radius=16,color={161,131,244},description='Place among leftovers. Six tiny miners work this area for 10 seconds.'},
-}
-local function integer(n,max)
- return type(n)=='number' and n==n and n>=0 and n%1==0 and n<=(max or 1e12)
-end
-function C.fresh()
- return {counts={Orbital=0,Scrap=0},collected=0,misses=0,rocks=0,version=0}
-end
-function C.validate(s)
- if type(s)~='table' or type(s.counts)~='table' then return false,'Missing consumable backpack' end
- for _,kind in ipairs(C.ORDER) do if not integer(s.counts[kind],C.STACK) then return false,'Invalid consumable count' end end
- for kind in pairs(s.counts) do if not C.ITEMS[kind] then return false,'Unknown consumable' end end
- for _,key in ipairs({'collected','rocks','version'}) do if not integer(s[key]) then return false,'Invalid consumable progress' end end
- if not integer(s.misses,C.MAX_DRY) then return false,'Invalid discovery streak' end
- local pending=s.pending
- if pending~=nil then
-  if type(pending)~='table' or not C.ITEMS[pending.kind] or s.counts[pending.kind]>=C.STACK
-   or type(pending.txId)~='string' or #pending.txId<1 or #pending.txId>100
-   or type(pending.runId)~='string' or #pending.runId<1 or #pending.runId>100 then return false,'Invalid reserved consumable' end
- end
- return true
-end
-function C.room(s,kind)
- return C.ITEMS[kind]~=nil and s.counts[kind]+(s.pending and s.pending.kind==kind and 1 or 0)<C.STACK
-end
-function C.onRock(s,tier,roll,choice)
- local available={}
- for _,kind in ipairs(C.ORDER) do if C.room(s,kind) then table.insert(available,kind) end end
- if #available==0 then return nil end
- s.rocks+=1;s.misses=math.min(C.MAX_DRY,s.misses+1)
- -- Teach both actions early. Afterwards randomness varies the opportunity,
- -- while the eighth eligible break guarantees useful equipment.
- if s.collected==0 then return s.misses>=3 and (C.room(s,'Orbital') and 'Orbital' or available[1]) or nil end
- if s.collected==1 then return s.misses>=5 and (C.room(s,'Scrap') and 'Scrap' or available[1]) or nil end
- local chance=.18+.03*math.clamp((tier or 1)-1,0,4)
- if s.misses<C.MAX_DRY and roll>=chance then return nil end
- return available[math.min(#available,1+math.floor(math.clamp(choice,0,.999999)*#available))]
-end
-function C.collect(s,kind)
- if not C.room(s,kind) then return false end
- s.counts[kind]+=1;s.collected+=1;s.misses=0;s.version+=1
- return true
-end
-function C.reserve(s,kind,version,txId,runId)
- if not C.ITEMS[kind] or s.counts[kind]<1 then return false,'That backpack pocket is empty' end
- if s.pending then return false,'A tool is already deploying' end
- if version~=s.version then return false,'Backpack changed; try again' end
- if type(txId)~='string' or #txId<1 or #txId>100 or type(runId)~='string' or #runId<1 or #runId>100 then return false,'Invalid deployment' end
- s.counts[kind]-=1;s.version+=1;s.pending={kind=kind,txId=txId,runId=runId}
- return true
-end
-function C.accept(s)
- if not s.pending then return false end
- s.pending=nil;s.version+=1;return true
-end
-function C.refund(s)
- local pending=s.pending;if not pending then return false end
- s.counts[pending.kind]+=1;s.pending=nil;s.version+=1;return true
-end
-return C
-
-end)()
-local ConsumableView = (function()
--- Two compact equipment pockets. Selection only aims; the server validates and
--- saves every deployment. The reticle previews area and never deals damage.
-local V={};V.__index=V
-local Players=game:GetService('Players')
-local UIS=game:GetService('UserInputService')
-local Http=game:GetService('HttpService')
-local RunService=game:GetService('RunService')
-function V.start(ctx)
- local self=setmetatable({ctx=ctx,selected=nil,candidate=nil,scan=0},V)
- local U=ctx.interface;local player=Players.LocalPlayer
- self.panel=U.panel(ctx.parent,UDim2.fromOffset(0,100),UDim2.fromOffset(270,76),U.palette.panel,10)
- self.panel.Name='BackpackTools';self.panel.Active=true
- local title=U.text(self.panel,UDim2.fromOffset(10,3),UDim2.new(1,-20,0,21),'TOOLS · stored separately from ore',14,U.palette.muted,true)
- self.title=title;self.buttons={}
- for index,kind in ipairs(Consumables.ORDER) do
-  local item=Consumables.ITEMS[kind]
-  local b=U.button(self.panel,UDim2.fromOffset(8+(index-1)*129,26),UDim2.fromOffset(125,44),item.short,function() self:select(kind) end,Color3.fromRGB(table.unpack(item.color)))
-  b.Name=kind..'Pocket';b.TextSize=16;self.buttons[kind]=b
- end
- self.detail=U.text(self.panel,UDim2.fromOffset(10,76),UDim2.new(1,-20,0,44),'',16,U.palette.text)
- self.detail.TextWrapped=true
- self.deploy=U.button(self.panel,UDim2.fromOffset(8,124),UDim2.fromOffset(166,40),'Place tool',function() self:place() end,U.palette.accent)
- self.cancel=U.button(self.panel,UDim2.fromOffset(180,124),UDim2.fromOffset(82,40),'Cancel',function() self:select(nil) end,U.palette.paper)
- local ghost=Instance.new('Part');ghost.Name='ToolPlacement';ghost.Size=Vector3.new(1.3,.45,1.3);ghost.Anchored=true
- ghost.CanCollide=false;ghost.CanQuery=false;ghost.CanTouch=false;ghost.Material=Enum.Material.Metal;ghost.CastShadow=false;ghost.Transparency=1;ghost.Parent=ctx.localFX;self.ghost=ghost
- local area=Instance.new('Part');area.Name='ToolReach';area.Shape=Enum.PartType.Cylinder;area.Anchored=true
- area.CanCollide=false;area.CanQuery=false;area.CanTouch=false;area.CastShadow=false;area.Material=Enum.Material.Neon;area.Transparency=1;area.Parent=ctx.localFX;self.area=area
- local mark=Instance.new('Highlight');mark.Name='ToolTarget';mark.DepthMode=Enum.HighlightDepthMode.Occluded;mark.FillTransparency=.85;mark.OutlineTransparency=.1;mark.Enabled=false;mark.Parent=ctx.localFX;self.mark=mark
- self.connection=RunService.RenderStepped:Connect(function(dt) self:step(dt,player) end)
- return self
-end
-function V:select(kind)
- local p=self.ctx.profile()
- if kind then
-  if self.ctx.hidden() or not p or not p.consumables or p.pendingTransaction or (p.consumables.counts[kind] or 0)<1
-   or Players.LocalPlayer:GetAttribute('MA_ConsumableActive') then return end
-  if self.selected==kind then kind=nil end
- end
- self.selected=kind;self.candidate=nil;self.mark.Enabled=false
- if kind and self.ctx.onSelect then self.ctx.onSelect() end
- if not kind then self.ghost.Transparency=1;self.area.Transparency=1 end
-end
-function V:isSelecting() return self.selected~=nil end
-function V:aim(screen,center)
- if not self.selected then return end
- self.candidate=nil;self.mark.Enabled=false;self.ghost.Transparency=1;self.area.Transparency=1
- local camera=workspace.CurrentCamera;if not camera then return end
- local player=Players.LocalPlayer;local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- if not hr then return end
- local ray=center and camera:ViewportPointToRay(camera.ViewportSize.X*.5,camera.ViewportSize.Y*.5) or camera:ScreenPointToRay(screen.X,screen.Y)
- local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={self.ctx.localFX,player.Character}
- local hit=workspace:Raycast(ray.Origin,ray.Direction*240,params);if not hit then return end
- local fields=self.ctx.world:FindFirstChild('Fields');if not fields then return end
- local fieldId,floor,fieldModel
- for _,field in ipairs(fields:GetChildren()) do
-  local part=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor')
-  if part and part:IsA('BasePart') then
-   local point=part.CFrame:PointToObjectSpace(hit.Position)
-   if math.abs(point.X)<=part.Size.X*.5 and math.abs(point.Z)<=part.Size.Z*.5 and math.abs(point.Y)<32 then
-    fieldId=field:GetAttribute('FieldId') or field:GetAttribute('Tier');floor=part;fieldModel=field;break
-   end
-  end
- end
- if not fieldId or not floor then return end
- local point=floor.CFrame:PointToObjectSpace(hit.Position)
- local ground=floor.CFrame:PointToWorldSpace(Vector3.new(point.X,floor.Size.Y*.5,point.Z))
- params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={floor,workspace.Terrain}
- local surface=workspace:Raycast(ground+Vector3.new(0,40,0),Vector3.new(0,-80,0),params);if surface then ground=surface.Position end
- local item=Consumables.ITEMS[self.selected];local profile=self.ctx.profile();local nearest,best,count=nil,math.huge,0
- local foreign={};local drones=self.ctx.world:FindFirstChild('Drones')
- if drones then for _,drone in ipairs(drones:GetChildren()) do
-  local id=drone:GetAttribute('TargetId')
-  if id and id~='' and drone:GetAttribute('Owner')~=player.UserId and (drone:GetAttribute('HP') or 0)>0 then foreign[id]=true end
- end end
- for _,r in pairs(self.ctx.resources) do
-  local source=r.source;local pos=source:GetAttribute('FullPosition') or source.Position
-  local delta=pos-ground;local distance=delta.X*delta.X+delta.Z*delta.Z
-  if source:GetAttribute('FieldId')==fieldId and not foreign[source:GetAttribute('ResourceId')] and (source:GetAttribute('HP') or 0)>0
-   and workspace:GetServerTimeNow()>=(source:GetAttribute('ReadyAt') or 0) and distance<=item.radius*item.radius then
-   count+=1;if distance<best then best=distance;nearest=r end
-  end
- end
- local unlocked=fieldModel:GetAttribute('AlwaysUnlocked')==true or Shops.unlocked(profile,fieldModel.Name)
- local phase=fieldModel:GetAttribute('Phase')
- local guarded=(phase=='Guarded' or phase=='Active') and not (profile.clearedFields or {})[fieldModel.Name]
- -- Replication can lag. The server repeats every ownership/defense/contact
- -- check before saving and on each actual mining contact.
- local valid=count>0 and unlocked and not guarded and (hr.Position-ground).Magnitude<=60
- local color=valid and Color3.fromRGB(table.unpack(item.color)) or Color3.fromRGB(235,104,96)
- self.ghost.Color=color;self.ghost.Position=ground+Vector3.new(0,.24,0);self.ghost.Transparency=.3
- self.area.Color=color;self.area.Size=Vector3.new(.06,item.radius*2,item.radius*2)
- self.area.CFrame=CFrame.new(ground+Vector3.new(0,.07,0))*CFrame.Angles(0,0,math.pi/2);self.area.Transparency=.94
- if valid then
-  self.candidate={fieldId=fieldId,x=ground.X,z=ground.Z,count=count}
-  if self.selected=='Orbital' and nearest then self.mark.Adornee=nearest.view;self.mark.FillColor=color;self.mark.OutlineColor=color;self.mark.Enabled=true end
- end
-end
-function V:place()
- local p=self.ctx.profile();local aim=self.candidate;local kind=self.selected
- if not aim or not kind or not p or not p.run or p.pendingTransaction then return end
- if (p.consumables.counts[kind] or 0)<1 then self:select(nil);return end
- self.ctx.command:FireServer('PlaceConsumable',{kind=kind,runId=p.run.id,version=p.consumables.version,
-  txId=Http:GenerateGUID(false),fieldId=aim.fieldId,x=aim.x,z=aim.z})
- self:select(nil)
-end
-function V:click(screen,touch)
- if not self.selected then return false end
- self:aim(screen,false)
- if not touch then self:place() end
- return true
-end
-function V:input(input,processed)
- local key=input.KeyCode
- if self.selected and (key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB) then self:select(nil);return true end
- if processed or UIS:GetFocusedTextBox() or self.ctx.hidden() then return false end
- if key==Enum.KeyCode.Z or key==Enum.KeyCode.DPadLeft then self:select('Orbital');return true end
- if key==Enum.KeyCode.X or key==Enum.KeyCode.DPadRight then self:select('Scrap');return true end
- if self.selected and (key==Enum.KeyCode.ButtonR1 or key==Enum.KeyCode.ButtonR2) then self:aim(nil,true);self:place();return true end
- return false
-end
-function V:step(dt,player)
- self.scan+=dt;if self.scan<.06 then return end;self.scan=0
- local p=self.ctx.profile();local s=p and p.consumables
- local hidden=self.ctx.hidden();local active=player:GetAttribute('MA_ConsumableActive')
- if self.selected and (hidden or not s or (s.counts[self.selected] or 0)<1 or active) then self:select(nil) end
- self.panel.Visible=s~=nil and s.collected>0 and not hidden
- if not self.panel.Visible then return end
- local width=math.min(270,self.ctx.parent.AbsoluteSize.X-24)
- self.panel.Position=UDim2.new(1,-width-12,0,100);self.panel.Size=UDim2.fromOffset(width,self.selected and 172 or 76)
- local buttonWidth=(width-20)/2
- for index,kind in ipairs(Consumables.ORDER) do
-  local b=self.buttons[kind];b.Size=UDim2.fromOffset(buttonWidth,44);b.Position=UDim2.fromOffset(8+(index-1)*(buttonWidth+4),26)
-  local key=UIS.TouchEnabled and '' or (index==1 and '[Z] ' or '[X] ')
-  b.Text=key..Consumables.ITEMS[kind].short..'\n×'..s.counts[kind]
-  self.ctx.interface.setEnabled(b,s.counts[kind]>0 and not p.pendingTransaction and not active)
- end
- self.title.Text=active and (Consumables.ITEMS[active] and Consumables.ITEMS[active].name..' working…' or 'Tool working…') or 'TOOLS · 3 charges per pocket'
- local selecting=self.selected~=nil;self.detail.Visible=selecting;self.deploy.Visible=selecting;self.cancel.Visible=selecting
- self.cancel.Position=UDim2.fromOffset(width-90,124);self.deploy.Size=UDim2.fromOffset(width-104,40)
- if selecting then
-  local gamepad=UIS:GetLastInputType()==Enum.UserInputType.Gamepad1
-  if gamepad then self:aim(nil,true)
-  elseif UIS.MouseEnabled and not UIS.TouchEnabled then
-   local pointer=UIS:GetMouseLocation()
-   if not self.ctx.blocks(pointer) then self:aim(pointer,false) end
-  end
-  self.detail.Text=self.candidate and (self.selected=='Orbital' and 'Melts the outlined rock in 4 seconds.' or ('Six bots · '..self.candidate.count..' nearby rocks · 10 seconds.'))
-   or 'Aim inside an unlocked field near ready rocks.'
-  self.ctx.interface.setEnabled(self.deploy,self.candidate~=nil and not p.pendingTransaction)
- end
-end
-function V:destroy()
- self.connection:Disconnect();self.panel:Destroy();self.ghost:Destroy();self.area:Destroy();self.mark:Destroy()
-end
-return V
-
-end)()
 local ToolRules = (function()
 -- Shared throw equations and temporary durability. Clients only preview them.
-local T={SLOTS=3,WORLD_LIFETIME=75,MAX_DROPS=36,MAX_OWNER_DROPS=6,MAX_DRY=6}
-T.ORDER={'BowlingBall','Crowbar','JellyGrenade'}
+local T={SLOTS=8,WORLD_LIFETIME=75,MAX_DROPS=36,MAX_OWNER_DROPS=6,MAX_DRY=6}
+T.ORDER={'BowlingBall','Crowbar','JellyGrenade','Greatsword','Scrap','Orbital','Sledgehammer','MoltenTongs'}
+T.SAVED={[5]='Scrap',[6]='Orbital'}
 T.ITEMS={
- BowlingBall={name='Bowling ball',short='Bowling ball',uses=4,gravity=420,speed=58,range=42,radius=1.05,color={95,109,222},cooldown=.65},
- Crowbar={name='Crowbar',short='Crowbar',uses=12,range=8,color={239,136,82},cooldown=.48},
- JellyGrenade={name='Jelly grenade',short='Jelly',uses=1,gravity=280,speed=52,range=38,radius=.5,color={144,225,99},cooldown=.65,fuse=1.35},
+ BowlingBall={name='Bowling ball',short='Bowling',uses=4,gravity=420,speed=58,range=42,radius=1.05,color={95,109,222},cooldown=.82,windup=.44},
+ Crowbar={name='Crowbar',short='Crowbar',uses=12,range=8,color={239,136,82},cooldown=.56,windup=.29,melee=true},
+ JellyGrenade={name='Jelly grenade',short='Jelly',uses=1,gravity=280,speed=52,range=38,radius=.5,color={144,225,99},cooldown=.62,windup=.16,fuse=.42},
+ Greatsword={name='Giant sword',short='Sword',uses=3,range=13,radius=.65,color={137,205,255},cooldown=.95,windup=.56,melee=true},
+ Sledgehammer={name='Sledgehammer',short='Hammer',uses=3,range=10,radius=.65,color={255,192,84},cooldown=.9,windup=.50,melee=true},
+ MoltenTongs={name='Molten steel tongs',short='Molten',uses=1,range=9,radius=.62,color={255,105,42},cooldown=.8,windup=.48,gravity=370,speed=50,molten=true},
+ Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.4,gadget=true},
+ Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.4,gadget=true},
 }
 function T.finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function T.vector(v) return typeof(v)=='Vector3' and math.abs(v.X)<=100000 and math.abs(v.Y)<=100000 and math.abs(v.Z)<=100000 end
@@ -7627,8 +7418,8 @@ function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)
  if (progress.found or 0)==0 then return progress.dry>=2 and 'BowlingBall' or nil end
  if progress.dry<T.MAX_DRY and roll>=.24 then return nil end
- -- Introduce all three, then vary the tool rather than handing out multipliers.
- if progress.found==1 then return 'Crowbar' elseif progress.found==2 then return 'JellyGrenade' end
+ -- Introduce each tool, then vary the tool rather than handing out multipliers.
+ if progress.found<#T.ORDER then return T.ORDER[progress.found+1] end
  return T.ORDER[1+math.floor(math.clamp(choice,0,.99999)*#T.ORDER)]
 end
 return T
@@ -7637,7 +7428,7 @@ end)()
 local ToolArt = (function()
 -- Small original tool silhouettes reused in-world, in hand and in hotbar icons.
 local A={}
-function A.create(kind,parent)
+function A.create(kind,parent,projectile)
  local def=ToolRules.ITEMS[kind];local model=Instance.new('Model');model.Name=kind
  local function part(name,size,offset,color,shape)
   local p=Instance.new('Part');p.Name=name;p.Size=size;p.CFrame=offset;p.Color=color
@@ -7650,6 +7441,36 @@ function A.create(kind,parent)
   for _,v in ipairs({Vector3.new(-.24,.73,-.69),Vector3.new(.24,.73,-.69),Vector3.new(0,.36,-.96)}) do
    part('FingerHole',Vector3.new(.23,.23,.14),CFrame.lookAt(v,v*2),dark,Enum.PartType.Ball)
   end
+ elseif kind=='Greatsword' then
+  model.PrimaryPart=part('Grip',Vector3.new(.29,.95,.29),CFrame.new(),dark)
+  part('Guard',Vector3.new(1.6,.22,.42),CFrame.new(0,.55,0),Color3.fromRGB(244,188,86))
+  local blade=part('Blade',Vector3.new(1.04,4.15,.22),CFrame.new(0,2.69,0),color)
+  blade.Material=Enum.Material.Metal
+  part('Edge',Vector3.new(.16,4.05,.25),CFrame.new(-.48,2.65,0),Color3.fromRGB(235,250,255))
+  part('Point',Vector3.new(.72,.72,.22),CFrame.new(0,4.74,0)*CFrame.Angles(0,0,math.pi/4),color)
+ elseif kind=='Sledgehammer' then
+  model.PrimaryPart=part('Handle',Vector3.new(.24,3,.24),CFrame.new(),dark)
+  part('Head',Vector3.new(1.95,.86,.9),CFrame.new(0,1.55,0),color)
+  part('Strike Face',Vector3.new(.25,.91,.98),CFrame.new(.96,1.55,0),Color3.fromRGB(212,224,232))
+ elseif kind=='MoltenTongs' then
+  if projectile then
+   model.PrimaryPart=part('MoltenSteel',Vector3.one*1.24,CFrame.new(),color,Enum.PartType.Ball)
+   model.PrimaryPart.Material=Enum.Material.Neon
+  else
+   model.PrimaryPart=part('TongsPivot',Vector3.new(.44,.32,.38),CFrame.new(),dark)
+   for _,side in ipairs({-1,1}) do
+    part('Handle',Vector3.new(.14,2.2,.18),CFrame.new(side*.33,-.52,0)*CFrame.Angles(0,0,side*.2),dark)
+    for i=0,6 do
+     local a=math.pi*i/6+ (side==1 and -math.pi*.5 or math.pi*.5)
+     part('CircularJaw',Vector3.new(.16,.34,.24),CFrame.new(math.cos(a)*.68,1.15+math.sin(a)*.68,0)*CFrame.Angles(0,0,a),Color3.fromRGB(150,161,175))
+    end
+   end
+   local ball=part('MoltenSteel',Vector3.one*1.21,CFrame.new(0,1.15,0),color,Enum.PartType.Ball);ball.Material=Enum.Material.Neon
+  end
+ elseif kind=='Scrap' or kind=='Orbital' then
+  model.PrimaryPart=part('Capsule',Vector3.new(1.18,.78,1.18),CFrame.new(),dark)
+  local signal=part('Charge',Vector3.new(.78,.68,.78),CFrame.new(0,.39,0),color,Enum.PartType.Ball);signal.Material=Enum.Material.Neon
+  if kind=='Orbital' then part('Beacon',Vector3.new(.14,.86,.14),CFrame.new(0,.86,0),color) end
  elseif kind=='Crowbar' then
   model.PrimaryPart=part('Shaft',Vector3.new(.23,2,.27),CFrame.new(),color)
   part('Grip',Vector3.new(.3,.85,.32),CFrame.new(0,-.5,0),dark)
@@ -7675,12 +7496,12 @@ return A
 
 end)()
 local ToolView = (function()
--- Custom equipment hotbar, matching ballistic preview, held tools and impact rubble.
+-- Custom equipment hotbar, held tools and impact rubble.
 local V={};V.__index=V
 function V.new(ctx)
  local UIS=game:GetService('UserInputService');local Http=game:GetService('HttpService')
  local players=game:GetService('Players');local player=players.LocalPlayer;local U=ctx.interface
- local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},arcs={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
+ local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
  local gui=Instance.new('Frame');gui.Name='TemporaryToolHotbar';gui.AnchorPoint=Vector2.new(.5,1);gui.BackgroundTransparency=1;gui.Active=true;gui.ZIndex=ctx.parent.ZIndex+2;gui.Parent=ctx.parent;self.gui=gui
  self.hint=U.text(gui,UDim2.fromOffset(0,-23),UDim2.new(1,0,0,20),'',13,U.palette.white,true);self.hint.TextXAlignment=Enum.TextXAlignment.Center
  for i=1,ToolRules.SLOTS do
@@ -7702,7 +7523,11 @@ function V.new(ctx)
    local item=self.state.slots[i];local kind=item and item.kind
    if kind~=slot.kind then
     if slot.model then slot.model:Destroy();slot.model=nil end
-    if kind and ToolRules.ITEMS[kind] then slot.model=ToolArt.create(kind,slot.icon) end
+    if kind and ToolRules.ITEMS[kind] then slot.model=ToolArt.create(kind,slot.icon)
+     local center,extent=slot.model:GetBoundingBox()
+     local target=center.Position;local distance=math.max(5,extent.Magnitude*1.8)
+     slot.icon.CurrentCamera.CFrame=CFrame.lookAt(target+Vector3.new(.44,.26,1).Unit*distance,target)
+    end
     slot.kind=kind
    end
   end
@@ -7713,7 +7538,7 @@ function V.new(ctx)
  pcall(function() starter:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end)
  local function add(part)
   if not part:IsA('BasePart') or self.world[part] or not ToolRules.ITEMS[part:GetAttribute('Kind')] then return end
-  local kind=part:GetAttribute('Kind');local model=ToolArt.create(kind,ctx.localFX)
+  local kind=part:GetAttribute('Kind');local model=ToolArt.create(kind,ctx.localFX,part:GetAttribute('State')=='Flying')
   model:PivotTo(part.CFrame);part.LocalTransparencyModifier=1
   self.world[part]={model=model,fill=ToolArt.bar(model.PrimaryPart,part:GetAttribute('HP') or 1,part:GetAttribute('MaxHP') or 1),kind=kind}
  end
@@ -7736,16 +7561,16 @@ end
 function V:input(input,processed)
  if processed or self.uis:GetFocusedTextBox() or self.ctx.hidden() then return false end
  local key=input.KeyCode
- local keys={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3}
+ local keys={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8}
  if keys[key] then self:equip(keys[key]);return true end
  if key==Enum.KeyCode.Backspace or key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then if self:selected() then self:unequip();return true end end
  if key==Enum.KeyCode.ButtonL1 then
-  for n=1,3 do local i=((self.state.selected or 0)+n-1)%3+1;local item=self.state.slots[i];if item and item.state=='Held' then self:equip(i);break end end;return true
+  for n=1,ToolRules.SLOTS do local i=((self.state.selected or 0)+n-1)%ToolRules.SLOTS+1;local item=self.state.slots[i];if item and item.state=='Held' then self:equip(i);break end end;return true
  end
  if self:selected() and (key==Enum.KeyCode.ButtonR2 or input.UserInputType==Enum.UserInputType.MouseButton1) then self:activate();return true end
  return false
 end
-function V:aim(screen)
+function V:contact(screen)
  local camera=workspace.CurrentCamera;local hr=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if not camera or not hr then return end
  local pointer=screen or self.uis:GetMouseLocation()
@@ -7753,14 +7578,13 @@ function V:aim(screen)
  local ray=center and camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) or camera:ScreenPointToRay(pointer.X,pointer.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={self.ctx.localFX,self.player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*180,params)
- return hit and hit.Position or ray.Origin+ray.Direction*45,hit and hit.Instance,hr,params
+ return hit and hit.Position,hit and hit.Instance
 end
 function V:activate(screen)
  local item=self:selected();if not item or item.state~='Held' or self.ctx.hidden() then return end
- local aim,target=self:aim(screen);if not aim then return end
+ local point,target=self:contact(screen);local id=target and target:GetAttribute('ResourceId');if not id then return end
  if not screen and self.uis.MouseEnabled and not self.uis.TouchEnabled and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
- self.swingAt=workspace:GetServerTimeNow()
- self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,aim=aim,resourceId=target and target:GetAttribute('ResourceId')})
+ self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,point=point,resourceId=id})
 end
 function V:click(screen) if not self:selected() then return false end;self:activate(screen);return true end
 function V:blocks(point)
@@ -7774,15 +7598,25 @@ function V:impact(source)
  local kind=source:GetAttribute('Kind');local position=source.Position
  local camera=workspace.CurrentCamera;if not camera or (camera.CFrame.Position-position).Magnitude>120 then return end
  local color=source:GetAttribute('Color') or Color3.fromRGB(160,150,135)
+ local cue=({BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
+  BowlingBallRelease='tool_throw',JellyGrenadeRelease='tool_throw',MoltenTongsRelease='tool_throw',JellyStick='tool_stick'})[kind]
+ if cue then self.ctx.audio:play(cue,position);return end
  if kind~='Drop' then
-  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
+  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
+ end
+ local slab=source:GetAttribute('Slab')
+ if slab and #self.chips<72 then
+  local p=Instance.new('Part');p.Name='SlicedRockSlab';p.Size=slab;p.Color=color;p.Material=Enum.Material.Rock
+  p.CanTouch=false;p.CanQuery=false;p.Position=position+Vector3.new(0,.28,0);p.Parent=self.ctx.localFX
+  p.AssemblyLinearVelocity=Vector3.new(13,12,-5);p.AssemblyAngularVelocity=Vector3.new(2,1,3)
+  self.chips[#self.chips+1]={part=p,at=now,expires=now+1.6}
  end
  local count=kind=='JellyGrenade' and 18 or kind=='BowlingBall' and 12 or kind=='Shatter' and 10 or 5
  for i=1,count do
   if #self.chips>=72 then break end
   local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble';p.Size=Vector3.one*(.16+(i%4)*.09)
-  p.Color=color;p.Material=kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
+  p.Color=color;p.Material=kind=='MoltenTongs' and Enum.Material.Neon or kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
   p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false;p.CFrame=CFrame.new(position+Vector3.new(math.cos(angle)*.6,.4,math.sin(angle)*.6));p.Parent=self.ctx.localFX
   p.AssemblyLinearVelocity=Vector3.new(math.cos(angle)*(8+i%7),13+i%9,math.sin(angle)*(8+i%7));p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
   self.chips[#self.chips+1]={part=p,at=now,expires=now+1.5}
@@ -7795,13 +7629,15 @@ function V:impact(source)
 end
 function V:layout(item,active)
  local size=self.ctx.parent.AbsoluteSize;local touch=self.uis.TouchEnabled and not self.uis.KeyboardEnabled
- local width=math.clamp(size.X-32,120,252);local cell=(width-12)/3;local height=size.Y<430 and 67 or 82
+ local width=math.clamp(size.X-24,120,544);local columns=(size.X<450 and size.Y>=430) and 4 or ToolRules.SLOTS
+ local cell=(width-(columns-1)*6)/columns;local height=size.Y<430 and 59 or 72
+ local totalHeight=math.ceil(ToolRules.SLOTS/columns)*(height+6)-6
  local bottom=touch and (size.X<550 and 98 or 18) or 12
- self.gui.Size=UDim2.fromOffset(width,height);self.gui.Position=UDim2.new(.5,0,1,-bottom);self.gui.Visible=not self.ctx.hidden()
+ self.gui.Size=UDim2.fromOffset(width,totalHeight);self.gui.Position=UDim2.new(.5,0,1,-bottom);self.gui.Visible=not self.ctx.hidden()
  for i,slot in ipairs(self.slots) do
-  local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset((i-1)*(cell+6),0)
+  local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset(((i-1)%columns)*(cell+6),math.floor((i-1)/columns)*(height+6))
   slot.icon.Size=UDim2.new(1,-8,0,height-35);slot.name.Position=UDim2.fromOffset(3,height-33)
-  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
+  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
   slot.fill.Size=UDim2.fromScale(entry and entry.hp/entry.maxHP or 0,1)
   slot.fill.BackgroundColor3=entry and entry.hp/entry.maxHP<=.25 and Color3.fromRGB(246,117,83) or Color3.fromRGB(156,231,102)
   slot.button.BackgroundColor3=self.state.selected==i and Color3.fromRGB(74,97,148) or Color3.fromRGB(45,49,63)
@@ -7809,33 +7645,12 @@ function V:layout(item,active)
   slot.button.Selectable=entry and entry.state=='Held' or false
  end
  self.use.Visible=active==true and touch
- self.use.Text=active and item.kind=='Crowbar' and 'Swing' or 'Throw';self.use.Position=UDim2.new(.5,-54,1,-bottom-height-68)
- self.hint.Text=active and (item.kind=='Crowbar' and ('Swing · '..item.hp..' hits left') or item.kind=='BowlingBall' and (math.max(0,item.hp-1)..' recoveries · Throw') or 'Sticks · one throw') or ''
-end
-function V:arc(item,active)
- if not active or not ToolRules.ITEMS[item.kind].gravity then for _,dot in ipairs(self.arcs) do dot.Transparency=1 end;return end
- local aim,_,hr,params=self:aim()
- local from=hr and ToolRules.origin(hr.Position,hr.CFrame.LookVector)
- local velocity=ToolRules.launch(item.kind,from,aim)
- local blocked=false;local previous=from
- for i=1,18 do
-  local dot=self.arcs[i]
-  if velocity and not dot then dot=Instance.new('Part');dot.Name='HeavyThrowArc';dot.Shape=Enum.PartType.Ball;dot.Size=Vector3.one*.16;dot.Color=Color3.fromRGB(255,230,146);dot.Material=Enum.Material.Neon;dot.Anchored=true;dot.CanCollide=false;dot.CanTouch=false;dot.CanQuery=false;dot.Parent=self.ctx.localFX;self.arcs[i]=dot end
-  if dot then
-   dot.Transparency=1
-   if velocity and not blocked then
-    local point=ToolRules.position(from,velocity,ToolRules.ITEMS[item.kind].gravity,i*.045)
-    local hit=workspace:Spherecast(previous,ToolRules.ITEMS[item.kind].radius,point-previous,params)
-    dot.Position=hit and hit.Position or point;dot.Transparency=.12+i*.025
-    if hit then blocked=true end;previous=point
-   end
-  end
- end
+ self.use.Text='Use';self.use.Position=UDim2.new(.5,-54,1,-bottom-totalHeight-68)
+ self.hint.Text=active and (ToolRules.ITEMS[item.kind].name..' · Click a spot on the rock') or ''
 end
 function V:step(dt,now)
  local item=self:selected();local active=type(item)=='table' and item.state=='Held' and not self.ctx.hidden()
  if now>=(self.hudAt or 0) then self.hudAt=now+.09;self:layout(item,active) end
- if now>=(self.arcAt or 0) then self.arcAt=now+.05;self:arc(item,active) end
  for source,r in pairs(self.world) do
   if not source.Parent then r.model:Destroy();self.world[source]=nil
   else
@@ -7856,8 +7671,12 @@ function V:step(dt,now)
   if kind and hand and ToolRules.ITEMS[kind] then
    if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};r.fill=ToolArt.bar(r.model.PrimaryPart,p:GetAttribute('HeldFieldToolHP') or 1,ToolRules.ITEMS[kind].uses);self.held[p]=r end
    r.fill.Size=UDim2.fromScale((p:GetAttribute('HeldFieldToolHP') or 0)/ToolRules.ITEMS[kind].uses,1)
-   local q=p==self.player and math.clamp((now-(self.swingAt or 0))/.35,0,1) or 1
-   r.model:PivotTo(hand.CFrame*CFrame.new(0,-.5,-.4)*CFrame.Angles(-math.sin(q*math.pi)*1.6,0,kind=='Crowbar' and -.3 or 0))
+   local wind=p:GetAttribute('ToolWindupUntil')
+   local release=p:GetAttribute('ToolSwingAt')
+   local elapsed=release and now-release or 10
+   local q=wind and math.clamp(1-(wind-now)/(ToolRules.ITEMS[kind].windup or .3),0,1) or 0
+   local recoil=not wind and elapsed>=0 and elapsed<.26 and math.sin(math.pi*elapsed/.26)^.65 or 0
+   r.model:PivotTo(hand.CFrame*CFrame.new(-q*.48,-.5+q*.92,-.4+q*.6-recoil*.85)*CFrame.Angles(q*1.85-recoil*2.1,0,q*.65-(kind=='Crowbar' and .3 or 0)))
   end
  end
  for p,r in pairs(self.held) do if not p.Parent then r.model:Destroy();self.held[p]=nil end end
@@ -7873,7 +7692,6 @@ end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for _,slot in ipairs(self.slots) do if slot.model then slot.model:Destroy() end end
- for _,p in ipairs(self.arcs) do p:Destroy() end
  for _,r in pairs(self.world) do r.model:Destroy() end
  for _,r in pairs(self.held) do r.model:Destroy() end
  for _,c in ipairs(self.chips) do c.part:Destroy() end
@@ -7966,9 +7784,9 @@ end
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
  p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
- p.LightEmission=.7;p.LightInfluence=0;p.Brightness=1;p.Rate=1.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
+ p.LightEmission=1;p.LightInfluence=0;p.Brightness=2;p.Rate=5.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
  p.SpreadAngle=Vector2.new(180,180);p.WindAffectsDrag=false
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.3,.2,.03),NumberSequenceKeypoint.new(1,0)})
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.3,.27,.045),NumberSequenceKeypoint.new(1,0)})
  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
@@ -7993,7 +7811,7 @@ function V.new(root,parent,audio)
   if (source:GetAttribute('CollectedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
-  view.Material=Enum.Material.SmoothPlastic;view.Color=source.Color;view.Reflectance=0
+  view.Material=Enum.Material.Neon;view.Color=source.Color:Lerp(Color3.new(1,1,1),.26);view.Reflectance=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local a=Instance.new('Attachment');a.Position=Vector3.new(0,.13,0);a.Parent=view
@@ -8003,9 +7821,10 @@ function V.new(root,parent,audio)
   trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
   trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
   local glints=sparkle(a,view.Color);glints.Enabled=false
-  local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=2.5;glow.Brightness=.18;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
+  local stars=Instance.new('Sparkles');stars.Name='CurrencyStars';stars.SparkleColor=view.Color;stars.Enabled=false;stars.Parent=view
+  local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=4.5;glow.Brightness=.18;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,trail=trail,glints=glints,glow=glow,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
+  local r={view=view,pos=position,trail=trail,glints=glints,stars=stars,glow=glow,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
@@ -8030,7 +7849,7 @@ function V.new(root,parent,audio)
   local anchor=Instance.new('Part');anchor.Name='CollectedMineral';anchor.Size=Vector3.one*.05;anchor.Transparency=1
   anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=target;anchor.Parent=parent
   local a=Instance.new('Attachment');a.Parent=anchor
-  local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(4)
+  local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(8)
   Debris:AddItem(anchor,burst.Lifetime.Max+.15)
   if audio and os.clock()-self.lastSound>.09 then
    local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
@@ -8092,7 +7911,7 @@ function V:update(dt,now)
    -- Retire the ore visual and authority immediately; let existing particles
    -- finish on an invisible, bounded cosmetic anchor.
    r.view.Name='FadingOreParticles';r.view.Transparency=1
-   r.glints.Enabled=false;r.glow.Enabled=false;r.trail.Enabled=false
+   r.glints.Enabled=false;r.stars.Enabled=false;r.glow.Enabled=false;r.trail.Enabled=false
    Debris:AddItem(r.view,math.max(r.glints.Lifetime.Max,r.trail.Lifetime)+.1)
    self.byId[r.seed]=nil;self.records[source]=nil
   else
@@ -8111,10 +7930,11 @@ function V:update(dt,now)
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
    r.view.Size=r.size*scale;r.view.Transparency=1-opacity
    local distance=camera and (camera.CFrame.Position-r.pos).Magnitude or math.huge
-   r.glints.Enabled=not reduced and not r.removedAt and not r.collectAt and opacity>.15 and distance<45 and glints<8
+   r.glints.Enabled=not reduced and not r.removedAt and not r.collectAt and opacity>.15 and distance<55 and glints<12
+   r.stars.Enabled=r.glints.Enabled
    if r.glints.Enabled then glints+=1 end
    r.glow.Enabled=not reduced and opacity>.05 and distance<24 and lights<2
-   if r.glow.Enabled then lights+=1;r.glow.Brightness=.18*opacity end
+   if r.glow.Enabled then lights+=1;r.glow.Brightness=.65*opacity end
   end
  end
 end
@@ -8758,7 +8578,6 @@ local pendingDroneSources={}
 local templateRetryQueued=false
 local profile=nil
 local logisticsView=nil
-local consumableView=nil
 local toolView=nil
 local U=Interface
 local palette=U.palette
@@ -9429,7 +9248,8 @@ local function renderResource(r,now)
  local period=targetPeriod
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
-  local displaySize=full*math.max(.005,growth*period)
+  local heat=s:GetAttribute('MeltBand') or 0
+  local displaySize=full*math.max(.005,growth*period)*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -9440,7 +9260,7 @@ local function renderResource(r,now)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
-  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52)
+  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   if not r.riseShown and now-spawnAt>.12 then
    r.riseShown=true
    if now-spawnAt<.65 then presentation:resourceRise(r,now) end
@@ -9713,14 +9533,10 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  openFleet=openFleet,openCards=function() if pending() and not sealedPack() then openOffer() else openRunCards() end end,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
-consumableView=ConsumableView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,resources=resourceIndex,command=command,
- profile=function() return profile end,hidden=menusVisible,
- blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
- onSelect=function() logisticsView.selected=nil;if toolView then toolView:unequip() end end})
 toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
  audio=soundscape,presentation=presentation,hidden=menusVisible,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) or (toolView and toolView:blocks(point-game:GetService('GuiService'):GetGuiInset())) end,
- onSelect=function() consumableView:select(nil);logisticsView.selected=nil end})
+ onSelect=function() logisticsView.selected=nil end})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
@@ -9776,7 +9592,7 @@ local function requestPlot(id)
  command:FireServer('Patch',id)
 end
 local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
- profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (consumableView and consumableView:isSelecting()) or (toolView and toolView:selected()~=nil) end,
+ profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
@@ -9808,7 +9624,6 @@ local mouse=player:GetMouse()
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
- if consumableView and consumableView:click(position,true) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
@@ -9817,14 +9632,13 @@ connect(UIS.TouchTapInWorld,function(position,processed)
 end)
 connect(UIS.InputBegan,function(input,processed)
  if toolView and toolView:input(input,processed) then return end
- if consumableView and consumableView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
-   if not (consumableView and consumableView:click(point,false)) then commandView:beginDrag();assignField(mouse.Target) end
+   commandView:beginDrag();assignField(mouse.Target)
   end
   return
  end
@@ -9949,7 +9763,6 @@ connect(gui.Destroying,function()
  RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
- if consumableView then consumableView:destroy() end
  if toolView then toolView:destroy() end
  tacticalHUD:destroy()
  crystalAudio:destroy()

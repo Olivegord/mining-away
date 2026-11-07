@@ -13,23 +13,45 @@ function S:state(p)
  end
  return p.fieldTools
 end
+function S:slot(p,s,i)
+ if s.slots[i] then return s.slots[i] end
+ local kind=ToolRules.SAVED[i];local count=kind and self.ctx.stock(p,kind) or 0
+ if count>0 then return {kind=kind,id='saved:'..kind,hp=count,state='Held',saved=true} end
+end
+function S:refreshStock(p)
+ local stamp=self.ctx.stock(p,'Scrap')..':'..self.ctx.stock(p,'Orbital')
+ if stamp==p.toolStock then return end
+ if stamp=='0:0' and not p.fieldTools then p.toolStock=stamp;return end
+ local s=self:state(p);p.toolStock=stamp
+ if s.selected>0 and not self:slot(p,s,s.selected) then s.selected=0 end
+ s.version+=1;self:publish(p)
+end
 function S:publish(p)
  local s=p.fieldTools;if not s then return end
  local view={slots={},selected=s.selected,version=s.version,runId=s.runId}
  for i=1,ToolRules.SLOTS do
-  local item=s.slots[i]
-  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=ToolRules.ITEMS[item.kind].uses,state=item.state} or false
+  local item=self:slot(p,s,i)
+  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=item.saved and 3 or ToolRules.ITEMS[item.kind].uses,state=s.attack and s.attack.item==item and 'Windup' or item.state} or false
  end
  p.player:SetAttribute('MA_FieldTools',self.ctx.encode(view))
- local selected=s.slots[s.selected]
+ local selected=self:slot(p,s,s.selected)
  p.player:SetAttribute('HeldFieldTool',selected and selected.state=='Held' and selected.kind or nil)
- p.player:SetAttribute('HeldFieldToolHP',selected and selected.hp or 0)
+ p.player:SetAttribute('HeldFieldToolHP',selected and math.min(ToolRules.ITEMS[selected.kind].uses,selected.hp) or 0)
 end
 function S:clear(p)
  for id,item in pairs(self.items) do
   if item.owner==p.player.UserId then if item.part then item.part:Destroy() end;self.items[id]=nil end
  end
- p.fieldTools=nil;p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
+ p.fieldTools=nil;p.toolStock=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',nil);p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
+end
+function S:previewLoadout(p)
+ local s=self:state(p)
+ for i,kind in ipairs(ToolRules.ORDER) do
+  self.serial+=1
+  local item={id=tostring(p.player.UserId)..':'..self.serial,owner=p.player.UserId,runId=s.runId,kind=kind,hp=ToolRules.ITEMS[kind].uses,state='Held'}
+  s.slots[i]=item;self.items[item.id]=item
+ end
+ s.version+=1;self:publish(p)
 end
 function S:remove(item)
  if item.part then item.part:Destroy();item.part=nil end
@@ -40,11 +62,11 @@ function S:remove(item)
   s.version+=1;self:publish(p)
  end
 end
-function S:marker(position,kind,color,normal)
+function S:marker(position,kind,color,normal,slab)
  local m=Instance.new('Part');m.Name=kind;m.Size=Vector3.one*.1;m.Transparency=1;m.Anchored=true
  m.CanCollide=false;m.CanQuery=false;m.CanTouch=false;m.Position=position
  m:SetAttribute('Kind',kind);m:SetAttribute('Color',color);m:SetAttribute('Normal',normal or Vector3.new(0,1,0))
- m:SetAttribute('StartedAt',self.ctx.now());m.Parent=self.effects;self.ctx.debris:AddItem(m,2.2)
+ m:SetAttribute('Slab',slab);m:SetAttribute('StartedAt',self.ctx.now());m.Parent=self.effects;self.ctx.debris:AddItem(m,2.2)
 end
 function S:worldPart(item,position)
  local def=ToolRules.ITEMS[item.kind];local p=Instance.new('Part');p.Name=item.kind
@@ -85,51 +107,109 @@ function S:collect(p,item)
   or (hr.Position-item.part.Position).Magnitude>3.8 or not self.ctx.clear(hr.Position,item.part.Position,p.player.Character) then return false end
  local slot
  for i=1,ToolRules.SLOTS do if s.slots[i]==item then slot=i;break end end
- if not slot then for i=1,ToolRules.SLOTS do if not s.slots[i] then slot=i;break end end end
+ if not slot then for i=1,ToolRules.SLOTS do if not self:slot(p,s,i) then slot=i;break end end end
  if not slot then return false end
  item.state='Held';item.part:Destroy();item.part=nil;item.expires=nil;s.slots[slot]=item;s.version+=1
  self:publish(p);self.ctx.notice(p,ToolRules.ITEMS[item.kind].name..' · slot '..slot)
  return true
 end
+function S:target(p,hr,def,id,position)
+ local ctx=self.ctx
+ local r=type(id)=='string' and #id<=160 and ctx.resources[id]
+ if not r or r.paid or not r.part.Parent or not ToolRules.vector(position)
+  or (position-hr.Position).Magnitude>def.range or not ctx.eligible(p,r,hr.Position) then return end
+ local offset=r.part.CFrame:PointToObjectSpace(position)/r.part.Size
+ local face=math.max(math.abs(offset.X),math.abs(offset.Y),math.abs(offset.Z))
+ if face>.7 or face<.30 or not ctx.clear(hr.Position,position,p.player.Character,r.part) then return end
+ return r,Vector3.new(math.clamp(offset.X,-.5,.5),math.clamp(offset.Y,-.5,.5),math.clamp(offset.Z,-.5,.5))
+end
 function S:command(p,action,payload)
  local s=self:state(p)
- if type(payload)~='table' or payload.runId~=s.runId or payload.version~=s.version then return end
+ if type(payload)~='table' or payload.runId~=s.runId or payload.version~=s.version or s.attack then return end
  if action=='EquipFieldTool' then
   local slot=payload.slot
   if not ToolRules.finite(slot) or slot%1~=0 or slot<0 or slot>ToolRules.SLOTS then return end
-  if slot>0 and (not s.slots[slot] or s.slots[slot].state~='Held') then return end
+  local item=self:slot(p,s,slot)
+  if slot>0 and (not item or item.state~='Held') then return end
   s.selected=slot;s.version+=1;self:publish(p);return
  end
- local item=s.slots[s.selected];local hr=self.ctx.root(p)
- if not item or item.state~='Held' or item.id~=payload.id or not hr or not ToolRules.vector(payload.aim)
-  or self.ctx.now()<(s.nextUse or 0) then return end
+ local item=self:slot(p,s,s.selected);local hr=self.ctx.root(p)
+ if not item or item.state~='Held' or item.id~=payload.id or not hr or self.ctx.now()<(s.nextUse or 0) then return end
  local def=ToolRules.ITEMS[item.kind]
- if item.kind=='Crowbar' then
-  local r=type(payload.resourceId)=='string' and #payload.resourceId<=160 and self.ctx.resources[payload.resourceId]
-  if not r or (r.part.Position-hr.Position).Magnitude>def.range+r.part.Size.Magnitude*.2 then return end
-  if not self.ctx.hit(p,r,math.min((r.maxHP-10)*.16,70),hr.Position,'Crowbar') then return end
-  item.hp-=1;self:marker(r.part.Position,'Crowbar',r.field.color)
-  if item.hp<=0 then self:marker(hr.Position,'Shatter',Color3.fromRGB(table.unpack(def.color)));self:remove(item) end
- else
-  -- Origin comes from the server character. The client sends aim, never speed,
-  -- gravity, a hit position, damage, or a result to trust.
-  local from=ToolRules.origin(hr.Position,hr.CFrame.LookVector)
-  if not self.ctx.clear(hr.Position,from,p.player.Character) then return end
-  local velocity=ToolRules.launch(item.kind,from,payload.aim);if not velocity then return end
-  item.hp-=1;item.state='Flying';item.from=from;item.pos=from;item.velocity=velocity;item.started=self.ctx.now();item.expires=item.started+8
-  self:worldPart(item,from)
+ local target,offset=self:target(p,hr,def,payload.resourceId,payload.point)
+ if def.gadget then
+  if not target then self.ctx.notice(p,'Click a nearby rock to deploy');return end
+  if self.ctx.gadget(p,item,target,target.part.CFrame:PointToWorldSpace(offset*target.part.Size)) and not item.saved then self:remove(item) end
+  return
  end
- s.nextUse=self.ctx.now()+def.cooldown;s.version+=1;self:publish(p)
+ if not target then self.ctx.notice(p,'Click a spot on a nearby rock');return end
+ local now=self.ctx.now()
+ s.attack={item=item,target=target,offset=offset,at=now+def.windup,run=s.runId}
+ s.nextUse=now+def.cooldown;s.version+=1
+ p.player:SetAttribute('ToolWindupUntil',s.attack.at)
+ self:marker(hr.Position,item.kind..'Windup',Color3.fromRGB(table.unpack(def.color)))
+ self:publish(p)
+end
+function S:release(p,s,attack)
+ local ctx=self.ctx;local item=attack.item;local def=ToolRules.ITEMS[item.kind];local hr=ctx.root(p)
+ s.attack=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',ctx.now())
+ if not hr or not ctx.healthy(p) or s.runId~=attack.run then self:publish(p);return end
+ local target=attack.target
+ if target and (target.paid or not target.part.Parent) then target=nil end
+ if not target then self:publish(p);return end
+ local aim=target.part.CFrame:PointToWorldSpace(attack.offset*target.part.Size)
+ if (aim-hr.Position).Magnitude>def.range+1 or not ctx.clear(hr.Position,aim,p.player.Character,target.part) then self:publish(p);return end
+ if def.melee then
+  local part=target.part;local center=part.Position;local originalHeight=part.Size.Y
+  local cut=math.clamp(.5+attack.offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
+  local fraction=item.kind=='Greatsword' and .5 or item.kind=='Sledgehammer' and .32 or .16
+  local cap=item.kind=='Greatsword' and 720 or item.kind=='Sledgehammer' and 320 or 70
+  if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),hr.Position,item.kind,aim) then self:publish(p);return end
+  item.hp-=1
+  self:marker(slab and (center+Vector3.new(0,(originalHeight-slab.Y)*.5,0)) or aim,item.kind,target.field.color,nil,slab)
+  if item.kind=='Sledgehammer' then
+   ctx.hazards:blast(center+Vector3.new(0,1,0),7,12,'heavy')
+   local n=0
+   for _,r in ipairs(target.field.resources) do
+    if r~=target and not r.paid and (r.part.Position-center).Magnitude<8 and ctx.hit(p,r,math.min(55,(r.maxHP-10)*.12),hr.Position,'Crowbar') then n+=1;if n>=3 then break end end
+   end
+  end
+  if item.hp<=0 then self:marker(hr.Position,'Shatter',Color3.fromRGB(table.unpack(def.color)));self:remove(item);return end
+ else
+  local delta=aim-hr.Position
+  local flat=Vector3.new(delta.X,0,delta.Z);local look=flat.Magnitude>.05 and flat.Unit or hr.CFrame.LookVector
+  local from=ToolRules.origin(hr.Position,look)
+  if not ctx.clear(hr.Position,from,p.player.Character) then from=hr.Position+Vector3.new(0,1.3,0) end
+  local velocity
+  if def.molten then
+   local top=target.part.Position.Y+target.part.Size.Y*.5
+   aim=Vector3.new(aim.X,top,aim.Z):Lerp(Vector3.new(target.part.Position.X,top,target.part.Position.Z),.04)
+   from=aim+Vector3.new(0,4.6,0);velocity=Vector3.new(0,-3,0)
+   if not ctx.clear(from,aim,p.player.Character,target.part) then self:publish(p);return end
+  else
+   aim=aim:Lerp(target.part.Position,.035)
+   velocity=ToolRules.launch(item.kind,from,aim)
+  end
+  if not velocity then self:publish(p);return end
+  item.hp-=1;item.state='Flying';item.from=from;item.pos=from;item.velocity=velocity;item.started=ctx.now();item.expires=item.started+8;item.sampleAge=0
+  self:worldPart(item,from);self:marker(from,item.kind..'Release',Color3.fromRGB(table.unpack(def.color)))
+ end
+ s.version+=1;self:publish(p)
 end
 function S:impact(p,item,point,normal,resource)
  local def=ToolRules.ITEMS[item.kind];item.pos=point+normal*(def.radius or .1)
  item.part.Position=item.pos;item.part:SetAttribute('State','Impact')
- if item.kind=='JellyGrenade' then
+ if item.kind=='MoltenTongs' then
+  item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+1.75;item.nextMelt=self.ctx.now()
+  item.part:SetAttribute('State','Molten');item.part:SetAttribute('FuseAt',item.fuseAt)
+  self:marker(point,'MoltenTongs',item.part.Color,normal)
+ elseif item.kind=='JellyGrenade' then
+  self:marker(point,'JellyStick',item.part.Color,normal)
   item.state='Stuck';item.fuseAt=self.ctx.now()+def.fuse
   if resource then item.stuck=resource;item.offset=resource.part.CFrame:PointToObjectSpace(item.pos);item.baseSize=resource.part.Size end
   item.part:SetAttribute('State','Stuck');item.part:SetAttribute('FuseAt',item.fuseAt)
  else
-  if resource then self.ctx.hit(p,resource,math.min((resource.maxHP-10)*.42,210),item.pos,'BowlingBall') end
+  if resource then self.ctx.hit(p,resource,math.min((resource.maxHP-10)*.42,210),item.pos,'BowlingBall',point) end
   self:marker(point,'BowlingBall',item.part.Color,normal)
   self.ctx.hazards:blast(item.pos,5,18,'heavy')
   if item.hp<=0 then self:marker(item.pos,'Shatter',item.part.Color);self:remove(item);return end
@@ -146,7 +226,8 @@ function S:step(dt)
  local now=self.ctx.now()
  for _,p in pairs(self.ctx.players) do
   local s=p.fieldTools
-  if s and (s.runId~=self.ctx.run(p) or not self.ctx.root(p)) then self:clear(p) end
+  if s and (s.runId~=self.ctx.run(p) or not self.ctx.root(p)) then self:clear(p)
+  elseif s and s.attack and now>=s.attack.at then self:release(p,s,s.attack) end
  end
  for _,item in pairs(self.items) do
   local p=self.ctx.players[item.owner]
@@ -162,6 +243,15 @@ function S:step(dt)
     from=to;item.pos=to;item.part.Position=to
    end
    item.sampleAge=age
+  elseif item.state=='Molten' then
+   local r=item.stuck
+   if now>=item.fuseAt or not r or r.paid or not r.part.Parent then self:remove(item)
+   elseif now>=item.nextMelt then
+    item.nextMelt=now+.22
+    local top=r.part.Position.Y+r.part.Size.Y*.5
+    item.pos=Vector3.new(item.pos.X,top+.4,item.pos.Z);item.part.Position=item.pos
+    self.ctx.hit(p,r,math.min(38,(r.maxHP-10)*.115),item.pos+Vector3.new(0,.35,0),'Melt',item.pos)
+   end
   elseif item.state=='Stuck' then
    local r=item.stuck
    if r and not r.paid and r.part.Parent then
@@ -170,7 +260,7 @@ function S:step(dt)
    if now>=item.fuseAt then
     local origin=item.pos
     self:marker(origin,'JellyGrenade',item.part.Color)
-    self.ctx.hazards:blast(origin,12,48,'explosion')
+    self.ctx.hazards:blast(origin,12,34,'explosion')
     for _,r2 in pairs(self.ctx.resources) do
      if not r2.paid and (r2.part.Position-origin).Magnitude<=12 then
       self.ctx.hit(p,r2,math.min((r2.maxHP-10)*.72,330),origin,'JellyGrenade')
