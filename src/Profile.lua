@@ -157,6 +157,8 @@ function P.validate(p,uid)
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
   if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
+  if offer.opened~=nil and type(offer.opened)~='boolean' then return false,'Invalid pack state' end
+  if (offer.packTier~=nil or offer.opened==false) and (not integer(offer.packTier) or offer.packTier<1 or offer.packTier>4) then return false,'Invalid pack tier' end
   local seen={}
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end

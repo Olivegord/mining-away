@@ -9,13 +9,14 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `afbedd3ca78c35719d0a69a1402d5b010f6a34074d4a1f627c9248129afd8987` | Hash of the November 6 gameplay build, unchanged by the documentation/sharing pass. |
-| Installed gameplay revision | `88ba15dfd928f880ee8bddefa54e153cfff20705` | Mine/sell/upgrade/prestige implementation. Later handoff/tooling commits need not change game Sources. |
+| Native-file SHA-256 | `d552ea1bf9567cb4f30e8c75ea813e18ffc5a9d87f9b08a0d1cc398c68c9e46a` | Hash of the local pack delivery build. |
+| Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Publication of latest work | **UNVERIFIED** | The agent did not publish. The owner was given Publish As instructions; execution/success was not observed. |
+| Shared Studio gameplay | **Verified November 6, 2026** | The cloud Edit session for place 124078027733625 contains the mine/sell/upgrade/prestige gameplay. Five allowlisted Sources matched the canonical build by length and fingerprint; the other two matched apart from authored map integration and effects preview placement. No overwrite was needed. |
+| Published Roblox version | **v4** | Studio Version History marks v4 published by OliveGord at 5:12 PM Pacific on November 6. Later versions through v11 were autosaves. The published v4 Sources were not independently inspected; gameplay verification above applies to the current shared Edit session. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
@@ -37,6 +38,17 @@ Earlier instructions named the historical place as the sole destination and trea
 
 ## Current implementation
 
+An unmarked copy of the original drone delivers each paid upgrade pack between the buyer and the pack shop. The server saves the tier and the three choices with the debit, withholds the choices until the owner completes the hold near the crate, and saves the opened state before showing the cards. A reconnect redelivers a sealed pack with its original tier and choices. Previously disclosed offers remain available. The shop interaction reaches 14 studs and the landed crate hold reaches 8 studs. Keyboard, gamepad and pointer/touch use the custom crate bar.
+
+| Crate | Box odds | Hold | Color progression |
+| --- | ---: | ---: | --- |
+| Common | 66% | 0.42 s | Grey |
+| Rare | 24% | 1.32 s | Grey → yellow |
+| Epic | 8% | 2.65 s | Grey → yellow → green |
+| Legendary | 2% | 4.80 s | Grey → yellow → green → violet |
+
+These timings, odds and the violet finish are tuning choices. Colored stages progressively reduce bar speed. Non-common boxes favor rarer existing cards among otherwise equally ranked offers. Cards rise from the crate when it is visible to the camera and retain the existing card effects and choice behavior. The reveal uses depth-of-field blur behind the cards.
+
 Revision `88ba15d` connects the ordinary one-drone start to immediate selling, visible purchases and prestige:
 
 - Converter Sell pays matching mineral wallets directly, without first filling the 120-unit launch storage.
@@ -50,6 +62,10 @@ Revision `88ba15d` connects the ordinary one-drone start to immediate selling, v
 Server owns damage, rewards, persistent state, cards, purchases and prestige. Clients render replicated intent. Preserve fail-safe persistence; a load failure must not overwrite a valid profile with defaults. See [core-loop report](review/CORE_LOOP.md), [consumables](review/CONSUMABLE_GAMEPLAY.md), [rock interactions](review/ROCK_INTERACTIONS.md), and [architecture](game/architecture.md).
 
 ## What was actually tested
+
+The local pack revision completed a one-player Studio Play test. Normal mining and sale commands earned 40 Quartz, and the shop UI bought a Rare crate. Studio observed the crate grounded between shop and buyer. Releasing E early kept it sealed. A full hold advanced grey to yellow, disclosed the three cards, and showed all three card faces with world depth-of-field and transparent menu surfaces. Selecting Shard Harvester installed one card, cleared the pending offer and removed the crate and blur. The console was empty and Play was stopped. The canonical disk file was verified against the seven allowlisted Sources. The source-only refresh preserved map, other instances and backup Sources.
+
+The core-loop suite passed in both configurations, including all four timing curves, sealed disclosure, cross-player rejection, interrupted holds, reconnect and exactly one claim. The native package/preservation suite passed. The legacy card price and HUD text assertions also fail on the baseline commit. Pack animation on touch, higher-tier visuals, listening quality, multiple Studio clients and production DataStore reconnects remain unverified. This pack revision has no Roblox publication. The version evidence above refers to the earlier shared build.
 
 Production-logic checks covered sale transactions, purchase costs, ownership, prestige and preservation. The one-file packaging/preservation suite passed. Server/client bundles compiled.
 

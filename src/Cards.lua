@@ -1,4 +1,5 @@
 local Shops=require('./Shops')
+local Packs=require('./Packs')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
 local C={CONTENT_VERSION=9,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
@@ -299,6 +300,7 @@ function C.buy(p,tx,expectedRun,context)
  if context.atDepot~=true or context.activeEncounter then return false,'Resolve packs at the depot outside combat' end
  local price=C.price(p);if Shops.balance(p,Shops.PACK_CURRENCY)<price then return false,'Not enough Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
+ local tier=Packs.roll(rng(hash(tostring(seed)..':delivery'))(100))
  local random=rng(seed);local pool={}
  for _,entry in ipairs(C.CATALOG) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
  local function addFallback()
@@ -311,13 +313,14 @@ function C.buy(p,tx,expectedRun,context)
  -- Prefer both a guarded-field answer and a productive economy option, then a
  -- an earned automation step, a useful first-pack mining fork, and varied choices.
  -- Caps can exhaust a lane; never invent a useless card just to fill that lane.
- local pairsOK,combat,economic,special,starterFork,automation={},{},{},{},{},{}
+ local pairsOK,combat,economic,special,starterFork,automation,rarity={},{},{},{},{},{},{}
  local baseline=p.run.packIndex==0 and vector(p,nil) or nil
  for i,a in ipairs(pool) do
   pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
   -- Keep a useful next automation step available without selecting it for the
   -- player. Resolve excludes owned unlocks and requires an owned courier for transport.
   automation[i]=(a.effects.plotAuto or 0)>0 or (a.effects.fullAuto or 0)>0
+  rarity[i]=a.rarity=='Rare' and 2 or (a.rarity=='Uncommon' and 1 or 0)
   starterFork[i]=false
   if baseline and (a.effects.fork or 0)>0 then
    for _,d in ipairs(p.fleet) do
@@ -340,6 +343,8 @@ function C.buy(p,tx,expectedRun,context)
     if p.run.packIndex<3 and (special[i] or special[j] or special[k]) then score=score+100 end
     if a._category~=b._category then score=score+4 end;if a._category~=c._category then score=score+4 end;if b._category~=c._category then score=score+4 end
     if a.scope~=b.scope then score=score+1 end;if a.scope~=c.scope then score=score+1 end;if b.scope~=c.scope then score=score+1 end
+    -- Better boxes favor rarer cards when equally useful triples are available.
+    score+=(tier-1)*.04*(rarity[i]+rarity[j]+rarity[k])
     if score>bestScore then chosen={a,b,c};bestScore=score end
    end end
   end end
@@ -347,10 +352,16 @@ function C.buy(p,tx,expectedRun,context)
  if #chosen~=3 then return false,'No three useful distinct choices remain; pursue your prestige objective' end
  local hasCombat=false
  for _,c in ipairs(chosen) do hasCombat=hasCombat or isCombat(c);c._vector=nil;c._category=nil end
- local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,packIndex=p.run.packIndex+1,price=price,currency=Shops.PACK_CURRENCY,choices=chosen,expires='This run'}
+ local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,packIndex=p.run.packIndex+1,price=price,currency=Shops.PACK_CURRENCY,choices=chosen,expires='This run',packTier=tier,opened=false}
  p.run.wallet[Shops.PACK_CURRENCY]=p.run.wallet[Shops.PACK_CURRENCY]-price;p.run.packIndex=p.run.packIndex+1;p.run.pendingOffer=clone(offer)
  if context.combatVisible then p.run.offersWithoutCombat=hasCombat and 0 or p.run.offersWithoutCombat+1 end
  record(p,'Buy',tx,offer);return true,clone(offer)
+end
+function C.open(p,offerId)
+ local offer=p.run.pendingOffer
+ if not offer or offer.id~=offerId then return false,'Pack is no longer pending' end
+ offer.opened=true
+ return true,{offerId=offerId}
 end
 function C.select(p,offerId,index,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
@@ -360,6 +371,7 @@ function C.select(p,offerId,index,tx,expectedRun,context)
  if context.atDepot~=true or context.activeEncounter then return false,'Choose your card at the depot outside combat' end
  local offer=p.run.pendingOffer
  if not offer or offer.id~=offerId or offer.runId~=p.run.id then return false,'Offer is no longer pending' end
+ if offer.opened==false then return false,'Open your delivered pack first' end
  if not finite(index) or index%1~=0 or index<1 or index>3 then return false,'Invalid card choice' end
  local c=clone(offer.choices[index]);if c.scope=='Individual' then
   local exists=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then exists=true end end

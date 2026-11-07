@@ -76,7 +76,10 @@ local function publish(p)
  p.player:SetAttribute('QueuedOreCount',#(p.oreQueue or {}))
  p.player:SetAttribute('QueuedOreIds',Http:JSONEncode(p.oreQueue or {}))
  copy.seed=nil;copy.receipts=nil
- if copy.run.pendingOffer then copy.run.pendingOffer.seed=nil end
+ if copy.run.pendingOffer then
+  copy.run.pendingOffer.seed=nil
+  if copy.run.pendingOffer.opened==false then copy.run.pendingOffer.choices=nil end
+ end
  copy.saveMode=preview and 'Preview — temporary profiles' or 'Saved profile';copy.pendingTransaction=p.busy or p.session.readOnly or false
  p.player:SetAttribute('MA_Profile',Http:JSONEncode(copy))
  p.player:SetAttribute('MA_SaveStatus',p.session.lost and 'Session lost — progress paused' or (p.session.readOnly and 'Save uncertain — reconciling' or (preview and 'PREVIEW • not saved across restarts' or 'Saved • autosave active')))
@@ -1749,6 +1752,21 @@ local function executePrestige(p: any,pl: any,payload: any)
   p.oreQueue={};p.testFleet=nil;RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);notice(p,'Prestige complete · +1 permanent drone and +25% base mining power.')
  end)
 end
+local packDelivery=PackDelivery.new({
+ root=root, players=Players, home=home, station=scene.packStation, healthy=healthy, atHome=atHome,
+ inAssault=activeAssault, characterRoot=characterRoot,
+ groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
+ offer=function(p) return data(p).run.pendingOffer end,
+ open=function(p,id,outcome)
+  if not transact(p,'open:'..id,function(copy)
+   local ok,result=Ca.open(copy,id)
+   if ok then return result end
+   return nil,result
+  end,nil,outcome) then outcome('rejected') end
+ end,
+})
+local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
+if packPrompt then packPrompt.ActionText='Buy pack';packPrompt.MaxActivationDistance=14 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
@@ -1768,7 +1786,10 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
    if ok then return result end
    return nil,result
   end
-  transact(p,'buy:'..payload.txId,buyCard,function() notice(p,'Choose one card. All three choices and targets are saved.') end)
+  local origin=characterRoot(p).Position
+  transact(p,'buy:'..payload.txId,buyCard,function()
+   packDelivery:spawn(p,data(p).run.pendingOffer,origin,now)
+  end)
  elseif action=='ChooseCard' then
   chooseCard(p,pl,payload)
  else
@@ -1933,6 +1954,7 @@ local function buyShopUpgrade(p,pl,payload)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
+ if action=='PackHold' then packDelivery:input(p,payload,now);return end
  if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
@@ -2210,7 +2232,7 @@ Players.PlayerAdded:Connect(function(pl) task.spawn(addPlayer,pl) end)
 local function removePlayer(pl)
  local p=profiles[pl.UserId];if not p or p.leaving then return end
  p.leaving=true;RoleEffects.ClearAbility(pl.UserId);leaveField(p);if p.connection then p.connection:Disconnect() end
- logistics:remove(p)
+ logistics:remove(p);packDelivery:clear(p)
  for _,d in ipairs(p.drones) do release(d);spend(d);d.model:Destroy();drones[d.id]=nil end
  -- Wait for the one ordered economy operation, then final save/unlock. No default fallback.
  local deadline=os.clock()+12
@@ -2242,6 +2264,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,field in ipairs(patches) do encounterStep(field) end
   logistics:tick(C.Tick)
   for _,p in pairs(profiles) do
+   packDelivery:step(p,now)
    recallFromField(p)
    dispatchOreQueue(p)
    consumableService:step(p,C.Tick)

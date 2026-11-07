@@ -103,4 +103,74 @@ check('mixed sales preserve typed balances and optional logistics cargo',functio
  q.run.cargo={Quartz=1};q.run.wallet.Quartz=1e14-1
  assert(not Pro.sell(q,prices,'overflow',run));assert(q.run.cargo.Quartz==1)
 end)
+check('rarity adds slower hold segments and never advances past its own color',function()
+ local previousDuration=0
+ for tier=1,#Packs.Tiers do
+  local duration=Packs.duration(tier)
+  assert(duration>previousDuration)
+  local progress,stage=Packs.sample(tier,duration)
+  assert(progress==1 and stage==tier)
+  local last=0
+  for step=0,40 do
+   local q=Packs.sample(tier,duration*step/40)
+   assert(q>=last and q<=1);last=q
+  end
+  previousDuration=duration
+ end
+ local starts={0,.42,1.32,2.65}
+ local lastSpeed=math.huge
+ for stage,at in ipairs(starts) do
+  local before,color=Packs.sample(4,at)
+  local after=Packs.sample(4,at+.1)
+  assert(color==stage and after-before<lastSpeed)
+  lastSpeed=after-before
+ end
+end)
+check('paid delivery stays sealed until the owner finishes a nearby uninterrupted hold',function()
+ local function advance(seconds)
+  realTime+=seconds;now=realTime;packDelivery:step(p,now)
+ end
+ local function visibleOffer()
+  return Http:JSONDecode(pl:GetAttribute('MA_Profile')).run.pendingOffer
+ end
+ mine();mine();mine();mine();sell()
+ move(scene.packStation.Position+Vector3.new(12,0,0))
+ local request=quote({packIndex=0});input('BuyPack',request)
+ local offer=Pro.clone(data(p).run.pendingOffer)
+ assert(offer.opened==false and #offer.choices==3 and not visibleOffer().choices)
+ local wallet=data(p).run.wallet.Quartz
+ local part=assert(p.packDelivery).part
+ assert((part.Position-scene.packStation.Position).Magnitude>=7)
+ input('BuyPack',request)
+ assert(p.packDelivery.part==part and data(p).run.wallet.Quartz==wallet)
+ local function hold(phase) input('PackHold',{phase=phase,offerId=offer.id}) end
+ local choice=quote({offerId=offer.id,index=2})
+ input('ChooseCard',choice);assert(#data(p).run.cards==0)
+ hold('Begin');assert(not part:GetAttribute('HoldAt'))
+ advance(Packs.DeliveryTime+.1);move(part.Position)
+ local intruder=player(310003);players.PlayerAdded:Fire(intruder)
+ intruder.Character:PivotTo(CFrame.new(part.Position))
+ command.OnServerEvent:Fire(intruder,'PackHold',{phase='Begin',offerId=offer.id})
+ assert(not part:GetAttribute('HoldAt'))
+ players.PlayerRemoving:Fire(intruder)
+ hold('Begin');assert(part:GetAttribute('HoldAt'))
+ advance(.18);hold('End');assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ advance(.2);hold('Begin');advance(Packs.HoldLease+.1)
+ assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ hold('Begin');move(field.center);advance(.15)
+ assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ players.PlayerRemoving:Fire(pl);assert(not part.Parent)
+ pl=player(310001);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId])
+ local restored=data(p).run.pendingOffer
+ assert(restored.id==offer.id and restored.packTier==offer.packTier and not visibleOffer().choices)
+ for i,card in ipairs(restored.choices) do assert(card.cardId==offer.choices[i].cardId and card.targetDroneId==offer.choices[i].targetDroneId) end
+ move(scene.packStation.Position+Vector3.new(12,0,0));advance(.1)
+ local delivered=assert(p.packDelivery)
+ advance(Packs.DeliveryTime+.1);move(delivered.part.Position);hold('Begin')
+ for _=1,math.ceil(Packs.duration(offer.packTier)/.2)+1 do advance(.2);hold('Keep') end
+ assert(data(p).run.pendingOffer.opened and #visibleOffer().choices==3)
+ input('ChooseCard',quote({offerId=offer.id,index=2}))
+ assert(data(p).run.pendingOffer==nil and #data(p).run.cards==1 and data(p).run.cards[1].cardId==offer.choices[2].cardId)
+ advance(.1);assert(not delivered.part.Parent)
+end)
 print(checks..' full-loop production-logic checks passed ('..(preview and 'Studio configuration' or 'production configuration')..'); API doubles, not a native playtest')

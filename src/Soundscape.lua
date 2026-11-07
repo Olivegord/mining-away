@@ -20,7 +20,9 @@ local CUES = {
  rock_cut={ids={'9125869504','9125869138'},volume=.075,duration=.28,pitch=1.4,cooldown=.18,range=48,maxVoices=2,fallback='action_jump_land.mp3'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  rock_body={id='9125869495',volume=.19,duration=.65,pitch=.58,cooldown=.12,range=75,maxVoices=2,fallback='action_jump_land.mp3'},
- pack={id='9126066421',volume=.25,duration=1,pitch=.8,cooldown=.4,fallback='volume_slider.ogg'},
+ pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
+ pack_step={id='9126066421',volume=.16,duration=.38,pitch=1.1,cooldown=.09,range=30,fallback='volume_slider.ogg'},
+ pack_open={id='91735091370012',volume=.22,duration=1.65,pitch=1.08,cooldown=.18,range=42,fallback='volume_slider.ogg'},
  upgrade={id='91735091370012',pitch=.8,volume=.12,duration=4,cooldown=.45,fallback='volume_slider.ogg'},
  prestige={id='91735091370012',volume=.16,duration=4,pitch=.85,cooldown=2,fallback='volume_slider.ogg'},
  cutting={id='9118614717',volume=.045,duration=.6,pitch=.72,cooldown=.22,fallback='action_jump_land.mp3'},
@@ -323,7 +325,6 @@ function Soundscape:observeProfile(previous,current)
  if before.id~=after.id then
   if #current.fleet>#previous.fleet then self:play('prestige') end
  elseif #after.cards>#before.cards then self:play('upgrade')
- elseif (after.packIndex or 0)>(before.packIndex or 0) then self:play('pack')
  elseif shopChanged then self:play('upgrade')
  elseif (after.saleEarnings or 0)>(before.saleEarnings or 0) then self:play('sale') end
  if before.id==after.id then

@@ -13,7 +13,7 @@ local gui=Instance.new('ScreenGui');gui.Name='PackVisualReview';gui.DisplayOrder
 gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.Parent=player.PlayerGui
 local root=U.frame(gui,UDim2.fromScale(0,0),UDim2.fromScale(1,1));root.BackgroundTransparency=1
 local panel=U.frame(root,UDim2.fromOffset(0,0),UDim2.fromOffset(820,452),Color3.fromRGB(19,21,35));U.corner(panel,28);U.stroke(panel,Color3.fromRGB(6,8,17),5)
-panel.BackgroundTransparency=1;panel:FindFirstChildOfClass('UIStroke').Transparency=1;panel:SetAttribute('CardBackdrop',true);CardView.backdrop(U,panel)
+panel.BackgroundTransparency=1;panel:FindFirstChildOfClass('UIStroke').Transparency=1
 local header=U.frame(panel,UDim2.fromOffset(0,0),UDim2.new(1,0,0,88));header.BackgroundTransparency=1
 local title=U.text(header,UDim2.fromOffset(20,8),UDim2.new(1,-40,0,38),'UPGRADE PACK',30,U.palette.white,true)
 title.Font=Enum.Font.Arcade;title.TextStrokeColor3=Color3.fromRGB(13,23,48);title.TextStrokeTransparency=.4

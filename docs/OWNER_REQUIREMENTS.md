@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — delivered packs and floating card choices
+
+Buying an upgrade pack sends an unmarked company drone to drop a glowing crate in the gap between the buyer and the shop. Leave space for the delivery. The buyer holds E on a custom progress bar. Common opens quickly with grey light and particles. Rare adds yellow, Epic adds green, and Legendary adds a longer series of slowdowns before its final color. The crate needs delivery, charge and opening feedback. Three saved cards rise into the air over a blurred world. The player chooses one.
+
 ## November 6 latest — one shared repository and exact Roblox identities
 
 The owner requests durable rules in `AGENTS.md` so local, published and shared games are never confused again, and a **public, shared GitHub repository** that a friend can open with Codex and use the same context. Keep the existing `Olivegord/mining-away` repository, include the actual canonical `build/DRONE_GAME.rbxl`, and carry the decisions and remaining work in [project state](PROJECT_STATE.md) and [collaboration instructions](COLLABORATION.md). Do not create a second repository or require a fork.

@@ -5,7 +5,6 @@ local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
 local TweenService=game:GetService('TweenService')
-local Debris=game:GetService('Debris')
 local player=Players.LocalPlayer
 local world=workspace:WaitForChild('MiningAway')
 local command=RS:WaitForChild('MiningAway'):WaitForChild('Command')
@@ -196,7 +195,6 @@ end
 connect(modal:GetPropertyChangedSignal('Visible'),syncModalTouch)
 connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' then syncModalTouch() end end)
 local modalMode,modalSize=nil,nil
-CardView.backdrop(U,sheet)
 local actionPending=nil
 local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
 local function clearBody() table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil; for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
@@ -216,6 +214,16 @@ local function cargoUnits(p)
  return n
 end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
+local packView=PackView.new({
+ player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,
+ hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
+})
+connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
+connect(RunService.RenderStepped,function() packView:update(workspace:GetServerTimeNow()) end)
+local function sealedPack()
+ local offer=pending()
+ return offer and offer.opened==false
+end
 local function fieldUnlocked(field)
  return profile and type(profile.clearedFields)=='table' and field and profile.clearedFields[field.Name]==true or false
 end
@@ -266,9 +274,15 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
- local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0;sheet:SetAttribute('CardBackdrop',inOffer)
+ local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0
  local colorful=true
  local texture=sheet:FindFirstChild('StudSurface');if texture then texture.Visible=not inOffer end
+ body.ScrollBarThickness=inOffer and 0 or 4
+ modalTitle.Visible=not inOffer
+ modalSubtitle.TextXAlignment=inOffer and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+ close.BackgroundTransparency=inOffer and 1 or 0
+ local closeEdge=close:FindFirstChildOfClass('UIStroke');if closeEdge then closeEdge.Enabled=not inOffer end
+ close.TextStrokeTransparency=inOffer and .4 or 1
  modalTitle.TextColor3=colorful and palette.white or palette.text;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
  modalSubtitle.TextColor3=inOffer and Color3.fromRGB(215,240,255) or palette.muted
  sheet.BackgroundColor3=palette.panel
@@ -282,7 +296,13 @@ local function menu(mode,title,subtitle,icon)
  modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,l.short and 10 or 18),UDim2.fromOffset(l.short and 38 or l.panelWidth<400 and 42 or 54,l.short and 38 or l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
  local titles={shop=string.upper(activeShop)..' SHOP',pack='UPGRADE PACK',offer='UPGRADE PACK',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
+ modalEmblem.Visible=not inOffer
+ if inOffer then
+  modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
+  modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
+ else modalSubtitle.TextSize=12 end
  modal.Visible=true
+ packView:setFocus(inOffer)
  if entering then
   if menuTween then menuTween:Cancel() end
   sheetScale.Scale=.98;menuTween=TweenService:Create(sheetScale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});menuTween:Play()
@@ -314,7 +334,7 @@ local function availability(action)
  if stationName then
   local station=world.Map:FindFirstChild(stationName,true)
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the card machine to open' or 'Visit the fleet uplink to prestige' end
+  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the card machine to buy' or 'Visit the fleet uplink to prestige' end
  end
  return true,''
 end
@@ -324,50 +344,11 @@ local function number(n)
  if math.abs(n-math.floor(n+.5))<.001 then return tostring(math.floor(n+.5)) end
  return string.format('%.3g',n)
 end
-local function previewRows(choice)
- local result={}
- for _,item in ipairs(choice.preview or {}) do
-  if type(item)=='table' then
-   local before,after=tonumber(item.before),tonumber(item.after)
-   if before and after then
-    local title,unit=item.label or 'Effect',item.unit or ''
-    if title=='Flight / 60Hz' then title='Flight';before=before*60;after=after*60;unit='studs/s' end
-    if unit~='%' and (title=='Turret resistance' or title=='Critical chance' or title=='Combat splash' or title=='Mining fork') then before=before*100;after=after*100;unit='%' end
-    if title=='Shared cargo' then title='Backpack';unit='ore' end
-    local separator=(unit=='' or unit=='%' or unit=='×') and '' or ' '
-    if title=='Plot targeting' or title=='Auto empty' then
-     table.insert(result,title..'  '..(before>0 and 'Automatic' or 'Manual')..' → '..(after>0 and 'Automatic' or 'Manual'))
-    else table.insert(result,title..'  '..number(before)..' → '..number(after)..separator..unit) end
-    if #result==4 then break end
-   end
-  end
- end
- return result
-end
 local function targetText(choice)
  if choice.cardId=='A02' then return 'YOUR COURIERS' end
  if choice.scope=='Individual' then return 'ONE DRONE / '..(choice.targetName or 'Assigned drone') end
  if choice.scope=='Color' then return 'ALL '..string.upper(choice.type or '')..' DRONES' end
  return choice.scope=='Player' and 'YOUR BACKPACK' or 'ENTIRE FLEET'
-end
-local function categoryText(choice)
- local e=choice.effects or {}
- local function gain(k) return type(e[k])=='number' and e[k]>0 end
- -- Category reflects the benefit, not a negative hull/mining tradeoff in an old saved payload.
- if gain('combat') or gain('rate') or gain('crit') or gain('splash') or gain('finisher') then return 'COMBAT' end
- if gain('health') or gain('reduction') or gain('shield') or gain('salvage') then return 'SURVIVAL' end
- if gain('capacity') or gain('yield') then return 'CARGO' end
- if gain('mining') or gain('fork') or gain('geode') then return 'MINING' end
- if gain('startup') then return 'LASER' end
- return 'FLIGHT'
-end
-local function stackText(choice)
- if choice.stackText then return choice.stackText end
- local count=0
- for _,owned in ipairs(profile.run.cards or {}) do if owned.cardId==choice.cardId and (choice.scope~='Individual' or owned.targetDroneId==choice.targetDroneId) then count=count+1 end end
- local reserve=string.sub(choice.cardId or '',1,1)=='R'
- local limit=(choice.scope=='Fleet' or choice.scope=='Player') and 2 or 1
- return reserve and 'Repeatable until its stat cap.' or string.format('Copy %d / %d · adds to base',count+1,limit)
 end
 local function progress(parent,y,width,title,detail,fraction,color,dark)
  label(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,22),title,17,dark and palette.white or palette.text,true)
@@ -387,14 +368,25 @@ local function updateOfferControls()
 end
 openOffer=function()
  local offer=pending();if not offer then return end
+ if offer.opened==false then
+  modal.Visible=false;modalMode=nil
+  return
+ end
  local size=viewport()
  if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
  local skipReveal=presentedOfferId==offer.id
+ local origin
+ local camera=workspace.CurrentCamera
+ local worldOrigin=not skipReveal and packView:origin(offer.id)
+ if camera and worldOrigin then
+  local screen,visible=camera:WorldToScreenPoint(worldOrigin)
+  if visible then origin=Vector2.new(screen.X,screen.Y) end
+ end
  local l=menu('offer','UPGRADE PACK','Choose one · This run','cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,target=targetText(choice),onChoose=function()
+  local view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
    if not pending() or pending().id~=offer.id or not canAct() then return end
    if send('ChooseCard',{offerId=offer.id,index=index}) then updateOfferControls() end
   end})
@@ -424,10 +416,10 @@ openPack=function()
  label(hero,UDim2.fromOffset(22,l.short and 94 or 126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
  if not l.short then progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true) end
  local allowed,blocked=availability('BuyPack')
- local text=not allowed and blocked or (affordable and 'Open pack · '..comma(price)..' Quartz' or 'Launch '..comma(price-credits)..' more Quartz')
+ local text=not allowed and blocked or (affordable and 'Buy pack · '..comma(price)..' Quartz' or 'Earn '..comma(price-credits)..' more Quartz')
  local buy
  buy=button(body,UDim2.fromOffset(3,l.short and 154 or 302),UDim2.fromOffset(width,50),text,function()
-  if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Opening…';enableAction(buy,false) end
+  if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Ordering…';enableAction(buy,false) end
  end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18;buy.TextStrokeTransparency=.5
  local oldEdge=buy:FindFirstChildOfClass('UIStroke');if oldEdge then oldEdge:Destroy() end
  U.skin(buy,Color3.fromRGB(153,46,201),12);enableAction(buy,canAct('BuyPack') and affordable)
@@ -606,52 +598,56 @@ local function refreshModal()
   end
  end)
 end
-local lastOffer=nil
-local resourceAccess=''
-local function menuContentKey(p)
- if not p or not p.run then return '' end
- local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
- for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
- for _,entry in ipairs(Shops.CATALOG) do table.insert(values,(run.shopLevels or {})[entry.id] or 0) end
- local pre=p.prestigePreview or {}
- for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
- for i,value in ipairs(values) do values[i]=tostring(value) end
- return table.concat(values,':')
-end
-local function readProfile()
- local raw=player:GetAttribute('MA_Profile');if type(raw)~='string' then return end
- local ok,p=pcall(function() return Http:JSONDecode(raw) end);if not ok or type(p)~='table' or type(p.run)~='table' then return end
- local oldProfile=profile
- local changedRun=profile and profile.run.id~=p.run.id
- soundscape:observeProfile(oldProfile,p)
- profile=p
- local access={p.run.id}
- for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
- local accessKey=table.concat(access,':')
- if accessKey~=resourceAccess then
-  resourceAccess=accessKey
-  for _,record in pairs(resources) do record.dirty=true end
+do
+ local lastOffer=nil
+ local resourceAccess=''
+ local function menuContentKey(p)
+  if not p or not p.run then return '' end
+  local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
+  for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
+  for _,entry in ipairs(Shops.CATALOG) do table.insert(values,(run.shopLevels or {})[entry.id] or 0) end
+  local pre=p.prestigePreview or {}
+  for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
+  for i,value in ipairs(values) do values[i]=tostring(value) end
+  return table.concat(values,':')
  end
- if actionPending then
-  local offer=p.run.pendingOffer
-  if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and (p.run.shopLevels[actionPending.upgradeId] or 0)>(actionPending.level or 0)) then actionPending=nil end
+ local function readProfile()
+  local raw=player:GetAttribute('MA_Profile');if type(raw)~='string' then return end
+  local ok,p=pcall(function() return Http:JSONDecode(raw) end);if not ok or type(p)~='table' or type(p.run)~='table' then return end
+  local oldProfile=profile
+  local changedRun=profile and profile.run.id~=p.run.id
+  soundscape:observeProfile(oldProfile,p)
+  profile=p
+  local access={p.run.id}
+  for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
+  local accessKey=table.concat(access,':')
+  if accessKey~=resourceAccess then
+   resourceAccess=accessKey
+   for _,record in pairs(resources) do record.dirty=true end
+  end
+  if actionPending then
+   local offer=p.run.pendingOffer
+   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and (p.run.shopLevels[actionPending.upgradeId] or 0)>(actionPending.level or 0)) then actionPending=nil end
+  end
+  if changedRun and modalMode=='prestige' then modal.Visible=false end
+  local offer=pending()
+  if offer and offer.opened==false and (not oldProfile or not oldProfile.run.pendingOffer or oldProfile.run.pendingOffer.id~=offer.id) then
+   if modalMode=='pack' then modal.Visible=false;modalMode=nil end
+  elseif offer and offer.opened~=false and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
+  elseif not offer and modalMode=='offer' then modal.Visible=false;modalMode=nil
+  elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
+   updateOfferControls()
+  elseif modalMode=='fleet' or modalMode=='run' then
+   local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
+   local milestone=p.prestigePreview or {}
+   local milestoneChanged=modalMode=='fleet' and (oldMilestone.earnings~=milestone.earnings or oldMilestone.wins~=milestone.wins or oldMilestone.eligible~=milestone.eligible)
+   local oldCrew=oldProfile and (oldProfile.activeFleet or oldProfile.fleet) or {};local crew=p.activeFleet or p.fleet
+   local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
+   if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
+  elseif menuContentKey(oldProfile)~=menuContentKey(p) then refreshModal() end
  end
- if changedRun and modalMode=='prestige' then modal.Visible=false end
- local offer=pending()
- if offer and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
- elseif not offer and modalMode=='offer' then modal.Visible=false;modalMode=nil
- elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
-  updateOfferControls()
- elseif modalMode=='fleet' or modalMode=='run' then
-  local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
-  local milestone=p.prestigePreview or {}
-  local milestoneChanged=modalMode=='fleet' and (oldMilestone.earnings~=milestone.earnings or oldMilestone.wins~=milestone.wins or oldMilestone.eligible~=milestone.eligible)
-  local oldCrew=oldProfile and (oldProfile.activeFleet or oldProfile.fleet) or {};local crew=p.activeFleet or p.fleet
-  local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
-  if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
- elseif menuContentKey(oldProfile)~=menuContentKey(p) then refreshModal() end
+ connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
-connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 local noticeUntil=0
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
@@ -1151,7 +1147,7 @@ local function stationAction(station)
   local key=station:GetAttribute('ShopKey')
   if profile then return function() openShop(key) end,key..' shop',Shops.unlocked(profile,key) and ('Spend '..key..' on upgrades') or 'Locked · buy access in the previous shop','Shop' end
   return nil
- elseif kind=='Pack' then return openPack,'Upgrade your fleet',pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 80)..' Quartz'),pending() and 'Choose' or 'Pack'
+ elseif kind=='Pack' then return openPack,'Upgrade your fleet',sealedPack() and 'Find your delivered crate and hold to open' or (pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 40)..' Quartz')),sealedPack() and 'Delivery' or (pending() and 'Choose' or 'Pack')
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
   return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
@@ -1161,7 +1157,7 @@ end
 local lastStationUse=0
 local function performStation(station)
  local action=stationAction(station)
- if menusVisible() then return end
+ if menusVisible() or (station:GetAttribute('Interaction')=='Pack' and packView.target) then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -1233,6 +1229,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if packView and packView:inputBegan(input,processed) then return end
  if consumableView and consumableView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
@@ -1319,7 +1316,7 @@ connect(RunService.Heartbeat,function(dt)
   local credits=Shops.balance(profile,'Quartz');local creditText=comma(credits)
   if credits>=1e9 then creditText=string.format('%.1fB',credits/1e9) elseif credits>=1e6 then creditText=string.format('%.1fM',credits/1e6) elseif credits>=10000 then creditText=string.format('%.1fk',credits/1000) end
   creditsLabel.Text='Quartz '..creditText
-  fleetCount.Text='Fleet';runCount.Text=pending() and 'Pick' or 'Cards'
+  fleetCount.Text='Fleet';runCount.Text=sealedPack() and 'Pack' or (pending() and 'Pick' or 'Cards')
   cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
@@ -1327,7 +1324,8 @@ connect(RunService.Heartbeat,function(dt)
   local powerLevel=profile.run.shopLevels.quartz_power or 0
   local powerCost=Shops.cost(Shops.BY_ID.quartz_power,powerLevel)
   prestigeButton.Text=pre and pre.eligible and 'Prestige · READY' or ('Prestige · '..comma(pre and pre.earnings or 0)..' / '..comma(pre and pre.saleRequired or 160))
-  if pending() then objective.Text='Your paid pack is waiting.\nChoose one of your three cards.'
+  if sealedPack() then objective.Text='Company delivery at the pack shop.\nHold to open your crate.'
+  elseif pending() then objective.Text='Your paid pack is waiting.\nChoose one of your three cards.'
   elseif amount>=capacity then objective.Text='Bag full → return to SELL ORE.\nSell, upgrade, then mine again.'
   elseif pre and pre.eligible then objective.Text='Prestige ready → visit the uplink.\nKeep your drones; gain permanent power.'
   elseif powerLevel==0 and credits>=powerCost then objective.Text='Buy Mining power in the Quartz shop.\n'..powerCost..' Quartz → 50% harder mining.'
@@ -1355,11 +1353,11 @@ connect(RunService.Heartbeat,function(dt)
  local station=nearbyInteraction();contextAction=nil;context.Visible=false
  local desiredContext=station and ({Pack='cards',Prestige='prestige',Sell='cargo',Shop='crystal'})[station:GetAttribute('Interaction')] or 'mining'
  if desiredContext~=contextKind then contextKind=desiredContext;contextIcon:Destroy();contextIcon=U.icon(context,contextKind,UDim2.fromOffset(12,(l.contextHeight-34)/2),UDim2.fromOffset(34,34),palette.mineral) end
- if station and not modal.Visible then
+ if station and not modal.Visible and not packView.target then
   local action,title,detail,actionText=stationAction(station)
   if l.contextWidth<350 then
    local kind=station:GetAttribute('Interaction')
-   if kind=='Pack' then title='Upgrade pack';detail=pending() and 'Your saved cards are ready' or '3 cards · choose 1'
+   if kind=='Pack' then title='Upgrade pack';detail=sealedPack() and 'Hold to open your delivered crate' or (pending() and 'Your saved cards are ready' or '3 cards · choose 1')
    elseif kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
    elseif kind=='Sell' then title='Sell ore';detail='Turn your backpack into spendable minerals' end
   end
@@ -1400,7 +1398,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- commandView:destroy();pickupView:destroy();fractureView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ packView:destroy();commandView:destroy();pickupView:destroy();fractureView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

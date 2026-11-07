@@ -1,0 +1,247 @@
+-- Each observer animates the same delivery from server timestamps.
+local RS=game:GetService('ReplicatedStorage')
+local UIS=game:GetService('UserInputService')
+local TweenService=game:GetService('TweenService')
+local PackView={}
+PackView.__index=PackView
+local colors={
+ Color3.fromRGB(181,190,201),
+ Color3.fromRGB(255,213,82),
+ Color3.fromRGB(86,255,141),
+ Color3.fromRGB(185,110,255),
+}
+local idle=Color3.fromRGB(115,135,150)
+local function block(parent,name,size,color,material)
+ local part=Instance.new('Part')
+ part.Name=name;part.Size=size;part.Color=color;part.Material=material
+ part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+ part.Parent=parent
+ return part
+end
+
+local function createCrate(parent)
+ local model=Instance.new('Model');model.Name='LocalCompanyCrate'
+ local shell=Color3.fromRGB(39,47,58)
+ local body=block(model,'Shell',Vector3.new(1.88,1.12,1.58),shell,Enum.Material.Metal)
+ local lid=block(model,'Lid',Vector3.new(1.94,.24,1.65),Color3.fromRGB(67,78,91),Enum.Material.Metal)
+ local seam=block(model,'Seal',Vector3.new(1.92,.055,1.62),idle,Enum.Material.Neon)
+ local light=Instance.new('PointLight');light.Range=7;light.Color=idle;light.Parent=seam
+ local sparks=Instance.new('ParticleEmitter')
+ sparks.Name='SealSparks';sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
+ sparks.Color=ColorSequence.new(idle);sparks.LightEmission=.85
+ sparks.Lifetime=NumberRange.new(.3,.65);sparks.Speed=NumberRange.new(.8,2.4)
+ sparks.Rate=5;sparks.SpreadAngle=Vector2.new(55,55);sparks.Drag=2
+ sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(1,0)})
+ sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(1,1)})
+ sparks.Parent=seam;model.PrimaryPart=body;model.Parent=parent
+ return {model=model,body=body,lid=lid,seam=seam,light=light,sparks=sparks}
+end
+
+local function createDrone(parent)
+ local template=workspace:FindFirstChild('Drone') or RS:FindFirstChild('Drone')
+ if not template or not template:IsA('Model') then return nil end
+ local drone=template:Clone()
+ drone.Name='CompanyCourier'
+ for _,item in ipairs(drone:GetDescendants()) do
+  if item:IsA('LuaSourceContainer') or item:IsA('BillboardGui') or item:IsA('SurfaceGui')
+   or item:IsA('Decal') or item:IsA('Texture') or item:IsA('Highlight') or item:IsA('Sound') then item:Destroy()
+  elseif item:IsA('BasePart') then
+   item.Anchored=true;item.CanCollide=false;item.CanTouch=false;item.CanQuery=false
+   item.Material=Enum.Material.Metal;item.Color=Color3.fromRGB(116,123,133)
+   if item:IsA('MeshPart') then item.TextureID='' end
+  elseif item:IsA('SpecialMesh') then item.TextureId=''
+  elseif item:IsA('Beam') or item:IsA('Trail') or item:IsA('ParticleEmitter') or item:IsA('Light') then item.Enabled=false end
+ end
+ drone:ScaleTo(drone:GetScale()*.69)
+ drone.Parent=parent
+ return drone
+end
+
+function PackView.new(options)
+ local self=setmetatable({options=options,records={}},PackView)
+ local focus=Instance.new('DepthOfFieldEffect')
+ focus.Name='PackWorldBlur';focus.FocusDistance=1.2;focus.InFocusRadius=.65
+ focus.FarIntensity=0;focus.NearIntensity=0;focus.Parent=game:GetService('Lighting')
+ self.focus=focus
+ local board=Instance.new('BillboardGui')
+ board.Name='HoldToOpenPack';board.Size=UDim2.fromOffset(160,48)
+ board.StudsOffsetWorldSpace=Vector3.new(0,1.7,0);board.AlwaysOnTop=true
+ board.Active=true;board.Enabled=false;board.ResetOnSpawn=false
+ local U=options.interface
+ local button=U.button(board,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',nil,Color3.fromRGB(23,30,40))
+ button.Name='PackHoldInput';button.Text='';button.Selectable=false
+ local label=U.text(button,UDim2.fromOffset(8,4),UDim2.new(1,-16,0,24),'',15,Color3.new(1,1,1),true)
+ label.TextXAlignment=Enum.TextXAlignment.Center
+ local track=U.frame(button,UDim2.fromOffset(9,33),UDim2.new(1,-18,0,6),Color3.fromRGB(49,61,77))
+ U.corner(track,3)
+ local fill=U.frame(track,UDim2.fromScale(0,0),UDim2.fromScale(0,1),colors[1])
+ U.corner(fill,3)
+ self.board=board;self.label=label;self.fill=fill;board.Parent=options.player.PlayerGui
+ self.connections={
+  button.InputBegan:Connect(function(input)
+   if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then self:begin(input) end
+  end),
+  UIS.InputEnded:Connect(function(input)
+   if input==self.input then self:release() end
+  end),
+  UIS.WindowFocusReleased:Connect(function() self:release() end),
+ }
+ return self
+end
+
+function PackView:setFocus(active)
+ if self.focusActive==active then return end
+ self.focusActive=active
+ if self.focusTween then self.focusTween:Cancel() end
+ self.focusTween=TweenService:Create(self.focus,TweenInfo.new(.22),{FarIntensity=active and .95 or 0})
+ self.focusTween:Play()
+end
+
+function PackView:signal(phase, source)
+ self.options.command:FireServer('PackHold',{phase=phase,offerId=source:GetAttribute('OfferId')})
+end
+
+function PackView:begin(input)
+ if self.input or not self.target or self.options.hidden() or self.options.busy() then return end
+ self.input=input;self.holding=self.target
+ self.sentAt=os.clock()
+ self:signal('Begin',self.holding)
+end
+
+function PackView:release()
+ if self.holding and self.holding.Parent then self:signal('End',self.holding) end
+ self.input=nil;self.holding=nil
+end
+
+function PackView:inputBegan(input,processed)
+ local key=input.KeyCode
+ if key~=Enum.KeyCode.E and key~=Enum.KeyCode.ButtonR2 then return false end
+ if processed or not self.target or self.options.hidden() or UIS:GetFocusedTextBox() then return false end
+ self:begin(input)
+ return true
+end
+
+function PackView:origin(offerId)
+ for part in pairs(self.records) do
+  if part:GetAttribute('OfferId')==offerId then return part.Position+Vector3.new(0,.55,0) end
+ end
+end
+
+function PackView:render(record,source,now,age,tier)
+ local o=self.options
+ local position=source.Position
+ local side=source:GetAttribute('Approach') or Vector3.new(1,0,0)
+ local top=position+Vector3.new(0,4.8,0)
+ local dronePosition
+ if age<Packs.DropTime then
+  local q=math.clamp(age/Packs.DropTime,0,1)
+  dronePosition=top-side*(19*(1-q)^3)+Vector3.new(0,6*(1-q)^2,0)
+ elseif age<Packs.DepartTime then
+  local q=(age-Packs.DropTime)/(Packs.DepartTime-Packs.DropTime)
+  dronePosition=top+side*(20*q^2)+Vector3.new(0,9*q^2,0)
+ end
+ if dronePosition and not record.courier and not record.triedCourier then
+  record.triedCourier=true;record.courier=createDrone(o.parent)
+ end
+ if record.courier then
+  if dronePosition then record.courier:PivotTo(CFrame.lookAt(dronePosition,dronePosition+side))
+  else record.courier:Destroy();record.courier=nil end
+ end
+ local boxPosition=position
+ if age<Packs.DropTime then boxPosition=dronePosition-Vector3.new(0,1.25,0)
+ elseif age<Packs.DeliveryTime then
+  local q=(age-Packs.DropTime)/(Packs.DeliveryTime-Packs.DropTime)
+  boxPosition=position+Vector3.new(0,3.55*(1-q*q),0)
+ elseif age<Packs.DeliveryTime+.21 then
+  local q=(age-Packs.DeliveryTime)/.21
+  boxPosition=position+Vector3.new(0,math.sin(q*math.pi)*.16*(1-q),0)
+ end
+ if not record.landed and age>=Packs.DeliveryTime then
+  record.landed=true
+  if age<Packs.DeliveryTime+.22 then o.audio:play('pack_land',position);record.sparks:Emit(12) end
+ end
+ local holdAt=source:GetAttribute('HoldAt')
+ local openedAt=source:GetAttribute('OpenedAt')
+ local progress,stage=0,0
+ if openedAt then progress,stage=1,tier
+ elseif holdAt then progress,stage=Packs.sample(tier,now-holdAt) end
+ local color=colors[stage] or idle
+ if stage~=record.stage then
+  record.stage=stage
+  record.seam.Color=color;record.light.Color=color;record.sparks.Color=ColorSequence.new(color)
+  if stage>0 and not openedAt then
+   record.sparks:Emit(7+stage*3)
+   o.audio:play('pack_step',position,{pitch=.78+stage*.16})
+  end
+ end
+ local lift=0
+ local fade=0
+ if openedAt then
+  local ageOpen=math.max(0,now-openedAt)
+  if not record.opened then
+   record.opened=true
+   if ageOpen<.25 then
+    o.audio:play('pack_open',position,{pitch=.9+tier*.075})
+    record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(12+tier*6)
+   end
+  end
+  lift=math.clamp(ageOpen/.29,0,1)
+  fade=math.clamp((ageOpen-.28)/.72,0,1)
+ end
+ local pose=CFrame.lookAt(boxPosition,boxPosition+side)
+ record.body.CFrame=pose
+ record.lid.CFrame=pose*CFrame.new(0,.66+.4*lift,0)*CFrame.Angles(-lift*1.28,0,0)
+ record.seam.CFrame=pose*CFrame.new(0,.54,0)
+ record.light.Brightness=(.4+progress*1.5)*(1-fade)
+ record.sparks.Rate=openedAt and 0 or (stage>0 and 10+stage*5 or 5)
+ record.body.Transparency=fade;record.lid.Transparency=fade;record.seam.Transparency=fade
+ return progress,color,holdAt,openedAt
+end
+
+function PackView:update(now)
+ local o=self.options
+ local folder=o.world:FindFirstChild('PackDeliveries')
+ local player=o.player
+ local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
+ local camera=workspace.CurrentCamera
+ self.target=nil
+ if folder and camera then for _,source in ipairs(folder:GetChildren()) do
+  local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier')
+  if stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
+   local record=self.records[source]
+   if not record then record=createCrate(o.parent);self.records[source]=record end
+   record.visible=true
+   local age=now-stamp
+   local progress,color,holdAt,openedAt=self:render(record,source,now,age,tier)
+   if source:GetAttribute('Owner')==player.UserId and hr and hum and hum.Health>0 and not openedAt
+    and age>=Packs.DeliveryTime and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden() then
+    self.target=source
+    local touch=UIS.PreferredInput==Enum.PreferredInput.Touch
+    local gamepad=UIS.PreferredInput==Enum.PreferredInput.Gamepad
+    self.label.Text=progress>=1 and 'Opening…' or (holdAt and Packs.Tiers[record.stage] or (touch and 'Hold to open' or (gamepad and 'Hold R2 to open' or 'Hold E to open')))
+    self.fill.Size=UDim2.fromScale(progress,1);self.fill.BackgroundColor3=color
+   end
+  end
+ end end
+ if self.holding then
+  if self.target~=self.holding then self:release()
+  elseif os.clock()-self.sentAt>=Packs.RenewEvery then self.sentAt=os.clock();self:signal('Keep',self.holding) end
+ end
+ self.board.Adornee=self.target;self.board.Enabled=self.target~=nil
+ for source,record in pairs(self.records) do
+  if not record.visible then
+   record.model:Destroy();if record.courier then record.courier:Destroy() end
+   self.records[source]=nil
+  else record.visible=false end
+ end
+end
+
+function PackView:destroy()
+ self:release()
+ for _,connection in ipairs(self.connections) do connection:Disconnect() end
+ self.board:Destroy();self.focus:Destroy()
+ for _,record in pairs(self.records) do record.model:Destroy();if record.courier then record.courier:Destroy() end end
+ table.clear(self.records)
+end
+return PackView

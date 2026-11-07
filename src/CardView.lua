@@ -311,27 +311,6 @@ local function onPlane(camera,x,y,depth)
  return ray.Origin+ray.Direction*(depth/math.max(.001,-direction.Z))
 end
 
--- A screen-space opaque modal would cover camera-local 3D cards. Put the
--- dark backing on a deeper physical plane and retain ordinary native hitboxes.
-function CardView.backdrop(U,root)
- local part=visualPart(workspace,Vector3.new(1,1,.01),Vector3.zero,Color3.new());part.Name='LocalPackBackdrop';part.Transparency=1
- local surface=Instance.new('SurfaceGui');surface.Name='PackBackdrop';surface.Adornee=part;surface.Face=Enum.NormalId.Front;surface.AlwaysOnTop=false;surface.LightInfluence=0;surface.MaxDistance=8;surface.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;surface.Parent=Players.LocalPlayer.PlayerGui
- local face=U.frame(surface,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(19,21,35));U.corner(face,56);U.stroke(face,Color3.fromRGB(6,8,17),10)
- serial+=1;local key=bindPrefix..'Backdrop'..serial
- local function dispose() RunService:UnbindFromRenderStep(key);surface:Destroy();part:Destroy() end
- root.Destroying:Connect(dispose)
- RunService:BindToRenderStep(key,Enum.RenderPriority.Camera.Value+7,function()
-  local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(root)
-  if not camera or not left or not root:GetAttribute('CardBackdrop') then surface.Enabled=false;part.Transparency=1;return end
-  local depth=1.12;local x,y=(left+right)/2,(top+bottom)/2
-  local w=(onPlane(camera,right,y,depth)-onPlane(camera,left,y,depth)).Magnitude
-  local h=(onPlane(camera,x,top,depth)-onPlane(camera,x,bottom,depth)).Magnitude
-  part.Size=Vector3.new(w,h,.01);part.CFrame=CFrame.new(onPlane(camera,x,y,depth))*camera.CFrame.Rotation*CFrame.Angles(0,math.pi,0)
-  surface.CanvasSize=Vector2.new((right-left)*2,(bottom-top)*2);surface.Enabled=true;part.Transparency=1
- end)
- return dispose
-end
-
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
@@ -391,7 +370,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
  local focused,pressed,blend=false,false,0
- local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.14)/revealSpeed)
+ local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.13)/revealSpeed)
  local reducedMotion=options.reducedMotion==true
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
  local function motionReduced()
@@ -416,9 +395,11 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
-  if not quiet and not options.skipReveal and age<0 then choose.Visible=false;surface.Enabled=false;part.Transparency=1;return end
-  choose.Visible=true
-  local reveal=(quiet or options.skipReveal) and 1 or math.clamp(age/(.55/revealSpeed),0,1);reveal=1-(1-reveal)^3
+  local instant=quiet or options.skipReveal
+  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
+  local progress=instant and 1 or math.clamp(age/(.67/revealSpeed),0,1)
+  local reveal=1-(1-progress)^3
+  choose.Visible=progress>=.85
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=focused and choose.Active and 1 or 0
@@ -427,17 +408,25 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if target==1 and UserInputService.MouseEnabled then local mouse=UserInputService:GetMouseLocation();nx=math.clamp((mouse.X-position.X)/math.max(1,size.X)*2-1,-1,1);ny=math.clamp((mouse.Y-position.Y)/math.max(1,size.Y)*2-1,-1,1) end
   local response=1-math.exp(-14*math.min(dt,.1));pointerX+=(nx-pointerX)*response;pointerY+=(ny-pointerY)*response
   blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local lift=(full and not quiet and blend*9 or 0)-(1-reveal)*18-(pressed and 2 or 0)
+  local bob=not quiet and math.sin(clock*2.5+index*1.4)*3 or 0
+  local lift=bob+(full and not quiet and blend*7 or 0)-(pressed and 2 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=age>=0 or quiet or options.skipReveal;terms.Visible=effect.Visible
+  effect.Visible=progress>=.79;terms.Visible=effect.Visible
   local bleed=full and 12 or 0
-  local depth=1;local center=onPlane(camera,(left+right)/2,(top+bottom)/2-lift,depth+.015)
-  local w=(onPlane(camera,right+bleed,(top+bottom)/2,depth)-onPlane(camera,left-bleed,(top+bottom)/2,depth)).Magnitude
-  local h=(onPlane(camera,(left+right)/2,top-bleed,depth)-onPlane(camera,(left+right)/2,bottom+bleed,depth)).Magnitude
-  local tilt=full and not quiet and math.rad((index-2)*1.5+pointerX*blend*9+(1-reveal)*22) or 0
-  local pitch=full and not quiet and math.rad(-pointerY*blend*5) or 0
+  local x,y=(left+right)/2,(top+bottom)/2
+  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.38,y+size.Y*.52)
+  local travel=1-reveal
+  local arc=math.sin(progress*math.pi)*math.min(46,size.Y*.14)
+  local depth=1
+  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift,depth+.015)
+  local scale=.34+.66*reveal
+  local w=(onPlane(camera,right+bleed,y,depth)-onPlane(camera,left-bleed,y,depth)).Magnitude*scale
+  local h=(onPlane(camera,x,top-bleed,depth)-onPlane(camera,x,bottom+bleed,depth)).Magnitude*scale
+  local tilt=full and not quiet and math.rad((index-2)*1.5+pointerX*blend*9+(index==1 and -1 or 1)*64*travel) or 0
+  local pitch=full and not quiet and math.rad(-pointerY*blend*5-23*travel) or 0
+  local roll=not quiet and math.rad((index-2)*20*travel) or 0
   part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
-  part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,0)
+  part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,roll)
   part.Transparency=1;surface.Enabled=true;local canvasSize=Vector2.new(math.floor((right-left+bleed*2)*FACE_PIXELS+.5),math.floor((bottom-top+bleed*2)*FACE_PIXELS+.5));if surface.CanvasSize~=canvasSize then surface.CanvasSize=canvasSize end
   canvas.Size=UDim2.fromOffset(size.X*FACE_PIXELS,size.Y*FACE_PIXELS);canvas.Position=UDim2.fromOffset((position.X-left+bleed)*FACE_PIXELS,(position.Y-top+bleed)*FACE_PIXELS)
   canvas.BackgroundColor3=pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)

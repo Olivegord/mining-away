@@ -72,6 +72,8 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
+ if 'Cards' in names and 'Packs' not in names:
+  names=tuple(n for name in names for n in (('Packs','Cards') if name=='Cards' else (name,)))
  if 'Profile' in names and 'Consumables' not in names:
   names=tuple(n for name in names for n in (('Consumables','Profile') if name=='Profile' else (name,)))
  # The shared beam renderer owns startup leases in every production/test bundle.
@@ -82,6 +84,7 @@ def module_bundle(names):
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  if 'Packs' in names[:names.index(name)]:code=code.replace("local Packs=require('./Packs')\n",'')
   if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
   if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')
   if 'DroneCatalog' in names[:names.index(name)]:code=code.replace("local DroneCatalog=require('./DroneCatalog')\n",'')
@@ -90,9 +93,9 @@ def module_bundle(names):
   s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','Config','Feel','Mining','RockCascade','ResourcePlacement','OreDrops','Rules','Profile','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','Config','Feel','Mining','RockCascade','ResourcePlacement','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','CardView','ShopView','AbilityView','Consumables','ConsumableView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','Packs','CardView','PackView','ShopView','AbilityView','Consumables','ConsumableView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''
