@@ -121,6 +121,7 @@ local templateRetryQueued=false
 local profile=nil
 local logisticsView=nil
 local consumableView=nil
+local toolView=nil
 local U=Interface
 local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
@@ -1050,6 +1051,7 @@ connect(RunService.RenderStepped,function(dt)
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
+ if toolView then toolView:step(dt,now) end
 end)
 
 local evade=button(safeRoot,UDim2.new(1,-136,1,-108),UDim2.fromOffset(118,38),'Evade  [Q]',function() command:FireServer('Evade') end,palette.accent);evade.Visible=false
@@ -1076,7 +1078,11 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
 consumableView=ConsumableView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,resources=resourceIndex,command=command,
  profile=function() return profile end,hidden=menusVisible,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
- onSelect=function() logisticsView.selected=nil end})
+ onSelect=function() logisticsView.selected=nil;if toolView then toolView:unequip() end end})
+toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
+ audio=soundscape,presentation=presentation,hidden=menusVisible,
+ blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) or (toolView and toolView:blocks(point-game:GetService('GuiService'):GetGuiInset())) end,
+ onSelect=function() consumableView:select(nil);logisticsView.selected=nil end})
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
@@ -1132,7 +1138,7 @@ local function requestPlot(id)
  command:FireServer('Patch',id)
 end
 local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
- profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (consumableView and consumableView:isSelecting()) end,
+ profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (consumableView and consumableView:isSelecting()) or (toolView and toolView:selected()~=nil) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
@@ -1163,6 +1169,7 @@ end
 local mouse=player:GetMouse()
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
+ if toolView and toolView:click(position) then return end
  if consumableView and consumableView:click(position,true) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
@@ -1171,6 +1178,7 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if toolView and toolView:input(input,processed) then return end
  if consumableView and consumableView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
@@ -1195,8 +1203,7 @@ connect(UIS.InputBegan,function(input,processed)
   local camera=workspace.CurrentCamera
   if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
-  local fields={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5}
-  if fields[key] then requestPlot(fields[key]) end
+  -- Number keys belong to the custom tool hotbar. Field commands use rocks.
  end
 end)
 connect(UIS.InputEnded,function(input)
@@ -1305,6 +1312,7 @@ connect(gui.Destroying,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
  if consumableView then consumableView:destroy() end
+ if toolView then toolView:destroy() end
  tacticalHUD:destroy()
  crystalAudio:destroy()
  soundscape:destroy()

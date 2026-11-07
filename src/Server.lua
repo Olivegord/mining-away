@@ -322,6 +322,8 @@ end
 local function abilityLineOfSight(p,from,r)
  return los(from,r.part.Position,r.part,{droneFolder,p.player.Character})
 end
+scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=home,now=function() return now end,
+ clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 local resourceSerial=0
 local function nodeUsage(field)
  local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
@@ -674,6 +676,7 @@ function fracture:step()
     if point then target=shot.target end
    end
    if point then
+    scene.hazards:beam(shot.pos,point,8,'rubble')
     local accepted=false
     if target and target.field==shot.field and (target==shot.target or not shot.context.chain.visited[target.id]) then
      shot.context.chain.visited[target.id]=true
@@ -712,7 +715,7 @@ end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
- if contactKind~='Fracture' and contactKind~='Consumable' and not sameRockType(d,r) then return false end
+ if contactKind~='Fracture' and contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r) then return false end
  local recipient=d
  local job=d.specialJob
  local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and job and not job.impacted and job.targetId==r.id and now>=job.startedAt+job.duration*job.impact
@@ -741,7 +744,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
- if contactKind=='Consumable' or (fractureContext and fractureContext.consumable) then r.consumableWorked=true end
+ if contactKind=='Consumable' or contactKind=='FieldTool' or (fractureContext and fractureContext.consumable) then r.consumableWorked=true end
  local baseAmount=amount
  local discoverySpeed=contactKind=='Fracture' and 1 or discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
@@ -755,11 +758,23 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   if r.hp>amount and r.hp-amount<=math.max(1,r.maxHP)*1e-10 then amount=r.hp end
  end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
+ if secondary then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
  local fragmentOrigin=r.part.Position+Vector3.new(0,r.part.Size.Y*.35+.4,0)
  local revealed=nil
  local broken=R.damage(r,amount)
+ if contactKind=='FieldTool' and fractureContext and fractureContext.toolKind=='BowlingBall' then
+  r.ballDents=math.min(4,(r.ballDents or 0)+1)
+  local point=r.part.CFrame:PointToObjectSpace(abilityOrigin)/r.part.Size
+  r.part:SetAttribute('BallDentPoint',Vector3.new(math.clamp(point.X,-.53,.53),math.clamp(point.Y,-.53,.53),math.clamp(point.Z,-.53,.53)))
+  r.part:SetAttribute('BallDentSerial',(r.part:GetAttribute('BallDentSerial') or 0)+1);r.part:SetAttribute('BallDents',r.ballDents)
+  r.damageBaseScale=r.damageBaseScale or Feel.stageScale(previous,r.stageCount);r.damageBaseStage=r.damageBaseStage or previous
+  r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',r.damageBaseStage)
+  r.part:SetAttribute('DamageDepth',math.clamp(1-r.hp/math.max(1,r.maxHP-10),0,1));r.part:SetAttribute('DamageAt',now)
+ end
+ if contactKind=='Breaker' then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),6,20,'heavy')
+ elseif special then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),5,14,'special') end
  if contactKind=='Fracture' then
   r.part:SetAttribute('FractureHits',(r.part:GetAttribute('FractureHits') or 0)+1)
   r.part:SetAttribute('FractureAt',now)
@@ -800,7 +815,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
  if broken then
-  r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.removeAt=now+2
+  r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)
    revealed={makeResource(r.field,r.position,'Core',core.maxHP,r.ore*4,core.size)}
@@ -814,7 +829,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    fracture:launch(recipient,r,fragmentOrigin,fractureContext,contactKind=='Breaker')
    -- Tools never manufacture more tools, including rocks later finished by a
    -- normal drone. The rock's ordinary ore payout remains unchanged.
-   if not r.consumableWorked then discoveries:TrySpawn(p.player,r.field.part,Vector3.new(r.position.X,r.part:GetAttribute('GroundY') or r.position.Y,r.position.Z),r.field.id) end
+   if not r.consumableWorked then
+    discoveries:TrySpawn(p.player,r.field.part,Vector3.new(r.position.X,r.part:GetAttribute('GroundY') or r.position.Y,r.position.Z),r.field.id)
+    if scene.fieldTools then scene.fieldTools:onRock(p,r) end
+   end
    table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn)
   end
  end
@@ -969,6 +987,7 @@ local function turretStep(field: any)
     elseif not d or not p or not R.participates(field.e,d,data(p).run.id) then t.fireAt=nil;t.lock=nil;t.nextShot=now+1
     elseif now>=t.fireAt then
      t.shotSerial=t.shotSerial+1;t.model:SetAttribute('ShotSerial',t.shotSerial)
+     scene.hazards:beam(t.emitter.Position,t.aim,field.cfg.Damage,'turret')
      if (d.pos-t.aim).Magnitude<=3.5 and (d.pos-t.emitter.Position).Magnitude<55 and los(t.emitter.Position,t.aim,d.model,{t.model,droneFolder}) then
       local stats=field.e.roster[d.id].stats;hurtDrone(d,field.cfg.Damage*(1-(stats.damageReduction or 0)))
      end
@@ -994,6 +1013,7 @@ local function combatHit(d,field,target,stats)
  if (stats.critChance or 0)>0 and seed:NextNumber()<stats.critChance then damage=damage*2;d.lastCritAt=now end
  d.shotSerial=(d.shotSerial or 0)+1;d.lastShotAt=now
  local dealt=math.min(target.hp,damage);target.hp=math.max(0,target.hp-damage)
+ scene.hazards:beam(d.pos,target.emitter.Position,12,'combat')
  local kills=target.hp<=0 and 1 or 0
  if dealt>0 then R.markContribution(field.e,d.owner,data(p).run.id) end
  if (stats.splashFraction or 0)>0 then
@@ -1869,6 +1889,7 @@ local function abilityContext(p,fieldId,operator,deployment)
    if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' or not targetRecord(resource) then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
    local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil)
+   if accepted then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
    if accepted and deployment and Consumables.accept(data(p).consumables) then p.dirty=true;p.publishDirty=true end
    return accepted,resource.paid==true
   end,
@@ -1891,6 +1912,23 @@ consumableService=ConsumableService.new({data=data,healthy=healthy,saveHealthy=f
   if surface then ground=surface.Position end
   if (hr.Position-ground).Magnitude>60 or not los(hr.Position,ground+Vector3.new(0,1.5,0),field.part,{droneFolder,p.player.Character}) then return nil,'Move closer to a clear placement spot' end
   return ground
+ end})
+scene.toolRandom=Random.new()
+scene.fieldTools=ToolRules.Service.new({world=root,players=profiles,resources=resources,debris=Debris,healthy=healthy,
+ root=characterRoot,run=function(p) return data(p).run.id end,encode=function(v) return Http:JSONEncode(v) end,
+ now=function() return now end,random=function() return scene.toolRandom:NextNumber() end,notice=notice,hazards=scene.hazards,
+ clear=function(from,to,character) return los(from,to,nil,{droneFolder,character}) end,
+ cast=function(from,to,radius,character)
+  if (to-from).Magnitude<1e-6 then return nil end
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
+  params.FilterDescendantsInstances={droneFolder,character,root.FieldTools,root.ToolImpacts}
+  return workspace:Spherecast(from,radius,to-from,params)
+ end,
+ hit=function(p,r,amount,origin,kind)
+  -- Equipment works without borrowing a live drone or changing its orders.
+  local actor={id=tostring(p.player.UserId)..':field-tool',owner=p.player.UserId,hp=1,life=1,role='Striker',pos=origin,
+   owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
+  return hitResource(actor,r,amount,false,nil,origin,'FieldTool',{consumable=true,toolKind=kind})
  end})
 local function finishAbility(p,token,context)
  local charge=p.ability.charge
@@ -1991,6 +2029,8 @@ local function commandPlayer(pl: any,action: any,payload: any)
   miningAbility(p,payload)
  elseif action=='PlaceConsumable' then
   consumableService:command(p,payload)
+ elseif action=='EquipFieldTool' or action=='UseFieldTool' then
+  scene.fieldTools:command(p,action,payload)
  elseif action=='BuyUpgrade' then
   buyShopUpgrade(p,pl,payload)
  elseif action=='DevFillBag' then
@@ -2229,6 +2269,7 @@ addPlayer=function(pl)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
   local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0);local firstField=scene.fields[1].center
+  scene.fieldTools:clear(p);p.hazardAt={}
   leaveField(p,nil,nil,true);ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
  end
  p.connection=pl.CharacterAdded:Connect(character)
@@ -2239,6 +2280,7 @@ Players.PlayerAdded:Connect(function(pl) task.spawn(addPlayer,pl) end)
 local function removePlayer(pl)
  local p=profiles[pl.UserId];if not p or p.leaving then return end
  p.leaving=true;RoleEffects.ClearAbility(pl.UserId);leaveField(p);if p.connection then p.connection:Disconnect() end
+ scene.fieldTools:clear(p)
  logistics:remove(p);packDelivery:clear(p)
  for _,d in ipairs(p.drones) do release(d);spend(d);d.model:Destroy();drones[d.id]=nil end
  -- Wait for the one ordered economy operation, then final save/unlock. No default fallback.
@@ -2290,6 +2332,10 @@ RunService.Heartbeat:Connect(function(dt: number)
   fracture:step()
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
+  scene.fieldTools:step(C.Tick)
+  for _,d in pairs(drones) do
+   if d.hp>0 and d.mining and d.target and not d.target.paid then scene.hazards:beam(d.pos,d.target.part.Position,4,'laser') end
+  end
   for _,field in ipairs(patches) do turretStep(field);encounterStep(field) end
  end
  snapshotElapsed=snapshotElapsed+dt;autosaveElapsed=autosaveElapsed+dt
@@ -2297,6 +2343,10 @@ RunService.Heartbeat:Connect(function(dt: number)
   local snapshotDt=snapshotElapsed;snapshotElapsed=0
   for _,d in pairs(drones) do snapshotDrone(d) end
   for _,field in ipairs(patches) do
+   for _,r in ipairs(field.resources) do
+    local solid=not r.paid and now>=r.readyAt
+    if r.part.CanCollide~=solid then r.part.CanCollide=solid;r.part.CanTouch=solid end
+   end
    field.model:SetAttribute('Phase',field.e.phase);field.model:SetAttribute('EncounterId',nil);field.model:SetAttribute('PhaseEndsAt',nil)
    for _,t in ipairs(field.turrets) do
     local watcher: any=t.watcher and profiles[t.watcher];local hr: any=watcher and characterRoot(watcher)

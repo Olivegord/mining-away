@@ -12,7 +12,7 @@ VM.__add=function(a,b) return setmetatable({X=a.X+b.X,Y=a.Y+b.Y,Z=a.Z+b.Z},VM) e
 VM.__sub=function(a,b) return setmetatable({X=a.X-b.X,Y=a.Y-b.Y,Z=a.Z-b.Z},VM) end
 VM.__unm=function(a) return setmetatable({X=-a.X,Y=-a.Y,Z=-a.Z},VM) end
 VM.__mul=function(a,b) if type(a)=='number' then a,b=b,a end;if type(b)=='table' then return setmetatable({X=a.X*b.X,Y=a.Y*b.Y,Z=a.Z*b.Z},VM) end;return setmetatable({X=a.X*b,Y=a.Y*b,Z=a.Z*b},VM) end
-VM.__div=function(a,b) return a*(1/b) end
+VM.__div=function(a,b) if type(b)=='table' then return setmetatable({X=a.X/b.X,Y=a.Y/b.Y,Z=a.Z/b.Z},VM) end;return a*(1/b) end
 function VM:Lerp(b,t)
  local value=self+(b-self)*t
  if self.R~=nil then value.R=value.X;value.G=value.Y;value.B=value.Z end
@@ -65,6 +65,8 @@ function Instance.new(class)
  return i
 end
 function IM:Play() self.Playing=true end
+function IM:TakeDamage(amount) self.Health=math.max(0,self.Health-amount) end
+function IM:ApplyImpulse(force) self.LastImpulse=force end
 function IM:IsA(c)
  return c==self.ClassName or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='SpawnLocation' or self.ClassName=='MeshPart' or self.ClassName=='UnionOperation' or self.ClassName=='WedgePart')) or (c=='LuaSourceContainer' and (self.ClassName=='Script' or self.ClassName=='LocalScript' or self.ClassName=='ModuleScript'))
 end
@@ -102,6 +104,7 @@ local realTime=1000
 local os={time=function() return math.floor(realTime) end,clock=function() return realTime end}
 function workspace:GetServerTimeNow() return realTime end
 function workspace:Raycast(...) return nil end
+function workspace:Spherecast(...) return nil end
 local heartbeat=signal();local players={PlayerAdded=signal(),PlayerRemoving=signal(),list={}}
 function players:GetPlayers() return self.list end
 local rs=Instance.new('ReplicatedStorage');local serverStorage=Instance.new('ServerStorage');local soundService=Instance.new('SoundService');local lighting=Instance.new('Lighting')
@@ -151,8 +154,10 @@ end
 local task={spawn=function(f,...) return f(...) end,defer=function(f,...) return f(...) end,wait=function(dt) realTime=realTime+(dt or .03);return dt or .03 end}
 local function player(id)
  local p=Instance.new('Player');p.UserId=id;p.DisplayName='Tester'..id;p.Name='Tester'..id;p.CharacterAdded=signal();p.Parent=workspace
- local ch=Instance.new('Model');local hr=Instance.new('Part');hr.Name='HumanoidRootPart';hr.Parent=ch;ch.PrimaryPart=hr
+ local ch=Instance.new('Model');local hr=Instance.new('Part');hr.Name='HumanoidRootPart';hr.AssemblyMass=1;hr.Parent=ch;ch.PrimaryPart=hr
  local h=Instance.new('Humanoid');h.Health=100;h.Parent=ch;p.Character=ch;ch.Parent=workspace
+ -- Existing non-hazard fixtures retain spawn protection. Damage tests remove it.
+ local shield=Instance.new('ForceField');shield.Parent=ch
  return p
 end
 -- Synthetic fixture asserts asset-binding paths, NOT the real source meshes' rendered appearance.

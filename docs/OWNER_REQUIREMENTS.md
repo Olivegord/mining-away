@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — temporary mining drops, physical throws and player damage
+
+Take inspiration from the surprise of Bee Swarm Simulator's drops. Mining rocks can drop temporary tools, while drones remain permanent. Touch drops to collect them in a custom hotbar with durability bars. A held bowling ball previews a steep gravity arc and falls fast; a hit can crater a rock. Touch the ball to recover it three times; it shatters on the final use. A one-use jelly grenade sticks to a rock, then explodes. The owner also suggests a crowbar. Make rocks solid enough for players to touch, add physical rubble, and make lasers and explosions able to hurt players. Keep the original map, drones and progression. Current implementation and publication evidence are in [project state](PROJECT_STATE.md).
+
 ## November 6 latest — sustainable sync and stop excessive Studio activity
 
 The owner rejects opening menus each time for Script Sync and asks for a sustainable workflow. Investigate the actual disconnect cause and verify repeated source changes without menu repairs; do not call a disk export a working native connection. The owner then reported Studio using **4 GB RAM** and explicitly requested stopping the activity causing it. Play/tests/previews and device simulation have been stopped. Do not continue native test loops or menu repairs under this request. The existing initially-open Studio rule still applies unless the owner authorizes saving and quitting.

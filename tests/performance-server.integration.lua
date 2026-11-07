@@ -19,6 +19,7 @@ discoveries.TrySpawn=function() end
 RoleEffects.Ability=function() end
 local pl=player(99511);players.PlayerAdded:Fire(pl);local p=assert(profiles[pl.UserId])
 p.testFleet=roleTestFleet(p);rebuildFleet(p) -- Stress all types even though the starting crew is curated.
+publish(p) -- The preview crew is installed after the initial backpack snapshot.
 assert(#p.drones==15 and #data(p).fleet==1 and pl:GetAttribute('BackpackCapacity')==120)
 reset();ticks(120);report('idle')
 local field=patches[1];pl.Character:PivotTo(CFrame.new(field.center+Vector3.new(0,3,0)))

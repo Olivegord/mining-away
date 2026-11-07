@@ -92,12 +92,13 @@ def module_bundle(names):
   if 'DroneCatalog' in names[:names.index(name)]:code=code.replace("local DroneCatalog=require('./DroneCatalog')\n",'')
   if 'Consumables' in names[:names.index(name)]:code=code.replace("local Consumables=require('./Consumables')\n",'')
   boundary=': any' if name=='World' else ''
-  s+='local '+name+boundary+' = (function()\n'+code+'\nend)()\n'
+  binding={'PlayerHazards':'ToolRules.Hazards','ToolService':'ToolRules.Service'}.get(name)
+  s+=(binding or ('local '+name+boundary))+' = (function()\n'+code+'\nend)()\n'
  return s
 def bundle():
- return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','Config','Feel','Mining','RockCascade','ResourcePlacement','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
+ return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','ToolRules','PlayerHazards','ToolService','Config','Feel','Mining','RockCascade','ResourcePlacement','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('DroneOutline','Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','Packs','CardView','PackView','ShopView','AbilityView','Consumables','ConsumableView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('DroneOutline','Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','Packs','CardView','PackView','ShopView','AbilityView','Consumables','ConsumableView','ToolRules','ToolArt','ToolView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''
