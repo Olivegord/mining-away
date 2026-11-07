@@ -9,7 +9,7 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `d388ff671c44e244a2f7f1c494e06a6184ec1a55e9299caba2191757c8b156c7` | Hash of the integrated pack delivery and shop build. |
+| Native-file SHA-256 | `cc34ccf939829819eb3478020723499519daf63e0a87c0044f555ac302638bee` | Hash of the integrated pack delivery and shop build. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,9 +21,9 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Current delivery gap
+## Standing publication permission and reconciliation
 
-Studio Play on **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**, was inspected after `fd10794` shipped to GitHub. Its server lacked the delivery system and the Studio starter balance. The updated canonical file is ready for reconciliation. The shared-place update requires publication authorization, a check for newer collaborator edits, and verification in a fresh Studio session on the shared place.
+The owner grants continuing permission to publish routine updates to the existing DRONEREVOLUTION starting place until revoked. This is recorded in AGENTS.md. The shared authored map and its source adjustments were reconciled into the canonical file, including shop placement, daylight, logistics and preview positioning. The shared Studio session passed the current pack purchase, delivery, hold and claim flow with 100 starting Quartz and 60 remaining after purchase. Publication evidence follows after the release operation.
 
 ## What caused the confusion
 
@@ -38,7 +38,7 @@ Earlier instructions named the historical place as the sole destination and trea
 - Rocks can drop useful stored consumables, including a placeable orbital laser. Avoid substituting generic timed multipliers for meaningful actions.
 - Bee Swarm Simulator is a reference for enjoyable play, not permission to copy its assets or introduce every mechanic it has.
 - Do not mistake earlier ore/reward timing or cosmetic tweaks for proof of an improved core loop. Automated correctness is not proof of fun.
-- Close Studio after work to avoid lag. Routine stop/install/save/restart is authorized; publishing and new experiences still need an explicit request.
+- Close Studio after work to avoid lag. Routine stop/install/save/restart is authorized; routine publication to the existing DRONEREVOLUTION place has standing authorization. New experiences need an explicit request.
 
 ## Current implementation
 
@@ -86,6 +86,6 @@ Limits: no final native multiplayer/late-join pass, real DataStore reconnect/ser
 ## Next work
 
 1. Add the friend's actual GitHub account as a collaborator when the owner supplies it. Use this shared repository.
-2. If the owner explicitly requests an online update, reconcile any newer shared-game edits, publish the canonical file to the existing DRONEREVOLUTION starting place, then record the actual published version/revision and verified destination here. Do not assume the instructions already completed this step.
+2. For each completed game update, reconcile any newer shared-game edits, publish the canonical file to the existing DRONEREVOLUTION starting place, then record the actual published version/revision and verified destination here. Do not assume the instructions already completed this step.
 3. Let the owner judge the simple loop in play. Prioritize meaningful mining and purchases over more decorative changes. Complete real multiplayer and durable-save checks before claiming those outcomes.
 4. Keep Sources, the canonical native file and this handoff synchronized for every subsequent contribution. Never resolve a binary conflict by silently taking one contributor's map over another's.

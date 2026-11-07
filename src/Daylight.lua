@@ -2,6 +2,8 @@
 -- the mismatched sunset sky is archived only in the running server.
 local Daylight = {}
 function Daylight.apply()
+ local authored = workspace:FindFirstChild('MiningAway')
+ if authored and authored:GetAttribute('DronerevolutionMapVersion') then return end
  local lighting = game:GetService('Lighting')
  local storage=game:GetService('ServerStorage')
  local archive=storage:FindFirstChild('OriginalQuarrySky')

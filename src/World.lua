@@ -218,6 +218,7 @@ local function nativeFinish(part,material,studs)
  part.BottomSurface=Enum.SurfaceType.Smooth
 end
 function W.ensureImpactField(root,fields)
+ if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end
  local quartz=fields:FindFirstChild('Quartz');local source=quartz and quartz:FindFirstChild('Field')
  if not source then return end
  local cfg=Config.Fields[6]
@@ -247,7 +248,7 @@ function W.layoutFields(root,fields,home)
  -- straight-line order placed Cobalt in front of spawn and Quartz at the end.
  -- Reuse the existing plot footprints, ordered by distance, then stagger the
  -- two right-hand plots so every later tier is farther from both depot and sell.
- if root:GetAttribute('PlotOrderVersion')~=1 then
+ if root:GetAttribute('PlotOrderVersion')~=1 and not root:GetAttribute('DronerevolutionMapVersion') then
   local slots={};local plots={}
   for id,cfg in ipairs(Config.Fields) do
    if cfg.TestField then continue end
@@ -276,6 +277,7 @@ function W.layoutFields(root,fields,home)
 end
 local function finishEditableMap(root,map,fields,home)
  W.layoutFields(root,fields,home)
+ if root:GetAttribute('DronerevolutionMapVersion') then return end
  -- Native Roblox surfaces provide readable material changes without global
  -- gloss: studded plastic trim, rough ore beds, paved lanes and metal machines.
  for _,part in ipairs(map:GetDescendants()) do if part:IsA('BasePart') then
@@ -319,6 +321,7 @@ end
 -- position. The old landscape planner belongs to the historical capture and
 -- must not be used to cover this native map with a second world.
 function W.landscapeEditable(scene)
+ if scene.root:GetAttribute('DronerevolutionMapVersion') then return end
  if not scene.root:GetAttribute('EditableMap') then return end
  local previous=scene.map:FindFirstChild('QuarryLandscape')
  if previous and previous:GetAttribute('LandscapeVersion')==1 then return end
@@ -441,6 +444,13 @@ end
 -- Keep the first field on the depot's center approach and respawn beside it.
 -- Run before resources/turrets spawn; move the original model as one assembly.
 function W.placeStart(scene)
+ if scene.root:GetAttribute('DronerevolutionMapVersion') then
+  local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+  scene.spawnPosition=spawn and spawn.Position or scene.home
+  scene.root:SetAttribute('StarterField','Quartz')
+  scene.root:SetAttribute('StarterSpawn',scene.spawnPosition)
+  return
+ end
  local home=scene.home;local pad=scene.map:FindFirstChild('HubPad',true)
  scene.root:SetAttribute('DepotHome',home)
  local quartz

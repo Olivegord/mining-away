@@ -67,7 +67,7 @@ end
 
 function Delivery:canHold(p, delivery, now)
  local o=self.options
- if now<delivery.readyAt or not o.healthy(p) or not o.atHome(p) or o.inAssault(p) then return false end
+ if now<delivery.readyAt or not o.healthy(p) or o.inAssault(p) then return false end
  local hr=o.characterRoot(p)
  return hr and (hr.Position-delivery.part.Position).Magnitude<=Packs.Range
 end
@@ -111,7 +111,7 @@ function Delivery:step(p, now)
  local offer=o.offer(p)
  local delivery=p.packDelivery
  if not delivery then
-  if offer and offer.opened==false and o.atHome(p) and o.healthy(p) then
+  if offer and offer.opened==false and o.healthy(p) then
    local hr=o.characterRoot(p)
    if hr and (hr.Position-o.station.Position).Magnitude<20 and now>=(p.nextPackDelivery or 0) then
     p.nextPackDelivery=now+1

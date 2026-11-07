@@ -205,6 +205,45 @@ function L.new(ctx: any): any
   local slot=1;while slots[slot] do slot+=1 end;slots[slot]=p.player.UserId
   -- A compact pad joins the depot's existing ground; existing map geometry stays intact.
   local base=ctx.origin+v(((slot-1)%3-1)*21,0,-26-math.floor((slot-1)/3)*21)
+  if ctx.root:GetAttribute('DronerevolutionMapVersion') then
+   local surface=ctx.root:GetAttribute('LogisticsSurfaceHeight') or 4
+   if slot<=9 then
+    base=v(((slot-1)%3-1)*21,surface+.5,66+math.floor((slot-1)/3)*21)
+   else
+    local index=slot-10
+    local row=math.floor(index/12)
+    local rowZ=152+row*21
+    base=v(-115.5+(index%12)*21,surface+.5,rowZ)
+    local map=ctx.root:FindFirstChild('Map')
+    local terraces=map and map:FindFirstChild('DronerevolutionTerraces')
+    assert(terraces,'Authored map is missing DronerevolutionTerraces')
+    local overflow=terraces:FindFirstChild('LogisticsOverflow')
+    if not overflow then
+     overflow=Instance.new('Folder');overflow.Name='LogisticsOverflow';overflow.Parent=terraces
+    end
+    local function floorPart(parent: any,name: string,position: Vector3,size: Vector3,color: Color3,variant: string): ()
+     local floor=Instance.new('Part');floor.Name=name;floor.Size=size;floor.Position=position
+     floor.Anchored=true;floor.CanCollide=true;floor.CanQuery=true;floor.CanTouch=false
+     floor.Material=Enum.Material.Plastic;floor.MaterialVariant=variant;floor.Color=color
+     floor.TopSurface=Enum.SurfaceType.Smooth;floor.BottomSurface=Enum.SurfaceType.Smooth
+     floor:SetAttribute('AuthoredMapSurface',true);floor:SetAttribute('GeneratedLogisticsFloor',true)
+     floor.Parent=parent
+    end
+    local function floorAssembly(name: string,x: number,z: number,width: number,depth: number): ()
+     if overflow:FindFirstChild(name) then return end
+     local assembly=Instance.new('Model');assembly.Name=name
+     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(215,181,116),'Studs')
+     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(159,83,46),'Universal')
+     assembly.Parent=overflow
+    end
+    -- Shared rows persist for this server, including when their first owner leaves.
+    -- The static apron ends at Z=126; this flush bridge meets row one's Z=141.5 edge.
+    floorAssembly('EntryWalk',0,133.75,14,15.5)
+    for connectedRow=0,row do
+     floorAssembly('Row_'..tostring(connectedRow+1),0,152+connectedRow*21,260,21)
+    end
+   end
+  end
   local function groundAt(x: any, z: any): any
    return ctx.groundHeight and ctx.groundHeight(x,z) or ctx.origin.Y-.5
   end

@@ -335,7 +335,10 @@ local function availability(action)
   if not station or not hr or (station.Position-hr.Position).Magnitude>=20 then return false,'Visit the '..activeShop..' shop to buy' end
   return true,''
  end
- if not atHomeUI() then return false,'Return to the depot' end
+ local packStation=world.Map:FindFirstChild('PackStation',true)
+ local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local nearPack=packStation and hr and (hr.Position-packStation.Position).Magnitude<24
+ if not atHomeUI() and not ((action=='BuyPack' or action=='ChooseCard') and nearPack) then return false,'Return to the depot' end
  local stationName=action=='BuyPack' and 'PackStation' or action=='Prestige' and 'PrestigeStation' or nil
  if stationName then
   local station=world.Map:FindFirstChild(stationName,true)

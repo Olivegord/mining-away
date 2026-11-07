@@ -8,7 +8,7 @@ The shared project is **https://github.com/Olivegord/mining-away**. Its integrat
 2. Use that repository as the project in Codex. For local desktop work, select its working folder; local changes must be committed and pushed back to this same shared repository. GitHub remains the shared source.
 3. Start with this prompt:
 
-   > Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Tell me the current game file, shared Roblox destination, last verified gameplay revision and publication status, then work on my requested change in this same project. Do not create another game or publish Roblox.
+   > Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Tell me the current game file, shared Roblox destination, last verified gameplay revision and publication status, then work on my requested change in this same project. Keep the existing DRONEREVOLUTION place current under the standing publication permission.
 
 `AGENTS.md` supplies repository instructions to Codex; the linked handoff supplies the project's decisions and current state. The original private chat is not copied into another person's account. See [OpenAI's guidance on repository instructions](https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex#agents-and-plans).
 
@@ -32,6 +32,6 @@ Roblox and GitHub access are independent. MideDibber's Playtest/Edit access to D
 
 ## Updating the shared Roblox game
 
-Only after an explicit publication request, use the canonical document and **File → Publish As / Publish to Roblox As → DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
+The owner grants standing permission to publish completed updates to this existing destination. Reconcile newer shared edits, then use the canonical document and **File → Publish As / Publish to Roblox As → DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
 
 Verify publication success and the destination, then record the exact Git revision/native hash, publication time and Roblox version or other direct verification evidence in `docs/PROJECT_STATE.md`. If publication is not observed, say **unverified**. Do not create a new game, change sharing permissions, or delete/archive either experience as part of an ordinary update.

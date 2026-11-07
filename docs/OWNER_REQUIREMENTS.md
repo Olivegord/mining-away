@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — standing publication permission
+
+The owner grants continuing permission to keep the existing DRONEREVOLUTION place 124078027733625, universe 10774898335, current with completed project updates. Apply this permission until revoked. Reconcile shared collaborator edits, update the canonical native file and repository, publish to the same starting place, and verify the shared Studio entry point. Routine releases require no repeated permission question. Existing restrictions on new experiences, access settings and deleting experiences continue to apply.
+
 ## November 6 latest — delivered packs and floating card choices
 
 Buying an upgrade pack sends an unmarked company drone to drop a glowing crate in the gap between the buyer and the shop. Leave space for the delivery. The buyer holds E on a custom progress bar. Common opens quickly with grey light and particles. Rare adds yellow, Epic adds green, and Legendary adds a longer series of slowdowns before its final color. The crate needs delivery, charge and opening feedback. Three saved cards rise into the air over a blurred world. The player chooses one.

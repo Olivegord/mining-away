@@ -28,6 +28,17 @@ function Stands.mount(map,home,template)
  template:SetAttribute('Interaction','Pack')
  local packBillboard=template:FindFirstChildOfClass('BillboardGui')
  if packBillboard then packBillboard:Destroy() end
+ if map.Parent and map.Parent:GetAttribute('DronerevolutionMapVersion') then
+  for _,key in ipairs(Shops.ORDER) do
+   local station=assert(map:FindFirstChild(key..'Shop'),'Authored map is missing shop '..key)
+   station:SetAttribute('Interaction','Shop');station:SetAttribute('ShopKey',key)
+   local prompt=station:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
+   prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop'
+   prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=station
+   stations[key]=station
+  end
+  return stations
+ end
  local pad=map:FindFirstChild('HubPad',true)
  local groundY=pad and pad.Position.Y+pad.Size.Y/2 or template.Position.Y-template.Size.Y/2
  for index,key in ipairs(Shops.ORDER) do

@@ -1572,7 +1572,10 @@ logistics=Logistics.new({C=C,R=R,W=World,root=root,origin=home,profiles=profiles
  data=data,Pro=Pro,Profile=Pro,Shops=Shops,capacityOf=function(profile) return Ca.capacity(profile,previewPerks(profiles[profile.userId])) end,healthy=healthy,characterRoot=characterRoot,inHome=atHome,
  notice=notice,updateProfile=publish,getClock=function() return now end,transact=transact,
  atDepotStation=function(p) return atStation(p,scene.converter or scene.packStation,18) end,
- groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
+ groundHeight=function(x,z)
+  if root:GetAttribute('DronerevolutionMapVersion') then return root:GetAttribute('LogisticsSurfaceHeight') or 4 end
+  return logisticsTerrain:surface(x,z)
+ end,
  guid=function() return Http:GenerateGUID(false) end,prices=prices,release=release,
  recall=function(d) local p=profiles[d.owner];if p then leaveDroneField(p,d) end end,
  assignFleet=function(p,field,fleet)
@@ -1777,7 +1780,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if not atHome(p) then
+ if not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
   notice(p,'Visit the Pack Shop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false
