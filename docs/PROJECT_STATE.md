@@ -9,14 +9,14 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896` | Continuous slowdown snapshot; geometry and unrelated Sources preserved. |
+| Native-file SHA-256 | `eb7d2217fca91672917b9151c8e6d0d4c9cbddcad34bef61daf259169181e939` | Free direct-pack-order snapshot; map and unrelated Sources preserved. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio gameplay | **Verified November 6, 2026** | Existing shared Edit document matches all seven Sources of `2ddef68`. Continuous keyboard test and final Rare pointer-hold test passed before v18 publication. Script Sync retained. |
-| Published Roblox version | **v18** | Existing DRONEREVOLUTION File → Publish completed; native Version History shows v18 **Published**, OliveGord, 7:56 PM Pacific November 6, 2026. Source/native revision `2ddef68`; snapshot SHA-256 `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896`. |
+| Shared Studio gameplay | **Verified November 6, 2026** | All seven installed Sources match `4f1bd48`. One E directly orders a zero-price crate with no menu; claim and second free order passed. Studio remains open, stopped in Edit mode. |
+| Published Roblox version | **v19** | Existing DRONEREVOLUTION Save to Roblox and Publish completed. Native Version History shows v19 **Published**, version timestamp 8:02 PM Pacific November 6, 2026; v18 Previously Published. Source/native revision `4f1bd48`; native hash above. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
@@ -27,7 +27,7 @@ Packs now cost **0 Quartz** for every pack index via the temporary `Shops.PACKS_
 
 Studio was already open at task start and will remain open with Play stopped. All three Script Sync roots were connected in the existing DRONEREVOLUTION document. Verified sync arrival before the final fresh Play run (Script Sync can apply a file after export returns). One E press produced exactly one sealed free crate, no menu, and retained 100 Quartz. Opening and claiming a card worked; the next E press produced a second free crate, no menu, one active crate, and the same balance. The prompt used Default style and displayed the free price. Core-loop checks pass nine scenarios in production and Studio modes, including ordering with zero Quartz; all 26 shop/profile/card checks pass, including repeated free orders at pack indices 0, 10 and 1000 and preserved paid-mode discount behavior. Touch/gamepad, multiplayer and production DataStore reconnect remain unverified.
 
-Canonical snapshot SHA-256: `eb7d2217fca91672917b9151c8e6d0d4c9cbddcad34bef61daf259169181e939`; all non-Source data and unrelated/backup Sources preserved. Publication of this follow-up is pending; v18 remains the last verified public release until the release record is updated.
+Canonical snapshot SHA-256: `eb7d2217fca91672917b9151c8e6d0d4c9cbddcad34bef61daf259169181e939`; all non-Source data and unrelated/backup Sources preserved. Source/native revision **`4f1bd48`** installed and published to existing DRONEREVOLUTION place **124078027733625**, universe **10774898335**. All seven installed Source lengths/fingerprints matched the local bundles before publication. Save to Roblox and File → Publish completed; native Version History shows **v19 Published**, version timestamp **8:02 PM Pacific November 6, 2026**, with v18 Previously Published. Studio remains open because it was initially open; final MCP state is **Edit**, with no Play/Run simulation active.
 
 ## Continuous pack slowdown — latest follow-up
 
@@ -91,7 +91,7 @@ Server owns damage, rewards, persistent state, cards, purchases and prestige. Cl
 
 ## Pack Shop
 
-The depot pack counter now has its own Pack Shop sign and prompt. The compact shop screen shows the Quartz balance and a single purchase button with the price. The purchase places an order for a crate. Mineral shops continue to sell their level upgrades. The native refresh checked that all non-Source data and unrelated scripts matched the prior file. The delivery flow was played before merging the compact shop layout.
+The depot pack counter has its own Pack Shop sign and proximity prompt. Press E to order a crate directly; the prompt displays the price, currently FREE (0 Quartz). There is no pack purchase menu. Mineral shops continue to sell their level upgrades. The native refresh checked that all non-Source data and unrelated scripts matched the prior file. The delivery flow was played before merging the compact shop layout.
 
 The five mineral shops now use compact upgrade tiles with a symbol, short name, effect, and one purchase or status button. Every catalog upgrade has a symbol, and field unlocks use their destination mineral color. Upgrade prices and transaction rules remain as before. Native Source preservation was verified offline. The updated shop layouts still need Studio visual and input verification.
 
