@@ -1774,7 +1774,7 @@ local packDelivery=PackDelivery.new({
  end,
 })
 local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
-if packPrompt then packPrompt.ActionText='Buy pack';packPrompt.MaxActivationDistance=14 end
+if packPrompt then packPrompt.ActionText=Shops.packPromptText(0);packPrompt.MaxActivationDistance=14 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end

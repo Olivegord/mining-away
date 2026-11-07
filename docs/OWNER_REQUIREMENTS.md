@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — free packs, direct E order
+
+Packs are free for now. The Pack Shop proximity prompt must show the price and pressing E orders a crate immediately; remove the intermediary pack purchase menu. Keep delivery, continuous crate hold and choose-one-of-three reveal. The temporary free-price switch applies in production as well as Studio, including later packs. This supersedes the paid pack prices and compact purchase-menu requirements below.
+
 ## November 6 latest — preserve the initial Studio open state
 
 Check and record whether Roblox Studio is already running before starting work, without launching it just to check. If it was already open, leave it open when finished. If it was closed and you open it for the task, close it when finished. Always stop Play/Run before the handoff and verify Studio is in Edit mode; never leave a playtest or simulation running, even when Studio must remain open. Save changes as needed before the handoff. This replaces the older unconditional close-Studio rule.

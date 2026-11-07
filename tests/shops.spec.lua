@@ -87,14 +87,29 @@ test('Emerald pack press works on its own and never requires another upgrade',fu
  local other=fresh();access(other,2);assert(buy(other,'ruby_pack_speed'));eq(S.packSpeed(other),2)
 end)
 test('pack discount affects future Quartz price, never paid offer or choices',function()
+ S.PACKS_FREE=false
  local p=fresh();access(p,3);p.run.wallet.Quartz=1000
  local ok,o=C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true,combatVisible=true});assert(ok);eq(o.price,40);eq(o.currency,'Quartz');eq(#o.choices,3);eq(S.balance(p,'Quartz'),960)
  assert(buy(p,'cobalt_pack_discount'));eq(C.price(p),68);eq(p.run.pendingOffer.price,40)
  local _,replay=C.buy(p,'replay',p.run.id,{expectedPackIndex=1,atDepot=true});eq(replay.id,o.id);eq(replay.choices[1].cardId,o.choices[1].cardId);eq(S.balance(p,'Quartz'),960)
  assert(C.open(p,o.id));assert(C.select(p,o.id,2,'pick',p.run.id,{atDepot=true}));eq(#p.run.cards,1);eq(p.run.pendingOffer,nil)
+ S.PACKS_FREE=true
 end)
 test('legacy universal counter cannot buy packs without Quartz',function()
+ S.PACKS_FREE=false
  local p=fresh();p.run.credits=100000;eq(C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true}),false)
+ S.PACKS_FREE=true
+end)
+test('temporary free packs need no balance and repeated orders keep one offer',function()
+ for _,index in ipairs({0,10,1000}) do
+  local p=fresh();p.run.packIndex=index
+  eq(C.price(p),0)
+  local ok,o=C.buy(p,'free',p.run.id,{expectedPackIndex=index,atDepot=true})
+  assert(ok);eq(o.price,0);eq(S.balance(p,'Quartz'),0);eq(p.run.packIndex,index+1)
+  local again,replay=C.buy(p,'repeat',p.run.id,{expectedPackIndex=index+1,atDepot=true})
+  assert(again);eq(replay.id,o.id);eq(p.run.packIndex,index+1);eq(S.balance(p,'Quartz'),0)
+ end
+ assert(S.packPromptText(0):find('FREE',1,true));assert(S.packPromptText(40):find('40 Quartz',1,true))
 end)
 test('wide relay and rapid orbital work without prerequisite upgrades',function()
  local p=fresh();access(p,5);p.run.wallet.Emerald=1000

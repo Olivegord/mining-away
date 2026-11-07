@@ -22,7 +22,8 @@ function Stands.mount(map,home,template)
  local stations={}
  addSign(template,'PACK SHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText='Browse packs';packPrompt.ObjectText='Pack Shop'
+ packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'
+ packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
  template:SetAttribute('Interaction','Pack')

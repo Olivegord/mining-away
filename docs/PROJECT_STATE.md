@@ -21,6 +21,14 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
+## Free packs and direct purchase — latest follow-up
+
+Packs now cost **0 Quartz** for every pack index via the temporary `Shops.PACKS_FREE=true` switch. The normal escalating/discount pricing remains behind that switch for later restoration. The native station prompt reads **Buy pack · FREE (0 Quartz)** and orders immediately on E; the intermediary BuyPack modal/button is removed. Delivery, saved/sealed choices, the continuous opening hold and choose-one card reveal remain unchanged. A pending offer and transaction quotes still prevent duplicate crates/rerolls. The client refreshes prompt price text from the server's nextPackPrice.
+
+Studio was already open at task start and will remain open with Play stopped. All three Script Sync roots were connected in the existing DRONEREVOLUTION document. Verified sync arrival before the final fresh Play run (Script Sync can apply a file after export returns). One E press produced exactly one sealed free crate, no menu, and retained 100 Quartz. Opening and claiming a card worked; the next E press produced a second free crate, no menu, one active crate, and the same balance. The prompt used Default style and displayed the free price. Core-loop checks pass nine scenarios in production and Studio modes, including ordering with zero Quartz; all 26 shop/profile/card checks pass, including repeated free orders at pack indices 0, 10 and 1000 and preserved paid-mode discount behavior. Touch/gamepad, multiplayer and production DataStore reconnect remain unverified.
+
+Canonical snapshot SHA-256: `eb7d2217fca91672917b9151c8e6d0d4c9cbddcad34bef61daf259169181e939`; all non-Source data and unrelated/backup Sources preserved. Publication of this follow-up is pending; v18 remains the last verified public release until the release record is updated.
+
 ## Continuous pack slowdown — latest follow-up
 
 The owner rejected the v16 circle restarts. The new implementation holds one native ProximityPrompt for the full rarity duration; HoldDuration never changes during the hold. A compact crate indicator uses the existing continuous weighted curve: 60%, 22%, 12%, 6% of Legendary progress over progressively longer intervals. Color boundaries do not reset input, time or fill. Native keyboard/gamepad events and native server validation remain; pointer/touch only forward button holds through InputHoldBegin/End. This uses Roblox's supported Custom prompt appearance, not a separate hold-command protocol. See [native prompt API](https://create.roblox.com/docs/reference/engine/classes/ProximityPrompt).

@@ -406,20 +406,9 @@ end
 openPack=function()
  if pending() then openOffer();return end
  if not profile or not profile.run then return end
- local price=profile.nextPackPrice or 40
- local credits=Shops.balance(profile,'Quartz')
- local affordable=credits>=price
  local allowed,blocked=availability('BuyPack')
- local l=menu('pack','PACK SHOP',comma(credits)..' Quartz','cards')
- local text='Buy pack · '..comma(price)..' Quartz'
- if not allowed then text=blocked end
- local buy
- buy=button(body,UDim2.fromOffset(0,0),UDim2.fromOffset(l.bodyWidth-4,44),text,function()
-  if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then
-   buy.Text='Ordering…';enableAction(buy,false)
-  end
- end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18
- enableAction(buy,allowed and affordable)
+ if not allowed then notice.Text=blocked;noticeUntil=os.clock()+3;return end
+ send('BuyPack',{packIndex=profile.run.packIndex})
 end
 openShop=function(key)
  if not profile or not profile.run.wallet then return end
@@ -1145,7 +1134,7 @@ local function stationAction(station)
   return nil
  elseif kind=='Pack' then
   if sealedPack() then return openPack,'Pack Shop','Hold to open your delivered crate','Delivery' end
-  return openPack,'Pack Shop',pending() and 'Card ready to pick' or '3 cards · keep 1',pending() and 'Choose' or 'Shop'
+  return openPack,'Pack Shop',pending() and 'Card ready to pick' or Shops.packPromptText(profile and profile.nextPackPrice or 0),pending() and 'Choose' or 'Buy'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
   return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
@@ -1313,6 +1302,9 @@ connect(RunService.Heartbeat,function(dt)
   local credits=Shops.balance(profile,'Quartz');local creditText=comma(credits)
   if credits>=1e9 then creditText=string.format('%.1fB',credits/1e9) elseif credits>=1e6 then creditText=string.format('%.1fM',credits/1e6) elseif credits>=10000 then creditText=string.format('%.1fk',credits/1000) end
   creditsLabel.Text='Quartz '..creditText
+  local packStation=world.Map:FindFirstChild('PackStation',true)
+  local prompt=packStation and packStation:FindFirstChildOfClass('ProximityPrompt')
+  if prompt then prompt.ActionText=Shops.packPromptText(profile.nextPackPrice or 0) end
   fleetCount.Text='Fleet';runCount.Text=sealedPack() and 'Pack' or (pending() and 'Pick' or 'Cards')
   cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)

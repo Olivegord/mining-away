@@ -3,7 +3,10 @@
 local Shops = (function()
 -- Pure mineral economy. Catalog prices are provisional playtest tuning;
 -- ownership, quoted levels, spending and receipts are server transactions.
-local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz'}
+local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz',PACKS_FREE=true}
+function S.packPromptText(price)
+ return price==0 and 'Buy pack · FREE (0 Quartz)' or ('Buy pack · '..tostring(price)..' Quartz')
+end
 S.COLORS={Quartz={180,225,213},Ruby={226,75,112},Cobalt={89,150,234},Violet={166,115,217},Emerald={70,184,139}}
 local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
  return {id=id,shop=shop,title=title,description=description,info=info,cost=cost,max=max or 1,effects=effects or {},unlock=unlock,role=role}
@@ -156,7 +159,8 @@ function Stands.mount(map,home,template)
  local stations={}
  addSign(template,'PACK SHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText='Browse packs';packPrompt.ObjectText='Pack Shop'
+ packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'
+ packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
  template:SetAttribute('Interaction','Pack')
@@ -2057,6 +2061,7 @@ function C.abilityPerks(p)
  return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0,scrapBots=Shops.effects(p,'Scrapper').scrapBots or 0}
 end
 function C.price(p)
+ if Shops.PACKS_FREE then return 0 end
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
  local price=prices[n+1] or 400
  if n>=7 then for _=8,n+1 do price=math.min(1e12,math.floor(price*1.3+.5));if price==1e12 then break end end end
@@ -6753,7 +6758,7 @@ local packDelivery=PackDelivery.new({
  end,
 })
 local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
-if packPrompt then packPrompt.ActionText='Buy pack';packPrompt.MaxActivationDistance=14 end
+if packPrompt then packPrompt.ActionText=Shops.packPromptText(0);packPrompt.MaxActivationDistance=14 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end

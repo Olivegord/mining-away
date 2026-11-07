@@ -129,19 +129,20 @@ check('rarity adds slower hold segments and never advances past its own color',f
   lastSpeed=after-before
  end
 end)
-check('paid delivery stays sealed until the owner finishes a nearby uninterrupted hold',function()
+check('free delivery stays sealed until the owner finishes a nearby uninterrupted hold',function()
  local function advance(seconds)
   realTime+=seconds;now=realTime;packDelivery:step(p,now)
  end
  local function visibleOffer()
   return Http:JSONDecode(pl:GetAttribute('MA_Profile')).run.pendingOffer
  end
- mine();mine();mine();mine();sell()
+ data(p).run.wallet.Quartz=0
  move(scene.packStation.Position+Vector3.new(12,0,0))
  local request=quote({packIndex=0});input('BuyPack',request)
  local offer=Pro.clone(data(p).run.pendingOffer)
  assert(offer.opened==false and #offer.choices==3 and not visibleOffer().choices)
  local wallet=data(p).run.wallet.Quartz
+ assert(offer.price==0 and wallet==0,'free pack charged money or required a balance')
  local part=assert(p.packDelivery).part
  assert((part.Position-scene.packStation.Position).Magnitude>=7)
  input('BuyPack',request)

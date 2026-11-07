@@ -133,6 +133,7 @@ function C.abilityPerks(p)
  return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0,scrapBots=Shops.effects(p,'Scrapper').scrapBots or 0}
 end
 function C.price(p)
+ if Shops.PACKS_FREE then return 0 end
  local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
  local price=prices[n+1] or 400
  if n>=7 then for _=8,n+1 do price=math.min(1e12,math.floor(price*1.3+.5));if price==1e12 then break end end end
