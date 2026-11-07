@@ -166,7 +166,7 @@ local function station(parent,name,at,color,title,interaction)
    local notch=block(model,'CardNotch',card.CFrame:PointToWorldSpace(Vector3.new(0,-.35,-.08)),Vector3.new(.6,.08,.04),P.ink);notch.CFrame=CFrame.new(notch.Position)*screen.CFrame.Rotation
   end
   local fascia=block(model,'CardName',at+Vector3.new(0,1.1,-2.56),Vector3.new(4.5,1.3,.12),P.ink)
-  textFace(fascia,'RUN CARDS','CHOOSE YOUR BUILD',color)
+  textFace(fascia,'PACK SHOP','',color)
  else
   -- Stepped hardware echoes the original segmented construct without replacing it.
   for i=1,3 do

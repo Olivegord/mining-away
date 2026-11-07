@@ -147,7 +147,7 @@ local function button(parent,pos,size,text,callback,color)
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
 local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop
-local activeShop,shopInfo='Quartz',nil
+local activeShop='Quartz'
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 U.icon(hud,'crystal',UDim2.fromOffset(9,10),UDim2.fromOffset(34,34),Color3.fromRGB(255,208,70))
 local creditsLabel=label(hud,UDim2.fromOffset(50,5),UDim2.new(1,-158,0,28),'Quartz 0',18,palette.text,true);creditsLabel.Name='Credits'
@@ -240,6 +240,12 @@ local function layoutModal()
   l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
+ if modalMode=='pack' then
+  l.panelWidth=math.min(380,l.panelWidth);l.panelHeight=math.min(l.short and 132 or 166,l.panelHeight)
+  l.panelPadding=16;l.headerHeight=l.short and 66 or 94
+  l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
+  l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
+ end
  if modalMode=='offer' and l.short then
   l.headerHeight=64;l.panelPadding=12;l.bodyWidth=l.panelWidth-24
   l.bodyHeight=l.panelHeight-l.headerHeight-l.panelPadding;l.cardHeight=math.clamp(l.bodyHeight-2,212,256)
@@ -289,12 +295,12 @@ local function menu(mode,title,subtitle,icon)
  local rounded=sheet:FindFirstChildOfClass('UICorner');if rounded then rounded.CornerRadius=UDim.new(0,inOffer and 28 or 20) end
  local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0;border.Color=inOffer and Color3.fromRGB(6,8,17) or palette.ink;border.Thickness=inOffer and 5 or 2 end
  if l.panelWidth<400 then
-  local shortTitles={shop=activeShop..' shop',pack='Upgrade pack',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
+  local shortTitles={shop=activeShop..' shop',pack='Pack shop',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
  modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,l.short and 10 or 18),UDim2.fromOffset(l.short and 38 or l.panelWidth<400 and 42 or 54,l.short and 38 or l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
- local titles={shop=string.upper(activeShop)..' SHOP',pack='UPGRADE PACK',offer='UPGRADE PACK',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
+ local titles={shop=string.upper(activeShop)..' SHOP',pack='PACK SHOP',offer='PICK A CARD',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modalEmblem.Visible=not inOffer
  if inOffer then
@@ -334,7 +340,7 @@ local function availability(action)
  if stationName then
   local station=world.Map:FindFirstChild(stationName,true)
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the card machine to buy' or 'Visit the fleet uplink to prestige' end
+  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the Pack Shop' or 'Visit the fleet uplink to prestige' end
  end
  return true,''
 end
@@ -359,7 +365,7 @@ end
 local function updateOfferControls()
  local usable,reason=availability('ChooseCard')
  local choosing=actionPending and actionPending.kind=='ChooseCard'
- normalSubtitle=choosing and 'Installing your upgrade…' or (not usable and (reason..' · Choices stay saved.') or 'Choose one · This run')
+ normalSubtitle=choosing and 'Applying card…' or (not usable and reason or 'This run only')
  for index,view in ipairs(offerViews) do
   enableAction(view.button,usable)
   local text=choosing and (actionPending.index==index and 'Installing…' or 'Please wait') or ''
@@ -382,7 +388,7 @@ openOffer=function()
   local screen,visible=camera:WorldToScreenPoint(worldOrigin)
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
- local l=menu('offer','UPGRADE PACK','Choose one · This run','cards')
+ local l=menu('offer','PICK A CARD','Choose one · This run','cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
@@ -397,43 +403,30 @@ end
 openPack=function()
  if pending() then openOffer();return end
  if not profile or not profile.run then return end
- local l=menu('pack','UPGRADE PACK','Three cards. Pick the upgrade your crew needs.','cards')
- local width=l.bodyWidth-6
- local narrow=l.bodyWidth<400
- local hero=frame(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,l.short and 140 or 180),Color3.fromRGB(31,111,214));hero.Name='PackHousing'
- CardView.housing(U,hero,Color3.fromRGB(31,111,214),Color3.fromRGB(121,232,255))
- local wrapper=frame(hero,UDim2.fromOffset(narrow and 18 or 24,23),UDim2.fromOffset(l.short and 56 or narrow and 63 or 79,l.short and 74 or narrow and 87 or 99),Color3.fromRGB(123,56,209));wrapper.Rotation=-8;wrapper.Name='PackWrapper'
- CardView.housing(U,wrapper,Color3.fromRGB(123,56,209),Color3.fromRGB(255,216,86))
- U.icon(wrapper,'crystal',UDim2.fromScale(.14,.23),UDim2.fromOffset(l.short and 40 or narrow and 45 or 56,l.short and 40 or narrow and 45 or 56),Color3.fromRGB(255,216,86))
- for _,y in ipairs({.08,.86}) do local seal=frame(wrapper,UDim2.fromScale(.09,y),UDim2.fromScale(.82,.035),Color3.fromRGB(255,216,86));seal.Name='PackSeal' end
- local price=profile.nextPackPrice or 40;local credits=Shops.balance(profile,'Quartz');local affordable=credits>=price
- local priceText=comma(price)
- local heroTextX=narrow and 94 or 125
- label(hero,UDim2.fromOffset(heroTextX,17),UDim2.new(1,narrow and -heroTextX-16 or -145,0,25),'UPGRADE PACK '..tostring(profile.run.packIndex+1)..(l.short and (' · '..comma(credits)..' Quartz owned') or ''),16,Color3.fromRGB(210,242,255),true)
- local priceSize=narrow and (#priceText>12 and 14 or (#priceText>8 and 18 or 23)) or 35
- local priceLabel=label(hero,UDim2.fromOffset(heroTextX,47),UDim2.new(1,narrow and -heroTextX-16 or -145,0,narrow and 62 or 45),priceText..(narrow and '\nQuartz' or ' Quartz'),priceSize,palette.white,true)
- priceLabel.TextStrokeColor3=Color3.fromRGB(13,23,48);priceLabel.TextStrokeTransparency=.4
- label(hero,UDim2.fromOffset(22,l.short and 94 or 126),UDim2.new(1,-44,0,39),narrow and 'Three saved choices. Pick one upgrade for this run.' or 'Mining power, combat tricks or a smarter cargo run. Three saved choices. One upgrade.',16,palette.white)
- if not l.short then progress(body,207,width,'Your pack fund',comma(credits)..' / '..comma(price)..' Quartz',credits/math.max(1,price),palette.accent,true) end
+ local price=profile.nextPackPrice or 40
+ local credits=Shops.balance(profile,'Quartz')
+ local affordable=credits>=price
  local allowed,blocked=availability('BuyPack')
- local text=not allowed and blocked or (affordable and 'Buy pack · '..comma(price)..' Quartz' or 'Earn '..comma(price-credits)..' more Quartz')
+ local l=menu('pack','PACK SHOP',comma(credits)..' Quartz','cards')
+ local text='Buy pack · '..comma(price)..' Quartz'
+ if not allowed then text=blocked end
  local buy
- buy=button(body,UDim2.fromOffset(3,l.short and 154 or 302),UDim2.fromOffset(width,50),text,function()
-  if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then buy.Text='Ordering…';enableAction(buy,false) end
- end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18;buy.TextStrokeTransparency=.5
- local oldEdge=buy:FindFirstChildOfClass('UIStroke');if oldEdge then oldEdge:Destroy() end
- U.skin(buy,Color3.fromRGB(153,46,201),12);enableAction(buy,canAct('BuyPack') and affordable)
- label(body,UDim2.fromOffset(8,l.short and 218 or 374),UDim2.fromOffset(width-10,50),'Cards reset at prestige. Your permanent drones stay yours.',12,Color3.fromRGB(202,209,231))
+ buy=button(body,UDim2.fromOffset(0,0),UDim2.fromOffset(l.bodyWidth-4,44),text,function()
+  if canAct('BuyPack') and affordable and send('BuyPack',{packIndex=profile.run.packIndex}) then
+   buy.Text='Ordering…';enableAction(buy,false)
+  end
+ end,Color3.fromRGB(153,46,201));buy.Name='BuyPack';buy.TextSize=18
+ enableAction(buy,allowed and affordable)
 end
-openShop=function(key,info)
+openShop=function(key)
  if not profile or not profile.run.wallet then return end
- activeShop=Shops.COLORS[key or activeShop] and (key or activeShop) or 'Quartz';shopInfo=info
+ activeShop=Shops.COLORS[key or activeShop] and (key or activeShop) or 'Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop',activeShop..' shop',allowed and 'Pick an upgrade. Info explains the full effect.' or reason,'crystal')
- ShopView.render(U,body,{profile=profile,shop=activeShop,width=l.bodyWidth-4,info=shopInfo,canBuy=allowed,
-  onShop=function(nextShop) openShop(nextShop) end,onInfo=function(id) openShop(activeShop,id) end,
+ local l=menu('shop',activeShop..' shop',allowed and (comma(Shops.balance(profile,activeShop))..' '..activeShop..' · Run upgrades') or reason,'crystal')
+ ShopView.render(U,body,{profile=profile,shop=activeShop,width=l.bodyWidth-4,canBuy=allowed,
+  onShop=function(nextShop) openShop(nextShop) end,
   onBuy=function(entry,level)
-   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=entry.id,level=level}) then openShop(activeShop,shopInfo) end
+   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=entry.id,level=level}) then openShop(activeShop) end
   end})
 end
 local function statTile(parent,x,y,width,title,value,color)
@@ -539,7 +532,7 @@ openRunCards=function()
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
   local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine rocks and sell your ore at SELL ORE. Spend the minerals in their shops or choose one of three pack upgrades.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
-  button(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,48),'View next pack',openPack,palette.accent)
+  label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Pack Shop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
    local y=63+(index-1)*145
@@ -586,7 +579,7 @@ local function refreshModal()
  local savedScroll=body.CanvasPosition;local mode=modalMode
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
- elseif mode=='shop' then openShop(activeShop,shopInfo)
+ elseif mode=='shop' then openShop(activeShop)
  elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
@@ -1147,7 +1140,9 @@ local function stationAction(station)
   local key=station:GetAttribute('ShopKey')
   if profile then return function() openShop(key) end,key..' shop',Shops.unlocked(profile,key) and ('Spend '..key..' on upgrades') or 'Locked · buy access in the previous shop','Shop' end
   return nil
- elseif kind=='Pack' then return openPack,'Upgrade your fleet',sealedPack() and 'Find your delivered crate and hold to open' or (pending() and 'Your three saved cards are waiting' or ('3 cards. Keep 1.  /  '..comma(profile and profile.nextPackPrice or 40)..' Quartz')),sealedPack() and 'Delivery' or (pending() and 'Choose' or 'Pack')
+ elseif kind=='Pack' then
+  if sealedPack() then return openPack,'Pack Shop','Hold to open your delivered crate','Delivery' end
+  return openPack,'Pack Shop',pending() and 'Card ready to pick' or '3 cards · keep 1',pending() and 'Choose' or 'Shop'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
   return cargoAction,'Sell ore','Your backpack becomes spendable minerals immediately','Sell'
@@ -1357,8 +1352,7 @@ connect(RunService.Heartbeat,function(dt)
   local action,title,detail,actionText=stationAction(station)
   if l.contextWidth<350 then
    local kind=station:GetAttribute('Interaction')
-   if kind=='Pack' then title='Upgrade pack';detail=sealedPack() and 'Hold to open your delivered crate' or (pending() and 'Your saved cards are ready' or '3 cards · choose 1')
-   elseif kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
+   if kind=='Prestige' then title='Grow your fleet';detail='Keep fleet · gain one drone'
    elseif kind=='Sell' then title='Sell ore';detail='Turn your backpack into spendable minerals' end
   end
   if action then contextAction=function() performStation(station) end;contextTitle.Text=title;contextDetail.Text=detail;contextButton.Text=(actionText or 'Use')..(touch and '' or ' [E]');context.Visible=true end

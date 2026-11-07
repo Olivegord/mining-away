@@ -9,7 +9,7 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `d552ea1bf9567cb4f30e8c75ea813e18ffc5a9d87f9b08a0d1cc398c68c9e46a` | Hash of the local pack delivery build. |
+| Native-file SHA-256 | `30052902d7ecf1b7b738da32f7e7ade99c136a9a9d7c6f32e259d1a5a25949e2` | Hash of the integrated pack delivery and shop build. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -61,9 +61,15 @@ Revision `88ba15d` connects the ordinary one-drone start to immediate selling, v
 
 Server owns damage, rewards, persistent state, cards, purchases and prestige. Clients render replicated intent. Preserve fail-safe persistence; a load failure must not overwrite a valid profile with defaults. See [core-loop report](review/CORE_LOOP.md), [consumables](review/CONSUMABLE_GAMEPLAY.md), [rock interactions](review/ROCK_INTERACTIONS.md), and [architecture](game/architecture.md).
 
+## Pack Shop
+
+The depot pack counter now has its own Pack Shop sign and prompt. The compact shop screen shows the Quartz balance and a single purchase button with the price. The purchase places an order for a crate. Mineral shops continue to sell their level upgrades. The native refresh checked that all non-Source data and unrelated scripts matched the prior file. The delivery flow was played before merging the compact shop layout.
+
+The five mineral shops now use compact upgrade tiles with a symbol, short name, effect, and one purchase or status button. Every catalog upgrade has a symbol, and field unlocks use their destination mineral color. Upgrade prices and transaction rules remain as before. Native Source preservation was verified offline. The updated shop layouts still need Studio visual and input verification.
+
 ## What was actually tested
 
-The local pack revision completed a one-player Studio Play test. Normal mining and sale commands earned 40 Quartz, and the shop UI bought a Rare crate. Studio observed the crate grounded between shop and buyer. Releasing E early kept it sealed. A full hold advanced grey to yellow, disclosed the three cards, and showed all three card faces with world depth-of-field and transparent menu surfaces. Selecting Shard Harvester installed one card, cleared the pending offer and removed the crate and blur. The console was empty and Play was stopped. The canonical disk file was verified against the seven allowlisted Sources. The source-only refresh preserved map, other instances and backup Sources.
+The pack revision `eab05ef` completed a one-player Studio Play test before the shop merge. Normal mining and sale commands earned 40 Quartz, and the shop UI bought a Rare crate. Studio observed the crate grounded between shop and buyer. Releasing E early kept it sealed. A full hold advanced grey to yellow, disclosed the three cards, and showed all three card faces with world depth-of-field and transparent menu surfaces. Selecting Shard Harvester installed one card, cleared the pending offer and removed the crate and blur. The console was empty and Play was stopped. The canonical disk file was verified against the seven allowlisted Sources. The source-only refresh preserved map, other instances and backup Sources.
 
 The core-loop suite passed in both configurations, including all four timing curves, sealed disclosure, cross-player rejection, interrupted holds, reconnect and exactly one claim. The native package/preservation suite passed. The legacy card price and HUD text assertions also fail on the baseline commit. Pack animation on touch, higher-tier visuals, listening quality, multiple Studio clients and production DataStore reconnects remain unverified. This pack revision has no Roblox publication. The version evidence above refers to the earlier shared build.
 

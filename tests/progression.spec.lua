@@ -1,3 +1,4 @@
+local Packs=require('../src/Packs')
 -- Deterministic economy/encounter MODEL using production domain modules.
 -- Not Roblox Studio, a renderer, networking, collision, or measured player behavior.
 local P=require('../src/Profile')
@@ -200,9 +201,10 @@ local function simulate(seed)
     if ok then
      firstPack=firstPack or world.time-began;packs+=1
      local index=pick(profile,offer,needField,seed*101+runNumber)
+     assert(Cards.open(profile,offer.id))
      assert(Cards.select(profile,offer.id,index,'model-pick:'..offer.id,profile.run.id,{atDepot=true}))
      table.insert(picked,offer.choices[index].cardId..(offer.choices[index].targetDroneId and '@'..offer.choices[index].targetName or ''))
-     world.time+=2
+     world.time+=2+Packs.duration(offer.packTier)
     end
    end
    -- After the first pack, use the higher-value safe Ruby option until a clear.

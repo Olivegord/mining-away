@@ -1773,7 +1773,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   return false
  end
  if not atHome(p) then
-  notice(p,'Use the pack machine or prestige beacon at the depot.')
+  notice(p,'Visit the Pack Shop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false
  end

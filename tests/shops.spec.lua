@@ -91,7 +91,7 @@ test('pack discount affects future Quartz price, never paid offer or choices',fu
  local ok,o=C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true,combatVisible=true});assert(ok);eq(o.price,40);eq(o.currency,'Quartz');eq(#o.choices,3);eq(S.balance(p,'Quartz'),960)
  assert(buy(p,'cobalt_pack_discount'));eq(C.price(p),68);eq(p.run.pendingOffer.price,40)
  local _,replay=C.buy(p,'replay',p.run.id,{expectedPackIndex=1,atDepot=true});eq(replay.id,o.id);eq(replay.choices[1].cardId,o.choices[1].cardId);eq(S.balance(p,'Quartz'),960)
- assert(C.select(p,o.id,2,'pick',p.run.id,{atDepot=true}));eq(#p.run.cards,1);eq(p.run.pendingOffer,nil)
+ assert(C.open(p,o.id));assert(C.select(p,o.id,2,'pick',p.run.id,{atDepot=true}));eq(#p.run.cards,1);eq(p.run.pendingOffer,nil)
 end)
 test('legacy universal counter cannot buy packs without Quartz',function()
  local p=fresh();p.run.credits=100000;eq(C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true}),false)
@@ -137,7 +137,7 @@ test('packs grant standalone abilities without any combo prerequisite',function(
   assert(card.cardId~='A03' and card.cardId~='A04')
   if card.cardId=='G01' then index=i;eq(card.effects.orbitalLaser,1) end
  end
- assert(index);assert(C.select(p,offer.id,index,'pick',p.run.id,{atDepot=true}));eq(S.abilityUnlocked(p,'Orbital'),true);eq(S.unlocked(p,'Cobalt'),false)
+ assert(index);assert(C.open(p,offer.id));assert(C.select(p,offer.id,index,'pick',p.run.id,{atDepot=true}));eq(S.abilityUnlocked(p,'Orbital'),true);eq(S.unlocked(p,'Cobalt'),false)
  C.CATALOG=catalog;C.FALLBACK=fallback
 end)
 test('retired paid combo offers refund exactly once and selected combos become standalone',function()
