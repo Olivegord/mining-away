@@ -157,6 +157,24 @@ local function addSign(station,text,height)
 end
 function Stands.mount(map,home,template)
  local stations={}
+ local prestige=map:FindFirstChild('PrestigeStation',true)
+ if prestige then
+  prestige:SetAttribute('Interaction','Prestige')
+  local prompt=prestige:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
+  prompt.ActionText='Review prestige';prompt.ObjectText='PRESTIGE'
+  prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=prestige
+  addSign(prestige,'PRESTIGE',3)
+ end
+ local printer=map:FindFirstChild('Printer',true)
+ if printer then
+  printer:SetAttribute('Interaction','Printer')
+  local prompt=printer:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
+  prompt.ActionText='Buy drones / manage fleet';prompt.ObjectText='DRONE YARD'
+  prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=printer
+  addSign(printer,'DRONE YARD',3)
+ end
  addSign(template,'PACK SHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
  packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'
@@ -3712,7 +3730,7 @@ local function station(parent,name,at,color,title,interaction)
  local model=Instance.new('Model');model.Name=name..'Assembly';model.Parent=parent
  local base=solid(block(model,name,at+Vector3.new(0,1,0),Vector3.new(6,2,5),P.metal,Enum.Material.Metal))
  base:SetAttribute('Interaction',interaction)
- local prompt=Instance.new('ProximityPrompt');prompt.ActionText=title;prompt.ObjectText=name=='PackStation' and 'RUN CARDS' or name=='Printer' and 'DRONE PRINTER' or 'PERMANENT FLEET';prompt.MaxActivationDistance=10;prompt.HoldDuration=0;prompt.RequiresLineOfSight=false;prompt.Enabled=name~='Printer';prompt.Parent=base
+ local prompt=Instance.new('ProximityPrompt');prompt.ActionText=title;prompt.ObjectText=name=='PackStation' and 'RUN CARDS' or name=='Printer' and 'DRONE PRINTER' or 'PERMANENT FLEET';prompt.MaxActivationDistance=10;prompt.HoldDuration=0;prompt.RequiresLineOfSight=false;prompt.Enabled=true;prompt.Parent=base
  block(model,'MachineFoot',at+Vector3.new(0,.18,0),Vector3.new(7,.36,6),P.ledge,Enum.Material.Concrete)
  for _,x in ipairs({-2.7,2.7}) do block(model,'ChassisEdge',at+Vector3.new(x,1.2,0),Vector3.new(.22,1.7,4.7),P.edge,Enum.Material.Metal) end
  if name=='Printer' then
@@ -5081,7 +5099,7 @@ local function atStation(p,station,radius)
  local hr=characterRoot(p);return hr and (hr.Position-station.Position).Magnitude<(radius or 18)
 end
 local function atHome(p)
- local hr=characterRoot(p);return hr and (hr.Position-home).Magnitude<30
+ local hr=characterRoot(p);return hr and ((hr.Position-home).Magnitude<30 or (scene.printer and (hr.Position-scene.printer.Position).Magnitude<16))
 end
 -- Orders belong to a field footprint with a forgiving walking margin.
 local function nearMiningField(position,field)
@@ -6764,7 +6782,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
+ if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
   notice(p,'Visit the Pack Shop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false

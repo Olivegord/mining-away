@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — drone outlines and physical station UI
+
+The owner reports that drones are difficult to see, requests outlines on all drones, and wants a much cleaner HUD. Prestige, shops and other progression menus must be reached through physical proximity prompts. Remove permanent progression shortcuts and duplicated interaction panels. Display every mineral currency and keep other mineral rocks visible; field unlocks and server mining/combat gates still apply. Preserve the existing pack reveal, map, assets and accepted VFX.
+
 ## November 6 latest — free packs, direct E order
 
 Packs are free for now. The Pack Shop proximity prompt must show the price and pressing E orders a crate immediately; remove the intermediary pack purchase menu. Keep delivery, continuous crate hold and choose-one-of-three reveal. The temporary free-price switch applies in production as well as Studio, including later packs. This supersedes the paid pack prices and compact purchase-menu requirements below.

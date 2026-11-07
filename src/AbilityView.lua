@@ -73,7 +73,7 @@ function View.start(options)
   end
   view:ScaleTo(view:GetScale()*.18)
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
-  view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
+  DroneOutline.attach(view);view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
    local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false

@@ -1,9 +1,7 @@
 --!strict
--- Reference-led HUD: Bee Swarm slim meters, Pet Sim compact icons. Presentation only.
+-- Compact mineral HUD and contextual fleet commands. Presentation only.
 local Players = game:GetService('Players')
 local UIS = game:GetService('UserInputService')
-local TweenService = game:GetService('TweenService')
-local Config = require(script.Parent.DroneConfig)
 local interfaceKit=nil
 local HUD = {}
 HUD.__index = HUD
@@ -44,39 +42,6 @@ local function plain(f: GuiObject)
  f.BackgroundTransparency=1; f.Active=false
  for _,child in f:GetChildren() do if child:IsA('UIStroke') or child:IsA('UIGradient') then child:Destroy() end end
 end
-local function portrait(parent: Frame, color: Color3)
- local vp=Instance.new('ViewportFrame'); vp.Name='DronePortrait'; vp.BackgroundTransparency=1
- vp.Position=UDim2.fromScale(.08,.05); vp.Size=UDim2.fromScale(.84,.73); vp.ZIndex=parent.ZIndex+1
- vp.Ambient=Color3.fromRGB(185,185,200); vp.LightColor=Color3.new(1,1,1); vp.LightDirection=Vector3.new(-1,-2,-3); vp.Parent=parent
- task.spawn(function()
- local template=game.ReplicatedStorage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone') or workspace:WaitForChild('Drone',10)
- if not template or not template:IsA('Model') then return end
- -- Model containers can replicate before their parts. Wait for the authored shell.
- if not template:FindFirstChild('Mesh') then template:WaitForChild('Mesh',10) end
- if not vp.Parent then return end
- local model=template:Clone()
- for _,v in model:GetDescendants() do
-  if v:IsA('LuaSourceContainer') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Sound') or v:IsA('BillboardGui') then v:Destroy()
-  elseif v:IsA('BasePart') then v.Anchored=true; v.CanCollide=false; v.LocalTransparencyModifier=0; v.Color=v.Color:Lerp(color,.65) end
- end
- local body=model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
- if body and body:IsA('BasePart') then
-  model.PrimaryPart=body; model:PivotTo(CFrame.new())
-  local trim=Instance.new('Part'); trim.Name='Chassis'; trim.Anchored=true; trim.CanCollide=false
-  trim.Size=Vector3.new(body.Size.X*1.02,.13,body.Size.Z*1.02); trim.Color=C.line
-  trim.CFrame=body.CFrame*CFrame.new(0,-body.Size.Y*.35,0); trim.Parent=model
-  for _,side in {-1,1} do
-   local optic=Instance.new('Part'); optic.Name='Optic'; optic.Anchored=true; optic.CanCollide=false
-   optic.Size=Vector3.new(body.Size.X*.6,.1,.03); optic.Color=color; optic.Material=Enum.Material.Neon
-   optic.CFrame=body.CFrame*CFrame.new(0,-body.Size.Y*.2,side*(body.Size.Z*.5+.02)); optic.Parent=model
-  end
- end
- model.Parent=vp
- local camera=Instance.new('Camera'); camera.FieldOfView=32; camera.CFrame=CFrame.lookAt(Vector3.new(5,3.5,6),Vector3.zero)
- camera.Parent=vp; vp.CurrentCamera=camera
- end)
-end
-
 -- Fixed screen size, lifted clear of the plot and crystals.
 function HUD.styleWorldLabel(gui: BillboardGui)
  if gui.Name~='TestLabel' then return end
@@ -85,7 +50,7 @@ function HUD.styleWorldLabel(gui: BillboardGui)
  local field=anchor:GetAttribute('FieldId')
  local accent=field and anchor.Color or C.gold
  gui.Size=UDim2.fromOffset(field and 154 or 142,36)
- gui.Enabled=field==nil
+ gui.Enabled=false
  gui.MaxDistance=38
  gui.AlwaysOnTop=false; gui.LightInfluence=0; gui.Adornee=anchor; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
  gui.StudsOffset=Vector3.zero; gui.ExtentsOffset=Vector3.zero
@@ -132,58 +97,42 @@ function HUD.attachHealth(view: Model, source: Instance, color: Color3, turret: 
 	gui.Destroying:Connect(function() hp:Disconnect(); maxHP:Disconnect() end)
 end
 
+-- The only permanent panels are mineral balances and backpack space.
+local minerals={'Quartz','Ruby','Cobalt','Violet','Emerald'}
+local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Color3.fromRGB(114,177,255),Color3.fromRGB(198,154,255),Color3.fromRGB(100,229,165)}
+local function compact(value)
+ if value>=1e9 then return string.format('%.1fB',value/1e9) elseif value>=1e6 then return string.format('%.1fM',value/1e6) elseif value>=10000 then return string.format('%.1fk',value/1000) end
+ return tostring(math.floor(value))
+end
+local function quietPanel(parent,name)
+ local f=card(parent,name);plain(f);f.BackgroundTransparency=.08;f.BackgroundColor3=C.panel;f.Active=false
+ local round=f:FindFirstChildOfClass('UICorner');if round then round.CornerRadius=UDim.new(0,10) end
+ local stroke=Instance.new('UIStroke');stroke.Color=Color3.fromRGB(76,88,113);stroke.Transparency=.4;stroke.Thickness=1;stroke.Parent=f
+ return f
+end
 function HUD.new(refs: any)
  interfaceKit=refs.interface
- local self: any=setmetatable({refs=refs,health=-1,tween=nil,input=UIS:GetLastInputType()},HUD)
- self.dock=frame(refs.root,'CommandDock',C.panel); plain(self.dock)
- self.dockScale=Instance.new('UIScale'); self.dockScale.Parent=self.dock
- self.status=card(self.dock,'SquadStatus'); self.status.BackgroundTransparency=0
- self.order=text(self.status,'CurrentOrder',8,0,150,22,11,C.green)
- self.living=text(self.status,'Living',150,0,180,22,11,C.text); self.living.TextXAlignment=Enum.TextXAlignment.Right
- local track=frame(self.status,'HealthTrack',C.track);track.Position=UDim2.fromScale(0,0);track.Size=UDim2.fromScale(1,1);track.ClipsDescendants=true;track.BackgroundTransparency=1
- self.fill=frame(track,'Fill',C.green);self.fill.Size=UDim2.fromScale(1,1)
- self.order.ZIndex=track.ZIndex+3;self.living.ZIndex=track.ZIndex+3
- -- The fleet roster lives in its menu; the work stays visible.
- self.roles={}
- for _,b in {refs.recall,refs.evade,refs.unload} do
-  b.Parent=self.dock;b.Font=Enum.Font.SourceSansBold;b.TextSize=16;skin(b,b==refs.recall and C.green or b==refs.evade and C.red or C.blue);b.TextColor3=C.text;b.TextStrokeTransparency=1
- end
- refs.evade.Name='Evade'
- refs.test.Parent=refs.root;refs.test.Font=Enum.Font.SourceSansBold;refs.test.TextSize=16;skin(refs.test,C.violet);refs.test.TextColor3=C.text
- self.hint=text(refs.root,'Controls',0,0,500,16,10,C.text);self.hint.TextXAlignment=Enum.TextXAlignment.Center;self.hint.TextStrokeColor3=Color3.new(0,0,0);self.hint.TextStrokeTransparency=.3
- -- Two short, flat label/value meters closely follow the Bee Swarm reference.
+ local self: any=setmetatable({refs=refs,input=UIS:GetLastInputType(),wallets={}},HUD)
  plain(refs.resources)
- self.coins=card(refs.resources,'CreditsCounter',C.blue);self.coins.BackgroundTransparency=0
- self.cargo=card(refs.resources,'CargoCounter',C.green);self.cargo.BackgroundTransparency=0
- self.gain=text(self.cargo,'CollectedGain',0,33,120,20,16,C.gold);self.gain.TextStrokeTransparency=.15;self.gain.TextStrokeColor3=C.line
- self.gain.TextXAlignment=Enum.TextXAlignment.Right;self.gain.Visible=false
- self.cargoScale=Instance.new('UIScale');self.cargoScale.Parent=self.cargo
+ for i,key in ipairs(minerals) do
+  local tile=quietPanel(refs.resources,'Wallet_'..key)
+  local dot=frame(tile,'Mineral',mineralColors[i]);dot.Size=UDim2.fromOffset(8,8);dot.Position=UDim2.fromOffset(10,10)
+  local name=text(tile,'MineralName',24,3,80,20,16,mineralColors[i]);name.Text=key
+  local value=text(tile,'Balance',10,23,90,25,22,C.text)
+  self.wallets[i]={tile=tile,name=name,value=value}
+ end
+ self.cargo=quietPanel(refs.resources,'CargoCounter')
+ local name=text(self.cargo,'Caption',10,3,100,20,16,C.muted);name.Text='Backpack'
+ refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.text;refs.cargoText.TextWrapped=false;refs.cargoText.Font=Enum.Font.SourceSansBold
+ refs.cargoTrack.Parent=self.cargo;refs.cargoTrack.Position=UDim2.new(0,8,1,-5);refs.cargoTrack.Size=UDim2.new(1,-16,0,3)
+ refs.cargoTrack.BackgroundColor3=C.track
+ self.gain=text(self.cargo,'CollectedGain',0,54,120,22,18,C.gold);self.gain.Visible=false
  self.collectedTotal=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
- self.cargoStroke=self.cargo:FindFirstChildOfClass('UIStroke')
- if interfaceKit then
-  self.cargoIcon=interfaceKit.icon(self.cargo,'cargo',UDim2.fromOffset(6,5),UDim2.fromOffset(22,22),C.text)
- end
- refs.credits.Parent=self.coins;refs.credits.TextColor3=C.gold;refs.credits.Font=Enum.Font.SourceSansBold;refs.credits.TextWrapped=false;refs.credits.TextTruncate=Enum.TextTruncate.AtEnd
- for _,name in ipairs({'Icon_coin','Icon_crystal'}) do local icon=refs.resources:FindFirstChild(name);if icon then icon.Visible=false end end
- self.creditCaption=text(self.coins,'Caption',0,0,58,26,11,Color3.fromRGB(35,38,40));self.creditCaption.BackgroundTransparency=0;self.creditCaption.BackgroundColor3=C.line;self.creditCaption.Text='Credits';self.creditCaption.TextXAlignment=Enum.TextXAlignment.Center
- self.cargoCaption=text(self.cargo,'Caption',0,0,52,26,11,Color3.fromRGB(35,38,40));self.cargoCaption.BackgroundTransparency=0;self.cargoCaption.BackgroundColor3=C.line;self.cargoCaption.Text='Backpack';self.cargoCaption.TextXAlignment=Enum.TextXAlignment.Center
- refs.cargoTrack.Parent=self.cargo;refs.cargoTrack.BackgroundColor3=C.track;refs.cargoTrack.ClipsDescendants=true
- local cargoRound=refs.cargoTrack:FindFirstChildOfClass('UICorner');if cargoRound then cargoRound.CornerRadius=UDim.new(0,0) end
- for _,fill in refs.cargoTrack:GetChildren() do if fill:IsA('Frame') then
-  fill.Position=UDim2.fromScale(0,0);local round=fill:FindFirstChildOfClass('UICorner');if round then round.CornerRadius=UDim.new(0,0) end
- end end
- refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.gold;refs.cargoText.Font=Enum.Font.SourceSansBold;refs.cargoText.TextWrapped=false;refs.cargoText.TextTruncate=Enum.TextTruncate.AtEnd;refs.cargoText.ZIndex=refs.cargoTrack.ZIndex+2
- self.testMode=text(refs.root,'TestMode',0,0,420,16,10,C.gold);self.testMode.Text='TESTING  •  NO RESTOCK';self.testMode.TextXAlignment=Enum.TextXAlignment.Center;self.testMode.TextStrokeColor3=Color3.new(0,0,0);self.testMode.TextStrokeTransparency=.35
- refs.fleet.Parent=refs.root;refs.cards.Parent=refs.root
- for _,b in {refs.fleet,refs.cards} do
-  skin(b,b==refs.fleet and C.blue or C.violet);b.Active=true
- end
- for _,label in {refs.fleetText,refs.cardsText} do label.TextSize=10;label.Font=Enum.Font.SourceSansBold;label.TextColor3=C.text;label.TextStrokeColor3=Color3.new(0,0,0);label.TextStrokeTransparency=.2 end
- skin(refs.context,C.panel);skin(refs.enemy,C.red:Lerp(C.panel,.5));skin(refs.toast,C.blue:Lerp(C.panel,.6))
- for _,panel in {refs.context,refs.enemy,refs.toast} do
-  for _,label in panel:GetDescendants() do if label:IsA('TextLabel') then label.TextColor3=C.text end end
- end
- plain(refs.objective);refs.objectiveText.TextColor3=C.text;refs.objectiveText.TextStrokeColor3=Color3.new(0,0,0);refs.objectiveText.TextStrokeTransparency=.25
+ self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
+ self.status=quietPanel(self.dock,'SquadStatus');self.order=text(self.status,'CurrentOrder',10,0,180,40,16,C.text)
+ for _,button in {refs.recall,refs.evade} do button.Parent=self.dock;button.TextSize=16 end
+ refs.unload.Visible=false;refs.test.Visible=false;refs.context.Visible=false
+ self.hint=text(refs.root,'Controls',0,0,380,24,16,C.text);self.hint.TextXAlignment=Enum.TextXAlignment.Center;self.hint.TextStrokeTransparency=.25
  self.connection=UIS.LastInputTypeChanged:Connect(function(input) self.input=input end)
  for _,v in workspace:GetDescendants() do if v:IsA('BillboardGui') and v.Name=='TestLabel' then HUD.styleWorldLabel(v) end end
  self.worldLabels=workspace.DescendantAdded:Connect(function(v)
@@ -224,136 +173,64 @@ function HUD.activity(folder,ownerId)
 end
 
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
- local r=self.refs
- local w,h=view.X,view.Y
- local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
- local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
- local total,living,working,delivering=activity.total,activity.living,activity.assigned,activity.delivering
- local backpackUnits=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
- local backpackCapacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
- local full=backpackUnits>=backpackCapacity
- local storageReady=(Players.LocalPlayer:GetAttribute('StorageUnits') or 0)>=(Players.LocalPlayer:GetAttribute('StorageCapacity') or 120) and (Players.LocalPlayer:GetAttribute('LaunchCargoUnits') or 0)==0
- local hp,maximum=activity.hp,activity.maximum
- local hidden=r.modal.Visible
- local busy=working>0 or delivering>0 or full or living<total
- if working>0 or delivering>0 then self.hasWorked=true end
- local status
- local queued=Players.LocalPlayer:GetAttribute('QueuedOreCount') or 0
- if fighting then status='Fleet fighting'
- elseif full then status='Bag full · return to SELL ORE'
- elseif working>0 then status=string.format('%d / %d miners assigned',working,activity.miners)
- elseif delivering>0 then status=string.format('%d hauling · %d miners ready',delivering,activity.miners)
- elseif queued>0 then status=string.format('%d working · %d queued',working,queued)
- elseif living<total then status=string.format('%d / %d ready',living,total)
- elseif activity.miners>0 then status=string.format('%d miners · %d support',activity.miners,activity.support)
- else status=string.format('%d drones ready',living) end
- self.order.Text=status;self.order.TextSize=16;self.order.TextColor3=C.text
- self.living.Visible=false
- self.fill.Visible=fighting
- self.fill.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maximum),0,1),1)
- local character=Players.LocalPlayer.Character;local root=character and character:FindFirstChild('HumanoidRootPart')
- local converter=workspace:FindFirstChild('Converter')
- local atDepot=root and converter and converter:IsA('BasePart') and (root.Position-converter.Position).Magnitude<18
- local canUnload=backpackUnits>0 and atDepot and not fighting
- local showRecall=working>0 or delivering>0
- local actions=(showRecall and 1 or 0)+(fighting and 1 or 0)+(canUnload and 1 or 0)
- local bw=touch and 90 or 100
- local width=math.min(w-24,196+actions*(bw+6))
- local reserve=touch and 108 or 12
- local stacked=w<600 and actions>1
- local dockHeight=stacked and 76 or 40
- local dockY=h-reserve-dockHeight
- self.dockScale.Scale=1
- self.dock.Size=UDim2.fromOffset(width,dockHeight)
- self.dock.Position=UDim2.fromOffset((w-width)/2,dockY)
- self.dock.Visible=not hidden and (busy or canUnload)
- self.status.Position=UDim2.fromOffset(0,0)
- self.status.Size=UDim2.fromOffset(stacked and width or math.max(100,width-actions*(bw+6)),stacked and 28 or 40)
- self.order.Position=UDim2.fromOffset(10,0);self.order.Size=UDim2.new(1,-20,1,0)
- if stacked then bw=(width-(actions-1)*6)/math.max(1,actions) end
- local x=stacked and 0 or width-actions*(bw+6)+6
- for _,entry in {{r.unload,canUnload},{r.recall,showRecall},{r.evade,fighting}} do
-  local button,visible=entry[1],entry[2]
-  if button then
-   button.Visible=visible
-   if visible then
-    button.Position=UDim2.fromOffset(x,stacked and 32 or 0);button.Size=UDim2.fromOffset(bw,stacked and 44 or 40);x+=bw+6
-   end
-  end
+ local r=self.refs;local w,h=view.X,view.Y
+ local hidden=r.hidden()
+ local p=r.profile();local wallet=p and p.run and p.run.wallet or {}
+ local columns=w<500 and 3 or 6
+ local width=math.min(w-24,738);local gap=6;local tileWidth=math.floor((width-(columns-1)*gap)/columns)
+ local rows=math.ceil(6/columns);local bottom=8+rows*58
+ r.resources.Position=UDim2.fromOffset(12,8);r.resources.Size=UDim2.fromOffset(width,rows*58-6);r.resources.Visible=not hidden
+ for i,entry in ipairs(self.wallets) do
+  entry.tile.Position=UDim2.fromOffset(((i-1)%columns)*(tileWidth+gap),math.floor((i-1)/columns)*58);entry.tile.Size=UDim2.fromOffset(tileWidth,52)
+  entry.name.Position=UDim2.fromOffset(w<620 and 18 or 24,3);entry.name.TextSize=w<620 and 14 or 16
+  entry.name.Size=UDim2.fromOffset(tileWidth-(w<620 and 22 or 29),20);entry.value.Size=UDim2.fromOffset(tileWidth-20,25)
+  entry.value.Text=compact(wallet[minerals[i]] or 0)
  end
- r.test.Visible=false -- Preview loadouts are available inside Fleet, away from the normal loop.
- r.test.Size=UDim2.fromOffset(math.min(208,w-24),32);r.test.Position=UDim2.fromOffset(w-math.min(208,w-24)-12,56)
- r.test.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
- r.recall.Text=touch and 'Recall' or 'Recall [R]'
- r.evade.Text=touch and 'Evade' or 'Evade [Q]'
- if r.unload then r.unload.Text='Sell'..(touch and '' or ' [U]') end
- self.hint.Visible=not hidden and not self.hasWorked and not busy and not r.context.Visible
- self.hint.Text=touch and 'Tap a rock to send a drone' or 'Click a rock · drag to queue'
- self.hint.TextSize=16;self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24)
- self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
- -- One small counter row, a prestige shortcut and the next useful purchase.
- local rw=math.max(140,math.min(390,w-164))
- r.resources.Size=UDim2.fromOffset(rw,32);r.resources.Position=UDim2.fromOffset(12,8);r.resources.Visible=not hidden
- local cw=math.floor((rw-6)*.38)
- self.coins.Position=UDim2.fromOffset(0,0);self.coins.Size=UDim2.fromOffset(cw,32)
- self.cargo.Position=UDim2.fromOffset(cw+6,0);self.cargo.Size=UDim2.fromOffset(rw-cw-6,32)
- self.creditCaption.Visible=false;self.cargoCaption.Visible=false
- r.credits.Position=UDim2.fromOffset(9,0);r.credits.Size=UDim2.new(1,-18,1,0);r.credits.TextSize=16
- local inset=self.cargoIcon and 32 or 9
- r.cargoText.Position=UDim2.fromOffset(inset,0);r.cargoText.Size=UDim2.new(1,-inset-8,1,-3);r.cargoText.TextSize=16
- if self.cargoIcon then r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','') end
- if w<500 then r.credits.Text=r.credits.Text:gsub('^Quartz ','Q '):gsub('%.0([kMB])','%1');r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','Bag '):gsub(' / ','/') end
- r.cargoTrack.Position=UDim2.new(0,3,1,-5);r.cargoTrack.Size=UDim2.new(1,-6,0,3)
- -- Aggregate confirmed pickups beside the existing meter. Changes in cargo
- -- alone do not invent collection receipts when a courier or deposit runs.
- local now=os.clock()
- local collected=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
+ self.cargo.Position=UDim2.fromOffset((5%columns)*(tileWidth+gap),math.floor(5/columns)*58);self.cargo.Size=UDim2.fromOffset(tileWidth,52)
+ local cargoCaption=self.cargo:FindFirstChild('Caption');cargoCaption.TextSize=w<620 and 14 or 16;cargoCaption.Size=UDim2.fromOffset(tileWidth-16,20)
+ r.cargoText.Position=UDim2.fromOffset(10,23);r.cargoText.Size=UDim2.fromOffset(tileWidth-20,24);r.cargoText.TextSize=20
+ r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ','')
+ local backpack=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
+ local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
+ local full=backpack>=capacity
+ self.cargo.BackgroundColor3=full and C.red:Lerp(C.panel,.45) or C.panel
+ local now=os.clock();local collected=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
  if collected>self.collectedTotal then
   self.gainUnits=(now-(self.gainAt or -10)<.65 and (self.gainUnits or 0) or 0)+collected-self.collectedTotal
   self.gainAt=now;self.gain.Text='+'..self.gainUnits..' ore'
  end
  self.collectedTotal=collected
- local age=now-(self.gainAt or -10);local gainFade=math.clamp((age-.5)/.35,0,1)
- self.gain.Visible=age<.85;self.gain.Position=UDim2.new(1,-120,1,2-age*8)
- self.gain.TextTransparency=gainFade;self.gain.TextStrokeTransparency=.15+.85*gainFade
- local reduced=Players.LocalPlayer:GetAttribute('ReducedMotion')==true or Players.LocalPlayer:GetAttribute('MA_ReducedMotion')==true
- self.cargoScale.Scale=1+(reduced and 0 or math.sin(math.clamp(age/.26,0,1)*math.pi)*.045)
- if self.lastCargo and backpackUnits>self.lastCargo then self.cargoChangedAt=now end
- self.lastCargo=backpackUnits
- local pulse=math.clamp(1-(now-(self.cargoChangedAt or -10))/.45,0,1)
- self.cargo.BackgroundColor3=(full and C.red:Lerp(C.panel,.35) or C.green):Lerp(C.text,pulse*.16)
- r.cargoText.TextColor3=full and C.gold or C.text
- if self.cargoStroke then self.cargoStroke.Color=full and C.gold or C.line:Lerp(C.gold,pulse);self.cargoStroke.Thickness=full and 2 or 2+pulse*.5 end
- self.testMode.Visible=false
- r.prestige.Position=UDim2.fromOffset(12,46);r.prestige.Size=UDim2.fromOffset(math.min(244,w-136),32);r.prestige.Visible=not hidden
- r.objective.Position=UDim2.fromOffset(12,84);r.objective.Size=UDim2.fromOffset(math.min(350,w-136),44);r.objective.Visible=not hidden and not fighting and h>=400
- r.objectiveText.TextSize=12
- for i,button in {r.fleet,r.cards} do
-  button.Position=UDim2.fromOffset(w-102+(i-1)*48,6);button.Size=UDim2.fromOffset(44,44);button.Visible=not hidden
-  local caption=i==1 and r.fleetText or r.cardsText
-  caption.TextSize=14;caption.Position=UDim2.fromOffset(0,27);caption.Size=UDim2.new(1,0,0,17)
-  for _,icon in button:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then
-   icon.Position=UDim2.fromOffset(10,0);icon.Size=UDim2.fromOffset(24,24)
-  end end
+ local age=now-(self.gainAt or -10);self.gain.Visible=age<.85
+ self.gain.Position=UDim2.fromOffset(0,52-age*8);self.gain.TextTransparency=math.clamp((age-.5)/.35,0,1)
+ local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
+ local working=activity.assigned;local delivering=activity.delivering
+ if working>0 or delivering>0 then self.hasWorked=true end
+ local showRecall=working>0 or delivering>0
+ self.dock.Visible=not hidden and (showRecall or fighting)
+ local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
+ local actions=(showRecall and 1 or 0)+(fighting and 1 or 0);local bw=touch and 80 or 100
+ local dockWidth=math.min(w-24,180+actions*(bw+6));local reserve=touch and 116 or 12
+ self.dock.Size=UDim2.fromOffset(dockWidth,40);self.dock.Position=UDim2.fromOffset((w-dockWidth)/2,h-reserve-40)
+ local statusWidth=dockWidth-actions*(bw+6)
+ self.status.Size=UDim2.fromOffset(statusWidth,40);self.order.Size=UDim2.new(1,-20,1,0)
+ self.order.Text=fighting and 'Fleet fighting' or full and 'Backpack full' or string.format('%d mining · %d hauling',working,delivering)
+ local x=statusWidth+6
+ for _,entry in ipairs({{r.recall,showRecall},{r.evade,fighting}}) do
+  entry[1].Visible=entry[2];if entry[2] then entry[1].Position=UDim2.fromOffset(x,0);entry[1].Size=UDim2.fromOffset(bw,40);x+=bw+6 end
  end
- local contextWidth=math.min(w-24,360)
- local contextY=self.dock.Visible and dockY-64 or h-reserve-56
- r.context.Size=UDim2.fromOffset(contextWidth,56);r.context.Position=UDim2.fromOffset((w-contextWidth)/2,contextY)
- r.contextTitle.Position=UDim2.fromOffset(10,3);r.contextTitle.Size=UDim2.new(1,-116,0,24);r.contextTitle.TextSize=16
- r.contextDetail.Position=UDim2.fromOffset(10,27);r.contextDetail.Size=UDim2.new(1,-116,0,23);r.contextDetail.TextSize=14
- r.contextDetail.TextWrapped=false;r.contextDetail.TextTruncate=Enum.TextTruncate.AtEnd
- r.contextButton.Position=UDim2.new(1,-100,0,6);r.contextButton.Size=UDim2.fromOffset(94,44);r.contextButton.TextSize=16
- for _,icon in r.context:GetChildren() do if icon:IsA('Frame') and icon.Name:sub(1,5)=='Icon_' then icon.Visible=false end end
- r.enemy.Position=UDim2.fromOffset((w-280)/2,52);r.enemy.Size=UDim2.fromOffset(math.min(280,w-24),36)
+ r.recall.Text=touch and 'Recall' or 'Recall [R]';r.evade.Text=touch and 'Evade' or 'Evade [Q]'
+ r.unload.Visible=false;r.test.Visible=false;r.context.Visible=false
+ self.hint.Visible=not hidden and h>=400 and not self.hasWorked and not self.dock.Visible
+ self.hint.Text=touch and 'Tap a rock to send your drone' or 'Click a rock · drag to queue'
+ self.hint.Size=UDim2.fromOffset(math.min(w-24,380),24);self.hint.Position=UDim2.fromOffset((w-math.min(w-24,380))/2,h-reserve-32)
+ r.enemy.Position=UDim2.fromOffset((w-math.min(280,w-24))/2,bottom+8);r.enemy.Size=UDim2.fromOffset(math.min(280,w-24),36)
  local toastWidth=math.min(350,w-24)
- r.toast.Size=UDim2.fromOffset(toastWidth,38);r.toast.Position=UDim2.fromOffset((w-toastWidth)/2,r.enemy.Visible and 94 or 52)
- if h<400 then r.toast.Visible=false end
+ r.toast.Size=UDim2.fromOffset(toastWidth,42);r.toast.Position=UDim2.fromOffset((w-toastWidth)/2,bottom+(r.enemy.Visible and 50 or 8))
 end
 
 function HUD:destroy()
  self.connection:Disconnect()
  self.worldLabels:Disconnect()
- if self.tween then self.tween:Cancel() end
 end
 return HUD
 

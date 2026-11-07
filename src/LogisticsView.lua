@@ -38,11 +38,6 @@ function View.start(ctx)
   if self.open and ctx.onOpen then ctx.onOpen() end
   if ctx.onVisibility then ctx.onVisibility() end
  end
- local trigger=U.button(root,UDim2.fromOffset(0,96),UDim2.fromOffset(100,36),'Drones [O]',function()
-  if units(run().storage)>=(profile().storageCapacity or 120) then self.tab='Storage' end
-  setOpen(not self.open)
- end,C.accent)
- trigger.Name='OpenDroneYard';trigger.TextSize=15
  local targetCycle=U.button(root,UDim2.fromOffset(0,138),UDim2.fromOffset(100,36),'Fleet',function() self:cycle() end,C.accent)
  targetCycle.Name='CarrierTargetCycle';targetCycle.TextSize=15;targetCycle.Visible=false
  local carrierReturn=U.button(root,UDim2.fromOffset(0,180),UDim2.fromOffset(100,36),'Return carrier',function() self:recall() end,C.mineral)
@@ -90,9 +85,13 @@ function View.start(ctx)
   b.TextSize=15;table.insert(purchases,{button=b,price=price,owned=alreadyOwned})
   return cardHeight
  end
- for index,name in ipairs({'Drones','Transport','Storage'}) do
-  tabs[name]=U.button(sheet,UDim2.fromOffset(0,82),UDim2.fromOffset(130,36),name,function() self.tab=name;signature='' end,name=='Drones' and C.accent or C.paper)
-  tabs[name].LayoutOrder=index
+ local pages={'Drones','Transport','Storage','Fleet','Cards'}
+ for index,name in ipairs(pages) do
+  tabs[name]=U.button(sheet,UDim2.fromOffset(0,82),UDim2.fromOffset(130,36),name,function()
+   if name=='Fleet' or name=='Cards' then setOpen(false);local action=name=='Fleet' and ctx.openFleet or ctx.openCards;if action then action() end
+   else self.tab=name;signature='' end
+  end,name=='Drones' and C.accent or C.paper)
+  tabs[name].LayoutOrder=index;tabs[name].Name='YardTab_'..name
  end
  render=function()
   for _,child in ipairs(body:GetChildren()) do child:Destroy() end
@@ -174,20 +173,17 @@ function View.start(ctx)
  end
  function self:update(view,fighting)
   if ctx.hidden() and self.open then setOpen(false) end
-  layer.Visible=self.open;trigger.Visible=not ctx.hidden();bar.Visible=not ctx.hidden() and not self.open and #(owned().carriers or {})>0
+  layer.Visible=self.open;bar.Visible=not ctx.hidden() and not self.open and #(owned().carriers or {})>0
   local touch=UIS.TouchEnabled;local short=view.Y<400
   local pockets=root:FindFirstChild('BackpackTools')
   local yardTop=pockets and pockets.Visible and (pockets.Position.Y.Offset+pockets.Size.Y.Offset+8) or 96
-  trigger.Position=UDim2.fromOffset(view.X-132,yardTop);trigger.Size=UDim2.fromOffset(120,36)
   local stored=units(run().storage);local capacity=profile().storageCapacity or 120
-  trigger.Text=stored>=capacity and 'Storage full' or touch and 'Buy drones' or 'Buy drones [O]'
-  trigger.Visible=trigger.Visible and not (short and fighting)
   local w=math.min(490,view.X-24);local h=math.min(568,view.Y-24)
   if w~=width or h~=height then
    width=w;height=h;contentWidth=w-36;signature=''
    sheet.Size=UDim2.fromOffset(w,h);sheet.Position=UDim2.fromOffset((view.X-w)/2,(view.Y-h)/2)
    title.Size=UDim2.new(1,-88,0,32);balance.Size=UDim2.new(1,-68,0,24)
-   for i,name in ipairs({'Drones','Transport','Storage'}) do tabs[name].Position=UDim2.fromOffset(14+(i-1)*(w-28)/3,82);tabs[name].Size=UDim2.fromOffset((w-28)/3-6,36) end
+   for i,name in ipairs(pages) do tabs[name].Position=UDim2.fromOffset(14+(i-1)*(w-28)/#pages,82);tabs[name].Size=UDim2.fromOffset((w-28)/#pages-4,40);tabs[name].TextSize=16 end
    local footerHeight=contentWidth<340 and 52 or 37
    body.Position=UDim2.fromOffset(14,128);body.Size=UDim2.fromOffset(w-28,math.max(32,h-128-footerHeight-20))
    foot.Position=UDim2.fromOffset(18,h-footerHeight-11);foot.Size=UDim2.new(1,-36,0,footerHeight)
@@ -269,6 +265,7 @@ function View.start(ctx)
       if node:IsA('LuaSourceContainer') or node:IsA('ProximityPrompt') or node:IsA('BillboardGui') then node:Destroy()
       elseif node:IsA('BasePart') then node.Anchored=true;node.CanCollide=false;node.CanTouch=false;node.CanQuery=false;node.LocalTransparencyModifier=0 end
      end
+     if class=='Carrier' or class=='Backpack' then DroneOutline.attach(clone) end
      clone.Parent=ctx.localFX;local hidden={}
      for _,node in ipairs(source:GetDescendants()) do if node:IsA('BasePart') then hidden[node]=node.LocalTransparencyModifier;node.LocalTransparencyModifier=1 end end
      local record={samples={},view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}
@@ -301,7 +298,7 @@ function View.start(ctx)
    for _,connection in ipairs(record.connections) do connection:Disconnect() end
    record.view:Destroy();if source.Parent then for node,value in pairs(record.hidden) do if node.Parent then node.LocalTransparencyModifier=value end end end
   end
-  trigger:Destroy();targetCycle:Destroy();carrierReturn:Destroy();bar:Destroy();layer:Destroy()
+  targetCycle:Destroy();carrierReturn:Destroy();bar:Destroy();layer:Destroy()
   if self.fieldMark then self.fieldMark:Destroy() end
  end
  return self

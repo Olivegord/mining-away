@@ -64,7 +64,11 @@ check('first affordable power purchase increases real mining throughput',functio
 end)
 local boughtId
 check('sale earnings buy a permanent second miner and prices increase without rerolling traits',function()
- move(home);local payload=quote({droneType='Laser'});input('BuyDrone',payload)
+ local printerBefore=scene.printer.Position
+ scene.printer.Position=home+Vector3.new(0,0,40);move(scene.printer.Position)
+ assert((characterRoot(p).Position-home).Magnitude>30,'printer probe must be outside the old home radius')
+ local payload=quote({droneType='Laser'});input('BuyDrone',payload)
+ scene.printer.Position=printerBefore
  assert(data(p).run.wallet.Quartz==0 and #data(p).fleet==2 and #p.drones==2)
  local owned=data(p).fleet[2];boughtId=owned.id
  assert(owned.type=='Blue' and owned.role=='Striker' and owned.base.miningDPS==30 and data(p).purchasedDrones==1)
@@ -79,7 +83,10 @@ check('earned sales unlock prestige even after money was spent on upgrades and d
  local pre=Pro.prestigePreview(data(p));assert(pre.eligible and pre.miningBonusBefore==0 and pre.miningBonusAfter==.25)
  local oldRun=data(p).run.id;local payload=quote({confirm=true})
  move(field.center);input('Prestige',payload);assert(data(p).prestiges==0)
- move(scene.prestigeStation.Position);input('Prestige',payload)
+ local prestigeBefore=scene.prestigeStation.Position
+ scene.prestigeStation.Position=home+Vector3.new(40,0,20);move(scene.prestigeStation.Position)
+ assert((characterRoot(p).Position-home).Magnitude>30,'prestige probe must be outside the old home radius')
+ input('Prestige',payload);scene.prestigeStation.Position=prestigeBefore
  assert(data(p).prestiges==1 and data(p).run.id~=oldRun and #data(p).fleet==3 and #p.drones==3)
  assert(data(p).fleet[1].id==firstId and data(p).fleet[2].id==boughtId)
  assert(not next(data(p).run.shopLevels) and data(p).run.wallet.Quartz==0 and data(p).run.saleEarnings==0 and Pro.cargoUnits(data(p))==0)

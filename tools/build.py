@@ -72,6 +72,8 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
+ if any(name in names for name in ('AbilityView','LaserShowcase','PackView','LogisticsView')) and 'DroneOutline' not in names:
+  names=('DroneOutline',)+tuple(names)
  if 'Cards' in names and 'Packs' not in names:
   names=tuple(n for name in names for n in (('Packs','Cards') if name=='Cards' else (name,)))
  if 'Profile' in names and 'Consumables' not in names:
@@ -95,7 +97,7 @@ def module_bundle(names):
 def bundle():
  return module_bundle(('Shops','ShopStands','DroneAbilities','DroneCatalog','DroneRoles','Consumables','ConsumableService','Config','Feel','Mining','RockCascade','ResourcePlacement','OreDrops','Rules','Profile','Packs','Cards','Persistence','DroneConfig','DroneRoleEffects','MiningDiscoveries','MapLayout','HarborLighting','Daylight','Facets','NativeMeadow','World','Logistics','PackDelivery'))+(ROOT/'src/Server.lua').read_text()
 def client_bundle():
- return module_bundle(('Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','Packs','CardView','PackView','ShopView','AbilityView','Consumables','ConsumableView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
+ return module_bundle(('DroneOutline','Shops','Feel','Mining','RockCascade','Feedback','AudioFeedback','SentryMotion','Soundscape','BeamVFX','WorkEffects','DroneCatalog','CrystalGeometry','RockDamage','DroneFX','SpecialDroneMotion','MotionBuffer','RoleVisuals','RoleEffectView','Presentation','LaserShowcase','UILayout','Interface','Packs','CardView','PackView','ShopView','AbilityView','Consumables','ConsumableView','PickupMotion','PickupView','FractureView','CommandView','LogisticsView'))+(ROOT/'src/Client.lua').read_text()
 def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''

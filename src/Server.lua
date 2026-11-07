@@ -97,7 +97,7 @@ local function atStation(p,station,radius)
  local hr=characterRoot(p);return hr and (hr.Position-station.Position).Magnitude<(radius or 18)
 end
 local function atHome(p)
- local hr=characterRoot(p);return hr and (hr.Position-home).Magnitude<30
+ local hr=characterRoot(p);return hr and ((hr.Position-home).Magnitude<30 or (scene.printer and (hr.Position-scene.printer.Position).Magnitude<16))
 end
 -- Orders belong to a field footprint with a forgiving walking margin.
 local function nearMiningField(position,field)
@@ -1780,7 +1780,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
+ if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
   notice(p,'Visit the Pack Shop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false

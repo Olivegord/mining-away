@@ -9,17 +9,31 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `eb7d2217fca91672917b9151c8e6d0d4c9cbddcad34bef61daf259169181e939` | Free direct-pack-order snapshot; map and unrelated Sources preserved. |
+| Native-file SHA-256 | `1eda8427de5a0926bed60d6caf623046a8dd57c7f7748f333ee91d9a04a21a40` | Drone-outline/station-UI snapshot; map and unrelated Sources preserved. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio gameplay | **Verified November 6, 2026** | All seven installed Sources match `4f1bd48`. One E directly orders a zero-price crate with no menu; claim and second free order passed. Studio remains open, stopped in Edit mode. |
-| Published Roblox version | **v19** | Existing DRONEREVOLUTION Save to Roblox and Publish completed. Native Version History shows v19 **Published**, version timestamp 8:02 PM Pacific November 6, 2026; v18 Previously Published. Source/native revision `4f1bd48`; native hash above. |
+| Shared Studio gameplay | **Verified November 6, 2026** | Final outline/station-UI Sources verified in the existing shared document. Desktop and simulated phone HUD, real Ruby sale, printer purchase and free-pack claim passed. Studio remains open, stopped in Edit mode. |
+| Published Roblox version | **v19; new UI release pending** | Last verified publication is v19 (`4f1bd48`). The new outline/station-UI release is installed and tested, but publication has not yet been observed. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Drone readability, mineral visibility and station UI — latest follow-up
+
+All gameplay drone types, display drones, company couriers, scrap bots, carriers and flying backpacks receive a clean dark silhouette outline on their actual client-rendered models. The outline is owned and destroyed with each model; it does not change geometry, movement, timing or damage. Capsules are not outlined.
+
+The permanent HUD now contains all five named mineral wallets (Quartz, Ruby, Cobalt, Violet and Emerald) and backpack space. It uses compact dark panels and mineral accents, reflows on narrow screens, and retains contextual Recall/Evade and earned tool controls. Removed permanent Prestige, Shops, Fleet, Cards, Buy drones, next-objective and duplicate E-action panels, plus M/O menu shortcuts and clicking drones to open their roster remotely. Native prompts are the entry points: the existing Printer opens Drone yard with purchases, transport, storage, Fleet and Cards inside; Prestige has its own repaired prompt; each mineral shop opens only its own upgrades. Walking beyond a station closes its menus. The crate keeps its existing reveal/choice flow.
+
+Locked-field rocks were explicitly hidden by the client; they are now rendered normally so the next minerals are visible goals. Unlock, ownership, line-of-sight and sentry rules remain server-enforced. Fixed station-distance mismatches: the printer's near side and far side both support purchases, and prestige validates the actual prestige station instead of also requiring the unrelated home radius.
+
+Native single-player checks in the existing shared DRONEREVOLUTION session: five currencies visible; normal Ruby unlock/mining/converter sale paid **14 Ruby** and updated its HUD counter; a **60 Quartz** permanent Miner purchase at the printer (33.305 studs from home) added the second drone; a free Rare pack delivered, opened with one native E hold and claimed exactly one card; the real prestige prompt opened its review; menus closed after leaving and M/O stayed inactive. The final narrow viewport (515×339) had all mineral names fitting, **2/2 gameplay drone outlines**, no removed shortcut objects, and visible rocks in all five fields. Desktop (1167×653) and simulated phone (750×381) were inspected as well. Console was empty; simulator restored to default; Play stopped. See [native observations](review/drone-readability-native.json).
+
+Production-logic checks: core loop passes nine scenarios in both production and Studio modes, now explicitly testing printer purchase and earned prestige outside the old home radius. Shop/profile/card, persistence, shop server, physical mining and client refinement suites pass. The shop harness now scopes its appended fixture to avoid Luau's 200-local limit. A stale Studio-preview assertion was updated to the already-authorized 100 starting Quartz; production still starts at zero. Native preservation verifies all non-Source chunks and unrelated/backup Sources are byte-identical to the previous canonical snapshot.
+
+Release snapshot SHA-256: **`1eda8427de5a0926bed60d6caf623046a8dd57c7f7748f333ee91d9a04a21a40`**. All three Script Sync roots were connected; initial seven Source fingerprints matched Git before edits. No other game chat was active, and fetching origin found no newer collaborator Git revision. Publication is pending below. Limits: no native multiplayer/late-join, real touch/gamepad, production DataStore reconnect/restart or owner enjoyment approval. The independent full visual/multiplayer acceptance gate remains unverified.
 
 ## Free packs and direct purchase — latest follow-up
 

@@ -53,7 +53,7 @@ local function createDrone(parent)
   elseif item:IsA('Beam') or item:IsA('Trail') or item:IsA('ParticleEmitter') or item:IsA('Light') then item.Enabled=false end
  end
  drone:ScaleTo(drone:GetScale()*.69)
- drone.Parent=parent
+ DroneOutline.attach(drone);drone.Parent=parent
  return drone
 end
 

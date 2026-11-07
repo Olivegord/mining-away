@@ -9,16 +9,12 @@ local icons={
 function V.render(U,parent,options)
  local p=options.profile;local key=options.shop;local width=options.width
  local color=key=='Quartz' and Color3.fromRGB(41,139,214) or Color3.fromRGB(unpack(Shops.COLORS[key]))
- local tabs=Instance.new('ScrollingFrame');tabs.Name='ShopTabs';tabs.Size=UDim2.fromOffset(width,48)
- tabs.BackgroundTransparency=1;tabs.BorderSizePixel=0;tabs.ScrollBarThickness=2;tabs.ScrollingDirection=Enum.ScrollingDirection.X;tabs.AutomaticCanvasSize=Enum.AutomaticSize.X
- tabs.CanvasSize=UDim2.fromOffset(0,0);tabs.ZIndex=parent.ZIndex+1;tabs.Parent=parent
- local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal;row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,6);row.Parent=tabs
- for index,shop in ipairs(Shops.ORDER) do
-  local b=U.button(tabs,UDim2.fromOffset(0,0),UDim2.fromOffset(82,44),shop,function() options.onShop(shop) end,shop==key and color or U.palette.paper)
-  b.TextSize=16;b.LayoutOrder=index;b.Name='ShopTab_'..shop
+ if not Shops.unlocked(p,key) then
+  local index=table.find(Shops.ORDER,key) or 1
+  U.text(parent,UDim2.fromOffset(8,10),UDim2.fromOffset(width-16,80),'Unlock '..key..' at the '..Shops.ORDER[math.max(1,index-1)]..' shop.',20,U.palette.text,true)
+  return
  end
- if not Shops.unlocked(p,key) then return end
- local grid=U.frame(parent,UDim2.fromOffset(0,56),UDim2.fromOffset(width,0));grid.BackgroundTransparency=1;grid.Name='UpgradeGrid';grid.AutomaticSize=Enum.AutomaticSize.Y
+ local grid=U.frame(parent,UDim2.fromOffset(0,4),UDim2.fromOffset(width,0));grid.BackgroundTransparency=1;grid.Name='UpgradeGrid';grid.AutomaticSize=Enum.AutomaticSize.Y
  local columns=width>=560 and 2 or 1;local gap=8
  local layout=Instance.new('UIGridLayout');layout.SortOrder=Enum.SortOrder.LayoutOrder;layout.FillDirectionMaxCells=columns
  layout.CellPadding=UDim2.fromOffset(gap,gap);layout.CellSize=UDim2.new(1/columns,-gap*(columns-1)/columns,0,130);layout.Parent=grid

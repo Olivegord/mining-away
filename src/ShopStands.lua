@@ -20,6 +20,24 @@ local function addSign(station,text,height)
 end
 function Stands.mount(map,home,template)
  local stations={}
+ local prestige=map:FindFirstChild('PrestigeStation',true)
+ if prestige then
+  prestige:SetAttribute('Interaction','Prestige')
+  local prompt=prestige:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
+  prompt.ActionText='Review prestige';prompt.ObjectText='PRESTIGE'
+  prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=prestige
+  addSign(prestige,'PRESTIGE',3)
+ end
+ local printer=map:FindFirstChild('Printer',true)
+ if printer then
+  printer:SetAttribute('Interaction','Printer')
+  local prompt=printer:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
+  prompt.ActionText='Buy drones / manage fleet';prompt.ObjectText='DRONE YARD'
+  prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=printer
+  addSign(printer,'DRONE YARD',3)
+ end
  addSign(template,'PACK SHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
  packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'

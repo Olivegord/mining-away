@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='mineral-shop-tests-') as directory:
     server = pathlib.Path(directory) / 'shop-server.lua'
     server.write_text((ROOT / 'tests/mock-roblox.lua').read_text() + '\n' +
                       (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' +
-                      (ROOT / 'tests/shop-server.integration.lua').read_text())
+                      ';(function()\n' + (ROOT / 'tests/shop-server.integration.lua').read_text() + '\nend)()')
     subprocess.run([str(luau / 'luau'), str(server)], check=True)
 subprocess.run([sys.executable, str(ROOT / 'tests/live-build.spec.py')], check=True)
 print('PASS current shop domain/server checks, all source and bundle syntax, deterministic live-capture preservation. Not Studio visual/multiplayer QA.')
