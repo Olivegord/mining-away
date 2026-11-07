@@ -1761,7 +1761,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end)
 end
 local packDelivery=PackDelivery.new({
- root=root, players=Players, home=home, station=scene.packStation, healthy=healthy, atHome=atHome,
+ root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, healthy=healthy, atHome=atHome,
  inAssault=activeAssault, characterRoot=characterRoot,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
  offer=function(p) return data(p).run.pendingOffer end,
@@ -1962,7 +1962,6 @@ local function buyShopUpgrade(p,pl,payload)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
- if action=='PackHold' then packDelivery:input(p,payload,now);return end
  if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1

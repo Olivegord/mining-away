@@ -49,8 +49,42 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  part:SetAttribute('Tier',offer.packTier)
  part:SetAttribute('Approach',sideways)
  part:SetAttribute('DeliveryAt',now)
+ local prompt=Instance.new('ProximityPrompt')
+ prompt.Name='OpenPack';prompt.ActionText='Open pack';prompt.ObjectText='Company delivery'
+ prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
+ prompt.MaxActivationDistance=Packs.Range;prompt.RequiresLineOfSight=false
+ prompt.Exclusivity=Enum.ProximityPromptExclusivity.OnePerButton
+ prompt.HoldDuration=Packs.stageDuration(1);prompt.Enabled=false;prompt.Parent=part
+ local delivery={part=part,prompt=prompt,id=offer.id,tier=offer.packTier,stage=1,readyAt=now+Packs.DeliveryTime}
+ p.packDelivery=delivery
+ prompt.PromptButtonHoldBegan:Connect(function(player)
+  local clock=o.getClock()
+  if player~=p.player or delivery.opening or delivery.start or not self:canHold(p,delivery,clock) then return end
+  delivery.start=clock;delivery.continueUntil=nil;delivery.endAt=nil
+  local elapsed=Packs.duration(delivery.stage)-Packs.stageDuration(delivery.stage)
+  part:SetAttribute('HoldAt',clock-elapsed)
+ end)
+ prompt.Triggered:Connect(function(player)
+  local clock=o.getClock()
+  if player~=p.player or delivery.opening or not delivery.start or not self:canHold(p,delivery,clock) then return end
+  if clock-delivery.start+0.06<Packs.stageDuration(delivery.stage) then self:release(delivery);return end
+  delivery.start=nil;delivery.endAt=nil
+  if delivery.stage<delivery.tier then
+   delivery.stage+=1;delivery.continueUntil=clock+.8
+   prompt.HoldDuration=Packs.stageDuration(delivery.stage)
+   prompt.ObjectText=Packs.Tiers[delivery.stage]..' pack'
+   part:SetAttribute('HoldStage',delivery.stage)
+  else
+   delivery.opening=true;prompt.Enabled=false
+   o.open(p,delivery.id,function(status)
+    if status=='rejected' and p.packDelivery==delivery then delivery.opening=false;self:release(delivery) end
+   end)
+  end
+ end)
+ prompt.PromptButtonHoldEnded:Connect(function(player)
+  if player==p.player and delivery.start and not delivery.opening then delivery.endAt=o.getClock()+.08 end
+ end)
  part.Parent=self.folder
- p.packDelivery={part=part,id=offer.id,tier=offer.packTier,readyAt=now+Packs.DeliveryTime}
 end
 
 function Delivery:clear(p)
@@ -60,9 +94,12 @@ end
 
 function Delivery:release(delivery)
  delivery.start=nil
- delivery.untilAt=nil
- delivery.renewed=nil
+ delivery.continueUntil=nil;delivery.endAt=nil
+ delivery.stage=1
+ delivery.prompt.HoldDuration=Packs.stageDuration(1)
+ delivery.prompt.ObjectText='Company delivery'
  delivery.part:SetAttribute('HoldAt',nil)
+ delivery.part:SetAttribute('HoldStage',1)
 end
 
 function Delivery:canHold(p, delivery, now)
@@ -70,39 +107,6 @@ function Delivery:canHold(p, delivery, now)
  if now<delivery.readyAt or not o.healthy(p) or o.inAssault(p) then return false end
  local hr=o.characterRoot(p)
  return hr and (hr.Position-delivery.part.Position).Magnitude<=Packs.Range
-end
-
-function Delivery:input(p, payload, now)
- local delivery=p.packDelivery
- if not delivery or type(payload)~='table' or payload.offerId~=delivery.id then return end
- if payload.phase=='End' then
-  if delivery.start then
-   if not self:finish(p,delivery,now) then self:release(delivery) end
-  end
-  return
- end
- if delivery.opening or not self:canHold(p,delivery,now) then return end
- if payload.phase=='Begin' and not delivery.start and now>=(delivery.nextBegin or 0) then
-  delivery.nextBegin=now+.16
-  delivery.start=now
-  delivery.untilAt=now+Packs.HoldLease
-  delivery.part:SetAttribute('HoldAt',now)
- elseif payload.phase=='Keep' and delivery.start and now<=delivery.untilAt then
-  delivery.untilAt=now+Packs.HoldLease
-  delivery.renewed=true
- end
-end
-
-function Delivery:finish(p,delivery,now)
- if not delivery.renewed or now>delivery.untilAt or now-delivery.start<Packs.duration(delivery.tier) or not self:canHold(p,delivery,now) then return false end
- delivery.opening=true
- delivery.start=nil
- self.options.open(p,delivery.id,function(status)
-  if status=='rejected' and p.packDelivery==delivery then
-   delivery.opening=false;self:release(delivery)
-  end
- end)
- return true
 end
 
 function Delivery:step(p, now)
@@ -128,9 +132,10 @@ function Delivery:step(p, now)
   elseif now-delivery.openedAt>1.15 then self:clear(p) end
   return
  end
- if not delivery.start then return end
- if now>delivery.untilAt or not self:canHold(p,delivery,now) then self:release(delivery);return end
- self:finish(p,delivery,now)
+ delivery.prompt.Enabled=now>=delivery.readyAt and not delivery.opening
+ if delivery.continueUntil and now>delivery.continueUntil then self:release(delivery) end
+ if delivery.start and delivery.endAt and now>=delivery.endAt then self:release(delivery) end
+ if delivery.start and not self:canHold(p,delivery,now) then self:release(delivery) end
 end
 
 return Delivery

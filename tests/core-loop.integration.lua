@@ -146,20 +146,26 @@ check('paid delivery stays sealed until the owner finishes a nearby uninterrupte
  assert((part.Position-scene.packStation.Position).Magnitude>=7)
  input('BuyPack',request)
  assert(p.packDelivery.part==part and data(p).run.wallet.Quartz==wallet)
- local function hold(phase) input('PackHold',{phase=phase,offerId=offer.id}) end
+ local function hold(phase)
+  local current=p.packDelivery.prompt
+  if phase=='Begin' then current.PromptButtonHoldBegan:Fire(pl)
+  elseif phase=='End' then current.PromptButtonHoldEnded:Fire(pl)
+  elseif phase=='Complete' then current.Triggered:Fire(pl) end
+ end
  local choice=quote({offerId=offer.id,index=2})
  input('ChooseCard',choice);assert(#data(p).run.cards==0)
  hold('Begin');assert(not part:GetAttribute('HoldAt'))
  advance(Packs.DeliveryTime+.1);move(part.Position)
  local intruder=player(310003);players.PlayerAdded:Fire(intruder)
  intruder.Character:PivotTo(CFrame.new(part.Position))
- command.OnServerEvent:Fire(intruder,'PackHold',{phase='Begin',offerId=offer.id})
+ p.packDelivery.prompt.PromptButtonHoldBegan:Fire(intruder)
  assert(not part:GetAttribute('HoldAt'))
  players.PlayerRemoving:Fire(intruder)
  hold('Begin');assert(part:GetAttribute('HoldAt'))
- advance(.18);hold('End');assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
- advance(.2);hold('Begin');advance(Packs.HoldLease+.1)
- assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ advance(.18);hold('End');advance(.1);assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ advance(.2);hold('Begin');hold('Complete')
+ assert(not data(p).run.pendingOffer.opened,'early native completion accepted')
+ hold('End')
  hold('Begin');move(field.center);advance(.15)
  assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
  players.PlayerRemoving:Fire(pl);assert(not part.Parent)
@@ -170,7 +176,13 @@ check('paid delivery stays sealed until the owner finishes a nearby uninterrupte
  move(scene.packStation.Position+Vector3.new(12,0,0));advance(.1)
  local delivered=assert(p.packDelivery)
  advance(Packs.DeliveryTime+.1);move(delivered.part.Position);hold('Begin')
- for _=1,math.ceil(Packs.duration(offer.packTier)/.2)+1 do advance(.2);hold('Keep') end
+ for stage=1,offer.packTier do
+  advance(Packs.stageDuration(stage)+.02);hold('Complete')
+  if stage<offer.packTier then
+   assert(delivered.prompt.HoldDuration==Packs.stageDuration(stage+1))
+   hold('End');hold('Begin')
+  end
+ end
  assert(data(p).run.pendingOffer.opened and #visibleOffer().choices==3)
  input('ChooseCard',quote({offerId=offer.id,index=2}))
  assert(data(p).run.pendingOffer==nil and #data(p).run.cards==1 and data(p).run.cards[1].cardId==offer.choices[2].cardId)

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — native pack prompt and Script Sync
+
+The owner reports that the station proximity prompt consumes E before the custom crate input. Replace the custom progress GUI with a regular Roblox ProximityPrompt whose hold stages become longer. Retain the rarity colors and crate/card effects, give the crate prompt priority while nearby, and connect native Script Sync. This supersedes the earlier custom-bar requirement. The default circle restarts for each longer stage; the player keeps holding E.
+
 ## November 6 latest — standing publication permission
 
 The owner grants continuing permission to keep the existing DRONEREVOLUTION place 124078027733625, universe 10774898335, current with completed project updates. Apply this permission until revoked. Reconcile shared collaborator edits, update the canonical native file and repository, publish to the same starting place, and verify the shared Studio entry point. Routine releases require no repeated permission question. Existing restrictions on new experiences, access settings and deleting experiences continue to apply.

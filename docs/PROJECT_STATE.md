@@ -9,7 +9,7 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `cc34ccf939829819eb3478020723499519daf63e0a87c0044f555ac302638bee` | Hash of the integrated pack delivery and shop build. |
+| Native-file SHA-256 | `21c3cba41088fbf76586b19e00b3ba593e53d4de1911e5863079c1b429fa42d8` | Native-prompt release snapshot; geometry and unrelated Sources preserved. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -20,6 +20,14 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Native prompt and Script Sync — November 6 follow-up
+
+The latest source/native-file revision is the commit introducing this section (`git log -1 -- src/PackDelivery.lua`). Installed into the existing shared Studio Edit document after exact baseline comparison. The native file SHA-256 is `21c3cba41088fbf76586b19e00b3ba593e53d4de1911e5863079c1b429fa42d8`. Publication of this follow-up is pending; v14 remains the last verified release until the publication record below is updated.
+
+The custom input/progress GUI and PackHold remote protocol are removed. Server-owned native hold events validate owner, range, readiness and elapsed stage duration. A short deferred release handles Roblox firing HoldEnded before Triggered. The crate keeps the existing delivery/colors/sounds, saved offer and floating-card reveal. A real one-player Studio Epic purchase completed all three native hold stages with one continuous E hold; native event ordering and sealed-to-opened state were observed. No custom HoldToOpenPack GUI existed, and the shop prompt was suppressed. Play is stopped. The core-loop suite passes all nine scenarios in both production and Studio configurations, including unauthorized/early/interrupted events, stage timing, reconnect and one-card selection. Touch/gamepad, Legendary native playback, multiplayer and production DataStore reconnect remain unverified.
+
+All three native Script Sync roots report SyncedAsRoot: `ServerScriptService`, `ReplicatedStorage.Shared`, and `StarterPlayer.StarterPlayerScripts`, mapped under `studio/`. A disposable `.luau` file created a ModuleScript, disk edits reached Studio, Studio edits reached disk, and disk deletion removed the instance. Existing backup LocalScripts remain disabled and the active ClientDroneControl remains enabled. `tools/script_sync.py` exports the seven bundled Sources without opening or saving an `.rbxl`; optional `--watch` exports src changes. A conflict check preserves unknown edits. The exporter creation/no-op/conflict checks passed. Root connections are local to this workstation; other computers connect their roots once as described in COLLABORATION.md. F8 is assigned to Sync to... on this workstation.
 
 ## Standing publication permission and reconciliation
 
@@ -42,7 +50,7 @@ Earlier instructions named the historical place as the sole destination and trea
 
 ## Current implementation
 
-An unmarked copy of the original drone delivers each paid upgrade pack between the buyer and the pack shop. The server saves the tier and the three choices with the debit, withholds the choices until the owner completes the hold near the crate, and saves the opened state before showing the cards. A reconnect redelivers a sealed pack with its original tier and choices. Previously disclosed offers remain available. The shop interaction reaches 14 studs and the landed crate hold reaches 8 studs. Keyboard, gamepad and pointer/touch use the custom crate bar.
+An unmarked copy of the original drone delivers each paid upgrade pack between the buyer and the pack shop. The server saves the tier and the three choices with the debit, withholds the choices until the owner completes the hold near the crate, and saves the opened state before showing the cards. A reconnect redelivers a sealed pack with its original tier and choices. Previously disclosed offers remain available. The shop interaction reaches 14 studs and the landed crate hold reaches 8 studs. Keyboard, gamepad and pointer/touch now use a standard Roblox ProximityPrompt. The nearby owner crate suppresses map prompts locally so the shop cannot consume E.
 
 | Crate | Box odds | Hold | Color progression |
 | --- | ---: | ---: | --- |
@@ -51,7 +59,7 @@ An unmarked copy of the original drone delivers each paid upgrade pack between t
 | Epic | 8% | 2.65 s | Grey → yellow → green |
 | Legendary | 2% | 4.80 s | Grey → yellow → green → violet |
 
-These timings, odds and the violet finish are tuning choices. Colored stages progressively reduce bar speed. Non-common boxes favor rarer existing cards among otherwise equally ranked offers. Cards rise from the crate when it is visible to the camera and retain the existing card effects and choice behavior. The reveal uses depth-of-field blur behind the cards.
+These timings, odds and the violet finish are tuning choices. The stock circle restarts through progressively longer hold stages (0.42, 0.90, 1.33, 2.15 seconds), continuing while the player holds the same key. Roblox does not retime its running stock circle when HoldDuration changes; separate native stages provide the increasing wait without a custom bar. Non-common boxes favor rarer existing cards among otherwise equally ranked offers. Cards rise from the crate when it is visible to the camera and retain the existing card effects and choice behavior. The reveal uses depth-of-field blur behind the cards.
 
 Revision `88ba15d` connects the ordinary one-drone start to immediate selling, visible purchases and prestige:
 

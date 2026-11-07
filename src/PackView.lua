@@ -63,29 +63,24 @@ function PackView.new(options)
  focus.Name='PackWorldBlur';focus.FocusDistance=1.2;focus.InFocusRadius=.65
  focus.FarIntensity=0;focus.NearIntensity=0;focus.Parent=game:GetService('Lighting')
  self.focus=focus
- local board=Instance.new('BillboardGui')
- board.Name='HoldToOpenPack';board.Size=UDim2.fromOffset(160,48)
- board.StudsOffsetWorldSpace=Vector3.new(0,1.7,0);board.AlwaysOnTop=true
- board.Active=true;board.Enabled=false;board.ResetOnSpawn=false
- local U=options.interface
- local button=U.button(board,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',nil,Color3.fromRGB(23,30,40))
- button.Name='PackHoldInput';button.Text='';button.Selectable=false
- local label=U.text(button,UDim2.fromOffset(8,4),UDim2.new(1,-16,0,24),'',15,Color3.new(1,1,1),true)
- label.TextXAlignment=Enum.TextXAlignment.Center
- local track=U.frame(button,UDim2.fromOffset(9,33),UDim2.new(1,-18,0,6),Color3.fromRGB(49,61,77))
- U.corner(track,3)
- local fill=U.frame(track,UDim2.fromScale(0,0),UDim2.fromScale(0,1),colors[1])
- U.corner(fill,3)
- self.board=board;self.label=label;self.fill=fill;board.Parent=options.player.PlayerGui
  self.connections={
-  button.InputBegan:Connect(function(input)
-   if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then self:begin(input) end
-  end),
   UIS.InputEnded:Connect(function(input)
-   if input==self.input then self:release() end
+   if input.KeyCode==Enum.KeyCode.E or input.KeyCode==Enum.KeyCode.ButtonX
+    or input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+    for _,record in pairs(self.records) do
+     record.held=false
+     if record.prompt then record.prompt:InputHoldEnd() end
+    end
+   end
   end),
-  UIS.WindowFocusReleased:Connect(function() self:release() end),
+  UIS.WindowFocusReleased:Connect(function()
+   for _,record in pairs(self.records) do
+    record.held=false
+    if record.prompt then record.prompt:InputHoldEnd() end
+   end
+  end),
  }
+ self.suppressed={}
  return self
 end
 
@@ -97,28 +92,35 @@ function PackView:setFocus(active)
  self.focusTween:Play()
 end
 
-function PackView:signal(phase, source)
- self.options.command:FireServer('PackHold',{phase=phase,offerId=source:GetAttribute('OfferId')})
+function PackView:bindPrompt(record,source)
+ local prompt=source:FindFirstChild('OpenPack')
+ if not prompt then return end
+ record.prompt=prompt
+ local function resume()
+  if record.resuming or not record.held then return end
+  record.resuming=true
+  task.defer(function()
+   if not source.Parent or not record.held then record.resuming=false;return end
+   prompt:InputHoldEnd();prompt.Enabled=false
+   task.wait()
+   if source.Parent and record.held then
+    prompt.Enabled=true
+    task.wait()
+    if source.Parent and record.held then prompt:InputHoldBegin() end
+   end
+   record.resuming=false
+  end)
+ end
+ record.connections={
+  prompt.PromptButtonHoldBegan:Connect(function() record.held=true end),
+  prompt:GetPropertyChangedSignal('HoldDuration'):Connect(resume),
+ }
 end
 
-function PackView:begin(input)
- if self.input or not self.target or self.options.hidden() or self.options.busy() then return end
- self.input=input;self.holding=self.target
- self.sentAt=os.clock()
- self:signal('Begin',self.holding)
-end
-
-function PackView:release()
- if self.holding and self.holding.Parent then self:signal('End',self.holding) end
- self.input=nil;self.holding=nil
-end
-
-function PackView:inputBegan(input,processed)
- local key=input.KeyCode
- if key~=Enum.KeyCode.E and key~=Enum.KeyCode.ButtonR2 then return false end
- if processed or not self.target or self.options.hidden() or UIS:GetFocusedTextBox() then return false end
- self:begin(input)
- return true
+local function disposeRecord(record)
+ if record.connections then for _,connection in ipairs(record.connections) do connection:Disconnect() end end
+ record.model:Destroy()
+ if record.courier then record.courier:Destroy() end
 end
 
 function PackView:origin(offerId)
@@ -210,38 +212,47 @@ function PackView:update(now)
   local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier')
   if stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
    local record=self.records[source]
-   if not record then record=createCrate(o.parent);self.records[source]=record end
+   if not record then record=createCrate(o.parent);self.records[source]=record;self:bindPrompt(record,source) end
    record.visible=true
    local age=now-stamp
-   local progress,color,holdAt,openedAt=self:render(record,source,now,age,tier)
+   local _,_,_,openedAt=self:render(record,source,now,age,tier)
    if source:GetAttribute('Owner')==player.UserId and hr and hum and hum.Health>0 and not openedAt
     and age>=Packs.DeliveryTime and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden() then
     self.target=source
-    local touch=UIS.PreferredInput==Enum.PreferredInput.Touch
-    local gamepad=UIS.PreferredInput==Enum.PreferredInput.Gamepad
-    self.label.Text=progress>=1 and 'Opening…' or (holdAt and Packs.Tiers[record.stage] or (touch and 'Hold to open' or (gamepad and 'Hold R2 to open' or 'Hold E to open')))
-    self.fill.Size=UDim2.fromScale(progress,1);self.fill.BackgroundColor3=color
+
    end
   end
  end end
- if self.holding then
-  if self.target~=self.holding then self:release()
-  elseif os.clock()-self.sentAt>=Packs.RenewEvery then self.sentAt=os.clock();self:signal('Keep',self.holding) end
+ for source,record in pairs(self.records) do
+  if record.prompt and not record.resuming then
+   record.prompt.Enabled=source==self.target and not o.busy()
+  end
  end
- self.board.Adornee=self.target;self.board.Enabled=self.target~=nil
+ local map=o.world:FindFirstChild('Map')
+ if self.target and map then
+  if not self.suppressing then
+   for _,prompt in ipairs(map:GetDescendants()) do
+    if prompt:IsA('ProximityPrompt') then self.suppressed[prompt]=prompt.Enabled;prompt.Enabled=false end
+   end
+   self.suppressing=true
+  end
+ elseif self.suppressing then
+  for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
+  table.clear(self.suppressed);self.suppressing=false
+ end
  for source,record in pairs(self.records) do
   if not record.visible then
-   record.model:Destroy();if record.courier then record.courier:Destroy() end
+   disposeRecord(record)
    self.records[source]=nil
   else record.visible=false end
  end
 end
 
 function PackView:destroy()
- self:release()
  for _,connection in ipairs(self.connections) do connection:Disconnect() end
- self.board:Destroy();self.focus:Destroy()
- for _,record in pairs(self.records) do record.model:Destroy();if record.courier then record.courier:Destroy() end end
+ self.focus:Destroy()
+ for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
+ for _,record in pairs(self.records) do disposeRecord(record) end
  table.clear(self.records)
 end
 return PackView

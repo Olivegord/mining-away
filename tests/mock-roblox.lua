@@ -59,6 +59,9 @@ local Instance={}
 function Instance.new(class)
  local i=setmetatable({_p={ClassName=class,Name=class,Position=Vector3.zero,CFrame=CFrame.new(),Size=Vector3.one,Color=Color3.new(1,1,1),Transparency=0,CanQuery=true,CanCollide=true,Enabled=true},_children={},_attrs={},_signals={}},IT)
  if class=='RemoteEvent' then i.OnServerEvent=signal() end
+ if class=='ProximityPrompt' then
+  i.PromptButtonHoldBegan=signal();i.PromptButtonHoldEnded=signal();i.Triggered=signal()
+ end
  return i
 end
 function IM:Play() self.Playing=true end

@@ -4,8 +4,6 @@ local Packs = {
  DeliveryTime = 1.7,
  DropTime = 1.27,
  DepartTime = 2.45,
- HoldLease = .8,
- RenewEvery = .24,
  Tiers = {'Common', 'Rare', 'Epic', 'Legendary'},
 }
 local ends = {.42, 1.32, 2.65, 4.8}
@@ -20,6 +18,10 @@ end
 
 function Packs.duration(tier)
  return ends[tier]
+end
+
+function Packs.stageDuration(stage)
+ return ends[stage]-(ends[stage-1] or 0)
 end
 
 function Packs.sample(tier, elapsed)

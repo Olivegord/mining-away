@@ -12,7 +12,17 @@ The shared project is **https://github.com/Olivegord/mining-away**. Its integrat
 
 `AGENTS.md` supplies repository instructions to Codex; the linked handoff supplies the project's decisions and current state. The original private chat is not copied into another person's account. See [OpenAI's guidance on repository instructions](https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex#agents-and-plans).
 
-The actual editable map is included at **`build/DRONE_GAME.rbxl`**. Open only that file in Studio. Do not use `assets/*.rbxl`, an old review ZIP, a differently named Home tile or another copy as the working game.
+The canonical map/recovery snapshot is **`build/DRONE_GAME.rbxl`**. Normal script work uses the existing shared **DRONEREVOLUTION** cloud document with native Script Sync; do not reopen/overwrite a local file for each source change. Do not use `assets/*.rbxl`, an old review ZIP or another game as a working copy.
+
+## Native Script Sync
+
+Studio is connected to the three tracked folders under `studio/`: **ServerScriptService**, **Shared** (ReplicatedStorage.Shared), and **StarterPlayerScripts**. Run `python3 tools/script_sync.py` after editing `src/`, or keep `python3 tools/script_sync.py --watch` running. It bundles only the seven managed Sources, refuses unmerged disk/Studio edits, and leaves additional files alone. Merge edits to generated bundles back into `src/` before exporting again. Commit generated Sources with their modular inputs. The ignored `build/script-sync-state.json` records the last exported hashes locally.
+
+On another computer, open the existing shared place, select each corresponding service/folder, choose **Sync to...**, and select the repository's `studio` directory. Confirm existing-file merge choices only after comparing Sources. Verify `InstanceFileSyncService:GetStatus(root) == Enum.InstanceFileSyncStatus.SyncedAsRoot`. Sync paths are machine-local and require this initial connection per checkout. This workstation has F8 assigned to **Sync to...**.
+
+Files can create scripts directly: `.legacy.luau` is a Legacy Script, `.local.luau` a LocalScript, and `.luau` a ModuleScript. New server/client RunContext scripts may use `.server.luau`/`.client.luau`. Deleting/renaming files also changes Studio instances. Existing disabled backup LocalScripts remain disabled; do not recreate or enable them. The three roots were verified, and disposable ModuleScript creation, disk-to-Studio editing, Studio-to-disk editing and deletion were tested in the actual shared Edit session. See [Roblox Script Sync](https://create.roblox.com/docs/scripting/sync).
+
+Script Sync updates the open Edit document; restart Play to run changed server code. It does **not** publish the game. Publish the existing shared place after tests, then verify Version History. The canonical native snapshot must still preserve authored map and unrelated scripts; never replace shared map edits with an older local snapshot.
 
 ## Read access and contribution access
 
@@ -32,6 +42,6 @@ Roblox and GitHub access are independent. MideDibber's Playtest/Edit access to D
 
 ## Updating the shared Roblox game
 
-The owner grants standing permission to publish completed updates to this existing destination. Reconcile newer shared edits, then use the canonical document and **File → Publish As / Publish to Roblox As → DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
+The owner grants standing permission to publish completed updates to this existing destination. Reconcile newer shared edits, verify the selected shared document IDs, then use **File → Publish** in that existing shared Studio document. Use Publish As only when recovering from the canonical native snapshot, targeting **DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
 
 Verify publication success and the destination, then record the exact Git revision/native hash, publication time and Roblox version or other direct verification evidence in `docs/PROJECT_STATE.md`. If publication is not observed, say **unverified**. Do not create a new game, change sharing permissions, or delete/archive either experience as part of an ordinary update.
