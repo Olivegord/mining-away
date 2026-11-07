@@ -9,14 +9,14 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `21c3cba41088fbf76586b19e00b3ba593e53d4de1911e5863079c1b429fa42d8` | Native-prompt release snapshot; geometry and unrelated Sources preserved. |
+| Native-file SHA-256 | `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896` | Continuous slowdown snapshot; geometry and unrelated Sources preserved. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio gameplay | **Verified November 6, 2026** | Existing shared document matches all seven Sources of `20b3c80`, with three native Script Sync roots connected. The Epic native prompt completed with a continuous E hold before v16 publication. Authored map and Studio starter balance retained. |
-| Published Roblox version | **v16** | File → Publish completed in the existing shared DRONEREVOLUTION document. Version History shows v16 **Published**, timestamp 7:27 PM Pacific November 6, 2026; v14 is Previously Published. Gameplay revision `20b3c80`, native SHA-256 `21c3cba41088fbf76586b19e00b3ba593e53d4de1911e5863079c1b429fa42d8`. |
+| Shared Studio gameplay | **Verified November 6, 2026** | Existing shared Edit document matches all seven Sources of `2ddef68`. Continuous keyboard test and final Rare pointer-hold test passed before v18 publication. Script Sync retained. |
+| Published Roblox version | **v18** | Existing DRONEREVOLUTION File → Publish completed; native Version History shows v18 **Published**, OliveGord, 7:56 PM Pacific November 6, 2026. Source/native revision `2ddef68`; snapshot SHA-256 `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896`. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
@@ -27,7 +27,7 @@ The owner rejected the v16 circle restarts. The new implementation holds one nat
 
 Installed through the three existing Script Sync roots in shared DRONEREVOLUTION (place 124078027733625, universe 10774898335). Native verification: an interrupted Common hold stayed sealed, then a runtime-only 4.8-second presentation probe recorded exactly one begin, one end, one trigger and zero fill regressions. Sampled fill rose from 64% at 0.67s to 84% at 1.60s, 95% at 2.93s and 99% at 4.40s. That probe extended an actual purchased Common crate's visible tier/duration only in Play; it was not a naturally rolled Legendary test. A card was claimed normally. A fresh Play with final Sources bought an actual Rare crate and opened it with a real pointer hold on the visible indicator. The indicator was visually inspected in Studio. All nine core-loop checks pass in both production and Studio configurations, including a single unchanged hold timestamp/duration and native End-before-Triggered ordering. Real touch/gamepad, multiplayer and production DataStore reconnect remain unverified.
 
-Canonical snapshot SHA-256: `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896`. Source-only refresh preserved authored map and unrelated/backup Sources. Play stopped after tests. Publication of this follow-up is pending; v16 remains the last verified public version until the release record is updated.
+Canonical snapshot SHA-256: `3519828953aeb5097658dc9a633838870c442caf4bb4fc3d1ab30f50968b8896`. Source-only refresh preserved authored map and unrelated/backup Sources. Play stopped after tests. Published source/native revision **`2ddef68`** as **v18** to existing DRONEREVOLUTION place **124078027733625**, universe **10774898335**. Native Version History shows v18 **Published**, OliveGord, **7:56 PM Pacific November 6, 2026**; v16 Previously Published. Before publication all seven installed Source lengths/fingerprints matched local bundles. Studio quit was confirmed by the app inventory after release.
 
 ## Native prompt and Script Sync — November 6 follow-up
 
