@@ -21,6 +21,10 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
+## Current delivery gap
+
+Studio Play on **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**, was inspected after `fd10794` shipped to GitHub. Its server lacked the delivery system and the Studio starter balance. The updated canonical file is ready for reconciliation. The shared-place update requires publication authorization, a check for newer collaborator edits, and verification in a fresh Studio session on the shared place.
+
 ## What caused the confusion
 
 Earlier instructions named the historical place as the sole destination and treated the local file and cloud titles as interchangeable. The actual current `.rbxl` was excluded from Git, so another checkout could have Sources and historical captures without the real authored document. This handoff corrects that: one tracked native file, one shared repository, explicit IDs, separate publication evidence, and a short durable context for other Codex sessions. Older review notes describe the revisions they tested; they do not override the identities above.

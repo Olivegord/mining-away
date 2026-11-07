@@ -17,6 +17,7 @@
 - If publishing is explicitly authorized in a later request, update the existing DRONEREVOLUTION starting place with the canonical file. Check for newer collaborator edits before overwriting. Do not create another experience/place, silently target 136098934779395, or change access settings. Naming the destination here is not permission to publish.
 - Do not delete/archive either Roblox experience based on this naming confusion. Preserve and reconcile unique work first; cloud deletion/archive needs an explicit request. Immutable `assets/*.rbxl` and recovery files are references, not competing playables.
 - Every handoff must state the Git revision, canonical file, Roblox destination, publication status, and any remaining verification limits. Keep `docs/PROJECT_STATE.md` current after substantial work.
+- The owner's normal test entry point is **DRONEREVOLUTION** in Studio. For every gameplay handoff, check what that entry point actually runs and state the result before telling the owner where to test. If it is behind, report the mismatch explicitly and finish any authorized synchronization yourself. When shared-place updates require permission, ask for that permission once with the tested revision and exact destination. Do not make opening a local file the normal handoff. This rule does not itself authorize publication.
 
 ## Game and collaboration rules
 
