@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — one shared repository and exact Roblox identities
+
+The owner requests durable rules in `AGENTS.md` so local, published and shared games are never confused again, and a **public, shared GitHub repository** that a friend can open with Codex and use the same context. Keep the existing `Olivegord/mining-away` repository, include the actual canonical `build/DRONE_GAME.rbxl`, and carry the decisions and remaining work in [project state](PROJECT_STATE.md) and [collaboration instructions](COLLABORATION.md). Do not create a second repository or require a fork.
+
+Creator Hub inspection verified that **DRONEREVOLUTION** (place **124078027733625**, universe **10774898335**) is shared with **MideDibber**, with Playtest and Edit access. **Drone Blower revolution** (place **136098934779395**, universe **10773006567**) is a separate older online experience. The owner's subsequent Publish As question concerned updating the existing DRONEREVOLUTION game with the latest canonical local file. This corrects older claims below that treated the names as interchangeable or 136098934779395 as the sharing destination. The old place remains the provenance of the immutable capture.
+
+The latest local file was verified, but publication to DRONEREVOLUTION has not been verified. Instructions explaining how to publish are not a completed publication or permission to publish automatically. GitHub sharing is authorized; creating/publishing/deleting Roblox experiences is not authorized by this request. Public repository visibility enables reading; direct write access for the friend requires their actual GitHub username, which the owner will provide later.
+
 ## November 6 latest — restore the simple buy, sell, upgrade, prestige loop
 
 The owner clarifies: **“the core should be simple. this is a roblox game. buy sell, upgrade, prestige. thsi loop is non existent.”** This supersedes the earlier direction away from progression. Prioritize a connected, understandable loop from the actual one-drone start: mine and collect, sell directly for spendable minerals, buy visible improvements or a permanent miner, then prestige for permanent strength. Keep logistics optional. Do not add complementary-worker dependencies, digging systems or another complicated field mechanic. Studio should start with the actual player economy; preview crews remain explicit developer actions. Retain snap-size cubic rocks, outward currency arcs, one drone type per rock, original assets and accepted feedback. Close Studio when finished.

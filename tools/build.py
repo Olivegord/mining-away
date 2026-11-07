@@ -9,7 +9,11 @@ from inspect_original import lz4,string,u32
 from import_lighting import append_model,refs
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 EXPECTED='480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b'
-ACTIVE_PLACE_ID=136098934779395
+# The shared destination is distinct from the place that supplied the capture.
+ACTIVE_PLACE_ID=124078027733625
+ACTIVE_UNIVERSE_ID=10774898335
+ACTIVE_EXPERIENCE_NAME='DRONEREVOLUTION'
+REFERENCE_PLACE_ID=136098934779395
 ACTIVE_EXPECTED='b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd'
 ACTIVE_BASE=ROOT/'assets/drone-blower-revolution-base.rbxl'
 CANONICAL_OUTPUT=ROOT/'build/DRONE_GAME.rbxl'
@@ -93,8 +97,9 @@ def editor_layout_script():
  """Materialize the requested map in Studio Edit without running gameplay."""
  return module_bundle(('Config','Shops','World','ShopStands'))+'''
 assert(not game:GetService('RunService'):IsRunning(),'Stop Play before editing the map')
-assert(game.PlaceId==136098934779395 or game.PlaceId==0,'Wrong experience')
-local root=assert(workspace:FindFirstChild('MiningAway'),'Open the Drone Blower revolution capture')
+assert(game.PlaceId==124078027733625 or game.PlaceId==0,'Wrong experience: expected DRONEREVOLUTION or the canonical local file')
+assert(game.PlaceId==0 or game.GameId==10774898335,'Wrong DRONEREVOLUTION universe')
+local root=assert(workspace:FindFirstChild('MiningAway'),'Open the canonical DRONE_GAME.rbxl')
 assert(root:GetAttribute('EditableMap'),'Expected the preserved editable map')
 local map=assert(root:FindFirstChild('Map'));local fields=assert(root:FindFirstChild('Fields'))
 local hub=assert(map:FindFirstChild('HubPad',true));local home=root:GetAttribute('DepotHome') or hub.Position
@@ -131,7 +136,7 @@ def live_source_payload():
  for path,(cls,module) in LIVE_SOURCES.items():
   source=bundle() if module=='Server' else client_bundle() if module=='Client' else (ROOT/'src'/f'{module}.lua').read_text()
   sources[path]={'class':cls,'source':source,'sha256':hashlib.sha256(source.encode()).hexdigest()}
- return {'place_id':ACTIVE_PLACE_ID,'captured_base_sha256':ACTIVE_EXPECTED,'sources':sources}
+ return {'place_id':ACTIVE_PLACE_ID,'universe_id':ACTIVE_UNIVERSE_ID,'experience_name':ACTIVE_EXPERIENCE_NAME,'canonical_file':str(CANONICAL_OUTPUT.relative_to(ROOT)),'captured_from_place_id':REFERENCE_PLACE_ID,'captured_base_sha256':ACTIVE_EXPECTED,'sources':sources}
 def string_values(d,p,count):
  values=[]
  for _ in range(count):

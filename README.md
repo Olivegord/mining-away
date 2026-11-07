@@ -1,154 +1,54 @@
-# Drone Blower revolution
+# DRONEREVOLUTION
 
-**One game file only:** `build/DRONE_GAME.rbxl`, place **136098934779395**. Open, edit, install and save that same native document. The plain `Drone Blower revolution.rbxl` is a retired duplicate and must not be recreated. Immutable files in `assets/` are reference inputs, not alternate games.
+**One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The current integration branch is **`codex/restore-feel-prestige`**.
 
-**Roblox destination/share link:** [Drone Blower revolution](https://www.roblox.com/games/136098934779395). `DRONE_GAME.rbxl` is its local editable master, not another experience. The Studio Home entry named “DRONEREVOLUTION” is not an alternate master for this repository. This pass does **not** publish to Roblox; the Roblox link does not yet include these local changes.
+**Open this game file:** [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl). It is checked into this repository and contains the authored map and installed game scripts.
 
-November 6 current gameplay candidate: the one-drone start now connects **mine → sell → buy upgrades/miners → prestige**. Sell pays immediately; Mining power starts at 20 Quartz; a permanent Miner starts at 60; each prestige adds its earned drone and +25% permanent base mining power. Studio starts with the real economy, and preview crews are opt-in developer controls. See [core-loop changes and verification](docs/review/CORE_LOOP.md). Run `PYTHONDONTWRITEBYTECODE=1 python3 tools/test_core_loop.py`.
+**Existing shared Roblox game:** [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625), place **124078027733625**, universe **10774898335**. MideDibber has Playtest and Edit access, verified November 6, 2026. Publication of the latest local file to that game is **not yet verified**. GitHub updates do not publish Roblox.
 
-November 5 gameplay candidate: rocks now drop stored **Orbital Beacons** and **Scrap Capsules**, replacing short multiplier boosts. Separate three-charge backpack pockets let the player choose when and where to use them; early guaranteed discoveries teach both actions, and later chance has an eight-break dry-streak limit. See the [progression research](docs/PROGRESSION_AND_CONSUMABLES_RESEARCH.md) and [implementation, controls and validation](docs/review/CONSUMABLE_GAMEPLAY.md). Run `python3 tools/test_consumables.py /path/to/luau`. The canonical native file was refreshed offline; this candidate has not been visually or multiplayer playtested in Studio.
+**Drone Blower revolution** (place **136098934779395**) is a separate older Roblox experience. It supplied the historical reference capture. It is not another name for the shared game.
 
-November 4 source candidate: [reference-driven beam overhaul and complete family inventory](docs/review/REFERENCE_BEAM_OVERHAUL.md). Timed native ribbons, concave star ignition, distinct support/combat/specialist effects and independent aftermath preserve the existing gameplay clocks. Run `python3 tools/test_beam_vfx.py /path/to/luau`, then export `build/source-payload.json` for the same canonical native document. The cloud checkout lacks that actual editable file and Studio access; video comparison, screenshots and final visual approval remain **UNVERIFIED**.
+## Start here with Codex
 
-Run `python3 tools/consolidate_game.py --previous-commit bdb76e2` from the local project to apply the current Sources to a native file containing that exact previous revision and safely remove the redundant generated copy. If Sources already match, omit the previous-commit argument. Unknown editor changes or a missing native editable file stop the operation without deleting anything. Close the redundant Studio document after its unique edits are reconciled; keep only the canonical document open.
+Open this same repository in Codex and start with:
 
-`python3 tools/build.py` validates the existing canonical file. Use `--previous-commit` or `--previous-payload` for a guarded source refresh. After committing, `python3 tools/release.py` refreshes/packages only that file, stamping its exact revision and checksum. It fails if the real native file is absent. CI exports Sources only; it never rebuilds a competing game from a reference capture. See [single-game workflow](docs/SINGLE_GAME_WORKFLOW.md).
+> Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Continue this existing game. Verify the current revision and canonical file before making changes. Do not create another game or publish to Roblox.
 
-New review candidate: [seven special miners, four-bay carriers, flying backpack and orbital storage](docs/review/SPECIAL_DRONES_LOGISTICS.md). This update builds on the current game branch and preserves its map, cards, mineral shops, mining roles and audio. Full storage launches pay the matching mineral currencies; carriers keep mining cleared fields after you leave. Optional auto-launch unlocks after the first shipment.
+[Project state and prior decisions](docs/PROJECT_STATE.md) records the current implementation, exact native-file checksum, accepted direction, rejected approaches and remaining verification. [Collaboration](docs/COLLABORATION.md) explains shared access, contributions and native-file ownership. Codex's repository instructions live in [AGENTS.md](AGENTS.md).
 
-Run `python3 tools/test_special_logistics.py /path/to/luau` for the current feature checks, then `python3 tests/live-build.spec.py` for exact source-only capture preservation. Open only the canonical editable workspace after updating it in place. This cloud update has not been installed into an existing Studio session or visually playtested; historical screenshots below do not show the new drones.
+## Current gameplay
 
-Latest cloud candidate: [committed mining flight and vivid 3D cards](docs/review/COMMITTED_MINING_FLIGHT.md). Healthy saves keep flight moving while work pauses; stations and shell-to-core jobs stay committed; breakers physically recover overhead; cards have nine vivid mechanic families and larger art. New source/renderer/saving regressions and deterministic live-capture builds run in CI. Engine feel, visual/multiplayer acceptance and the requested Catch a Brainrot video study remain **NOT VERIFIED**; the video players buffered without visual frames.
+The current candidate connects **mine → sell → buy upgrades/miners → prestige**:
 
-The owner authorizes routine Studio stop/install/save/restart without repeated questions. The polished editable game has been reopened and initialized in Studio. [Long-session performance findings and remaining limits](docs/review/LONG_SESSION_LAG.md): unnecessary rock/effect render work is removed, but the reported lag is not yet confirmed fixed.
+- A new player starts with one permanent drone and a 40-ore backpack.
+- Sell at the existing Converter pays spendable mineral currency immediately.
+- Mining power begins at 20 Quartz; a permanent Miner begins at 60 Quartz.
+- Prestige adds an earned drone and +25% permanent base mining power; existing permanent drones survive.
+- Rocks are cubic, snap smaller without spinning, and eject drops upward and outward. One drone type may work on a rock at a time.
+- Orbital Beacons and Scrap Capsules are stored consumables, placed deliberately through backpack pockets.
 
-Latest polish: orbital columns shrink into noisy full-height embers; the former scout is now a Cultivator that grows replacement rocks; blue/gold/green rock outlines explain selectable, queued and working orders; mineral fragments glow, trail and burst on confirmed collection. [Implementation and validation limits](docs/review/POLISH_CULTIVATOR.md). Saved source/build changes do not hot-load the owner's running Play session.
+See [core-loop changes and actual test evidence](docs/review/CORE_LOOP.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
 
-Latest mining pass: [blackening rock layers, large boulders, sustained orbital melting, powered breaker hits and the always-open 10× health test field beside Quartz](docs/review/MINING_IMPACT.md). Full backpacks permit mining and pause pickup. The owner-requested Play session is running; project files and review builds can continue to be saved while they test. Earlier [collectible mining and hardware upgrades](docs/review/MINING_EXPERIENCE.md) remain.
+## Work on the same file
 
+Edit the readable Luau in `src/`. Only seven allowlisted native Sources are refreshed into `build/DRONE_GAME.rbxl`; authored geometry, assets and backup scripts remain intact. `assets/*.rbxl` are immutable historical references, not playable alternatives. Follow the [single-game workflow](docs/SINGLE_GAME_WORKFLOW.md).
 
-**Editable Workspace:** the requested layout is applied directly in Studio Edit. Open `build/DRONE_GAME.rbxl` to inspect the baked map. There is no separate playable preservation build; capture-preservation checks run only in temporary test fixtures. `python3 tools/build.py --editor-layout-script build/apply-editable-workspace.lua` emits the reproducible Command Bar/MCP edit script; apply it to the canonical document in Edit mode, then save that same file. See [editable-map evidence](docs/review/EDITABLE_WORKSPACE.md).
-
-November 1 correction: [visible depot shops and standalone upgrades](docs/review/SHOP_VISIBILITY_CORRECTION.md). Spawn is beside central Quartz, the nearest field. N-Gon is inspiration; explicit combo cards are removed.
-
-Current November 1 work: [mineral shops and tutorial-based upgrade cells](docs/review/MINERAL_SHOPS.md), [Orbiter/Scrapper gadgets and smoother swarm movement](docs/review/DRONE_GADGETS.md). Fresh profiles start with Quartz; each mineral shop spends its own balance and sells the next field/shop. Packs spend Quartz. New focused checks run without Studio Play via `python3 tools/test_shops.py /path/to/luau` and `python3 tools/test_gadgets.py /path/to/luau`. The UI, busy multiplayer scenes and gameplay satisfaction still need the owner's engine playtest; historical validation below does not approve this new candidate.
-
-The active game is the existing Roblox place **136098934779395**, in this same [Olivegord/mining-away repository](https://github.com/Olivegord/mining-away). The owner corrected the target on October 31: the older local Mining Away build is historical, not the current playable artifact. Preserve the captured live map, assets, card UI, tactical HUD, role drones, audio and discoveries.
-
-The verified native capture is `assets/drone-blower-revolution-base.rbxl` (SHA-256 `b08036b400c77451e609f5fa3a4f7f04cd5dcc2030f35a76de12ecc278f532cd`). `python3 tools/build.py` validates or refreshes the existing canonical native document; it does not rebuild from this reference capture. The builder changes only Source for the two live controllers and five exact-path live modules; all other raw chunks and untouched Source values in the existing native document remain byte-identical, including script enablement, geometry, terrain, lighting and ServerStorage backups. Names alone are unsafe because the capture contains same-name backup scripts.
-
-For reproduction, use Python 3.9+ and the `zstd` command (verified installed version 1.5.7; alternatively the Python `zstandard` package). After committing the final source, `python3 tools/release.py` validates/refreshes the same canonical place and writes `build/drone-blower-revolution-review.zip`, and `build/revision.json` with the source commit, capture checksum, output checksum and place ID. It refuses dirty releases unless `--allow-dirty` explicitly labels an unfinished review build. `python3 tools/build.py --source-payload /absolute/path/payload.json` exports the same seven exact-path sources for controlled edits to the existing Studio place. Neither command publishes or creates an experience.
-
-The capture remains immutable. Refreshing retains a non-playable `.rbxl.previous` recovery file and atomically updates the same canonical native document. Capture builders are temporary test-fixture APIs only; normal build/release commands cannot generate another game in `build/`. Review ZIPs exclude immutable `.rbxl` inputs and contain exactly one playable file.
-
-The owner will test this integrated candidate themselves and requested no further test runs. The latest backpack/swarm behavior is described immediately below; later historical sections retain obsolete hold/card descriptions for reference. New binary-preservation coverage is available in `tests/live-build.spec.py`, but has not been run for this live-target integration. Earlier tests and motion evidence below concern earlier artifacts and do not validate this candidate.
-
-## Latest effects pass
-
-Mining now has three differently sized sphere Parts pulsing with sine waves, transparent cylinder Part lasers with a wide halo/thin core, restored original particles/contact glows, cutting sparks and fracture bursts. Every drone has flight trails and exhaust. Couriers show pickup, committed parcel transfer, loaded flight, unloading and confirmed sale; Medics visibly charge before repairing. These are runtime effects in the existing place. See [work effects and validation limits](docs/review/WORK_EFFECTS.md).
-
-## Latest owner changes: backpack and moving swarm
-
-Toolbox audio adds a three-track APM background playlist, short action/reward cues, and Music/Effects controls inside the fleet menu. Neutral 13:30 daylight, softer shadows and reduced specular preserve clear native Roblox materials and the original sky. Existing crystal pops and crunches remain. See [audio, asset credits and validation limits](docs/review/AUDIO_LIGHTING.md). These changes join the same combined source-only review build.
-
-Miners fill the player's 40-unit backpack, with no individual holds. Carry it to the Converter and use **Sell / U**. Finished miners regroup around you; leaving a plot brings your working swarm along, with orders resuming on return. Couriers collect at most eight units beside you, fly to the converter, sell after arrival, and return. Medics follow other drones and repair 10 health every two seconds through an attached beam. These support roles do not mine or attack.
-
-The preview **Random loadout / T** button gives 2–5 drones with at least one miner. It changes no permanent saved ownership. Permanent types/IDs/base traits stay intact; a separate role distinguishes miners, breakers, healers and couriers. The first Blue remains the original mining drone, Red is a breaker, Green is a Medic, and alternating later Blues become Couriers.
-
-The existing plot models are ordered by increasing distance from spawn and sell: Quartz, Ruby, Cobalt, Violet, Emerald. Native Concrete, Pavement, DiamondPlate, Metal, rough mineral beds and studded Plastic add variety with reduced specular shine.
-
-The fleet uses centered uniform formations and bounded, neighbor-driven separation/passing through the original capped movement equations. Cards have two visible text elements and native SourceSans fonts. Supported 3D hierarchy: camera-local Part → SurfaceGui → ViewportFrame visual, with normal touch/controller hitboxes. See [current implementation and validation limits](docs/review/BACKPACK_SWARM.md).
-
-## Historical project notes — superseded by the latest changes above
-
-This branch originally restored the drone/mining presentation and implemented the one-drone → run cards → permanent fleet prestige loop. The following history is retained as reference; active builds use the captured Drone Blower revolution place described above.
-
-[Draft review PR #1](https://github.com/Olivegord/mining-away/pull/1) remains unmerged pending owner/Studio review.
-
-Current review branch: [`codex/restore-feel-prestige`](https://github.com/Olivegord/mining-away/tree/codex/restore-feel-prestige). Downloadable review builds, the original handoff and validation status are on the [source Page](https://chatgpt.com/space/page_80b705099bb481918ea713e1780329fe). Each release ZIP contains `revision.json` with its exact source commit and place checksum; it must say `source_dirty: false`. This candidate uses a retro parts-built map and a compact three-card comparison. Its independent [art-director gate](docs/review/ART_DIRECTOR_GATE.md) is **NOT VERIFIED** until the exact build is inspected in motion in Roblox Studio; historical screenshots do not validate it.
-
-## Game handbook
-
-Start with [docs/game/README.md](docs/game/README.md): [architecture](docs/game/architecture.md), [map reference](docs/game/map_reference.md), [full game design](docs/game/game_design.md), [implementation plan](docs/game/implementation_plan.md), [upgrades](docs/game/upgrades.md), and [every card](docs/game/upgrade_cards.md). The card catalog lists all 41 standard + 3 reserve outcomes, exact effects, targets, penalties, caps and saved legacy behavior; no pack grinding is needed to inspect it.
-
-The [expanded valley and sparse hub review](docs/review/EXPANDED_MAP.md), [Alabaster Reach and upgrades review](docs/review/ALABASTER_UPGRADES.md), current [map reference](docs/game/map_reference.md), and [UI overhaul review](docs/review/UI_OVERHAUL.md) record the presentation passes and their evidence. Source-defined maps assemble when **Play** starts.
-
-## Open the game
-
-Use only **build/DRONE_GAME.rbxl**, the canonical document for **Drone Blower revolution** (136098934779395). The immutable base is assets/drone-blower-revolution-base.rbxl. Studio uses isolated temporary Preview profiles. The owner will start the next run themselves.
-
-A fresh profile owns one permanent drone. Click individual ores to assign work; additional explicit selections queue while workers are busy. Each worker has its own 40-unit starting hold. Click **Unload** (or U) to send loaded workers to the depot; payment occurs after their arrival. Recall cancels work. The first earned-currency pack costs 40 credits.
-
-**Plot Scanner** unlocks plot commands and choosing the next stone automatically. **Auto Hauler** targets one named permanent drone: when its own hold fills it returns to unload, then resumes the assigned plot. Automation cards are run upgrades and clear on prestige. The smaller original drones work close to the minerals; manual work, full holds and delivery trips are visible without a permanent portrait bar.
-
-
-At the depot's card machine, buy a pack with earned credits. Three saved choices appear; pick exactly one. Type cards affect the named built-in type; individual cards name the server-selected permanent drone. Every modifier says **This run**. Closing/rejoining keeps the identical paid offer, target and price. A startup-rate card halves its named drone's warmup when alone; it does not double damage.
-
-Build a crew that can defeat Cobalt's original segmented pyramid. **Q / Evade** changes the crew's flank without retiring the assault roster; sentries visibly charge and fire at a frozen location, so moving before the shot can avoid it. **R / Recall** ends your participation. Destroyed drones reprint free at home after ten seconds plus two seconds of reconstruction, preserving identity, base traits and current-run cards. Reprinted drones retain their permanent identity and current run cards.
-
-At 160 cumulative sale credits, optionally confirm the first prestige at the beacon; the second milestone is 400. These first two fleet additions do not require a guarded-field victory. The third requires 2,000 credits plus one Cobalt clear. Keep the existing Blue, add exactly one permanent Red, and reset credits, cargo, cards and offer progression. Unlocked plots stay unlocked. Begin the next run with both drones. Pack spending never subtracts from cumulative sale progress. There is no permanent fleet cap or discarded earned drone; six units are covered by math/identity tests, while engine performance at larger fleets remains unprofiled.
-
-## Presentation pass
-
-The review build uses an alabaster/teal alien landscape and a compact cream HUD with original native icons, rounded headings, tactile controls, and one focused menu at a time. Cards show their exact target, effect, drawback, stacking and before/after values; adaptive desktop cards keep all three actions visible, while phone choices scroll vertically. Fleet inspection separates permanent crew from run upgrades, and prestige shows what stays and resets. See the [UI references](docs/review/UI_REFERENCES.md) and [UI validation](docs/review/UI_OVERHAUL.md). Drones retain their original shell with type trim. Client-only effects include original crystal fractures, beam/impact effects, reconstruction, and segmented sentry motion; all gameplay remains server-owned. See the [sentry review](docs/review/SENTRY_ANIMATION.md) for current motion evidence.
-
-## Mining satisfaction
-
-The [research and design rationale](docs/MINING_SATISFACTION.md) prioritizes readable consequences and useful build choices. Blue drones cut continuously; Red drones deliver charged 0.8-second impacts with 50% extra shell/core damage; Green drones echo primary fractures into one eligible nearby resource. After Plot Scanner is earned, automatic target selection considers travel, work, payout and type strengths. Manual selection remains the starting behavior. Original assets and eased flight remain, with smaller low-flying workers, faster short work hops and server-owned gameplay. Final engine motion/audio and multiplayer validation remain required.
-
-## Economy and tuning
-
-| Field | Mining work | Maximum node budget | Units / ordinary node | Credits / unit | Regrowth delay | Defense |
-|---|---:|---:|---:|---:|---:|---|
-| Landing Quartz | 1× | 12 | 10 | 1 | 8 s | Safe |
-| Ruby Grove | 1.8× | 16 | 12 | 2 | 14 s | Safe |
-| Cobalt Ridge | 3.2× | 6 | 15 | 4 | 25 s | One original pyramid, 260 HP |
-| Violet Basin | 5.2× | 9 | 16 | 7 | 35 s | Two pyramids, 390 HP each |
-| Deep Emerald | 8× | 12 | 20 | 10 | 45 s | Two pyramids, 650 HP each |
-
-A shell reserves five node-budget slots, then reveals one core and four smaller crystals. The core pays four ordinary-node yields; each shard pays one. Shell destruction pays nothing directly. Spawn separation, field insets and turret-footprint exclusion use bounded attempts; crowded fields retry rather than overlap. Ordinary growth is separate from regrowth delay. A growing resource cannot be reserved/mined.
-
-The first pack costs 40 credits and each drone starts with 40 ore capacity. The early prestige milestones are 160 and 400 sold credits with no combat requirement; later milestones rejoin the Cobalt/Violet/Emerald progression. Exact subsequent pack prices and upgrade values live in Cards.lua; permanent milestones live in Profile.MILESTONES. These are provisional design values, not measured retention results.
-
-The catalog includes Plot Scanner and Auto Hauler alongside the existing mining, combat, survival and cargo cards. New paid offers prioritize the next useful automation step while keeping three choices and one selection. Already-paid offers retain their original choices, effects and price. Server-owned per-drone cargo and delivery manifests preserve earned ore through save/reconnect boundaries; delivery crediting uses the same durable transaction/receipt system as purchases.
-
-
-## Shared expedition rules
-
-The current Studio implementation uses permanent plot unlocks. Clear a plot's guards once to retain access across prestige and reconnects. The merge preserves that newer behavior alongside manual ore orders and earned automation. Earlier timed-expedition descriptions and tests apply only to historical candidates.
-
-
-## Persistence and authority
-
-`Persistence.lua` uses UpdateAsync envelopes, unique server leases, revision fencing, bounded ordered retries and recent transaction receipts. Purchases, claims, sales and prestige commit before the UI/world report success. Lost responses reconcile the exact durable transaction, including postcommit fleet/stat rebuilds. Load/schema/lock failures spawn no default replacement profile and cannot overwrite established progress. See [docs/PERSISTENCE.md](docs/PERSISTENCE.md).
-
-Stable drone IDs, types, base traits, prestige, run cards, credits, material cargo, sale progress, offer seeds/selection IDs and the complete pending offer persist. Ordinary newly mined cargo/wins autosave every 30 seconds and on leave/shutdown; a hard crash before that save can lose that most recent unsaved gameplay delta. Economy transactions include current dirty gameplay data in the durable write. An unresolved/uncertain save pauses the owner's simulation rather than granting speculative card/prestige effects. Corrupt paid-offer targets get the documented atomic full-price migration refund rather than a reroll.
-
-Server models/logical positions, assignments, damage, resource slots, rewards, reprints and encounter gates remain authoritative. Clients render distinct local viewmodels from complete original templates using one elapsed-time-correct original movement layer; their transforms never authorize hits. Replicated attributes contain current goals, life, stages, growth timestamps and state for late joiners. Client profile snapshots omit RNG seeds and receipt ledgers. The one remote accepts bounded intent, not damage/reward multipliers or another owner's sale.
-
-## Original art and reversible build
-
-`assets/mining-away-base.rbxl` is the historical December 18, 2023 autosave, not an export of the live 2026 place. Its SHA256 is `480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b`. Original extracted scripts are in `reference/original/src/` for direct comparison.
-
-The builder changes only the two controller source properties and Script/LocalScript enabled states. Every other binary asset/hierarchy/property chunk remains byte-identical. At runtime known experimental display props move into a preserved ServerStorage reference folder; original spawn, Converter, Ruby/Cobalt geometry and dormant construct integrate into the ground-level map. New trees/trails/depot stations extend that world instead of adding an elevated overlay. Original script/loader/plugin text is never executed by build tools.
-
-Active guards clone the actual `construct` meshes (`bottemseg`, `lowerseg`, `upperseg`, `topseg`, `eye`, `eyecase`, `spawnEye`) and rig. The complete original/editor history remains in the source and full ServerStorage template. Only redundant editor `AnimSaves` history is omitted from live guard clones: the original construct has 3,444 instances, 3,429 of which are that editor hierarchy. This avoids replicating thousands of unused objects per enemy without deleting the source animation data.
-
-Rollback restores reviewed Sources into the same canonical native document. Do not open a source capture as a second game. A `.rbxl.previous` file is recovery data, not an alternate playable release.
-
-## Reproduce and inspect
-
-Use official pinned Luau 0.744 binaries (`luau`, `luau-compile`, `luau-analyze`). GitHub Actions downloads the pinned archive and verifies its SHA256.
+For Python tooling use Python 3.9+ and a Zstandard decoder (`zstd` or the Python `zstandard` package). Tests use official Luau 0.744 tools, pinned in [CI](.github/workflows/validate.yml).
 
 ```sh
-python3 tools/test.py /path/to/luau-tools
-python3 tests/binary.spec.py
-python3 tests/geometry.spec.py
-python3 tools/release.py
+python3 tools/build.py
+python3 tools/test_core_loop.py /path/to/luau-tools
+python3 tests/single-game.spec.py
 ```
 
-`release.py` packages only `build/DRONE_GAME.rbxl`, source text in `build/drone-blower-revolution-review.zip`, and exact `build/revision.json`. It requires the actual canonical native file; it never manufactures a replacement from a capture. Source modules are bundled lexically into the preserved server/client entrypoints; they are not disconnected installer snippets.
+`build.py` validates the tracked native document against current Sources. After changing Sources, refresh using the exact previous installed commit or payload; unknown native edits must be reconciled. Save and commit the same canonical native file with the source change. Stop Play and close Studio when finished.
 
-The new tests cover original-equation 30/60/120/144 Hz motion, growth/three stages, all domain boundaries, actual-server/API-double behavior, real persistence logic with a fault-injecting storage double, source asset preservation and finite progression models. They replace the old three-drone baseline expectations. See [docs/review/VALIDATION.md](docs/review/VALIDATION.md), [progression model](docs/review/PROGRESSION_SIMULATION.md), [geometry/layout review](docs/review/ORIGINAL_GEOMETRY_AND_LAYOUT.md), and [UI review](docs/UI_REVIEW.md).
+After committing, `python3 tools/release.py` packages exactly that native file, source text and revision/preservation reports in `build/drone-blower-revolution-review.zip`. The historical ZIP name is an artifact name, not a Roblox destination. The command does not publish Roblox.
 
-**Earlier Studio status (superseded by [latest review](docs/review/ALABASTER_UPGRADES.md)):** an intermediate polish build was reopened from disk and entered Play successfully; its depot, quarry lighting, material cleanup and HUD were inspected. Final gameplay, mesh/audio permissions, original-versus-repaired video, true visual parity, touch text layout, real DataStore operation, network latency and two-client/late-join behavior remain unverified. The Mac locked before the gameplay walkthrough; subsequent source fixes still need a final Studio pass. See [polish review](docs/review/POLISH_PASS.md). The historical source lacks the live-only RockCrack/RockBreak Sound objects; the renderer preserves those named references when available and otherwise uses quiet engine-bundled impact sounds verified in the installed Studio content directory. The outside-engine map schematic and API doubles are not screenshots or multiplayer proof. Follow [docs/STUDIO_ACCEPTANCE.md](docs/STUDIO_ACCEPTANCE.md) before release. Nothing was published to Roblox.
+## Sharing and publishing
+
+Share **this repository's URL** for code, context and the current `.rbxl`. Public visibility allows reading; direct contributions to the shared repository require a GitHub collaborator invitation. Roblox permissions and GitHub permissions are independent.
+
+Updating the online game is a separate, explicitly authorized action: open `build/DRONE_GAME.rbxl`, choose **File → Publish As / Publish to Roblox As**, select the existing **DRONEREVOLUTION** experience and its starting place **124078027733625**, then **Overwrite**. Reconcile any newer collaborator edits first. Verify the resulting published version and update [project state](docs/PROJECT_STATE.md). Do not create a new experience/place or delete either existing cloud game as part of ordinary synchronization.
+
+Additional references: [architecture](docs/game/architecture.md), [persistence](docs/PERSISTENCE.md), [original-feel parity](docs/ORIGINAL_FEEL_PARITY.md), [game handbook](docs/game/README.md), [Studio acceptance](docs/STUDIO_ACCEPTANCE.md).

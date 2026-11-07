@@ -1,7 +1,8 @@
 -- Bundle after production BeamVFX. Temporary Edit-only component preview.
 -- Run only in the existing canonical editable document; never save this folder.
 assert(not game:GetService('RunService'):IsRunning(),'This preview requires stopped Studio Edit mode')
-assert(game.PlaceId==136098934779395 or game.PlaceId==0,'Wrong game')
+assert(game.PlaceId==124078027733625 or game.PlaceId==0,'Wrong game: expected DRONEREVOLUTION or the canonical local file')
+assert(game.PlaceId==0 or game.GameId==10774898335,'Wrong DRONEREVOLUTION universe')
 assert(workspace:FindFirstChild('MiningAway'),'Open the existing editable workspace')
 local camera=assert(workspace.CurrentCamera,'No native camera')
 local previous=workspace:FindFirstChild('MiningAwayBeamReview');if previous then previous:Destroy() end

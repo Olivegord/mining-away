@@ -1,4 +1,4 @@
-name: Validate and build Drone Blower revolution
+name: Validate DRONEREVOLUTION
 
 on:
   push:
@@ -42,10 +42,12 @@ jobs:
           python3 tools/test_smooth_animation.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate sole-game release and consolidation guards
         run: python3 tests/single-game.spec.py
+      - name: Verify the shared native file matches current Sources
+        run: python3 tools/build.py
       - name: Export source payload for the existing editable game
         run: python3 tools/build.py --source-payload build/source-payload.json
-      # CI has no native editable Studio document. Never reconstruct a second
-      # playable from the older immutable capture to satisfy an artifact job.
+      # The canonical native document is tracked. Never reconstruct a second
+      # playable from a historical reference capture.
       - name: Upload source payload
         uses: actions/upload-artifact@v4
         with:

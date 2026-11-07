@@ -15,13 +15,16 @@ import subprocess
 import tarfile
 import tempfile
 
-from build import (ROOT, CANONICAL_OUTPUT, ACTIVE_PLACE_ID, LIVE_SOURCES, chunks,
+from build import (ROOT, CANONICAL_OUTPUT, ACTIVE_PLACE_ID, REFERENCE_PLACE_ID, LIVE_SOURCES, chunks,
                    script_inventory, live_source_payload, string_values, string, u32, chunk)
 
 
 def validate_previous_payload(previous):
     """Validate exact path, class and Source hashes before trusting a baseline."""
-    assert isinstance(previous, dict) and previous.get('place_id') == ACTIVE_PLACE_ID, 'Wrong previous payload place_id'
+    # Older exact Source baselines predate the verified sharing identity. They
+    # remain usable for a local refresh; this does not permit installing into
+    # the historical cloud experience. Native installers reject that place.
+    assert isinstance(previous, dict) and previous.get('place_id') in (ACTIVE_PLACE_ID, REFERENCE_PLACE_ID), 'Wrong previous payload place_id'
     expected = previous.get('sources')
     assert isinstance(expected, dict) and set(expected) == set(LIVE_SOURCES), 'Previous payload must contain the exact live Source allowlist'
     for source_path, (source_class, _) in LIVE_SOURCES.items():

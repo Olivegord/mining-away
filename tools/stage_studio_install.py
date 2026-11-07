@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 from build import ROOT, live_source_payload
+from refresh_editable import validate_previous_payload
 
 parser=argparse.ArgumentParser()
 group=parser.add_mutually_exclusive_group(required=True)
@@ -20,7 +21,7 @@ group.add_argument('--previous-payload',type=Path,help='Exact previously install
 args=parser.parse_args()
 if args.previous_payload:
     previous_payload=json.loads(args.previous_payload.read_text())
-    assert previous_payload['place_id']==136098934779395
+    validate_previous_payload(previous_payload)
     (ROOT/'build/refinement-before-payload.json').write_text(json.dumps(previous_payload))
 else:
     with tempfile.TemporaryDirectory(prefix='mining-install-baseline-') as directory:

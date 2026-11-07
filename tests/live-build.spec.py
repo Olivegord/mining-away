@@ -16,7 +16,9 @@ assert hashlib.sha256(original).hexdigest() == ACTIVE_EXPECTED
 before = list(chunks(original))
 old_scripts = {item['ref']: item for item in script_inventory(before)}
 payload = live_source_payload()
-assert payload['place_id'] == ACTIVE_PLACE_ID == 136098934779395
+assert payload['place_id'] == ACTIVE_PLACE_ID == 124078027733625
+assert payload['universe_id'] == 10774898335
+assert payload['captured_from_place_id'] == 136098934779395
 assert set(payload['sources']) == set(LIVE_SOURCES)
 
 with tempfile.TemporaryDirectory() as temporary:

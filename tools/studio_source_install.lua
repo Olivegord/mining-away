@@ -1,6 +1,7 @@
 -- Execute in Studio Edit, with the staged payloads served from localhost:8767.
 assert(not game:GetService('RunService'):IsRunning(),'Install only in Edit')
-assert(game.PlaceId==136098934779395 or game.PlaceId==0,'Wrong game')
+assert(game.PlaceId==124078027733625 or game.PlaceId==0,'Wrong game: expected DRONEREVOLUTION or the canonical local file')
+assert(game.PlaceId==0 or game.GameId==10774898335,'Wrong DRONEREVOLUTION universe')
 assert(workspace:FindFirstChild('MiningAway'),'Expected the existing game')
 local http=game:GetService('HttpService')
 local enabled=http.HttpEnabled
@@ -11,6 +12,7 @@ local fetched,prior,nextPayload=pcall(function()
 end)
 http.HttpEnabled=enabled
 assert(fetched,prior)
+assert(nextPayload.place_id==124078027733625 and nextPayload.universe_id==10774898335,'Wrong destination payload')
 local targets,before,untouched={},{},{}
 for path,entry in pairs(nextPayload.sources) do
  local node=game

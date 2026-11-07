@@ -216,6 +216,27 @@ class SingleGameWorkflow(unittest.TestCase):
         self.assertNotEqual(updated, self.native_fixture)
         self.assert_native_preserved(self.native_fixture, updated)
 
+    def test_historical_capture_id_remains_a_verified_local_source_baseline(self):
+        self.install_native()
+        previous = self.stage_source_update()
+        payload = json.loads(previous.read_text())
+        payload['place_id'] = build.REFERENCE_PLACE_ID
+        payload.pop('universe_id', None)
+        previous.write_text(json.dumps(payload))
+        self.tool('refresh_editable.py', '--previous-payload', str(previous))
+        updated = self.canonical.read_bytes()
+        self.assertNotEqual(updated, self.native_fixture)
+        self.assert_native_preserved(self.native_fixture, updated)
+
+    def test_unrelated_place_payload_cannot_overwrite_native_sources(self):
+        self.install_native()
+        previous = self.stage_source_update()
+        payload = json.loads(previous.read_text())
+        payload['place_id'] = 12345
+        previous.write_text(json.dumps(payload))
+        self.tool('refresh_editable.py', '--previous-payload', str(previous), success=False)
+        self.assertEqual(self.canonical.read_bytes(), self.native_fixture)
+
     def test_unknown_live_source_is_never_overwritten(self):
         self.install_native()
         previous = self.stage_source_update()

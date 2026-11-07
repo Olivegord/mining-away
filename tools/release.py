@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 
 from build import (ROOT, ACTIVE_BASE, ACTIVE_EXPECTED, ACTIVE_OUTPUT, ACTIVE_PLACE_ID,
+                   ACTIVE_UNIVERSE_ID, ACTIVE_EXPERIENCE_NAME, REFERENCE_PLACE_ID,
                    chunks, script_inventory, live_source_payload)
 from refresh_editable import refresh
 
@@ -176,6 +177,10 @@ def main() -> None:
     metadata = {
         "project": "Olivegord/mining-away",
         "place_id": ACTIVE_PLACE_ID,
+        "universe_id": ACTIVE_UNIVERSE_ID,
+        "experience_name": ACTIVE_EXPERIENCE_NAME,
+        "publication_status": "Local package only; Roblox publication is not performed or verified by this tool",
+        "captured_from_place_id": REFERENCE_PLACE_ID,
         "target": "DRONE_GAME",
         "source_commit": revision,
         "source_dirty": dirty,
