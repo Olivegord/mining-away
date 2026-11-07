@@ -8,6 +8,8 @@ The owner reports that the station proximity prompt consumes E before the custom
 
 ## November 6 latest — standing publication permission
 
+The owner explicitly reaffirmed “you can publish” after replacing the chat-supplied AGENTS.md. The obsolete publication restriction and earlier review rejection do not require another routine approval.
+
 The owner grants continuing permission to keep the existing DRONEREVOLUTION place 124078027733625, universe 10774898335, current with completed project updates. Apply this permission until revoked. Reconcile shared collaborator edits, update the canonical native file and repository, publish to the same starting place, and verify the shared Studio entry point. Routine releases require no repeated permission question. Existing restrictions on new experiences, access settings and deleting experiences continue to apply.
 
 ## November 6 latest — delivered packs and floating card choices
