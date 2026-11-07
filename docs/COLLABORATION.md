@@ -38,7 +38,7 @@ Roblox and GitHub access are independent. MideDibber's Playtest/Edit access to D
 - Before editing Sources, retain the exact currently installed Git revision or a `tools/build.py --source-payload` export as the refresh baseline. Use `python3 tools/build.py --previous-commit <installed-revision>` or `--previous-payload <exact-payload>` to apply changes to the canonical file. Never guess a baseline for unknown Studio edits.
 - Commit the synchronized Sources and **the same** `build/DRONE_GAME.rbxl` together. A normal save to disk is not a GitHub update; a GitHub push is not a Roblox publication.
 - If the native binary conflicts, preserve both contributors' edits for reconciliation in the canonical document. Do not text-merge the binary or silently pick a side.
-- Update `docs/PROJECT_STATE.md` with actual changes and validation limits. Stop Play, save the canonical document and close Studio when finished.
+- Update `docs/PROJECT_STATE.md` with actual changes and validation limits. Check and record whether Roblox Studio is already running before starting work, without launching it just to check. If it was already open, leave it open when finished. If it was closed and you open it for the task, close it when finished. Stop Play and save changes as needed before the handoff. This replaces the older unconditional close-Studio rule.
 
 ## Updating the shared Roblox game
 

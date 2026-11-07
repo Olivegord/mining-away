@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — preserve the initial Studio open state
+
+Check and record whether Roblox Studio is already running before starting work, without launching it just to check. If it was already open, leave it open when finished. If it was closed and you open it for the task, close it when finished. Stop Play and save changes as needed before the handoff. This replaces the older unconditional close-Studio rule.
+
 ## November 6 latest — continuous slowdown, no restart
 
 The owner rejects restarting the circle between rarity stages: one fill must advance continuously and become slower as it goes. Keep the native ProximityPrompt for input and server hold completion, but use a single visual indicator to express the nonlinear fill. This supersedes the stock-circle stage workaround below. No resetting/restarting holds at color changes.
@@ -30,7 +34,7 @@ The latest local file was verified, but publication to DRONEREVOLUTION has not b
 
 ## November 6 latest — restore the simple buy, sell, upgrade, prestige loop
 
-The owner clarifies: **“the core should be simple. this is a roblox game. buy sell, upgrade, prestige. thsi loop is non existent.”** This supersedes the earlier direction away from progression. Prioritize a connected, understandable loop from the actual one-drone start: mine and collect, sell directly for spendable minerals, buy visible improvements or a permanent miner, then prestige for permanent strength. Keep logistics optional. Do not add complementary-worker dependencies, digging systems or another complicated field mechanic. Studio should start with the actual player economy; preview crews remain explicit developer actions. Retain snap-size cubic rocks, outward currency arcs, one drone type per rock, original assets and accepted feedback. Close Studio when finished.
+The owner clarifies: **“the core should be simple. this is a roblox game. buy sell, upgrade, prestige. thsi loop is non existent.”** This supersedes the earlier direction away from progression. Prioritize a connected, understandable loop from the actual one-drone start: mine and collect, sell directly for spendable minerals, buy visible improvements or a permanent miner, then prestige for permanent strength. Keep logistics optional. Do not add complementary-worker dependencies, digging systems or another complicated field mechanic. Studio should start with the actual player economy; preview crews remain explicit developer actions. Retain snap-size cubic rocks, outward currency arcs, one drone type per rock, original assets and accepted feedback. Follow the latest initial-state Studio rule above.
 
 The prices and prestige bonus in this pass are tuning choices, not an owner endorsement or proof of fun. See [core loop and verification](review/CORE_LOOP.md).
 
@@ -38,7 +42,7 @@ The prices and prestige bonus in this pass are tuning choices, not an owner endo
 
 The owner subsequently supplied [taw's automation-game essay](https://t-a-w.blogspot.com/2026/07/how-to-make-great-automation-game.html), then explicitly rejected our complementary-worker interpretation: **keep this a simple Roblox mining game; only one type of drone may work on a rock at a time**. The proposed Smasher-to-miner handoff is removed. Do not restore that relay, require paired drone types, or turn the loop into factory management. Same-type helpers may use existing boulder slots; different types select different rocks.
 
-The owner requests closing the game when work is done to avoid lag: stop Play, save the canonical file and close Studio after checks.
+Historical close-after-work request: superseded by the latest initial-state Studio rule above.
 
 The owner rejects earlier ore release as a sufficient mining-loop improvement: it changes reward timing. Change the actual interaction between mining jobs and rocks. They explicitly reject rocks animating smaller with a spinning motion: **snap smaller, retaining orientation**. Currency must launch **up and away in a visible arc**, clearing the rock before attraction. This supersedes all older tilted/damped shrink and queued intermediate-stage animation requirements. The selected gameplay candidate makes collapse chunks strike nearby rocks, prepare intact neighbors and trigger bounded cascades through weakened neighbors. Heavy Smasher breaks launch a wider volley. This is an implemented candidate, not an owner endorsement. See [rock interactions and verification](review/ROCK_INTERACTIONS.md).
 
