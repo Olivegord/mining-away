@@ -21,6 +21,11 @@
 
 ## Game and collaboration rules
 
+- Do not use the Roblox Studio Version History panel. The owner explicitly prohibited it for this and future work. Verify publication using other direct evidence; never reopen the panel as a release check.
+- Routine Script Sync must not depend on reopening menus for each export. The owner explicitly rejected that workflow. Verify actual source arrival and root status; a disk export is not proof of native sync.
+- The owner reported Studio reaching 4 GB RAM and requested stopping the activity causing it. Stop Play/device simulation and avoid repeated native test loops, previews, profiling or menu repairs without renewed direction. Preserve the initial-open rule unless the owner explicitly authorizes quitting. Current follow-up fixes are saved on disk; publication and durable sync verification must be reported accurately.
+
+
 - Routine script changes now use native Roblox **Script Sync** in the existing shared DRONEREVOLUTION Studio session. Run `python3 tools/script_sync.py` after source edits, or `--watch`; the connected roots are `studio/ServerScriptService`, `studio/Shared`, and `studio/StarterPlayerScripts`. Verify root status and exact place/universe before exporting. Do not make saving/reopening/overwriting an `.rbxl` the normal script-install workflow. Reconcile Studio-origin edits into `src/` before exporting; the exporter refuses unknown edits. Preserve additional scripts and disabled backups. The canonical native file remains the sole map/recovery/release snapshot, refreshed with the seven-source preservation tool after reconciliation. Script Sync does not publish; verify publication separately.
 
 - Preserve the live map, assets, card UI, tactical HUD, roles, crystal audio and discoveries. Latest owner requirements override the older design brief and rejected cloud-v1 presentation.

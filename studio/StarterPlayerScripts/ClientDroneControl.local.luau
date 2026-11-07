@@ -5,7 +5,7 @@ local DroneOutline = (function()
 local Outline={}
 function Outline.attach(model)
  local h=model:FindFirstChild('DroneOutline') or Instance.new('Highlight')
- h.Name='DroneOutline';h.Adornee=model
+ h.Name='DroneOutline';h.Adornee=model;h.Enabled=true
  h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
  h.FillTransparency=1;h.OutlineTransparency=0
  h.OutlineColor=Color3.fromRGB(16,27,43)
@@ -7904,15 +7904,10 @@ end
 function V:reply(state)
  for id,pending in pairs(self.pending) do if pending.request==state.requestId then self.pending[id]=nil end end
  if state.resourceId then self.flash={id=state.resourceId,at=os.clock(),color=state.status=='accepted' and GREEN or state.status=='queued' and GOLD or RED} end
- if state.droneId and state.status=='accepted' then
-  for source,d in pairs(self.ctx.drones) do if source:GetAttribute('DroneId')==state.droneId then
-   if not self.worker then
-    self.worker=Instance.new('Highlight');self.worker.Name='DispatchedWorker';self.worker.DepthMode=Enum.HighlightDepthMode.Occluded
-    self.worker.FillColor=GREEN;self.worker.OutlineColor=GREEN;self.worker.FillTransparency=.88;self.worker.Parent=self.ctx.parent
-   end
-   self.worker.Adornee=d.view;self.workerUntil=os.clock()+1;break
-  end end
- end
+ -- Keep the drone's single permanent outline. A second dispatch Highlight
+ -- on the same model overrides it, even after that temporary cue is disabled.
+ -- Accepted/queued/rejected feedback remains on the commanded rock.
+
 end
 function V:update(dt,now)
  self.clock+=dt;if self.clock<.06 then return end;self.clock=0
@@ -7987,7 +7982,6 @@ function V:update(dt,now)
  end
  local flash=self.flash
  if flash and os.clock()-flash.at<.8 and flash.id~=hover and not working[flash.id] and not self.queued[flash.id] and not self.pending[flash.id] then table.insert(marked,flash.id) end
- if self.worker then self.worker.Enabled=visible and os.clock()<(self.workerUntil or 0) end
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
@@ -8032,7 +8026,7 @@ function V:update(dt,now)
 end
 function V:destroy()
  if self.meter then self.meter:Destroy() end
- if self.worker then self.worker:Destroy() end;for _,h in ipairs(self.pool) do h:Destroy() end
+ for _,h in ipairs(self.pool) do h:Destroy() end
  for _,h in pairs(self.fields) do h:Destroy() end
 end
 return V

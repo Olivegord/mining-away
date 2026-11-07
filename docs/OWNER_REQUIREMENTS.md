@@ -2,6 +2,18 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — sustainable sync and stop excessive Studio activity
+
+The owner rejects opening menus each time for Script Sync and asks for a sustainable workflow. Investigate the actual disconnect cause and verify repeated source changes without menu repairs; do not call a disk export a working native connection. The owner then reported Studio using **4 GB RAM** and explicitly requested stopping the activity causing it. Play/tests/previews and device simulation have been stopped. Do not continue native test loops or menu repairs under this request. The existing initially-open Studio rule still applies unless the owner authorizes saving and quitting.
+
+## November 6 latest — keep mining outlines; flat currency side list
+
+The owner reports that a drone loses its outline when sent mining. Preserve its outline throughout assignment, travel, charge, mining and recall. The currency UI must be a compact list on the side, with no padded panels or outlines. Show each mineral currency only after its area's unlock. This supersedes the immediately preceding all-five-wallet cards and full-width counter strip.
+
+## November 6 latest — do not use the history panel
+
+The owner explicitly requests: “stop using the history panel now and in the future.” Keep Roblox Studio Version History closed and do not use that panel for publication verification. Use other direct evidence, and state any remaining verification limit accurately.
+
 ## November 6 latest — drone outlines and physical station UI
 
 The owner reports that drones are difficult to see, requests outlines on all drones, and wants a much cleaner HUD. Prestige, shops and other progression menus must be reached through physical proximity prompts. Remove permanent progression shortcuts and duplicated interaction panels. Display every mineral currency and keep other mineral rocks visible; field unlocks and server mining/combat gates still apply. Preserve the existing pack reveal, map, assets and accepted VFX.

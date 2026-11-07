@@ -1,0 +1,49 @@
+{
+  "mining": {
+    "miningFrames": 141,
+    "failures": 0,
+    "frames": 269,
+    "states": {
+      "Mine": true,
+      "Warmup": true,
+      "Travel": true
+    }
+  },
+  "unlock": {
+    "visible": [
+      "Quartz",
+      "Ruby"
+    ],
+    "size": "160, 72",
+    "unlocked": {
+      "Quartz": true,
+      "Ruby": true
+    },
+    "wallet": {
+      "Quartz": 20,
+      "Ruby": 0,
+      "Cobalt": 0,
+      "Emerald": 0,
+      "Violet": 0
+    }
+  },
+  "initialHUD": {
+    "visible": [
+      "Quartz"
+    ],
+    "size": "160, 48",
+    "walletBackgroundTransparency": 1,
+    "walletUIStrokes": 0
+  },
+  "sync": {
+    "afterResume": "All three roots SyncedAsRoot",
+    "afterFollowingHUDExport": "All three roots still SyncedAsRoot; final side anchor reached Studio",
+    "cause": "Code 25 cause not established; no claim of durable repair",
+    "remaining": "Repeated unattended sync, Studio-origin conflict recovery and restart checks deferred after owner requested stopping Studio activity"
+  },
+  "stopped": {
+    "play": "Edit verified",
+    "device": "default",
+    "memory": "Owner reported 4 GB. No subsequent native tests/profiling/menu repairs authorized. Awaiting explicit save-and-quit choice because existing rules require leaving initially open Studio running."
+  }
+}

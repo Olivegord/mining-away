@@ -9,17 +9,31 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `1eda8427de5a0926bed60d6caf623046a8dd57c7f7748f333ee91d9a04a21a40` | Drone-outline/station-UI snapshot; map and unrelated Sources preserved. |
+| Native-file SHA-256 | `7ede00538cd4439d2748b0a87b408dfe8ef56c0c429d3a0f2484b39562f1d43c` | Flat side-HUD/mining-outline follow-up snapshot; map and unrelated Sources preserved. |
 | Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The integration commit that installs the pack delivery Sources identifies the exact local revision. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio gameplay | **Verified November 6, 2026** | Final outline/station-UI Sources verified in the existing shared document. Desktop and simulated phone HUD, real Ruby sale, printer purchase and free-pack claim passed. Studio remains open, stopped in Edit mode. |
-| Published Roblox version | **v19; new UI release pending** | Last verified publication is v19 (`4f1bd48`). The new outline/station-UI release is installed and tested, but publication has not yet been observed. |
+| Shared Studio gameplay | **Verified November 6, 2026** | Latest flat side-HUD and mining-outline fixes installed through the existing Script Sync roots. Native mining kept one visible outline; normal Ruby unlock adds its readout. Play stopped and device simulation off after the owner reported excessive Studio RAM. |
+| Published Roblox version | **v19 last verified; latest follow-up unverified** | Last verified publication is v19 (`4f1bd48`). Save to Roblox and Publish were invoked for `d15231a`, but success was not directly verified. The newer flat side-HUD follow-up is installed and tested; its publication has not been verified. Never reopen the history panel. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — persistent mining outline, flat side HUD, Studio stopped
+
+The owner rejected the preceding full-width wallet cards. The HUD is now a flat **160-pixel-wide side list**, with transparent rows, no padding panels or borders, and no permanent mining-status box. It starts with **Quartz + backpack** (160×48) and shows each additional mineral only after its corresponding area unlock. Recall/Evade remain small flat contextual controls on the side. The list sits above mobile movement controls. Physical progression prompts and visible locked-field rocks remain.
+
+`CommandView` was creating a second `DispatchedWorker` Highlight on the same drone as its permanent outline. That competing highlight could override the permanent outline after a mining command, including once disabled. Removed the second drone highlight; accepted/queued/rejected feedback remains on the commanded rock. The permanent outline stays attached to the actual drone model. A production-client regression verifies a mining acceptance leaves exactly one enabled drone outline.
+
+Native verification in the owner's normal **DRONEREVOLUTION** entry point: a real mining order traversed **Travel → Warmup → Mine**, with **269 rendered samples including 141 mining frames and zero outline failures**. The active mining outline was visually inspected. Initial side list showed only Quartz and backpack (160×48); a normal 80-Quartz Ruby unlock changed it to Quartz + Ruby + backpack (160×72), leaving Cobalt/Violet/Emerald hidden. Rows had no background panel or UIStroke. [Follow-up observations](review/drone-readability-followup-native.json).
+
+All three native Script Sync roots initially entered error code 25. One explicit Resume Sync reconciled only the two intended newer disk Sources, preserving all other scripts and backups. All three roots then reported **SyncedAsRoot**. A subsequent HUD export arrived automatically with all roots still healthy. **The underlying code-25 cause and long-term unattended reliability are not established.** The owner explicitly rejected repeated menu repair; do not claim the sustainable-sync request is complete. Investigation should resume with bounded source/file-watcher diagnostics rather than repeated native menu work.
+
+The owner then reported Studio at **4 GB RAM** and requested stopping the activity causing it. Play has been stopped; native state verified **Edit**; device simulation reset to **default**. No further native tests, profiling or menu repairs should run without renewed direction. Studio was initially open, so it has been left open pending the owner's explicit save-and-quit choice. An earlier automatic approval review rejected closing/reopening the shared document under that initial-open rule. No document was closed. The history panel was closed and the owner's permanent prohibition is recorded in AGENTS.md.
+
+Canonical Source-only snapshot SHA-256: **`7ede00538cd4439d2748b0a87b408dfe8ef56c0c429d3a0f2484b39562f1d43c`**. All non-Source chunks and unrelated/backup Sources were preserved. The client refinement regression suite passes; prior core-loop, shop/profile/persistence and specialist checks remain as documented below. Latest follow-up publication is **unverified**. Remaining limits: native phone check after the final flat-list anchor, multiplayer/late join, production persistence, durable sync reliability and owner visual approval. Do not use the history panel to resolve publication.
 
 ## Drone readability, mineral visibility and station UI — latest follow-up
 

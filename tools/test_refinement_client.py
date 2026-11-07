@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as tmp:
         'motion': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/motion-setup.lua').read_text() + '\n' + render + '\n' + (ROOT / 'tests/client-refinement-motion.integration.lua').read_text(),
         'intent': mock + '\n' + (ROOT / 'tests/client-refinement-intent.setup.lua').read_text() + '\n' + plot + '\n' + assign + '\n' + activate + '\n' + (ROOT / 'tests/client-refinement-intent.integration.lua').read_text(),
         'impact': mock + '\n' + module_bundle(('AudioFeedback',)) + '\n' + (ROOT / 'tests/client-refinement-impact.setup.lua').read_text() + '\n' + impact + '\n' + (ROOT / 'tests/client-refinement-impact.integration.lua').read_text(),
-        'highlight': mock + '\n' + (ROOT / 'tests/client-refinement-highlight.setup.lua').read_text() + '\n' + module_bundle(('CommandView',)) + '\n' + (ROOT / 'tests/client-refinement-highlight.integration.lua').read_text(),
+        'highlight': mock + '\n' + (ROOT / 'tests/client-refinement-highlight.setup.lua').read_text() + '\n' + module_bundle(('DroneOutline','CommandView',)) + '\n' + (ROOT / 'tests/client-refinement-highlight.integration.lua').read_text(),
     }
     for name, source in sources.items():
         path = pathlib.Path(tmp) / (name + '.lua')
