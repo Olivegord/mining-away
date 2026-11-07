@@ -97,6 +97,7 @@ IT.__newindex=function(i,k,v)
 end
 function Instance.new(class)
  local i=setmetatable({_p={ClassName=class,Name=class,Position=Vector3.zero,CFrame=CFrame.new(),Size=Vector3.one,Color=Color3.new(1,1,1),Transparency=0,LocalTransparencyModifier=0,ChildAdded=signal(),ChildRemoved=signal(),DescendantAdded=signal(),DescendantRemoving=signal(),AttributeChanged=signal(),Destroying=signal()},_children={},_attrs={},_attributeSignals={},_propertySignals={}},IT)
+ if class=='Beam' then i._p.Width0=1;i._p.Width1=1 end
  if class=='RemoteEvent' then i.OnServerEvent=signal();i.OnClientEvent=signal() end
  if class=='ProximityPrompt' then i.Triggered=signal() end
  if class=='Sound' then i.Ended=signal() end

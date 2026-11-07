@@ -43,6 +43,9 @@ for _,d in ipairs(p.drones)do if DroneRoles.isSpecial(d.role)then table.insert(s
 for i,d in ipairs(specialists)do
  local target=field.resources[i];target.hp=1000000;target.maxHP=1000000;target.paid=false;target.readyAt=now
  assert(assignOre(p,d,target));d.pos=Feel.mineGoal(target.position,d.targetSlot,false,target.fullSize);d.velocity=Vector3.zero
+ -- Sample the transition to the committed gesture, before any contact. The
+ -- current warmup is longer than the original two-second measurement window.
+ d.warmAt=now-math.max(0,d.stats.warmup-1.25)
 end
 reset()
 for _=1,120 do realTime+=C.Tick;now=realTime;for _,d in ipairs(specialists)do droneStep(d,C.Tick)end end
