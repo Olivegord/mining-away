@@ -4902,32 +4902,25 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
  prompt.MaxActivationDistance=Packs.Range;prompt.RequiresLineOfSight=false
  prompt.Exclusivity=Enum.ProximityPromptExclusivity.OnePerButton
- prompt.HoldDuration=Packs.stageDuration(1);prompt.Enabled=false;prompt.Parent=part
- local delivery={part=part,prompt=prompt,id=offer.id,tier=offer.packTier,stage=1,readyAt=now+Packs.DeliveryTime}
+ prompt.Style=Enum.ProximityPromptStyle.Custom
+ prompt.HoldDuration=Packs.duration(offer.packTier);prompt.Enabled=false;prompt.Parent=part
+ local delivery={part=part,prompt=prompt,id=offer.id,tier=offer.packTier,readyAt=now+Packs.DeliveryTime}
  p.packDelivery=delivery
  prompt.PromptButtonHoldBegan:Connect(function(player)
   local clock=o.getClock()
   if player~=p.player or delivery.opening or delivery.start or not self:canHold(p,delivery,clock) then return end
-  delivery.start=clock;delivery.continueUntil=nil;delivery.endAt=nil
-  local elapsed=Packs.duration(delivery.stage)-Packs.stageDuration(delivery.stage)
-  part:SetAttribute('HoldAt',clock-elapsed)
+  delivery.start=clock;delivery.endAt=nil
+  part:SetAttribute('HoldAt',clock)
  end)
  prompt.Triggered:Connect(function(player)
   local clock=o.getClock()
   if player~=p.player or delivery.opening or not delivery.start or not self:canHold(p,delivery,clock) then return end
-  if clock-delivery.start+0.06<Packs.stageDuration(delivery.stage) then self:release(delivery);return end
+  if clock-delivery.start+0.06<Packs.duration(delivery.tier) then self:release(delivery);return end
   delivery.start=nil;delivery.endAt=nil
-  if delivery.stage<delivery.tier then
-   delivery.stage+=1;delivery.continueUntil=clock+.8
-   prompt.HoldDuration=Packs.stageDuration(delivery.stage)
-   prompt.ObjectText=Packs.Tiers[delivery.stage]..' pack'
-   part:SetAttribute('HoldStage',delivery.stage)
-  else
-   delivery.opening=true;prompt.Enabled=false
-   o.open(p,delivery.id,function(status)
-    if status=='rejected' and p.packDelivery==delivery then delivery.opening=false;self:release(delivery) end
-   end)
-  end
+  delivery.opening=true;prompt.Enabled=false
+  o.open(p,delivery.id,function(status)
+   if status=='rejected' and p.packDelivery==delivery then delivery.opening=false;self:release(delivery) end
+  end)
  end)
  prompt.PromptButtonHoldEnded:Connect(function(player)
   if player==p.player and delivery.start and not delivery.opening then delivery.endAt=o.getClock()+.08 end
@@ -4942,12 +4935,8 @@ end
 
 function Delivery:release(delivery)
  delivery.start=nil
- delivery.continueUntil=nil;delivery.endAt=nil
- delivery.stage=1
- delivery.prompt.HoldDuration=Packs.stageDuration(1)
- delivery.prompt.ObjectText='Company delivery'
+ delivery.endAt=nil
  delivery.part:SetAttribute('HoldAt',nil)
- delivery.part:SetAttribute('HoldStage',1)
 end
 
 function Delivery:canHold(p, delivery, now)
@@ -4981,7 +4970,6 @@ function Delivery:step(p, now)
   return
  end
  delivery.prompt.Enabled=now>=delivery.readyAt and not delivery.opening
- if delivery.continueUntil and now>delivery.continueUntil then self:release(delivery) end
  if delivery.start and delivery.endAt and now>=delivery.endAt then self:release(delivery) end
  if delivery.start and not self:canHold(p,delivery,now) then self:release(delivery) end
 end

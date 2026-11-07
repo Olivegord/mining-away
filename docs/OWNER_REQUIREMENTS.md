@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 6 latest — continuous slowdown, no restart
+
+The owner rejects restarting the circle between rarity stages: one fill must advance continuously and become slower as it goes. Keep the native ProximityPrompt for input and server hold completion, but use a single visual indicator to express the nonlinear fill. This supersedes the stock-circle stage workaround below. No resetting/restarting holds at color changes.
+
 ## November 6 latest — native pack prompt and Script Sync
 
 The owner reports that the station proximity prompt consumes E before the custom crate input. Replace the custom progress GUI with a regular Roblox ProximityPrompt whose hold stages become longer. Retain the rarity colors and crate/card effects, give the crate prompt priority while nearby, and connect native Script Sync. This supersedes the earlier custom-bar requirement. The default circle restarts for each longer stage; the player keeps holding E.

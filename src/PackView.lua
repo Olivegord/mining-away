@@ -63,23 +63,9 @@ function PackView.new(options)
  focus.Name='PackWorldBlur';focus.FocusDistance=1.2;focus.InFocusRadius=.65
  focus.FarIntensity=0;focus.NearIntensity=0;focus.Parent=game:GetService('Lighting')
  self.focus=focus
- self.connections={
-  UIS.InputEnded:Connect(function(input)
-   if input.KeyCode==Enum.KeyCode.E or input.KeyCode==Enum.KeyCode.ButtonX
-    or input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
-    for _,record in pairs(self.records) do
-     record.held=false
-     if record.prompt then record.prompt:InputHoldEnd() end
-    end
-   end
-  end),
-  UIS.WindowFocusReleased:Connect(function()
-   for _,record in pairs(self.records) do
-    record.held=false
-    if record.prompt then record.prompt:InputHoldEnd() end
-   end
-  end),
- }
+ self.connections={UIS.WindowFocusReleased:Connect(function()
+  for _,record in pairs(self.records) do if record.prompt then record.prompt:InputHoldEnd() end end
+ end)}
  self.suppressed={}
  return self
 end
@@ -92,33 +78,58 @@ function PackView:setFocus(active)
  self.focusTween:Play()
 end
 
+-- Keep Roblox's input/hold events; only the progress presentation is custom.
 function PackView:bindPrompt(record,source)
  local prompt=source:FindFirstChild('OpenPack')
  if not prompt then return end
  record.prompt=prompt
- local function resume()
-  if record.resuming or not record.held then return end
-  record.resuming=true
-  task.defer(function()
-   if not source.Parent or not record.held then record.resuming=false;return end
-   prompt:InputHoldEnd();prompt.Enabled=false
-   task.wait()
-   if source.Parent and record.held then
-    prompt.Enabled=true
-    task.wait()
-    if source.Parent and record.held then prompt:InputHoldBegin() end
-   end
-   record.resuming=false
-  end)
+ if source:GetAttribute('Owner')~=self.options.player.UserId then return end
+ local gui=Instance.new('BillboardGui')
+ gui.Name='PackOpeningPrompt';gui.Adornee=source;gui.Size=UDim2.fromOffset(220,62)
+ gui.StudsOffsetWorldSpace=Vector3.new(0,2.3,0);gui.AlwaysOnTop=true;gui.Active=true;gui.Enabled=false
+ local button=Instance.new('TextButton')
+ button.Name='Hold';button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(27,32,41)
+ button.BackgroundTransparency=.12;button.BorderSizePixel=0;button.Text='';button.AutoButtonColor=false;button.Parent=gui
+ local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
+ local label=Instance.new('TextLabel')
+ label.Name='Action';label.BackgroundTransparency=1;label.Position=UDim2.fromOffset(12,8)
+ label.Size=UDim2.new(1,-24,0,28);label.Font=Enum.Font.GothamMedium;label.TextSize=17
+ label.TextColor3=Color3.fromRGB(239,243,249);label.Text='[E]  Open pack';label.Parent=button
+ local track=Instance.new('Frame');track.Name='Track';track.BorderSizePixel=0
+ track.BackgroundColor3=Color3.fromRGB(69,77,90);track.Position=UDim2.fromOffset(12,44)
+ track.Size=UDim2.new(1,-24,0,6);track.ClipsDescendants=true;track.Parent=button
+ local fill=Instance.new('Frame');fill.Name='Progress';fill.BorderSizePixel=0
+ fill.BackgroundColor3=idle;fill.Size=UDim2.fromScale(0,1);fill.Parent=track
+ gui.Parent=self.options.player:WaitForChild('PlayerGui')
+ record.indicator=gui;record.fill=fill
+ local function finishPointer(input)
+  if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldEnd() end
  end
  record.connections={
-  prompt.PromptButtonHoldBegan:Connect(function() record.held=true end),
-  prompt:GetPropertyChangedSignal('HoldDuration'):Connect(resume),
+  prompt.PromptShown:Connect(function(inputType)
+   record.shown=true
+   label.Text=inputType==Enum.ProximityPromptInputType.Touch and 'Hold to open pack'
+    or inputType==Enum.ProximityPromptInputType.Gamepad and '[X]  Open pack' or '[E]  Open pack'
+  end),
+  prompt.PromptHidden:Connect(function() record.shown=false;gui.Enabled=false end),
+  prompt.PromptButtonHoldBegan:Connect(function()
+   record.holdAt=workspace:GetServerTimeNow();record.releaseAt=nil;record.completed=false
+  end),
+  prompt.PromptButtonHoldEnded:Connect(function() record.releaseAt=workspace:GetServerTimeNow()+.08 end),
+  prompt.Triggered:Connect(function() record.completed=true end),
+  button.InputBegan:Connect(function(input)
+   if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldBegin() end
+  end),
+  button.InputEnded:Connect(finishPointer),
+  UIS.InputEnded:Connect(finishPointer),
  }
+ -- Register visibility handlers before allowing the first PromptShown event.
+ prompt.Enabled=false
 end
 
 local function disposeRecord(record)
  if record.connections then for _,connection in ipairs(record.connections) do connection:Disconnect() end end
+ if record.indicator then record.indicator:Destroy() end
  record.model:Destroy()
  if record.courier then record.courier:Destroy() end
 end
@@ -212,7 +223,8 @@ function PackView:update(now)
   local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier')
   if stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
    local record=self.records[source]
-   if not record then record=createCrate(o.parent);self.records[source]=record;self:bindPrompt(record,source) end
+   if not record then record=createCrate(o.parent);self.records[source]=record end
+   if not record.prompt then self:bindPrompt(record,source) end
    record.visible=true
    local age=now-stamp
    local _,_,_,openedAt=self:render(record,source,now,age,tier)
@@ -224,8 +236,19 @@ function PackView:update(now)
   end
  end end
  for source,record in pairs(self.records) do
-  if record.prompt and not record.resuming then
-   record.prompt.Enabled=source==self.target and not o.busy()
+  if record.prompt then
+   local enabled=source==self.target and not o.busy()
+   record.prompt.Enabled=enabled
+   if record.indicator then
+    record.indicator.Enabled=enabled and record.shown==true
+    if record.releaseAt and now>=record.releaseAt and not record.completed then record.holdAt=nil end
+    if not enabled and not record.completed then record.holdAt=nil end
+    local progress,stage=0,0
+    if record.completed then progress,stage=1,source:GetAttribute('Tier')
+    elseif record.holdAt then progress,stage=Packs.sample(source:GetAttribute('Tier'),now-record.holdAt) end
+    record.fill.Size=UDim2.fromScale(progress,1)
+    record.fill.BackgroundColor3=colors[stage] or idle
+   end
   end
  end
  local map=o.world:FindFirstChild('Map')

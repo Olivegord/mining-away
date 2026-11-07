@@ -176,13 +176,17 @@ check('paid delivery stays sealed until the owner finishes a nearby uninterrupte
  move(scene.packStation.Position+Vector3.new(12,0,0));advance(.1)
  local delivered=assert(p.packDelivery)
  advance(Packs.DeliveryTime+.1);move(delivered.part.Position);hold('Begin')
- for stage=1,offer.packTier do
-  advance(Packs.stageDuration(stage)+.02);hold('Complete')
-  if stage<offer.packTier then
-   assert(delivered.prompt.HoldDuration==Packs.stageDuration(stage+1))
-   hold('End');hold('Begin')
-  end
+ local duration=Packs.duration(offer.packTier)
+ assert(delivered.prompt.HoldDuration==duration)
+ local started=delivered.part:GetAttribute('HoldAt')
+ for step=1,20 do
+  advance(duration/20)
+  assert(delivered.prompt.HoldDuration==duration,'native hold restarted or changed duration')
+  assert(delivered.part:GetAttribute('HoldAt')==started,'continuous hold timestamp reset')
+  assert(not data(p).run.pendingOffer.opened)
  end
+ -- Native HoldEnded can precede Triggered in the same completion frame.
+ hold('End');hold('Complete')
  assert(data(p).run.pendingOffer.opened and #visibleOffer().choices==3)
  input('ChooseCard',quote({offerId=offer.id,index=2}))
  assert(data(p).run.pendingOffer==nil and #data(p).run.cards==1 and data(p).run.cards[1].cardId==offer.choices[2].cardId)
