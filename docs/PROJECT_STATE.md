@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks darken to black as they take damage and shrink on each crack, with turns, original sounds, crystal-local beam contact and collectible fragments. Packs, upgrades and prestige still use Quartz.
+**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks turn black before each crack, then shrink and regain their mineral color. The starter crystals use the reference’s opaque red SmoothPlastic finish. The beam tracks each change in shape. Packs, upgrades and prestige still use Quartz.
 
 ## Identity and delivery state
 
@@ -11,26 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `66499e42c4c6d25c5b4a29a38eefd559a7687b249d318aabf4df655159866881` | Crystal darkening and shrink. All non-Source chunks and backup Sources preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal damage appearance commit. [Seven actual Edit hashes](review/crystal-shade-native.json). |
+| Native-file SHA-256 | `7dd37d10cbcab1d0ca13aea0e90a3f6c957ce5cbd4561c19daf896b7ff0a94a4` | Crystal flash, shrink, color reset, and reference finish. All non-Source chunks and backup Sources preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal flash and finish commit. [Seven actual Edit hashes](review/crystal-crack-flash-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
 | Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The damage appearance update is installed in shared Edit at the exact destination. All seven managed Source hashes match the canonical snapshot and all three roots are `SyncedAsRoot`. Studio remains in Edit on loaded version 90. |
-| Roblox publication | **No publication for the crystal damage appearance update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Roblox publication | **No publication for the crystal flash and finish update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — rocks darken and shrink
+## Latest follow-up — black flash before the crack
 
-Fresh starter crystals still appear shiny red and full size. Visible mineral rocks darken from the first hit and reach black at the last damage stage. Starter crystals snap to 75%, 50%, and 25% of their original size with the three cracks. The server changes the rock geometry with each stage, and the client follows the same stage when rendering the surface and beam contact. The health, ordinary eight-second replacement delay, and two-second readiness delay are unchanged.
+The enabled Mining Away server shades its red crystal within each health band and resets the shade after the band changes. The owner's requested sequence now holds the old visible size and facing in black for 0.10 seconds, then shrinks, turns, plays the crack, and restores the mineral color. The hold is a presentation choice. The server still applies damage and updates size immediately. The final break removes the rock without replaying skipped cracks.
 
-The focused production renderer and beam-contact checks passed with API doubles, as did the workshop suite in Studio and production configurations. The broader physical-mining suite still stops at its full-bag manual-order fixture, which fails on the preceding commit too. All seven native Source hashes match in shared Edit. No new native Play session was started and no Roblox publication was performed.
+Compared the open reference template with a running DRONEREVOLUTION starter crystal. Both use the same union dimensions. The reference is opaque SmoothPlastic, with zero reflectance, no material variant, and no decal or surface texture. DRONEREVOLUTION had been overriding the template with translucent Ice. The starter now inherits the reference finish from the preserved union.
 
-Reproduce on the canonical snapshot from `408e954` with the updated modular Sources, `python3 tools/script_sync.py`, and `python3 tools/build.py --previous-commit 408e954`.
+A native Edit probe ran the renderer on the actual union without placing a fixture in the map. It measured red at full size, black at full size through the hold, and red at 75% size. The focused renderer, beam contact, and workshop checks passed with API doubles. Shared Edit matches all seven canonical Source hashes. No new native Play was started. There was no Roblox publication.
+
+Reproduce from the canonical snapshot at `84b56bd` using the updated modular Sources, `python3 tools/script_sync.py`, and `python3 tools/build.py --previous-commit 84b56bd`.
 
 ## Earlier follow-up — crystal spawns and default swarm formation
 

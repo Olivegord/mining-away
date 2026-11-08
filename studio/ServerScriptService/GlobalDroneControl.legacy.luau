@@ -1668,10 +1668,9 @@ function F.stage(hp,maxHP,count)
 end
 function F.stageDarkness(hp,maxHP,stage,count,junk)
  count=math.clamp(math.floor(count or 3),1,7)
- local layers=(1-hp/math.max(1,maxHP))*(count+1)
- if junk then return .0832*math.clamp(layers-stage,0,1)^.8 end
- -- Reach black on the last visible layer, before the break hides the rock.
- return math.clamp(layers/count,0,1)
+ local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
+ if junk then return .0832*progress^.8 end
+ return progress
 end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
@@ -1730,16 +1729,20 @@ function F.newStagePresentation(stage,broken,now,count)
  stage=math.clamp(math.floor(stage or 0),0,count or 3)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
-function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
+function F.updateStagePresentation(p,authoritativeStage,broken,now,count,flashBeforeCrack)
  count=count or 3
  local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
  if p.knownBreak then return nil end
  if broken then
-  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={}
+  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={};p.crackAt=nil
   return 'break'
  end
  if target<=p.knownStage then return nil end
- p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
+ if flashBeforeCrack then
+  p.crackAt=p.crackAt or now+.10
+  if now<p.crackAt then return nil end
+ end
+ p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now;p.crackAt=nil
  return 'stage'
 end
 return F
@@ -6778,9 +6781,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
  elseif reference then
-  -- The original Mining Away crystal sample: a shiny red Ice union.
-  part.Color=field.color;part.Material=Enum.Material.Ice;part.MaterialVariant=''
-  part.Transparency=.2;part.Reflectance=0
+  -- The reference clones its opaque red union with the authored finish.
+  part.Color=field.color
+  if not original then part.Material=Enum.Material.SmoothPlastic end
  elseif original then
   part.Color=field.cfg.Key=='Ruby' and original.Color or field.color
   part.Material=original.Material;part.MaterialVariant='';part.Reflectance=0

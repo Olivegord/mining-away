@@ -370,9 +370,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
  elseif reference then
-  -- The original Mining Away crystal sample: a shiny red Ice union.
-  part.Color=field.color;part.Material=Enum.Material.Ice;part.MaterialVariant=''
-  part.Transparency=.2;part.Reflectance=0
+  -- The reference clones its opaque red union with the authored finish.
+  part.Color=field.color
+  if not original then part.Material=Enum.Material.SmoothPlastic end
  elseif original then
   part.Color=field.cfg.Key=='Ruby' and original.Color or field.color
   part.Material=original.Material;part.MaterialVariant='';part.Reflectance=0

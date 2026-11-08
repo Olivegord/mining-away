@@ -2,7 +2,7 @@
 
 Read this before changing drone beams, charge effects, launch effects, particle aftermath or their sound/camera feedback. It consolidates the owner's critiques in the November 4, 2026 beam iteration. Read [OWNER_REQUIREMENTS.md](OWNER_REQUIREMENTS.md) first; new explicit owner instructions override this snapshot. Historical review documents describe experiments, including rejected ones, and must not silently override the final direction below.
 
-**November 8 damage appearance:** rocks darken with health lost and reach black at the last visible damage stage. The starter crystal now shrinks at each crack as it changes facing. Both the size and facing snap together, and the beam tracks the new surface. Fresh starter crystals still appear full size.
+**November 8 damage appearance:** within each health band, a crystal darkens toward black. It holds black at the old size for 0.10 seconds, then shrinks and turns on the crack as its original color returns. The beam follows the visible surface through the sequence. Fresh starter crystals use the reference's opaque red SmoothPlastic union with no texture layer.
 
 **November 8 beam contact:** the owner wants the tip to follow the turning crystal like Mining Away. Primary mining beams on original crystal meshes aim at the reference's off-center marker, sample the visible surface beneath it, and keep the verified hit in crystal coordinates. That endpoint turns and shrinks with the rock immediately, while the muzzle stays attached to the drone. The ray budget, obstruction checks, width ramp and fade remain in use. Other contacts keep their existing aiming rules.
 

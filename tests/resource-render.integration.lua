@@ -15,13 +15,16 @@ assert(reads==before,'mature unchanged rocks repeatedly read replicated attribut
 source:SetAttribute('HP',100);source:SetAttribute('Stage',2)
 local initial=record.view.Size.X
 local orientation=record.view.CFrame.LookVector
-renderResource(record,63);assert(record.settled and not record.visual.scorched and record.view.Size.X==initial*.5,'layer loss did not snap immediately')
+renderResource(record,63)
+assert(record.view.Size.X==initial and record.view.Color.R==0 and #cues==0,'crack changed size or played audio before the black flash')
+renderResource(record,63.101)
+assert(record.settled and record.view.Size.X==initial*.5 and record.view.Color.R==1,'layer loss did not snap and restore color')
 assert((record.view.CFrame.LookVector-orientation).Magnitude>.2,'crystal did not change facing')
 local snapped=record.view.CFrame.LookVector
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(2,false,63,3)}
-renderResource(late,63);assert((late.view.CFrame.LookVector-snapped).Magnitude<1e-8,'late observer got a different facing')
-renderResource(record,63.035);assert(record.view.Size.X==initial*.5 and (record.view.CFrame.LookVector-snapped).Magnitude<1e-8,'rock changed between damage stages')
-for frame=1,30 do renderResource(record,63+frame/60) end
+renderResource(late,63.101);assert((late.view.CFrame.LookVector-snapped).Magnitude<1e-8,'late observer got a different facing')
+renderResource(record,63.135);assert(record.view.Size.X==initial*.5 and (record.view.CFrame.LookVector-snapped).Magnitude<1e-8,'rock changed between damage stages')
+for frame=1,30 do renderResource(record,63.101+frame/60) end
 assert(record.settled and record.visual.stage==2 and #cues==1,'one observed fracture replayed extra animations')
 source:SetAttribute('HP',0);source:SetAttribute('BreakSerial',1)
 for frame=1,60 do renderResource(record,64+frame/60) end
@@ -29,7 +32,7 @@ assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==2)
--- The starter crystals spawn red and full size. Damage darkens them across cracks.
+-- Every crack flashes black at the old size and then exposes a smaller red crystal.
 local fixed=source:Clone()
 fixed:SetAttribute('ReferenceCrystal',true)
 fixed.Color=Color3.fromRGB(255,0,0)
@@ -42,18 +45,21 @@ local originalDirection=fixedRecord.view.CFrame.LookVector
 assert(originalSize.X==3 and fixedRecord.view.Color.R==1 and not fixedRecord.settled)
 fixed:SetAttribute('HP',90);fixedRecord.dirty=true
 renderResource(fixedRecord,72.5)
-local previousRed=fixedRecord.view.Color.R
-assert(previousRed>0 and previousRed<1 and fixedRecord.view.Size.X==3)
+assert(fixedRecord.view.Color.R>0 and fixedRecord.view.Color.R<1 and fixedRecord.view.Size.X==3)
 for stage,hp in ipairs({75,50,25}) do
+ local at=72+stage
+ local oldDirection=fixedRecord.view.CFrame.LookVector
  fixed:SetAttribute('HP',hp);fixed:SetAttribute('Stage',stage);fixedRecord.dirty=true
- renderResource(fixedRecord,72+stage)
+ renderResource(fixedRecord,at)
+ renderResource(fixedRecord,at+.05)
+ assert(fixedRecord.view.Color.R==0 and fixedRecord.view.Size.X==originalSize.X*(1-(stage-1)*.25))
+ assert((fixedRecord.view.CFrame.LookVector-oldDirection).Magnitude<1e-8)
+ renderResource(fixedRecord,at+.101)
  assert(fixedRecord.view.Size.X==originalSize.X*(1-stage*.25))
- assert(fixedRecord.view.Color.R<previousRed)
- previousRed=fixedRecord.view.Color.R
+ assert(fixedRecord.view.Color.R==1 and fixedRecord.view.Transparency<1)
  if stage==1 then assert((fixedRecord.view.CFrame.LookVector-originalDirection).Magnitude>.2) end
 end
-assert(previousRed==0 and fixedRecord.view.Transparency<1,'the final visible layer should be black')
 local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(3,false,76,3)}
 renderResource(lateFixed,76)
-assert(lateFixed.view.Color.R==0 and lateFixed.view.Size.X==fixedRecord.view.Size.X)
+assert(lateFixed.view.Color.R==1 and lateFixed.view.Size.X==fixedRecord.view.Size.X and not lateFixed.visual.crackAt)
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

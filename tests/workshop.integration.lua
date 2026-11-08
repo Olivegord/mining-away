@@ -28,6 +28,7 @@ check('the starter field starts with sixteen scattered full-size crystals',funct
  local originalRng=seed
  local crystal=Instance.new('UnionOperation')
  crystal.Size=Vector3.new(3.135,6.566902,4.487231)
+ crystal.Material=Enum.Material.SmoothPlastic
  scene.classicCrystal=crystal
  field.part.Size=Vector3.new(unpack(field.cfg.Size))
  for roll=1,24 do
@@ -43,7 +44,7 @@ check('the starter field starts with sixteen scattered full-size crystals',funct
    assert(r.maxHP>=50 and r.maxHP<=100 and r.hp==r.maxHP-10 and r.readyAt==r.spawnAt+2)
    assert(r.part.ClassName=='UnionOperation' and r.limit==1 and r.stageCount==3)
    assert((r.fullSize-crystal.Size).Magnitude<.0001)
-   assert(r.part.Color.R==1 and r.part.Color.G==0 and r.part.Color.B==0 and r.part.Material==Enum.Material.Ice and r.part.Transparency==.2)
+   assert(r.part.Color.R==1 and r.part.Color.G==0 and r.part.Color.B==0 and r.part.Material==Enum.Material.SmoothPlastic and r.part.Transparency==0)
    assert(r.part:GetAttribute('Mineral')=='Quartz' and r.ore==10)
   end
  end

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — black, then smaller and red again
+
+The black phase comes before each crack's size change. As the crystal shrinks and turns, its red returns. Check the finish against the open Mining Away crystal too. This supersedes the earlier cumulative darkening direction.
+
 ## November 8 latest — rocks darken and shrink while lasered
 
 Rocks should darken toward black while taking laser damage and get smaller at each crack. Fresh starter crystals remain shiny red and full size when they appear. Keep the beam on the visible surface as it turns and shrinks.

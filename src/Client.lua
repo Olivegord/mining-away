@@ -778,8 +778,8 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
- -- geometry writes. Spawn growth is animated; mining size changes are snaps.
- if r.settled and not r.dirty then return end
+ -- geometry writes. Wake a settled rock when its black flash is due to end.
+ if r.settled and not r.dirty and (not r.visual.crackAt or now<r.visual.crackAt) then return end
  r.dirty=false
  local s=r.source;local view=r.view
  -- Locked fields remain visible destinations; the server still gates mining.
@@ -800,7 +800,7 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
+ local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount,not junk)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
@@ -822,7 +822,10 @@ local function renderResource(r,now)
    end
   end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
-  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk)
+  local darkness
+  if r.visual.crackAt then darkness=1
+  elseif event=='stage' and not junk then darkness=0
+  else darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk) end
   view.Color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11):Lerp(Color3.new(0,0,0),darkness)
  else view.Transparency=1 end
  if junk then
