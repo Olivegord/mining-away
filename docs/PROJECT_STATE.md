@@ -9,19 +9,31 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0f8885778fa5c0b3f3ecfec5d160df2483efbffd4bc0f3b1ba43453a612e9879` | Added the biome and ore photo materials and matching Sources. Existing map geometry and unrelated Sources were preserved. |
-| Installed gameplay revision | `2ae7b0f0a7c16b1a9d349769fa9c984f3638ee82` | Three connected biome treatments, living foliage, local lights, and polished ore textures. |
+| Native-file SHA-256 | `3c0064f840260ae71e871204a6ddedf3163fee9b1ef052daa0e984edb1afb986` | Matches the combined quarry, effects and economy release. All non-Source chunks and unrelated Sources were preserved. |
+| Installed gameplay revision | `5ce27c1bd1ab668ff99670cd2f021b22d8eb67f3` | Grounded Orbital, visible cut pieces, impact cues and useful pack/shop choices on top of the quarry biome update. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quarry biome revision installed November 7, 2026** | All seven Sources and new materials matched the open shared document. Play was stopped; Studio remains in Edit mode. |
-| Published Roblox version | **v29, verified; biome revision pending** | The last successful receipt was v29 on November 7 at 5:38:42 PM Pacific. The Mac locked before the next publish action. Never reopen the history panel. |
+| Shared Studio entry point | **Combined effects and quarry revision installed November 7, 2026** | All seven Sources matched after publication. Studio was left open in Edit with Play stopped. |
+| Published Roblox version | **v37, verified** | Studio recorded successful publication to the existing place at 6:35:44 PM Pacific on November 7. The Version History panel was not used. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — connected quarry biomes and polished ore
+## Latest follow-up — in-use effects, tools and useful upgrades
+
+Orbital now aims for 2.4 seconds with a thin red sight and a rock-sized circle. The strike column remains at ground level while its sparks track the melting rock top. Gridcutter scores the rotated rock and ejects nine textured pieces; Halver separates two wider chunks and the sword divides its detached slice into six. Specialist warmup carries into the first work gesture. Rock contact waves and debris scale with their source. Temporary deployed gadgets only spend their charge once a hit is accepted.
+
+Starter packs avoid guard-only upgrades until the player can prepare for a guarded field. The pack still offers three saved choices and allows one selection. Cobalt's old discount purchase now gives 25% ore yield per level; free packs stay free and old purchase levels carry over. Shops explain missing minerals or required drone types and refuse purchases that are already at their effect cap. [Effect and economy review](review/EFFECTS_AND_ECONOMY.md)
+
+Before exporting, GitHub's integration branch matched `1106fdb` and the open shared document matched all 12 disk Sources, including the five unmanaged extras. Native Script Sync delivered the three changed Sources with all roots `SyncedAsRoot`. The final `(bytes, rolling fingerprint)` pairs, using seed 0 and multiplier 131 modulo 2147483647, are `(491168, 200801960)` for GlobalDroneControl, `(554556, 1982382348)` for ClientDroneControl and `(4851, 624427711)` for DroneRoleEffects.
+
+The quarry chat published the verified combined document at `2026-11-08T02:35:44Z`. Studio logged `Publish succeeded for placeId 124078027733625`, `Add publish notes to v37`, and `Published new changes in "DRONEREVOLUTION" to Roblox.` A post-publish audit confirmed all the same Sources and roots, place **124078027733625**, universe **10774898335**, and Edit mode with one connected Studio user. The open document still reports its loaded `game.PlaceVersion` of 26; the log records the new live version. Studio was open initially and remained open.
+
+Server/client compilation, the specialist and beam timelines, consumables and hazards, core loop in both configurations, shop logic and persistence passed. The update was installed and published without a new native test loop from this chat. Full effect appearance, mobile, multiplayer and listening quality remain unverified.
+
+## Earlier follow-up — connected quarry biomes and polished ore
 
 Emerald's causeway looks across a turquoise terrain lagoon framed by chalk rock formations and green banks. Cobalt has six blue and coral mushroom trees with cream rims. Ruby uses red leaf cover mixed into the green approaches and broken gray cliffs. The original mining beds, routes and rock geometry remain in place. Newly textured crowns and bark, cooler dawn fill and lights on depot fixtures and ramps restore contrast. The low-resolution ore photo adds mineral-colored veins and a roughness map. [Photo credits and asset IDs](../assets/quarry-textures/README.md)
 
