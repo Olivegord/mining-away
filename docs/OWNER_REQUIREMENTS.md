@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — flat junk, direct mining and dropped tools
+
+Keep the patterned junk faces flat through damage. Remove plot borders and let players choose any available rock or junk cube in the area. Every usable dropped tool should act on an empty click and should help aim at nearby rocks when the intended target is clear. Rework how each tool is held and how the avatar winds up, uses it and recovers.
+
 ## November 8 latest — Arts & Crafts and Tech
 
 The owner chooses each junk theme. The first clearing is Arts & Crafts with brick. The second is Tech. Use straight-on, close, recognizable photos of components. The motherboard reference centers one dark square chip on a green board, with traces around it. Use a different single photograph of a dense gumball pile, with no mirroring. Keep broad patterns such as plaid at their authored scale. Break the waterfront sample grid into separate areas, with remaining samples unassigned.

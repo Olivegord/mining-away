@@ -9,8 +9,8 @@ T.ITEMS={
  Greatsword={name='Giant sword',short='Sword',uses=3,range=13,radius=.65,color={137,205,255},cooldown=.95,windup=.56,melee=true},
  Sledgehammer={name='Sledgehammer',short='Hammer',uses=3,range=10,radius=.65,color={255,192,84},cooldown=.9,windup=.50,melee=true},
  MoltenTongs={name='Molten steel tongs',short='Molten',uses=1,range=9,radius=.62,color={255,105,42},cooldown=.8,windup=.48,gravity=370,speed=50,molten=true},
- Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.4,gadget=true},
- Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.4,gadget=true},
+ Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.58,windup=.26,gadget=true},
+ Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.58,windup=.26,gadget=true},
 }
 function T.finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function T.vector(v) return typeof(v)=='Vector3' and math.abs(v.X)<=100000 and math.abs(v.Y)<=100000 and math.abs(v.Z)<=100000 end
@@ -29,6 +29,23 @@ function T.segmentDistance(point,from,to)
  local delta=to-from;local length=delta:Dot(delta)
  local q=length>1e-8 and math.clamp((point-from):Dot(delta)/length,0,1) or 0
  return (point-(from+delta*q)).Magnitude
+end
+-- Work in box-local units so a click at a corner or the visible edge
+-- produces a real surface contact at any stage of a rock's life.
+function T.surface(part,point,from)
+ local half=part.Size*.5
+ local v=part.CFrame:PointToObjectSpace(point)
+ local q=Vector3.new(math.clamp(v.X,-half.X,half.X),math.clamp(v.Y,-half.Y,half.Y),math.clamp(v.Z,-half.Z,half.Z))
+ if (q-v).Magnitude<1e-5 then
+  local relative=q/half
+  local direction=relative.Magnitude>.01 and relative or part.CFrame:PointToObjectSpace(from)/half
+  local axis='X'
+  if math.abs(direction.Y)>math.abs(direction[axis]) then axis='Y' end
+  if math.abs(direction.Z)>math.abs(direction[axis]) then axis='Z' end
+  local edge=half[axis]*(direction[axis]<0 and -1 or 1)
+  q=Vector3.new(axis=='X' and edge or q.X,axis=='Y' and edge or q.Y,axis=='Z' and edge or q.Z)
+ end
+ return part.CFrame:PointToWorldSpace(q),q/part.Size
 end
 function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)

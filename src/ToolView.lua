@@ -3,7 +3,7 @@ local V={};V.__index=V
 function V.new(ctx)
  local UIS=game:GetService('UserInputService');local Http=game:GetService('HttpService')
  local players=game:GetService('Players');local player=players.LocalPlayer;local U=ctx.interface
- local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
+ local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},rigs={},posed={},chips={},connections={},state={slots={},selected=0}},V)
  local gui=Instance.new('Frame');gui.Name='TemporaryToolHotbar';gui.AnchorPoint=Vector2.new(.5,1);gui.BackgroundTransparency=1;gui.Active=true;gui.ZIndex=ctx.parent.ZIndex+2;gui.Parent=ctx.parent;self.gui=gui
  self.hint=U.text(gui,UDim2.fromOffset(0,-23),UDim2.new(1,0,0,20),'',13,U.palette.white,true);self.hint.TextXAlignment=Enum.TextXAlignment.Center
  for i=1,ToolRules.SLOTS do
@@ -48,6 +48,9 @@ function V.new(ctx)
  table.insert(self.connections,folder.ChildAdded:Connect(add))
  local effects=ctx.world:WaitForChild('ToolImpacts')
  table.insert(self.connections,effects.ChildAdded:Connect(function(p) self:impact(p) end))
+ local run=game:GetService('RunService')
+ table.insert(self.connections,run.PreAnimation:Connect(function() self:resetArms() end))
+ table.insert(self.connections,run.PreSimulation:Connect(function(dt) self:poseArms(dt,workspace:GetServerTimeNow()) end))
  return self
 end
 function V:selected() return self.state.slots[self.state.selected or 0] end
@@ -72,7 +75,7 @@ function V:input(input,processed)
  if self:selected() and (key==Enum.KeyCode.ButtonR2 or input.UserInputType==Enum.UserInputType.MouseButton1) then self:activate();return true end
  return false
 end
-function V:contact(screen)
+function V:contact(screen,range)
  local camera=workspace.CurrentCamera;local hr=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if not camera or not hr then return end
  local pointer=screen or self.uis:GetMouseLocation()
@@ -80,12 +83,16 @@ function V:contact(screen)
  local ray=center and camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) or camera:ScreenPointToRay(pointer.X,pointer.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={self.ctx.localFX,self.player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*180,params)
- return hit and hit.Position,hit and hit.Instance
+ if hit then return hit.Position,hit.Instance end
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local distance=math.max(0,(origin-ray.Origin):Dot(ray.Direction))+range
+ return ray.Origin+ray.Direction*distance
 end
 function V:activate(screen)
  local item=self:selected();if not item or item.state~='Held' or self.ctx.hidden() then return end
- local point,target=self:contact(screen);local id=target and target:GetAttribute('ResourceId');if not id then return end
- if not screen and self.uis.MouseEnabled and not self.uis.TouchEnabled and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
+ if not screen and self.uis:GetLastInputType()==Enum.UserInputType.MouseButton1 and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
+ local point,target=self:contact(screen,ToolRules.ITEMS[item.kind].range);if not point then return end
+ local id=target and target:GetAttribute('ResourceId')
  self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,point=point,resourceId=id})
 end
 function V:click(screen) if not self:selected() then return false end;self:activate(screen);return true end
@@ -97,12 +104,22 @@ end
 function V:impact(source)
  local now=workspace:GetServerTimeNow();local at=source:GetAttribute('StartedAt') or 0
  if now-at>.3 then return end
- local kind=source:GetAttribute('Kind');local position=source.Position
+ local kind=source:GetAttribute('Kind');if type(kind)~='string' then return end
+ local position=source.Position
  local camera=workspace.CurrentCamera;if not camera or (camera.CFrame.Position-position).Magnitude>120 then return end
  local color=source:GetAttribute('Color') or Color3.fromRGB(160,150,135)
- local cue=({BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
+ local cue=({ScrapWindup='tool_windup',OrbitalWindup='tool_windup',BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
   BowlingBallRelease='tool_throw',JellyGrenadeRelease='tool_throw',MoltenTongsRelease='tool_throw',JellyStick='tool_stick'})[kind]
  if cue then self.ctx.audio:play(cue,position);return end
+ if kind:sub(-5)=='Whiff' then
+  self.ctx.audio:play('tool_throw',position,{pitch=kind=='CrowbarWhiff' and 1.25 or .84,level=.68})
+  return
+ end
+ if kind:sub(-5)=='Probe' then
+  self.ctx.audio:play('tool_stick',position,{level=.6})
+  RoleVisuals.Pulse(position,color,.25,3,.42)
+  return
+ end
  if kind~='Drop' then
   local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
@@ -178,7 +195,50 @@ function V:layout(item,active)
  end
  self.use.Visible=active==true and touch
  self.use.Text='Use';self.use.Position=UDim2.new(.5,-54,1,-bottom-totalHeight-68)
- self.hint.Text=active and (ToolRules.ITEMS[item.kind].name..' · Click a spot on the rock') or ''
+ self.hint.Text=active and ToolRules.ITEMS[item.kind].name or ''
+end
+function V:resetArms()
+ for joint,base in pairs(self.posed) do if joint.Parent then joint.Transform=base end end
+ table.clear(self.posed)
+end
+function V:poseArms(dt,now)
+ local camera=workspace.CurrentCamera
+ if not camera then return end
+ for _,p in ipairs(self.players:GetPlayers()) do
+  local character=p.Character
+  local hr=character and character:FindFirstChild('HumanoidRootPart')
+  local rig=self.rigs[p]
+  if rig and rig.character~=character then self.rigs[p]=nil;rig=nil end
+  if not hr or (p~=self.player and (camera.CFrame.Position-hr.Position).Magnitude>115) then continue end
+  local held=p:GetAttribute('HeldFieldTool')
+  local action=p:GetAttribute('ToolActionKind')
+  local at=p:GetAttribute('ToolActionAt')
+  local elapsed=at and now-at or math.huge
+  if not ToolRules.ITEMS[action] or elapsed>=ToolArt.recovery(action) then action=nil end
+  local kind=action or held
+  if not kind and not rig then continue end
+  if not rig then
+   rig={character=character,joints=ToolArt.armRig(character),weight=0}
+   self.rigs[p]=rig
+  end
+  if not rig.joints[1] then
+   if now<(rig.retryAt or 0) then continue end
+   rig.retryAt=now+.4;rig.joints=ToolArt.armRig(character)
+  end
+  if kind then rig.kind=kind end
+  rig.weight+=( (kind and 1 or 0)-rig.weight)*(1-math.exp(-dt*22))
+  if rig.weight<.012 then if not kind then self.rigs[p]=nil end;continue end
+  local aim=p:GetAttribute('ToolAim')
+  local heading=0
+  if action and aim then
+   local direction=hr.CFrame:PointToObjectSpace(aim)
+   heading=math.clamp(math.deg(math.atan2(-direction.X,-direction.Z)),-90,90)*.70
+   local weight=elapsed<0 and math.clamp(1+elapsed/ToolRules.ITEMS[action].windup,0,1) or math.clamp(1-elapsed/ToolArt.recovery(action),0,1)
+   heading*=weight
+  end
+  ToolArt.poseArms(rig.joints,rig.kind,action,elapsed,heading,rig.weight,self.posed)
+ end
+ for p in pairs(self.rigs) do if not p.Parent then self.rigs[p]=nil end end
 end
 function V:step(dt,now)
  local item=self:selected();local active=type(item)=='table' and item.state=='Held' and not self.ctx.hidden()
@@ -201,14 +261,8 @@ function V:step(dt,now)
   local r=self.held[p]
   if r and (r.kind~=kind or not hand) then r.model:Destroy();self.held[p]=nil;r=nil end
   if kind and hand and ToolRules.ITEMS[kind] then
-   if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};r.fill=ToolArt.bar(r.model.PrimaryPart,p:GetAttribute('HeldFieldToolHP') or 1,ToolRules.ITEMS[kind].uses);self.held[p]=r end
-   r.fill.Size=UDim2.fromScale((p:GetAttribute('HeldFieldToolHP') or 0)/ToolRules.ITEMS[kind].uses,1)
-   local wind=p:GetAttribute('ToolWindupUntil')
-   local release=p:GetAttribute('ToolSwingAt')
-   local elapsed=release and now-release or 10
-   local q=wind and math.clamp(1-(wind-now)/(ToolRules.ITEMS[kind].windup or .3),0,1) or 0
-   local recoil=not wind and elapsed>=0 and elapsed<.26 and math.sin(math.pi*elapsed/.26)^.65 or 0
-   r.model:PivotTo(hand.CFrame*CFrame.new(-q*.48,-.5+q*.92,-.4+q*.6-recoil*.85)*CFrame.Angles(q*1.85-recoil*2.1,0,q*.65-(kind=='Crowbar' and .3 or 0)))
+   if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};self.held[p]=r end
+   r.model:PivotTo(ToolArt.grip(kind,hand))
   end
  end
  for p,r in pairs(self.held) do if not p.Parent then r.model:Destroy();self.held[p]=nil end end
@@ -230,6 +284,7 @@ function V:step(dt,now)
 end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
+ self:resetArms()
  for _,slot in ipairs(self.slots) do if slot.model then slot.model:Destroy() end end
  for _,r in pairs(self.world) do r.model:Destroy() end
  for _,r in pairs(self.held) do r.model:Destroy() end

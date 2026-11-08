@@ -9,17 +9,31 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `5172c612a753169b401568e30745e85d355580b388250763c30b023e60804ef9` | Arts & Crafts and Tech previews, six Tech templates, and three waterfront displays. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Arts & Crafts and Tech preview Sources and the separated waterfront samples. |
+| Native-file SHA-256 | `203f575fdf8f2ae4c10b9caba72c17c07e7f8e9859b21e7cf82093e2457cfb92` | Flat junk, direct rock selection, updated tool Sources, and five hidden plot borders. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Direct rock selection and dropped-tool overhaul, with the five trim edits. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Themed junk samples visible in Edit, November 8, 2026** | The open DRONEREVOLUTION Edit session has the three display areas and the themed preview Sources. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The five decorative borders are hidden. All seven managed Sources match the canonical snapshot by SHA-256 and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
 | Roblox publication | **No publication in the November 8 pass** | Open Edit reports loaded version 70. The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — flat junk and dropped-tool handling
+
+Arts & Crafts and Tech junk keep their photo and pattern finishes on flat faces. Junk skips cavity geometry, including the former separate fabric, foam, cork and circuit interiors. Tool hits still damage junk, and sword slices and melting can lower its flat top. Ordinary ore keeps its existing damage geometry.
+
+Players can click or drag over individual rocks and junk cubes to choose work. The Rock Scanner starts automatic follow-up after an explicit rock order. Five decorative border parts are now invisible in Edit and the runtime plot outlines are gone. The physical mining floors, resource spawning regions, mineral unlocks and guard encounters are retained. The themed clearings continue to run in Studio preview.
+
+Usable clicks submit an aim point even over empty ground or sky. The server preserves a direct surface click, helps acquire nearby exposed rock and rechecks reach and cover at release. Empty swings play without using durability, thrown tools still launch, and an empty Scrap or Orbital use plays a placement pulse while retaining the item. Each tool has a palm grip and separate hold, windup, use and recovery poses for the avatar joints.
+
+Studio was open in Play at entry. Stopped it and left the shared DRONEREVOLUTION session open in Edit at place 124078027733625, universe 10774898335, loaded version 70. Verified all five trim values, 150 unchanged ground-support samples and the Quartz viewport. Script Sync delivered both updated controllers and all seven Edit Source hashes match the native snapshot. No Roblox release was published. The last independently documented publication remains v43.
+
+The field-tool, core-loop, rock-damage, consumable and native-file preservation suites passed. An Edit harness exercised all eight grips and pose transitions on both native joint types. Live gameplay, avatar appearance in motion, touch and controller feel, and multiplayer were not playtested in this pass.
+
+The [checked saver](../tools/refresh_plot_borders.py) accepts only the five direct `Workspace.MiningAway.Fields.<mineral>.Border.Transparency` changes from 0 to 1. It applies the exported property values against the verified previous native hash while preserving the other properties and all 50 Sources. Use the prior commit `64beb6843798428aeb78aa6f09cc0c6e3d8c8ee2` as the exact Source baseline for `python3 tools/build.py --previous-commit`.
 
 ## Latest follow-up — Arts & Crafts and Tech
 

@@ -693,7 +693,7 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=source.Reflectance;view.Parent=localFX;hidePart(source)
- if source:GetAttribute('JunkInterior') then
+ if source:GetAttribute('Kind')=='Junk' then
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
@@ -710,7 +710,7 @@ local function observe(source)
  if not source.Parent then return end
  if source:IsA('Decal') then
   local record=resources[source.Parent]
-  if record and record.source:GetAttribute('JunkInterior') then
+  if record and record.source:GetAttribute('Kind')=='Junk' then
    if not record.view:FindFirstChild(source.Name) then
     local clone=source:Clone();clone.LocalTransparencyModifier=record.view.Transparency;clone.Parent=record.view
    end
@@ -783,7 +783,7 @@ local function renderResource(r,now)
  local final=s:GetAttribute('FullPosition') or s.Position
  local spawnAt=s:GetAttribute('SpawnAt') or now-2
  local readyAt=s:GetAttribute('ReadyAt') or spawnAt+2
- local junk=s:GetAttribute('JunkInterior')
+ local junk=s:GetAttribute('Kind')=='Junk'
  -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
  local growth=1
  if not junk then
@@ -1146,37 +1146,19 @@ end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
  if (not who or who==player) and prompt.Parent and prompt.Parent:IsA('BasePart') then performStation(prompt.Parent) end
 end)
-local function availableAutomaticWorker()
- if not profile then return false end
- for source in pairs(drones) do
-  if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutomationMineEnabled')==true
-   and (source:GetAttribute('HP') or 0)>0 and source:GetAttribute('State')~='Reprinting' and source:GetAttribute('State')~='Deliver'
-   and source:GetAttribute('Role')~='Medic' and source:GetAttribute('Role')~='Courier' then return true end
- end
- return false
-end
-local function requestPlot(id)
+local function requestField(id)
  if menusVisible() then return end
  if logisticsView and logisticsView:dispatchField(id) then return end
- local fields=world:FindFirstChild('Fields');local guarded=false
+ local fields=world:FindFirstChild('Fields')
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
-   if field:GetAttribute('JunkClearing') then
-    command:FireServer('Patch',{fieldId=id,requestId=Http:GenerateGUID(false)})
-    return
-   end
-   local phase=field:GetAttribute('Phase');guarded=not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active');break
+   local phase=field:GetAttribute('Phase')
+   if not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active') then command:FireServer('Patch',id) end
+   return
   end
  end end
- if not guarded and player:GetAttribute('AutomationMineEnabled')~=true then
-  return
- end
- if not guarded and not availableAutomaticWorker() then
-  return
- end
- command:FireServer('Patch',id)
 end
-local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
+local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
  profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
@@ -1194,14 +1176,14 @@ local function assignField(target)
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
-   if type(fieldId)=='number' and (node:GetAttribute('JunkInterior') or (logisticsView and logisticsView.selected)) then requestPlot(fieldId);return end
+   if type(fieldId)=='number' and logisticsView and logisticsView.selected then requestField(fieldId);return end
    commandView:request(resourceId)
    return
   end
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then return end
   local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
-  if type(field)=='number' then requestPlot(field);return end
+  if type(field)=='number' then requestField(field);return end
   node=node.Parent
  end
 end

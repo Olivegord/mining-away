@@ -136,14 +136,38 @@ check('lasers and explosions hurt players including the owner, with cover and sh
  scene.hazards:blast(hr.Position,12,40);assert(h.Health==50 and hr.LastImpulse,'owner explosion or impulse missing')
  hr.Position=home;advance(.4);scene.hazards:blast(home,12,40);assert(h.Health==50,'home safe area missing')
 end)
-check('ground and interior clicks do nothing; windup preserves the chosen face point',function()
+check('a near-miss acquires a rock and windup preserves the chosen face point',function()
  local _,p=fixture();tools:previewLoadout(p);local s=tools:state(p);local r=node(3);local ball=s.slots[1];equip(p,ball)
- input(p,'UseFieldTool',{id=ball.id,point=r.part.Position},true);assert(not s.attack)
- input(p,'UseFieldTool',contact(ball,r,r.part.Position),true);assert(not s.attack)
+ local assist=tools:target(p,p.player.Character.PrimaryPart,ToolRules.ITEMS.BowlingBall,nil,r.part.Position+Vector3.new(0,0,2))
+ assert(assist==r,'a click just beside the rock should assist')
  local point=r.part.CFrame:PointToWorldSpace(r.part.Size*Vector3.new(.28,.5,.2))
  input(p,'UseFieldTool',contact(ball,r,point),true);assert(s.attack and math.abs(s.attack.offset.X-.28)<1e-6 and ball.hp==4)
  advance(.2);tools:step(.016);assert(ball.state=='Held' and ball.hp==4)
  advance(.3);tools:step(.016);assert(ball.state=='Flying' and ball.hp==3)
+end)
+check('all eight tools act on an empty click',function()
+ for i,kind in ipairs(ToolRules.ORDER) do
+  local _,p=fixture();tools:previewLoadout(p);local s=tools:state(p);local item=s.slots[i];equip(p,item)
+  local point=p.player.Character.PrimaryPart.Position+Vector3.new(4,-2,0)
+  input(p,'UseFieldTool',{id=item.id,point=point,version=s.version-1},true)
+  assert(s.attack and s.attack.target==nil and p.player:GetAttribute('ToolActionKind')==kind)
+  advance(1);tools:step(.016)
+  local def=ToolRules.ITEMS[kind]
+  if def.gravity then assert(item.state=='Flying' and item.hp==def.uses-1)
+  else
+   assert(item.state=='Held' and item.hp==def.uses)
+   assert(tools.effects:FindFirstChild(kind..(def.gadget and 'Probe' or 'Whiff')))
+  end
+ end
+end)
+check('assist skips blocked rocks and releases even if a target disappears',function()
+ local _,p=fixture();tools:previewLoadout(p);local s=tools:state(p);local ball=s.slots[1];equip(p,ball)
+ local r=node(7);local hr=p.player.Character.PrimaryPart;local def=ToolRules.ITEMS.BowlingBall
+ local clear=tools.ctx.clear;tools.ctx.clear=function(_,_,_,target) return target~=r.part end
+ assert(not tools:target(p,hr,def,r.id,r.part.Position+Vector3.new(0,1.5,0)))
+ tools.ctx.clear=clear
+ input(p,'UseFieldTool',contact(ball,r),true);assert(s.attack.target==r)
+ r.paid=true;advance(1);tools:step(.016);assert(ball.state=='Flying' and ball.hp==3)
 end)
 check('sword removes a real slice at click height and keeps its foot grounded',function()
  local _,p=fixture();tools:previewLoadout(p);local sword=tools:state(p).slots[4];equip(p,sword)

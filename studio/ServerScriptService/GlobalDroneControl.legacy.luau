@@ -13,7 +13,7 @@ local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
 end
 S.CATALOG={
  item('quartz_power','Quartz','Mining power','+50% base mining power per level','Adds 50% of base mining power to every mining drone per level. Four levels; stacks with cards up to the 4× run cap. Permanent prestige power applies on top. Resets on prestige.',20,4,{mining=.5}),
- item('quartz_scanner','Quartz','Auto target','Miners pick rocks in the selected field','Earn automatic target selection. Click a cleared field once; workers keep choosing ready crystals until you recall or leave. Does not empty your backpack.',40,1,{plotAuto=1}),
+ item('quartz_scanner','Quartz','Auto target','Miners choose the next rock nearby','Earn automatic target selection. Click a rock once. Assigned workers keep choosing ready rocks until you recall or leave. Does not empty your backpack.',40,1,{plotAuto=1}),
  item('quartz_backpack','Quartz','Bigger backpack','+20 ore capacity per level','Adds 50% of the starting 40-unit backpack per level. Shared with capacity cards; total capacity is capped at 120. Whole final crystal drops are preserved.',30,3,{capacity=.5}),
  item('quartz_ruby','Quartz','Unlock Ruby','Opens the Ruby field and shop','Spend Quartz once to open Ruby for this run. Ruby purchases then spend Ruby. Guard clearances remain permanent.',80,1,nil,'Ruby'),
  item('ruby_cobalt','Ruby','Unlock Cobalt','Opens the Cobalt field and shop','Opens Cobalt this run. Its pyramid guard must still be defeated before mining; buying access never bypasses combat.',144,1,nil,'Cobalt'),
@@ -109,7 +109,7 @@ function S.reason(p,entry,context)
  if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
  if entry.id=='ruby_pack_speed' and S.packSpeed(p)>=2 then return 'Pack reveal already accelerated' end
  if entry.id=='emerald_pack_speed' and S.packSpeed(p)>=4 then return 'Pack reveal already at full speed' end
- if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Plot targeting already installed' end end end
+ if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Automatic targeting already installed' end end end
  if entry.id=='quartz_backpack' then
   local capacity=S.effects(p).capacity or 0
   for _,c in ipairs(p.run.cards) do capacity=capacity+(c.effects.capacity or 0) end
@@ -756,6 +756,7 @@ function S:command(p,payload,verifiedPosition,verifiedTarget)
   p.player:SetAttribute('MA_ConsumableActive',record.kind)
  end)
  if not started then ctx.notice(p,'Wait for the current save to finish') end
+ return started
 end
 function S:drop(p,kind,target,point,finish)
  local ctx=self.ctx
@@ -815,8 +816,8 @@ T.ITEMS={
  Greatsword={name='Giant sword',short='Sword',uses=3,range=13,radius=.65,color={137,205,255},cooldown=.95,windup=.56,melee=true},
  Sledgehammer={name='Sledgehammer',short='Hammer',uses=3,range=10,radius=.65,color={255,192,84},cooldown=.9,windup=.50,melee=true},
  MoltenTongs={name='Molten steel tongs',short='Molten',uses=1,range=9,radius=.62,color={255,105,42},cooldown=.8,windup=.48,gravity=370,speed=50,molten=true},
- Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.4,gadget=true},
- Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.4,gadget=true},
+ Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.58,windup=.26,gadget=true},
+ Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.58,windup=.26,gadget=true},
 }
 function T.finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function T.vector(v) return typeof(v)=='Vector3' and math.abs(v.X)<=100000 and math.abs(v.Y)<=100000 and math.abs(v.Z)<=100000 end
@@ -835,6 +836,23 @@ function T.segmentDistance(point,from,to)
  local delta=to-from;local length=delta:Dot(delta)
  local q=length>1e-8 and math.clamp((point-from):Dot(delta)/length,0,1) or 0
  return (point-(from+delta*q)).Magnitude
+end
+-- Work in box-local units so a click at a corner or the visible edge
+-- produces a real surface contact at any stage of a rock's life.
+function T.surface(part,point,from)
+ local half=part.Size*.5
+ local v=part.CFrame:PointToObjectSpace(point)
+ local q=Vector3.new(math.clamp(v.X,-half.X,half.X),math.clamp(v.Y,-half.Y,half.Y),math.clamp(v.Z,-half.Z,half.Z))
+ if (q-v).Magnitude<1e-5 then
+  local relative=q/half
+  local direction=relative.Magnitude>.01 and relative or part.CFrame:PointToObjectSpace(from)/half
+  local axis='X'
+  if math.abs(direction.Y)>math.abs(direction[axis]) then axis='Y' end
+  if math.abs(direction.Z)>math.abs(direction[axis]) then axis='Z' end
+  local edge=half[axis]*(direction[axis]<0 and -1 or 1)
+  q=Vector3.new(axis=='X' and edge or q.X,axis=='Y' and edge or q.Y,axis=='Z' and edge or q.Z)
+ end
+ return part.CFrame:PointToWorldSpace(q),q/part.Size
 end
 function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)
@@ -918,7 +936,7 @@ function S:publish(p)
  local view={slots={},selected=s.selected,version=s.version,runId=s.runId}
  for i=1,ToolRules.SLOTS do
   local item=self:slot(p,s,i)
-  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=item.saved and 3 or ToolRules.ITEMS[item.kind].uses,state=s.attack and s.attack.item==item and 'Windup' or item.state} or false
+  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=item.saved and 3 or ToolRules.ITEMS[item.kind].uses,state=s.attack and i==s.selected and 'Windup' or item.state} or false
  end
  p.player:SetAttribute('MA_FieldTools',self.ctx.encode(view))
  local selected=self:slot(p,s,s.selected)
@@ -929,7 +947,7 @@ function S:clear(p)
  for id,item in pairs(self.items) do
   if item.owner==p.player.UserId then if item.part then item.part:Destroy() end;self.items[id]=nil end
  end
- p.fieldTools=nil;p.toolStock=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',nil);p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
+ p.fieldTools=nil;p.toolStock=nil;p.player:SetAttribute('ToolActionAt',nil);p.player:SetAttribute('ToolActionKind',nil);p.player:SetAttribute('ToolAim',nil);p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
 end
 function S:previewLoadout(p)
  local s=self:state(p)
@@ -1014,61 +1032,111 @@ function S:collect(p,item)
  self:publish(p);self.ctx.notice(p,ToolRules.ITEMS[item.kind].name..' · slot '..slot)
  return true
 end
-function S:target(p,hr,def,id,position)
+function S:target(p,hr,def,id,point)
  local ctx=self.ctx
- local r=type(id)=='string' and #id<=160 and ctx.resources[id]
- if not r or r.paid or not r.part.Parent or not ToolRules.vector(position)
-  or (position-hr.Position).Magnitude>def.range or not ctx.eligible(p,r,hr.Position) then return end
- local offset=r.part.CFrame:PointToObjectSpace(position)/r.part.Size
- local face=math.max(math.abs(offset.X),math.abs(offset.Y),math.abs(offset.Z))
- if face>.7 or face<.30 or not ctx.clear(hr.Position,position,p.player.Character,r.part) then return end
- return r,Vector3.new(math.clamp(offset.X,-.5,.5),math.clamp(offset.Y,-.5,.5),math.clamp(offset.Z,-.5,.5))
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local direct=type(id)=='string' and #id<=160 and ctx.resources[id]
+ local function contact(r,hint)
+  if r.paid or not r.part.Parent or not ctx.eligible(p,r,hr.Position) then return end
+  local surface,offset=ToolRules.surface(r.part,hint,origin)
+  if (surface-origin).Magnitude>def.range+.65 or not ctx.clear(origin,surface,p.player.Character,r.part) then return end
+  return surface,offset
+ end
+ if direct then
+  local surface,offset=contact(direct,point)
+  if surface and (surface-point).Magnitude<=1.2 then return direct,offset end
+ end
+ local delta=point-origin
+ if delta.Magnitude<.15 then return end
+ local direction=delta.Unit
+ local reach=math.min(def.range,delta.Magnitude)
+ local best,bestOffset,bestScore
+ for _,r in pairs(ctx.resources) do
+  if r==direct or r.paid or not r.part.Parent then continue end
+  local part=r.part
+  local depth=(part.Position-origin):Dot(direction)
+  if depth<=0 or depth>reach+part.Size.Magnitude*.5+2 then continue end
+  local sample=origin+direction*math.min(depth,reach)
+  local surface,offset=ToolRules.surface(part,sample,origin)
+  local gap=(surface-sample).Magnitude
+  -- Favor the rock along the click line. A wider cone for throws still
+  -- tops out at a few studs and cannot reach behind the player or through cover.
+  local allowance=math.clamp(depth*.13,1.8,4.2)
+  if gap>allowance and (surface-point).Magnitude>allowance then continue end
+  local score=math.min(gap,(surface-point).Magnitude)+depth*.025
+  if not bestScore or score<bestScore or (score==bestScore and r.id<best.id) then
+   if contact(r,sample) then best,bestOffset,bestScore=r,offset,score end
+  end
+ end
+ return best,bestOffset
+end
+function S:freeAim(p,hr,def,point)
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local delta=point-origin
+ local aim=origin+(delta.Magnitude>def.range and delta.Unit*def.range or delta)
+ local hit=self.ctx.cast(origin,aim,0,p.player.Character)
+ return hit and hit.Position or aim,hit and hit.Normal
 end
 function S:command(p,action,payload)
  local s=self:state(p)
- if type(payload)~='table' or payload.runId~=s.runId or payload.version~=s.version or s.attack then return end
+ if type(payload)~='table' or payload.runId~=s.runId or s.attack then return end
  if action=='EquipFieldTool' then
+  if payload.version~=s.version then return end
   local slot=payload.slot
   if not ToolRules.finite(slot) or slot%1~=0 or slot<0 or slot>ToolRules.SLOTS then return end
   local item=self:slot(p,s,slot)
   if slot>0 and (not item or item.state~='Held') then return end
   s.selected=slot;s.version+=1;self:publish(p);return
  end
- local item=self:slot(p,s,s.selected);local hr=self.ctx.root(p)
- if not item or item.state~='Held' or item.id~=payload.id or not hr or self.ctx.now()<(s.nextUse or 0) then return end
+ local item=self:slot(p,s,s.selected);local hr=self.ctx.root(p);local now=self.ctx.now()
+ -- The selected item ID and run identify the use even if another slot's
+ -- inventory update is still in flight. Cooldown and windup serialize uses.
+ if not item or item.state~='Held' or item.id~=payload.id or not hr or now<(s.nextUse or 0)
+  or not ToolRules.vector(payload.point) then return end
  local def=ToolRules.ITEMS[item.kind]
  local target,offset=self:target(p,hr,def,payload.resourceId,payload.point)
- if def.gadget then
-  if not target then self.ctx.notice(p,'Click a nearby rock to deploy');return end
-  if self.ctx.gadget(p,item,target,target.part.CFrame:PointToWorldSpace(offset*target.part.Size)) and not item.saved then
-   item.state='Deployed';s.version+=1;self:publish(p)
-  end
-  return
- end
- if not target then self.ctx.notice(p,'Click a spot on a nearby rock');return end
- local now=self.ctx.now()
- s.attack={item=item,target=target,offset=offset,at=now+def.windup,run=s.runId}
+ s.attack={item=item,target=target,offset=offset,point=payload.point,at=now+def.windup,run=s.runId}
  s.nextUse=now+def.cooldown;s.version+=1
- p.player:SetAttribute('ToolWindupUntil',s.attack.at)
+ p.player:SetAttribute('ToolActionKind',item.kind)
+ p.player:SetAttribute('ToolAim',target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size) or payload.point)
+ p.player:SetAttribute('ToolActionAt',s.attack.at)
  self:marker(hr.Position,item.kind..'Windup',Color3.fromRGB(table.unpack(def.color)))
  self:publish(p)
 end
 function S:release(p,s,attack)
  local ctx=self.ctx;local item=attack.item;local def=ToolRules.ITEMS[item.kind];local hr=ctx.root(p)
- s.attack=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',ctx.now())
+ s.attack=nil
  if not hr or not ctx.healthy(p) or s.runId~=attack.run then self:publish(p);return end
- local target=attack.target
- if target and (target.paid or not target.part.Parent) then target=nil end
- if not target then self:publish(p);return end
- local aim=target.part.CFrame:PointToWorldSpace(attack.offset*target.part.Size)
- if (aim-hr.Position).Magnitude>def.range+1 or not ctx.clear(hr.Position,aim,p.player.Character,target.part) then self:publish(p);return end
+ local target,offset=attack.target,attack.offset
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local aim=target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size)
+ if not aim or target.paid or not target.part.Parent or not ctx.eligible(p,target,hr.Position)
+  or (aim-origin).Magnitude>def.range+.65 or not ctx.clear(origin,aim,p.player.Character,target.part) then
+  target,offset=self:target(p,hr,def,nil,attack.point)
+  aim=target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size)
+ end
+ local normal
+ if not aim then aim,normal=self:freeAim(p,hr,def,attack.point) end
+ local color=Color3.fromRGB(table.unpack(def.color))
+ if def.gadget then
+  if target and ctx.gadget(p,item,target,aim) then
+   if not item.saved then item.state='Deployed' end
+  else self:marker(aim,item.kind..'Probe',color,normal) end
+  s.version+=1;self:publish(p);return
+ end
+ if def.melee and not target then
+  self:marker(origin,item.kind..'Whiff',color,aim-origin)
+  self:publish(p);return
+ end
  if def.melee then
   local part=target.part;local center=part.Position;local originalHeight=part.Size.Y
   local rock={frame=part.CFrame,size=part.Size,material=part.Material,variant=part.MaterialVariant}
-  local cut=math.clamp(.5+attack.offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
+  local cut=math.clamp(.5+offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
   local fraction=item.kind=='Greatsword' and .5 or item.kind=='Sledgehammer' and .32 or .16
   local cap=item.kind=='Greatsword' and 720 or item.kind=='Sledgehammer' and 320 or 70
-  if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),hr.Position,item.kind,aim) then self:publish(p);return end
+  if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),origin,item.kind,aim) then
+   self:marker(origin,item.kind..'Whiff',color,aim-origin);self:publish(p);return
+  end
   item.hp-=1
   if item.kind=='Greatsword' and target.paid then slab=rock.size end
   self:marker(slab and (rock.frame:PointToWorldSpace(Vector3.new(0,(originalHeight-slab.Y)*.5,0))) or aim,
@@ -1088,12 +1156,14 @@ function S:release(p,s,attack)
   if not ctx.clear(hr.Position,from,p.player.Character) then from=hr.Position+Vector3.new(0,1.3,0) end
   local velocity
   if def.molten then
-   local top=target.part.Position.Y+target.part.Size.Y*.5
-   aim=Vector3.new(aim.X,top,aim.Z):Lerp(Vector3.new(target.part.Position.X,top,target.part.Position.Z),.04)
-   from=aim+Vector3.new(0,4.6,0);velocity=Vector3.new(0,-3,0)
-   if not ctx.clear(from,aim,p.player.Character,target.part) then self:publish(p);return end
+   -- Drop vertically when there's headroom, otherwise lob from the hand.
+   if target then aim=Vector3.new(aim.X,target.part.Position.Y+target.part.Size.Y*.5,aim.Z):Lerp(target.part.Position,.04) end
+   local above=aim+Vector3.yAxis*4.6
+   if ctx.clear(origin,above,p.player.Character) and ctx.clear(above,aim,p.player.Character,target and target.part) then
+    from=above;velocity=Vector3.new(0,-3,0)
+   else velocity=ToolRules.launch(item.kind,from,aim) end
   else
-   aim=aim:Lerp(target.part.Position,.035)
+   if target then aim=aim:Lerp(target.part.Position,.035) end
    velocity=ToolRules.launch(item.kind,from,aim)
   end
   if not velocity then self:publish(p);return end
@@ -1106,7 +1176,7 @@ function S:impact(p,item,point,normal,resource)
  local def=ToolRules.ITEMS[item.kind];item.pos=point+normal*(def.radius or .1)
  item.part.Position=item.pos;item.part:SetAttribute('State','Impact')
  if item.kind=='MoltenTongs' then
-  item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+1.75;item.nextMelt=self.ctx.now()
+  item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+(resource and 1.75 or .65);item.nextMelt=self.ctx.now()
   item.part:SetAttribute('State','Molten');item.part:SetAttribute('FuseAt',item.fuseAt)
   self:marker(point,'MoltenTongs',item.part.Color,normal,nil,resource and {frame=resource.part.CFrame,size=resource.part.Size,material=resource.part.Material,variant=resource.part.MaterialVariant})
  elseif item.kind=='JellyGrenade' then
@@ -1152,8 +1222,8 @@ function S:step(dt)
    item.sampleAge=age
   elseif item.state=='Molten' then
    local r=item.stuck
-   if now>=item.fuseAt or not r or r.paid or not r.part.Parent then self:remove(item)
-   elseif now>=item.nextMelt then
+   if now>=item.fuseAt or (r and (r.paid or not r.part.Parent)) then self:remove(item)
+   elseif r and now>=item.nextMelt then
     item.nextMelt=now+.22
     local top=r.part.Position.Y+r.part.Size.Y*.5
     item.pos=Vector3.new(item.pos.X,top+.4,item.pos.Z);item.part.Position=item.pos
@@ -1717,25 +1787,25 @@ local JunkField = (function()
 -- Shared timings and finishes for the themed junk clearings.
 local J={BatchSize=4,Cap=10,LowWork=2,CrewCap=2,DropHeight=53,FallTime=.82,SettleTime=.32}
 J.Props={
- {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194},interior='Wool'},
- {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235},interior='Wool'},
- {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76},interior='Cork'},
- {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155},interior='Foam'},
- {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154},interior='Wool'},
- {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77},interior='Cork'},
+ {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194}},
+ {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235}},
+ {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76}},
+ {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155}},
+ {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154}},
+ {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77}},
 }
 J.TemplateProps={
- {name='Suggestion Box',template='SuggestionBox',work=67,ore=12,interior='Wool'},
- {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10,interior='Foam'},
- {name='Moving Box',template='MovingBox',work=62,ore=11,interior='Foam'},
+ {name='Suggestion Box',template='SuggestionBox',work=67,ore=12},
+ {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10},
+ {name='Moving Box',template='MovingBox',work=62,ore=11},
 }
 J.TechProps={
- {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12,interior='Circuit'},
- {name='Motherboard',template='Motherboard',work=75,ore=15,interior='Circuit'},
- {name='Ribbon Cable',template='RibbonCable',work=57,ore=11,interior='Foam'},
- {name='Circuit Traces',template='CircuitTraces',work=66,ore=13,interior='Circuit'},
- {name='Fuse Box',template='FuseBox',work=73,ore=14,interior='Circuit'},
- {name='Heat Sink',template='HeatSink',work=81,ore=16,interior='Circuit'},
+ {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12},
+ {name='Motherboard',template='Motherboard',work=75,ore=15},
+ {name='Ribbon Cable',template='RibbonCable',work=57,ore=11},
+ {name='Circuit Traces',template='CircuitTraces',work=66,ore=13},
+ {name='Fuse Box',template='FuseBox',work=73,ore=14},
+ {name='Heat Sink',template='HeatSink',work=81,ore=16},
 }
 function J.withTemplates(props,specs,folder)
  local result=table.clone(props)
@@ -1748,13 +1818,6 @@ function J.withTemplates(props,specs,folder)
   end
  end
  return result
-end
-local interiors={Wool={Enum.Material.Fabric,Color3.fromRGB(248,244,231)},
- Cork={Enum.Material.Wood,Color3.fromRGB(215,174,120)},Foam={Enum.Material.Fabric,Color3.fromRGB(193,237,211)},
- Circuit={Enum.Material.Metal,Color3.fromRGB(148,120,82)}}
-function J.finish(name)
- local finish=interiors[name]
- if finish then return finish[1],finish[2] end
 end
 function J.fallPose(age,grounded)
  if age<0 then return grounded+Vector3.yAxis*J.DropHeight end
@@ -2484,7 +2547,7 @@ local function card(id,title,scope,effects,description,kind)
  return {cardId=id,title=title,scope=scope,effects=effects,description=description,type=kind,rarity=rarity,expires='This run'}
 end
 C.CATALOG={
- card('A01','Plot Scanner','Fleet',{plotAuto=1},'Click a plot to let mining drones choose stones for you'),
+ card('A01','Rock Scanner','Fleet',{plotAuto=1},'Pick the first rock. Drones choose the next one nearby.'),
  card('G01','Orbital Laser','Player',{orbitalLaser=1},'Unlock timed orbital burns that melt the biggest ready rock over four seconds'),
  card('G02','Scrap-bot Swarm','Player',{scrapSwarm=1},'Unlock a ten-second swarm of tiny mining bots'),
  card('A02','Fast Couriers','Player',{fullAuto=1},'+100% courier delivery speed; couriers carry small batches from your backpack'),
@@ -2635,7 +2698,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Plot targeting',fullAuto='Courier speed bonus'}
+local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
@@ -2741,9 +2804,9 @@ local function resolve(p,entry,seed,combatVisible,multiTargetCombat)
  if not beneficial(p,c) then return nil end
  c.preview,c.previewTargetName=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
  local purposes={combat='Break through guarded fields',survival='Keep your fighting drones alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
- local headlines={A01='CHOOSE A PLOT, KEEP MINING',A02='COURIERS DELIVER FASTER',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
+ local headlines={A01='CHOOSE A ROCK, KEEP MINING',A02='COURIERS DELIVER FASTER',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
  c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
- if c.cardId=='A01' then c.purpose='Choose a plot instead of every stone'
+ if c.cardId=='A01' then c.purpose='Keep mining nearby after the first rock'
  elseif c.cardId=='A02' then c.purpose='Couriers sell small batches from your backpack faster' end
  local drawbacks={}
  for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','backpack space'}}) do
@@ -6474,7 +6537,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
- p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Plot Scanner · max backpack')
+ p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Rock Scanner · max backpack')
  return includePurchasedSpecials(p,fleet)
 end
 local function randomTestFleet(p: any)
@@ -6585,7 +6648,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if junk then
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
-  part:SetAttribute('JunkInterior',junk.interior);part:SetAttribute('JunkName',junk.name)
+  part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
  else
   part.Color=shell and Color3.fromRGB(186,193,224):Lerp(field.color,.48) or Color3.fromRGB(228,239,248):Lerp(field.color,.66)
   part.Material=Enum.Material.Slate;part.Reflectance=0
@@ -7454,7 +7517,7 @@ end
 local function mineDrone(d: any,p: any,field: any,dt: number)
  if d.combatTarget or d.state=='Attack' then release(d);d.chargeAt=nil;d.chargeTarget=nil end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
- -- Only the Plot Scanner card chooses an unclicked next resource.
+ -- Only the Rock Scanner card chooses an unclicked next resource.
  if not field.junk and not d.target and d.autoField==field.id and ((d.stats.plotAuto or 0)>0 or d.deployedCarrier) then chooseResource(d,field) end
  local r=d.target
  if r then
@@ -7623,7 +7686,7 @@ local function breakerDrone(d,p,hr,field,dt)
  end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
  -- Owning a breaker earns autonomous heavy-rock work after the owner chooses
- -- an ore/plot. The ordinary miner still needs the earned Plot Scanner.
+ -- a rock. The ordinary miner still needs the earned Rock Scanner.
  if not field.junk and not d.target and (p.workField==field.id or d.deployedCarrier) then
   local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field,d),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
   local r=node and resources[node.id]
@@ -7960,7 +8023,7 @@ local function assignOre(p: any,d: any,r: any): boolean
  end
  local slot=1;while slot<=r.limit and occupied[slot] do slot+=1 end
  if slot>r.limit then return false end
- local old=d.field;local resume=d.autoField~=nil;release(d);spend(d)
+ local old=d.field;local resume=d.autoField~=nil or (d.stats.plotAuto or 0)>0;release(d);spend(d)
  d.autoField=resume and r.field.id or nil;d.manualTarget=r.id
  d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil;p.workField=r.field.id
  r.slots[d.id]=slot;updateSlots(r)
@@ -8320,14 +8383,14 @@ scene.fieldTools=ToolRules.Service.new({world=root,players=profiles,resources=re
    return consumableService:drop(p,item.kind,target,point,function(used) scene.fieldTools:finishGadget(p,item,used) end)
   end
   local profile=data(p)
-  consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
-  return true
+  return consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
  end,
  clear=function(from,to,character,target) return los(from,to,target,{droneFolder,character}) end,
  cast=function(from,to,radius,character)
   if (to-from).Magnitude<1e-6 then return nil end
   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
   params.FilterDescendantsInstances={droneFolder,character,root.FieldTools,root.ToolImpacts}
+  if radius==0 then return workspace:Raycast(from,to-from,params) end
   return workspace:Spherecast(from,radius,to-from,params)
  end,
  hit=function(p,r,amount,origin,kind,point)
@@ -8468,7 +8531,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
   RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=action=='RoleLoadout' and roleTestFleet(p) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
-  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a field to send every miner.' or 'Random test loadout ready — no saved fleet changed.')
+  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a rock to start mining.' or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
@@ -8492,13 +8555,12 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
-  if field.junk then reject('Order the clearing to send your crew',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
-  if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the plot to mine',field,d);return end
+  if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the mining area',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if not DroneRoles.isWorker(d.role) then reject('Choose the miner or breaker',field,d);return end
-  if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
-  if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
+  if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Rock unavailable',field,d);return end
+  if now<r.readyAt then reject('Rock is still settling',field,d,r);return end
   if not sameRockType(d,r) then reject('This rock is already assigned to another drone type or crew',field,d,r);return end
   if d.target==r and d.field==field.id and r.slots[d.id] then commandReply(pl,payload,'accepted','Already assigned',field,d,r,r.slots[d.id]);return end
   local occupied={};for _,v in pairs(r.slots) do occupied[v]=true end
@@ -8518,7 +8580,6 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(id)~='string' or #id>160 then reply('rejected','Invalid rock');return end
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
-  if r.field.junk then reply('rejected','Order the clearing to send your crew',r);return end
   p.oreQueue=p.oreQueue or {}
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
@@ -8557,7 +8618,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local can=playerCanMine(p,field)
   if can and field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if can then
-   if not nearMiningField(hr.Position,field) then commandReply(pl,payload,'rejected','Move closer to the plot to mine',field);return end
+   if not nearMiningField(hr.Position,field) then commandReply(pl,payload,'rejected','Move closer to the mining area',field);return end
    if activeAssault(p) then commandReply(pl,payload,'rejected','Recall fighting drones first',field);return end
    local assigned=0
    for _,d in ipairs(p.drones) do
@@ -8569,13 +8630,13 @@ local function commandPlayer(pl: any,action: any,payload: any)
     end
    end
    if assigned==0 then
-    local reason=field.junk and 'An available miner or breaker is needed' or 'Click ores first. Plot Scanner unlocks plot orders.'
+    local reason=field.junk and 'An available miner or breaker is needed' or 'Click a rock to start mining.'
     commandReply(pl,payload,'rejected',reason,field);notice(p,reason);return
    end
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
    if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end
-   commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Plot survey assigned',field)
+   commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Mining area assigned',field)
   else
    local fleet={}
    for _,d in ipairs(p.drones) do

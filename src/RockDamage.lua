@@ -56,14 +56,6 @@ end
 local function discard(parts)
  if type(parts)=='table' then for _,part in ipairs(parts) do part:Destroy() end end
 end
-local function placeInterior(record)
- local interior=record.interior
- if not interior then return end
- local frame,size=R.basePose(record.view)
- interior.part.Size=size*interior.scale
- interior.part.CFrame=frame*CFrame.new(size*interior.offset)
- interior.part.Transparency=record.view.Transparency
-end
 function R.new(options)
  options=options or {}
  local self={records={},queued={},working=false,nextAt=0,closed=false,operations=0,failures=0}
@@ -81,7 +73,6 @@ function R.new(options)
   self:register(record)
   local state=self.records[record];local source=record.source
   if not state or not source.Parent or not record.view.Parent then return end
-  placeInterior(record)
   if (source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0 then self.queued[record]=nil;return end
   local bubbles=count(source:GetAttribute('BubbleBites'));local dents=count(source:GetAttribute('SmashDents'))
   local band=R.depthBand(bubbles,dents,source:GetAttribute('DamageDepth'))
@@ -90,7 +81,7 @@ function R.new(options)
   local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')..(heat>0 and ':heat'..heat or '')
   if key==state.requested then return end
   state.requested=key;state.generation+=1
-  if bubbles+dents==0 and not ball and heat==0 then return end
+  if source:GetAttribute('Kind')=='Junk' or (bubbles+dents==0 and not ball and heat==0) then return end
   -- Only the local render clone is touched, never the replicated source.
   if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
   self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,heat=heat,meltPoint=source:GetAttribute('MeltPoint'),dentWidth=source:GetAttribute('DentWidth'),generation=state.generation,key=key,at=now}
@@ -142,37 +133,13 @@ function R.new(options)
    cutters[#cutters+1]=cutter
   end
   self.operations+=1
-  local interiorMaterial,interiorColor
-  if request.ball and record.source:GetAttribute('JunkInterior') then
-   interiorMaterial,interiorColor=JunkField.finish(record.source:GetAttribute('JunkInterior'))
-  end
-  local core
-  if interiorMaterial then
-   core=Instance.new('Part');core.Size=Vector3.one*(CANONICAL*.92);core.CFrame=CFrame.new()
-   table.insert(cutters,core)
-  end
   local geometryOptions={
    CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Automatic,SplitApart=false,
   }
   local ok,parts=pcall(function()
    return geometry:SubtractAsync(base,cutters,geometryOptions)
   end)
-  local coreParts
-  if core then
-   table.remove(cutters)
-   if ok and type(parts)=='table' and #parts==1 then
-    -- A small gap between the two cavity surfaces keeps the wool and shell
-    -- from fighting for the same pixels at the cut.
-    for _,cutter in ipairs(cutters) do cutter.Size*=1.025 end
-    local coreOK,result=pcall(function() return geometry:SubtractAsync(core,cutters,geometryOptions) end)
-    if not coreOK or type(result)~='table' or #result~=1 then
-     failure(record,state,request.key,'Interior: '..tostring(result));discard(parts);discard(result);parts=nil
-    else coreParts=result end
-   end
-   core:Destroy()
-  end
   base:Destroy();discard(cutters)
-  if not parts and core then return end
   if not ok or type(parts)~='table' or #parts~=1 then
    failure(record,state,request.key,'Subtract: '..(ok and ('expected one result, received '..tostring(type(parts)=='table' and #parts or type(parts))) or tostring(parts)))
    discard(parts);return
@@ -214,17 +181,10 @@ function R.new(options)
     view.Size=size*ratio;view.CFrame=frame*CFrame.new(size*offset)
     view.Color=record.baseColor;view:SetAttribute('PhysicalDamageKey',request.key)
     view:SetAttribute('PhysicalDamageError',nil)
-    if record.interior then record.interior.part:Destroy();record.interior=nil end
-    if coreParts then
-     local inner=coreParts[1]
-     clean(inner);inner.Name='JunkInterior';inner.Material=interiorMaterial;inner.MaterialVariant='';inner.Color=interiorColor
-     record.interior={part=inner,scale=inner.Size/CANONICAL,offset=inner.CFrame.Position/CANONICAL}
-     placeInterior(record);inner.Parent=view;coreParts=nil
-    end
     record.dirty=true;state.applied=request.key
    else view.PivotOffset=priorPivot;failure(record,state,request.key,'Substitute: '..tostring(swapError)) end
   elseif not valid then failure(record,state,request.key,string.format('Invalid bounds %.4f, %.4f, %.4f; template=%s',ratio.X,ratio.Y,ratio.Z,self.template and self.template.ClassName or 'original')) end
-  discard(parts);discard(coreParts)
+  discard(parts)
  end
  function self:step(now)
   if self.closed or self.working or now<self.nextAt then return end

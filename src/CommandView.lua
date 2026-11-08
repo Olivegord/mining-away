@@ -1,5 +1,4 @@
--- Rock clicks stay precise after automation. Drag to paint a work queue;
--- empty field ground still assigns automatic workers to the whole plot.
+-- Click individual rocks or drag across them to paint a work queue.
 local Players=game:GetService('Players')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
@@ -9,8 +8,7 @@ local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
 function V.new(ctx)
- local self=setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
- self.fields={};return self
+ return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end
 function V:beginDrag() self.dragging=true;self.visited={} end
 function V:endDrag() self.dragging=false;self.visited=nil end
@@ -44,8 +42,7 @@ function V:update(dt,now)
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
   end
  end
- local automatic=player:GetAttribute('AutomationMineEnabled')==true
- local hover,hoverField=nil,nil;local camera=workspace.CurrentCamera
+ local hover;local camera=workspace.CurrentCamera
  if visible and camera and not UIS:GetFocusedTextBox() then
   local pointer=UIS:GetMouseLocation()
   local ray
@@ -59,38 +56,14 @@ function V:update(dt,now)
     local node=hit.Instance
     while node and node~=workspace do
      hover=hover or node:GetAttribute('ResourceId')
-     hoverField=hoverField or node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
      node=node.Parent
     end
    end
   end
  end
- local fields=ctx.world and ctx.world:FindFirstChild('Fields')
- local assigned={}
- for source in pairs(ctx.drones) do
-  if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
-   local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
-  end
- end
- if fields then for _,field in ipairs(fields:GetChildren()) do
-  local id=field:GetAttribute('FieldId') or field:GetAttribute('Tier')
-  local floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor')
-  if floor and floor:IsA('BasePart') then
-   local h=self.fields[field]
-   if not h then
-    h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
-   end
-   local junk=field:GetAttribute('JunkClearing')
-   local hovered=hoverField==id and (junk or not hover)
-   h.Enabled=visible and (automatic or junk==true) and (hovered or assigned[id]==true)
-   local color=assigned[id] and GREEN or BLUE
-   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hovered and .94 or 1;h.OutlineTransparency=hovered and .08 or .65
-  end
- end end
- for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
  if not visible then self:endDrag() end
- if self.dragging and hover and records[hover] and not records[hover].source:GetAttribute('JunkInterior') and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
+ if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
  end
  if hover and records[hover] then table.insert(marked,hover) end
@@ -147,6 +120,5 @@ end
 function V:destroy()
  if self.meter then self.meter:Destroy() end
  for _,h in ipairs(self.pool) do h:Destroy() end
- for _,h in pairs(self.fields) do h:Destroy() end
 end
 return V

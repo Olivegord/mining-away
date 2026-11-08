@@ -31,7 +31,7 @@ function S:publish(p)
  local view={slots={},selected=s.selected,version=s.version,runId=s.runId}
  for i=1,ToolRules.SLOTS do
   local item=self:slot(p,s,i)
-  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=item.saved and 3 or ToolRules.ITEMS[item.kind].uses,state=s.attack and s.attack.item==item and 'Windup' or item.state} or false
+  view.slots[i]=item and {id=item.id,kind=item.kind,hp=item.hp,maxHP=item.saved and 3 or ToolRules.ITEMS[item.kind].uses,state=s.attack and i==s.selected and 'Windup' or item.state} or false
  end
  p.player:SetAttribute('MA_FieldTools',self.ctx.encode(view))
  local selected=self:slot(p,s,s.selected)
@@ -42,7 +42,7 @@ function S:clear(p)
  for id,item in pairs(self.items) do
   if item.owner==p.player.UserId then if item.part then item.part:Destroy() end;self.items[id]=nil end
  end
- p.fieldTools=nil;p.toolStock=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',nil);p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
+ p.fieldTools=nil;p.toolStock=nil;p.player:SetAttribute('ToolActionAt',nil);p.player:SetAttribute('ToolActionKind',nil);p.player:SetAttribute('ToolAim',nil);p.player:SetAttribute('HeldFieldTool',nil);p.player:SetAttribute('HeldFieldToolHP',0);p.player:SetAttribute('MA_FieldTools',nil)
 end
 function S:previewLoadout(p)
  local s=self:state(p)
@@ -127,61 +127,111 @@ function S:collect(p,item)
  self:publish(p);self.ctx.notice(p,ToolRules.ITEMS[item.kind].name..' · slot '..slot)
  return true
 end
-function S:target(p,hr,def,id,position)
+function S:target(p,hr,def,id,point)
  local ctx=self.ctx
- local r=type(id)=='string' and #id<=160 and ctx.resources[id]
- if not r or r.paid or not r.part.Parent or not ToolRules.vector(position)
-  or (position-hr.Position).Magnitude>def.range or not ctx.eligible(p,r,hr.Position) then return end
- local offset=r.part.CFrame:PointToObjectSpace(position)/r.part.Size
- local face=math.max(math.abs(offset.X),math.abs(offset.Y),math.abs(offset.Z))
- if face>.7 or face<.30 or not ctx.clear(hr.Position,position,p.player.Character,r.part) then return end
- return r,Vector3.new(math.clamp(offset.X,-.5,.5),math.clamp(offset.Y,-.5,.5),math.clamp(offset.Z,-.5,.5))
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local direct=type(id)=='string' and #id<=160 and ctx.resources[id]
+ local function contact(r,hint)
+  if r.paid or not r.part.Parent or not ctx.eligible(p,r,hr.Position) then return end
+  local surface,offset=ToolRules.surface(r.part,hint,origin)
+  if (surface-origin).Magnitude>def.range+.65 or not ctx.clear(origin,surface,p.player.Character,r.part) then return end
+  return surface,offset
+ end
+ if direct then
+  local surface,offset=contact(direct,point)
+  if surface and (surface-point).Magnitude<=1.2 then return direct,offset end
+ end
+ local delta=point-origin
+ if delta.Magnitude<.15 then return end
+ local direction=delta.Unit
+ local reach=math.min(def.range,delta.Magnitude)
+ local best,bestOffset,bestScore
+ for _,r in pairs(ctx.resources) do
+  if r==direct or r.paid or not r.part.Parent then continue end
+  local part=r.part
+  local depth=(part.Position-origin):Dot(direction)
+  if depth<=0 or depth>reach+part.Size.Magnitude*.5+2 then continue end
+  local sample=origin+direction*math.min(depth,reach)
+  local surface,offset=ToolRules.surface(part,sample,origin)
+  local gap=(surface-sample).Magnitude
+  -- Favor the rock along the click line. A wider cone for throws still
+  -- tops out at a few studs and cannot reach behind the player or through cover.
+  local allowance=math.clamp(depth*.13,1.8,4.2)
+  if gap>allowance and (surface-point).Magnitude>allowance then continue end
+  local score=math.min(gap,(surface-point).Magnitude)+depth*.025
+  if not bestScore or score<bestScore or (score==bestScore and r.id<best.id) then
+   if contact(r,sample) then best,bestOffset,bestScore=r,offset,score end
+  end
+ end
+ return best,bestOffset
+end
+function S:freeAim(p,hr,def,point)
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local delta=point-origin
+ local aim=origin+(delta.Magnitude>def.range and delta.Unit*def.range or delta)
+ local hit=self.ctx.cast(origin,aim,0,p.player.Character)
+ return hit and hit.Position or aim,hit and hit.Normal
 end
 function S:command(p,action,payload)
  local s=self:state(p)
- if type(payload)~='table' or payload.runId~=s.runId or payload.version~=s.version or s.attack then return end
+ if type(payload)~='table' or payload.runId~=s.runId or s.attack then return end
  if action=='EquipFieldTool' then
+  if payload.version~=s.version then return end
   local slot=payload.slot
   if not ToolRules.finite(slot) or slot%1~=0 or slot<0 or slot>ToolRules.SLOTS then return end
   local item=self:slot(p,s,slot)
   if slot>0 and (not item or item.state~='Held') then return end
   s.selected=slot;s.version+=1;self:publish(p);return
  end
- local item=self:slot(p,s,s.selected);local hr=self.ctx.root(p)
- if not item or item.state~='Held' or item.id~=payload.id or not hr or self.ctx.now()<(s.nextUse or 0) then return end
+ local item=self:slot(p,s,s.selected);local hr=self.ctx.root(p);local now=self.ctx.now()
+ -- The selected item ID and run identify the use even if another slot's
+ -- inventory update is still in flight. Cooldown and windup serialize uses.
+ if not item or item.state~='Held' or item.id~=payload.id or not hr or now<(s.nextUse or 0)
+  or not ToolRules.vector(payload.point) then return end
  local def=ToolRules.ITEMS[item.kind]
  local target,offset=self:target(p,hr,def,payload.resourceId,payload.point)
- if def.gadget then
-  if not target then self.ctx.notice(p,'Click a nearby rock to deploy');return end
-  if self.ctx.gadget(p,item,target,target.part.CFrame:PointToWorldSpace(offset*target.part.Size)) and not item.saved then
-   item.state='Deployed';s.version+=1;self:publish(p)
-  end
-  return
- end
- if not target then self.ctx.notice(p,'Click a spot on a nearby rock');return end
- local now=self.ctx.now()
- s.attack={item=item,target=target,offset=offset,at=now+def.windup,run=s.runId}
+ s.attack={item=item,target=target,offset=offset,point=payload.point,at=now+def.windup,run=s.runId}
  s.nextUse=now+def.cooldown;s.version+=1
- p.player:SetAttribute('ToolWindupUntil',s.attack.at)
+ p.player:SetAttribute('ToolActionKind',item.kind)
+ p.player:SetAttribute('ToolAim',target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size) or payload.point)
+ p.player:SetAttribute('ToolActionAt',s.attack.at)
  self:marker(hr.Position,item.kind..'Windup',Color3.fromRGB(table.unpack(def.color)))
  self:publish(p)
 end
 function S:release(p,s,attack)
  local ctx=self.ctx;local item=attack.item;local def=ToolRules.ITEMS[item.kind];local hr=ctx.root(p)
- s.attack=nil;p.player:SetAttribute('ToolWindupUntil',nil);p.player:SetAttribute('ToolSwingAt',ctx.now())
+ s.attack=nil
  if not hr or not ctx.healthy(p) or s.runId~=attack.run then self:publish(p);return end
- local target=attack.target
- if target and (target.paid or not target.part.Parent) then target=nil end
- if not target then self:publish(p);return end
- local aim=target.part.CFrame:PointToWorldSpace(attack.offset*target.part.Size)
- if (aim-hr.Position).Magnitude>def.range+1 or not ctx.clear(hr.Position,aim,p.player.Character,target.part) then self:publish(p);return end
+ local target,offset=attack.target,attack.offset
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local aim=target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size)
+ if not aim or target.paid or not target.part.Parent or not ctx.eligible(p,target,hr.Position)
+  or (aim-origin).Magnitude>def.range+.65 or not ctx.clear(origin,aim,p.player.Character,target.part) then
+  target,offset=self:target(p,hr,def,nil,attack.point)
+  aim=target and target.part.CFrame:PointToWorldSpace(offset*target.part.Size)
+ end
+ local normal
+ if not aim then aim,normal=self:freeAim(p,hr,def,attack.point) end
+ local color=Color3.fromRGB(table.unpack(def.color))
+ if def.gadget then
+  if target and ctx.gadget(p,item,target,aim) then
+   if not item.saved then item.state='Deployed' end
+  else self:marker(aim,item.kind..'Probe',color,normal) end
+  s.version+=1;self:publish(p);return
+ end
+ if def.melee and not target then
+  self:marker(origin,item.kind..'Whiff',color,aim-origin)
+  self:publish(p);return
+ end
  if def.melee then
   local part=target.part;local center=part.Position;local originalHeight=part.Size.Y
   local rock={frame=part.CFrame,size=part.Size,material=part.Material,variant=part.MaterialVariant}
-  local cut=math.clamp(.5+attack.offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
+  local cut=math.clamp(.5+offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
   local fraction=item.kind=='Greatsword' and .5 or item.kind=='Sledgehammer' and .32 or .16
   local cap=item.kind=='Greatsword' and 720 or item.kind=='Sledgehammer' and 320 or 70
-  if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),hr.Position,item.kind,aim) then self:publish(p);return end
+  if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),origin,item.kind,aim) then
+   self:marker(origin,item.kind..'Whiff',color,aim-origin);self:publish(p);return
+  end
   item.hp-=1
   if item.kind=='Greatsword' and target.paid then slab=rock.size end
   self:marker(slab and (rock.frame:PointToWorldSpace(Vector3.new(0,(originalHeight-slab.Y)*.5,0))) or aim,
@@ -201,12 +251,14 @@ function S:release(p,s,attack)
   if not ctx.clear(hr.Position,from,p.player.Character) then from=hr.Position+Vector3.new(0,1.3,0) end
   local velocity
   if def.molten then
-   local top=target.part.Position.Y+target.part.Size.Y*.5
-   aim=Vector3.new(aim.X,top,aim.Z):Lerp(Vector3.new(target.part.Position.X,top,target.part.Position.Z),.04)
-   from=aim+Vector3.new(0,4.6,0);velocity=Vector3.new(0,-3,0)
-   if not ctx.clear(from,aim,p.player.Character,target.part) then self:publish(p);return end
+   -- Drop vertically when there's headroom, otherwise lob from the hand.
+   if target then aim=Vector3.new(aim.X,target.part.Position.Y+target.part.Size.Y*.5,aim.Z):Lerp(target.part.Position,.04) end
+   local above=aim+Vector3.yAxis*4.6
+   if ctx.clear(origin,above,p.player.Character) and ctx.clear(above,aim,p.player.Character,target and target.part) then
+    from=above;velocity=Vector3.new(0,-3,0)
+   else velocity=ToolRules.launch(item.kind,from,aim) end
   else
-   aim=aim:Lerp(target.part.Position,.035)
+   if target then aim=aim:Lerp(target.part.Position,.035) end
    velocity=ToolRules.launch(item.kind,from,aim)
   end
   if not velocity then self:publish(p);return end
@@ -219,7 +271,7 @@ function S:impact(p,item,point,normal,resource)
  local def=ToolRules.ITEMS[item.kind];item.pos=point+normal*(def.radius or .1)
  item.part.Position=item.pos;item.part:SetAttribute('State','Impact')
  if item.kind=='MoltenTongs' then
-  item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+1.75;item.nextMelt=self.ctx.now()
+  item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+(resource and 1.75 or .65);item.nextMelt=self.ctx.now()
   item.part:SetAttribute('State','Molten');item.part:SetAttribute('FuseAt',item.fuseAt)
   self:marker(point,'MoltenTongs',item.part.Color,normal,nil,resource and {frame=resource.part.CFrame,size=resource.part.Size,material=resource.part.Material,variant=resource.part.MaterialVariant})
  elseif item.kind=='JellyGrenade' then
@@ -265,8 +317,8 @@ function S:step(dt)
    item.sampleAge=age
   elseif item.state=='Molten' then
    local r=item.stuck
-   if now>=item.fuseAt or not r or r.paid or not r.part.Parent then self:remove(item)
-   elseif now>=item.nextMelt then
+   if now>=item.fuseAt or (r and (r.paid or not r.part.Parent)) then self:remove(item)
+   elseif r and now>=item.nextMelt then
     item.nextMelt=now+.22
     local top=r.part.Position.Y+r.part.Size.Y*.5
     item.pos=Vector3.new(item.pos.X,top+.4,item.pos.Z);item.part.Position=item.pos

@@ -41,6 +41,7 @@ function S:command(p,payload,verifiedPosition,verifiedTarget)
   p.player:SetAttribute('MA_ConsumableActive',record.kind)
  end)
  if not started then ctx.notice(p,'Wait for the current save to finish') end
+ return started
 end
 function S:drop(p,kind,target,point,finish)
  local ctx=self.ctx

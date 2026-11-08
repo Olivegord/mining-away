@@ -246,7 +246,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
- p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Plot Scanner · max backpack')
+ p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Rock Scanner · max backpack')
  return includePurchasedSpecials(p,fleet)
 end
 local function randomTestFleet(p: any)
@@ -357,7 +357,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if junk then
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
-  part:SetAttribute('JunkInterior',junk.interior);part:SetAttribute('JunkName',junk.name)
+  part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
  else
   part.Color=shell and Color3.fromRGB(186,193,224):Lerp(field.color,.48) or Color3.fromRGB(228,239,248):Lerp(field.color,.66)
   part.Material=Enum.Material.Slate;part.Reflectance=0
@@ -1226,7 +1226,7 @@ end
 local function mineDrone(d: any,p: any,field: any,dt: number)
  if d.combatTarget or d.state=='Attack' then release(d);d.chargeAt=nil;d.chargeTarget=nil end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
- -- Only the Plot Scanner card chooses an unclicked next resource.
+ -- Only the Rock Scanner card chooses an unclicked next resource.
  if not field.junk and not d.target and d.autoField==field.id and ((d.stats.plotAuto or 0)>0 or d.deployedCarrier) then chooseResource(d,field) end
  local r=d.target
  if r then
@@ -1395,7 +1395,7 @@ local function breakerDrone(d,p,hr,field,dt)
  end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
  -- Owning a breaker earns autonomous heavy-rock work after the owner chooses
- -- an ore/plot. The ordinary miner still needs the earned Plot Scanner.
+ -- a rock. The ordinary miner still needs the earned Rock Scanner.
  if not field.junk and not d.target and (p.workField==field.id or d.deployedCarrier) then
   local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field,d),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
   local r=node and resources[node.id]
@@ -1732,7 +1732,7 @@ local function assignOre(p: any,d: any,r: any): boolean
  end
  local slot=1;while slot<=r.limit and occupied[slot] do slot+=1 end
  if slot>r.limit then return false end
- local old=d.field;local resume=d.autoField~=nil;release(d);spend(d)
+ local old=d.field;local resume=d.autoField~=nil or (d.stats.plotAuto or 0)>0;release(d);spend(d)
  d.autoField=resume and r.field.id or nil;d.manualTarget=r.id
  d.field=r.field.id;d.target=r;d.targetSlot=slot;d.state='Travel';d.commandOutAt=nil;p.workField=r.field.id
  r.slots[d.id]=slot;updateSlots(r)
@@ -2092,14 +2092,14 @@ scene.fieldTools=ToolRules.Service.new({world=root,players=profiles,resources=re
    return consumableService:drop(p,item.kind,target,point,function(used) scene.fieldTools:finishGadget(p,item,used) end)
   end
   local profile=data(p)
-  consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
-  return true
+  return consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
  end,
  clear=function(from,to,character,target) return los(from,to,target,{droneFolder,character}) end,
  cast=function(from,to,radius,character)
   if (to-from).Magnitude<1e-6 then return nil end
   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude
   params.FilterDescendantsInstances={droneFolder,character,root.FieldTools,root.ToolImpacts}
+  if radius==0 then return workspace:Raycast(from,to-from,params) end
   return workspace:Spherecast(from,radius,to-from,params)
  end,
  hit=function(p,r,amount,origin,kind,point)
@@ -2240,7 +2240,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
   RoleEffects.ClearAbility(pl.UserId);p.ability=nil;p.testFleet=action=='RoleLoadout' and roleTestFleet(p) or randomTestFleet(p);rebuildFleet(p);logistics:refresh(p)
-  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a field to send every miner.' or 'Random test loadout ready — no saved fleet changed.')
+  notice(p,action=='RoleLoadout' and 'All drone types ready. Click a rock to start mining.' or 'Random test loadout ready — no saved fleet changed.')
  elseif action=='Recall' then
   leaveField(p)
   for _,carrier in ipairs(data(p).logistics.carriers) do logistics:command(p,'RecallCarrier',carrier.id) end
@@ -2264,13 +2264,12 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
-  if field.junk then reject('Order the clearing to send your crew',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
-  if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the plot to mine',field,d);return end
+  if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the mining area',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if not DroneRoles.isWorker(d.role) then reject('Choose the miner or breaker',field,d);return end
-  if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Crystal unavailable',field,d);return end
-  if now<r.readyAt then reject('Crystal still growing',field,d,r);return end
+  if not r or r.field~=field or not r.part.Parent or r.paid or r.hp<=0 then reject('Rock unavailable',field,d);return end
+  if now<r.readyAt then reject('Rock is still settling',field,d,r);return end
   if not sameRockType(d,r) then reject('This rock is already assigned to another drone type or crew',field,d,r);return end
   if d.target==r and d.field==field.id and r.slots[d.id] then commandReply(pl,payload,'accepted','Already assigned',field,d,r,r.slots[d.id]);return end
   local occupied={};for _,v in pairs(r.slots) do occupied[v]=true end
@@ -2290,7 +2289,6 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(id)~='string' or #id>160 then reply('rejected','Invalid rock');return end
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
-  if r.field.junk then reply('rejected','Order the clearing to send your crew',r);return end
   p.oreQueue=p.oreQueue or {}
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
@@ -2329,7 +2327,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local can=playerCanMine(p,field)
   if can and field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
   if can then
-   if not nearMiningField(hr.Position,field) then commandReply(pl,payload,'rejected','Move closer to the plot to mine',field);return end
+   if not nearMiningField(hr.Position,field) then commandReply(pl,payload,'rejected','Move closer to the mining area',field);return end
    if activeAssault(p) then commandReply(pl,payload,'rejected','Recall fighting drones first',field);return end
    local assigned=0
    for _,d in ipairs(p.drones) do
@@ -2341,13 +2339,13 @@ local function commandPlayer(pl: any,action: any,payload: any)
     end
    end
    if assigned==0 then
-    local reason=field.junk and 'An available miner or breaker is needed' or 'Click ores first. Plot Scanner unlocks plot orders.'
+    local reason=field.junk and 'An available miner or breaker is needed' or 'Click a rock to start mining.'
     commandReply(pl,payload,'rejected',reason,field);notice(p,reason);return
    end
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
    if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end
-   commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Plot survey assigned',field)
+   commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Mining area assigned',field)
   else
    local fleet={}
    for _,d in ipairs(p.drones) do

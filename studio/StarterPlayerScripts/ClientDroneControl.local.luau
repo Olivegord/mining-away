@@ -28,7 +28,7 @@ local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
 end
 S.CATALOG={
  item('quartz_power','Quartz','Mining power','+50% base mining power per level','Adds 50% of base mining power to every mining drone per level. Four levels; stacks with cards up to the 4× run cap. Permanent prestige power applies on top. Resets on prestige.',20,4,{mining=.5}),
- item('quartz_scanner','Quartz','Auto target','Miners pick rocks in the selected field','Earn automatic target selection. Click a cleared field once; workers keep choosing ready crystals until you recall or leave. Does not empty your backpack.',40,1,{plotAuto=1}),
+ item('quartz_scanner','Quartz','Auto target','Miners choose the next rock nearby','Earn automatic target selection. Click a rock once. Assigned workers keep choosing ready rocks until you recall or leave. Does not empty your backpack.',40,1,{plotAuto=1}),
  item('quartz_backpack','Quartz','Bigger backpack','+20 ore capacity per level','Adds 50% of the starting 40-unit backpack per level. Shared with capacity cards; total capacity is capped at 120. Whole final crystal drops are preserved.',30,3,{capacity=.5}),
  item('quartz_ruby','Quartz','Unlock Ruby','Opens the Ruby field and shop','Spend Quartz once to open Ruby for this run. Ruby purchases then spend Ruby. Guard clearances remain permanent.',80,1,nil,'Ruby'),
  item('ruby_cobalt','Ruby','Unlock Cobalt','Opens the Cobalt field and shop','Opens Cobalt this run. Its pyramid guard must still be defeated before mining; buying access never bypasses combat.',144,1,nil,'Cobalt'),
@@ -124,7 +124,7 @@ function S.reason(p,entry,context)
  if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
  if entry.id=='ruby_pack_speed' and S.packSpeed(p)>=2 then return 'Pack reveal already accelerated' end
  if entry.id=='emerald_pack_speed' and S.packSpeed(p)>=4 then return 'Pack reveal already at full speed' end
- if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Plot targeting already installed' end end end
+ if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Automatic targeting already installed' end end end
  if entry.id=='quartz_backpack' then
   local capacity=S.effects(p).capacity or 0
   for _,c in ipairs(p.run.cards) do capacity=capacity+(c.effects.capacity or 0) end
@@ -516,25 +516,25 @@ local JunkField = (function()
 -- Shared timings and finishes for the themed junk clearings.
 local J={BatchSize=4,Cap=10,LowWork=2,CrewCap=2,DropHeight=53,FallTime=.82,SettleTime=.32}
 J.Props={
- {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194},interior='Wool'},
- {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235},interior='Wool'},
- {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76},interior='Cork'},
- {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155},interior='Foam'},
- {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154},interior='Wool'},
- {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77},interior='Cork'},
+ {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194}},
+ {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235}},
+ {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76}},
+ {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155}},
+ {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154}},
+ {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77}},
 }
 J.TemplateProps={
- {name='Suggestion Box',template='SuggestionBox',work=67,ore=12,interior='Wool'},
- {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10,interior='Foam'},
- {name='Moving Box',template='MovingBox',work=62,ore=11,interior='Foam'},
+ {name='Suggestion Box',template='SuggestionBox',work=67,ore=12},
+ {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10},
+ {name='Moving Box',template='MovingBox',work=62,ore=11},
 }
 J.TechProps={
- {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12,interior='Circuit'},
- {name='Motherboard',template='Motherboard',work=75,ore=15,interior='Circuit'},
- {name='Ribbon Cable',template='RibbonCable',work=57,ore=11,interior='Foam'},
- {name='Circuit Traces',template='CircuitTraces',work=66,ore=13,interior='Circuit'},
- {name='Fuse Box',template='FuseBox',work=73,ore=14,interior='Circuit'},
- {name='Heat Sink',template='HeatSink',work=81,ore=16,interior='Circuit'},
+ {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12},
+ {name='Motherboard',template='Motherboard',work=75,ore=15},
+ {name='Ribbon Cable',template='RibbonCable',work=57,ore=11},
+ {name='Circuit Traces',template='CircuitTraces',work=66,ore=13},
+ {name='Fuse Box',template='FuseBox',work=73,ore=14},
+ {name='Heat Sink',template='HeatSink',work=81,ore=16},
 }
 function J.withTemplates(props,specs,folder)
  local result=table.clone(props)
@@ -547,13 +547,6 @@ function J.withTemplates(props,specs,folder)
   end
  end
  return result
-end
-local interiors={Wool={Enum.Material.Fabric,Color3.fromRGB(248,244,231)},
- Cork={Enum.Material.Wood,Color3.fromRGB(215,174,120)},Foam={Enum.Material.Fabric,Color3.fromRGB(193,237,211)},
- Circuit={Enum.Material.Metal,Color3.fromRGB(148,120,82)}}
-function J.finish(name)
- local finish=interiors[name]
- if finish then return finish[1],finish[2] end
 end
 function J.fallPose(age,grounded)
  if age<0 then return grounded+Vector3.yAxis*J.DropHeight end
@@ -3892,14 +3885,6 @@ end
 local function discard(parts)
  if type(parts)=='table' then for _,part in ipairs(parts) do part:Destroy() end end
 end
-local function placeInterior(record)
- local interior=record.interior
- if not interior then return end
- local frame,size=R.basePose(record.view)
- interior.part.Size=size*interior.scale
- interior.part.CFrame=frame*CFrame.new(size*interior.offset)
- interior.part.Transparency=record.view.Transparency
-end
 function R.new(options)
  options=options or {}
  local self={records={},queued={},working=false,nextAt=0,closed=false,operations=0,failures=0}
@@ -3917,7 +3902,6 @@ function R.new(options)
   self:register(record)
   local state=self.records[record];local source=record.source
   if not state or not source.Parent or not record.view.Parent then return end
-  placeInterior(record)
   if (source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0 then self.queued[record]=nil;return end
   local bubbles=count(source:GetAttribute('BubbleBites'));local dents=count(source:GetAttribute('SmashDents'))
   local band=R.depthBand(bubbles,dents,source:GetAttribute('DamageDepth'))
@@ -3926,7 +3910,7 @@ function R.new(options)
   local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')..(heat>0 and ':heat'..heat or '')
   if key==state.requested then return end
   state.requested=key;state.generation+=1
-  if bubbles+dents==0 and not ball and heat==0 then return end
+  if source:GetAttribute('Kind')=='Junk' or (bubbles+dents==0 and not ball and heat==0) then return end
   -- Only the local render clone is touched, never the replicated source.
   if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
   self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,heat=heat,meltPoint=source:GetAttribute('MeltPoint'),dentWidth=source:GetAttribute('DentWidth'),generation=state.generation,key=key,at=now}
@@ -3978,37 +3962,13 @@ function R.new(options)
    cutters[#cutters+1]=cutter
   end
   self.operations+=1
-  local interiorMaterial,interiorColor
-  if request.ball and record.source:GetAttribute('JunkInterior') then
-   interiorMaterial,interiorColor=JunkField.finish(record.source:GetAttribute('JunkInterior'))
-  end
-  local core
-  if interiorMaterial then
-   core=Instance.new('Part');core.Size=Vector3.one*(CANONICAL*.92);core.CFrame=CFrame.new()
-   table.insert(cutters,core)
-  end
   local geometryOptions={
    CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Automatic,SplitApart=false,
   }
   local ok,parts=pcall(function()
    return geometry:SubtractAsync(base,cutters,geometryOptions)
   end)
-  local coreParts
-  if core then
-   table.remove(cutters)
-   if ok and type(parts)=='table' and #parts==1 then
-    -- A small gap between the two cavity surfaces keeps the wool and shell
-    -- from fighting for the same pixels at the cut.
-    for _,cutter in ipairs(cutters) do cutter.Size*=1.025 end
-    local coreOK,result=pcall(function() return geometry:SubtractAsync(core,cutters,geometryOptions) end)
-    if not coreOK or type(result)~='table' or #result~=1 then
-     failure(record,state,request.key,'Interior: '..tostring(result));discard(parts);discard(result);parts=nil
-    else coreParts=result end
-   end
-   core:Destroy()
-  end
   base:Destroy();discard(cutters)
-  if not parts and core then return end
   if not ok or type(parts)~='table' or #parts~=1 then
    failure(record,state,request.key,'Subtract: '..(ok and ('expected one result, received '..tostring(type(parts)=='table' and #parts or type(parts))) or tostring(parts)))
    discard(parts);return
@@ -4050,17 +4010,10 @@ function R.new(options)
     view.Size=size*ratio;view.CFrame=frame*CFrame.new(size*offset)
     view.Color=record.baseColor;view:SetAttribute('PhysicalDamageKey',request.key)
     view:SetAttribute('PhysicalDamageError',nil)
-    if record.interior then record.interior.part:Destroy();record.interior=nil end
-    if coreParts then
-     local inner=coreParts[1]
-     clean(inner);inner.Name='JunkInterior';inner.Material=interiorMaterial;inner.MaterialVariant='';inner.Color=interiorColor
-     record.interior={part=inner,scale=inner.Size/CANONICAL,offset=inner.CFrame.Position/CANONICAL}
-     placeInterior(record);inner.Parent=view;coreParts=nil
-    end
     record.dirty=true;state.applied=request.key
    else view.PivotOffset=priorPivot;failure(record,state,request.key,'Substitute: '..tostring(swapError)) end
   elseif not valid then failure(record,state,request.key,string.format('Invalid bounds %.4f, %.4f, %.4f; template=%s',ratio.X,ratio.Y,ratio.Z,self.template and self.template.ClassName or 'original')) end
-  discard(parts);discard(coreParts)
+  discard(parts)
  end
  function self:step(now)
   if self.closed or self.working or now<self.nextAt then return end
@@ -5634,7 +5587,7 @@ function P:_floor(position,exclude)
  local result=workspace:Raycast(position+Vector3.new(0,1,0),Vector3.new(0,-100,0),params)
  return result and result.Position.Y or position.Y-9
 end
-function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock,interiorMaterial)
+function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock)
  if self.closed then return end
  if #self.fragments>=self.maxFragments then
   if not priority then return end
@@ -5646,7 +5599,6 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
  local part=rock and Instance.new('Part') or template:Clone();if not part then return end
  if rock then
   part.Size=template.Size;part.Material=template.Material;part.MaterialVariant=template.MaterialVariant
-  if interiorMaterial then part.Material=interiorMaterial;part.MaterialVariant='' end
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
@@ -6118,10 +6070,6 @@ function P:resourceImpact(resource,event,now)
  self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
  -- Solid cubic rubble has weight; bright collectible ore is a separate reward.
  local amount=breaking and 12 or 5
- local interiorMaterial,interiorColor
- if resource.source:GetAttribute('JunkInterior') and resource.source:GetAttribute('BallDentPoint') then
-  interiorMaterial,interiorColor=JunkField.finish(resource.source:GetAttribute('JunkInterior'))
- end
  local full=resource.source:GetAttribute('FullSize') or view.Size
  if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do
@@ -6132,10 +6080,9 @@ function P:resourceImpact(resource,event,now)
   local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
   local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
   local speed=breaking and (6+i%3*2.3) or (2.4+i*.65)
-  local interior=interiorMaterial and i%3~=0
-  self:_fragment(view,frame,interior and interiorColor or resource.baseColor,0,scale,
+  self:_fragment(view,frame,resource.baseColor,0,scale,
    Vector3.new(math.cos(angle)*speed,breaking and (9+i%4*1.8) or 5+i*.65,math.sin(angle)*speed),
-   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true,interior and interiorMaterial)
+   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true)
  end
 end
 function P:update(_dt,now)
@@ -7609,8 +7556,8 @@ T.ITEMS={
  Greatsword={name='Giant sword',short='Sword',uses=3,range=13,radius=.65,color={137,205,255},cooldown=.95,windup=.56,melee=true},
  Sledgehammer={name='Sledgehammer',short='Hammer',uses=3,range=10,radius=.65,color={255,192,84},cooldown=.9,windup=.50,melee=true},
  MoltenTongs={name='Molten steel tongs',short='Molten',uses=1,range=9,radius=.62,color={255,105,42},cooldown=.8,windup=.48,gravity=370,speed=50,molten=true},
- Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.4,gadget=true},
- Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.4,gadget=true},
+ Scrap={name='Scrap capsule',short='Scrap',uses=1,range=45,radius=.6,color={190,149,255},cooldown=.58,windup=.26,gadget=true},
+ Orbital={name='Orbital laser',short='Orbital',uses=1,range=45,radius=.6,color={255,125,81},cooldown=.58,windup=.26,gadget=true},
 }
 function T.finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function T.vector(v) return typeof(v)=='Vector3' and math.abs(v.X)<=100000 and math.abs(v.Y)<=100000 and math.abs(v.Z)<=100000 end
@@ -7629,6 +7576,23 @@ function T.segmentDistance(point,from,to)
  local delta=to-from;local length=delta:Dot(delta)
  local q=length>1e-8 and math.clamp((point-from):Dot(delta)/length,0,1) or 0
  return (point-(from+delta*q)).Magnitude
+end
+-- Work in box-local units so a click at a corner or the visible edge
+-- produces a real surface contact at any stage of a rock's life.
+function T.surface(part,point,from)
+ local half=part.Size*.5
+ local v=part.CFrame:PointToObjectSpace(point)
+ local q=Vector3.new(math.clamp(v.X,-half.X,half.X),math.clamp(v.Y,-half.Y,half.Y),math.clamp(v.Z,-half.Z,half.Z))
+ if (q-v).Magnitude<1e-5 then
+  local relative=q/half
+  local direction=relative.Magnitude>.01 and relative or part.CFrame:PointToObjectSpace(from)/half
+  local axis='X'
+  if math.abs(direction.Y)>math.abs(direction[axis]) then axis='Y' end
+  if math.abs(direction.Z)>math.abs(direction[axis]) then axis='Z' end
+  local edge=half[axis]*(direction[axis]<0 and -1 or 1)
+  q=Vector3.new(axis=='X' and edge or q.X,axis=='Y' and edge or q.Y,axis=='Z' and edge or q.Z)
+ end
+ return part.CFrame:PointToWorldSpace(q),q/part.Size
 end
 function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)
@@ -7708,6 +7672,75 @@ function A.bar(part,hp,maxHP)
  fill.BackgroundColor3=Color3.fromRGB(156,231,102);fill.BorderSizePixel=0;fill.Parent=track
  return fill
 end
+-- Each pose gives the right shoulder pitch/yaw/roll, elbow pitch, wrist
+-- pitch, and left shoulder pitch/roll. The model stays on the palm.
+local function pose(x,y,z,elbow,wrist,left,spread)
+ return {Vector3.new(x,y,z),Vector3.new(elbow,0,0),Vector3.new(wrist,0,0),Vector3.new(left or 0,0,spread or -8)}
+end
+local motions={
+ BowlingBall={grip=Vector3.new(0,.61,-.75),tilt=-38,
+  idle=pose(30,5,17,40,-10,21,12), load=pose(-34,-24,33,52,12,24,-16), strike=pose(86,6,9,12,-19,8,-20), recovery=.38},
+ Crowbar={grip=Vector3.new(0,-.54,0),tilt=-83,
+  idle=pose(24,2,13,32,0), load=pose(88,-38,36,67,-22,18,-17), strike=pose(66,28,-9,13,21,9,-14), recovery=.24},
+ JellyGrenade={grip=Vector3.new(0,.03,-.44),tilt=-35,
+  idle=pose(27,2,14,46,0), load=pose(97,-25,34,70,-26,13,-15), strike=pose(91,7,9,10,19,6,-16), recovery=.30},
+ Greatsword={grip=Vector3.new(0,-.05,0),tilt=-91,
+  idle=pose(28,12,19,39,-13,23,12), load=pose(70,-54,45,58,-19,48,10), strike=pose(77,43,-12,14,21,50,19), recovery=.37},
+ Sledgehammer={grip=Vector3.new(0,-1.02,0),tilt=-89,
+  idle=pose(27,10,18,40,-7,24,10), load=pose(111,-14,30,64,-11,94,15), strike=pose(42,9,9,8,-76,38,18), recovery=.36},
+ MoltenTongs={grip=Vector3.new(.20,-1.14,0),tilt=-98,
+  idle=pose(39,4,14,30,-8), load=pose(67,-12,21,42,-11,26,8), strike=pose(81,8,12,7,27,21,-5), recovery=.32},
+ Scrap={grip=Vector3.new(0,-.22,-.45),tilt=-60,
+  idle=pose(31,6,15,38,-4), load=pose(54,-12,23,60,-8), strike=pose(74,3,9,11,18), recovery=.28},
+ Orbital={grip=Vector3.new(0,-.22,-.45),tilt=-64,
+  idle=pose(36,7,14,38,-2), load=pose(69,-13,19,53,-16), strike=pose(81,4,8,10,17), recovery=.28},
+}
+local function smooth(x)
+ x=math.clamp(x,0,1)
+ return x*x*(3-2*x)
+end
+local function angles(v)
+ return CFrame.Angles(math.rad(v.X),math.rad(v.Y),math.rad(v.Z))
+end
+function A.armRig(character)
+ local joints={}
+ local names={RightShoulder=1,RightElbow=2,RightWrist=3,LeftShoulder=4,['Right Shoulder']=1,['Left Shoulder']=4}
+ for _,joint in ipairs(character:GetDescendants()) do
+  local index=names[joint.Name]
+  if index and (joint:IsA('Motor6D') or joint:IsA('AnimationConstraint')) and joint.Part0 then joints[index]=joint end
+ end
+ return joints
+end
+function A.poseArms(rig,kind,action,elapsed,heading,weight,applied)
+ local motion=motions[kind]
+ if not motion then return end
+ local from,to,blend=motion.idle,motion.idle,0
+ if action and elapsed<0 then
+  local windup=ToolRules.ITEMS[kind].windup
+  local progress=1+elapsed/windup
+  local loadEnd=ToolRules.ITEMS[kind].melee and .70 or .77
+  if progress<loadEnd then from,to,blend=motion.idle,motion.load,smooth(progress/loadEnd)
+  else from,to,blend=motion.load,motion.strike,smooth((progress-loadEnd)/(1-loadEnd)) end
+ elseif action then from,to,blend=motion.strike,motion.idle,smooth(elapsed/motion.recovery) end
+ for i,joint in pairs(rig) do
+  if not joint.Parent or not joint.Part0 then continue end
+  local rotation=from[i]:Lerp(to[i],blend)
+  if i==1 then
+   rotation+=Vector3.new(rig[2] and 0 or from[2]:Lerp(to[2],blend).X*.42,heading,0)
+  elseif i==4 then rotation+=Vector3.new(0,heading*.52,0) end
+  local basis=joint.C0.Rotation
+  local base=joint.Transform
+  joint.Transform=base:Lerp(basis:Inverse()*angles(rotation)*basis,weight)
+  applied[joint]=base
+ end
+end
+function A.recovery(kind) return motions[kind] and motions[kind].recovery or 0 end
+function A.grip(kind,hand)
+ local motion=motions[kind]
+ local attachment=hand:FindFirstChild('RightGripAttachment')
+ local palm=CFrame.new(attachment and attachment.Position or Vector3.new(0,-hand.Size.Y*.40,0))
+ return hand.CFrame*palm*CFrame.Angles(math.rad(motion.tilt),0,0)*CFrame.new(-motion.grip)
+end
 return A
 
 end)()
@@ -7717,7 +7750,7 @@ local V={};V.__index=V
 function V.new(ctx)
  local UIS=game:GetService('UserInputService');local Http=game:GetService('HttpService')
  local players=game:GetService('Players');local player=players.LocalPlayer;local U=ctx.interface
- local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},chips={},connections={},state={slots={},selected=0}},V)
+ local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},rigs={},posed={},chips={},connections={},state={slots={},selected=0}},V)
  local gui=Instance.new('Frame');gui.Name='TemporaryToolHotbar';gui.AnchorPoint=Vector2.new(.5,1);gui.BackgroundTransparency=1;gui.Active=true;gui.ZIndex=ctx.parent.ZIndex+2;gui.Parent=ctx.parent;self.gui=gui
  self.hint=U.text(gui,UDim2.fromOffset(0,-23),UDim2.new(1,0,0,20),'',13,U.palette.white,true);self.hint.TextXAlignment=Enum.TextXAlignment.Center
  for i=1,ToolRules.SLOTS do
@@ -7762,6 +7795,9 @@ function V.new(ctx)
  table.insert(self.connections,folder.ChildAdded:Connect(add))
  local effects=ctx.world:WaitForChild('ToolImpacts')
  table.insert(self.connections,effects.ChildAdded:Connect(function(p) self:impact(p) end))
+ local run=game:GetService('RunService')
+ table.insert(self.connections,run.PreAnimation:Connect(function() self:resetArms() end))
+ table.insert(self.connections,run.PreSimulation:Connect(function(dt) self:poseArms(dt,workspace:GetServerTimeNow()) end))
  return self
 end
 function V:selected() return self.state.slots[self.state.selected or 0] end
@@ -7786,7 +7822,7 @@ function V:input(input,processed)
  if self:selected() and (key==Enum.KeyCode.ButtonR2 or input.UserInputType==Enum.UserInputType.MouseButton1) then self:activate();return true end
  return false
 end
-function V:contact(screen)
+function V:contact(screen,range)
  local camera=workspace.CurrentCamera;local hr=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if not camera or not hr then return end
  local pointer=screen or self.uis:GetMouseLocation()
@@ -7794,12 +7830,16 @@ function V:contact(screen)
  local ray=center and camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) or camera:ScreenPointToRay(pointer.X,pointer.Y)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={self.ctx.localFX,self.player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*180,params)
- return hit and hit.Position,hit and hit.Instance
+ if hit then return hit.Position,hit.Instance end
+ local origin=hr.Position+Vector3.yAxis*1.3
+ local distance=math.max(0,(origin-ray.Origin):Dot(ray.Direction))+range
+ return ray.Origin+ray.Direction*distance
 end
 function V:activate(screen)
  local item=self:selected();if not item or item.state~='Held' or self.ctx.hidden() then return end
- local point,target=self:contact(screen);local id=target and target:GetAttribute('ResourceId');if not id then return end
- if not screen and self.uis.MouseEnabled and not self.uis.TouchEnabled and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
+ if not screen and self.uis:GetLastInputType()==Enum.UserInputType.MouseButton1 and self.ctx.blocks(self.uis:GetMouseLocation()) then return end
+ local point,target=self:contact(screen,ToolRules.ITEMS[item.kind].range);if not point then return end
+ local id=target and target:GetAttribute('ResourceId')
  self.ctx.command:FireServer('UseFieldTool',{runId=self.state.runId,version=self.state.version,id=item.id,point=point,resourceId=id})
 end
 function V:click(screen) if not self:selected() then return false end;self:activate(screen);return true end
@@ -7811,12 +7851,22 @@ end
 function V:impact(source)
  local now=workspace:GetServerTimeNow();local at=source:GetAttribute('StartedAt') or 0
  if now-at>.3 then return end
- local kind=source:GetAttribute('Kind');local position=source.Position
+ local kind=source:GetAttribute('Kind');if type(kind)~='string' then return end
+ local position=source.Position
  local camera=workspace.CurrentCamera;if not camera or (camera.CFrame.Position-position).Magnitude>120 then return end
  local color=source:GetAttribute('Color') or Color3.fromRGB(160,150,135)
- local cue=({BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
+ local cue=({ScrapWindup='tool_windup',OrbitalWindup='tool_windup',BowlingBallWindup='tool_windup',CrowbarWindup='tool_windup',GreatswordWindup='tool_windup',SledgehammerWindup='tool_windup',JellyGrenadeWindup='tool_windup',MoltenTongsWindup='tool_windup',
   BowlingBallRelease='tool_throw',JellyGrenadeRelease='tool_throw',MoltenTongsRelease='tool_throw',JellyStick='tool_stick'})[kind]
  if cue then self.ctx.audio:play(cue,position);return end
+ if kind:sub(-5)=='Whiff' then
+  self.ctx.audio:play('tool_throw',position,{pitch=kind=='CrowbarWhiff' and 1.25 or .84,level=.68})
+  return
+ end
+ if kind:sub(-5)=='Probe' then
+  self.ctx.audio:play('tool_stick',position,{level=.6})
+  RoleVisuals.Pulse(position,color,.25,3,.42)
+  return
+ end
  if kind~='Drop' then
   local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
@@ -7892,7 +7942,50 @@ function V:layout(item,active)
  end
  self.use.Visible=active==true and touch
  self.use.Text='Use';self.use.Position=UDim2.new(.5,-54,1,-bottom-totalHeight-68)
- self.hint.Text=active and (ToolRules.ITEMS[item.kind].name..' · Click a spot on the rock') or ''
+ self.hint.Text=active and ToolRules.ITEMS[item.kind].name or ''
+end
+function V:resetArms()
+ for joint,base in pairs(self.posed) do if joint.Parent then joint.Transform=base end end
+ table.clear(self.posed)
+end
+function V:poseArms(dt,now)
+ local camera=workspace.CurrentCamera
+ if not camera then return end
+ for _,p in ipairs(self.players:GetPlayers()) do
+  local character=p.Character
+  local hr=character and character:FindFirstChild('HumanoidRootPart')
+  local rig=self.rigs[p]
+  if rig and rig.character~=character then self.rigs[p]=nil;rig=nil end
+  if not hr or (p~=self.player and (camera.CFrame.Position-hr.Position).Magnitude>115) then continue end
+  local held=p:GetAttribute('HeldFieldTool')
+  local action=p:GetAttribute('ToolActionKind')
+  local at=p:GetAttribute('ToolActionAt')
+  local elapsed=at and now-at or math.huge
+  if not ToolRules.ITEMS[action] or elapsed>=ToolArt.recovery(action) then action=nil end
+  local kind=action or held
+  if not kind and not rig then continue end
+  if not rig then
+   rig={character=character,joints=ToolArt.armRig(character),weight=0}
+   self.rigs[p]=rig
+  end
+  if not rig.joints[1] then
+   if now<(rig.retryAt or 0) then continue end
+   rig.retryAt=now+.4;rig.joints=ToolArt.armRig(character)
+  end
+  if kind then rig.kind=kind end
+  rig.weight+=( (kind and 1 or 0)-rig.weight)*(1-math.exp(-dt*22))
+  if rig.weight<.012 then if not kind then self.rigs[p]=nil end;continue end
+  local aim=p:GetAttribute('ToolAim')
+  local heading=0
+  if action and aim then
+   local direction=hr.CFrame:PointToObjectSpace(aim)
+   heading=math.clamp(math.deg(math.atan2(-direction.X,-direction.Z)),-90,90)*.70
+   local weight=elapsed<0 and math.clamp(1+elapsed/ToolRules.ITEMS[action].windup,0,1) or math.clamp(1-elapsed/ToolArt.recovery(action),0,1)
+   heading*=weight
+  end
+  ToolArt.poseArms(rig.joints,rig.kind,action,elapsed,heading,rig.weight,self.posed)
+ end
+ for p in pairs(self.rigs) do if not p.Parent then self.rigs[p]=nil end end
 end
 function V:step(dt,now)
  local item=self:selected();local active=type(item)=='table' and item.state=='Held' and not self.ctx.hidden()
@@ -7915,14 +8008,8 @@ function V:step(dt,now)
   local r=self.held[p]
   if r and (r.kind~=kind or not hand) then r.model:Destroy();self.held[p]=nil;r=nil end
   if kind and hand and ToolRules.ITEMS[kind] then
-   if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};r.fill=ToolArt.bar(r.model.PrimaryPart,p:GetAttribute('HeldFieldToolHP') or 1,ToolRules.ITEMS[kind].uses);self.held[p]=r end
-   r.fill.Size=UDim2.fromScale((p:GetAttribute('HeldFieldToolHP') or 0)/ToolRules.ITEMS[kind].uses,1)
-   local wind=p:GetAttribute('ToolWindupUntil')
-   local release=p:GetAttribute('ToolSwingAt')
-   local elapsed=release and now-release or 10
-   local q=wind and math.clamp(1-(wind-now)/(ToolRules.ITEMS[kind].windup or .3),0,1) or 0
-   local recoil=not wind and elapsed>=0 and elapsed<.26 and math.sin(math.pi*elapsed/.26)^.65 or 0
-   r.model:PivotTo(hand.CFrame*CFrame.new(-q*.48,-.5+q*.92,-.4+q*.6-recoil*.85)*CFrame.Angles(q*1.85-recoil*2.1,0,q*.65-(kind=='Crowbar' and .3 or 0)))
+   if not r then r={kind=kind,model=ToolArt.create(kind,self.ctx.localFX)};self.held[p]=r end
+   r.model:PivotTo(ToolArt.grip(kind,hand))
   end
  end
  for p,r in pairs(self.held) do if not p.Parent then r.model:Destroy();self.held[p]=nil end end
@@ -7944,6 +8031,7 @@ function V:step(dt,now)
 end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
+ self:resetArms()
  for _,slot in ipairs(self.slots) do if slot.model then slot.model:Destroy() end end
  for _,r in pairs(self.world) do r.model:Destroy() end
  for _,r in pairs(self.held) do r.model:Destroy() end
@@ -8245,8 +8333,7 @@ return V
 
 end)()
 local CommandView = (function()
--- Rock clicks stay precise after automation. Drag to paint a work queue;
--- empty field ground still assigns automatic workers to the whole plot.
+-- Click individual rocks or drag across them to paint a work queue.
 local Players=game:GetService('Players')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
@@ -8256,8 +8343,7 @@ local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
 function V.new(ctx)
- local self=setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
- self.fields={};return self
+ return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end
 function V:beginDrag() self.dragging=true;self.visited={} end
 function V:endDrag() self.dragging=false;self.visited=nil end
@@ -8291,8 +8377,7 @@ function V:update(dt,now)
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
   end
  end
- local automatic=player:GetAttribute('AutomationMineEnabled')==true
- local hover,hoverField=nil,nil;local camera=workspace.CurrentCamera
+ local hover;local camera=workspace.CurrentCamera
  if visible and camera and not UIS:GetFocusedTextBox() then
   local pointer=UIS:GetMouseLocation()
   local ray
@@ -8306,38 +8391,14 @@ function V:update(dt,now)
     local node=hit.Instance
     while node and node~=workspace do
      hover=hover or node:GetAttribute('ResourceId')
-     hoverField=hoverField or node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
      node=node.Parent
     end
    end
   end
  end
- local fields=ctx.world and ctx.world:FindFirstChild('Fields')
- local assigned={}
- for source in pairs(ctx.drones) do
-  if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
-   local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
-  end
- end
- if fields then for _,field in ipairs(fields:GetChildren()) do
-  local id=field:GetAttribute('FieldId') or field:GetAttribute('Tier')
-  local floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor')
-  if floor and floor:IsA('BasePart') then
-   local h=self.fields[field]
-   if not h then
-    h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
-   end
-   local junk=field:GetAttribute('JunkClearing')
-   local hovered=hoverField==id and (junk or not hover)
-   h.Enabled=visible and (automatic or junk==true) and (hovered or assigned[id]==true)
-   local color=assigned[id] and GREEN or BLUE
-   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hovered and .94 or 1;h.OutlineTransparency=hovered and .08 or .65
-  end
- end end
- for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
  if not visible then self:endDrag() end
- if self.dragging and hover and records[hover] and not records[hover].source:GetAttribute('JunkInterior') and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
+ if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
  end
  if hover and records[hover] then table.insert(marked,hover) end
@@ -8394,7 +8455,6 @@ end
 function V:destroy()
  if self.meter then self.meter:Destroy() end
  for _,h in ipairs(self.pool) do h:Destroy() end
- for _,h in pairs(self.fields) do h:Destroy() end
 end
 return V
 
@@ -9403,7 +9463,7 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=source.Reflectance;view.Parent=localFX;hidePart(source)
- if source:GetAttribute('JunkInterior') then
+ if source:GetAttribute('Kind')=='Junk' then
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
@@ -9420,7 +9480,7 @@ local function observe(source)
  if not source.Parent then return end
  if source:IsA('Decal') then
   local record=resources[source.Parent]
-  if record and record.source:GetAttribute('JunkInterior') then
+  if record and record.source:GetAttribute('Kind')=='Junk' then
    if not record.view:FindFirstChild(source.Name) then
     local clone=source:Clone();clone.LocalTransparencyModifier=record.view.Transparency;clone.Parent=record.view
    end
@@ -9493,7 +9553,7 @@ local function renderResource(r,now)
  local final=s:GetAttribute('FullPosition') or s.Position
  local spawnAt=s:GetAttribute('SpawnAt') or now-2
  local readyAt=s:GetAttribute('ReadyAt') or spawnAt+2
- local junk=s:GetAttribute('JunkInterior')
+ local junk=s:GetAttribute('Kind')=='Junk'
  -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
  local growth=1
  if not junk then
@@ -9856,37 +9916,19 @@ end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
  if (not who or who==player) and prompt.Parent and prompt.Parent:IsA('BasePart') then performStation(prompt.Parent) end
 end)
-local function availableAutomaticWorker()
- if not profile then return false end
- for source in pairs(drones) do
-  if source:GetAttribute('Owner')==player.UserId and source:GetAttribute('AutomationMineEnabled')==true
-   and (source:GetAttribute('HP') or 0)>0 and source:GetAttribute('State')~='Reprinting' and source:GetAttribute('State')~='Deliver'
-   and source:GetAttribute('Role')~='Medic' and source:GetAttribute('Role')~='Courier' then return true end
- end
- return false
-end
-local function requestPlot(id)
+local function requestField(id)
  if menusVisible() then return end
  if logisticsView and logisticsView:dispatchField(id) then return end
- local fields=world:FindFirstChild('Fields');local guarded=false
+ local fields=world:FindFirstChild('Fields')
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
-   if field:GetAttribute('JunkClearing') then
-    command:FireServer('Patch',{fieldId=id,requestId=Http:GenerateGUID(false)})
-    return
-   end
-   local phase=field:GetAttribute('Phase');guarded=not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active');break
+   local phase=field:GetAttribute('Phase')
+   if not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active') then command:FireServer('Patch',id) end
+   return
   end
  end end
- if not guarded and player:GetAttribute('AutomationMineEnabled')~=true then
-  return
- end
- if not guarded and not availableAutomaticWorker() then
-  return
- end
- command:FireServer('Patch',id)
 end
-local commandView=CommandView.new({parent=localFX,world=world,resources=resourceIndex,drones=drones,command=command,
+local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
  profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
@@ -9904,14 +9946,14 @@ local function assignField(target)
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
-   if type(fieldId)=='number' and (node:GetAttribute('JunkInterior') or (logisticsView and logisticsView.selected)) then requestPlot(fieldId);return end
+   if type(fieldId)=='number' and logisticsView and logisticsView.selected then requestField(fieldId);return end
    commandView:request(resourceId)
    return
   end
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then return end
   local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
-  if type(field)=='number' then requestPlot(field);return end
+  if type(field)=='number' then requestField(field);return end
   node=node.Parent
  end
 end
