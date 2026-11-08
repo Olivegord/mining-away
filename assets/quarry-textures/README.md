@@ -82,3 +82,9 @@ These 64×64 tiles are drawn for DRONEREVOLUTION. Regenerate them from the repos
 | `motif-blue-knit.png` | `126905018997201` |
 | `motif-gold-studs.png` | `107794782432490` |
 | `motif-fired-brick.png` | `119317200148174` |
+
+## Junk object faces
+
+The 23 RGB images in `junk/` are 64×64 pixels each. They cover eight one-part cube templates. The plywood suggestion box and alphabet block use a crop of [Poly Haven Plywood](https://polyhaven.com/a/plywood). The moving box uses a crop of [ambientCG Paper 005](https://ambientcg.com/view?id=Paper005). Both sources are CC0. Labels, hardware, glass reflections and object graphics are drawn for the game. All glass and ice details are painted into opaque faces.
+
+Regenerate with Pillow using `python3 tools/draw_junk_cubes.py <plywood_diff_1k.jpg> <Paper005_1K-JPG_Color.jpg>`.

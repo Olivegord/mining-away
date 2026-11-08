@@ -57,6 +57,9 @@ MOTIF_SCOPE = {
         ("Stars", "Daisies", "BlueGingham", "RedGingham", "Pips", "Waves", "Knit", "Studs")
     }, {"MaterialVariant"}),
 }
+JUNK_CUBE_SCOPE = {
+    "templates": ("ServerStorage", {"JunkCubeTemplates"}, {"Folder", "Part", "Decal"}),
+}
 PALETTE_VARIANTS = {f"QuarryPalette_{name}" for name in
                     ("LeafClumps", "LeafStipple", "LeafRibs", "Tufts", "Strata", "Pebbles")}
 PALETTE_SCOPE = {
@@ -461,6 +464,8 @@ def main():
                        help="Append only the spawn and biome approach accents")
     scope.add_argument("--quarry-motifs", dest="addition", action="store_const", const=MOTIF_SCOPE,
                        help="Append the eight original quarry patterns and their props")
+    scope.add_argument("--junk-cubes", dest="addition", action="store_const", const=JUNK_CUBE_SCOPE,
+                       help="Append only the textured junk cube template library")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
     scope.add_argument("--color-shapes", action="store_true", help="Save quarry palette and abstract accents")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")

@@ -9,8 +9,8 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `c6a880e9a84d6cc12607acf86dfe8c4c79e83918e88aca018b66c782d3d34f20` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
+| Native-file SHA-256 | `0d9453e9bf9b5b645d603585ab8d92a335bb606ac6d3d482fb838a0afc378b69` | Scoped save of eight junk cube templates on top of the grassy basin revision. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Grassy basin and junk cube template library in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -20,6 +20,14 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Follow-up — textured junk cube templates
+
+Installed eight single-part cube templates in `ServerStorage.JunkCubeTemplates` in the shared DRONEREVOLUTION Edit document. Suggestion box, gumball dispenser, alphabet block, box fan, aquarium, ice cube, ticket box, and moving box use 23 unique 64×64 face images, with six decals per cube. Plywood and cardboard use CC0 material crops. All 23 Roblox image IDs loaded in Studio Edit. See [texture sources](../assets/quarry-textures/README.md#junk-object-faces).
+
+Studio was initially open in Play. Stopped it and verified place 124078027733625, universe 10774898335, in Edit with all three Script Sync roots reporting `SyncedAsRoot`. The checked background save appended exactly 57 instances and preserved every existing instance, property, parent, and all 50 Sources. The Quartz falling-junk gameplay Sources are integrated separately. This template pass did not start a Play session or publish a release.
+
+Reproduce in shared Studio Edit with `tools/studio_junk_cube_templates.lua`. Save the staged export to `templates.b64` and run `tools/refresh_native_scenery.py <export-directory> --junk-cubes --baseline-sha256 <verified-sha256>` before applying the stage and rerunning with `--write`.
 
 ## Latest follow-up — grassy basin slopes and raised shelves
 
