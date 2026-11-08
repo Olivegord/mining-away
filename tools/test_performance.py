@@ -20,8 +20,6 @@ server_check=(ROOT/'tests/performance-server.integration.lua').read_text()
 fx_setup=(ROOT/'tests/special-fx.setup.lua').read_text()
 fx_check=(ROOT/'tests/performance-fx.integration.lua').read_text()
 view_check=(ROOT/'tests/performance-logistics-view.integration.lua').read_text()
-presentation=(ROOT/'src/Presentation.lua').read_text()
-impact=presentation[presentation.index('function P:resourceImpact('):presentation.index('function P:update(')]
 results={}
 with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
     tmp=pathlib.Path(directory)
@@ -42,7 +40,6 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
             ('fx',fx_setup+'\n'+module_bundle(('BeamVFX',))+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
             ('logistics',fx_setup+'\n'+module_bundle(('MotionBuffer','DroneOutline'))+'\n'+view_setup+'\n'+methods+'\n'+view_check),
         ]
-        if name=='after':fixtures.append(('fracture',mock+'\nlocal P={}\n'+impact+'\n'+(ROOT/'tests/performance-fracture.integration.lua').read_text()))
         for kind,source in fixtures:
             path=tmp/(name+'-'+kind+'.lua');path.write_text(source)
             subprocess.run([str(args.luau/'luau-compile'),str(path)],stdout=subprocess.DEVNULL,check=True)

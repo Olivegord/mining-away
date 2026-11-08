@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — crystal turns, original sounds, collectible fragments only
+
+Restore Mining Away's quick direction changes and original RockCrack/RockBreak sounds during mining. Only release fragments the player can pick up; remove decorative chips and the separate flying collapse fragments. Keep the red starter crystals, ore payouts, and current progression. No publication requested.
+
 ## November 8 latest — match the first Mining Away patch
 
 Match the reference ruby patch's 30 × 2 × 30 stud size. Clear the ground around the first field down to the checker baseplate, and use shiny red crystals. Keep Quartz as the reward so the existing packs, upgrades and prestige still work. No publication requested.

@@ -1,4 +1,4 @@
-"""Production collapse/ballistics boundaries, using the shared Roblox API double."""
+"""Production crystal stages and reward-only drops, using the shared Roblox API double."""
 import pathlib, subprocess, tempfile
 from build import ROOT, bundle
 luau=pathlib.Path('/private/tmp/mining-away-luau')

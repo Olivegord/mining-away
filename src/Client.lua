@@ -26,7 +26,6 @@ BeamVFX.onCue=function(kind,position,now)
  end
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
-local fractureView=FractureView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new()
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
@@ -801,11 +800,6 @@ local function renderResource(r,now)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
- if r.audioHealth and health<r.audioHealth and not broken and not event and now>=(r.nextCutSound or 0) and now-(s:GetAttribute('FractureAt') or 0)>.18 then
-  soundscape:play('rock_cut',view.Position,{pitch=math.clamp(1.15-full.X*.025,.8,1.1)})
-  r.nextCutSound=now+.24
- end
- r.audioHealth=health
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
@@ -818,7 +812,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then
@@ -829,26 +823,13 @@ local function renderResource(r,now)
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
   view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  if junk then
-   if not r.riseShown and now-spawnAt>=JunkField.FallTime then
-    r.riseShown=true
-    if now-spawnAt<JunkField.FallTime+.42 then
-     presentation:resourceRise(r,now)
-     soundscape:play('rock_body',Vector3.new(final.X,ground,final.Z),{pitch=.8})
-    end
-   end
-  elseif not r.riseShown and now-spawnAt>.12 then
-   r.riseShown=true
-   if now-spawnAt<.65 then presentation:resourceRise(r,now) end
-  end
  else view.Transparency=1 end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
- if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
- elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');soundscape:play('rock_body',view.Position,{pitch=math.clamp(1.1-full.X*.03,.7,1)});presentation:resourceImpact(r,event,now) end
+ if event then crystalAudio:play(view.Position,event) end
  rockDamage:update(r,now)
  r.settled=now>=readyAt
 end
@@ -1095,7 +1076,6 @@ connect(RunService.RenderStepped,function(dt)
  roleEffectView:step(now)
  presentation:beginFrame()
  pickupView:update(dt,now)
- fractureView:update(now)
  for _,r in pairs(resources) do renderResource(r,now) end
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
@@ -1343,7 +1323,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- packView:destroy();commandView:destroy();pickupView:destroy();fractureView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ packView:destroy();commandView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

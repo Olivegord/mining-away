@@ -5,7 +5,6 @@ local Players=game:GetService('Players')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
 local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SMOKE='rbxasset://textures/particles/smoke_main.dds'
 local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local YELLOW=Color3.fromRGB(255,208,69)
 local ENERGY_TAIL=1.8
@@ -111,19 +110,6 @@ function W:burst(position,normal,color,count,now)
  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.06,.19,.02),NumberSequenceKeypoint.new(1,0)})
  sparks.SpreadAngle=Vector2.new(65,65)
  sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
-end
--- A low, irregular puff separates a fracture from bright collectible ore.
-function W:fracture(position,normal,color,count,now)
- if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
- local anchor=part(self.parent,'RockFractureSmoke');anchor.CFrame=facing(position,normal)
- local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.32))
- dust.Texture=SMOKE;dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
- dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(3,6);dust.Drag=9
- dust.Acceleration=Vector3.new(0,.35,0);dust.SpreadAngle=Vector2.new(85,85)
- dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-55,55)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.24,.04),NumberSequenceKeypoint.new(.35,.56,.1),NumberSequenceKeypoint.new(1,.78,.12)})
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.15,.4),NumberSequenceKeypoint.new(1,1)})
- dust:Emit(count>20 and 14 or 6);table.insert(self.bursts,{part=anchor,untilAt=now+1.3})
 end
 function W:destroyMining(beam)
  local fx=beam.work

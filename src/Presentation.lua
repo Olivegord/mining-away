@@ -270,7 +270,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if self.audio and self.audio.setLoop then
-  if visible and sample.active and sample.isMining and not sample.paused then
+  if visible and sample.active and sample.isMining and not sample.paused and not reference then
    self.audio:setLoop(beam,'cutting_hum',point,.45+.55*width,.9+.1*width)
    beam.wasCutting=true
   else
@@ -903,46 +903,6 @@ function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
  return CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
-end
-function P:resourceRise(resource,now)
- if self.closed then return end
- local view=resource.view
- local ground=resource.source:GetAttribute('GroundY') or self:_floor(view.Position,resource.source)
- local at=Vector3.new(view.Position.X,ground+.05,view.Position.Z)
- -- A single low dust displacement connects the two-second growth to the bed.
- -- Late observers and mature rocks never replay this.
- self.work:fracture(at,Vector3.yAxis,resource.baseColor,5,now)
-end
-function P:resourceImpact(resource,event,now)
- if self.closed or (event~='stage' and event~='break') then return end
- local breaking=event=='break'
- if breaking then self:kick(resource.view.Position,.065,now) end
- -- A completed specialist already owns the absorbed/split/cube/shatter
- -- fragments. Do not pile generic showers onto all its hidden fracture stages.
- if resource.source:GetAttribute('EffectType') and (resource.source:GetAttribute('EffectDoneAt') or 0)>0 then return end
- local view=resource.view;local floor=self:_floor(view.Position,resource.source)
- local contact=resource.lastContact;local point,normal=view.Position+Vector3.new(0,view.Size.Y*.5,0),Vector3.yAxis
- if contact then
-  local x,y,z=F.surfaceComponents(contact.anchor,view.Size)
-  if x then point=view.CFrame:PointToWorldSpace(Vector3.new(x,y,z));normal=view.CFrame:VectorToWorldSpace(contact.normal) end
- end
- self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
- -- Solid cubic rubble has weight; bright collectible ore is a separate reward.
- local amount=breaking and 12 or 5
- local full=resource.source:GetAttribute('FullSize') or view.Size
- if type(full)=='number' then full=Vector3.one*full end
- for i=1,amount do
-  local angle=i*2.399963+now*.1
-  local size=math.clamp((breaking and (.11+(i%3)*.033) or .065)*full.X,.15,1.1)
-  local scale=math.clamp(size/math.max(.01,view.Size.X),.03,.62)
-  local radius=math.min(full.X*.18,.65)
-  local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
-  local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
-  local speed=breaking and (6+i%3*2.3) or (2.4+i*.65)
-  self:_fragment(view,frame,resource.baseColor,0,scale,
-   Vector3.new(math.cos(angle)*speed,breaking and (9+i%4*1.8) or 5+i*.65,math.sin(angle)*speed),
-   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true)
- end
 end
 function P:update(_dt,now)
  if self.closed then return end

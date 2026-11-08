@@ -1,9 +1,9 @@
--- Custom equipment hotbar, held tools and impact rubble.
+-- Custom equipment hotbar, held tools and impact cues.
 local V={};V.__index=V
 function V.new(ctx)
  local UIS=game:GetService('UserInputService');local Http=game:GetService('HttpService')
  local players=game:GetService('Players');local player=players.LocalPlayer;local U=ctx.interface
- local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},rigs={},posed={},chips={},connections={},state={slots={},selected=0}},V)
+ local self=setmetatable({ctx=ctx,player=player,players=players,uis=UIS,slots={},world={},held={},rigs={},posed={},connections={},state={slots={},selected=0}},V)
  local gui=Instance.new('Frame');gui.Name='TemporaryToolHotbar';gui.AnchorPoint=Vector2.new(.5,1);gui.BackgroundTransparency=1;gui.Active=true;gui.ZIndex=ctx.parent.ZIndex+2;gui.Parent=ctx.parent;self.gui=gui
  self.hint=U.text(gui,UDim2.fromOffset(0,-23),UDim2.new(1,0,0,20),'',13,U.palette.white,true);self.hint.TextXAlignment=Enum.TextXAlignment.Center
  for i=1,ToolRules.SLOTS do
@@ -126,14 +126,11 @@ function V:impact(source)
  end
  local slab=source:GetAttribute('Slab');local size=source:GetAttribute('RockSize')
  local rockFrame=source:GetAttribute('RockFrame')
- local variant=source:GetAttribute('RockVariant') or ''
- local material=Enum.Material[source:GetAttribute('RockMaterial') or 'Rock'] or Enum.Material.Rock
  local radius=size and math.clamp(math.max(size.X,size.Z)*.5,.8,8) or 1
  local reduced=BeamVFX.reduced()
- if slab and rockFrame and #self.chips<=66 then
+ if slab and rockFrame then
   local frame=CFrame.new(position)*rockFrame.Rotation
   local scale=math.clamp(radius,1,6)
-  local floor=rockFrame.Position.Y-size.Y*.5
   -- One sweep across the selected cut plane. The detached volume is still
   -- together until the pressure at its center throws the six pieces outward.
   if not reduced then
@@ -142,39 +139,10 @@ function V:impact(source)
    RoleVisuals.Beam(left,right,Color3.fromRGB(178,232,255),.14*scale,.16,'Lance')
    RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.46)
   end
-  for i=1,6 do
-   local x=(i-1)%3-1;local z=i<=3 and -.25 or .25
-   local pose=frame*CFrame.new(x*slab.X/3,0,z*slab.Z)
-   local dir=(frame.RightVector*x-frame.LookVector*z*3).Unit
-   local p=Instance.new('Part');p.Name='SlicedOreBlock';p.Size=Vector3.new(slab.X/3,slab.Y,slab.Z*.5)*.976
-   p.Color=color;p.Material=material;p.MaterialVariant=variant;p.CFrame=pose;p.Anchored=true;p.CastShadow=false
-   p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=self.ctx.localFX
-   self.chips[#self.chips+1]={part=p,at=at,expires=at+1.15,pose=pose,velocity=dir*(4+scale*1.4),
-    rise=4+scale*.75,floor=floor+p.Size.Y*.5,spin=Vector3.new(z*2,0,x*.8)}
-  end
  end
  if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47)
  elseif kind=='BowlingBall' or kind=='Sledgehammer' then RoleVisuals.Pulse(position,Color3.fromRGB(238,203,154),radius*.8,radius*3.2,.37)
  elseif kind=='MoltenTongs' then RoleVisuals.Pulse(position,color,radius*.6,radius*2.25,.58) end
- local count=kind=='JellyGrenade' and 18 or kind=='BowlingBall' and 12 or kind=='Shatter' and 10 or 5
- if reduced then count=math.min(count,3) end
- for i=1,count do
-  if #self.chips>=72 then break end
-  local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble'
-  local scale=math.clamp(radius*.52,.65,2.5)
-  local gel=kind=='JellyGrenade' and i%3==0
-  local ember=kind=='MoltenTongs'
-  p.Size=Vector3.new(.18+(i%4)*.10,.12+(i%3)*.07,.19+(i%5)*.053)*scale
-  p.Color=color;p.Material=ember and Enum.Material.Neon or gel and Enum.Material.Glass or kind=='Shatter' and Enum.Material.Metal or material
-  if gel or ember then p.Shape=Enum.PartType.Ball else p.MaterialVariant=variant end
-  local outward=Vector3.new(math.cos(angle),0,math.sin(angle))
-  local normal=source:GetAttribute('Normal') or Vector3.yAxis
-  p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false
-  p.CFrame=CFrame.new(position+normal*.22+outward*.32*scale);p.Parent=self.ctx.localFX
-  p.AssemblyLinearVelocity=outward*((5+i%7)*scale)+Vector3.yAxis*(7+i%9)+normal*(kind=='Crowbar' and 9 or 3)
-  p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
-  self.chips[#self.chips+1]={part=p,at=now,expires=now+1.5}
- end
 end
 function V:layout(item,active)
  local size=self.ctx.parent.AbsoluteSize;local touch=self.uis.TouchEnabled and not self.uis.KeyboardEnabled
@@ -266,21 +234,7 @@ function V:step(dt,now)
   end
  end
  for p,r in pairs(self.held) do if not p.Parent then r.model:Destroy();self.held[p]=nil end end
- for i=#self.chips,1,-1 do
-  local c=self.chips[i]
-  if now>=c.expires then c.part:Destroy();table.remove(self.chips,i)
-  else
-   local q=(now-c.at)/(c.expires-c.at)
-   if c.pose then
-    local t=math.max(0,now-c.at-.075)
-    local center=c.pose.Position+c.velocity*((1-math.exp(-3*t))/3)
-    local height=math.max(c.floor,center.Y+c.rise*t-19*t*t)
-    local rotation=math.min(t,.38)
-    c.part.CFrame=CFrame.new(center.X,height,center.Z)*c.pose.Rotation*CFrame.Angles(c.spin.X*rotation,0,c.spin.Z*rotation)
-   end
-   c.part.Transparency=math.clamp((q-.65)/.35,0,1)
-  end
- end
+
 end
 function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
@@ -288,7 +242,6 @@ function V:destroy()
  for _,slot in ipairs(self.slots) do if slot.model then slot.model:Destroy() end end
  for _,r in pairs(self.world) do r.model:Destroy() end
  for _,r in pairs(self.held) do r.model:Destroy() end
- for _,c in ipairs(self.chips) do c.part:Destroy() end
  self.gui:Destroy();self.use:Destroy()
  if self.oldBackpack~=nil then pcall(function() game:GetService('StarterGui'):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,self.oldBackpack) end) end
 end

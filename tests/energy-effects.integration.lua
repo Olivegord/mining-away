@@ -147,26 +147,5 @@ check('nearby character feels the impact at far camera zoom and reduced motion o
  renderer:kick(Vector3.zero,.14,100.01);assert(renderer.shakeStrength==before)
  renderer:destroy();players.LocalPlayer=oldPlayer;character:Destroy();player:Destroy();camera.CFrame=CFrame.new(0,20,0)
 end)
-check('real fracture creates authored mesh chunks and honors pool limit',function()
- local source=Instance.new('UnionOperation');source:SetAttribute('FullSize',Vector3.one*4);source.Parent=workspace
- local view=source:Clone();view.Size=Vector3.one;view.Position=Vector3.new(0,2,0);view.Parent=root
- local renderer=Presentation.new({parent=root});renderer._floor=function() return 0 end
- local resource={source=source,view=view,baseColor=Color3.new(.5,.7,1)}
- renderer:resourceImpact(resource,'stage',100);assert(#renderer.fragments==3)
- renderer:resourceImpact(resource,'break',100.5);assert(#renderer.fragments==12)
- for _,burst in ipairs(renderer.work.bursts) do
-  local dust=burst.part:FindFirstChildWhichIsA('ParticleEmitter')
-  assert(dust.Texture=='rbxasset://textures/particles/smoke_main.dds' and dust.LightEmission==0,'rock fracture still looks like collectible light')
-  assert(dust.Acceleration.X==0 and dust.Acceleration.Z==0 and not dust.WindAffectsDrag)
-  assert(dust.Speed.Max<=6 and dust.Drag>=9 and dust.Emitted<=14 and burst.untilAt>=100+dust.Lifetime.Max)
- end
- for _,fragment in ipairs(renderer.fragments) do
-  assert(fragment.part:IsA('UnionOperation'),'lost original rock geometry')
-  assert(fragment.velocity.Y>0 and fragment.duration>=.75 and not fragment.part.CanQuery)
- end
- for n=1,10 do renderer:resourceImpact(resource,'break',101+n*.1) end
- assert(#renderer.fragments==renderer.maxFragments)
- renderer:update(1,110);assert(#renderer.fragments==0);renderer:destroy();source:Destroy()
-end)
 root:Destroy();camera:Destroy()
 print(checks..' production energy/fragment behavior checks with API doubles; Studio appearance remains separate')

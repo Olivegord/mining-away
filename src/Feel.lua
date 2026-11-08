@@ -42,11 +42,21 @@ function F.approachWork(position,goal,maxStep60,dt)
  local step=math.min(distance*F.alpha(.065,dt),math.max(0,maxStep60)*1.45*60*dt,distance)
  return position+delta/distance*step
 end
--- Cubes keep their original orientation for their entire lifetime. Mining
--- snaps the size and grounded height; it never tilts, spins or eases the rock.
-function F.groundedRockFrame(position,size,ground,_stage,seed)
+-- Original crystals snap to a new facing on each crack. Seed + stage give
+-- the same pose to the server collider, current observers and late joiners.
+function F.rockYaw(seed,stage,turn)
+ local yaw=(seed*.01)%(2*math.pi)
+ if turn then
+  for i=1,stage do
+   local roll=(seed*131+i*271)%83
+   yaw+=math.rad(55+roll)*((seed+i)%2==0 and 1 or -1)
+  end
+ end
+ return yaw
+end
+function F.groundedRockFrame(position,size,ground,stage,seed,turn)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,seed*.01,0),ground+size.Y-.06
+ return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn),0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach

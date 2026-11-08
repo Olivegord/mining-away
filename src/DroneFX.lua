@@ -21,16 +21,6 @@ local function part(e,name,size,color,material,shape)
  if shape then p.Shape=shape end
  p.Parent=e.folder;e.parts[#e.parts+1]=p;e.owner.count+=1;return p
 end
-local function fragments(e,n,color,material,shape)
- local result={}
- local base=material or e.material
- for i=1,n do
-  local chip=part(e,'ExtractedChip',Vector3.one,color or e.color,base,shape)
-  if base==e.material then chip.MaterialVariant=e.view.MaterialVariant end
-  result[i]=chip
- end
- return result
-end
 local function ring(e,n,color,width)
  local root=part(e,'PressurePlane',Vector3.one*.025,color)
  return {root=root,plane=PlaneBurst.create(root,color),width=width or .045}
@@ -71,31 +61,26 @@ local function build(e)
    local p=part(e,'PressureBubble',Vector3.one,cyan,Enum.Material.Glass,Enum.PartType.Ball);p.Reflectance=.18;e.bubbles[i]=p
    e.glints[i]=part(e,'GlassGlint',Vector3.one,Color3.new(1,1,1),Enum.Material.Neon,Enum.PartType.Ball)
   end
-  e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
   e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal)}
   for _,jaw in ipairs(e.jaws) do jaw.MaterialVariant='QuarryDrone_Ribbed' end
-  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,2,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf' end
+  e.cut=part(e,'ShearEdge',Vector3.one,cyan)
  elseif e.kind=='Gridcutter' then
   e.grid={};for i=1,4 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
-  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock' end
+  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1))
   e.release=ring(e,12,Color3.fromRGB(255,120,145),.065)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
-  e.ring=ring(e,12,purple,.07);e.fragments=fragments(e,10)
+  e.ring=ring(e,12,purple,.07)
  elseif e.kind=='Starforge' then
   e.sun=part(e,'ContainedSun',Vector3.one,gold,Enum.Material.Neon,Enum.PartType.Ball)
   e.corona=part(e,'HeatEnvelope',Vector3.one,hot,Enum.Material.Neon,Enum.PartType.Ball)
   e.rays={};for i=1,3 do e.rays[i]=part(e,'HeatRay',Vector3.one,hot) end
-  e.fragments=fragments(e,10,hot:Lerp(e.color,.28),e.material,Enum.PartType.Ball)
  elseif e.kind=='Frostbite' then
   e.shell=proxy(e);e.shell.Name='GrowingIce';e.shell.Color=ice;e.shell.Material=Enum.Material.Glass;e.shell.Transparency=1;e.shell.Reflectance=.16
-  e.ring=ring(e,10,ice,.045);e.fragments=fragments(e,12,ice,Enum.Material.Glass)
+  e.ring=ring(e,10,ice,.045)
  elseif e.kind=='Resonator' then
   e.rings={ring(e,10,cyan,.045),ring(e,10,purple,.045),ring(e,10,cyan,.045)}
-  e.fragments=fragments(e,8)
  end
 end
 local function facePoint(e,i)
@@ -104,20 +89,6 @@ local function facePoint(e,i)
 end
 local function fade(e,age) return age and smooth(age/e.tail) or 0 end
 local function recovery(age) return age and smooth(age/.65) or 0 end
-local function ballistic(e,age,style)
- hideParts(e.fragments)
- if not age then return end
- local alpha=fade(e,age)
- for i,p in ipairs(e.fragments) do
-  local a=i*2.399963;local r=e.radius
-  local origin=facePoint(e,i)
-  local force=style=='slab' and 1.6 or style=='dust' and 1.1 or 2
-  local velocity=Vector3.new(math.cos(a)*force,1.6+(i%3)*.4,math.sin(a)*force)
-  p.CFrame=CFrame.new(origin+velocity*age+Vector3.new(0,-5*age*age,0))*e.cf.Rotation*CFrame.Angles(age*(i%3-1),age*.7,i*.2)
-  local size=style=='slab' and Vector3.new(r*.4,r*.11,r*.3) or style=='ice' and Vector3.new(r*.09,r*.35,r*.13) or Vector3.one*r*(style=='dust' and .075 or .16)
-  p.Size=safeSize(size*(1-alpha*.7));p.Transparency=alpha
- end
-end
 local function bubblePose(e,t,age)
  local r=e.radius;local fill=smooth(t/(e.impact*.88))
  local cutPoint,cutDiameter
@@ -142,19 +113,6 @@ local function bubblePose(e,t,age)
   local glint=e.glints[i];glint.Position=position+Vector3.new(-diameter*.23,diameter*.27,-diameter*.12)
   glint.Size=Vector3.one*math.max(.025,diameter*.05);glint.Transparency=.18+pop*.82
  end
- hideParts(e.fragments)
- if age then
-  for i,p in ipairs(e.fragments) do
-   local a=i*2.399963;local spread=math.max(0,age-.42)
-   local origin=floating+Vector3.new(math.cos(a)*r*.13,(i%3-1)*r*.10,math.sin(a)*r*.13)
-   -- Actual ore-colored contents detach with the bubble, then acquire
-   -- ballistic weight when its skin ruptures. Cosmetic chips grant no ore.
-   local offset=Vector3.new(math.cos(a)*spread*2.4,spread*(1.4+i%3*.3)-9*spread*spread,math.sin(a)*spread*2.4)
-   p.CFrame=CFrame.new(origin+offset)*e.cf.Rotation*CFrame.Angles(spread*i*.3,spread,0)
-   p.Size=safeSize(Vector3.one*r*(.18+(i%2)*.04)*(1-fade(e,age)*.5))
-   p.Transparency=age<.42 and .05 or fade(e,age)
-  end
- end
 end
 local function halverPose(e,t,age)
  local charge=smooth(t/(e.impact*.7));local cut=clamp((t-e.impact*.8)/(e.impact*.2))^3;local reset=recovery(age)
@@ -167,17 +125,6 @@ local function halverPose(e,t,age)
   p.Size=Vector3.new(.12,size.Y*.21,size.Z*1.05);p.Transparency=.15+reset*.85
  end
  energyLine(e,e.cut,top:PointToWorldSpace(Vector3.new(0,0,-size.Z*.51)),top:PointToWorldSpace(Vector3.new(0,0,size.Z*.51)),.075,.97-cut*.9+reset*.9,'Lance')
- hideParts(e.fragments)
- if age then
-  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .36)
-  local travel=e.radius*.7*(1-math.exp(-age*9));local lift=math.max(0,(3+e.radius)*age-13*age^2)
-  for i,p in ipairs(e.fragments) do
-   local side=i==1 and -1 or 1
-   p.Size=safeSize(Vector3.new(size.X*.49,height,size.Z*.985))
-   p.CFrame=frame*CFrame.new(side*(size.X*.25+travel),(size.Y-height)*.5+lift,0)*CFrame.Angles(0,0,side*math.min(age,.44)*.62)
-   p.Transparency=smooth((age/e.tail-.48)/.52)
-  end
- end
 end
 local function gridPose(e,t,age)
  local frame,size=e.rockFrame,e.rockSize
@@ -194,27 +141,7 @@ local function gridPose(e,t,age)
  end
  local scanX=-x+scan*x*2
  energyLine(e,e.scanner,top:PointToWorldSpace(Vector3.new(scanX,.045,-z)),top:PointToWorldSpace(Vector3.new(scanX,.045,z)),width*1.6,.18+out*.82,'Gridcutter')
- hideParts(e.fragments)
  showRing(e.release,CFrame.new(top.Position),e.radius*(.35+1.3*(1-math.exp(-(age or 0)*13))),age and smooth(age/.42) or 1)
- if age then
-  -- Tiles begin in the volume the blade just scored. The final pass releases
-  -- the whole remaining rock; other passes peel the upper layer off the cube.
-  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .31)
-  local launch=math.max(0,age-.035)
-  local impulse=math.clamp(e.radius*3.9,4,17)
-  local lift=math.clamp(e.radius*1.9,2.2,8)
-  for i,p in ipairs(e.fragments) do
-   local x1=(i-1)%3-1;local z1=math.floor((i-1)/3)-1
-   local origin=frame:PointToWorldSpace(Vector3.new(x1*size.X/3,(size.Y-height)*.5,z1*size.Z/3))
-   local direction=frame:PointToWorldSpace(Vector3.new(x1,0,z1))-frame.Position
-   if direction.Magnitude>0 then direction=direction.Unit end
-   local travel=impulse*(1-math.exp(-launch*3.4))/3.4
-   local dy=math.max(-(size.Y-height)*.5,launch*(lift+(i%3)*.55)-launch^2*16)
-   p.Size=safeSize(Vector3.new(size.X/3,height,size.Z/3)*.97)
-   p.CFrame=CFrame.new(origin+direction*travel+Vector3.yAxis*dy)*frame.Rotation*CFrame.Angles(z1*launch,0,x1*launch)
-   p.Transparency=smooth((age/e.tail-.5)*2)
-  end
- end
 end
 local function singularityPose(e,t,age)
  local r=e.radius;local grow=smooth(t/(e.impact*.75));local close=recovery(age)
@@ -222,7 +149,7 @@ local function singularityPose(e,t,age)
  local diameter=r*.63*grow*(1-close*.85)
  e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
  showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*1.18),.15+math.max(close,fade(e,age))*.85)
- -- Keep the authored gravity well and chips. A pair of tightening hooks and
+ -- Keep the authored gravity well. A pair of tightening hooks and
  -- two sharp cuts give this small well a different vocabulary from heat rays.
  -- This is a resource gravity well, not a laser emitter: no charge lens here.
  e.gravityVFX=e.gravityVFX or BeamVFX.new(e.folder,'Singularity',purple,nil,false)
@@ -231,18 +158,6 @@ local function singularityPose(e,t,age)
   local strength=1-fade(e,age)
   for _,v in ipairs(e.gravityVFX.all) do v.Width0*=strength;v.Width1*=strength end
   if e.gravityVFX.orb then e.gravityVFX.orb.Transparency=1 end -- existing EventHorizon owns the dark center
- end
- hideParts(e.fragments)
- if age then
-  for i,p in ipairs(e.fragments) do
-   local u=clamp((age-(i-1)*.012)/.62)
-   local path,_,captured=PullMotion.sample(i,u)
-   local origin=facePoint(e,i)
-   local target=center+path*r*.18
-   p.Position=origin:Lerp(target,smooth(u*5))
-   local consumed=smooth((u-captured+.08)/.08)
-   p.Size=Vector3.one*math.max(.025,r*.14*(1-consumed));p.Transparency=math.max(consumed,fade(e,age))
-  end
  end
 end
 local function starforgePose(e,t,age)
@@ -253,14 +168,6 @@ local function starforgePose(e,t,age)
  e.corona.Position=center;e.corona.Size=e.sun.Size*1.35;e.corona.Transparency=.82+cool*.18
  for i,p in ipairs(e.rays) do energyLine(e,p,center,facePoint(e,i*2),.065,.95-heat*.65+cool*.75,'Starforge') end
  e.rock.Color=e.color:Lerp(hot,heat*.25*(1-cool))
- hideParts(e.fragments)
- if age then
-  for i,p in ipairs(e.fragments) do
-   local drip=math.max(0,age-(i-1)*.035);local a=i*2.399963
-   p.Position=facePoint(e,i)+Vector3.new(math.cos(a)*drip*.35,-2.8*drip*drip,math.sin(a)*drip*.35)
-   p.Size=safeSize(Vector3.new(r*.10,r*(.12+drip*.13),r*.10)*(1-fade(e,age)*.65));p.Transparency=fade(e,age)
-  end
- end
 end
 local function frostbitePose(e,t,age)
  local freeze=smooth(t/(e.impact*.8));local shatter=age and smooth(age/.16) or 0
@@ -268,7 +175,6 @@ local function frostbitePose(e,t,age)
  e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
  local wave=age and (1-math.exp(-age*18)) or 0
  showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.92+wave*1.03),age and clamp(.2+age/.7) or 1)
- ballistic(e,age,'ice')
 end
 local function resonatorPose(e,t,age)
  for i,value in ipairs(e.rings) do
@@ -289,7 +195,6 @@ local function resonatorPose(e,t,age)
   local recoil=math.sin(math.pi*clamp(age/.26))*math.exp(-age*8)*.018
   e.rock.CFrame=e.rockFrame*CFrame.Angles(0,recoil,0)
  end
- ballistic(e,age,'dust')
 end
 local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularity=singularityPose,Starforge=starforgePose,Frostbite=frostbitePose,Resonator=resonatorPose}
 
@@ -429,7 +334,7 @@ function FX.new(world,options)
     end
     e.visualNow=visualNow;e.contactAge=age
     -- The ordinary fracture queue owns surviving crystal size/pose immediately
-    -- after the accepted hit. Keep only local chips/tool recovery over that view.
+    -- after the accepted hit. Keep only tool recovery over that view.
     e.view.LocalTransparencyModifier=(not impacted or depleted) and 1 or e.originalTransparency
     if age and age>=e.tail then
      if depleted then

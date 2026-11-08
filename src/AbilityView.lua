@@ -5,7 +5,6 @@ local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
-local Debris=game:GetService('Debris')
 local function enabled(profile,kind)
  return profile and profile.run and Shops.abilityUnlocked(profile,kind) or false
 end
@@ -65,8 +64,7 @@ function View.start(options)
   record.view:Destroy();record.beam:Destroy()
   -- The tiny tool retires immediately; its already emitted world-space motes
   -- get their full tail instead of being cut off at swarm expiry.
-  record.sparks.Enabled=false;record.core.Transparency=1
-  Debris:AddItem(record.core,record.sparks.Lifetime.Max+.1);bots[source]=nil
+  record.core:Destroy();bots[source]=nil
  end
  local function observe(source)
   if bots[source] or not source:IsA('Folder') or source:GetAttribute('ScrapBot')~=true then return end
@@ -91,14 +89,7 @@ function View.start(options)
    part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
-  local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
-  local sparks=Instance.new('ParticleEmitter');sparks.Name='ChiselChips';sparks.Enabled=false;sparks.Rate=0
-  sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.WindAffectsDrag=false;sparks.Drag=2.4;sparks.Squash=NumberSequence.new(.6);sparks.Rotation=NumberRange.new(-180,180);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.1;sparks.Color=ColorSequence.new(Color3.fromRGB(235,204,139))
-  sparks.Lifetime=NumberRange.new(.25,.5);sparks.Speed=NumberRange.new(1,2);sparks.Acceleration=Vector3.new(0,-4,0)
-  sparks.SpreadAngle=Vector2.new(65,65);sparks.EmissionDirection=Enum.NormalId.Right
-  sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.09),NumberSequenceKeypoint.new(1,0)})
-  sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.45,.5),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
-  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,sparks=sparks,alpha=0,yaw=0,samples={}}
+  bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,alpha=0,yaw=0,samples={}}
  end
  local function scan()
   local folder=workspace:FindFirstChild('DroneRoleState')
@@ -148,7 +139,7 @@ function View.start(options)
     -- Solid miniature chisels tap on confirmed damage pulses; these bots do
     -- close mechanical work rather than projecting the miner's laser again.
     local serial=source:GetAttribute('Pulse') or 0
-    if serial~=(record.serial or serial) then record.hitAt=now;record.sparks:Emit(2) end
+    if serial~=(record.serial or serial) then record.hitAt=now end
     record.serial=serial
     local tap=math.max(0,1-(now-(record.hitAt or -100))/.18)
     local height=math.min(1.3,math.max(.1,record.pos.Y-target.Y))
