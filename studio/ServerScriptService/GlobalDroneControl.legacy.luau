@@ -1666,12 +1666,6 @@ function F.stage(hp,maxHP,count)
  if maxHP<=0 then return count end
  return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
 end
-function F.stageDarkness(hp,maxHP,stage,count,junk)
- count=math.clamp(math.floor(count or 3),1,7)
- local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
- if junk then return .0832*progress^.8 end
- return progress
-end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
  -- A powered weight gains speed all the way down. It has no arrival brake:
@@ -1689,6 +1683,14 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
+function F.crystalShade(hp,maxHP,stage,count)
+ local period=F.stageScale(stage,count)
+ return math.clamp(hp/math.max(1,maxHP)/period-(1-period)/4,0,1)
+end
+function F.junkDarkness(hp,maxHP,stage,count)
+ local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
+ return .0832*progress^.8
+end
 function F.rockShape(slice,heat) return Vector3.new(1,(slice or 1)*(1-.0625*(heat or 0)),1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
@@ -1729,20 +1731,16 @@ function F.newStagePresentation(stage,broken,now,count)
  stage=math.clamp(math.floor(stage or 0),0,count or 3)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
-function F.updateStagePresentation(p,authoritativeStage,broken,now,count,flashBeforeCrack)
+function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  count=count or 3
  local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
  if p.knownBreak then return nil end
  if broken then
-  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={};p.crackAt=nil
+  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={}
   return 'break'
  end
  if target<=p.knownStage then return nil end
- if flashBeforeCrack then
-  p.crackAt=p.crackAt or now+.10
-  if now<p.crackAt then return nil end
- end
- p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now;p.crackAt=nil
+ p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
 end
 return F

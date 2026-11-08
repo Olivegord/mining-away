@@ -34,11 +34,12 @@ with tempfile.TemporaryDirectory(prefix='mining-performance-') as directory:
     for name,server,fx,view in [('before',old.bundle(),(base/'src/DroneFX.lua').read_text(),(base/'src/LogisticsView.lua').read_text()),('after',bundle(),(ROOT/'src/DroneFX.lua').read_text(),(ROOT/'src/LogisticsView.lua').read_text())]:
         metrics={}
         methods=view[view.index(' function self:step('):view.index(' return self\nend\nreturn View')]
+        outline_setup=old.module_bundle(('DroneOutline',)) if name=='before' and 'DroneOutline.' in methods else ''
         view_setup="\nlocal player={};local UIS={};local C={}\nlocal ctx={world=Instance.new('Folder'),localFX=Instance.new('Folder'),hidden=function()return false end}\nctx.world.Parent=workspace;ctx.localFX.Parent=workspace\nlocal self={visuals={},connections={},scanAt=0}\nlocal trigger,targetCycle,carrierReturn,bar,layer=Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame'),Instance.new('Frame')\n"
         fixtures=[
             ('server',mock+'\nmath.randomseed(42)\n'+setup+'\nfunction runService:IsStudio()return true end\n'+server+'\n;(function()\n'+server_check+'\nend)()'),
             ('fx',fx_setup+'\n'+module_bundle(('BeamVFX',))+'\nlocal DroneFX=(function()\n'+fx+'\nend)()\n'+fx_check),
-            ('logistics',fx_setup+'\n'+module_bundle(('MotionBuffer','DroneOutline'))+'\n'+view_setup+'\n'+methods+'\n'+view_check),
+            ('logistics',fx_setup+'\n'+module_bundle(('MotionBuffer',))+'\n'+outline_setup+'\n'+view_setup+'\n'+methods+'\n'+view_check),
         ]
         for kind,source in fixtures:
             path=tmp/(name+'-'+kind+'.lua');path.write_text(source)

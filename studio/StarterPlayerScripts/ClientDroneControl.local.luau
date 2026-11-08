@@ -73,21 +73,6 @@ end
 return W
 
 end)()
-local DroneOutline = (function()
--- Outline the rendered model, including late-joining observers' local copies.
-local Outline={}
-function Outline.attach(model)
- local h=model:FindFirstChild('DroneOutline') or Instance.new('Highlight')
- h.Name='DroneOutline';h.Adornee=model;h.Enabled=true
- h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
- h.FillTransparency=1;h.OutlineTransparency=0
- h.OutlineColor=Color3.fromRGB(16,27,43)
- h.Parent=model
- return h
-end
-return Outline
-
-end)()
 local Shops = (function()
 -- Pure mineral economy. Catalog prices are provisional playtest tuning;
 -- ownership, quoted levels, spending and receipts are server transactions.
@@ -526,12 +511,6 @@ function F.stage(hp,maxHP,count)
  if maxHP<=0 then return count end
  return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
 end
-function F.stageDarkness(hp,maxHP,stage,count,junk)
- count=math.clamp(math.floor(count or 3),1,7)
- local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
- if junk then return .0832*progress^.8 end
- return progress
-end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
  -- A powered weight gains speed all the way down. It has no arrival brake:
@@ -549,6 +528,14 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
+function F.crystalShade(hp,maxHP,stage,count)
+ local period=F.stageScale(stage,count)
+ return math.clamp(hp/math.max(1,maxHP)/period-(1-period)/4,0,1)
+end
+function F.junkDarkness(hp,maxHP,stage,count)
+ local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
+ return .0832*progress^.8
+end
 function F.rockShape(slice,heat) return Vector3.new(1,(slice or 1)*(1-.0625*(heat or 0)),1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)
@@ -589,20 +576,16 @@ function F.newStagePresentation(stage,broken,now,count)
  stage=math.clamp(math.floor(stage or 0),0,count or 3)
  return {stage=stage,knownStage=stage,broken=broken==true,knownBreak=broken==true,queue={},nextAt=now or 0}
 end
-function F.updateStagePresentation(p,authoritativeStage,broken,now,count,flashBeforeCrack)
+function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  count=count or 3
  local target=broken and count or math.clamp(math.floor(authoritativeStage or 0),0,count)
  if p.knownBreak then return nil end
  if broken then
-  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={};p.crackAt=nil
+  p.stage=target;p.knownStage=target;p.knownBreak=true;p.broken=true;p.queue={}
   return 'break'
  end
  if target<=p.knownStage then return nil end
- if flashBeforeCrack then
-  p.crackAt=p.crackAt or now+.10
-  if now<p.crackAt then return nil end
- end
- p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now;p.crackAt=nil
+ p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
 end
 return F
@@ -6176,7 +6159,7 @@ function Showcase.new(world,parent,config)
    model.PrimaryPart=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
    model:ScaleTo(model:GetScale()*config.Swarm.ModelScale)
    config.decorate(model,def.role=='Combat' and 'Striker' or def.role)
-   DroneOutline.attach(model);model.Parent=station;model:PivotTo(CFrame.new(pos+Vector3.yAxis*12))
+   model.Parent=station;model:PivotTo(CFrame.new(pos+Vector3.yAxis*12))
    local emitter=model:FindFirstChild('Emmiter',true) or model:FindFirstChild('MiningEmitter',true) or model:FindFirstChild('Emitter',true)
    if emitter then emitter.Color=def.color end
    local state=Instance.new('Folder');state.Name='DisplayState';state:SetAttribute('DroneId','preview:'..i);state.Parent=station
@@ -7073,7 +7056,7 @@ local function createDrone(parent,droneConfig)
  end
  drone:ScaleTo(drone:GetScale()*.69)
  if droneConfig then droneConfig.decorate(drone,'Courier',Color3.fromRGB(151,164,169)) end
- DroneOutline.attach(drone);drone.Parent=parent
+ drone.Parent=parent
  return drone
 end
 
@@ -7490,7 +7473,7 @@ function View.start(options)
   view:ScaleTo(view:GetScale()*.18)
   if options.droneConfig then options.droneConfig.decorate(view,'Dart',Color3.fromRGB(179,176,113)) end
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
-  DroneOutline.attach(view);view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
+  view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
    local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
@@ -8274,10 +8257,6 @@ end
 function V:reply(state)
  for id,pending in pairs(self.pending) do if pending.request==state.requestId then self.pending[id]=nil end end
  if state.resourceId then self.flash={id=state.resourceId,at=os.clock(),color=state.status=='accepted' and GREEN or state.status=='queued' and GOLD or RED} end
- -- Keep the drone's single permanent outline. A second dispatch Highlight
- -- on the same model overrides it, even after that temporary cue is disabled.
- -- Accepted/queued/rejected feedback remains on the commanded rock.
-
 end
 function V:update(dt,now)
  self.clock+=dt;if self.clock<.06 then return end;self.clock=0
@@ -8334,15 +8313,15 @@ function V:update(dt,now)
    used+=1
    local h=self.pool[used]
    if not h then
-    h=Instance.new('Highlight');h.Name='RockOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Parent=ctx.parent;self.pool[used]=h
+    h=Instance.new('Highlight');h.Name='RockOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.OutlineTransparency=1;h.Parent=ctx.parent;self.pool[used]=h
    end
    local growing=now<(r.source:GetAttribute('ReadyAt') or 0)
    local busy=(r.source:GetAttribute('SlotsUsed') or 0)>=(r.source:GetAttribute('SlotCapacity') or 1)
    local color=working[id] and GREEN or self.queued[id] and GOLD or (growing or busy) and RED or BLUE
    local pulse=flash and flash.id==id and math.clamp(1-(os.clock()-flash.at)/.8,0,1) or 0
    if pulse>0 then color=flash.color end
-   h.Adornee=r.view;h.Enabled=true;h.FillColor=color;h.OutlineColor=color
-   h.FillTransparency=(id==hover and .86 or .95)-pulse*.2;h.OutlineTransparency=id==hover and .05 or .3
+   h.Adornee=r.view;h.Enabled=true;h.FillColor=color
+   h.FillTransparency=(id==hover and .86 or .95)-pulse*.2
 
   end
  end
@@ -8627,7 +8606,7 @@ function View.start(ctx)
    end
    local floor=nil;local fields=ctx.world:FindFirstChild('Fields')
    if fields then for _,field in ipairs(fields:GetChildren()) do if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==fieldId then floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor');break end end end
-   if not self.fieldMark then self.fieldMark=Instance.new('Highlight');self.fieldMark.Name='CarrierFieldOrder';self.fieldMark.DepthMode=Enum.HighlightDepthMode.Occluded;self.fieldMark.FillColor=C.accent;self.fieldMark.OutlineColor=C.accent;self.fieldMark.FillTransparency=.92;self.fieldMark.OutlineTransparency=.08;self.fieldMark.Parent=ctx.localFX end
+   if not self.fieldMark then self.fieldMark=Instance.new('Highlight');self.fieldMark.Name='CarrierFieldOrder';self.fieldMark.DepthMode=Enum.HighlightDepthMode.Occluded;self.fieldMark.FillColor=C.accent;self.fieldMark.FillTransparency=.92;self.fieldMark.OutlineTransparency=1;self.fieldMark.Parent=ctx.localFX end
    self.fieldMark.Adornee=floor;self.fieldMark.Enabled=floor~=nil
   elseif (not self.selected or self.open or ctx.hidden()) and self.fieldMark then self.fieldMark.Enabled=false end
   if now>=self.scanAt then
@@ -8645,7 +8624,6 @@ function View.start(ctx)
       if node:IsA('LuaSourceContainer') or node:IsA('ProximityPrompt') or node:IsA('BillboardGui') then node:Destroy()
       elseif node:IsA('BasePart') then node.Anchored=true;node.CanCollide=false;node.CanTouch=false;node.CanQuery=false;node.LocalTransparencyModifier=0 end
      end
-     if class=='Carrier' or class=='Backpack' then DroneOutline.attach(clone) end
      clone.Parent=ctx.localFX;local hidden={}
      for _,node in ipairs(source:GetDescendants()) do if node:IsA('BasePart') then hidden[node]=node.LocalTransparencyModifier;node.LocalTransparencyModifier=1 end end
      local record={samples={},view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}
@@ -9344,7 +9322,7 @@ local function registerDrone(source)
  if not referenceMiner then DroneConfig.decorate(clone,source:GetAttribute('Role') or kind) end
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
- clone.PrimaryPart=pivot;clone.Parent=localFX;DroneOutline.attach(clone)
+ clone.PrimaryPart=pivot;clone.Parent=localFX
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
  for _,part in ipairs(clone:GetDescendants()) do
@@ -9466,8 +9444,8 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
- -- geometry writes. Wake a settled rock when its black flash is due to end.
- if r.settled and not r.dirty and (not r.visual.crackAt or now<r.visual.crackAt) then return end
+ -- geometry writes. Spawn growth is animated; mining size changes are snaps.
+ if r.settled and not r.dirty then return end
  r.dirty=false
  local s=r.source;local view=r.view
  -- Locked fields remain visible destinations; the server still gates mining.
@@ -9488,7 +9466,7 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount,not junk)
+ local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
@@ -9510,11 +9488,17 @@ local function renderResource(r,now)
    end
   end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
-  local darkness
-  if r.visual.crackAt then darkness=1
-  elseif event=='stage' and not junk then darkness=0
-  else darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk) end
-  view.Color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11):Lerp(Color3.new(0,0,0),darkness)
+  local maxHealth=s:GetAttribute('MaxHP') or 1
+  local color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  if junk then
+   view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
+  else
+   -- Mining Away changes the size stage first and applies its new shade on the next hit.
+   if event=='stage' then r.crackHealth=health end
+   local shadeStage=r.crackHealth==health and stage-1 or stage
+   local shadeHealth=shadeStage<stage and math.max(health,maxHealth*period) or health
+   view.Color=color:Lerp(Color3.new(0,0,0),1-Feel.crystalShade(shadeHealth,maxHealth,shadeStage,stageCount))
+  end
  else view.Transparency=1 end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do

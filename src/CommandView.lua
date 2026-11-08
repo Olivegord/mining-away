@@ -22,10 +22,6 @@ end
 function V:reply(state)
  for id,pending in pairs(self.pending) do if pending.request==state.requestId then self.pending[id]=nil end end
  if state.resourceId then self.flash={id=state.resourceId,at=os.clock(),color=state.status=='accepted' and GREEN or state.status=='queued' and GOLD or RED} end
- -- Keep the drone's single permanent outline. A second dispatch Highlight
- -- on the same model overrides it, even after that temporary cue is disabled.
- -- Accepted/queued/rejected feedback remains on the commanded rock.
-
 end
 function V:update(dt,now)
  self.clock+=dt;if self.clock<.06 then return end;self.clock=0
@@ -82,15 +78,15 @@ function V:update(dt,now)
    used+=1
    local h=self.pool[used]
    if not h then
-    h=Instance.new('Highlight');h.Name='RockOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Parent=ctx.parent;self.pool[used]=h
+    h=Instance.new('Highlight');h.Name='RockOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.OutlineTransparency=1;h.Parent=ctx.parent;self.pool[used]=h
    end
    local growing=now<(r.source:GetAttribute('ReadyAt') or 0)
    local busy=(r.source:GetAttribute('SlotsUsed') or 0)>=(r.source:GetAttribute('SlotCapacity') or 1)
    local color=working[id] and GREEN or self.queued[id] and GOLD or (growing or busy) and RED or BLUE
    local pulse=flash and flash.id==id and math.clamp(1-(os.clock()-flash.at)/.8,0,1) or 0
    if pulse>0 then color=flash.color end
-   h.Adornee=r.view;h.Enabled=true;h.FillColor=color;h.OutlineColor=color
-   h.FillTransparency=(id==hover and .86 or .95)-pulse*.2;h.OutlineTransparency=id==hover and .05 or .3
+   h.Adornee=r.view;h.Enabled=true;h.FillColor=color
+   h.FillTransparency=(id==hover and .86 or .95)-pulse*.2
 
   end
  end

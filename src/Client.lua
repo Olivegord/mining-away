@@ -656,7 +656,7 @@ local function registerDrone(source)
  if not referenceMiner then DroneConfig.decorate(clone,source:GetAttribute('Role') or kind) end
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
- clone.PrimaryPart=pivot;clone.Parent=localFX;DroneOutline.attach(clone)
+ clone.PrimaryPart=pivot;clone.Parent=localFX
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
  for _,part in ipairs(clone:GetDescendants()) do
@@ -778,8 +778,8 @@ end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
 local function renderResource(r,now)
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
- -- geometry writes. Wake a settled rock when its black flash is due to end.
- if r.settled and not r.dirty and (not r.visual.crackAt or now<r.visual.crackAt) then return end
+ -- geometry writes. Spawn growth is animated; mining size changes are snaps.
+ if r.settled and not r.dirty then return end
  r.dirty=false
  local s=r.source;local view=r.view
  -- Locked fields remain visible destinations; the server still gates mining.
@@ -800,7 +800,7 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount,not junk)
+ local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
@@ -822,11 +822,17 @@ local function renderResource(r,now)
    end
   end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
-  local darkness
-  if r.visual.crackAt then darkness=1
-  elseif event=='stage' and not junk then darkness=0
-  else darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk) end
-  view.Color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11):Lerp(Color3.new(0,0,0),darkness)
+  local maxHealth=s:GetAttribute('MaxHP') or 1
+  local color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  if junk then
+   view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
+  else
+   -- Mining Away changes the size stage first and applies its new shade on the next hit.
+   if event=='stage' then r.crackHealth=health end
+   local shadeStage=r.crackHealth==health and stage-1 or stage
+   local shadeHealth=shadeStage<stage and math.max(health,maxHealth*period) or health
+   view.Color=color:Lerp(Color3.new(0,0,0),1-Feel.crystalShade(shadeHealth,maxHealth,shadeStage,stageCount))
+  end
  else view.Transparency=1 end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do

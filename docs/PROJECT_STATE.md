@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks turn black before each crack, then shrink and regain their mineral color. The starter crystals use the reference’s opaque red SmoothPlastic finish. The beam tracks each change in shape. Packs, upgrades and prestige still use Quartz.
+**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks use Mining Away’s health-band shade and brighten on the hit after each crack. World drone and target outlines are removed. The starter crystals use the reference’s opaque red SmoothPlastic finish. The beam tracks each change in shape. Packs, upgrades and prestige still use Quartz.
 
 ## Identity and delivery state
 
@@ -11,20 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `7dd37d10cbcab1d0ca13aea0e90a3f6c957ce5cbd4561c19daf896b7ff0a94a4` | Crystal flash, shrink, color reset, and reference finish. All non-Source chunks and backup Sources preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal flash and finish commit. [Seven actual Edit hashes](review/crystal-crack-flash-native.json). |
+| Native-file SHA-256 | `a08c1f902530316dca83945799de1eb952c08d43f6ce375cb264c729eecbca53` | Reference crystal shading and removal of world outlines. All non-Source chunks and backup Sources preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal shade and outline commit. [Seven actual Edit hashes](review/reference-shade-no-outlines-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
 | Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The damage appearance update is installed in shared Edit at the exact destination. All seven managed Source hashes match the canonical snapshot and all three roots are `SyncedAsRoot`. Studio remains in Edit on loaded version 90. |
-| Roblox publication | **No publication for the crystal flash and finish update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Roblox publication | **No publication for the shade and outline update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — black flash before the crack
+## Latest follow-up — reference shading and no world outlines
+
+The enabled Mining Away server computes shade from the remaining health divided by the current size band, minus a small offset for the band. DRONEREVOLUTION uses that formula. At the crack it uses the outgoing band, then switches to the new band on the next hit. The former timed black flash was removed. In the native Edit probe the first crack changed the width from 3.135 to 2.351 studs and the normalized red channel rose from 0.749 at the crack to 0.922 on the following hit.
+
+Removed persistent outlines from fleet drones, orbital and showcase drones, carriers and backpacks, and pack drone models. Rock and carrier field targeting use fill cues with fully transparent edges. Card artwork, text styling and UI borders were outside this gameplay outline pass.
+
+The focused renderer and command cue fixtures passed. Studio Edit has all seven matching Source hashes and all three Script Sync roots. There was no new native Play session or Roblox publication. Reproduce from the canonical snapshot at `6b28a67` with the updated modular Sources, `python3 tools/script_sync.py`, and `python3 tools/build.py --previous-commit 6b28a67`.
+
+## Earlier follow-up — black flash before the crack
 
 The enabled Mining Away server shades its red crystal within each health band and resets the shade after the band changes. The owner's requested sequence now holds the old visible size and facing in black for 0.10 seconds, then shrinks, turns, plays the crack, and restores the mineral color. The hold is a presentation choice. The server still applies damage and updates size immediately. The final break removes the rock without replaying skipped cracks.
 

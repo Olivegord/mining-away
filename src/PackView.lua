@@ -56,7 +56,7 @@ local function createDrone(parent,droneConfig)
  end
  drone:ScaleTo(drone:GetScale()*.69)
  if droneConfig then droneConfig.decorate(drone,'Courier',Color3.fromRGB(151,164,169)) end
- DroneOutline.attach(drone);drone.Parent=parent
+ drone.Parent=parent
  return drone
 end
 

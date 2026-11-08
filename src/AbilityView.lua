@@ -81,7 +81,7 @@ function View.start(options)
   view:ScaleTo(view:GetScale()*.18)
   if options.droneConfig then options.droneConfig.decorate(view,'Dart',Color3.fromRGB(179,176,113)) end
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
-  DroneOutline.attach(view);view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
+  view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
    local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false

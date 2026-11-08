@@ -248,7 +248,7 @@ function View.start(ctx)
    end
    local floor=nil;local fields=ctx.world:FindFirstChild('Fields')
    if fields then for _,field in ipairs(fields:GetChildren()) do if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==fieldId then floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor');break end end end
-   if not self.fieldMark then self.fieldMark=Instance.new('Highlight');self.fieldMark.Name='CarrierFieldOrder';self.fieldMark.DepthMode=Enum.HighlightDepthMode.Occluded;self.fieldMark.FillColor=C.accent;self.fieldMark.OutlineColor=C.accent;self.fieldMark.FillTransparency=.92;self.fieldMark.OutlineTransparency=.08;self.fieldMark.Parent=ctx.localFX end
+   if not self.fieldMark then self.fieldMark=Instance.new('Highlight');self.fieldMark.Name='CarrierFieldOrder';self.fieldMark.DepthMode=Enum.HighlightDepthMode.Occluded;self.fieldMark.FillColor=C.accent;self.fieldMark.FillTransparency=.92;self.fieldMark.OutlineTransparency=1;self.fieldMark.Parent=ctx.localFX end
    self.fieldMark.Adornee=floor;self.fieldMark.Enabled=floor~=nil
   elseif (not self.selected or self.open or ctx.hidden()) and self.fieldMark then self.fieldMark.Enabled=false end
   if now>=self.scanAt then
@@ -266,7 +266,6 @@ function View.start(ctx)
       if node:IsA('LuaSourceContainer') or node:IsA('ProximityPrompt') or node:IsA('BillboardGui') then node:Destroy()
       elseif node:IsA('BasePart') then node.Anchored=true;node.CanCollide=false;node.CanTouch=false;node.CanQuery=false;node.LocalTransparencyModifier=0 end
      end
-     if class=='Carrier' or class=='Backpack' then DroneOutline.attach(clone) end
      clone.Parent=ctx.localFX;local hidden={}
      for _,node in ipairs(source:GetDescendants()) do if node:IsA('BasePart') then hidden[node]=node.LocalTransparencyModifier;node.LocalTransparencyModifier=1 end end
      local record={samples={},view=clone,pose=source:GetAttribute('Pose'),hidden=hidden,connections={},exhaust=clone:FindFirstChild('Exhaust',true),sourceExhaust=source:FindFirstChild('Exhaust',true)}

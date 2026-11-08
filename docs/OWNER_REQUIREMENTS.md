@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — use Mining Away's actual rock shading and remove world outlines
+
+The pre-crack effect looked too black. Use the shade calculation from the enabled Mining Away script. Remove world outlines from drones and rock targeting. Retain the selection fill and health readout.
+
 ## November 8 latest — black, then smaller and red again
 
 The black phase comes before each crack's size change. As the crystal shrinks and turns, its red returns. Check the finish against the open Mining Away crystal too. This supersedes the earlier cumulative darkening direction.

@@ -65,7 +65,7 @@ function Showcase.new(world,parent,config)
    model.PrimaryPart=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
    model:ScaleTo(model:GetScale()*config.Swarm.ModelScale)
    config.decorate(model,def.role=='Combat' and 'Striker' or def.role)
-   DroneOutline.attach(model);model.Parent=station;model:PivotTo(CFrame.new(pos+Vector3.yAxis*12))
+   model.Parent=station;model:PivotTo(CFrame.new(pos+Vector3.yAxis*12))
    local emitter=model:FindFirstChild('Emmiter',true) or model:FindFirstChild('MiningEmitter',true) or model:FindFirstChild('Emitter',true)
    if emitter then emitter.Color=def.color end
    local state=Instance.new('Folder');state.Name='DisplayState';state:SetAttribute('DroneId','preview:'..i);state.Parent=station

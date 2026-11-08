@@ -2,12 +2,10 @@ local ctx={world=world,parent=fx,resources={rock={source=rock,view=view}},drones
 local v=CommandView.new(ctx)
 v:update(.1,1000)
 assert(v.pool[1] and v.pool[1].Enabled and v.pool[1].Adornee==view,'starter hover must mark the clicked rock')
-assert(not v.fields[field].Enabled,'starter must not show automatic field scope')
-localPlayer:SetAttribute('AutomationMineEnabled',true);v:update(.1,1000)
-assert(v.pool[1].Enabled and not v.fields[field].Enabled,'automation must retain exact rock scope')
+assert(v.pool[1].OutlineTransparency==1 and v.pool[1].FillTransparency<1,'hover needs a fill without an outline')
 assert(v.meter.Enabled and v.meter.Adornee==view,'one contextual health meter follows hover')
 hit=floor;v:update(.1,1000)
-assert(v.fields[field].Enabled and not v.meter.Enabled,'ground has field scope without a rock health label')
+assert(not v.pool[1].Enabled and not v.meter.Enabled,'hovering the ground clears the rock cue')
 local calls={};ctx.command={FireServer=function(_,action,payload) table.insert(calls,payload) end}
 v:beginDrag();hit=rock;v:update(.1,1000);v:update(.1,1000)
 assert(#calls==1 and calls[1].toggle==false,'holding over a rock must not repeat or cancel the order')
@@ -15,12 +13,11 @@ local drone=Instance.new('Model');drone.Parent=fx
 local shell=Instance.new('Part');shell.Parent=drone
 local authoritative=Instance.new('Model');authoritative:SetAttribute('DroneId','worker');authoritative.Parent=world
 ctx.drones[authoritative]={view=drone}
-local permanent=DroneOutline.attach(drone)
 v:reply({droneId='worker',resourceId='rock',status='accepted'})
 for step=1,60 do v:update(.1,1000+step*.1) end
 local outlines=0
 for _,h in ipairs(fx:GetDescendants()) do if h:IsA('Highlight') and h.Adornee==drone then outlines+=1 end end
-assert(outlines==1 and permanent.Enabled and permanent.OutlineTransparency==0,'mining command replaced or obscured the permanent drone outline')
+assert(outlines==0,'mining command created a drone outline')
 v:endDrag();v:destroy();assert(v.meter._destroyed,'context readout must be cleaned')
-v:destroy();assert(v.fields[field]._destroyed and v.pool[1]._destroyed,'highlights must be cleaned')
+assert(v.pool[1]._destroyed,'highlights must be cleaned')
 print('PASS current command highlight scope and cleanup (API doubles)')

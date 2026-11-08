@@ -16,9 +16,7 @@ source:SetAttribute('HP',100);source:SetAttribute('Stage',2)
 local initial=record.view.Size.X
 local orientation=record.view.CFrame.LookVector
 renderResource(record,63)
-assert(record.view.Size.X==initial and record.view.Color.R==0 and #cues==0,'crack changed size or played audio before the black flash')
-renderResource(record,63.101)
-assert(record.settled and record.view.Size.X==initial*.5 and record.view.Color.R==1,'layer loss did not snap and restore color')
+assert(record.settled and record.view.Size.X==initial*.5,'layer loss did not snap immediately')
 assert((record.view.CFrame.LookVector-orientation).Magnitude>.2,'crystal did not change facing')
 local snapped=record.view.CFrame.LookVector
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(2,false,63,3)}
@@ -32,7 +30,8 @@ assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==2)
--- Every crack flashes black at the old size and then exposes a smaller red crystal.
+-- Mining Away shades the current health band. A crack retains that shade
+-- through the size change, and the next accepted hit uses the new band.
 local fixed=source:Clone()
 fixed:SetAttribute('ReferenceCrystal',true)
 fixed.Color=Color3.fromRGB(255,0,0)
@@ -41,25 +40,26 @@ fixed:SetAttribute('SpawnAt',70);fixed:SetAttribute('ReadyAt',72)
 local fixedRecord={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(0,false,70,3)}
 renderResource(fixedRecord,70)
 local originalSize=fixedRecord.view.Size
-local originalDirection=fixedRecord.view.CFrame.LookVector
 assert(originalSize.X==3 and fixedRecord.view.Color.R==1 and not fixedRecord.settled)
-fixed:SetAttribute('HP',90);fixedRecord.dirty=true
-renderResource(fixedRecord,72.5)
-assert(fixedRecord.view.Color.R>0 and fixedRecord.view.Color.R<1 and fixedRecord.view.Size.X==3)
+local beforeCrack={.75,.50/.75-.0625,.25/.50-.125}
+local afterCrack={.74/.75-.0625,.49/.50-.125,.24/.25-.1875}
 for stage,hp in ipairs({75,50,25}) do
  local at=72+stage
  local oldDirection=fixedRecord.view.CFrame.LookVector
+ fixed:SetAttribute('HP',hp+1);fixedRecord.dirty=true
+ renderResource(fixedRecord,at-.1)
+ assert(fixedRecord.view.Size.X==originalSize.X*(1-(stage-1)*.25))
+ assert(fixedRecord.view.Color.R>beforeCrack[stage] and fixedRecord.view.Color.R<afterCrack[stage])
  fixed:SetAttribute('HP',hp);fixed:SetAttribute('Stage',stage);fixedRecord.dirty=true
  renderResource(fixedRecord,at)
- renderResource(fixedRecord,at+.05)
- assert(fixedRecord.view.Color.R==0 and fixedRecord.view.Size.X==originalSize.X*(1-(stage-1)*.25))
- assert((fixedRecord.view.CFrame.LookVector-oldDirection).Magnitude<1e-8)
- renderResource(fixedRecord,at+.101)
+ assert(math.abs(fixedRecord.view.Color.R-beforeCrack[stage])<1e-7)
  assert(fixedRecord.view.Size.X==originalSize.X*(1-stage*.25))
- assert(fixedRecord.view.Color.R==1 and fixedRecord.view.Transparency<1)
- if stage==1 then assert((fixedRecord.view.CFrame.LookVector-originalDirection).Magnitude>.2) end
+ assert((fixedRecord.view.CFrame.LookVector-oldDirection).Magnitude>.2)
+ fixed:SetAttribute('HP',hp-1);fixedRecord.dirty=true
+ renderResource(fixedRecord,at+.05)
+ assert(math.abs(fixedRecord.view.Color.R-afterCrack[stage])<1e-7)
 end
 local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(3,false,76,3)}
 renderResource(lateFixed,76)
-assert(lateFixed.view.Color.R==1 and lateFixed.view.Size.X==fixedRecord.view.Size.X and not lateFixed.visual.crackAt)
+assert(lateFixed.view.Color.R==fixedRecord.view.Color.R and lateFixed.view.Size.X==fixedRecord.view.Size.X)
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

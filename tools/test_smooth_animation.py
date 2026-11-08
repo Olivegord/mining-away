@@ -22,7 +22,7 @@ scrap='\n'.join([
  (ROOT/'tests/energy-effects.setup.lua').read_text(),
  (ROOT/'tests/smooth-animation.setup.lua').read_text(),
  "local Debris=game:GetService('Debris')\nfunction IM:GetScale()return 1 end\nfunction IM:ScaleTo(scale)self.Scale=scale end",
- module_bundle(('DroneOutline','MotionBuffer','DroneRoleEffects')),
+ module_bundle(('MotionBuffer','DroneRoleEffects')),
  observe,
  'local function renderBots(dt,now)\n'+render+'\nend',
  (ROOT/'tests/scrap-view.integration.lua').read_text(),
