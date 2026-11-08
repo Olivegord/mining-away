@@ -17,6 +17,8 @@ Download the two linked 1K diffuse JPEGs as `grass_ground.jpg` and `ganges_river
 
 The [contrast pass](../../tools/studio_quarry_contrast.lua) reuses the original strong vein photo for Quartz, Cobalt and the Impact field, and the older gravel on the Quartz bed. Eleven selected turf parts use the stronger grass grade. Drone panels reuse `stone-soft.png` at 0.92 studs per tile; working ribs use `metal.png` at 0.64 studs per tile, so the low-resolution patterns read on small hardware.
 
+The [abstract palette pass](../../tools/studio_quarry_color_shapes.lua) uses the same saved 64×64 tiles. Rounded leaf clumps use the canopy and pebble grades. Fan leaves and tapered tiers use a tighter corrugation pattern. Striped forms and selected rock layers use the soft strata grade at a smaller scale. Checker, brick, herringbone, timber and ribbed finishes give the small shapes distinct patterns.
+
 Earlier source tiles and grades are retained for provenance:
 
 | File | Source | Roblox image ID |

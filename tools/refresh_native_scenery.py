@@ -7,7 +7,7 @@ by the corresponding Studio edit command.
 """
 import argparse
 import base64
-from collections import defaultdict
+from collections import Counter, defaultdict
 from hashlib import sha256
 import json
 import math
@@ -47,12 +47,19 @@ WOODLAND_SCOPE = {
 BIOME_REACH_SCOPE = {
     "scenery": (MAP, {"QuarryBiomeReaches"}, {"Folder", "Model", "Part"}),
 }
+PALETTE_VARIANTS = {f"QuarryPalette_{name}" for name in
+                    ("LeafClumps", "LeafStipple", "LeafRibs", "Tufts", "Strata", "Pebbles")}
+PALETTE_SCOPE = {
+    "scenery": (MAP, {"QuarryColorShapes"}, {"Folder", "Part", "WedgePart"}),
+    "variants": ("MaterialService", PALETTE_VARIANTS, {"MaterialVariant"}),
+}
 RIM_SCOPE = {
     "rim": (MAP, {"QuarryBlockRim"}, {"Folder", "Part"}),
     "archive": ("ServerStorage", {"QuarryRimArchive"}, {"Folder"}),
 }
 RIM_WALLS = {"WestEscarpment", "NorthCrown", "EastChalkRim", "SouthwestGate", "SoutheastGate"}
 WOODLANDS = {f"{name}Woodland" for name in ("Quartz", "Ruby", "Violet", "Emerald", "Impact")}
+PALETTE_WOODLANDS = {"QuartzWoodland", "ImpactWoodland"}
 
 
 class Native:
@@ -132,11 +139,31 @@ def unpack_colors(data, count):
     return list(zip(data[:count], data[count:2*count], data[2*count:]))
 
 
-def close(first, second):
-    return len(first) == len(second) and all(math.isclose(a, b, rel_tol=0, abs_tol=.0015) for a, b in zip(first, second))
+def close(first, second, tolerance=.0015):
+    return len(first) == len(second) and all(math.isclose(a, b, rel_tol=0, abs_tol=tolerance)
+                                              for a, b in zip(first, second))
 
 
-def patch_parts(base, edits, contrast=False, basin=False):
+def check_palette_edit(edit):
+    path, before, after = edit["path"], edit["before"], edit["after"]
+    assert before.keys() == after.keys() == {"color", "variant"}
+    old = before["variant"]
+    new = after["variant"]
+    if old in {"QuarryFoliage_Canopy", "QuarryFoliage_Evergreen"}:
+        assert path.startswith((TERRACES+"AssetScenery.", MAP+".QuarryWoodlands.",
+                                MAP+".QuarryBiomeReaches.Quartz.", MAP+".EmeraldChalkLagoon.",
+                                MAP+".QuarryDepthPass.EmeraldShoreTerraces."))
+        assert new == old or new in {"QuarryPalette_LeafClumps", "QuarryPalette_LeafStipple", "QuarryPalette_LeafRibs"}
+    elif path.startswith(MAP+".QuarryBiomeReaches."):
+        assert path.endswith((".TerraceSurface", ".LowerGrassBench"))
+        assert old in {"QuarryPhoto_Grass", "QuarryBlend_RubyLoam"}
+        assert new == old or new == "QuarryPalette_Tufts"
+    else:
+        assert path.startswith(MAP+".QuarryBlockRim.") and path.endswith(".RockStratum")
+        assert old == "QuarryPhoto_Slate" and new == "QuarryPalette_Strata"
+
+
+def patch_parts(base, edits, contrast=False, basin=False, palette=False):
     batches = {}
     seen = set()
     equivalent = []
@@ -144,7 +171,10 @@ def patch_parts(base, edits, contrast=False, basin=False):
                "color": ("Color3uint8", 0x1a), "variant": ("MaterialVariantSerialized", 1)}
     for edit in edits:
         path = edit["path"]
-        assert path.startswith(TERRACES) or (contrast and path == QUARTZ), f"Native edit outside authored terraces: {path}"
+        if palette:
+            check_palette_edit(edit)
+        else:
+            assert path.startswith(TERRACES) or (contrast and path == QUARTZ), f"Native edit outside authored terraces: {path}"
         if contrast:
             assert edit["after"].keys() <= {"color", "variant"}, "Contrast pass cannot alter geometry"
         if basin:
@@ -168,6 +198,8 @@ def patch_parts(base, edits, contrast=False, basin=False):
                 }
             before = batches[cid]["old"]
             if not close(before["position"][index], edit["anchor"]):
+                continue
+            if "anchorSize" in edit and not close(before["size"][index], edit["anchorSize"]):
                 continue
             for key, expected in edit["before"].items():
                 value = before[key][index]
@@ -266,12 +298,16 @@ def reparent(data, moves, block_rim=False):
             relocated[child] = parent
     assert len(relocated) == len(moves)
     parents.update(relocated)
-    result = [data[:32]]
+    return write_parents(native, parents), relocated
+
+
+def write_parents(native, parents):
+    result = [native.data[:32]]
     for kind, _, raw in native.chunks:
         if kind == b"PRNT":
             raw = chunk(b"PRNT", b"\0"+struct.pack("<I", len(parents))+pack_refs(parents)+pack_refs(parents.values()))
         result.append(raw)
-    return b"".join(result), relocated
+    return b"".join(result)
 
 
 def read_section(directory, name):
@@ -279,8 +315,65 @@ def read_section(directory, name):
     return subprocess.run(["zstd", "-d", "-q", "-c"], input=compressed, capture_output=True, check=True).stdout
 
 
-def merge(base, directory, contrast=False, basin=False, addition=None, block_rim=False):
+def surface_inventory(native, prefix):
+    vectors = {}
+    rows = Counter()
+    for ref, (cid, cls, index, _) in native.instances.items():
+        path = native.path(ref)
+        if not path.startswith(prefix) or cls not in {"Part", "WedgePart"}:
+            continue
+        if cid not in vectors:
+            count = len(native.classes[cid][1])
+            _, coords = split_cframe(native.prop(cid, "CFrame", 0x10), count)
+            vectors[cid] = (unpack_vectors(coords, count), unpack_vectors(native.prop(cid, "size", 0x0e), count),
+                            unpack_colors(native.prop(cid, "Color3uint8", 0x1a), count),
+                            string_values(native.prop(cid, "MaterialVariantSerialized", 1), 0, count))
+        pos, size, color, variant = (values[index] for values in vectors[cid])
+        rows[path.removeprefix(prefix), cls, pos, size, color, variant.decode()] += 1
+    return rows
+
+
+def palette_woodland(original, directory, edits):
+    model = read_section(directory, "woodland")
+    assert model.startswith(b"<roblox!\x89\xff\r\n\x1a\n")
+    live = Native(model)
+    roots = [ref for ref, parent in live.parents.items() if parent == -1]
+    assert len(roots) == 2 and {live.instances[ref][3] for ref in roots} == PALETTE_WOODLANDS
+    assert all(cls in {"Folder", "Model", "Part", "WedgePart"} for cls, _ in live.classes.values())
+    prefix = MAP+".QuarryWoodlands."
+    relocated, remaining, reconciled = {}, edits.copy(), 0
+    archive = original.one("ServerStorage.QuarryRimArchive")
+    for name in PALETTE_WOODLANDS:
+        assert "ServerStorage.QuarryRimArchive."+name not in original.paths
+        old_root, new_root = original.one(prefix+name), live.one(name)
+        assert original.instances[old_root][1] == live.instances[new_root][1] == "Folder"
+        old_children = Counter((original.instances[ref][1], original.instances[ref][3])
+                               for ref, parent in original.parents.items() if parent == old_root)
+        new_children = Counter((live.instances[ref][1], live.instances[ref][3])
+                               for ref, parent in live.parents.items() if parent == new_root)
+        assert old_children == new_children and ("Folder", "ForestShelf") in new_children
+        ground = name+".ForestShelf."
+        assert surface_inventory(original, prefix+ground) == surface_inventory(live, ground)
+        rows = surface_inventory(live, name+".")
+        for edit in edits:
+            if not edit["path"].startswith(prefix+name+"."):
+                continue
+            check_palette_edit(edit)
+            relative = edit["path"].removeprefix(prefix+name+".")
+            color, variant = tuple(edit["after"]["color"]), edit["after"]["variant"]
+            matches = [key for key, count in rows.items() if count and key[:2] == (relative, edit["class"])
+                       and key[-1] == variant and close(key[-2], color, 1) and close(key[2], edit["anchor"])]
+            assert matches, f"Woodland export does not contain the edited foliage: {edit}"
+            rows[matches[0]] -= 1
+            remaining.remove(edit)
+            reconciled += 1
+        relocated[old_root] = archive
+    return model, remaining, relocated, reconciled
+
+
+def merge(base, directory, contrast=False, basin=False, addition=None, block_rim=False, palette=False):
     original = Native(base)
+    moved, reconciled = {}, 0
     if addition or block_rim:
         moves = json.loads(read_section(directory, "moves")) if block_rim else []
         plan = {"edits": [], "moves": moves}
@@ -289,9 +382,12 @@ def merge(base, directory, contrast=False, basin=False, addition=None, block_rim
     else:
         plan = json.loads(read_section(directory, "edits"))
         assert plan.keys() == {"edits", "moves"} and plan["edits"]
-        assert bool(plan["moves"]) == (not contrast and not basin), "Unexpected archive operation for this pass"
-        result, touched = patch_parts(original, plan["edits"], contrast, basin)
-        scope = BASIN_SCOPE if basin else CONTRAST_SCOPE if contrast else SCOPE
+        assert bool(plan["moves"]) == (not contrast and not basin and not palette), "Unexpected archive operation for this pass"
+        edits = plan["edits"]
+        if palette and (directory/"woodland.b64").is_file():
+            woodland, edits, moved, reconciled = palette_woodland(original, directory, edits)
+        result, touched = patch_parts(original, edits, contrast, basin, palette)
+        scope = PALETTE_SCOPE if palette else BASIN_SCOPE if basin else CONTRAST_SCOPE if contrast else SCOPE
     for name, (parent, roots, allowed) in scope.items():
         model = read_section(directory, name)
         assert model.startswith(b"<roblox!\x89\xff\r\n\x1a\n"), "Expected Studio's native binary model export"
@@ -302,7 +398,11 @@ def merge(base, directory, contrast=False, basin=False, addition=None, block_rim
         current = Native(result)
         assert all(parent+"."+root not in current.paths for root in roots), f"{name} already exists"
         result = append_model(result, model, current.one(parent), chunks, chunk, u32, string, packstr)
-    moved = {}
+    if moved:
+        current = Native(result)
+        result = write_parents(current, {**current.parents, **moved})
+        current = Native(result)
+        result = append_model(result, woodland, current.one(MAP+".QuarryWoodlands"), chunks, chunk, u32, string, packstr)
     if plan["moves"]:
         result, moved = reparent(result, plan["moves"], block_rim)
     final = Native(result)
@@ -311,11 +411,14 @@ def merge(base, directory, contrast=False, basin=False, addition=None, block_rim
     assert set(touched) == {key for key, old in original.props.items() if final.props[key] != old}
     assert script_inventory(original.chunks) == script_inventory(final.chunks)
     assert all(final.parents[ref] == moved.get(ref, parent) for ref, parent in original.parents.items())
-    return result, {
+    stats = {
         "parts_updated": len(plan["edits"]), "archived_models": len(plan["moves"]),
         "new_instances": len(final.instances)-len(original.instances),
         "preserved_sources": len(script_inventory(final.chunks)),
     }
+    if reconciled:
+        stats["woodland_foliage_reconciled"] = reconciled
+    return result, stats
 
 
 def write_snapshot(expected, result):
@@ -343,11 +446,12 @@ def main():
     scope.add_argument("--biome-reaches", dest="addition", action="store_const", const=BIOME_REACH_SCOPE,
                        help="Append only the authored biome extensions")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
+    scope.add_argument("--color-shapes", action="store_true", help="Save quarry palette and abstract accents")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")
     args = parser.parse_args()
     data = CANONICAL_OUTPUT.read_bytes()
     assert sha256(data).hexdigest() == args.baseline_sha256, "Canonical file changed; reconcile before saving"
-    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.addition, args.block_rim)
+    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.addition, args.block_rim, args.color_shapes)
     if args.write:
         write_snapshot(data, result)
     print(json.dumps({**stats, "wrote": args.write, "sha256": sha256(result).hexdigest()}, indent=2))

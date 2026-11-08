@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — abstract color, patterns, and leaf shapes
+
+Spread brighter color, simple abstract shapes, and distinct low-resolution finishes through the quarry. Use the supplied reference for the balance of bold patterns and quieter surfaces. Give different trees and leaf shapes distinct textures and silhouettes. Keep each biome's established palette and character, including Cobalt's mushroom-only canopy.
+
 ## November 7 latest — extend each biome and lengthen its transition
 
 Give each biome more terrain beyond its mining bed. Carry its signature silhouettes through the extension, with smaller, more widely spaced forms toward the far edge. Use the existing authored materials, preserve the established routes, and keep the Cobalt extensions mushroom-only.
