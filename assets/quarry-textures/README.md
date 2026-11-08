@@ -1,6 +1,19 @@
 # Quarry photo textures
 
-These 64×64 diffuse tiles come from [Poly Haven's CC0 library](https://polyhaven.com/license) and CC0 photographs on Wikimedia Commons. The game uses the color maps at deliberately low resolution, with the quarry's authored lighting.
+The quarry's repeating color tiles use a saved **32×32 to 64×64 pixel** range. All six tiles in the current material pass are **64×64**. Keep source photos separately from the exported tiles, and do not upscale for upload. Flat roughness maps can be smaller. The tiles come from [Poly Haven's CC0 library](https://polyhaven.com/license) and CC0 photographs on Wikimedia Commons.
+
+| Current tile | Source and treatment | Roblox image ID |
+| --- | --- | --- |
+| `grass-short.png` | [Grass Ground, Poly Haven](https://polyhaven.com/a/grass_ground); muted olive, short clumps, reduced broad mottling | `134439792116456` |
+| `field-aggregate.png` | [Ganges River Pebbles, Poly Haven](https://polyhaven.com/a/ganges_river_pebbles); mid-gray rounded gravel for mining beds | `102016069607159` |
+| `cliff-soft-strata.png` | Retained `cliff.png`; soft, broad warm strata | `85691036287394` |
+| `stone-soft.png` | Retained `rock.png`; low-contrast cool stone | `140053828439773` |
+| `paving-worn-joints.png` | Retained `paving.png`; distinct, low-glare paving joints | `129610805568567` |
+| `ore-satin-vein.png` | Retained `ore-vein.png`; quieter host stone and visible veins, with the existing ore roughness | `84604323769040` |
+
+Download the two linked 1K diffuse JPEGs as `grass_ground.jpg` and `ganges_river_pebbles.jpg`, then run `swift tools/balance_quarry_textures.swift <photo-directory>` from the repository root. The authored scales, pattern modes, and mining-bed tints are recorded in [the Studio material pass](../../tools/studio_balance_quarry.lua). Grass uses organic tiling at 10–12 studs per tile; gravel uses a regular 17-stud tile to keep each stone readable. Herringbone, checker pads, and directional wood provide the stronger patterns in small areas.
+
+Earlier source tiles and grades are retained for provenance:
 
 | File | Source | Roblox image ID |
 | --- | --- | --- |
@@ -23,7 +36,7 @@ These 64×64 diffuse tiles come from [Poly Haven's CC0 library](https://polyhave
 
 These seven 64×64 grades keep the original photo detail. Cliff strata, grass, gravel, and paving use a wider range of tones. Canopy and evergreen lift the darkest pixels and reduce the contrast between individual leaves. Ruby's ground cover uses a scarlet and burnt-orange grade. Regenerate the local tiles from the retained originals with `swift tools/grade_quarry_textures.swift`.
 
-| In-use grade | Source photo | Roblox image ID |
+| Earlier grade | Source photo | Roblox image ID |
 | --- | --- | --- |
 | `cliff-graded.png` | `cliff.png` | `110682071054939` |
 | `grass-graded.png` | `grass.png` | `136005318797247` |
