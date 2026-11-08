@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `922cb78ea3ad809d10dbcff957401bb61d2e6f0d765beaee53e7eb18e07baea2` | Background save of the authored woodlands. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `c56e7874c608f9900267e3fc09ac0d357688144d` | Five extended forest shelves and 122 trees around the quarry basin. |
+| Native-file SHA-256 | `a4fc63d232b249e8622b285e01b19a83a05285bccbbad76018ccf09cd3e97612` | Background save of the block rim and tapered woodland. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `b3b4aa9fc1444ad97ba92c97bff58a2a2e306efc` | Stepped rectangular outer rim and wider tree spacing toward the edges. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quarry woodlands installed November 7, 2026** | The extended terrain and trees are present in the open Edit session. Seven managed Sources and all three Script Sync roots were verified before the additive scenery change. |
+| Shared Studio entry point | **Block rim installed November 7, 2026** | The rectangular wall and thinned woodland are present in the open Edit session. The session's loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — taller and denser woodland
+## Latest follow-up — stepped block rim and tapered woodland
+
+The five outer wall runs use 382 rectangular parts with staggered columns, inset stone courses, and broad grass benches. The seven existing interior terraces and south outlet remain. Tree spacing increases across the outer shelves. Quartz has 13 close trees, six on the middle shelves, and four on the outer shelves from the woodland pass. All five former rim sections and 47 thinned trees were moved to ServerStorage for recovery.
+
+Inspected the Quartz clearing and its background walls in Studio Edit. All 270 clearance probes over six mining beds and eight established routes passed, and the new wall clears the positions of the 75 retained woodland trees. The background save preserved all 50 Sources. Studio was open at the start and remains in Edit. No runtime or performance test was run. This revision is saved locally. The last verified Roblox publication remains v43.
+
+## Earlier follow-up — taller and denser woodland
 
 Five new forest shelves extend Quartz, Impact, Ruby, Violet, and Emerald. The Quartz clearing has 39 new trees with staggered rows and taller crowns behind them. Across the quarry, 122 broadleaf and evergreen trees use the existing authored models and low-resolution materials. The tallest new tree is about 59 studs. Cobalt's mushroom grove has no ordinary trees. The trees are decorative and have no collision.
 
