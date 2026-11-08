@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a4fc63d232b249e8622b285e01b19a83a05285bccbbad76018ccf09cd3e97612` | Background save of the block rim and tapered woodland. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `b3b4aa9fc1444ad97ba92c97bff58a2a2e306efc` | Stepped rectangular outer rim and wider tree spacing toward the edges. |
+| Native-file SHA-256 | `35e4e957b8a524224ab3079169ed2d15c822ac26c5fd46e028317a6c6a8c91d0` | Background save of the six biome extensions. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `f0cbfc012dc8fdf461615df77b89e7c4717f5932` | Broader biome shelves with fewer, smaller silhouettes toward the edges. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Block rim installed November 7, 2026** | The rectangular wall and thinned woodland are present in the open Edit session. The session's loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
+| Shared Studio entry point | **Biome extensions installed November 7, 2026** | The six extensions are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — stepped block rim and tapered woodland
+## Latest follow-up — longer biome transitions
+
+Seven extensions add 35 shelves to the six biomes, including two branches for Cobalt. The longest branch of each biome covers 75–93 studs between shelf centers. Quartz carries smaller broadleaf and evergreen trees, Impact has ochre ground and broken rock clusters, Ruby steps down through dark fins and rust loam, Violet uses split slate benches, and Emerald uses grass-capped chalk. Cobalt adds 30 scaled copies of the existing mushroom models. Each branch tapers from four or five forms on its first shelf to one on the far shelf.
+
+Inspected the Cobalt and Emerald transition in Studio Edit and verified all 30 caps are upright. All 28 new shelf joins overlap, with adjacent heights differing by at most 0.74 studs. All 549 clearance probes over the six fields, eight established routes, and 31 lagoon causeway slabs passed. The background save added only the new scenery and preserved all 50 Sources. Studio was already open and remains in Edit. Walking and performance were not playtested. The last verified Roblox publication remains v43.
+
+## Earlier follow-up — stepped block rim and tapered woodland
 
 The five outer wall runs use 382 rectangular parts with staggered columns, inset stone courses, and broad grass benches. The seven existing interior terraces and south outlet remain. Tree spacing increases across the outer shelves. Quartz has 13 close trees, six on the middle shelves, and four on the outer shelves from the woodland pass. All five former rim sections and 47 thinned trees were moved to ServerStorage for recovery.
 
