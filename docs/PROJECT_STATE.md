@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `2ffebea168619de0a646fde62e3c1bf5c99103f844606a7fa2115a329b877b68` | Dialog-free scenery save and verified seven-Source refresh. All 43 unmanaged Sources match the prior snapshot. |
-| Installed Edit revision | `e08e6dbb7c688a9224ad6f4a38d8724226d115e9` | Distinct drone silhouettes and quarry hardware, plus selective texture contrast on the expanded map. |
+| Native-file SHA-256 | `3b9ceb9d52a3d5aa39e641839900122bdad1a0fe008fbac2f20d6c75994875bc` | Background save of the authored basin. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `424d030bfdb5efd93ca836a6782933ae15f51111` | High rock walls, stepped landforms, and ground color variation. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quarry and drone passes installed November 7, 2026** | The expanded map is visible in Edit, and the new drone Sources are installed there. Seven managed Sources and all three Script Sync roots were verified. |
+| Shared Studio entry point | **Quarry basin installed November 7, 2026** | The walled basin is visible in Edit. Seven managed Sources and all three Script Sync roots were verified. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — drone silhouettes and selective texture contrast
+## Latest follow-up — walled quarry basin
+
+Five connected rim sections frame the quarry in dark rock, with a lower gap at the south outlet. Seven terraced landforms sit closer to the fields. Their green caps and moss lips alternate with deep blue rock faces. Broad olive, lime, and jade patches run across the ledges and into 88 existing turf pieces. The scenery is authored in the shared Edit document and mirrored to the canonical file with the background saver. It adds 4,014 anchored terrain facets across 12 groups, with the highest crest around 197 studs above the world origin.
+
+Inspected the result in Studio Edit. All 270 clearance probes over six mining beds and eight established routes passed, and three sampled joins from Quartz and Impact onto the lower shelves were continuous. The scoped save preserved all 50 Sources. Studio was open at the start and was left in Edit. This pass had no new playtest or performance measurement. Roblox remains at v43.
+
+## Earlier follow-up — drone silhouettes and selective texture contrast
 
 All 14 roles now use visible, tool-specific hulls over their preserved rigs. The starter miner is rounded, the seeder is a wedge, the breaker carries a cylindrical ram, the orbital relay uses a dish, and the courier has an open sling. Existing specialist joints and timings are retained. Painted panels and ribbed metal use the quarry photos at drone scale. Solid fragments inherit their ore finish; energy, glass and smoke retain distinct treatments. Card previews, company deliveries and small scrap miners use the same hull builder.
 
