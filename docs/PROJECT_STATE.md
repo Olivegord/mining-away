@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `daf68e9fa75d458cd8036fb2fadc6888e0c4acbbd51499dd7cd21e393af9b9b8` | Background save of the abstract colors, foliage, and current starter woodland placements. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `797ef0c9bc93fa2fdc4d8e0c78593e9d8fd9a3b5` | Abstract accents, six low-resolution material variants, and distinct tree crowns. |
+| Native-file SHA-256 | `fc906cbc9a524dd12677d89d29aed33a4abad6a8e37678f734bf568234e96a72` | Background save of the larger accents at spawn and the field approaches. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `9da04a68cec3b3c58c9a1946a21b638240d09613` | Larger shapes on the approaches, including two distinct tree crowns near Quartz. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Abstract palette installed November 7, 2026** | The abstract accents and foliage are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
+| Shared Studio entry point | **Arrival accents installed November 7, 2026** | The spawn and approach accents are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — abstract colors and foliage shapes
+## Latest follow-up — visible accents at spawn and field approaches
+
+A cyan wedge and amber discs frame the view from spawn. Each field approach has a larger abstract shape. Quartz has a coral dotted block, a round crown with mint stippling, and a lime fan crown with ribs. The palette uses the existing 64×64 tiles.
+
+The Quartz approach was inspected in Studio Edit. All 71 added parts are anchored and decorative, with projected clearance around every mining bed and authored walkable route. The background save added only the new group and preserved all 50 Sources. Studio was already open and remained in Edit. This pass did not run Play or performance tests. The last verified Roblox publication remains v43.
+
+## Earlier follow-up — abstract colors and foliage shapes
 
 Thirty abstract accents bring striped slabs, dotted cubes, offset discs, patterned squares and wedges to the six biomes and hub. Nine new trees use rounded leaves, fans or needle tiers. Cobalt keeps its mushroom canopy. The pass changes 1,415 existing foliage surfaces and 95 ground or rock surfaces. Six new material variants reuse the existing 64×64 color tiles at different scales.
 
