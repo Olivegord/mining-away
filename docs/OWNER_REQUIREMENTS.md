@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — natural basin landforms
+
+Add grassy mounds and broad raised plateaus. Blend the perimeter walls into rising ground so the map feels like a natural basin rather than a cage. Preserve mining beds, routes, smooth textures and selective bright grass accents.
+
 ## November 7 latest — natural planting and selective bright grass
 
 Return to the softer palette before the all-over saturated grass/orange dirt pass. Add gradual yellow-green variation, more tall tiered and little stepped trees, grass tufts, bushes and flowers. Spread planting naturally while keeping routes and beds clear. Bring the previous bright greens back selectively for pops in a few spots, not across all the ground. Retain smooth grass, physical raised patches, existing textures and brighter daytime lighting.

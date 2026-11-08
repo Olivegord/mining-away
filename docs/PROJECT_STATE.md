@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `01489d80d52b7e3281275187c13fb49b2647f147f946b9eaeba12a70ec29cf94` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `c6a880e9a84d6cc12607acf86dfe8c4c79e83918e88aca018b66c782d3d34f20` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,15 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — softer meadow with selective bright patches
+## Latest follow-up — grassy basin slopes and raised shelves
+
+Added QuarryBasinFoothills: 11 broad grass slopes with solid foundations and raised plateaus, 41 grass rim caps, and 22 trees cloned from the existing native tree. Lowered three high wall sections while preserving their bottoms. Grass slopes meet outer field edges; existing tiered levels, materials, meadow gradients and selective bright patches remain. Final tree grounding lifted 12 shelf trees onto the actual visible terrain/wall crown.
+
+All 11 slopes passed three Edit ray samples with upward normals greater than 0.70. All 412 protected bed/route samples retained their prior height. Inspected two actual Edit viewport angles. Scoped save added 417 instances and preserved all 50 Sources and unrelated properties. Studio was initially open and remains open in Edit, place 124078027733625 / universe 10774898335. No Play or multiplayer test. Public version remains v43; not published.
+
+Helpers: tools/studio_basin_foothills.lua and tools/refresh_basin_foothills.py. Final export includes terrain-grounded shelf trees; the staging script alone precedes that final grounding adjustment. Source-refresh check via build.py refused GlobalDroneControl after concurrent gameplay build changes appeared; no forced Source overwrite was performed. The active falling-junk chat was informed and native ownership released. Its tools/build.py and src/JunkField.lua edits are outside this scenery commit.
+
+## Earlier follow-up — softer meadow with selective bright patches
 
 Restored the f838cce ground/earth palette rather than keeping the all-over green/orange pass. Seven of the 36 raised grass patches deliberately regain the earlier bright lime/yellow-green colors. Eighteen soft yellow-green blends fade across grass surfaces using lit SurfaceGui gradient strips; the original grass texture and physical patches remain. Global midday lighting is unchanged.
 
