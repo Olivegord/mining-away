@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `35e4e957b8a524224ab3079169ed2d15c822ac26c5fd46e028317a6c6a8c91d0` | Background save of the six biome extensions. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `f0cbfc012dc8fdf461615df77b89e7c4717f5932` | Broader biome shelves with fewer, smaller silhouettes toward the edges. |
+| Native-file SHA-256 | `daf68e9fa75d458cd8036fb2fadc6888e0c4acbbd51499dd7cd21e393af9b9b8` | Background save of the abstract colors, foliage, and current starter woodland placements. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `797ef0c9bc93fa2fdc4d8e0c78593e9d8fd9a3b5` | Abstract accents, six low-resolution material variants, and distinct tree crowns. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Biome extensions installed November 7, 2026** | The six extensions are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
+| Shared Studio entry point | **Abstract palette installed November 7, 2026** | The abstract accents and foliage are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — longer biome transitions
+## Latest follow-up — abstract colors and foliage shapes
+
+Thirty abstract accents bring striped slabs, dotted cubes, offset discs, patterned squares and wedges to the six biomes and hub. Nine new trees use rounded leaves, fans or needle tiers. Cobalt keeps its mushroom canopy. The pass changes 1,415 existing foliage surfaces and 95 ground or rock surfaces. Six new material variants reuse the existing 64×64 color tiles at different scales.
+
+Quartz was inspected in the existing Play preview. The final Edit audit confirmed seven accent groups, 171 anchored noncolliding parts, six variants, and the current positions and finishes of sampled trees. The checked background save copied in the Quartz and Impact woodland branches to retain their Studio placements and stored the previous copies in ServerStorage in the canonical snapshot. All 50 Sources were preserved. Studio was already open and was returned to Edit. Performance and full-map Play behavior were not tested. The last verified Roblox publication remains v43.
+
+## Earlier follow-up — longer biome transitions
 
 Seven extensions add 35 shelves to the six biomes, including two branches for Cobalt. The longest branch of each biome covers 75–93 studs between shelf centers. Quartz carries smaller broadleaf and evergreen trees, Impact has ochre ground and broken rock clusters, Ruby steps down through dark fins and rust loam, Violet uses split slate benches, and Emerald uses grass-capped chalk. Cobalt adds 30 scaled copies of the existing mushroom models. Each branch tapers from four or five forms on its first shelf to one on the far shelf.
 
