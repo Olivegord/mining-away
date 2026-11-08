@@ -47,6 +47,9 @@ WOODLAND_SCOPE = {
 BIOME_REACH_SCOPE = {
     "scenery": (MAP, {"QuarryBiomeReaches"}, {"Folder", "Model", "Part"}),
 }
+ARRIVAL_SCOPE = {
+    "scenery": (MAP, {"QuarryArrivalAccents"}, {"Folder", "Part", "WedgePart"}),
+}
 PALETTE_VARIANTS = {f"QuarryPalette_{name}" for name in
                     ("LeafClumps", "LeafStipple", "LeafRibs", "Tufts", "Strata", "Pebbles")}
 PALETTE_SCOPE = {
@@ -445,6 +448,8 @@ def main():
                        help="Append only the authored woodland scenery")
     scope.add_argument("--biome-reaches", dest="addition", action="store_const", const=BIOME_REACH_SCOPE,
                        help="Append only the authored biome extensions")
+    scope.add_argument("--arrival-accents", dest="addition", action="store_const", const=ARRIVAL_SCOPE,
+                       help="Append only the spawn and biome approach accents")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
     scope.add_argument("--color-shapes", action="store_true", help="Save quarry palette and abstract accents")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")

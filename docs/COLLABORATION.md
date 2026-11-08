@@ -65,3 +65,5 @@ The [block rim pass](../tools/studio_quarry_block_rim.lua) exports `rim`, `archi
 The [biome extension pass](../tools/studio_quarry_biome_reaches.lua) exports the `scenery` string at `shared.QuarryBiomeReachesSnapshot`. Use `--biome-reaches` to append only the six authored biome extensions under `Workspace.MiningAway.Map.QuarryBiomeReaches`.
 
 The [color and shape pass](../tools/studio_quarry_color_shapes.lua) exports `scenery`, `variants`, and `edits` at `shared.QuarryColorShapesSnapshot`. Use `--color-shapes` to save these scope-limited changes. If the Quartz or Impact woodland placement differs from the canonical baseline, the optional `woodland` section contains both current woodland folders. The saver verifies the forest shelf surfaces and foliage edits, then archives the old copies in the canonical file before installing the current branches.
+
+The [arrival accents pass](../tools/studio_quarry_visible_accents.lua) exports the `scenery` string at `shared.QuarryArrivalSnapshot`. Use `--arrival-accents` to append only the spawn and field approach accents.
