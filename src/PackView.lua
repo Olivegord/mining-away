@@ -5,12 +5,12 @@ local TweenService=game:GetService('TweenService')
 local PackView={}
 PackView.__index=PackView
 local colors={
- Color3.fromRGB(181,190,201),
+ Color3.fromRGB(121,211,248),
  Color3.fromRGB(255,213,82),
  Color3.fromRGB(86,255,141),
  Color3.fromRGB(185,110,255),
 }
-local idle=Color3.fromRGB(115,135,150)
+local idle=Color3.fromRGB(75,209,220)
 local function block(parent,name,size,color,material)
  local part=Instance.new('Part')
  part.Name=name;part.Size=size;part.Color=color;part.Material=material
@@ -21,9 +21,9 @@ end
 
 local function createCrate(parent)
  local model=Instance.new('Model');model.Name='LocalCompanyCrate'
- local shell=Color3.fromRGB(39,47,58)
+ local shell=Color3.fromRGB(32,119,133)
  local body=block(model,'Shell',Vector3.new(1.88,1.12,1.58),shell,Enum.Material.Metal)
- local lid=block(model,'Lid',Vector3.new(1.94,.24,1.65),Color3.fromRGB(67,78,91),Enum.Material.Metal)
+ local lid=block(model,'Lid',Vector3.new(1.94,.24,1.65),Color3.fromRGB(255,193,76),Enum.Material.Metal)
  body.Material=Enum.Material.CorrodedMetal;body.MaterialVariant='QuarryDrone_Ribbed'
  lid.Material=Enum.Material.Slate;lid.MaterialVariant='QuarryDrone_Painted'
  local seam=block(model,'Seal',Vector3.new(1.92,.055,1.62),idle,Enum.Material.Neon)

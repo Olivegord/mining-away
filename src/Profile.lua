@@ -1,8 +1,9 @@
+local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneCatalog=require('./DroneCatalog')
 local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=8,CONTENT=1}
+local P={SCHEMA=9,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -10,7 +11,7 @@ for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
-local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' end
+local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
 P.TYPE_SCALES={Blue={speed=1.15,mining=1,combat=1},Red={speed=1,mining=.95,combat=1.15},Green={speed=1,mining=1.10,combat=.95}}
 local function integer(n) return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
@@ -21,7 +22,7 @@ local function clone(v)
 end
 P.clone=clone
 local function run(uid,index)
- local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
+ local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,quartzEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
  Shops.fresh(state);return state
 end
 local function logisticsOwnership()
@@ -128,7 +129,7 @@ function P.validate(p,uid)
  if type(r.abilityCooldowns)~='table' then return false,'Missing gadget cooldowns' end
  for key,value in pairs(r.abilityCooldowns) do if (key~='Orbital' and key~='Scrap') or not finite(value) or value<0 or value>=1e14 then return false,'Invalid gadget cooldown' end end
  local shopOK,shopError=Shops.validate(r);if not shopOK then return false,shopError end
- for _,k in ipairs({'credits','saleEarnings','packIndex','offersWithoutCombat'}) do if not integer(r[k]) then return false,'Invalid run counter '..k end end
+ for _,k in ipairs({'credits','saleEarnings','quartzEarnings','packIndex','offersWithoutCombat'}) do if not integer(r[k]) then return false,'Invalid run counter '..k end end
  for _,k in ipairs({'cargo','droneCargo','deliveries','cards','wins','entitlements','yieldRemainders'}) do if type(r[k])~='table' then return false,'Missing run state '..k end end
  if not validBag(r.cargo) then return false,'Invalid legacy cargo' end
  local cargoTotal=bagUnits(r.cargo)
@@ -145,14 +146,18 @@ function P.validate(p,uid)
  if not integer(cargoTotal) then return false,'Cargo total limit exceeded' end
  for field,n in pairs(r.wins) do if type(field)~='string' or not integer(n) then return false,'Invalid run wins' end end
  for material,n in pairs(r.yieldRemainders) do if type(material)~='string' or not finite(n) or n<0 or n>=1 then return false,'Invalid yield remainder' end end
+ local blueprints={}
  if #r.cards>500 then return false,'Invalid card count' end
  for _,c in ipairs(r.cards) do
   if type(c)~='table' or type(c.cardId)~='string' or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid run card' end
-  if not validRarity(c.rarity) then return false,'Invalid run card rarity' end
+  if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid run card rarity or blueprint' end
+  if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
  end
+ local blueprintCount=0;for _ in pairs(blueprints) do blueprintCount+=1 end
+ if blueprintCount>Workshop.SLOTS then return false,'Too many blueprints' end
  local offer=r.pendingOffer
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
@@ -162,7 +167,8 @@ function P.validate(p,uid)
   local seen={}
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
-   if not validRarity(c.rarity) then return false,'Invalid offer choice rarity' end
+   if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid offer choice rarity or blueprint' end
+   if c.workshop and (blueprints[c.cardId] or blueprintCount>=Workshop.SLOTS or c.packTier~=offer.packTier) then return false,'Invalid blueprint slot' end
    for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
@@ -302,6 +308,11 @@ function P.migrate(raw,uid,seed)
   if p.consumables==nil then p.consumables=Consumables.fresh() end
   p.schemaVersion=8
  end
+ if p.schemaVersion==8 then
+  if type(p.run)~='table' or not integer(p.run.saleEarnings) then return nil,'Invalid Quartz migration' end
+  -- Honor already-earned run progress once; every new sale counts only Quartz.
+  p.run.quartzEarnings=p.run.saleEarnings;p.schemaVersion=9
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -327,19 +338,7 @@ function P.buyDrone(p,kind,tx,expectedRun,context)
   return true,replay
  end
  if expectedRun~=p.run.id then return false,'Stale run' end
- if type(kind)~='string' or (kind~='Laser' and not specialTypes[kind]) then return false,'Unknown drone' end
- context=context or {}
- if not context.atDepot or context.activeEncounter then return false,'Visit the depot outside combat' end
- local price=DroneCatalog.price(kind,p.fleet)
- if not integer(price) or price<1 then return false,'Drone is unavailable' end
- if p.run.wallet.Quartz<price then return false,'Need '..price..' Quartz' end
- if not integer(p.nextDroneSerial+1) or not integer(p.purchasedDrones+1) then return false,'Permanent serial limit exceeded' end
- local serial=p.nextDroneSerial
- local awarded=kind=='Laser' and drone(p.userId,serial,'Blue',p.seed,1) or specialDrone(p.userId,serial,kind,p.seed)
- p.run.wallet.Quartz=p.run.wallet.Quartz-price;p.run.credits=p.run.wallet.Quartz
- table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.purchasedDrones=p.purchasedDrones+1
- local result={droneId=awarded.id,droneType=kind,role=awarded.role,price=price,currency='Quartz',fleetCount=#p.fleet,runId=p.run.id}
- P.record(p,'BuyDrone',tx,result);return true,result
+ return false,'Earn a permanent mining drone through Quartz prestige'
 end
 function P.cargoUnits(p)
  return bagUnits(p.run.cargo)
@@ -422,7 +421,7 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
  local deposited,depositError=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,depositError end
- p.run.deliveries[droneId]=nil;p.run.credits=p.run.credits+amount;p.run.saleEarnings=p.run.saleEarnings+amount
+ p.run.deliveries[droneId]=nil;p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.cargo.Quartz or 0)
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount}
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
@@ -440,21 +439,26 @@ function P.sell(p,prices,tx,expectedRun)
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
  local deposited,depositError=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,depositError end
- p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount
+ p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.Quartz or 0)
  local result={credits=amount,earnings=amount,units=units,cargo=manifest,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
-local milestones={{earnings=160,field='Quartz',wins=0},{earnings=400,field='Quartz',wins=0},{earnings=2000,field='Cobalt',wins=1},{earnings=5000,field='Cobalt',wins=1},{earnings=11000,field='Violet',wins=1},{earnings=22000,field='Violet',wins=1},{earnings=42000,field='Emerald',wins=1}}
-P.MILESTONES=milestones
 function P.milestone(p)
- local n=p.prestiges+1
- return clone(milestones[n] or {earnings=math.floor(42000*1.75^(n-7)),field='Emerald',wins=1})
+ return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}
 end
-function P.nextType(p) return ({'Red','Green','Blue'})[(p.prestiges%3)+1] end
+local prestigeKinds={'Red','Bubbler','Halver','Blue','Gridcutter','Singularity'}
+function P.nextType(p) return prestigeKinds[p.prestiges%#prestigeKinds+1] end
+local function prestigeDrone(p)
+ local kind=P.nextType(p)
+ return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
+  or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
+end
 function P.prestigePreview(p)
- local m=P.milestone(p);local wins=p.clearedFields[m.field] and 1 or 0
- local eligible=p.run.saleEarnings>=m.earnings and wins>=m.wins and p.run.pendingOffer==nil
- local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Sell more ore this run' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
- return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed,p.prestiges+2).role,cards=#p.run.cards,runId=p.run.id}
+ local m=P.milestone(p);local earned=p.run.quartzEarnings
+ local eligible=earned>=m.earnings and p.run.pendingOffer==nil
+ local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the workshop')
+ return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
+  saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
+  newType=P.nextType(p),newRole=prestigeDrone(p).role,cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -465,7 +469,7 @@ function P.prestige(p,tx,expectedRun,context)
  if not context.atDepot or context.activeEncounter then return false,'Recall your fighting drones and return to the depot' end
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
- local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=drone(p.userId,serial,P.nextType(p),p.seed,p.prestiges+2)
+ local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=prestigeDrone(p)
  Consumables.refund(p.consumables)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)
  local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,fleetCount=#p.fleet,prestiges=p.prestiges}

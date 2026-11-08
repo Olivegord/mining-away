@@ -8,7 +8,7 @@ The shared project is **https://github.com/Olivegord/mining-away**. Its integrat
 2. Use that repository as the project in Codex. For local desktop work, select its working folder; local changes must be committed and pushed back to this same shared repository. GitHub remains the shared source.
 3. Start with this prompt:
 
-   > Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Tell me the current game file, shared Roblox destination, last verified gameplay revision and publication status, then work on my requested change in this same project. Keep the existing DRONEREVOLUTION place current under the standing publication permission.
+   > Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Tell me the current game file, shared Roblox destination, last verified gameplay revision and publication status, then work on my requested change in this same project. Use Script Sync and save the canonical snapshot for routine work. Publish only when I ask for a release.
 
 `AGENTS.md` supplies repository instructions to Codex; the linked handoff supplies the project's decisions and current state. The original private chat is not copied into another person's account. See [OpenAI's guidance on repository instructions](https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex#agents-and-plans).
 

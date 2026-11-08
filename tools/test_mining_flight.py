@@ -11,7 +11,7 @@ card_domain=cards[:cards.index('local Players=')]+'\n'+cards[cards.index('functi
 with tempfile.TemporaryDirectory() as tmp:
  for name,source in {
   'cards':mock+'\n'+module_bundle(('Shops','DroneRoles','Cards'))+'\n'+card_domain+'\n'+(ROOT/'tests/card-color.integration.lua').read_text(),
-  'server':mock+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\nfunction runService:IsStudio() return true end\n'+bundle()+'\n'+(ROOT/'tests/mining-flight.integration.lua').read_text(),
+  'server':mock+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\nfunction runService:IsStudio() return true end\n'+bundle()+'\n;(function()\n'+(ROOT/'tests/mining-flight.integration.lua').read_text()+'\nend)()',
   'observers':mock+'\n'+(ROOT/'tests/gadget-server.setup.lua').read_text()+'\n'+bundle()+'\n'+(ROOT/'tests/motion-setup.lua').read_text()+'\n'+render+'\n'+(ROOT/'tests/mining-flight-observers.integration.lua').read_text(),
   'client':mock+'\n'+module_bundle(('Feel',))+'\n'+(ROOT/'tests/motion-setup.lua').read_text()+'\n'+render+'\n'+(ROOT/'tests/mining-flight-client.integration.lua').read_text(),
  }.items():

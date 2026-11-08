@@ -47,7 +47,7 @@ local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
   local profile=Pro.new(uid,seed:NextInteger(1,2147483000))
-  if inStudio then profile.run.wallet.Quartz=100;profile.run.credits=100 end
+  -- Studio starts with the real earned Quartz economy; no free workshop money.
   return profile
  end,
  migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
@@ -64,6 +64,7 @@ local function publish(p)
  local copy={}
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
+ copy.workshop=Ca.workshopRows(copy)
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
@@ -1896,7 +1897,7 @@ local function chooseCard(p: any,pl: any,payload: any)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
 local function executePrestige(p: any,pl: any,payload: any)
- if payload.confirm~=true or not atStation(p,scene.prestigeStation,20) then return end
+ if payload.confirm~=true or not (atStation(p,scene.prestigeStation,20) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return end
  local function applyPrestige(copy: any): (any, any)
   local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true}
   local ok: boolean,result: any=Pro.prestige(copy,payload.txId,payload.runId,context)
@@ -1909,7 +1910,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end)
 end
 local packDelivery=PackDelivery.new({
- root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, healthy=healthy, atHome=atHome,
+ root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, stations={scene.packStation,shopStations.Quartz}, healthy=healthy, atHome=atHome,
  inAssault=activeAssault, characterRoot=characterRoot,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
  offer=function(p) return data(p).run.pendingOffer end,
@@ -1928,25 +1929,16 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
-  notice(p,'Visit the Pack Shop or prestige beacon.')
+ if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and (atStation(p,scene.packStation,24) or atStation(p,shopStations.Quartz,20))) then
+  notice(p,'Visit the Quartz Workshop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false
  end
  if action=='BuyPack' then
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
-  if not atStation(p,scene.packStation,20) then return false end
+  if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return false end
   local function buyCard(copy: any): (any, any)
-   -- Offer combat preparation one shop before the next uncleared guard.
-   -- A sole sentry cannot usefully trigger a chain or sustain a kill-to-kill perk.
-   local combat,multi=false,false
-   for index,field in ipairs(patches) do
-    if field.cfg.Turrets>0 and not copy.clearedFields[field.cfg.Key] and field.e.phase~='Cleared'
-     and Shops.unlocked(copy,patches[index-1].cfg.Key) then
-     combat=true;multi=multi or field.cfg.Turrets>1
-    end
-   end
-   local options: any={combatVisible=combat,multiTargetCombat=multi,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -2147,13 +2139,11 @@ local function miningAbility(p,payload)
 end
 local function buyShopUpgrade(p,pl,payload)
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
- local entry=type(payload.upgradeId)=='string' and Shops.BY_ID[payload.upgradeId]
- local station=entry and shopStations[entry.shop]
- if not station or not atStation(p,station,20) then notice(p,'Visit that mineral shop to buy upgrades.');return end
+ if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then notice(p,'Visit the Quartz Workshop.');return end
  transact(p,'shop:'..payload.txId,function(copy)
-  local ok,result=Shops.buy(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{shop=entry.shop,atShop=true,activeEncounter=false,fleet=runtimeFleet(p)})
+  local ok,result=Ca.upgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{atDepot=true,activeEncounter=false})
   if ok then return result end;return nil,result
- end,function() refreshStats(p);notice(p,entry.title..' installed.');p.publishDirty=true end)
+ end,function(result) refreshStats(p);notice(p,result.title..' · level '..result.level);p.publishDirty=true end)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end

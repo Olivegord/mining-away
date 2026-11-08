@@ -188,7 +188,7 @@ check('actual Profile missing-target migration refund is durable before presenta
 end)
 check('actual Profile prestige crash retains identities and exactly one permanent grant',function()
  local b=backend();local c={now=100,waits={}};local m=Persistence.new(b,realOptions('real-A',c));local s=assert(m:load(1))
- local originalId=s.data.fleet[1].id;local originalBase=clone(s.data.fleet[1].base);s.data.run.saleEarnings=2000;s.data.run.wins.Cobalt=1
+ local originalId=s.data.fleet[1].id;local originalBase=clone(s.data.fleet[1].base);s.data.run.saleEarnings=2000;s.data.run.quartzEarnings=2000;s.data.run.wins.Cobalt=1
  local runId=s.data.run.id;b.failAfter=3
  eq(m:transaction(s,'storage-prestige',function(p)
   local ok,r=Profile.prestige(p,'domain-prestige',runId,{atDepot=true,activeEncounter=false,confirmed=true})

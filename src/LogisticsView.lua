@@ -54,7 +54,7 @@ function View.start(ctx)
  local balance=U.text(sheet,UDim2.fromOffset(50,48),UDim2.new(1,-68,0,24),'',14,C.muted,true)
  U.button(sheet,UDim2.new(1,-56,0,12),UDim2.fromOffset(40,40),'X',function() setOpen(false) end,C.danger)
  local tabs={};local body=Instance.new('ScrollingFrame');body.Name='YardContents';body.BackgroundTransparency=1;body.BorderSizePixel=0;body.Active=true;body.ScrollBarThickness=3;body.ScrollBarImageColor3=C.muted;body.ZIndex=sheet.ZIndex+2;body.Parent=sheet
- local foot=U.text(sheet,UDim2.fromOffset(18,0),UDim2.new(1,-36,0,37),'Buy and load at the depot. Your permanent fleet stays with you.',13,C.muted)
+ local foot=U.text(sheet,UDim2.fromOffset(18,0),UDim2.new(1,-36,0,37),'Earn mining drones through prestige. Your permanent fleet stays with you.',13,C.muted)
  local width,height,contentWidth=480,540,444
  local signature='';local barSignature='';local purchases={};local launch,auto,storageSummary=nil,nil,nil
  local render
@@ -98,12 +98,13 @@ function View.start(ctx)
   purchases={};launch=nil;auto=nil;storageSummary=nil
   for name,b in pairs(tabs) do U.skin(b,name==self.tab and C.accent or C.paper,11,.92) end
   if self.tab=='Drones' then
-   local y=0
-   for _,key in ipairs(DroneCatalog.Order) do
-    local entry=DroneCatalog.Types[key]
-    y=y+shopCard(y,entry.Name,entry.Description,DroneCatalog.price(key,profile().fleet),Color3.fromRGB(unpack(entry.Color)),entry.Duration>0 and entry.Duration or nil,'BuyDrone',key,false)+8
-   end
-   body.CanvasSize=UDim2.fromOffset(0,y)
+   local pre=profile().prestigePreview or {}
+   text(body,8,12,contentWidth-16,32,'GROW YOUR PERMANENT FLEET',19,C.accent)
+   U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, choose three blueprints and level your build. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
+   text(body,8,143,contentWidth-16,32,tostring(pre.earnings or 0)..' / '..tostring(pre.saleRequired or 360)..' Quartz sold',18,C.mineral)
+   U.button(body,UDim2.fromOffset(8,190),UDim2.fromOffset(contentWidth-16,44),'Open Quartz Workshop',function() setOpen(false);ctx.openWorkshop() end,C.mineral)
+   U.button(body,UDim2.fromOffset(8,246),UDim2.fromOffset(contentWidth-16,44),'Review prestige reward',function() setOpen(false);ctx.openPrestige() end,C.accent)
+   body.CanvasSize=UDim2.fromOffset(0,304)
   elseif self.tab=='Storage' then
    local card=row(0,160)
    text(card,14,10,contentWidth-28,28,'ORBITAL STORAGE',19,C.accent)
@@ -188,7 +189,7 @@ function View.start(ctx)
    body.Position=UDim2.fromOffset(14,128);body.Size=UDim2.fromOffset(w-28,math.max(32,h-128-footerHeight-20))
    foot.Position=UDim2.fromOffset(18,h-footerHeight-11);foot.Size=UDim2.new(1,-36,0,footerHeight)
   end
-  local p=profile();local wallet=p.run and p.run.wallet or {};balance.Text=compact(wallet.Quartz or 0)..' Quartz • purchases at the depot'
+  local p=profile();local wallet=p.run and p.run.wallet or {};balance.Text=compact(wallet.Quartz or 0)..' Quartz · permanent fleet'
   local key={self.tab,tostring(w),tostring(h),tostring(owned().backpack),tostring(#(p.fleet or {})),tostring(self.loadCarrier),tostring(p.run and p.run.id),tostring(player:GetAttribute('MA_DevToolsEnabled'))}
   for _,record in ipairs(owned().carriers or {}) do table.insert(key,record.id..':'..state(record.id)..':'..table.concat(record.droneIds or {},',')) end
   for id in pairs(self.draft) do table.insert(key,id) end;table.sort(key)
@@ -228,7 +229,7 @@ function View.start(ctx)
   carrierReturn.Visible=self.selected~=nil and not ctx.hidden() and not self.open
   carrierReturn.Position=UDim2.fromOffset(view.X-112,yardTop+(targetCycle.Visible and 84 or 42))
   sheet.Position=UDim2.fromOffset((view.X-w)/2,(view.Y-h)/2)
-  foot.Text=os.clock()<self.messageUntil and self.message or self.selected and 'Carrier selected • click a field to deploy • [R] returns it • [C] changes target' or 'Buy and load at the depot. Your permanent fleet stays with you.'
+  foot.Text=os.clock()<self.messageUntil and self.message or self.selected and 'Carrier selected • click a field to deploy • [R] returns it • [C] changes target' or 'Earn mining drones through prestige. Your permanent fleet stays with you.'
  end
  -- All players render the same authoritative logistics poses through local clones.
  function self:step(now,dt)

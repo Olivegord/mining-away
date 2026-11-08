@@ -72,6 +72,8 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
+ if any(name in names for name in ('Shops','Cards','Profile','ShopView')) and 'Workshop' not in names:
+  names=('Workshop',)+tuple(names)
  if any(name in names for name in ('AbilityView','LaserShowcase','PackView','LogisticsView')) and 'DroneOutline' not in names:
   names=('DroneOutline',)+tuple(names)
  if 'Cards' in names and 'Packs' not in names:
@@ -90,6 +92,7 @@ def module_bundle(names):
    # Keep World helpers scoped to World; the game controller is near Luau's local limit.
    biome=(ROOT/'src/QuarryBiomes.lua').read_text()
    code=code.replace("require('./QuarryBiomes')",'(function()\n'+biome+'\nend)()')
+  if 'Workshop' in names[:names.index(name)]:code=code.replace("local Workshop=require('./Workshop')\n",'')
   if 'Packs' in names[:names.index(name)]:code=code.replace("local Packs=require('./Packs')\n",'')
   if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
   if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')

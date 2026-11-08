@@ -1,11 +1,69 @@
 --!strict
 -- Drone Blower revolution • Olivegord/mining-away • generated from editable source.
+local Workshop = (function()
+-- Small Quartz run: draft three blueprints, then invest in those choices.
+-- These local tuning values travel with the saved offer, so reconnects never reroll.
+local W={SLOTS=3,PACK_PRICES={20,45,80},LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+W.TIERS={'Common','Rare','Epic','Legendary'}
+W.CATALOG={
+ {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',max=6,step={mining=.5},color={246,113,93},icon='mining'},
+ {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',max=6,step={startup=1},color={69,190,244},icon='startup'},
+ {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',max=4,step={yield=.25},color={188,119,245},icon='crystal'},
+ {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
+ {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+}
+W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
+function W.owned(p)
+ local result={}
+ for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
+ return result
+end
+function W.find(p,id)
+ for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
+ return nil
+end
+function W.price(p) return W.PACK_PRICES[#W.owned(p)+1] end
+function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
+function W.effects(c,level)
+ local effects={}
+ for k,v in pairs(c.step) do effects[k]=v*level end
+ for k,v in pairs(c.once or {}) do effects[k]=v end
+ return effects
+end
+function W.card(entry,tier)
+ local c={cardId=entry.id,title=entry.title,scope=entry.scope,category=entry.category,workshop=true,
+  level=math.min(tier,entry.max),maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
+  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[tier],packTier=tier,expires='This run'}
+ c.effects=W.effects(c,c.level)
+ c.description='Starts at level '..c.level..'. Buy more levels in the Quartz Workshop.'
+ c.headline='LEVEL '..c.level..' BLUEPRINT';c.purpose='Choose a build, then invest in it'
+ c.tradeoff='Uses 1 of 3 build slots';c.stackText='Level '..c.level..' / '..c.maxLevel..' · This run'
+ return c
+end
+function W.validate(c)
+ if not c.workshop then return true end
+ local entry=W.BY_ID[c.cardId]
+ if not entry or c.workshop~=true or c.scope~=entry.scope or type(c.level)~='number' or c.level%1~=0
+  or c.level<1 or c.level>entry.max or c.maxLevel~=entry.max or c.levelCost~=W.LEVEL_COST or c.levelGrowth~=W.LEVEL_GROWTH
+  or type(c.step)~='table' or type(c.once)~='table' or type(c.effects)~='table'
+  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 or c.rarity~=W.TIERS[c.packTier] then return false end
+ local function same(a,b)
+  for k,v in pairs(a) do if b[k]~=v then return false end end
+  for k,v in pairs(b) do if a[k]~=v then return false end end
+  return true
+ end
+ return same(c.step,entry.step) and same(c.once,entry.once or {}) and same(c.effects,W.effects(c,c.level))
+end
+return W
+
+end)()
 local Shops = (function()
 -- Pure mineral economy. Catalog prices are provisional playtest tuning;
 -- ownership, quoted levels, spending and receipts are server transactions.
-local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz',PACKS_FREE=true}
+local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz',PACKS_FREE=false}
 function S.packPromptText(price)
- return price==0 and 'Buy pack · FREE (0 Quartz)' or ('Buy pack · '..tostring(price)..' Quartz')
+ return 'Open Quartz Workshop'
 end
 S.COLORS={Quartz={180,225,213},Ruby={226,75,112},Cobalt={89,150,234},Violet={166,115,217},Emerald={70,184,139}}
 local function item(id,shop,title,description,info,cost,max,effects,unlock,role)
@@ -181,6 +239,8 @@ function Stands.position(home,index,groundY)
  return Vector3.new(home.X+offset,groundY+1.5,home.Z+(index==1 and 32 or 18))
 end
 local function addSign(station,text,height)
+  local existing=station:FindFirstChild('TestLabel')
+  if existing then for _,node in ipairs(existing:GetDescendants()) do if node:IsA('TextLabel') then node.Text=text end end;return end
   local sign=station:FindFirstChild('ShopSign')
   if not sign then sign=Instance.new('Part');sign.Name='ShopSign';sign.Parent=station end
   sign.Anchored=true;sign.CanCollide=false;sign.CanTouch=false;sign.CanQuery=false
@@ -192,6 +252,14 @@ local function addSign(station,text,height)
    title.Size=UDim2.fromScale(1,1);title.BackgroundTransparency=1;title.TextColor3=station.Color
    title.Font=Enum.Font.SourceSansBold;title.TextSize=54;title.Text=text;title.Parent=face
   end
+end
+local function quartzWorkshop(stations)
+ for key,station in pairs(stations) do
+  local prompt=station:FindFirstChildOfClass('ProximityPrompt')
+  if prompt then prompt.Enabled=key=='Quartz';prompt.ActionText='Open Quartz Workshop';prompt.ObjectText=key=='Quartz' and 'Quartz Workshop' or 'Future field' end
+  local sign=station:FindFirstChild('ShopSign')
+  if sign then for _,node in ipairs(sign:GetDescendants()) do if node:IsA('TextLabel') then node.Text=key=='Quartz' and 'QUARTZ WORKSHOP' or key:upper()..' · LATER' end end end
+ end
 end
 function Stands.mount(map,home,template)
  local stations={}
@@ -208,14 +276,14 @@ function Stands.mount(map,home,template)
  if printer then
   printer:SetAttribute('Interaction','Printer')
   local prompt=printer:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
-  prompt.ActionText='Buy drones / manage fleet';prompt.ObjectText='DRONE YARD'
+  prompt.ActionText='Manage permanent fleet';prompt.ObjectText='DRONE YARD'
   prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
   prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=printer
   addSign(printer,'DRONE YARD',3)
  end
- addSign(template,'PACK SHOP',3)
+ addSign(template,'QUARTZ WORKSHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'
+ packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Quartz Workshop'
  packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
@@ -231,6 +299,7 @@ function Stands.mount(map,home,template)
    prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
    stations[key]=station
   end
+  quartzWorkshop(stations)
   return stations
  end
  local pad=map:FindFirstChild('HubPad',true)
@@ -253,6 +322,7 @@ function Stands.mount(map,home,template)
   prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
   stations[key]=station
  end
+ quartzWorkshop(stations)
  return stations
 end
 return Stands
@@ -2038,7 +2108,7 @@ return R
 end)()
 local Profile = (function()
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=8,CONTENT=1}
+local P={SCHEMA=9,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -2046,7 +2116,7 @@ for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
-local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' end
+local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
 P.TYPE_SCALES={Blue={speed=1.15,mining=1,combat=1},Red={speed=1,mining=.95,combat=1.15},Green={speed=1,mining=1.10,combat=.95}}
 local function integer(n) return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
@@ -2057,7 +2127,7 @@ local function clone(v)
 end
 P.clone=clone
 local function run(uid,index)
- local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
+ local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,quartzEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
  Shops.fresh(state);return state
 end
 local function logisticsOwnership()
@@ -2164,7 +2234,7 @@ function P.validate(p,uid)
  if type(r.abilityCooldowns)~='table' then return false,'Missing gadget cooldowns' end
  for key,value in pairs(r.abilityCooldowns) do if (key~='Orbital' and key~='Scrap') or not finite(value) or value<0 or value>=1e14 then return false,'Invalid gadget cooldown' end end
  local shopOK,shopError=Shops.validate(r);if not shopOK then return false,shopError end
- for _,k in ipairs({'credits','saleEarnings','packIndex','offersWithoutCombat'}) do if not integer(r[k]) then return false,'Invalid run counter '..k end end
+ for _,k in ipairs({'credits','saleEarnings','quartzEarnings','packIndex','offersWithoutCombat'}) do if not integer(r[k]) then return false,'Invalid run counter '..k end end
  for _,k in ipairs({'cargo','droneCargo','deliveries','cards','wins','entitlements','yieldRemainders'}) do if type(r[k])~='table' then return false,'Missing run state '..k end end
  if not validBag(r.cargo) then return false,'Invalid legacy cargo' end
  local cargoTotal=bagUnits(r.cargo)
@@ -2181,14 +2251,18 @@ function P.validate(p,uid)
  if not integer(cargoTotal) then return false,'Cargo total limit exceeded' end
  for field,n in pairs(r.wins) do if type(field)~='string' or not integer(n) then return false,'Invalid run wins' end end
  for material,n in pairs(r.yieldRemainders) do if type(material)~='string' or not finite(n) or n<0 or n>=1 then return false,'Invalid yield remainder' end end
+ local blueprints={}
  if #r.cards>500 then return false,'Invalid card count' end
  for _,c in ipairs(r.cards) do
   if type(c)~='table' or type(c.cardId)~='string' or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid run card' end
-  if not validRarity(c.rarity) then return false,'Invalid run card rarity' end
+  if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid run card rarity or blueprint' end
+  if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
  end
+ local blueprintCount=0;for _ in pairs(blueprints) do blueprintCount+=1 end
+ if blueprintCount>Workshop.SLOTS then return false,'Too many blueprints' end
  local offer=r.pendingOffer
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
@@ -2198,7 +2272,8 @@ function P.validate(p,uid)
   local seen={}
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
-   if not validRarity(c.rarity) then return false,'Invalid offer choice rarity' end
+   if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid offer choice rarity or blueprint' end
+   if c.workshop and (blueprints[c.cardId] or blueprintCount>=Workshop.SLOTS or c.packTier~=offer.packTier) then return false,'Invalid blueprint slot' end
    for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
@@ -2338,6 +2413,11 @@ function P.migrate(raw,uid,seed)
   if p.consumables==nil then p.consumables=Consumables.fresh() end
   p.schemaVersion=8
  end
+ if p.schemaVersion==8 then
+  if type(p.run)~='table' or not integer(p.run.saleEarnings) then return nil,'Invalid Quartz migration' end
+  -- Honor already-earned run progress once; every new sale counts only Quartz.
+  p.run.quartzEarnings=p.run.saleEarnings;p.schemaVersion=9
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -2363,19 +2443,7 @@ function P.buyDrone(p,kind,tx,expectedRun,context)
   return true,replay
  end
  if expectedRun~=p.run.id then return false,'Stale run' end
- if type(kind)~='string' or (kind~='Laser' and not specialTypes[kind]) then return false,'Unknown drone' end
- context=context or {}
- if not context.atDepot or context.activeEncounter then return false,'Visit the depot outside combat' end
- local price=DroneCatalog.price(kind,p.fleet)
- if not integer(price) or price<1 then return false,'Drone is unavailable' end
- if p.run.wallet.Quartz<price then return false,'Need '..price..' Quartz' end
- if not integer(p.nextDroneSerial+1) or not integer(p.purchasedDrones+1) then return false,'Permanent serial limit exceeded' end
- local serial=p.nextDroneSerial
- local awarded=kind=='Laser' and drone(p.userId,serial,'Blue',p.seed,1) or specialDrone(p.userId,serial,kind,p.seed)
- p.run.wallet.Quartz=p.run.wallet.Quartz-price;p.run.credits=p.run.wallet.Quartz
- table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.purchasedDrones=p.purchasedDrones+1
- local result={droneId=awarded.id,droneType=kind,role=awarded.role,price=price,currency='Quartz',fleetCount=#p.fleet,runId=p.run.id}
- P.record(p,'BuyDrone',tx,result);return true,result
+ return false,'Earn a permanent mining drone through Quartz prestige'
 end
 function P.cargoUnits(p)
  return bagUnits(p.run.cargo)
@@ -2458,7 +2526,7 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
  local deposited,depositError=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,depositError end
- p.run.deliveries[droneId]=nil;p.run.credits=p.run.credits+amount;p.run.saleEarnings=p.run.saleEarnings+amount
+ p.run.deliveries[droneId]=nil;p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.cargo.Quartz or 0)
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount}
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
@@ -2476,21 +2544,26 @@ function P.sell(p,prices,tx,expectedRun)
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
  local deposited,depositError=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,depositError end
- p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount
+ p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.Quartz or 0)
  local result={credits=amount,earnings=amount,units=units,cargo=manifest,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
-local milestones={{earnings=160,field='Quartz',wins=0},{earnings=400,field='Quartz',wins=0},{earnings=2000,field='Cobalt',wins=1},{earnings=5000,field='Cobalt',wins=1},{earnings=11000,field='Violet',wins=1},{earnings=22000,field='Violet',wins=1},{earnings=42000,field='Emerald',wins=1}}
-P.MILESTONES=milestones
 function P.milestone(p)
- local n=p.prestiges+1
- return clone(milestones[n] or {earnings=math.floor(42000*1.75^(n-7)),field='Emerald',wins=1})
+ return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}
 end
-function P.nextType(p) return ({'Red','Green','Blue'})[(p.prestiges%3)+1] end
+local prestigeKinds={'Red','Bubbler','Halver','Blue','Gridcutter','Singularity'}
+function P.nextType(p) return prestigeKinds[p.prestiges%#prestigeKinds+1] end
+local function prestigeDrone(p)
+ local kind=P.nextType(p)
+ return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
+  or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
+end
 function P.prestigePreview(p)
- local m=P.milestone(p);local wins=p.clearedFields[m.field] and 1 or 0
- local eligible=p.run.saleEarnings>=m.earnings and wins>=m.wins and p.run.pendingOffer==nil
- local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (p.run.saleEarnings<m.earnings and 'Sell more ore this run' or (wins<m.wins and 'Defeat this plot’s guards once' or 'Ready at the depot'))
- return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,saleRequired=m.earnings,field=m.field,winsRequired=m.wins,wins=wins,earnings=p.run.saleEarnings,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,newType=P.nextType(p),newRole=drone(p.userId,p.nextDroneSerial,P.nextType(p),p.seed,p.prestiges+2).role,cards=#p.run.cards,runId=p.run.id}
+ local m=P.milestone(p);local earned=p.run.quartzEarnings
+ local eligible=earned>=m.earnings and p.run.pendingOffer==nil
+ local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the workshop')
+ return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
+  saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
+  newType=P.nextType(p),newRole=prestigeDrone(p).role,cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -2501,7 +2574,7 @@ function P.prestige(p,tx,expectedRun,context)
  if not context.atDepot or context.activeEncounter then return false,'Recall your fighting drones and return to the depot' end
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
- local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=drone(p.userId,serial,P.nextType(p),p.seed,p.prestiges+2)
+ local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=prestigeDrone(p)
  Consumables.refund(p.consumables)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)
  local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,fleetCount=#p.fleet,prestiges=p.prestiges}
@@ -2556,7 +2629,7 @@ return Packs
 end)()
 local Cards = (function()
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=10,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=11,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -2620,18 +2693,6 @@ C.FALLBACK={
  card('R02','Combat Reserve','Fleet',{combat=.10},'+10% combat shot damage; repeatable until cap'),
  card('R03','Cargo Reserve','Player',{capacity=.10},'+10% player backpack space; repeatable until cap'),
 }
-local combatEffects={combat=true,health=true,reduction=true,crit=true,splash=true,shield=true,rate=true,finisher=true,salvage=true,chain=true}
-local function isCombat(c)
- for stat,n in pairs(c.effects) do if combatEffects[stat] and n>0 then return true end end;return false
-end
-local economicEffects={orbitalLaser=true,scrapSwarm=true,mining=true,speed=true,capacity=true,startup=true,yield=true,fork=true,geode=true,plotAuto=true,fullAuto=true}
-local function isEconomic(c)
- for stat,n in pairs(c.effects) do if economicEffects[stat] and n>0 then return true end end;return false
-end
-local function signature(c)
- local e=c.effects
- return (e.orbitalLaser or 0)>0 or (e.scrapSwarm or 0)>0 or (e.finisher or 0)>0 or (e.geode or 0)>0 or (e.salvage or 0)>0 or (e.chain or 0)>0 or (e.fork or 0)>0 or (e.shield or 0)>0 or (e.crit or 0)>0 or (e.plotAuto or 0)>0 or (e.fullAuto or 0)>0
-end
 local function affects(c,d)
  return c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id)
 end
@@ -2667,6 +2728,7 @@ end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
+ local forkCap=(Workshop.find(p,'Q_SPLIT') or (extra and extra.workshop and extra.cardId=='Q_SPLIT')) and .4 or .2
  local speed=clamp(1+(s.speed or 0),.1,3)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
@@ -2676,7 +2738,7 @@ function C.stats(p,d,extra)
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(.08,b.warmup*C.LASER_CHARGE_SCALE/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
-  splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,.2) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
+  splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
@@ -2686,13 +2748,7 @@ end
 function C.abilityPerks(p)
  return {orbitalCycle=(Shops.effects(p).orbitalCycle or 0)>0,scrapBots=Shops.effects(p,'Scrapper').scrapBots or 0}
 end
-function C.price(p)
- if Shops.PACKS_FREE then return 0 end
- local n=p.run.packIndex;local prices={40,80,110,150,210,290,400}
- local price=prices[n+1] or 400
- if n>=7 then for _=8,n+1 do price=math.min(1e12,math.floor(price*1.3+.5));if price==1e12 then break end end end
- return math.max(1,math.floor(price*(1-clamp(Shops.effects(p).packDiscount or 0,0,.30))+.5))
-end
+function C.price(p) return Workshop.price(p) or 0 end
 local function hash(s)
  local h=104729
  for i=1,#s do h=(h*131+string.byte(s,i))%2147483647 end
@@ -2752,26 +2808,6 @@ local function beneficial(p,c)
  for key,n in pairs(after) do if n>(baseline[key] or 0)+1e-8 then return true end end
  return false
 end
-local function compatible(a,b)
- -- Avoid mechanically dominated subsets/supersets in a single equally priced offer.
- local age,bge,agt,bgt=true,true,false,false
- for k,x in pairs(a._vector) do
-  local y=b._vector[k]
-  if x<y-1e-8 then age=false;bgt=true elseif x>y+1e-8 then bge=false;agt=true end
- end
- return not ((age and agt) or (bge and bgt) or (age and bge))
-end
-local function category(c)
- local e=c.effects
- local function boosts(k) return (e[k] or 0)>0 end
- if boosts('plotAuto') or boosts('orbitalLaser') or boosts('scrapSwarm') then return 'mining'
- elseif boosts('fullAuto') then return 'cargo'
- elseif boosts('combat') or boosts('rate') or boosts('crit') or boosts('splash') or boosts('finisher') or boosts('range') then return 'combat'
- elseif boosts('health') or boosts('reduction') or boosts('shield') or boosts('salvage') then return 'survival'
- elseif boosts('capacity') or boosts('yield') then return 'cargo'
- elseif boosts('mining') or boosts('fork') or boosts('geode') then return 'mining'
- elseif boosts('startup') then return 'startup' else return 'flight' end
-end
 local function preview(p,c)
  local lines={}
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
@@ -2797,48 +2833,6 @@ local function preview(p,c)
  end
  return lines,target and target.name
 end
-local function resolve(p,entry,seed,combatVisible,multiTargetCombat)
- if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
- if multiTargetCombat==false and (entry.effects.splash or entry.effects.salvage) then return nil end
- if entry.effects.fullAuto then
-  local exists=false;for _,d in ipairs(p.fleet) do if courier(d) then exists=true;break end end
-  if not exists then return nil end
- end
- local c=clone(entry)
- if c.scope=='Color' then
-  local exists=false;for _,d in ipairs(p.fleet) do if d.type==c.type then exists=true;break end end;if not exists then return nil end
- elseif c.scope=='Individual' then
-  local eligible={}
-  for _,d in ipairs(p.fleet) do
-   c.targetDroneId=d.id
-   local eligibleRole=true
-   for k,n in pairs(c.effects) do
-    if n>0 and ((workEffects[k] or combatOnly[k]) and support(d) or k=='fullAuto' and not courier(d)) then eligibleRole=false end
-    if n>0 and (k=='fork' or k=='forkRange') and not DroneRoles.isMiner(d.role or d.type) then eligibleRole=false end
-   end
-   if eligibleRole and beneficial(p,c) then table.insert(eligible,d) end
-  end
-  if #eligible==0 then return nil end
-  table.sort(eligible,function(a,b) return a.id<b.id end)
-  local d=eligible[rng(hash(tostring(seed)..':'..c.cardId..':target'))(#eligible)]
-  c.targetDroneId=d.id;c.targetName=d.name;c.type=d.type
- end
- if not beneficial(p,c) then return nil end
- c.preview,c.previewTargetName=preview(p,c);c._vector=vector(p,c);c._category=category(c);c.category=c._category
- local purposes={combat='Break through guarded fields',survival='Keep your fighting drones alive',cargo='Bring home more each trip',mining='Clear crystals faster',startup='Less waiting between crystals',flight='Reach the next crystal faster'}
- local headlines={A01='CHOOSE A ROCK, KEEP MINING',A02='COURIERS DELIVER FASTER',D09='HIT HARD, ARC FURTHER',D13='FINISH THE FIGHT',D14='CRACK THE CORE',D15='KILLS REPAIR HULL',D16='CHAIN YOUR SHOTS',F09='MINE TWO AT ONCE',C01='+100% BASE FLIGHT SPEED',D05='FASTER LASER STARTUP',F10='HOLD THE FRONT LINE',F11='MORE ORE, FASTER TRIPS',D17='SPECIALIZE FOR SIEGES',D18='FASTER COMBAT VOLLEYS',D19='CHASE RICH GEODES',D20='HARVEST THE WHOLE CLUSTER'}
- c.headline=headlines[c.cardId] or string.upper(c._category..' upgrade');c.purpose=purposes[c._category]
- if c.cardId=='A01' then c.purpose='Keep mining nearby after the first rock'
- elseif c.cardId=='A02' then c.purpose='Couriers sell small batches from your backpack faster' end
- local drawbacks={}
- for _,loss in ipairs({{'speed','flight speed'},{'mining','mining output'},{'combat','combat shot damage'},{'health','maximum hull'},{'startup','startup rate'},{'yield','ore yield'},{'capacity','backpack space'}}) do
-  local n=c.effects[loss[1]]
-  if n and n<0 then table.insert(drawbacks,string.format('%g%% less %s',-n*100,loss[2])) end
- end
- c.tradeoff=#drawbacks>0 and table.concat(drawbacks,'; ') or 'No stat penalty'
- c.stackText=stackLimit(c)==1 and 'Unique for this target · this run' or ('Copy '..(countOwned(p,c)+1)..' of '..stackLimit(c)..' · adds to base · this run')
- return c
-end
 local function receipt(p,operation,tx)
  for i=#p.receipts,1,-1 do local r=p.receipts[i];if r.operation==operation and r.id==tx then return clone(r.result) end end
  return nil
@@ -2848,76 +2842,84 @@ local function record(p,operation,tx,result)
  while #p.receipts>64 do table.remove(p.receipts,1) end
 end
 local function validID(tx) return type(tx)=='string' and #tx>0 and #tx<=128 end
+-- Expose only choices with a real benefit for the permanent fleet, including legacy caps.
+function C.workshopOffer(p,tier,seed)
+ local pool={}
+ for _,entry in ipairs(Workshop.CATALOG) do
+  if not Workshop.find(p,entry.id) then
+   local c=Workshop.card(entry,tier)
+   if beneficial(p,c) then
+    c.preview,c.previewTargetName=preview(p,c)
+    table.insert(pool,c)
+   end
+  end
+ end
+ local random=rng(seed)
+ for i=#pool,2,-1 do local j=random(i);pool[i],pool[j]=pool[j],pool[i] end
+ if #pool<3 then return nil end
+ -- Three different mechanics, all with the same rarity's starting levels.
+ return {pool[1],pool[2],pool[3]}
+end
 function C.buy(p,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
- local replay=receipt(p,'Buy',tx);if replay then return true,replay end
  if expectedRun~=p.run.id then return false,'Stale run' end
+ local replay=receipt(p,'Buy',tx)
+ if replay then return replay.runId==expectedRun,replay end
  if p.run.pendingOffer then return true,clone(p.run.pendingOffer) end
  context=context or {}
  if context.expectedPackIndex~=p.run.packIndex then return false,'Stale pack index' end
- if context.atDepot~=true or context.activeEncounter then return false,'Resolve packs at the depot outside combat' end
- local price=C.price(p);if Shops.balance(p,Shops.PACK_CURRENCY)<price then return false,'Not enough Quartz' end
+ if context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
+ local price=Workshop.price(p)
+ if not price then return false,'Three blueprints chosen. Level your build or prestige for a new one.' end
+ if Shops.balance(p,'Quartz')<price then return false,'Need '..price..' Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
  local tier=Packs.roll(rng(hash(tostring(seed)..':delivery'))(100))
- local random=rng(seed);local pool={}
- local function resolveEntry(entry)
-  local c=resolve(p,entry,seed,context.combatVisible==true,context.multiTargetCombat)
-  if c then table.insert(pool,c) end
- end
- for _,entry in ipairs(C.CATALOG) do resolveEntry(entry) end
- local function addFallback()
-  for _,entry in ipairs(C.FALLBACK) do resolveEntry(entry) end
- end
- if #pool<6 then addFallback() end
- pool=C.weightedOrder(pool,random)
- -- Search the bounded catalog rather than letting a greedy first pick prevent a
- -- useful triple. Seeded weighted ordering breaks ties; repeated requests cannot reroll.
- -- Prefer both a guarded-field answer and a productive economy option, then a
- -- an earned automation step, a useful first-pack mining fork, and varied choices.
- -- Caps can exhaust a lane; never invent a useless card just to fill that lane.
- local pairsOK,combat,economic,special,starterFork,automation,rarity={},{},{},{},{},{},{}
- local baseline=p.run.packIndex==0 and vector(p,nil) or nil
- for i,a in ipairs(pool) do
-  pairsOK[i]={};combat[i]=isCombat(a);economic[i]=isEconomic(a);special[i]=signature(a)
-  -- Keep a useful next automation step available without selecting it for the
-  -- player. Resolve excludes owned unlocks and requires an owned courier for transport.
-  automation[i]=(a.effects.plotAuto or 0)>0 or (a.effects.fullAuto or 0)>0
-  rarity[i]=a.rarity=='Rare' and 2 or (a.rarity=='Uncommon' and 1 or 0)
-  starterFork[i]=false
-  if baseline and (a.effects.fork or 0)>0 then
-   for _,d in ipairs(p.fleet) do
-    local damage,reach=d.id..':forkFraction',d.id..':forkRange'
-    if a._vector[damage]>baseline[damage]+1e-8 or a._vector[reach]>baseline[reach]+1e-8 then starterFork[i]=true;break end
-   end
-  end
-  for j=i+1,#pool do pairsOK[i][j]=a.cardId~=pool[j].cardId and compatible(a,pool[j]) end
- end
- local chosen,bestScore={},-math.huge
- for i=1,#pool do
-  for j=i+1,#pool do if pairsOK[i][j] then
-   for k=j+1,#pool do if pairsOK[i][k] and pairsOK[j][k] then
-    local a,b,c=pool[i],pool[j],pool[k]
-    local score=0
-    if context.combatVisible and (combat[i] or combat[j] or combat[k]) then score=score+1000 end
-    if economic[i] or economic[j] or economic[k] then score=score+1000 end
-    if automation[i] or automation[j] or automation[k] then score=score+750 end
-    if starterFork[i] or starterFork[j] or starterFork[k] then score=score+500 end
-    if p.run.packIndex<3 and (special[i] or special[j] or special[k]) then score=score+100 end
-    if a._category~=b._category then score=score+4 end;if a._category~=c._category then score=score+4 end;if b._category~=c._category then score=score+4 end
-    if a.scope~=b.scope then score=score+1 end;if a.scope~=c.scope then score=score+1 end;if b.scope~=c.scope then score=score+1 end
-    -- Better boxes favor rarer cards when equally useful triples are available.
-    score+=(tier-1)*.04*(rarity[i]+rarity[j]+rarity[k])
-    if score>bestScore then chosen={a,b,c};bestScore=score end
-   end end
-  end end
- end
- if #chosen~=3 then return false,'No three useful distinct choices remain; pursue your prestige objective' end
- local hasCombat=false
- for _,c in ipairs(chosen) do hasCombat=hasCombat or isCombat(c);c._vector=nil;c._category=nil end
- local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,packIndex=p.run.packIndex+1,price=price,currency=Shops.PACK_CURRENCY,choices=chosen,expires='This run',packTier=tier,opened=false}
- p.run.wallet[Shops.PACK_CURRENCY]=p.run.wallet[Shops.PACK_CURRENCY]-price;p.run.packIndex=p.run.packIndex+1;p.run.pendingOffer=clone(offer)
- if context.combatVisible then p.run.offersWithoutCombat=hasCombat and 0 or p.run.offersWithoutCombat+1 end
+ local choices=C.workshopOffer(p,tier,seed)
+ if not choices then return false,'No three useful blueprints remain. Level your build or prestige.' end
+ local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,
+  packIndex=p.run.packIndex+1,price=price,currency='Quartz',choices=choices,expires='This run',packTier=tier,opened=false}
+ p.run.wallet.Quartz-=price;p.run.credits=p.run.wallet.Quartz
+ p.run.packIndex+=1;p.run.pendingOffer=clone(offer)
  record(p,'Buy',tx,offer);return true,clone(offer)
+end
+function C.workshopUpgrade(p,c)
+ if c.level>=c.maxLevel then return nil,'Max level' end
+ local nextCard=clone(c);nextCard.level+=1;nextCard.effects=Workshop.effects(nextCard,nextCard.level)
+ local delta=clone(c);delta.effects={}
+ for k,v in pairs(nextCard.effects) do delta.effects[k]=v-(c.effects[k] or 0) end
+ -- Check the actual clamped stats, not just the nominal modifier.
+ local before,after=vector(p,nil),vector(p,delta);local useful=false
+ for key,n in pairs(after) do if n>(before[key] or 0)+1e-8 then useful=true;break end end
+ if not useful then return nil,'Already at the effective cap' end
+ nextCard.preview,nextCard.previewTargetName=preview(p,delta)
+ nextCard.stackText='Level '..nextCard.level..' / '..nextCard.maxLevel..' · This run'
+ return nextCard
+end
+function C.workshopRows(p)
+ local rows={}
+ for _,c in ipairs(Workshop.owned(p)) do
+  local nextCard,reason=C.workshopUpgrade(p,c)
+  table.insert(rows,{card=clone(c),cost=Workshop.levelCost(c),next=nextCard,reason=reason})
+ end
+ return rows
+end
+function C.upgrade(p,id,level,tx,expectedRun,context)
+ if not validID(tx) then return false,'Invalid transaction ID' end
+ if expectedRun~=p.run.id then return false,'Stale run' end
+ local replay=receipt(p,'Workshop',tx)
+ if replay then return replay.cardId==id and replay.runId==expectedRun and replay.previousLevel==level,replay end
+ if not context or context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
+ if p.run.pendingOffer then return false,'Choose your delivered blueprint first' end
+ local c=Workshop.find(p,id)
+ if not c then return false,'Choose this blueprint from a pack first' end
+ if c.level~=level then return false,'Level changed. Refresh the workshop.' end
+ local nextCard,reason=C.workshopUpgrade(p,c);if not nextCard then return false,reason end
+ local cost=Workshop.levelCost(c)
+ if Shops.balance(p,'Quartz')<cost then return false,'Need '..cost..' Quartz' end
+ p.run.wallet.Quartz-=cost;p.run.credits=p.run.wallet.Quartz
+ for i,owned in ipairs(p.run.cards) do if owned==c then p.run.cards[i]=nextCard;break end end
+ local result={cardId=id,title=c.title,level=nextCard.level,previousLevel=level,cost=cost,runId=p.run.id}
+ record(p,'Workshop',tx,result);return true,clone(result)
 end
 function C.open(p,offerId)
  local offer=p.run.pendingOffer
@@ -2927,8 +2929,8 @@ function C.open(p,offerId)
 end
 function C.select(p,offerId,index,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
- local replay=receipt(p,'Select',tx);if replay then return true,replay end
  if expectedRun~=p.run.id then return false,'Stale run' end
+ local replay=receipt(p,'Select',tx);if replay then return replay.offerId==offerId and replay.index==index and replay.runId==expectedRun,replay end
  context=context or {}
  if context.atDepot~=true or context.activeEncounter then return false,'Choose your card at the depot outside combat' end
  local offer=p.run.pendingOffer
@@ -2939,6 +2941,7 @@ function C.select(p,offerId,index,tx,expectedRun,context)
   local exists=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then exists=true end end
   if not exists then return false,'Saved target missing; refund offer through migration' end
  end
+ if c.workshop and (#Workshop.owned(p)>=Workshop.SLOTS or Workshop.find(p,c.cardId)) then return false,'Blueprint slot unavailable' end
  -- No mutable catalog lookup: the complete paid choice is the contract.
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
  local result={offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
@@ -2957,7 +2960,7 @@ function C.refundInvalidOffer(p)
  if not finite(o.price) or o.price<0 then return false,'Corrupt paid offer; require recovery' end
  local balance=Shops.balance(p,Shops.PACK_CURRENCY)
  if balance+math.floor(o.price)>=1e14 then return false,'Refund exceeds wallet limit' end
- p.run.wallet[Shops.PACK_CURRENCY]=balance+math.floor(o.price);p.run.pendingOffer=nil
+ p.run.wallet[Shops.PACK_CURRENCY]=balance+math.floor(o.price);p.run.credits=p.run.wallet.Quartz;p.run.pendingOffer=nil
  return true,'Full saved pack price refunded; no reroll'
 end
 return C
@@ -5758,7 +5761,7 @@ function L.finishLaunch(p: any, values: any): (any, any)
  earnings=math.floor(earnings)
  if not integer(earnings) or not integer(p.run.saleEarnings+earnings) then return false,'Launch earnings limit reached' end
  local manifest=clone(state.launchCargo)
- add(p.run.wallet,manifest);p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings
+ add(p.run.wallet,manifest);p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings;p.run.quartzEarnings+=(manifest.Quartz or 0)
  state.launchCargo={};state.launchRemaining=0;p.logistics.launches+=1
  return true,{units=units,earnings=earnings,cargo=manifest,runId=p.run.id,launch=p.logistics.launches}
 end
@@ -6199,6 +6202,7 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  if not offer or offer.opened~=false or p.leaving or p.packDelivery then return end
  local o=self.options
  local station=o.station.Position
+ for _,candidate in ipairs(o.stations or {}) do if (candidate.Position-buyerPosition).Magnitude<(station-buyerPosition).Magnitude then station=candidate.Position end end
  local direction=flat(buyerPosition-station)
  if direction.Magnitude<9 then direction=flat(o.home-station) end
  if direction.Magnitude<.1 then direction=Vector3.new(0,0,1) end
@@ -6288,7 +6292,9 @@ function Delivery:step(p, now)
  if not delivery then
   if offer and offer.opened==false and o.healthy(p) then
    local hr=o.characterRoot(p)
-   if hr and (hr.Position-o.station.Position).Magnitude<20 and now>=(p.nextPackDelivery or 0) then
+   local near=hr and (hr.Position-o.station.Position).Magnitude<20
+   for _,station in ipairs(o.stations or {}) do near=near or (hr and (hr.Position-station.Position).Magnitude<20) end
+   if near and now>=(p.nextPackDelivery or 0) then
     p.nextPackDelivery=now+1
     self:spawn(p,offer,hr.Position,now)
    end
@@ -6360,7 +6366,7 @@ local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
   local profile=Pro.new(uid,seed:NextInteger(1,2147483000))
-  if inStudio then profile.run.wallet.Quartz=100;profile.run.credits=100 end
+  -- Studio starts with the real earned Quartz economy; no free workshop money.
   return profile
  end,
  migrate=function(data,uid) return Pro.migrate(data,uid) end,validate=Pro.validate,
@@ -6377,6 +6383,7 @@ local function publish(p)
  local copy={}
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
+ copy.workshop=Ca.workshopRows(copy)
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
@@ -8209,7 +8216,7 @@ local function chooseCard(p: any,pl: any,payload: any)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
 local function executePrestige(p: any,pl: any,payload: any)
- if payload.confirm~=true or not atStation(p,scene.prestigeStation,20) then return end
+ if payload.confirm~=true or not (atStation(p,scene.prestigeStation,20) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return end
  local function applyPrestige(copy: any): (any, any)
   local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true}
   local ok: boolean,result: any=Pro.prestige(copy,payload.txId,payload.runId,context)
@@ -8222,7 +8229,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end)
 end
 local packDelivery=PackDelivery.new({
- root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, healthy=healthy, atHome=atHome,
+ root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, stations={scene.packStation,shopStations.Quartz}, healthy=healthy, atHome=atHome,
  inAssault=activeAssault, characterRoot=characterRoot,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
  offer=function(p) return data(p).run.pendingOffer end,
@@ -8241,25 +8248,16 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and atStation(p,scene.packStation,24)) then
-  notice(p,'Visit the Pack Shop or prestige beacon.')
+ if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and (atStation(p,scene.packStation,24) or atStation(p,shopStations.Quartz,20))) then
+  notice(p,'Visit the Quartz Workshop or prestige beacon.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false
  end
  if action=='BuyPack' then
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
-  if not atStation(p,scene.packStation,20) then return false end
+  if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return false end
   local function buyCard(copy: any): (any, any)
-   -- Offer combat preparation one shop before the next uncleared guard.
-   -- A sole sentry cannot usefully trigger a chain or sustain a kill-to-kill perk.
-   local combat,multi=false,false
-   for index,field in ipairs(patches) do
-    if field.cfg.Turrets>0 and not copy.clearedFields[field.cfg.Key] and field.e.phase~='Cleared'
-     and Shops.unlocked(copy,patches[index-1].cfg.Key) then
-     combat=true;multi=multi or field.cfg.Turrets>1
-    end
-   end
-   local options: any={combatVisible=combat,multiTargetCombat=multi,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -8460,13 +8458,11 @@ local function miningAbility(p,payload)
 end
 local function buyShopUpgrade(p,pl,payload)
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
- local entry=type(payload.upgradeId)=='string' and Shops.BY_ID[payload.upgradeId]
- local station=entry and shopStations[entry.shop]
- if not station or not atStation(p,station,20) then notice(p,'Visit that mineral shop to buy upgrades.');return end
+ if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then notice(p,'Visit the Quartz Workshop.');return end
  transact(p,'shop:'..payload.txId,function(copy)
-  local ok,result=Shops.buy(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{shop=entry.shop,atShop=true,activeEncounter=false,fleet=runtimeFleet(p)})
+  local ok,result=Ca.upgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{atDepot=true,activeEncounter=false})
   if ok then return result end;return nil,result
- end,function() refreshStats(p);notice(p,entry.title..' installed.');p.publishDirty=true end)
+ end,function(result) refreshStats(p);notice(p,result.title..' · level '..result.level);p.publishDirty=true end)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end

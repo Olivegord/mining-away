@@ -27,8 +27,8 @@ jobs:
           chmod +x luau luau-compile luau-analyze
       - name: Ensure native capture decoder
         run: command -v zstd || sudo apt-get install -y zstd
-      - name: Validate current economy, persistence and active capture
-        run: python3 tools/test_shops.py "$RUNNER_TEMP/mining-away-luau"
+      - name: Validate Quartz workshop, prestige, persistence and active capture
+        run: python3 tools/test_workshop.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate stored consumables, saved deployment and placement input
         run: python3 tools/test_consumables.py "$RUNNER_TEMP/mining-away-luau"
       - name: Validate gadgets, swarm steering and production server

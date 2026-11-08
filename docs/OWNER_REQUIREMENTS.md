@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — one Quartz upgrade, pack, drone and prestige loop
+
+Start small and make progression depend only on Quartz. Combine the shop and pack system, and give pack rarity a real gameplay consequence. Combine roguelike limited choices with repeatable upgrades that become more expensive, taking inspiration from Leaf Blower Revolution. Connect that build to prestige and drone management. Keep it colorful and enjoyable, not gray and drab. Test whether upgrades have meaningful effects; automated correctness alone does not establish enjoyment. This request authorizes implementation and testing, not Roblox publication.
+
 ## November 8 latest — fix platform z-fighting
 
 Remove the flickering from overlapping platform surfaces. Preserve the restored stylized textures, restrained regional colors, rock mining and the waterfront sample display.

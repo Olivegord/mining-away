@@ -17,6 +17,7 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  if not offer or offer.opened~=false or p.leaving or p.packDelivery then return end
  local o=self.options
  local station=o.station.Position
+ for _,candidate in ipairs(o.stations or {}) do if (candidate.Position-buyerPosition).Magnitude<(station-buyerPosition).Magnitude then station=candidate.Position end end
  local direction=flat(buyerPosition-station)
  if direction.Magnitude<9 then direction=flat(o.home-station) end
  if direction.Magnitude<.1 then direction=Vector3.new(0,0,1) end
@@ -106,7 +107,9 @@ function Delivery:step(p, now)
  if not delivery then
   if offer and offer.opened==false and o.healthy(p) then
    local hr=o.characterRoot(p)
-   if hr and (hr.Position-o.station.Position).Magnitude<20 and now>=(p.nextPackDelivery or 0) then
+   local near=hr and (hr.Position-o.station.Position).Magnitude<20
+   for _,station in ipairs(o.stations or {}) do near=near or (hr and (hr.Position-station.Position).Magnitude<20) end
+   if near and now>=(p.nextPackDelivery or 0) then
     p.nextPackDelivery=now+1
     self:spawn(p,offer,hr.Position,now)
    end

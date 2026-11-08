@@ -65,7 +65,7 @@ function L.finishLaunch(p: any, values: any): (any, any)
  earnings=math.floor(earnings)
  if not integer(earnings) or not integer(p.run.saleEarnings+earnings) then return false,'Launch earnings limit reached' end
  local manifest=clone(state.launchCargo)
- add(p.run.wallet,manifest);p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings
+ add(p.run.wallet,manifest);p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings;p.run.quartzEarnings+=(manifest.Quartz or 0)
  state.launchCargo={};state.launchRemaining=0;p.logistics.launches+=1
  return true,{units=units,earnings=earnings,cargo=manifest,runId=p.run.id,launch=p.logistics.launches}
 end

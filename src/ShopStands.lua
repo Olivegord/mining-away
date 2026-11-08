@@ -6,6 +6,8 @@ function Stands.position(home,index,groundY)
  return Vector3.new(home.X+offset,groundY+1.5,home.Z+(index==1 and 32 or 18))
 end
 local function addSign(station,text,height)
+  local existing=station:FindFirstChild('TestLabel')
+  if existing then for _,node in ipairs(existing:GetDescendants()) do if node:IsA('TextLabel') then node.Text=text end end;return end
   local sign=station:FindFirstChild('ShopSign')
   if not sign then sign=Instance.new('Part');sign.Name='ShopSign';sign.Parent=station end
   sign.Anchored=true;sign.CanCollide=false;sign.CanTouch=false;sign.CanQuery=false
@@ -17,6 +19,14 @@ local function addSign(station,text,height)
    title.Size=UDim2.fromScale(1,1);title.BackgroundTransparency=1;title.TextColor3=station.Color
    title.Font=Enum.Font.SourceSansBold;title.TextSize=54;title.Text=text;title.Parent=face
   end
+end
+local function quartzWorkshop(stations)
+ for key,station in pairs(stations) do
+  local prompt=station:FindFirstChildOfClass('ProximityPrompt')
+  if prompt then prompt.Enabled=key=='Quartz';prompt.ActionText='Open Quartz Workshop';prompt.ObjectText=key=='Quartz' and 'Quartz Workshop' or 'Future field' end
+  local sign=station:FindFirstChild('ShopSign')
+  if sign then for _,node in ipairs(sign:GetDescendants()) do if node:IsA('TextLabel') then node.Text=key=='Quartz' and 'QUARTZ WORKSHOP' or key:upper()..' · LATER' end end end
+ end
 end
 function Stands.mount(map,home,template)
  local stations={}
@@ -33,14 +43,14 @@ function Stands.mount(map,home,template)
  if printer then
   printer:SetAttribute('Interaction','Printer')
   local prompt=printer:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
-  prompt.ActionText='Buy drones / manage fleet';prompt.ObjectText='DRONE YARD'
+  prompt.ActionText='Manage permanent fleet';prompt.ObjectText='DRONE YARD'
   prompt.Enabled=true;prompt.HoldDuration=0;prompt.MaxActivationDistance=12
   prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=printer
   addSign(printer,'DRONE YARD',3)
  end
- addSign(template,'PACK SHOP',3)
+ addSign(template,'QUARTZ WORKSHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Pack Shop'
+ packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Quartz Workshop'
  packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
@@ -56,6 +66,7 @@ function Stands.mount(map,home,template)
    prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
    stations[key]=station
   end
+  quartzWorkshop(stations)
   return stations
  end
  local pad=map:FindFirstChild('HubPad',true)
@@ -78,6 +89,7 @@ function Stands.mount(map,home,template)
   prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
   stations[key]=station
  end
+ quartzWorkshop(stations)
  return stations
 end
 return Stands

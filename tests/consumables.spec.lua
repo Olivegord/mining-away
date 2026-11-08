@@ -54,7 +54,7 @@ end)
 check('prestige keeps consumables but resets run cards and adds exactly one drone',function()
  local p=P.new(44,123);p.consumables.counts.Orbital=2;p.consumables.collected=4
  p.run.cards={{cardId='F01',scope='Fleet',effects={mining=.15}}}
- local milestone=P.milestone(p);p.run.saleEarnings=milestone.earnings;if milestone.wins>0 then p.clearedFields[milestone.field]=true end
+ local milestone=P.milestone(p);p.run.saleEarnings=milestone.earnings;p.run.quartzEarnings=milestone.earnings;if milestone.wins>0 then p.clearedFields[milestone.field]=true end
  assert(P.prestige(p,'prestige',p.run.id,{atDepot=true,confirmed=true}))
  assert(#p.fleet==2 and #p.run.cards==0 and p.consumables.counts.Orbital==2 and p.consumables.collected==4)
  assert(P.validate(p,44))

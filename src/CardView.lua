@@ -16,7 +16,7 @@ function CardView.summary(choice)
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
  add('fullAuto',amount(e.fullAuto or 0,'courier speed'))
- add('mining',amount(e.mining or 0,'mining speed'))
+ add('mining',amount(e.mining or 0,'mining power'))
  add('combat',amount(e.combat or 0,'attack damage'))
  add('rate',amount(e.rate or 0,'attack speed'))
  add('health',amount(e.health or 0,'drone health'))
@@ -49,6 +49,7 @@ function CardView.terms(choice,_targetOverride)
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles then target='Mining drones'
  else target='All drones' end
+ if choice.workshop then return target..' · This run\n'..choice.rarity..' Lv '..choice.level..' · 1 of 3 slots' end
  local details={target..' · This run'}
  local losses={}
  for _,entry in ipairs({{'speed','drone speed'},{'mining','mining speed'},{'combat','attack damage'},{'health','drone health'},{'startup','startup speed'},{'yield','ore yield'},{'capacity','backpack space'}}) do
