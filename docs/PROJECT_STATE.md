@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `fc906cbc9a524dd12677d89d29aed33a4abad6a8e37678f734bf568234e96a72` | Background save of the larger accents at spawn and the field approaches. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `9da04a68cec3b3c58c9a1946a21b638240d09613` | Larger shapes on the approaches, including two distinct tree crowns near Quartz. |
+| Native-file SHA-256 | `26168909199253833903ccaa44b5cece9038cad4788b1e3e0776aa7c3357fdf4` | Background save of the sparse block quarry. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Sparse block quarry in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Arrival accents installed November 7, 2026** | The spawn and approach accents are present in the open Edit session. Its loaded place version is 26. The last seven-Source and Script Sync root verification preceded the scenery passes. |
+| Shared Studio entry point | **Block quarry installed November 7, 2026** | The open Edit session has the simpler map. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — visible accents at spawn and field approaches
+## Latest follow-up — sparse block quarry
+
+Seven rectangular landforms replace the faceted interior terraces. The outer walls keep their lower grass benches and open more of the skyline. The hub and all six biomes use a few widely spaced blocks and patterned pavers, with five simple mushrooms in Cobalt. Selected original trees, flowers, rocks and shop fixtures remain. Quartz uses a cooler, finer gravel and 88 existing turf surfaces use the quieter grass finish. The open map went from 12,837 to 2,365 BaseParts. Older scenery is recoverable from `ServerStorage.QuarryBlockscapeArchive`.
+
+Studio was open and in Edit at the start and handoff. Inspected the Quartz and Cobalt clearings in the Edit viewport. All 629 ray probes over six mining fields, eight established routes and 31 lagoon causeway slabs matched the prior ground hits. The work changes the optional outer terrain. Walking, performance and multiplayer were not playtested. The background save preserved all 50 Sources. The last verified Roblox publication remains v43.
+
+## Earlier follow-up — visible accents at spawn and field approaches
 
 A cyan wedge and amber discs frame the view from spawn. Each field approach has a larger abstract shape. Quartz has a coral dotted block, a round crown with mint stippling, and a lime fan crown with ribs. The palette uses the existing 64×64 tiles.
 

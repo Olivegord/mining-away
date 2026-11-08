@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — sparse blocky quarry
+
+Make the entire quarry much simpler and blockier while keeping its levels. Use the reference for open ground, bold color, simple textures, and occasional varied props. Keep the six mining elevations, connected routes, and recognizable biome silhouettes. Favor broad rectangular rock and grass steps over dense faceted walls, deep woodland, and complicated decoration.
+
 ## November 7 latest — abstract color, patterns, and leaf shapes
 
 Spread brighter color, simple abstract shapes, and distinct low-resolution finishes through the quarry. Use the supplied reference for the balance of bold patterns and quieter surfaces. Give different trees and leaf shapes distinct textures and silhouettes. Keep each biome's established palette and character, including Cobalt's mushroom-only canopy.
