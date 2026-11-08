@@ -44,6 +44,9 @@ BASIN_SCOPE = {
 WOODLAND_SCOPE = {
     "scenery": (MAP, {"QuarryWoodlands"}, {"Folder", "Model", "Part", "WedgePart"}),
 }
+BIOME_REACH_SCOPE = {
+    "scenery": (MAP, {"QuarryBiomeReaches"}, {"Folder", "Model", "Part"}),
+}
 RIM_SCOPE = {
     "rim": (MAP, {"QuarryBlockRim"}, {"Folder", "Part"}),
     "archive": ("ServerStorage", {"QuarryRimArchive"}, {"Folder"}),
@@ -276,13 +279,13 @@ def read_section(directory, name):
     return subprocess.run(["zstd", "-d", "-q", "-c"], input=compressed, capture_output=True, check=True).stdout
 
 
-def merge(base, directory, contrast=False, basin=False, woodlands=False, block_rim=False):
+def merge(base, directory, contrast=False, basin=False, addition=None, block_rim=False):
     original = Native(base)
-    if woodlands or block_rim:
+    if addition or block_rim:
         moves = json.loads(read_section(directory, "moves")) if block_rim else []
         plan = {"edits": [], "moves": moves}
         result, touched = base, set()
-        scope = RIM_SCOPE if block_rim else WOODLAND_SCOPE
+        scope = RIM_SCOPE if block_rim else addition
     else:
         plan = json.loads(read_section(directory, "edits"))
         assert plan.keys() == {"edits", "moves"} and plan["edits"]
@@ -335,13 +338,16 @@ def main():
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--contrast", action="store_true", help="Use the quarry contrast pass allowlist")
     scope.add_argument("--basin", action="store_true", help="Use the quarry basin pass allowlist")
-    scope.add_argument("--woodlands", action="store_true", help="Append only the authored woodland scenery")
+    scope.add_argument("--woodlands", dest="addition", action="store_const", const=WOODLAND_SCOPE,
+                       help="Append only the authored woodland scenery")
+    scope.add_argument("--biome-reaches", dest="addition", action="store_const", const=BIOME_REACH_SCOPE,
+                       help="Append only the authored biome extensions")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")
     args = parser.parse_args()
     data = CANONICAL_OUTPUT.read_bytes()
     assert sha256(data).hexdigest() == args.baseline_sha256, "Canonical file changed; reconcile before saving"
-    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.woodlands, args.block_rim)
+    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.addition, args.block_rim)
     if args.write:
         write_snapshot(data, result)
     print(json.dumps({**stats, "wrote": args.write, "sha256": sha256(result).hexdigest()}, indent=2))

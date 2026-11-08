@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — extend each biome and lengthen its transition
+
+Give each biome more terrain beyond its mining bed. Carry its signature silhouettes through the extension, with smaller, more widely spaced forms toward the far edge. Use the existing authored materials, preserve the established routes, and keep the Cobalt extensions mushroom-only.
+
 ## November 7 latest — taper the trees and rebuild the main wall
 
 Keep the woodland dense next to the clearings and thin it gradually across the outer shelves. Rebuild the main quarry wall from rectangular rock masses, with staggered columns and broad, stepped grass ledges. Use the existing low-resolution rock and turf materials.

@@ -61,3 +61,5 @@ The [basin pass](../tools/studio_quarry_basin.lua) exports `scenery` and `edits`
 The [woodland pass](../tools/studio_quarry_woodlands.lua) exports a single `scenery` string at `shared.QuarryWoodlandsSnapshot`. Use `--woodlands` for the checked report and the write. This scope adds only `Workspace.MiningAway.Map.QuarryWoodlands`, including the five forest shelves and their tree models.
 
 The [block rim pass](../tools/studio_quarry_block_rim.lua) exports `rim`, `archive`, and `moves` at `shared.QuarryBlockRimSnapshot`. Use `--block-rim`. This scope adds the rectangular rim and moves only the five former rim sections and selected outer woodland trees to `ServerStorage.QuarryRimArchive`. The exporter uses a child part position to distinguish trees with the same name.
+
+The [biome extension pass](../tools/studio_quarry_biome_reaches.lua) exports the `scenery` string at `shared.QuarryBiomeReachesSnapshot`. Use `--biome-reaches` to append only the six authored biome extensions under `Workspace.MiningAway.Map.QuarryBiomeReaches`.
