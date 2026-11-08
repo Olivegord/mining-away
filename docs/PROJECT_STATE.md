@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Turns, original crack and break sounds, crystal-local beam contact and collectible fragments are active. Packs, upgrades and prestige still use Quartz.
+**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks darken to black as they take damage and shrink on each crack, with turns, original sounds, crystal-local beam contact and collectible fragments. Packs, upgrades and prestige still use Quartz.
 
 ## Identity and delivery state
 
@@ -11,22 +11,30 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `adcf6f7b49505e7a34bd07d099d51462cb6563ab885fcad72e281dba14f12b70` | Starter crystal spawning and default swarm formation. All non-Source chunks and backup Sources preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal and formation commit. [Seven actual Edit hashes](review/reference-spawn-formation-native.json). |
+| Native-file SHA-256 | `66499e42c4c6d25c5b4a29a38eefd559a7687b249d318aabf4df655159866881` | Crystal darkening and shrink. All non-Source chunks and backup Sources preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal damage appearance commit. [Seven actual Edit hashes](review/crystal-shade-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | Both updates are installed in shared Edit at the exact destination. All seven managed Source hashes match the canonical snapshot and all three roots are `SyncedAsRoot`. Studio remains in Edit on loaded version 90. |
-| Roblox publication | **No publication for the crystal and formation update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The damage appearance update is installed in shared Edit at the exact destination. All seven managed Source hashes match the canonical snapshot and all three roots are `SyncedAsRoot`. Studio remains in Edit on loaded version 90. |
+| Roblox publication | **No publication for the crystal damage appearance update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — crystal spawns and default swarm formation
+## Latest follow-up — rocks darken and shrink
 
-The starter patch scatters 16 whole-stud crystal centers across its 30 × 30 stud footprint, including the edges. It uses the original 3.135 × 6.567 × 4.487 stud mesh, centered three studs above the bed center. Crystals keep their full size when they turn on ordinary hits. They start at 50–100 health, break at 10, are removed two seconds after the break, and are ordinarily replaced after eight seconds even with four workers assigned. A replacement becomes mineable two seconds after it appears. A two-stud minimum gap between spawn centers reduces stacking while allowing clusters.
+Fresh starter crystals still appear shiny red and full size. Visible mineral rocks darken from the first hit and reach black at the last damage stage. Starter crystals snap to 75%, 50%, and 25% of their original size with the three cracks. The server changes the rock geometry with each stage, and the client follows the same stage when rendering the surface and beam contact. The health, ordinary eight-second replacement delay, and two-second readiness delay are unchanged.
+
+The focused production renderer and beam-contact checks passed with API doubles, as did the workshop suite in Studio and production configurations. The broader physical-mining suite still stops at its full-bag manual-order fixture, which fails on the preceding commit too. All seven native Source hashes match in shared Edit. No new native Play session was started and no Roblox publication was performed.
+
+Reproduce on the canonical snapshot from `408e954` with the updated modular Sources, `python3 tools/script_sync.py`, and `python3 tools/build.py --previous-commit 408e954`.
+
+## Earlier follow-up — crystal spawns and default swarm formation
+
+The starter patch scatters 16 whole-stud crystal centers across its 30 × 30 stud footprint, including the edges. It uses the original 3.135 × 6.567 × 4.487 stud mesh, centered three studs above the bed center. They start at 50–100 health, break at 10, are removed two seconds after the break, and are ordinarily replaced after eight seconds even with four workers assigned. A replacement becomes mineable two seconds after it appears. A two-stud minimum gap between spawn centers reduces stacking while allowing clusters.
 
 The four starters appear at equal angles on a 10-stud ring around the player's spawn. Idle follow uses the same ring around the character root with a baseline height of seven studs and up to a third of a stud of bob. Idle support drones share the ring. Active work, transport and repair retain their role-specific destinations.
 

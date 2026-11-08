@@ -263,12 +263,12 @@ function F.stage(hp,maxHP,count)
  if maxHP<=0 then return count end
  return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
 end
-function F.stageDarkness(hp,maxHP,stage,count)
+function F.stageDarkness(hp,maxHP,stage,count,junk)
  count=math.clamp(math.floor(count or 3),1,7)
- local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
- -- Keep the mineral readable as pressure accumulates; fresh fracture faces
- -- and missing volume carry the damage, never a fully black replacement.
- return .16*progress^.8
+ local layers=(1-hp/math.max(1,maxHP))*(count+1)
+ if junk then return .0832*math.clamp(layers-stage,0,1)^.8 end
+ -- Reach black on the last visible layer, before the break hides the rock.
+ return math.clamp(layers/count,0,1)
 end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start

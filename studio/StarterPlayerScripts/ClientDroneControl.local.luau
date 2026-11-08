@@ -526,12 +526,12 @@ function F.stage(hp,maxHP,count)
  if maxHP<=0 then return count end
  return math.clamp(math.floor((1-hp/maxHP)*(count+1)+1e-7),0,count)
 end
-function F.stageDarkness(hp,maxHP,stage,count)
+function F.stageDarkness(hp,maxHP,stage,count,junk)
  count=math.clamp(math.floor(count or 3),1,7)
- local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
- -- Keep the mineral readable as pressure accumulates; fresh fracture faces
- -- and missing volume carry the damage, never a fully black replacement.
- return .16*progress^.8
+ local layers=(1-hp/math.max(1,maxHP))*(count+1)
+ if junk then return .0832*math.clamp(layers-stage,0,1)^.8 end
+ -- Reach black on the last visible layer, before the break hides the rock.
+ return math.clamp(layers/count,0,1)
 end
 function F.powerDive(start,impact,elapsed,duration)
  local delta=impact-start
@@ -4032,7 +4032,7 @@ function R.new(options)
    and record.source.Parent and record.view.Parent and (record.source:GetAttribute('BreakSerial') or 0)==0 then
    local view=record.view;local frame,size=R.basePose(view)
    local offset=result.CFrame.Position/CANONICAL
-   local priorPivot=view.PivotOffset
+   local priorPivot,priorColor=view.PivotOffset,view.Color
    local swapped,swapError=pcall(function()
     if (view:IsA('Part') and cubic) or (view:IsA('PartOperation') and result:IsA('MeshPart')) then
      -- Native verification found SubstituteGeometry(MeshPart) reports success
@@ -4058,7 +4058,7 @@ function R.new(options)
    if swapped then
     record.damageScale=ratio;record.damageOffset=offset
     view.Size=size*ratio;view.CFrame=frame*CFrame.new(size*offset)
-    view.Color=record.baseColor;view:SetAttribute('PhysicalDamageKey',request.key)
+    view.Color=priorColor;view:SetAttribute('PhysicalDamageKey',request.key)
     view:SetAttribute('PhysicalDamageError',nil)
     record.dirty=true;state.applied=request.key
    else view.PivotOffset=priorPivot;failure(record,state,request.key,'Substitute: '..tostring(swapError)) end
@@ -9487,7 +9487,7 @@ local function renderResource(r,now)
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
- local period=reference and 1 or Feel.stageScale(stage,stageCount)
+ local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
@@ -9507,8 +9507,8 @@ local function renderResource(r,now)
    end
   end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
-  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
-  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk)
+  view.Color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11):Lerp(Color3.new(0,0,0),darkness)
  else view.Transparency=1 end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do

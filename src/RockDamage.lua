@@ -161,7 +161,7 @@ function R.new(options)
    and record.source.Parent and record.view.Parent and (record.source:GetAttribute('BreakSerial') or 0)==0 then
    local view=record.view;local frame,size=R.basePose(view)
    local offset=result.CFrame.Position/CANONICAL
-   local priorPivot=view.PivotOffset
+   local priorPivot,priorColor=view.PivotOffset,view.Color
    local swapped,swapError=pcall(function()
     if (view:IsA('Part') and cubic) or (view:IsA('PartOperation') and result:IsA('MeshPart')) then
      -- Native verification found SubstituteGeometry(MeshPart) reports success
@@ -187,7 +187,7 @@ function R.new(options)
    if swapped then
     record.damageScale=ratio;record.damageOffset=offset
     view.Size=size*ratio;view.CFrame=frame*CFrame.new(size*offset)
-    view.Color=record.baseColor;view:SetAttribute('PhysicalDamageKey',request.key)
+    view.Color=priorColor;view:SetAttribute('PhysicalDamageKey',request.key)
     view:SetAttribute('PhysicalDamageError',nil)
     record.dirty=true;state.applied=request.key
    else view.PivotOffset=priorPivot;failure(record,state,request.key,'Substitute: '..tostring(swapError)) end

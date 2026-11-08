@@ -29,16 +29,31 @@ assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==2)
--- Reference-size crystals appear fully formed, then turn at a crack.
+-- The starter crystals spawn red and full size. Damage darkens them across cracks.
 local fixed=source:Clone()
 fixed:SetAttribute('ReferenceCrystal',true)
-fixed:SetAttribute('HP',75);fixed:SetAttribute('Stage',0);fixed:SetAttribute('BreakSerial',0)
+fixed.Color=Color3.fromRGB(255,0,0)
+fixed:SetAttribute('MaxHP',100);fixed:SetAttribute('HP',100);fixed:SetAttribute('Stage',0);fixed:SetAttribute('BreakSerial',0)
 fixed:SetAttribute('SpawnAt',70);fixed:SetAttribute('ReadyAt',72)
 local fixedRecord={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(0,false,70,3)}
 renderResource(fixedRecord,70)
 local originalSize=fixedRecord.view.Size
 local originalDirection=fixedRecord.view.CFrame.LookVector
-assert(originalSize.X==3 and not fixedRecord.settled)
-fixed:SetAttribute('Stage',1);renderResource(fixedRecord,72.2)
-assert(fixedRecord.view.Size.X==3 and (fixedRecord.view.CFrame.LookVector-originalDirection).Magnitude>.2)
+assert(originalSize.X==3 and fixedRecord.view.Color.R==1 and not fixedRecord.settled)
+fixed:SetAttribute('HP',90);fixedRecord.dirty=true
+renderResource(fixedRecord,72.5)
+local previousRed=fixedRecord.view.Color.R
+assert(previousRed>0 and previousRed<1 and fixedRecord.view.Size.X==3)
+for stage,hp in ipairs({75,50,25}) do
+ fixed:SetAttribute('HP',hp);fixed:SetAttribute('Stage',stage);fixedRecord.dirty=true
+ renderResource(fixedRecord,72+stage)
+ assert(fixedRecord.view.Size.X==originalSize.X*(1-stage*.25))
+ assert(fixedRecord.view.Color.R<previousRed)
+ previousRed=fixedRecord.view.Color.R
+ if stage==1 then assert((fixedRecord.view.CFrame.LookVector-originalDirection).Magnitude>.2) end
+end
+assert(previousRed==0 and fixedRecord.view.Transparency<1,'the final visible layer should be black')
+local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(3,false,76,3)}
+renderResource(lateFixed,76)
+assert(lateFixed.view.Color.R==0 and lateFixed.view.Size.X==fixedRecord.view.Size.X)
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

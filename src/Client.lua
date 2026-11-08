@@ -802,7 +802,7 @@ local function renderResource(r,now)
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
- local period=reference and 1 or Feel.stageScale(stage,stageCount)
+ local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
@@ -822,8 +822,8 @@ local function renderResource(r,now)
    end
   end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
-  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
-  view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount,junk)
+  view.Color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11):Lerp(Color3.new(0,0,0),darkness)
  else view.Transparency=1 end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do

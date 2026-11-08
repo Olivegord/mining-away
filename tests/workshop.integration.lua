@@ -49,13 +49,13 @@ check('the starter field starts with sixteen scattered full-size crystals',funct
  end
  seed=originalRng
 end)
-check('the reference crystal stays full size and respawns after eight seconds with four workers',function()
+check('the reference crystal shrinks when cracked and respawns after eight seconds with four workers',function()
  move(field.center)
  local r=field.resources[1]
  r.readyAt=now
  local miner=p.drones[1]
  assert(assignOre(p,miner,r));miner.pos=committedStation(miner,r);miner.mining=true
- assert(hitResource(miner,r,r.maxHP*.26) and r.stage==1 and (r.part.Size-r.fullSize).Magnitude==0)
+ assert(hitResource(miner,r,r.maxHP*.26) and r.stage==1 and (r.part.Size-r.fullSize*.75).Magnitude<1e-5)
  local brokenAt=now
  local before={};for _,rock in ipairs(field.resources) do before[rock.id]=true end
  assert(hitResource(miner,r,1000) and r.paid and r.removeAt==brokenAt+2)

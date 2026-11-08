@@ -845,7 +845,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  local scale=r.referenceCrystal and 1 or Feel.stageScale(r.stage,r.stageCount)
+  local scale=Feel.stageScale(r.stage,r.stageCount)
   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
  end
