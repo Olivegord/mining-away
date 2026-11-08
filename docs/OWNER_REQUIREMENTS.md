@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — more colorful, without overdoing it
+
+Keep the restored stylized textures and rock mining. Make the world more colorful and stimulating while still looking good; realism is optional, but avoid an overdone treatment. Use restrained regional colors and retain readable mining surfaces.
+
 ## November 8 latest — restore rock mining and the photographed earlier look
 
 The owner chooses rock mining again. Keep the random photo/pattern objects in the waterfront display, but remove them from the playable fields. Restore the attached earlier version's low-resolution grass, gravel, foliage, rock textures and colors, with lighting only a little brighter. Preserve the current map and subsequent gameplay fixes rather than reverting the whole game. This supersedes the earlier Arts & Crafts/Tech mining prototype and the assistant's recommendation to make junk the main mining identity.

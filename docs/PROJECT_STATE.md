@@ -9,19 +9,31 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `9bb5ebe082f920df18ceb7cab68a06f559513ff8f455bb58dbb1dc2c066776f0` | Restored textured rock fields, reference palette and brighter morning fill; current island and persistent tool marks retained. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Rock mining and the restored reference treatment. |
+| Native-file SHA-256 | `8ea8c29643431891c5b81d215c4610731665c62555e264644d62932bbf8ecdd0` | Restrained regional color pass over the restored textured rock fields. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Livelier regional colors and late-morning lighting; rock mining retained. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | Rock-field initialization and the restored reference appearance are installed. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
-| Roblox publication | **No publication in the reference restoration** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The regional palette and late-morning lighting are installed. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the color pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — rock mining and the earlier textured look
+## Latest follow-up — livelier, restrained regional colors
+
+Retinted the existing grass, raised patches and green foliage, giving Quartz fresher greens, Ruby warmer coral earth, Cobalt blue-green earth, Violet lavender, and Emerald pale jade/chalk. Mining beds use quieter complementary tints. Selected foliage groups blend toward a cooler green to give variation without new scenery. Every texture image, material assignment, authored transform, route, field and display object is preserved.
+
+Advanced the sun from 08:30 to 10:15 to shorten the heavier shadows. Brightness is 2.35, exposure +0.12, with balanced cool shadow fill. Global saturation is slightly lower (+0.14 versus +0.18); the additional color comes from specific surface choices. No new lights, effects, geometry or scripts.
+
+The checked background save changes 1,630 part colors and eight lighting properties, preserving all 50 Sources and all instance parents. It includes 36 raised patches, six beds, 30 terrace surfaces, 309 supporting turf parts and 1,249 existing foliage parts. The waterfront display retains its 125 descendants. `tools/build.py` reports no Source changes.
+
+Studio was already open in Edit and remains open in Edit at place 124078027733625, universe 10774898335, loaded version 76. Inspected Quartz close and the six-area overview. All seven native Source SHA-256 values match the canonical file and all three Script Sync roots are connected. This is an Edit visual review, not a Play, mobile, multiplayer or performance test. No publication.
+
+Reproduce from `f4d3b9d` with `python3 tools/refresh_lively_palette.py <directory>`. Run its generated `stage.lua` in shared Edit, apply `shared.LivelyPalette.apply()`, inspect, and rerun the Python command with `--write`. The saver permits only part colors and the specified lighting properties; it checks the baseline hash and preserves all geometry, textures and Sources.
+
+## Earlier follow-up — rock mining and the earlier textured look
 
 All playable fields initialize mineral rocks in both Studio preview and production. Removed the automatic Quartz Arts & Crafts and Ruby Tech activation. Their templates and the waterfront display remain. The prototype's isolated test fixture can still exercise its retained machinery without enabling it in the game. Current tool controls, persistent damage marks, health-based size, economy and the one-drone start are preserved.
 
