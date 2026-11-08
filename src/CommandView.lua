@@ -67,11 +67,9 @@ function V:update(dt,now)
  end
  local fields=ctx.world and ctx.world:FindFirstChild('Fields')
  local assigned={}
- if automatic then
-  for source in pairs(ctx.drones) do
-   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
-    local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
-   end
+ for source in pairs(ctx.drones) do
+  if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
+   local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
   end
  end
  if fields then for _,field in ipairs(fields:GetChildren()) do
@@ -82,15 +80,17 @@ function V:update(dt,now)
    if not h then
     h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
    end
-   h.Enabled=visible and automatic and ((not hover and hoverField==id) or assigned[id]==true)
+   local junk=field:GetAttribute('JunkClearing')
+   local hovered=hoverField==id and (junk or not hover)
+   h.Enabled=visible and (automatic or junk==true) and (hovered or assigned[id]==true)
    local color=assigned[id] and GREEN or BLUE
-   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=not hover and hoverField==id and .94 or 1;h.OutlineTransparency=not hover and hoverField==id and .08 or .65
+   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hovered and .94 or 1;h.OutlineTransparency=hovered and .08 or .65
   end
  end end
  for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
  if not visible then self:endDrag() end
- if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
+ if self.dragging and hover and records[hover] and not records[hover].source:GetAttribute('JunkInterior') and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
  end
  if hover and records[hover] then table.insert(marked,hover) end
@@ -140,7 +140,7 @@ function V:update(dt,now)
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
-  self.title.Text=tostring(s:GetAttribute('Mineral') or 'Rock')..(s:GetAttribute('Brittle') and ' · brittle' or '')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('Mineral') or 'Rock')..(s:GetAttribute('Brittle') and ' · brittle' or '')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

@@ -10,5 +10,9 @@ with tempfile.TemporaryDirectory(prefix='mining-core-loop-') as directory:
    ';(function()\n'+(ROOT/'tests/core-loop.integration.lua').read_text()+'\nend)()'])
   path=Path(directory)/('studio.lua' if studio else 'production.lua');path.write_text(source)
   subprocess.run([str(luau/'luau'),str(path)],check=True)
+ path=Path(directory)/'junk-clearing.lua'
+ path.write_text('\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
+  bundle(),';(function()\n'+(ROOT/'tests/junk-clearing.integration.lua').read_text()+'\nend)()']))
+ subprocess.run([str(luau/'luau'),str(path)],check=True)
  path=Path(directory)/'client.lua';path.write_text(client_bundle())
  subprocess.run([str(luau/'luau-compile'),str(path)],check=True,stdout=subprocess.DEVNULL)

@@ -512,6 +512,58 @@ end
 return F
 
 end)()
+local JunkField = (function()
+-- Shared timings and finishes for the local Quartz prototype.
+local J={BatchSize=4,Cap=10,LowWork=2,CrewCap=2,DropHeight=53,FallTime=.82,SettleTime=.32}
+J.Props={
+ {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194},interior='Wool'},
+ {name='Plaid Cube',template='BlueGinghamPaver',size=6.3,work=65,ore=12,color={184,209,235},interior='Wool'},
+ {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76},interior='Cork'},
+ {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155},interior='Foam'},
+ {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154},interior='Wool'},
+}
+J.TemplateProps={
+ {name='Suggestion Box',template='SuggestionBox',work=67,ore=12,interior='Wool'},
+ {name='Gumball Dispenser',template='GumballDispenser',work=72,ore=13,interior='Wool'},
+ {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10,interior='Foam'},
+ {name='Box Fan',template='BoxFan',work=79,ore=14,interior='Cork'},
+ {name='Cube Aquarium',template='CubeAquarium',work=68,ore=12,interior='Wool'},
+ {name='Ice Cube',template='IceCube',work=61,ore=11,interior='Wool'},
+ {name='Ticket Box',template='TicketBox',work=57,ore=10,interior='Cork'},
+ {name='Moving Box',template='MovingBox',work=62,ore=11,interior='Foam'},
+}
+local interiors={Wool={Enum.Material.Fabric,Color3.fromRGB(248,244,231)},
+ Cork={Enum.Material.Wood,Color3.fromRGB(215,174,120)},Foam={Enum.Material.Fabric,Color3.fromRGB(193,237,211)}}
+function J.finish(name)
+ local finish=interiors[name]
+ if finish then return finish[1],finish[2] end
+end
+function J.fallPose(age,grounded)
+ if age<0 then return grounded+Vector3.yAxis*J.DropHeight end
+ if age<J.FallTime then
+  local t=age/J.FallTime
+  return (grounded+Vector3.yAxis*(J.DropHeight*(1-t*t)))*CFrame.Angles(.62*(1-t),.95*(1-t),-.28*(1-t))
+ end
+ local t=math.clamp((age-J.FallTime)/J.SettleTime,0,1)
+ return (grounded+Vector3.yAxis*(6.4*t*(1-t)))*CFrame.Angles(.13*math.sin(t*math.pi),0,0)
+end
+-- Give crews without a job the next object, then rotate within each job
+-- count by least recent award. Failed/blocked requests cannot lose a turn.
+function J.dispatch(crews,claim)
+ while #crews>0 do
+  table.sort(crews,function(a,b)
+   if a.active~=b.active then return a.active<b.active end
+   if a.turn~=b.turn then return a.turn<b.turn end
+   return a.id<b.id
+  end)
+  local crew=crews[1]
+  if crew.active>=J.CrewCap or not claim(crew) then table.remove(crews,1)
+  else crew.active+=1 end
+ end
+end
+return J
+
+end)()
 local Mining = (function()
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
@@ -3823,6 +3875,14 @@ end
 local function discard(parts)
  if type(parts)=='table' then for _,part in ipairs(parts) do part:Destroy() end end
 end
+local function placeInterior(record)
+ local interior=record.interior
+ if not interior then return end
+ local frame,size=R.basePose(record.view)
+ interior.part.Size=size*interior.scale
+ interior.part.CFrame=frame*CFrame.new(size*interior.offset)
+ interior.part.Transparency=record.view.Transparency
+end
 function R.new(options)
  options=options or {}
  local self={records={},queued={},working=false,nextAt=0,closed=false,operations=0,failures=0}
@@ -3840,6 +3900,7 @@ function R.new(options)
   self:register(record)
   local state=self.records[record];local source=record.source
   if not state or not source.Parent or not record.view.Parent then return end
+  placeInterior(record)
   if (source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0 then self.queued[record]=nil;return end
   local bubbles=count(source:GetAttribute('BubbleBites'));local dents=count(source:GetAttribute('SmashDents'))
   local band=R.depthBand(bubbles,dents,source:GetAttribute('DamageDepth'))
@@ -3900,12 +3961,37 @@ function R.new(options)
    cutters[#cutters+1]=cutter
   end
   self.operations+=1
+  local interiorMaterial,interiorColor
+  if request.ball and record.source:GetAttribute('JunkInterior') then
+   interiorMaterial,interiorColor=JunkField.finish(record.source:GetAttribute('JunkInterior'))
+  end
+  local core
+  if interiorMaterial then
+   core=Instance.new('Part');core.Size=Vector3.one*(CANONICAL*.92);core.CFrame=CFrame.new()
+   table.insert(cutters,core)
+  end
+  local geometryOptions={
+   CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Automatic,SplitApart=false,
+  }
   local ok,parts=pcall(function()
-   return geometry:SubtractAsync(base,cutters,{
-    CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Automatic,SplitApart=false,
-   })
+   return geometry:SubtractAsync(base,cutters,geometryOptions)
   end)
+  local coreParts
+  if core then
+   table.remove(cutters)
+   if ok and type(parts)=='table' and #parts==1 then
+    -- A small gap between the two cavity surfaces keeps the wool and shell
+    -- from fighting for the same pixels at the cut.
+    for _,cutter in ipairs(cutters) do cutter.Size*=1.025 end
+    local coreOK,result=pcall(function() return geometry:SubtractAsync(core,cutters,geometryOptions) end)
+    if not coreOK or type(result)~='table' or #result~=1 then
+     failure(record,state,request.key,'Interior: '..tostring(result));discard(parts);discard(result);parts=nil
+    else coreParts=result end
+   end
+   core:Destroy()
+  end
   base:Destroy();discard(cutters)
+  if not parts and core then return end
   if not ok or type(parts)~='table' or #parts~=1 then
    failure(record,state,request.key,'Subtract: '..(ok and ('expected one result, received '..tostring(type(parts)=='table' and #parts or type(parts))) or tostring(parts)))
    discard(parts);return
@@ -3947,10 +4033,17 @@ function R.new(options)
     view.Size=size*ratio;view.CFrame=frame*CFrame.new(size*offset)
     view.Color=record.baseColor;view:SetAttribute('PhysicalDamageKey',request.key)
     view:SetAttribute('PhysicalDamageError',nil)
+    if record.interior then record.interior.part:Destroy();record.interior=nil end
+    if coreParts then
+     local inner=coreParts[1]
+     clean(inner);inner.Name='JunkInterior';inner.Material=interiorMaterial;inner.MaterialVariant='';inner.Color=interiorColor
+     record.interior={part=inner,scale=inner.Size/CANONICAL,offset=inner.CFrame.Position/CANONICAL}
+     placeInterior(record);inner.Parent=view;coreParts=nil
+    end
     record.dirty=true;state.applied=request.key
    else view.PivotOffset=priorPivot;failure(record,state,request.key,'Substitute: '..tostring(swapError)) end
   elseif not valid then failure(record,state,request.key,string.format('Invalid bounds %.4f, %.4f, %.4f; template=%s',ratio.X,ratio.Y,ratio.Z,self.template and self.template.ClassName or 'original')) end
-  discard(parts)
+  discard(parts);discard(coreParts)
  end
  function self:step(now)
   if self.closed or self.working or now<self.nextAt then return end
@@ -5524,7 +5617,7 @@ function P:_floor(position,exclude)
  local result=workspace:Raycast(position+Vector3.new(0,1,0),Vector3.new(0,-100,0),params)
  return result and result.Position.Y or position.Y-9
 end
-function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock)
+function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock,interiorMaterial)
  if self.closed then return end
  if #self.fragments>=self.maxFragments then
   if not priority then return end
@@ -5536,6 +5629,7 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
  local part=rock and Instance.new('Part') or template:Clone();if not part then return end
  if rock then
   part.Size=template.Size;part.Material=template.Material;part.MaterialVariant=template.MaterialVariant
+  if interiorMaterial then part.Material=interiorMaterial;part.MaterialVariant='' end
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
@@ -6007,6 +6101,10 @@ function P:resourceImpact(resource,event,now)
  self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
  -- Solid cubic rubble has weight; bright collectible ore is a separate reward.
  local amount=breaking and 12 or 5
+ local interiorMaterial,interiorColor
+ if resource.source:GetAttribute('JunkInterior') and resource.source:GetAttribute('BallDentPoint') then
+  interiorMaterial,interiorColor=JunkField.finish(resource.source:GetAttribute('JunkInterior'))
+ end
  local full=resource.source:GetAttribute('FullSize') or view.Size
  if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do
@@ -6017,9 +6115,10 @@ function P:resourceImpact(resource,event,now)
   local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
   local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
   local speed=breaking and (6+i%3*2.3) or (2.4+i*.65)
-  self:_fragment(view,frame,resource.baseColor,0,scale,
+  local interior=interiorMaterial and i%3~=0
+  self:_fragment(view,frame,interior and interiorColor or resource.baseColor,0,scale,
    Vector3.new(math.cos(angle)*speed,breaking and (9+i%4*1.8) or 5+i*.65,math.sin(angle)*speed),
-   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true)
+   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true,interior and interiorMaterial)
  end
 end
 function P:update(_dt,now)
@@ -8198,11 +8297,9 @@ function V:update(dt,now)
  end
  local fields=ctx.world and ctx.world:FindFirstChild('Fields')
  local assigned={}
- if automatic then
-  for source in pairs(ctx.drones) do
-   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
-    local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
-   end
+ for source in pairs(ctx.drones) do
+  if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
+   local id=source:GetAttribute('AutoFieldId');if id and id>0 then assigned[id]=true end
   end
  end
  if fields then for _,field in ipairs(fields:GetChildren()) do
@@ -8213,15 +8310,17 @@ function V:update(dt,now)
    if not h then
     h=Instance.new('Highlight');h.Name='FieldOrder';h.DepthMode=Enum.HighlightDepthMode.Occluded;h.Adornee=floor;h.Parent=ctx.parent;self.fields[field]=h
    end
-   h.Enabled=visible and automatic and ((not hover and hoverField==id) or assigned[id]==true)
+   local junk=field:GetAttribute('JunkClearing')
+   local hovered=hoverField==id and (junk or not hover)
+   h.Enabled=visible and (automatic or junk==true) and (hovered or assigned[id]==true)
    local color=assigned[id] and GREEN or BLUE
-   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=not hover and hoverField==id and .94 or 1;h.OutlineTransparency=not hover and hoverField==id and .08 or .65
+   h.FillColor=color;h.OutlineColor=color;h.FillTransparency=hovered and .94 or 1;h.OutlineTransparency=hovered and .08 or .65
   end
  end end
  for field,h in pairs(self.fields) do if not field.Parent then h:Destroy();self.fields[field]=nil end end
  local marked={};local records=ctx.resources
  if not visible then self:endDrag() end
- if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
+ if self.dragging and hover and records[hover] and not records[hover].source:GetAttribute('JunkInterior') and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
  end
  if hover and records[hover] then table.insert(marked,hover) end
@@ -8271,7 +8370,7 @@ function V:update(dt,now)
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
-  self.title.Text=tostring(s:GetAttribute('Mineral') or 'Rock')..(s:GetAttribute('Brittle') and ' · brittle' or '')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('Mineral') or 'Rock')..(s:GetAttribute('Brittle') and ' · brittle' or '')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
@@ -9287,6 +9386,9 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=source.Reflectance;view.Parent=localFX;hidePart(source)
+ if source:GetAttribute('JunkInterior') then
+  for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
+ end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
@@ -9299,6 +9401,15 @@ end
 local observed={}
 local function observe(source)
  if not source.Parent then return end
+ if source:IsA('Decal') then
+  local record=resources[source.Parent]
+  if record and record.source:GetAttribute('JunkInterior') then
+   if not record.view:FindFirstChild(source.Name) then
+    local clone=source:Clone();clone.LocalTransparencyModifier=record.view.Transparency;clone.Parent=record.view
+   end
+   hidePart(source)
+  end
+ end
  if source:IsA('BasePart') then
   local ancestor=source.Parent
   while ancestor and ancestor~=world do
@@ -9365,9 +9476,13 @@ local function renderResource(r,now)
  local final=s:GetAttribute('FullPosition') or s.Position
  local spawnAt=s:GetAttribute('SpawnAt') or now-2
  local readyAt=s:GetAttribute('ReadyAt') or spawnAt+2
+ local junk=s:GetAttribute('JunkInterior')
  -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
- local growth=Feel.growth(now,spawnAt)
- if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
+ local growth=1
+ if not junk then
+  growth=Feel.growth(now,spawnAt)
+  if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
+ end
  local stageCount=s:GetAttribute('StageCount') or 3
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
@@ -9380,8 +9495,7 @@ local function renderResource(r,now)
  r.audioHealth=health
  local stage=r.visual.stage
  local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
- local targetPeriod=Feel.resourceScale(stage,stageCount,scarBase,scarStage)
- local period=targetPeriod
+ local period=junk and 1 or Feel.resourceScale(stage,stageCount,scarBase,scarStage)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
   local heat=s:GetAttribute('MeltBand') or 0
@@ -9394,14 +9508,33 @@ local function renderResource(r,now)
   local frame
   if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
+  if junk then
+   if now<readyAt then
+    frame=JunkField.fallPose(now-spawnAt,frame)
+    if now<spawnAt then view.Transparency=1 end
+   end
+  end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
   view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  if not r.riseShown and now-spawnAt>.12 then
+  if junk then
+   if not r.riseShown and now-spawnAt>=JunkField.FallTime then
+    r.riseShown=true
+    if now-spawnAt<JunkField.FallTime+.42 then
+     presentation:resourceRise(r,now)
+     soundscape:play('rock_body',Vector3.new(final.X,ground,final.Z),{pitch=.8})
+    end
+   end
+  elseif not r.riseShown and now-spawnAt>.12 then
    r.riseShown=true
    if now-spawnAt<.65 then presentation:resourceRise(r,now) end
   end
  else view.Transparency=1 end
+ if junk then
+  for _,decal in ipairs(view:GetChildren()) do
+   if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
+  end
+ end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');soundscape:play('rock_body',view.Position,{pitch=math.clamp(1.1-full.X*.03,.7,1)});presentation:resourceImpact(r,event,now) end
  rockDamage:update(r,now)
@@ -9721,6 +9854,10 @@ local function requestPlot(id)
  local fields=world:FindFirstChild('Fields');local guarded=false
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
+   if field:GetAttribute('JunkClearing') then
+    command:FireServer('Patch',{fieldId=id,requestId=Http:GenerateGUID(false)})
+    return
+   end
    local phase=field:GetAttribute('Phase');guarded=not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active');break
   end
  end end
@@ -9750,7 +9887,7 @@ local function assignField(target)
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
-   if logisticsView and logisticsView.selected and type(fieldId)=='number' then requestPlot(fieldId);return end
+   if type(fieldId)=='number' and (node:GetAttribute('JunkInterior') or (logisticsView and logisticsView.selected)) then requestPlot(fieldId);return end
    commandView:request(resourceId)
    return
   end

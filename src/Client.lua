@@ -693,6 +693,9 @@ local function registerResource(source)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
  view.Reflectance=source.Reflectance;view.Parent=localFX;hidePart(source)
+ if source:GetAttribute('JunkInterior') then
+  for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
+ end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
@@ -705,6 +708,15 @@ end
 local observed={}
 local function observe(source)
  if not source.Parent then return end
+ if source:IsA('Decal') then
+  local record=resources[source.Parent]
+  if record and record.source:GetAttribute('JunkInterior') then
+   if not record.view:FindFirstChild(source.Name) then
+    local clone=source:Clone();clone.LocalTransparencyModifier=record.view.Transparency;clone.Parent=record.view
+   end
+   hidePart(source)
+  end
+ end
  if source:IsA('BasePart') then
   local ancestor=source.Parent
   while ancestor and ancestor~=world do
@@ -771,9 +783,13 @@ local function renderResource(r,now)
  local final=s:GetAttribute('FullPosition') or s.Position
  local spawnAt=s:GetAttribute('SpawnAt') or now-2
  local readyAt=s:GetAttribute('ReadyAt') or spawnAt+2
+ local junk=s:GetAttribute('JunkInterior')
  -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
- local growth=Feel.growth(now,spawnAt)
- if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
+ local growth=1
+ if not junk then
+  growth=Feel.growth(now,spawnAt)
+  if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
+ end
  local stageCount=s:GetAttribute('StageCount') or 3
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
@@ -786,8 +802,7 @@ local function renderResource(r,now)
  r.audioHealth=health
  local stage=r.visual.stage
  local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
- local targetPeriod=Feel.resourceScale(stage,stageCount,scarBase,scarStage)
- local period=targetPeriod
+ local period=junk and 1 or Feel.resourceScale(stage,stageCount,scarBase,scarStage)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
   local heat=s:GetAttribute('MeltBand') or 0
@@ -800,14 +815,33 @@ local function renderResource(r,now)
   local frame
   if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
+  if junk then
+   if now<readyAt then
+    frame=JunkField.fallPose(now-spawnAt,frame)
+    if now<spawnAt then view.Transparency=1 end
+   end
+  end
   view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
   local darkness=Feel.stageDarkness(health,s:GetAttribute('MaxHP') or 1,stage,stageCount)
   view.Color=r.baseColor:Lerp(Color3.new(0,0,0),darkness*.52):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  if not r.riseShown and now-spawnAt>.12 then
+  if junk then
+   if not r.riseShown and now-spawnAt>=JunkField.FallTime then
+    r.riseShown=true
+    if now-spawnAt<JunkField.FallTime+.42 then
+     presentation:resourceRise(r,now)
+     soundscape:play('rock_body',Vector3.new(final.X,ground,final.Z),{pitch=.8})
+    end
+   end
+  elseif not r.riseShown and now-spawnAt>.12 then
    r.riseShown=true
    if now-spawnAt<.65 then presentation:resourceRise(r,now) end
   end
  else view.Transparency=1 end
+ if junk then
+  for _,decal in ipairs(view:GetChildren()) do
+   if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
+  end
+ end
  if event=='stage' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');presentation:resourceImpact(r,event,now)
  elseif event=='break' then crystalAudio:play(view.Position,event,stage,s:GetAttribute('Kind')=='Geode');soundscape:play('rock_body',view.Position,{pitch=math.clamp(1.1-full.X*.03,.7,1)});presentation:resourceImpact(r,event,now) end
  rockDamage:update(r,now)
@@ -1127,6 +1161,10 @@ local function requestPlot(id)
  local fields=world:FindFirstChild('Fields');local guarded=false
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
+   if field:GetAttribute('JunkClearing') then
+    command:FireServer('Patch',{fieldId=id,requestId=Http:GenerateGUID(false)})
+    return
+   end
    local phase=field:GetAttribute('Phase');guarded=not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active');break
   end
  end end
@@ -1156,7 +1194,7 @@ local function assignField(target)
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
    local fieldId=node:GetAttribute('FieldId')
-   if logisticsView and logisticsView.selected and type(fieldId)=='number' then requestPlot(fieldId);return end
+   if type(fieldId)=='number' and (node:GetAttribute('JunkInterior') or (logisticsView and logisticsView.selected)) then requestPlot(fieldId);return end
    commandView:request(resourceId)
    return
   end

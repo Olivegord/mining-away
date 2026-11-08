@@ -417,7 +417,7 @@ function P:_floor(position,exclude)
  local result=workspace:Raycast(position+Vector3.new(0,1,0),Vector3.new(0,-100,0),params)
  return result and result.Position.Y or position.Y-9
 end
-function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock)
+function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor,now,duration,priority,rock,interiorMaterial)
  if self.closed then return end
  if #self.fragments>=self.maxFragments then
   if not priority then return end
@@ -429,6 +429,7 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
  local part=rock and Instance.new('Part') or template:Clone();if not part then return end
  if rock then
   part.Size=template.Size;part.Material=template.Material;part.MaterialVariant=template.MaterialVariant
+  if interiorMaterial then part.Material=interiorMaterial;part.MaterialVariant='' end
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
@@ -900,6 +901,10 @@ function P:resourceImpact(resource,event,now)
  self.work:fracture(point+normal*.05,normal,resource.baseColor,breaking and 38 or 13,now)
  -- Solid cubic rubble has weight; bright collectible ore is a separate reward.
  local amount=breaking and 12 or 5
+ local interiorMaterial,interiorColor
+ if resource.source:GetAttribute('JunkInterior') and resource.source:GetAttribute('BallDentPoint') then
+  interiorMaterial,interiorColor=JunkField.finish(resource.source:GetAttribute('JunkInterior'))
+ end
  local full=resource.source:GetAttribute('FullSize') or view.Size
  if type(full)=='number' then full=Vector3.one*full end
  for i=1,amount do
@@ -910,9 +915,10 @@ function P:resourceImpact(resource,event,now)
   local offset=Vector3.new(math.cos(angle)*radius,math.min(view.Size.Y*.2,.35),math.sin(angle)*radius)
   local frame=CFrame.new(view.Position+offset)*view.CFrame.Rotation*CFrame.Angles(i*.4,angle,i*.23)
   local speed=breaking and (6+i%3*2.3) or (2.4+i*.65)
-  self:_fragment(view,frame,resource.baseColor,0,scale,
+  local interior=interiorMaterial and i%3~=0
+  self:_fragment(view,frame,interior and interiorColor or resource.baseColor,0,scale,
    Vector3.new(math.cos(angle)*speed,breaking and (9+i%4*1.8) or 5+i*.65,math.sin(angle)*speed),
-   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true)
+   Vector3.new(i*.7,1.3,-i*.45),floor,now,breaking and 2.1 or 1.55,nil,true,interior and interiorMaterial)
  end
 end
 function P:update(_dt,now)

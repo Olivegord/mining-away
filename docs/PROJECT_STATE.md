@@ -9,17 +9,27 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0d9453e9bf9b5b645d603585ab8d92a335bb606ac6d3d482fb838a0afc378b69` | Scoped save of eight junk cube templates on top of the grassy basin revision. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Grassy basin and junk cube template library in the open shared Edit document. |
+| Native-file SHA-256 | `5e5fd9abe504dd05c7ea68807aea3fbaa6c61a8032b4db0affb2d8baae1863f3` | Quartz junk prototype on top of the grassy basin and eight native junk cube templates. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Quartz junk prototype and template library in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Courtyard and layered ground installed November 7, 2026** | The open Edit session has the colorful hub and all six refreshed mining areas. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
+| Shared Studio entry point | **Quartz junk prototype installed November 7, 2026** | Play from the open DRONEREVOLUTION Edit session starts the prototype. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session's loaded place version is 26. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — falling junk in Quartz
+
+Click the Quartz bed or a landed prop to order the crew. The starter miner needs no card. Up to four props fall per wave, with replenishment at two or fewer unclaimed objects and a cap of ten live objects including those in flight. The server chooses clear, supported landing spots and assigns single-object claims before flight. Crews without a job go first, with least-recently-served ordering within each active job count and up to two simultaneous jobs per crew. Recall, leaving the clearing, loss of the worker and disconnect release its claims.
+
+The fall rotation includes the original pip, gingham, knit, timber and daisy props and the eight new native templates. Bowling-ball craters cut the shell and its inset core separately. Fabric, cork and foam interiors have separate finishes and carry through to the break debris. Collected salvage sells as Quartz through the existing converter and upgrade economy. This prototype activates only in preview on the authored quarry. The falling actors are runtime instances.
+
+One native Play session from shared Edit, at place 124078027733625 and universe 10774898335, started with one worker and four junk objects. A normal bowling-ball remote produced one dent and a cream Fabric core in a separate client union. A normal clearing order broke the dented prop and selected another. A later batch included the suggestion box, gumball dispenser and alphabet block. Moving to the converter released the field claims, and Sell credited 25 Quartz for 25 collected units. Studio was open in Edit on entry and returned to Edit after the check. All seven native Edit Source hashes matched the generated bundles after Script Sync, with all three roots still connected. The canonical background refresh preserved the map and backup Sources. Public Roblox remains at the last verified v43.
+
+Reproduce the API-double checks with `python3 tools/test_core_loop.py` and `python3 tools/test_field_tools.py`. These cover ready gating, late-join priority, exclusive claims, the cap, pickup and sell, and bowling-ball damage. There was no native multi-client run, visual comparison of the full fall animation across observers, or visual review of every template. Existing pickup, mining-flight and gadget regression suites also report baseline failures.
 
 ## Follow-up — textured junk cube templates
 
