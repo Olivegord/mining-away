@@ -5435,7 +5435,10 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
   self.fragments[replace].part:Destroy();table.remove(self.fragments,replace)
  end
  local part=rock and Instance.new('Part') or template:Clone();if not part then return end
- if rock then part.Size=template.Size;part.Material=Enum.Material.Rock;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth end
+ if rock then
+  part.Size=template.Size;part.Material=template.Material;part.MaterialVariant=template.MaterialVariant
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+ end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
  for _,object in ipairs(part:GetDescendants()) do
   if object:IsA('BasePart') or object:IsA('LuaSourceContainer') or object:IsA('JointInstance')
@@ -7704,7 +7707,8 @@ local PickupMotion = (function()
 -- Render-only sampling of authoritative pickup snapshots. A short interpolation
 -- buffer preserves acceleration, gravity and floor contacts without chasing a
 -- succession of network targets. It never decides collection or grants ore.
-local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=38,AIR_DRAG=.9,GROUND_DRAG=14}
+-- Match the authoritative OreDrops trajectory when predicting between packets.
+local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18}
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function axis(a,b,va,vb,t,span)
  local slope=(b-a)/span
@@ -7748,8 +7752,8 @@ function M.tumble(age,landAge)
  age=math.max(0,age)
  -- Angular momentum carries across contact, then friction arrests the spin.
  -- Sampling absolute age keeps landing poses equal at all render rates.
- if type(landAge)~='number' or age<=landAge then return age*4.8 end
- return math.max(0,landAge)*4.8+(1-math.exp(-(age-landAge)*8))*.6
+ if type(landAge)~='number' or age<=landAge then return age*5.4 end
+ return math.max(0,landAge)*5.4+(1-math.exp(-(age-landAge)*16))*.22
 end
 function M.supportHeight(sx,sy,sz,rx,ry,rz)
  -- Vertical extent of a box rotated Rx * Ry * Rz. Keep the collectible's
@@ -7782,11 +7786,11 @@ local function backpack(owner,fallback)
 end
 local function sparkle(parent,color)
  local p=Instance.new('ParticleEmitter');p.Name='MineralGlints'
- p.Texture='rbxasset://textures/ui/VR/circleWhite.png';p.Color=ColorSequence.new(color)
- p.LightEmission=1;p.LightInfluence=0;p.Brightness=2;p.Rate=5.5;p.Lifetime=NumberRange.new(.65,1.1);p.Speed=NumberRange.new(.1,.4);p.Drag=3
- p.SpreadAngle=Vector2.new(180,180);p.WindAffectsDrag=false
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.3,.27,.045),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(1,1)})
+ p.Texture='rbxasset://textures/sparkle.png';p.Color=ColorSequence.new(color:Lerp(Color3.new(1,1,1),.48))
+ p.LightEmission=.45;p.LightInfluence=0;p.Brightness=1;p.Rate=1.15;p.Lifetime=NumberRange.new(.18,.31);p.Speed=NumberRange.new(.12,.38);p.Drag=5
+ p.Enabled=false;p.SpreadAngle=Vector2.new(180,180);p.WindAffectsDrag=false
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.3,.17,.025),NumberSequenceKeypoint.new(1,0)})
+ p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.36),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
 local function sample(r,source,now)
@@ -7810,20 +7814,18 @@ function V.new(root,parent,audio)
   if (source:GetAttribute('CollectedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
-  view.Material=Enum.Material.Neon;view.Color=source.Color:Lerp(Color3.new(1,1,1),.26);view.Reflectance=0
+  view.Material=Enum.Material.Neon;view.MaterialVariant='';view.Color=source.Color:Lerp(Color3.fromRGB(160,151,137),.34);view.Reflectance=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
-  local a=Instance.new('Attachment');a.Position=Vector3.new(0,.13,0);a.Parent=view
-  local b=Instance.new('Attachment');b.Position=Vector3.new(0,-.13,0);b.Parent=view
-  local trail=Instance.new('Trail');trail.Name='OreMagnetTrail';trail.Attachment0=a;trail.Attachment1=b
-  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.25;trail.MinLength=.08;trail.FaceCamera=true;trail.LightEmission=.55
-  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,0)})
-  trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
-  local glints=sparkle(a,view.Color);glints.Enabled=false
-  local stars=Instance.new('Sparkles');stars.Name='CurrencyStars';stars.SparkleColor=view.Color;stars.Enabled=false;stars.Parent=view
-  local glow=Instance.new('PointLight');glow.Name='MineralGlow';glow.Color=source.Color;glow.Range=4.5;glow.Brightness=.18;glow.Shadows=false;glow.Enabled=false;glow.Parent=view
+  local a=Instance.new('Attachment');a.Position=Vector3.new(-.12,0,0);a.Parent=view
+  local b=Instance.new('Attachment');b.Position=Vector3.new(.12,0,0);b.Parent=view
+  local trail=Instance.new('Trail');trail.Name='OreMotionTrail';trail.Attachment0=a;trail.Attachment1=b
+  trail.Color=ColorSequence.new(view.Color);trail.Lifetime=.14;trail.MaxLength=3.5;trail.MinLength=.05;trail.FaceCamera=true;trail.LightEmission=.38
+  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.68),NumberSequenceKeypoint.new(1,0)})
+  trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.48),NumberSequenceKeypoint.new(1,1)});trail.Enabled=false;trail.Parent=view
+  local glints=sparkle(a,view.Color)
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,trail=trail,glints=glints,stars=stars,glow=glow,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
+  local r={view=view,pos=position,trail=trail,glints=glints,size=source.Size,seed=id,ground=source:GetAttribute('GroundImpactSerial') or 0,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
@@ -7845,11 +7847,13 @@ function V.new(root,parent,audio)
   local r=self.byId[receipt.pickupId]
   if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
   local target=backpack(player,rootPart.Position)
-  local anchor=Instance.new('Part');anchor.Name='CollectedMineral';anchor.Size=Vector3.one*.05;anchor.Transparency=1
-  anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=target;anchor.Parent=parent
-  local a=Instance.new('Attachment');a.Parent=anchor
-  local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Rate=0;burst.Speed=NumberRange.new(1,3);burst:Emit(8)
-  Debris:AddItem(anchor,burst.Lifetime.Max+.15)
+  if not player:GetAttribute('ReducedEffects') and not player:GetAttribute('MA_ReducedEffects') then
+   local anchor=Instance.new('Part');anchor.Name='CollectedMineral';anchor.Size=Vector3.one*.05;anchor.Transparency=1
+   anchor.Anchored=true;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Position=target;anchor.Parent=parent
+   local a=Instance.new('Attachment');a.Parent=anchor
+   local burst=sparkle(a,Color3.fromRGB(receipt.r,receipt.g,receipt.b));burst.Speed=NumberRange.new(.6,1.4);burst:Emit(2)
+   Debris:AddItem(anchor,burst.Lifetime.Max+.1)
+  end
   if audio and os.clock()-self.lastSound>.09 then
    local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
    self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
@@ -7858,7 +7862,7 @@ function V.new(root,parent,audio)
  return self
 end
 function V:update(dt,now)
- local camera=workspace.CurrentCamera;local glints,lights=0,0
+ local camera=workspace.CurrentCamera;local glints,trails=0,0
  local player=Players.LocalPlayer
  local reduced=player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true
  for source,r in pairs(self.records) do
@@ -7869,14 +7873,14 @@ function V:update(dt,now)
     r.collectTarget=source:GetAttribute('CollectedPosition')
    end
   end
-  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt);local scale=1;local done=false
+  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt);local scale=1;local done=false;local moving=false
   if r.collectAt then
    local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,math.sin(math.clamp(t,0,1)*math.pi)*.18,0)
    opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1));scale=math.max(.04,shrink);done=t>=1
-   r.trail.Enabled=not reduced and t<.8
+   moving=t<.82
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
    -- late to replay a sound. A streamed/stalled observer must still settle.
@@ -7897,8 +7901,7 @@ function V:update(dt,now)
    local x,y,z=PickupMotion.position(r.samples,now)
    if x then r.pos=Vector3.new(x,y,z) end
    opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
-   local latest=r.samples[#r.samples]
-   r.trail.Enabled=not reduced and latest and latest.homing and r.velocity.Magnitude>10 and opacity>.1 or false
+   moving=r.velocity.Magnitude>6
   else
    r.removedAt=r.removedAt or now
    -- Destruction can replicate just before its receipt. Keep a tiny grace
@@ -7910,7 +7913,7 @@ function V:update(dt,now)
    -- Retire the ore visual and authority immediately; let existing particles
    -- finish on an invisible, bounded cosmetic anchor.
    r.view.Name='FadingOreParticles';r.view.Transparency=1
-   r.glints.Enabled=false;r.stars.Enabled=false;r.glow.Enabled=false;r.trail.Enabled=false
+   r.glints.Enabled=false;r.trail.Enabled=false
    Debris:AddItem(r.view,math.max(r.glints.Lifetime.Max,r.trail.Lifetime)+.1)
    self.byId[r.seed]=nil;self.records[source]=nil
   else
@@ -7929,11 +7932,10 @@ function V:update(dt,now)
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
    r.view.Size=r.size*scale;r.view.Transparency=1-opacity
    local distance=camera and (camera.CFrame.Position-r.pos).Magnitude or math.huge
-   r.glints.Enabled=not reduced and not r.removedAt and not r.collectAt and opacity>.15 and distance<55 and glints<12
-   r.stars.Enabled=r.glints.Enabled
+   r.trail.Enabled=not reduced and moving and opacity>.12 and distance<65 and trails<14
+   if r.trail.Enabled then trails+=1 end
+   r.glints.Enabled=not reduced and not r.removedAt and not r.collectAt and opacity>.15 and distance<42 and glints<8
    if r.glints.Enabled then glints+=1 end
-   r.glow.Enabled=not reduced and opacity>.05 and distance<24 and lights<2
-   if r.glow.Enabled then lights+=1;r.glow.Brightness=.65*opacity end
   end
  end
 end

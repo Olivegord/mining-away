@@ -353,8 +353,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
- part.Color=shell and Color3.fromRGB(100,91,108) or Color3.fromRGB(132,125,115):Lerp(field.color,.38)
+ part.Color=shell and Color3.fromRGB(183,171,194) or Color3.fromRGB(239,231,215):Lerp(field.color,.30)
  part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
+ World.applyQuarryVariant(part)
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
@@ -539,7 +540,7 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   local chip=r.part:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
-  chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=Enum.Material.Rock
+  chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=Enum.Material.Rock;chip.MaterialVariant=''
   -- Rewards retain their material hue independently of fracture shading.
   chip.Color=r.field.color
   chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0

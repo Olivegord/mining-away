@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — low-resolution photo textures, visible sun, weighted ore
+
+Use free online texture photos with visibly low resolution. The reference cues are Brainchip Arena's large mortar seams and ribbed panels and Nullscape's worn, repeating tiles. Keep the quarry lively and preserve its existing setting and dawn lighting. Make the sun and rays more visible. Ore currency needs a heavier fall and landing, with a restrained sparkle and a short motion trail. The shipped texture files are sourced from Poly Haven. [Brainchip Arena](https://medal.tv/games/roblox/clips/nLt9rIzUkRVLyp6vG) · [Nullscape](https://www.youtube.com/watch?v=ndx3rRFgrYQ&t=12s) · [Texture sources](../assets/quarry-textures/README.md)
+
 ## November 7 latest — old realistic textures in the existing setting
 
 Replace the studded, brightly colored finish with realistic textures in the style of older games. Apply the direction across the existing world. Brainchip Arena and Nullscape [Delusional Descension] are texture references. Keep the authored quarry, layout, models, lighting, and gameplay. The [project state](PROJECT_STATE.md) records the texture choices and release.

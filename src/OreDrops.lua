@@ -1,7 +1,7 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.85,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38,
- AIR_DRAG=.9,GROUND_DRAG=14,RESTITUTION=.28}
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=70,
+ AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.18}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -11,7 +11,7 @@ end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
  local speed=10.5+(serial%5)*.65
- return math.cos(angle)*speed,15+index*.7,math.sin(angle)*speed
+ return math.cos(angle)*speed,17+index*.8,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -36,7 +36,7 @@ local function fall(s,dt)
   if dt<=1e-6 then break end
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
-   s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
+   s.landed=true;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
   end
   local contact=(s.vy+math.sqrt(s.vy*s.vy+2*O.GRAVITY*height))/O.GRAVITY
   local span=math.min(dt,contact)
@@ -45,7 +45,7 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
+  s.landed=true;s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -55,7 +55,7 @@ function O.step(s,target,dt,attract)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.age>=O.SCATTER_TIME and distance<=O.MAGNET_RANGE
+ local pulling=attract and s.landed==true and s.age>=O.SCATTER_TIME and distance<=O.MAGNET_RANGE
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then

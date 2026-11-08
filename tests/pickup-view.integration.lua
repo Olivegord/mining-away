@@ -17,6 +17,15 @@ check('rotating fragment stays supported above the authoritative floor',function
  assert(r.drawPosition.Y>=.22 and r.view.Size.Y==.58)
  assert(source.LocalTransparencyModifier==1 and not r.view.CanCollide and not r.view.CanQuery)
 end)
+check('fast scatter has a short trail and reduced effects suppresses it',function()
+ local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
+ source:SetAttribute('SnapshotAt',realTime+.01);source:SetAttribute('Velocity',Vector3.new(10,16,0))
+ view:update(1/60,realTime+.01)
+ assert(r.trail.Enabled and r.trail.Lifetime<.2 and r.glints.Rate<2 and not r.view:FindFirstChildWhichIsA('Sparkles'))
+ pl:SetAttribute('ReducedEffects',true);view:update(1/60,realTime+.02)
+ assert(not r.trail.Enabled and not r.glints.Enabled)
+ pl:SetAttribute('ReducedEffects',false);workspace.CurrentCamera=camera
+end)
 check('ground sound waits for the buffered visible contact and fires once',function()
  source:SetAttribute('GroundImpactAt',realTime);source:SetAttribute('GroundImpactPosition',Vector3.new(0,.22,0))
  source:SetAttribute('GroundImpactSpeed',12);source:SetAttribute('GroundImpactSerial',1)

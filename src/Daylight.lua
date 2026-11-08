@@ -3,8 +3,16 @@
 local Daylight = {}
 function Daylight.apply()
  local authored = workspace:FindFirstChild('MiningAway')
- if authored and authored:GetAttribute('DronerevolutionMapVersion') then return end
  local lighting = game:GetService('Lighting')
+ if authored and authored:GetAttribute('DronerevolutionMapVersion') then
+  -- Keep the authored dawn, sky and grading. The sky's zero-size sun disk
+  -- hid the light source even though its SunRays effect was already enabled.
+  local sky=lighting:FindFirstChildOfClass('Sky')
+  if sky then sky.SunAngularSize=8 end
+  local rays=lighting:FindFirstChildOfClass('SunRaysEffect')
+  if rays then rays.Intensity=.17;rays.Spread=.85;rays.Enabled=true end
+  return
+ end
  local storage=game:GetService('ServerStorage')
  local archive=storage:FindFirstChild('OriginalQuarrySky')
  if not archive then archive=Instance.new('Folder');archive.Name='OriginalQuarrySky';archive.Parent=storage end

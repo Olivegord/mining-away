@@ -225,6 +225,7 @@ function L.new(ctx: any): any
      local floor=Instance.new('Part');floor.Name=name;floor.Size=size;floor.Position=position
      floor.Anchored=true;floor.CanCollide=true;floor.CanQuery=true;floor.CanTouch=false
      floor.Material=material;floor.Color=color
+     W.applyQuarryVariant(floor)
      floor.TopSurface=Enum.SurfaceType.Smooth;floor.BottomSurface=Enum.SurfaceType.Smooth
      floor:SetAttribute('AuthoredMapSurface',true);floor:SetAttribute('GeneratedLogisticsFloor',true)
      floor.Parent=parent
@@ -232,8 +233,8 @@ function L.new(ctx: any): any
     local function floorAssembly(name: string,x: number,z: number,width: number,depth: number): ()
      if overflow:FindFirstChild(name) then return end
      local assembly=Instance.new('Model');assembly.Name=name
-     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(130,123,108),Enum.Material.Concrete)
-     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(126,104,82),Enum.Material.Sandstone)
+     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(230,226,215),Enum.Material.Concrete)
+     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(229,223,211),Enum.Material.Sandstone)
      assembly.Parent=overflow
     end
     -- Shared rows persist for this server, including when their first owner leaves.

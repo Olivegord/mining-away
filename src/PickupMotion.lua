@@ -1,7 +1,8 @@
 -- Render-only sampling of authoritative pickup snapshots. A short interpolation
 -- buffer preserves acceleration, gravity and floor contacts without chasing a
 -- succession of network targets. It never decides collection or grants ore.
-local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=38,AIR_DRAG=.9,GROUND_DRAG=14}
+-- Match the authoritative OreDrops trajectory when predicting between packets.
+local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18}
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function axis(a,b,va,vb,t,span)
  local slope=(b-a)/span
@@ -45,8 +46,8 @@ function M.tumble(age,landAge)
  age=math.max(0,age)
  -- Angular momentum carries across contact, then friction arrests the spin.
  -- Sampling absolute age keeps landing poses equal at all render rates.
- if type(landAge)~='number' or age<=landAge then return age*4.8 end
- return math.max(0,landAge)*4.8+(1-math.exp(-(age-landAge)*8))*.6
+ if type(landAge)~='number' or age<=landAge then return age*5.4 end
+ return math.max(0,landAge)*5.4+(1-math.exp(-(age-landAge)*16))*.22
 end
 function M.supportHeight(sx,sy,sz,rx,ry,rz)
  -- Vertical extent of a box rotated Rx * Ry * Rz. Keep the collectible's

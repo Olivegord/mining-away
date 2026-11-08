@@ -1651,8 +1651,8 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.85,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=38,
- AIR_DRAG=.9,GROUND_DRAG=14,RESTITUTION=.28}
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=70,
+ AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.18}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -1662,7 +1662,7 @@ end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
  local speed=10.5+(serial%5)*.65
- return math.cos(angle)*speed,15+index*.7,math.sin(angle)*speed
+ return math.cos(angle)*speed,17+index*.8,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -1687,7 +1687,7 @@ local function fall(s,dt)
   if dt<=1e-6 then break end
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
-   s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
+   s.landed=true;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
   end
   local contact=(s.vy+math.sqrt(s.vy*s.vy+2*O.GRAVITY*height))/O.GRAVITY
   local span=math.min(dt,contact)
@@ -1696,7 +1696,7 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
+  s.landed=true;s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -1706,7 +1706,7 @@ function O.step(s,target,dt,attract)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.age>=O.SCATTER_TIME and distance<=O.MAGNET_RANGE
+ local pulling=attract and s.landed==true and s.age>=O.SCATTER_TIME and distance<=O.MAGNET_RANGE
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
@@ -3826,8 +3826,16 @@ local Daylight = (function()
 local Daylight = {}
 function Daylight.apply()
  local authored = workspace:FindFirstChild('MiningAway')
- if authored and authored:GetAttribute('DronerevolutionMapVersion') then return end
  local lighting = game:GetService('Lighting')
+ if authored and authored:GetAttribute('DronerevolutionMapVersion') then
+  -- Keep the authored dawn, sky and grading. The sky's zero-size sun disk
+  -- hid the light source even though its SunRays effect was already enabled.
+  local sky=lighting:FindFirstChildOfClass('Sky')
+  if sky then sky.SunAngularSize=8 end
+  local rays=lighting:FindFirstChildOfClass('SunRaysEffect')
+  if rays then rays.Intensity=.17;rays.Spread=.85;rays.Enabled=true end
+  return
+ end
  local storage=game:GetService('ServerStorage')
  local archive=storage:FindFirstChild('OriginalQuarrySky')
  if not archive then archive=Instance.new('Folder');archive.Name='OriginalQuarrySky';archive.Parent=storage end
@@ -4195,12 +4203,22 @@ end
 -- The authored terraces use the stud pack for nearly every surface, including
 -- earth, plants and wood. Map those finishes to actual surface materials at
 -- server startup so the original parts, placement and archives stay intact.
+local quarryVariants={}
+function W.applyQuarryVariant(part)
+ part.MaterialVariant=quarryVariants[part.Material] or ''
+end
 function W.applyQuarryTextures(scene)
  if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
  local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
  if not terraces then return end
  local material=Enum.Material
  local rgb=Color3.fromRGB
+ -- Roblox restricts material definitions to Studio. The native document
+ -- carries the 64 px photo tiles; gameplay only selects the named variants.
+ for _,variant in ipairs(game:GetService('MaterialService'):GetChildren()) do
+  local base=variant:IsA('MaterialVariant') and variant.Name:match('^QuarryPhoto_(%w+)$')
+  if base then quarryVariants[material[base]]=variant.Name end
+ end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
   DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
@@ -4217,7 +4235,9 @@ function W.applyQuarryTextures(scene)
    if not part.CustomPhysicalProperties then part.CustomPhysicalProperties=part.CurrentPhysicalProperties end
    part.Material=base;part.MaterialVariant=''
   end
-  part.Color=tint;part.Reflectance=0
+  W.applyQuarryVariant(part)
+  part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
+  part.Reflectance=0
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
   part.FrontSurface=Enum.SurfaceType.Smooth;part.BackSurface=Enum.SurfaceType.Smooth
   part.LeftSurface=Enum.SurfaceType.Smooth;part.RightSurface=Enum.SurfaceType.Smooth
@@ -4251,7 +4271,7 @@ function W.applyQuarryTextures(scene)
     elseif prop:find('tree',1,true) then
      finish(part,material.Wood,rgb(99,77,56):Lerp(color,.19))
     elseif prop=='model' and variant=='' then
-     finish(part,material.Fabric,rgb(139,130,103):Lerp(color,.34))
+     finish(part,material.SmoothPlastic,rgb(227,203,156):Lerp(color,.57))
     end
    elseif part.Name=='ServiceDeck' or part.Parent.Name=='WornRouteSurfaces' then
     finish(part,material.Concrete,rgb(130,123,108))
@@ -5093,6 +5113,7 @@ function L.new(ctx: any): any
      local floor=Instance.new('Part');floor.Name=name;floor.Size=size;floor.Position=position
      floor.Anchored=true;floor.CanCollide=true;floor.CanQuery=true;floor.CanTouch=false
      floor.Material=material;floor.Color=color
+     W.applyQuarryVariant(floor)
      floor.TopSurface=Enum.SurfaceType.Smooth;floor.BottomSurface=Enum.SurfaceType.Smooth
      floor:SetAttribute('AuthoredMapSurface',true);floor:SetAttribute('GeneratedLogisticsFloor',true)
      floor.Parent=parent
@@ -5100,8 +5121,8 @@ function L.new(ctx: any): any
     local function floorAssembly(name: string,x: number,z: number,width: number,depth: number): ()
      if overflow:FindFirstChild(name) then return end
      local assembly=Instance.new('Model');assembly.Name=name
-     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(130,123,108),Enum.Material.Concrete)
-     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(126,104,82),Enum.Material.Sandstone)
+     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(230,226,215),Enum.Material.Concrete)
+     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(229,223,211),Enum.Material.Sandstone)
      assembly.Parent=overflow
     end
     -- Shared rows persist for this server, including when their first owner leaves.
@@ -5840,8 +5861,9 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
- part.Color=shell and Color3.fromRGB(100,91,108) or Color3.fromRGB(132,125,115):Lerp(field.color,.38)
+ part.Color=shell and Color3.fromRGB(183,171,194) or Color3.fromRGB(239,231,215):Lerp(field.color,.30)
  part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
+ World.applyQuarryVariant(part)
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
@@ -6026,7 +6048,7 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   local chip=r.part:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
-  chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=Enum.Material.Rock
+  chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=Enum.Material.Rock;chip.MaterialVariant=''
   -- Rewards retain their material hue independently of fracture shading.
   chip.Color=r.field.color
   chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0

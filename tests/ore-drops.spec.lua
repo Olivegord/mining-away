@@ -11,6 +11,20 @@ end)
 check('scatter has a visible delay before collection',function()
  local s=drop();for _=1,7 do assert(not O.step(s,{x=0,y=1,z=0},.05,true)) end
 end)
+check('a high launch must land even after the scatter timer elapses',function()
+ local s=drop();s.y=15;s.vy=19
+ local target={x=3,y=2,z=0}
+ while s.age<O.SCATTER_TIME do O.step(s,target,.01,true) end
+ assert(not s.landed and not s.homing and s.y>s.floor)
+ local impact
+ for _=1,100 do
+  local _,speed=O.step(s,target,.01,true)
+  if speed>0 then impact=speed;break end
+  assert(not s.homing)
+ end
+ assert(impact and s.landed)
+ O.step(s,target,.01,true);assert(s.homing)
+end)
 check('magnet catches a player moving at walking speed at 30 60 and 144 FPS',function()
  for _,fps in ipairs({30,60,144}) do
   local s=drop(-16);local picked=false

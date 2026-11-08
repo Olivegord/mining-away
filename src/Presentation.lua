@@ -421,7 +421,10 @@ function P:_fragment(template,frame,color,transparency,scale,velocity,spin,floor
   self.fragments[replace].part:Destroy();table.remove(self.fragments,replace)
  end
  local part=rock and Instance.new('Part') or template:Clone();if not part then return end
- if rock then part.Size=template.Size;part.Material=Enum.Material.Rock;part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth end
+ if rock then
+  part.Size=template.Size;part.Material=template.Material;part.MaterialVariant=template.MaterialVariant
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+ end
  -- Clone each real mesh once. Nested emitter parts and joints must not travel twice.
  for _,object in ipairs(part:GetDescendants()) do
   if object:IsA('BasePart') or object:IsA('LuaSourceContainer') or object:IsA('JointInstance')

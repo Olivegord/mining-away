@@ -221,12 +221,22 @@ end
 -- The authored terraces use the stud pack for nearly every surface, including
 -- earth, plants and wood. Map those finishes to actual surface materials at
 -- server startup so the original parts, placement and archives stay intact.
+local quarryVariants={}
+function W.applyQuarryVariant(part)
+ part.MaterialVariant=quarryVariants[part.Material] or ''
+end
 function W.applyQuarryTextures(scene)
  if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
  local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
  if not terraces then return end
  local material=Enum.Material
  local rgb=Color3.fromRGB
+ -- Roblox restricts material definitions to Studio. The native document
+ -- carries the 64 px photo tiles; gameplay only selects the named variants.
+ for _,variant in ipairs(game:GetService('MaterialService'):GetChildren()) do
+  local base=variant:IsA('MaterialVariant') and variant.Name:match('^QuarryPhoto_(%w+)$')
+  if base then quarryVariants[material[base]]=variant.Name end
+ end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
   DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
@@ -243,7 +253,9 @@ function W.applyQuarryTextures(scene)
    if not part.CustomPhysicalProperties then part.CustomPhysicalProperties=part.CurrentPhysicalProperties end
    part.Material=base;part.MaterialVariant=''
   end
-  part.Color=tint;part.Reflectance=0
+  W.applyQuarryVariant(part)
+  part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
+  part.Reflectance=0
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
   part.FrontSurface=Enum.SurfaceType.Smooth;part.BackSurface=Enum.SurfaceType.Smooth
   part.LeftSurface=Enum.SurfaceType.Smooth;part.RightSurface=Enum.SurfaceType.Smooth
@@ -277,7 +289,7 @@ function W.applyQuarryTextures(scene)
     elseif prop:find('tree',1,true) then
      finish(part,material.Wood,rgb(99,77,56):Lerp(color,.19))
     elseif prop=='model' and variant=='' then
-     finish(part,material.Fabric,rgb(139,130,103):Lerp(color,.34))
+     finish(part,material.SmoothPlastic,rgb(227,203,156):Lerp(color,.57))
     end
    elseif part.Name=='ServiceDeck' or part.Parent.Name=='WornRouteSurfaces' then
     finish(part,material.Concrete,rgb(130,123,108))
