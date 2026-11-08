@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — environment rejection and composition rework
+
+The owner rejected the quarry environment again after v39. The stated problems are poor scale, weak map composition, muddy textures, fog that is not visible in play, and lights that do not visibly contribute. Inspect the actual in-game result and use the supplied references more closely. Build a convincing hierarchy of large landmarks, supporting forms and readable approaches, with distinct foliage, stone and ground values and visible local lights. Low-resolution photo textures and the original cubic ore remain required. Prior screenshots and successful publication are not acceptance of the art. Keep the static environment current in the shared Studio Edit Workspace and the canonical native file, as recorded in AGENTS.md.
+
+Use different pattern sizes where they help players recognize a surface: clearly laid paths and station pads beside quieter rock faces and mining beds. The later reference illustrates this separation; carry over its texture hierarchy without the cloth, flowers, stars or craft theme.
+
 ## November 7 latest — brighter quarry lighting and dry surfaces
 
 After the quarry and gameplay changes are integrated, make the shared quarry feel brighter and more stylized. Keep some distance fog, make the sun render consistently, and give dry surfaces an appropriately matte finish. In particular, dirt should not look like shiny plastic. Preserve the authored routes, models, and low-resolution photo texture character.

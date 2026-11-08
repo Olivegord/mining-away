@@ -235,9 +235,9 @@ function W.applyOreFinish(part)
  end
 end
 function W.applyQuarryTextures(scene)
- if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
+ if not scene.root:GetAttribute('DronerevolutionMapVersion') then return false end
  local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
- if not terraces then return end
+ if not terraces then return false end
  local material=Enum.Material
  local rgb=Color3.fromRGB
  -- Roblox restricts material definitions to Studio. The native document
@@ -247,6 +247,9 @@ function W.applyQuarryTextures(scene)
   if base then quarryVariants[material[base]]=variant.Name end
   if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Polished' then polishedOre=true end
  end
+ -- The shared Edit map and canonical file already carry the authored scenery.
+ -- Still register materials for runtime ore and debris on every server.
+ if scene.root:GetAttribute('QuarrySceneryAuthored') then return true end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
   DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
@@ -255,6 +258,16 @@ function W.applyQuarryTextures(scene)
   DR_CliffStrata={material.Sandstone,rgb(126,104,82)},
   DR_ExposedRock={material.Slate,rgb(109,98,86)},
   DR_WornPath={material.Pavement,rgb(143,134,116)},
+ }
+ -- Keep the photo palette legible after multiplication by the part color.
+ -- Walkable stone and earth should read as different surfaces at a glance.
+ local photoTint={
+  [material.Grass]=rgb(221,224,201),
+  [material.LeafyGrass]=rgb(201,216,198),
+  [material.Sandstone]=rgb(255,237,219),
+  [material.Pebble]=rgb(248,230,205),
+  [material.Pavement]=rgb(229,239,255),
+  [material.Concrete]=rgb(248,232,207),
  }
  local function finish(part,base,tint,foliageVariant)
   if part.Transparency>=1 or part.Material==material.Neon then return end
@@ -266,12 +279,8 @@ function W.applyQuarryTextures(scene)
   W.applyQuarryVariant(part)
   if foliageVariant then
    part.MaterialVariant=foliageVariant;part.Color=tint
-  elseif base==material.Grass or base==material.LeafyGrass then
-   -- The aerial tile is olive in its diffuse map. A green tint keeps grass
-   -- legible against the orange cliffs under the authored dawn light.
-   part.Color=rgb(154,239,197):Lerp(tint,.12)
-  elseif base==material.Concrete or base==material.Pavement then
-   part.Color=rgb(211,228,251):Lerp(tint,.14)
+  elseif photoTint[base] and quarryVariants[base] then
+   part.Color=photoTint[base]:Lerp(tint,.14)
   else
    part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
   end
@@ -293,7 +302,7 @@ function W.applyQuarryTextures(scene)
     finish(part,curb and material.Concrete or material.Pavement,curb and rgb(105,99,90) or rgb(151,139,114))
    elseif group.Name=='StudPackCliffs' then
     if variant=='Studs' then finish(part,material.Grass,rgb(100,109,72):Lerp(color,.17))
-    elseif variant=='Universal' then finish(part,material.Rock,rgb(117,101,84):Lerp(color,.22)) end
+    elseif variant=='Universal' then finish(part,material.Sandstone,rgb(148,110,87):Lerp(color,.22)) end
    elseif group.Name=='WoodenMarketStalls' then
     if color.R>color.G*1.25 and color.G>color.B*1.2 then
      finish(part,material.WoodPlanks,rgb(123,98,74):Lerp(color,.22))
@@ -379,6 +388,7 @@ function W.applyQuarryTextures(scene)
   end
  end
  QuarryBiomes.build(scene,terraces)
+ return true
 end
 function W.ensureImpactField(root,fields)
  if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end

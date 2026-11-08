@@ -4277,6 +4277,23 @@ local ivory=rgb(249,239,207)
 local cool={rgb(65,108,183),rgb(105,158,226),rgb(166,222,252)}
 local coral={rgb(154,61,77),rgb(221,102,117),rgb(251,172,142)}
 
+local function glow(part,color,range,brightness)
+ local lamp=Instance.new('PointLight');lamp.Name='LocalGlow';lamp.Color=color
+ lamp.Range=range;lamp.Brightness=brightness;lamp.Shadows=false;lamp.Parent=part
+end
+
+local function block(parent,name,frame,size,color,variant)
+ local p=Instance.new('Part');p.Name=name;p.Anchored=true
+ p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
+ p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
+ p.CFrame=frame;p.Size=size;p.Color=color;p.Material=Enum.Material.Slate
+ p.MaterialVariant=variant or 'QuarryBiome_Chalk'
+ local definition=game:GetService('MaterialService'):FindFirstChild(p.MaterialVariant)
+ if definition and definition:IsA('MaterialVariant') then p.Material=definition.BaseMaterial end
+ p.Parent=parent
+ return p
+end
+
 local function cosmetic(part)
  part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false
  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
@@ -4304,44 +4321,80 @@ end
 
 local function mushroom(parent,ground,height,radius,lean,palette,index)
  local tree=Instance.new('Model');tree.Name=palette==cool and 'Blue Trumpet' or 'Coral Fan';tree.Parent=parent
- local neck=ground+Vector3.yAxis*(height*.63)+lean*.46
- local previous=ground-Vector3.yAxis*.22
- for step=1,5 do
-  local t=step/5
-  local next=ground+Vector3.yAxis*(height*.63*t)+lean*(.46*t*t)
-  local stem=segment(tree,'FibrousStem',previous,next,radius*(.18-.07*t),ivory:Lerp(palette[2],t*.48),Enum.Material.Concrete,'QuarryPhoto_Concrete')
-  stem.CastShadow=true
-  previous=next
+ tree:SetAttribute('BiomeLandmark',true)
+ local function stalk(t)
+  return ground+Vector3.yAxis*(height*.77*t)+lean*(t*t)
  end
- local brim,shoulder,upper={},{},{}
- local n=height>20 and 14 or 10
+ local stemRings={};local segments=height>25 and 7 or 5
+ for k=0,segments do
+  local t=k/segments;local ring={}
+  local width=radius*(.085+.09*(1-t)^3+.055*t^5)
+  for j=1,8 do
+   local a=(j-1)*math.pi*.25
+   ring[j]=stalk(t)+Vector3.new(math.cos(a),0,math.sin(a))*width*(1+.065*math.sin(j*2.1+index))
+  end
+  stemRings[k+1]=ring
+ end
+ local function stemFinish(part)
+  cosmetic(part);part.Name='CurvedFibrousStem';part.Material=Enum.Material.Slate;part.MaterialVariant='QuarryBiome_Chalk'
+ end
+ for k=1,segments do
+  local t=k/segments
+  for j=1,8 do
+   local next=j%8+1
+   local tint=ivory:Lerp(palette[2],t*t*.65):Lerp(palette[1],(j%3)*.026)
+   Facets.triangle(tree,stemRings[k][j],stemRings[k+1][j],stemRings[k+1][next],tint,stemFinish)
+   Facets.triangle(tree,stemRings[k][j],stemRings[k+1][next],stemRings[k][next],tint,stemFinish)
+  end
+ end
+ -- Buttresses give the trunk weight where it meets the ground.
+ for i=1,index>50 and 0 or 5 do
+  local a=i*math.pi*.4+index
+  segment(tree,'StemButtress',ground+Vector3.new(math.cos(a),0,math.sin(a))*radius*.24,
+   stalk(.22),radius*.09,ivory,Enum.Material.Slate,'QuarryBiome_Chalk')
+ end
+ local n=height>34 and 16 or 12
+ local neck=stalk(1);local rings={{},{},{}};local tops={{},{},{}}
  for i=1,n do
-  local angle=(i-1)*2*math.pi/n
-  local wave=math.sin(3*angle+index*.61)*.74+math.sin(5*angle+index)*.26
-  local fan=palette==coral and (.88+.18*math.cos(angle-index)) or 1
-  local reach=radius*(fan+wave*.10+math.cos(angle+index)*.06)
-  local radial=Vector3.new(math.cos(angle),0,math.sin(angle))
-  shoulder[i]=neck+radial*(reach*.54)+Vector3.yAxis*(height*.225)+lean*.31
-  brim[i]=neck+radial*(reach*.96)+Vector3.yAxis*(height*(.33+.043*wave))+lean*.54
-  upper[i]=brim[i]+radial*(reach*.04)+Vector3.yAxis*(height*(.024+.009*wave))
+  local a=(i-1)*2*math.pi/n
+  local wave=math.sin(3*a+index*.61)*.7+math.sin(5*a+index)*.3
+  local fan=palette==coral and (.87+.18*math.cos(a-index)) or 1
+  local radial=Vector3.new(math.cos(a),0,math.sin(a))
+  local reach=radius*(fan+wave*.075)
+  rings[1][i]=neck+radial*radius*.14
+  rings[2][i]=neck+radial*reach*.48+Vector3.yAxis*height*.135+lean*.09
+  rings[3][i]=neck+radial*reach+Vector3.yAxis*height*(.19+.025*wave)+lean*.17
+  for k=1,3 do tops[k][i]=rings[k][i]+Vector3.yAxis*(k==3 and .7 or 1.1) end
  end
  for i=1,n do
   local j=i%n+1
-  local shade=palette[1]:Lerp(palette[2],.47+.19*math.cos(i*1.9+index))
-  Facets.triangle(tree,neck,shoulder[i],shoulder[j],shade,capFacet)
-  Facets.triangle(tree,shoulder[i],brim[i],brim[j],shade:Lerp(palette[2],.32),capFacet)
-  Facets.triangle(tree,shoulder[i],brim[j],shoulder[j],shade:Lerp(palette[2],.20),capFacet)
-  Facets.triangle(tree,brim[i],upper[i],upper[j],ivory,capFacet)
-  Facets.triangle(tree,brim[i],upper[j],brim[j],ivory,capFacet)
-  Facets.triangle(tree,neck+Vector3.yAxis*(height*.09),upper[i],upper[j],shade:Lerp(palette[2],.38),capFacet)
-  if i%5==1 then
-   local a=shoulder[i]:Lerp(brim[i],.26)-Vector3.yAxis*.18
-   local rib=segment(tree,'LuminousGill',a,shoulder[i]:Lerp(brim[i],.55)-Vector3.yAxis*.18,radius*.012,palette[3],Enum.Material.Neon)
-   rib.CastShadow=false
-   if height>24 and i==1 then
-    local l=Instance.new('PointLight');l.Name='GillGlow';l.Color=palette[2];l.Brightness=.8;l.Range=15;l.Shadows=false;l.Parent=rib
+  local shade=palette[1]:Lerp(palette[2],.34+.15*math.sin(i*1.3+index))
+  for k=1,2 do
+   Facets.triangle(tree,rings[k][i],rings[k+1][i],rings[k+1][j],shade,capFacet)
+   Facets.triangle(tree,rings[k][i],rings[k+1][j],rings[k][j],shade,capFacet)
+   local upper=palette[2]:Lerp(palette[3],.10+.06*(i%3))
+   Facets.triangle(tree,tops[k][i],tops[k+1][j],tops[k+1][i],upper,capFacet)
+   Facets.triangle(tree,tops[k][i],tops[k][j],tops[k+1][j],upper,capFacet)
+  end
+  Facets.triangle(tree,rings[3][i],tops[3][i],tops[3][j],ivory,capFacet)
+  Facets.triangle(tree,rings[3][i],tops[3][j],rings[3][j],ivory,capFacet)
+  -- Continuous ribbed undersides replace the disconnected white dashes.
+  for k=1,2 do
+   local rib=segment(tree,'RadialGill',rings[k][i]-Vector3.yAxis*.24,rings[k+1][i]-Vector3.yAxis*.24,
+    radius*.018,palette[1]:Lerp(ivory,.21),Enum.Material.Slate,'QuarryBiome_Chalk')
+   if i%5==1 then
+    local a=rings[k][i]:Lerp(rings[k+1][i],.18)-Vector3.yAxis*.36
+    local b=rings[k][i]:Lerp(rings[k+1][i],.91)-Vector3.yAxis*.36
+    local glowRib=segment(tree,'BioluminescentGill',a,b,radius*.009,palette[3],Enum.Material.Neon)
+    glowRib.CastShadow=false
+    if k==1 and i==1 then glow(glowRib,palette[3],math.min(36,height*.65),1.5) end
    end
   end
+ end
+ -- Coral shelves branch from the same curved stalk, as in the canyon reference.
+ if palette==coral and height>25 and index<50 then
+  mushroom(tree,stalk(.35),height*.51,radius*.46,Vector3.new(8,0,4),palette,index+60)
+  mushroom(tree,stalk(.65),height*.31,radius*.34,Vector3.new(-6,0,-3),palette,index+80)
  end
 end
 
@@ -4361,52 +4414,47 @@ local function patchEdge(part,bed)
 end
 
 local function cobalt(biome,bed,terraces,ground)
+ -- A dominant crown and two supporting silhouettes frame the open mining floor.
  for i,spec in ipairs({
-  {37,6,32,14,Vector3.new(8,0,-3),cool},
-  {20,41,27,12,Vector3.new(4,0,7),cool},
-  {-20,36,19,9,Vector3.new(-7,0,4),coral},
-  {18,-42,24,10,Vector3.new(5,0,-5),cool},
-  {-35,27,12,5.5,Vector3.new(-2,0,3),cool},
-  {-45,22,8,3.7,Vector3.new(-1,0,1.8),coral},
+  {39,10,58,25,Vector3.new(-10,0,-5),cool},
+  {18,-41,44,21,Vector3.new(5,0,5),cool},
+  {-20,38,35,17,Vector3.new(-8,0,-5),coral},
+  {34,39,18,9,Vector3.new(-4,0,2),coral},
+  {-39,25,12,6,Vector3.new(2,0,1),cool},
  }) do
   local pos=ground(spec[1],spec[2]);if pos then mushroom(biome,pos,spec[3],spec[4],spec[5],spec[6],i) end
  end
- -- Carry the cooler ground into the approach, fading back into the original
- -- grass on the next ledges. Field ownership and rock placement stay on bed.
  for _,part in ipairs(terraces:GetDescendants()) do
-  if part:IsA('BasePart') and part.MaterialVariant=='QuarryPhoto_Grass' then
+  if part:IsA('BasePart') then
    local edge,y=patchEdge(part,bed)
-   if math.abs(y)<7 then
-    local weight=.65*(1-math.clamp(edge/27,0,1))
-    part.Color=part.Color:Lerp(rgb(122,225,249),weight)
+   if edge<26 and y>-25 and y<7 then
+    if part.MaterialVariant=='QuarryPhoto_Grass' and edge<15 then
+     part.Material=Enum.Material.Slate;part.MaterialVariant='QuarryBiome_Chalk'
+     part.Color=rgb(201,222,194):Lerp(rgb(139,183,166),math.clamp(edge/26,0,1))
+    elseif part.MaterialVariant=='QuarryPhoto_Rock' or part.MaterialVariant=='QuarryPhoto_Sandstone' then
+     part.Material=Enum.Material.Slate;part.MaterialVariant='QuarryBiome_Shale';part.Color=rgb(167,185,213)
+    end
    end
   end
  end
- bed.Color=rgb(177,211,247)
+ bed.Material=Enum.Material.Slate;bed.MaterialVariant='QuarryBiome_Shale';bed.Color=rgb(141,164,196)
 end
 
-local function spire(parent,base,width,height,lean,tint,variant,column)
- local foot,crest={},{}
- local peak=base+Vector3.yAxis*height+lean
+local function spire(parent,base,width,height,lean,tint,variant)
+ -- Offset vertical stone plates make broken cliffs with readable ledges and fissures.
+ local group=Instance.new('Model');group.Name='FracturedCliff';group.Parent=parent
  for i=1,5 do
-  local angle=(i-1)*2*math.pi/5
-  local spoke=Vector3.new(math.cos(angle),0,math.sin(angle))
-  foot[i]=base+spoke*(width*(.76+i*.055))
-  local elevation=column and (.73+i*.032) or (.48+i*.054)
-  local shoulder=column and (.59+i*.031) or (.42+i*.026)
-  crest[i]=base+Vector3.yAxis*(height*elevation)+lean*.67+spoke*(width*shoulder)
+  local offset=(i-3)*width*.38
+  local h=height*({.59,.84,1,.76,.46})[i]
+  local at=base+Vector3.new(offset,h*.5,-math.abs(i-3)*width*.20)+lean*(h/height)*.4
+  local p=block(group,'SplitRockFace',CFrame.new(at)*CFrame.Angles(.025*(i-3),.13*(i-2),-.035*(i-3)),
+   Vector3.new(width*(.38+.05*(i%2)),h,width*(.74+.11*(i%3))),tint:Lerp(rgb(105,132,158),.06*(i%3)),variant)
+  local crown=Instance.new('WedgePart');crown.Name='JaggedCrown';cosmetic(crown)
+  crown.Size=Vector3.new(p.Size.Z*.99,height*(.12+.025*(i%3)),p.Size.X*1.02)
+  crown.CFrame=p.CFrame*CFrame.new(0,h*.5+crown.Size.Y*.5-.15,0)*CFrame.Angles(0,i%2==0 and math.pi*.5 or -math.pi*.5,0)
+  crown.Color=tint;crown.Material=Enum.Material.Slate;crown.MaterialVariant=variant;crown.Parent=group
  end
- local function finish(part)
-  cosmetic(part);part.Name='CliffSpire';part.Material=Enum.Material.Slate;part.MaterialVariant=variant
- end
- for i=1,5 do
-  local j=i%5+1
-  local shade=tint:Lerp(rgb(122,152,169),i*.052)
-  Facets.triangle(parent,foot[i],crest[i],foot[j],shade,finish)
-  Facets.triangle(parent,foot[j],crest[i],crest[j],shade,finish)
-  Facets.triangle(parent,crest[i],peak,crest[j],shade,finish)
- end
- return peak
+ return base+Vector3.yAxis*height+lean*.4
 end
 
 local function ruby(biome,bed,terraces,ground)
@@ -4416,20 +4464,20 @@ local function ruby(biome,bed,terraces,ground)
   if edge>27 or y>5 or y< -25 then continue end
   local noise=math.noise(part.Position.X*.058,part.Position.Z*.058)
   if part.MaterialVariant=='QuarryPhoto_Grass' and (edge<9 or noise>edge/55-.28) then
-   part.MaterialVariant='QuarryBiome_Crimson';part.Color=rgb(189,103,108):Lerp(rgb(155,71,76),math.clamp(.5+noise,0,1))
-  elseif (part.MaterialVariant=='QuarryPhoto_Sandstone' or part.MaterialVariant=='QuarryPhoto_Rock') and edge<18 then
+   part.MaterialVariant='QuarryBiome_Crimson';part.Color=rgb(248,237,221):Lerp(rgb(221,215,204),math.clamp(.5+noise,0,1))
+  elseif (part.MaterialVariant=='QuarryPhoto_Sandstone' or part.MaterialVariant=='QuarryPhoto_Rock' or (part.Name=='RubyEdgeWeathering' and part.MaterialVariant=='QuarryPhoto_Pebble')) and edge<18 then
    part.Material=Enum.Material.Slate;part.MaterialVariant='QuarryBiome_Shale'
    part.Color=rgb(174,195,223):Lerp(rgb(116,132,156),math.clamp(.45+noise,0,1))
   end
  end
  bed.Material=Enum.Material.Slate;bed.MaterialVariant='QuarryBiome_Shale';bed.Color=rgb(149,163,185)
- for _,spec in ipairs({{-37,9,5.8,20,-4},{-37,-13,4.8,26,-3},{-34,-27,3.9,15,-2},{-19,37,4.3,14,2},{16,38,3.1,9,1}}) do
+ for _,spec in ipairs({{-39,10,13,43,-4},{-38,-16,11,57,-3},{-34,-34,8,32,-2},{-17,38,6,18,2},{17,39,4,11,1}}) do
   local p=ground(spec[1],spec[2])
   if p then
    spire(biome,p,spec[3],spec[4],Vector3.new(spec[5],0,-1),rgb(208,220,240),'QuarryBiome_Shale')
    local seam=p+Vector3.new(spec[3]*.64,1.3,0)
-   local vein=segment(biome,'RubyVein',seam,seam+Vector3.new(-.45,spec[4]*.21,-.4),.15,rgb(250,87,104),Enum.Material.Neon)
-   vein.CastShadow=false
+   local vein=segment(biome,'RubyVein',seam,seam+Vector3.new(-.45,spec[4]*.21,-.4),.34,rgb(255,117,134),Enum.Material.Neon)
+   vein.CastShadow=false;glow(vein,rgb(255,103,122),16,1.7)
   end
  end
 end
@@ -4441,7 +4489,7 @@ local function basin(terrain,center,rx,rz,depth,minCorner,maxCorner)
  local channels=terrain:ReadVoxelChannels(region,4,{'SolidMaterial','SolidOccupancy','LiquidOccupancy'})
  local materials,solid,water=channels.SolidMaterial,channels.SolidOccupancy,channels.LiquidOccupancy
  local origin=region.CFrame.Position-region.Size*.5
- local salt,sand,grass=Enum.Material.Salt,Enum.Material.Sand,Enum.Material.Grass
+ local salt,sand,grass=Enum.Material.Salt,Enum.Material.Sand,Enum.Material.Ground
  local function profile(x,z)
   local dx,dz=x-center.X,z-center.Z
   local angle=math.atan2(dz/rz,dx/rx)
@@ -4482,63 +4530,51 @@ local function basin(terrain,center,rx,rz,depth,minCorner,maxCorner)
 end
 
 local function rockMass(parent,base,width,depth,height,turn,seed)
- local color=rgb(240,249,255)
- local rings={}
- local sides=height>12 and 7 or 5
- local bands=height>12 and {{0,1},{.19,1.12},{.63,.79},{.86,.70},{1,.45}} or {{0,1},{.38,.97},{.90,.55}}
- for j,spec in ipairs(bands) do
-  local points={}
-  for i=1,sides do
-   local a=(i-1)*math.pi*2/sides+turn
-   local rough=1+.17*math.sin(i*3.1+seed)+.08*math.cos(i*2.4+j)
-   points[i]=base+Vector3.new(math.cos(a)*width*spec[2]*rough+height*.10*spec[1],
-    height*(spec[1]+(j==1 and 0 or .045*math.cos(i*1.7+j*.37+seed))),
-    math.sin(a)*depth*spec[2]*rough-height*.045*spec[1])
-  end
-  rings[j]=points
- end
- local function finish(part)
-  cosmetic(part);part.Name='StratifiedChalk';part.Material=Enum.Material.Slate
-  part.MaterialVariant='QuarryBiome_Chalk'
- end
- for j=1,#rings-1 do
-  for i=1,sides do
-   local k=i%sides+1
-   local shade=color:Lerp(rgb(150,183,199),.15+.18*(.5+.5*math.cos(i*1.7+seed))+(j==1 and .10 or 0))
-   local a,b,c,d=rings[j][i],rings[j][k],rings[j+1][k],rings[j+1][i]
-   Facets.triangle(parent,a,b,c,shade,finish);Facets.triangle(parent,a,c,d,shade,finish)
+ local group=Instance.new('Model');group.Name='WeatheredWhiteCliff';group.Parent=parent
+ local basis=CFrame.new(base)*CFrame.Angles(0,turn,0)
+ -- Broad planar faces and stepped fractures, with no rounded cone silhouette.
+ for i=1,4 do
+  local h=height*({.72,1,.89,.56})[i]
+  local x=(i-2.5)*width*.49
+  local tint=rgb(246,247,229):Lerp(rgb(157,190,203),.035+((i+seed)%3)*.055)
+  local slab=block(group,'ChalkSlab',basis*CFrame.new(x,h*.5,(i%2)*depth*.14)*CFrame.Angles(.018*(i-2),.035*(i-2),.045*(i-2)),
+   Vector3.new(width*.57,h,depth*(.9+.11*(i%2))),tint,'QuarryBiome_Chalk')
+  if h>12 then
+   block(group,'ChalkLedge',slab.CFrame*CFrame.new(0,h*.15,-depth*.10)*CFrame.Angles(0,.06,-.06),
+    Vector3.new(width*.63,height*.09,depth*1.05),tint:Lerp(ivory,.2),'QuarryBiome_Chalk')
+   block(group,'BrokenSummit',slab.CFrame*CFrame.new(0,h*.48,0)*CFrame.Angles(.12,0,-.10),
+    Vector3.new(width*.59,height*.075,depth*.89),tint,'QuarryBiome_Chalk')
   end
  end
- local top=base+Vector3.new(height*.10,height*.99,-height*.045)
- local last=rings[#rings]
- for i=1,sides do Facets.triangle(parent,last[i],last[i%sides+1],top,color,finish) end
- return top
+ return basis:PointToWorldSpace(Vector3.new(-width*.25,height+.1,0))
 end
 
 local function foliage(parent,base,scale,seed)
- for i=1,5 do
+ -- Layered leaf planes keep a leafy silhouette instead of spherical clusters.
+ for i=1,7 do
   local angle=(i-1)*2.4+seed
-  local leaf=Instance.new('Part');leaf.Name='ShoreFoliage';leaf.Shape=Enum.PartType.Ball
-  cosmetic(leaf)
-  leaf.Size=Vector3.new(2.5+((i*7)%3)*.42,1.1+i%2*.48,2.4)*scale
-  leaf.CFrame=CFrame.new(base+Vector3.new(math.cos(angle)*1.1,i%2*.5,math.sin(angle)*1.1)*scale)*CFrame.Angles(.14,angle,.22)
-  leaf.Color=rgb(139,200,136):Lerp(rgb(209,232,158),i*.11)
-  leaf.Material=Enum.Material.LeafyGrass;leaf.MaterialVariant='QuarryFoliage_Canopy'
-  leaf.Parent=parent
+  local reach=(i%3)*1.05*scale
+  local size=Vector3.new(3.4+(i%2)*.7,.75+(i%3)*.16,2.8)*scale
+  local at=base+Vector3.new(math.cos(angle)*reach,(i%3)*.36,math.sin(angle)*reach)
+  block(parent,'LeafyShelf',CFrame.new(at)*CFrame.Angles(.07*math.sin(i),angle,.14*math.cos(i)),size,
+   rgb(213,244,171):Lerp(rgb(124,203,142),.14*(i%4)),'QuarryFoliage_Canopy')
  end
 end
 
 local function causeway(parent,origin)
- -- Flagstone crossing from the quarry to the overlook, with one low parapet.
- for i=1,7 do
-  local p=Instance.new('Part');p.Name='LagoonCauseway';cosmetic(p)
+ -- A complete narrow crossing, leading through the water to the far overlook.
+ for i=0,30 do
+  local t=i/30
+  local bend=math.sin(t*math.pi)*4.2
+  local at=origin+Vector3.new(i*3.18,.45+math.sin(t*math.pi)*1.3-.9*t^5,bend)
+  local p=block(parent,'LagoonCauseway',CFrame.new(at)*CFrame.Angles(0,.045*math.cos(t*math.pi),0),
+   Vector3.new(3.27,.95,7.8),ivory:Lerp(rgb(171,205,198),.06*(i%3)),'QuarryBiome_Chalk')
   p.CanCollide=true;p.CanQuery=true;p:SetAttribute('WalkRoute',true)
-  p.Size=Vector3.new(2.9,.9,7.8-.17*(i%2));p.Position=origin+Vector3.new(i*2.79,-.45+math.min(i-1,3)*.34,.11*math.sin(i))
-  p.Color=ivory:Lerp(rgb(155,194,190),.13+.15*(i%3))
-  p.Material=Enum.Material.Slate;p.MaterialVariant='QuarryBiome_Chalk';p.Parent=parent
-  if i==2 or i==5 or i==7 then
-   local foot=p.Position+Vector3.new(0,-3.5,2.4)
-   rockMass(parent,foot,1.25,1.32,5.1,.4,i)
+  if i%4==0 then
+   block(parent,'BridgePier',CFrame.new(at+Vector3.new(0,-6.5,0)),Vector3.new(2.5,12,5.5),rgb(204,222,218),'QuarryBiome_Chalk')
+  end
+  if i>2 and i<29 and i%3~=0 then
+   block(parent,'LowParapet',CFrame.new(at+Vector3.new(0,.9,3.65)),Vector3.new(3.24,1.5,.65),ivory,'QuarryBiome_Chalk')
   end
  end
 end
@@ -4549,12 +4585,12 @@ local function shoreTree(parent,base,h,lean,index)
  local bark=rgb(220,212,176)
  segment(parent,'WindBentTrunk',base-Vector3.yAxis*.18,fork,h*.11,bark,Enum.Material.Wood,'QuarryFoliage_Bark')
  segment(parent,'WindBentTrunk',fork,top,h*.073,bark,Enum.Material.Wood,'QuarryFoliage_Bark')
- foliage(parent,top,h*.20,index)
+ foliage(parent,top,h*.15,index)
  for i=1,3 do
   local theta=i*2.4+index
   local endPoint=fork+Vector3.new(math.cos(theta)*h*.30,h*(.16+i*.04),math.sin(theta)*h*.26)
   segment(parent,'WindBentBranch',fork,endPoint,h*.045,bark,Enum.Material.Wood,'QuarryFoliage_Bark')
-  foliage(parent,endPoint,h*.13,i+index)
+  foliage(parent,endPoint,h*.10,i+index)
  end
 end
 
@@ -4562,31 +4598,38 @@ local function lagoon(parent,bed)
  local terrain=workspace.Terrain
  local center=bed.Position+Vector3.new(95,-5,0)
  local profile=basin(terrain,center,49,39,7,bed.Position+Vector3.new(48,-34,-44),center+Vector3.new(54,13,44))
- causeway(parent,bed.Position+Vector3.new(43,.55,0))
- -- Give the view from the causeway a clear foreground, open water in the
- -- middle, and two offset cliff groups beyond it. Leave the waterline legible.
- for i,s in ipairs({{26,-22,8.4,7.2,29},{34,-17,6.0,6.2,20},{19,-27,5.1,5.2,15},
-  {35,15,6.4,6.0,16},{39,7,4.1,4.9,11},{10,30,4.6,4.2,6},{-9,29,3.6,4.2,5},
-  {-27,16,4.2,4.7,3.8},{13,-17,3.7,3.3,4.5}}) do
-  local x,z=center.X+s[1],center.Z+s[2]
-  local _,y=profile(x,z)
-  local base=Vector3.new(x,y-1.5,z)
-  local peak=rockMass(parent,base,s[3],s[4],s[5],i*.51,i)
-  if i<=7 then
-   foliage(parent,peak-Vector3.yAxis*.22,i<=3 and 1.8 or 1.15,i)
-   if i<=3 then foliage(parent,base+Vector3.new(-s[3]*.61,s[5]*.59,s[4]*.25),1.08,i+7) end
+ causeway(parent,bed.Position+Vector3.new(40,.55,0))
+ -- One large broken cliff dominates the far bank. Lower shelves overlap it,
+ -- and open water is held between the foreground crossing and the stone wall.
+ for i,s in ipairs({{29,-23,12,9,60},{39,-14,9,8,44},{15,-28,8,7,30},
+  {35,20,8,7,34},{42,7,5,6,21},{10,31,7,5,8},{-9,29,5,4,5},
+  {-28,18,5,5,4},{11,-17,4,3,5}}) do
+  local x,z=center.X+s[1],center.Z+s[2];local _,y=profile(x,z)
+  local base=Vector3.new(x,y-1.1,z)
+  local peak=rockMass(parent,base,s[3],s[4],s[5],-.12+i*.16,i)
+  foliage(parent,peak, i<=4 and 2.15 or 1.4,i)
+  if i<=4 then
+   foliage(parent,base+Vector3.new(-s[3]*.5,s[5]*.64,-s[4]*.45),1.65,i+7)
+   foliage(parent,base+Vector3.new(s[3]*.45,s[5]*.31,s[4]*.45),1.3,i+12)
   end
  end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={terrain};params.IgnoreWater=true
- for i,s in ipairs({{-34,14,7.2},{-31,-17,8.6},{-20,-29,5.5},{-7,-32,0},{7,32,0},{24,27,5.8},{30,-25,0}}) do
-  local x,z=center.X+s[1],center.Z+s[2]
-  local r,expected=profile(x,z)
+ for i,s in ipairs({{-34,19,10},{-31,-22,12},{-20,-29,10},{-7,-32,0},{7,32,0},{24,27,12},{30,-25,0}}) do
+  local x,z=center.X+s[1],center.Z+s[2];local r,expected=profile(x,z)
   local hit=workspace:Raycast(Vector3.new(x,center.Y+24,z),Vector3.new(0,-36,0),params)
   local ground=hit and hit.Position or (r<.94 and Vector3.new(x,expected,z))
   if ground and ground.Y>center.Y+.15 then
-   foliage(parent,ground+Vector3.yAxis*.25,1.15+.22*(i%3),i)
-   if s[3]>0 then shoreTree(parent,ground,s[3],Vector3.new(.8+i*.08,0,.55),i) end
+   foliage(parent,ground+Vector3.yAxis*.25,1.5+.22*(i%3),i)
+   if s[3]>0 then shoreTree(parent,ground,s[3],Vector3.new(2+i*.12,0,1.4),i) end
   end
+ end
+ -- Pale reeds and warm seed heads draw attention at the landing.
+ for i=1,9 do
+  local angle=i*2.4;local base=bed.Position+Vector3.new(46+math.cos(angle)*4,1.6,math.sin(angle)*6)
+  local tip=base+Vector3.new(.3,2.2+(i%3)*.65,.15)
+  segment(parent,'WaterReed',base,tip,.14,rgb(146,189,151),Enum.Material.Slate,'QuarryBiome_Chalk')
+  local bulb=cylinder(parent,'ReedLight',CFrame.new(tip)*CFrame.Angles(0,0,math.pi*.5),Vector3.new(.8,.35,.35),rgb(255,222,131),Enum.Material.Neon)
+  if i==1 then glow(bulb,rgb(255,221,148),18,1.5) end
  end
 end
 
@@ -4613,22 +4656,91 @@ local function emerald(biome,bed,terraces)
 
 end
 
+local function lantern(parent,base,yaw,height)
+ local warm=rgb(255,212,125)
+ local basis=CFrame.new(base)*CFrame.Angles(0,yaw,0)
+ local function piece(name,offset,size,tint,variant)
+  return block(parent,name,basis*CFrame.new(offset),size,tint,variant)
+ end
+ local dark=rgb(66,82,83)
+ piece('LampFoot',Vector3.new(0,.3,0),Vector3.new(1.5,.6,1.5),rgb(185,204,193))
+ piece('LampPost',Vector3.new(0,height*.5,0),Vector3.new(.38,height,.38),dark,'QuarryPhoto_CorrodedMetal')
+ piece('LampArm',Vector3.new(.8,height-.3,0),Vector3.new(2,.32,.4),dark,'QuarryPhoto_CorrodedMetal')
+ piece('LampHood',Vector3.new(1.6,height-.65,0),Vector3.new(1.65,.34,1.55),dark,'QuarryPhoto_CorrodedMetal')
+ local glass=piece('WarmLamp',Vector3.new(1.6,height-1.3,0),Vector3.new(.96,1.1,.96),warm)
+ glass.Material=Enum.Material.Neon;glass.MaterialVariant='';glass.CastShadow=false
+ piece('LampLowerRim',Vector3.new(1.6,height-1.88,0),Vector3.new(1.23,.18,1.23),dark,'QuarryPhoto_CorrodedMetal')
+ glow(glass,warm,24,2.7)
+end
+
+local function lighting(scene,terraces)
+ local lamps=Instance.new('Folder');lamps.Name='QuarryLanterns';lamps.Parent=scene.map
+ for _,s in ipairs({{-17,4,17,0},{17,4,17,math.pi},{-42,4,-26,0},{42,4,-26,math.pi}}) do
+  lantern(lamps,Vector3.new(s[1],s[2],s[3]),s[4],8.6)
+ end
+ local routes=terraces:FindFirstChild('WalkableRoutes')
+ if routes then
+  for _,route in ipairs(routes:GetChildren()) do
+   if route:IsA('BasePart') and not route.Name:match('Curb$') then
+    local at=route.CFrame:PointToWorldSpace(Vector3.new(route.Size.X*.5+.7,route.Size.Y*.5,-route.Size.Z*.28))
+    local _,yaw=route.CFrame:ToOrientation()
+    lantern(lamps,at,yaw+math.pi,7.4)
+   end
+  end
+ end
+end
+
+local function patternedSurfaces(scene,terraces)
+ -- Architectural patterns have limited, readable jobs. Mining beds keep their
+ -- quieter geological surfaces, and the large hub pad remains plain.
+ local materials=game:GetService('MaterialService')
+ local herringbone=materials:FindFirstChild('QuarryPattern_Herringbone')
+ local checker=materials:FindFirstChild('QuarryPattern_Checker')
+ local square=terraces:FindFirstChild('MarketSquare')
+ if square and herringbone then
+  for _,name in ipairs({'NorthSouthWalk','EastWestWalk','UtilityWalk','ShopApron'}) do
+   local part=square:FindFirstChild(name)
+   if part and part:IsA('BasePart') then
+    if not part.CustomPhysicalProperties then part.CustomPhysicalProperties=part.CurrentPhysicalProperties end
+    part.Material=herringbone.BaseMaterial;part.MaterialVariant=herringbone.Name
+    part.Color=rgb(190,205,240);part.Reflectance=0
+   end
+  end
+ end
+ local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
+ if depot and checker then
+  for _,name in ipairs({'Printer','PackStation','PrestigeStation'}) do
+   local assembly=depot:FindFirstChild(name..'Assembly')
+   local pad=assembly and assembly:FindFirstChild(name..'Pad')
+   if pad and pad:IsA('BasePart') then
+    if not pad.CustomPhysicalProperties then pad.CustomPhysicalProperties=pad.CurrentPhysicalProperties end
+    pad.Material=checker.BaseMaterial;pad.MaterialVariant=checker.Name
+    pad.Color=rgb(233,234,216);pad.Reflectance=0
+   end
+  end
+ end
+end
+
 function Biomes.build(scene,terraces)
  local fields=scene.root:FindFirstChild('Fields')
  if not fields then return end
  local terrain=workspace.Terrain
- terrain.WaterColor=rgb(83,179,184);terrain.WaterReflectance=.27
- terrain.WaterTransparency=.26;terrain.WaterWaveSize=.16;terrain.WaterWaveSpeed=7
+ terrain.WaterColor=rgb(35,139,154);terrain.WaterReflectance=.34
+ terrain.WaterTransparency=.38;terrain.WaterWaveSize=.13;terrain.WaterWaveSpeed=5
  terrain:SetMaterialColor(Enum.Material.Salt,rgb(206,221,218))
  terrain:SetMaterialColor(Enum.Material.Sand,rgb(209,222,185))
+ terrain:SetMaterialColor(Enum.Material.Ground,rgb(107,151,104))
  for _,spec in ipairs({{'Ruby','RubyCrimsonBluffs',ruby},{'Cobalt','CobaltMushroomGrove',cobalt},{'Emerald','EmeraldChalkLagoon',emerald}}) do
   local field=fields:FindFirstChild(spec[1])
   local bed=field and field:FindFirstChild('Field')
   if bed and bed:IsA('BasePart') then
    local biome=Instance.new('Folder');biome.Name=spec[2];biome.Parent=scene.map
    spec[3](biome,bed,terraces,turfSampler(terraces,bed.Position))
+   task.wait()
   end
  end
+ lighting(scene,terraces)
+ patternedSurfaces(scene,terraces)
 end
 return Biomes
 
@@ -4646,9 +4758,9 @@ function W.applyOreFinish(part)
  end
 end
 function W.applyQuarryTextures(scene)
- if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
+ if not scene.root:GetAttribute('DronerevolutionMapVersion') then return false end
  local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
- if not terraces then return end
+ if not terraces then return false end
  local material=Enum.Material
  local rgb=Color3.fromRGB
  -- Roblox restricts material definitions to Studio. The native document
@@ -4658,6 +4770,9 @@ function W.applyQuarryTextures(scene)
   if base then quarryVariants[material[base]]=variant.Name end
   if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Polished' then polishedOre=true end
  end
+ -- The shared Edit map and canonical file already carry the authored scenery.
+ -- Still register materials for runtime ore and debris on every server.
+ if scene.root:GetAttribute('QuarrySceneryAuthored') then return true end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
   DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
@@ -4666,6 +4781,16 @@ function W.applyQuarryTextures(scene)
   DR_CliffStrata={material.Sandstone,rgb(126,104,82)},
   DR_ExposedRock={material.Slate,rgb(109,98,86)},
   DR_WornPath={material.Pavement,rgb(143,134,116)},
+ }
+ -- Keep the photo palette legible after multiplication by the part color.
+ -- Walkable stone and earth should read as different surfaces at a glance.
+ local photoTint={
+  [material.Grass]=rgb(221,224,201),
+  [material.LeafyGrass]=rgb(201,216,198),
+  [material.Sandstone]=rgb(255,237,219),
+  [material.Pebble]=rgb(248,230,205),
+  [material.Pavement]=rgb(229,239,255),
+  [material.Concrete]=rgb(248,232,207),
  }
  local function finish(part,base,tint,foliageVariant)
   if part.Transparency>=1 or part.Material==material.Neon then return end
@@ -4677,12 +4802,8 @@ function W.applyQuarryTextures(scene)
   W.applyQuarryVariant(part)
   if foliageVariant then
    part.MaterialVariant=foliageVariant;part.Color=tint
-  elseif base==material.Grass or base==material.LeafyGrass then
-   -- The aerial tile is olive in its diffuse map. A green tint keeps grass
-   -- legible against the orange cliffs under the authored dawn light.
-   part.Color=rgb(154,239,197):Lerp(tint,.12)
-  elseif base==material.Concrete or base==material.Pavement then
-   part.Color=rgb(211,228,251):Lerp(tint,.14)
+  elseif photoTint[base] and quarryVariants[base] then
+   part.Color=photoTint[base]:Lerp(tint,.14)
   else
    part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
   end
@@ -4704,7 +4825,7 @@ function W.applyQuarryTextures(scene)
     finish(part,curb and material.Concrete or material.Pavement,curb and rgb(105,99,90) or rgb(151,139,114))
    elseif group.Name=='StudPackCliffs' then
     if variant=='Studs' then finish(part,material.Grass,rgb(100,109,72):Lerp(color,.17))
-    elseif variant=='Universal' then finish(part,material.Rock,rgb(117,101,84):Lerp(color,.22)) end
+    elseif variant=='Universal' then finish(part,material.Sandstone,rgb(148,110,87):Lerp(color,.22)) end
    elseif group.Name=='WoodenMarketStalls' then
     if color.R>color.G*1.25 and color.G>color.B*1.2 then
      finish(part,material.WoodPlanks,rgb(123,98,74):Lerp(color,.22))
@@ -4790,6 +4911,7 @@ function W.applyQuarryTextures(scene)
   end
  end
  QuarryBiomes.build(scene,terraces)
+ return true
 end
 function W.ensureImpactField(root,fields)
  if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end

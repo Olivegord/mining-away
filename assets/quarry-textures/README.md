@@ -21,6 +21,25 @@ These 64×64 diffuse tiles come from [Poly Haven's CC0 library](https://polyhave
 | `ore-vein.png` | [Covellite, pyrite and quartz, GeoDIL no. 2274](https://commons.wikimedia.org/wiki/File:Covellite,_pyrite_and_quartz_(GeoDIL_number_-_2274).jpg), cropped and graded | `101826947844494` |
 | `ore-roughness.png` | Derived from the same GeoDIL photograph; bright mineral veins are smoother than the host stone | `134197243065883` |
 
+These seven 64×64 grades keep the original photo detail. Cliff strata, grass, gravel, and paving use a wider range of tones. Canopy and evergreen lift the darkest pixels and reduce the contrast between individual leaves. Ruby's ground cover uses a scarlet and burnt-orange grade. Regenerate the local tiles from the retained originals with `swift tools/grade_quarry_textures.swift`.
+
+| In-use grade | Source photo | Roblox image ID |
+| --- | --- | --- |
+| `cliff-graded.png` | `cliff.png` | `110682071054939` |
+| `grass-graded.png` | `grass.png` | `136005318797247` |
+| `gravel-graded.png` | `gravel.png` | `83637161982243` |
+| `paving-graded.png` | `paving.png` | `104656144918864` |
+| `canopy-graded.png` | `canopy.png` | `87224951749815` |
+| `evergreen-graded.png` | `evergreen.png` | `88408188951983` |
+| `ruby-leaves-graded.png` | `ruby-leaves.png` | `100289458480761` |
+
+Two other 64×64 photo tiles add a readable pattern on selected architectural surfaces. The larger hub pad and mining beds keep their quieter finishes.
+
+| Pattern | CC0 source | Roblox image ID |
+| --- | --- | --- |
+| `herringbone.png` (market walks and shop apron) | [Brick Floor, Poly Haven](https://polyhaven.com/a/brick_floor) | `117231580478198` |
+| `checker-tile.png` (three service station pads) | [Tiles 012, ambientCG](https://ambientcg.com/view?id=Tiles012) · [license](https://docs.ambientcg.com/license/) | `110730082505290` |
+
 The scenery keeps its photo color maps. Three flat grayscale maps set the finish without adding extra surface detail or metalness:
 
 | Roughness map | Used for | Roblox image ID |
