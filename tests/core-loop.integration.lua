@@ -4,6 +4,16 @@ local checks=0
 local function check(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));checks+=1;print('PASS core loop '..name) end
 RoleEffects.BreakerPhase=function() end;discoveries.TrySpawn=function() end
 local pl=player(310001);players.PlayerAdded:Fire(pl);local p=assert(profiles[pl.UserId]);local field=patches[1]
+check('all fields seed mineral rocks rather than display junk in both runtime modes',function()
+ for _,f in ipairs(patches) do
+  assert(not f.junk and f.model:GetAttribute('JunkClearing')==false)
+  assert(#f.resources>0,'empty mining field '..f.id)
+  for _,r in ipairs(f.resources) do
+   assert(r.kind~='Junk' and not r.part:GetAttribute('JunkName'))
+   assert(r.part:GetAttribute('Mineral')==(f.cfg.Material or f.cfg.Key or f.cfg.Name))
+  end
+ end
+end)
 local function input(action,payload) p.tokens=7;p.bucketAt=now;command.OnServerEvent:Fire(pl,action,payload) end
 local function move(position) pl.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0))) end
 local serial=0

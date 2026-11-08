@@ -9,19 +9,33 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `308adf69a0b9cf6cd492c58db75b2d9d918e9205e8010d84fc0d4264211e38df` | Island reserve with persistent tool marks and shared health scaling. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Persistent tool marks and health-scaled mining objects. |
+| Native-file SHA-256 | `9bb5ebe082f920df18ceb7cab68a06f559513ff8f455bb58dbb1dc2c066776f0` | Restored textured rock fields, reference palette and brighter morning fill; current island and persistent tool marks retained. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Rock mining and the restored reference treatment. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed alongside persistent tool marks and shared health sizing. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
-| Roblox publication | **No publication in the tool-mark follow-ups or island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | Rock-field initialization and the restored reference appearance are installed. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the reference restoration** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — persistent tool marks and health-based size
+## Latest follow-up — rock mining and the earlier textured look
+
+All playable fields initialize mineral rocks in both Studio preview and production. Removed the automatic Quartz Arts & Crafts and Ruby Tech activation. Their templates and the waterfront display remain. The prototype's isolated test fixture can still exercise its retained machinery without enabling it in the game. Current tool controls, persistent damage marks, health-based size, economy and the one-drone start are preserved.
+
+Used `077b76a` (smooth grass and raised green patches, before the pale midday treatment) as the closest historical appearance reference for the owner's screenshot; the screenshot's exact originating revision is not independently known. Restored 604 surviving part appearances/newer turf finishes without reverting the island, paths or terrain. Kept the original sky and ore vein asset. The earlier 08:30 lighting has exposure +0.10 instead of +0.04 and ambient/outdoor fill lifted by 6/255. Archived the scattered motif samples, older patterned accents and added grass-gradient overlays under ServerStorage; the waterfront display's 125 descendants are unchanged.
+
+Found a newer Studio placement of the fourteen-part original Quartz tree. Preserved its live transforms through a scoped native serialization reconciliation instead of replacing it with the older snapshot position. No other part geometry changed. All 50 Sources were preserved by the appearance save, then the seven-Source refresh changed only the server controller.
+
+Studio was already open in Edit and remains open in Edit at place 124078027733625, universe 10774898335, loaded version 76. Inspected Quartz in Edit after the restoration and sample cleanup. Script Sync delivered the changed server Source; all seven SHA-256 values match the canonical snapshot and all three roots are `SyncedAsRoot`. The next test from the existing DRONEREVOLUTION Edit document runs the updated rock initialization. No Play, mobile or multiplayer session was started, so live ore appearance and gameplay feel remain for the owner to assess. No Roblox publication.
+
+Core-loop checks passed in production and Studio configurations, including populated non-junk fields with the template library present in the prototype fixture. The 19 field-tool checks and 12 rock-damage checks passed; these use API doubles, not native visual playtests. `tools/build.py` verified no remaining Source changes.
+
+Reproduce the appearance on `e1d127c` using `python3 tools/restore_reference_look.py <export-directory>`, execute its generated `stage.lua` in shared Edit, inspect the staged result, call `shared.ReferenceLook.apply()`, then run the same command with `--write`. The checked plan allows only appearance properties, three archive parent moves and the explicitly exported Quartz tree transforms. To preserve the observed tree placement, copy [the scoped tree export](review/reference-look-tree.b64) to `<export-directory>/tree.b64` before writing. Use Script Sync and `python3 tools/build.py --previous-commit e1d127c` for the Source update. Do not open an old native file as a second playable.
+
+## Earlier follow-up — persistent tool marks and health-based size
 
 A resource keeps up to eight distinct impact or heat marks for its lifetime. Close hits of the same kind deepen the existing mark without erasing other marks. At capacity the earlier marks stay. The server replicates the full history so another observer can reconstruct the same solid surface. Marks stay attached as a resource shrinks.
 
@@ -40,6 +54,8 @@ Studio was open in Play on entry and left open in Edit at place 124078027733625,
 Script Sync changed only ClientDroneControl. Verified all seven Edit Source hashes and the three sync roots. The native refresh preserved all non-Source data and backup scripts. Reproduce the canonical Source refresh with `python3 tools/build.py --previous-commit 96850ed8f033f318cb75ccbbbac08a74c6624ec9`.
 
 ## Latest follow-up — the island reserve
+
+November 8 research addendum: inspected Roblox Charts with Entry-level Phone / United States selected, plus the existing shared Edit map at place 124078027733625 / universe 10774898335, loaded version 76. [The visual audit](LOW_END_VISUAL_DIRECTION.md) separates device-filtered rows from global Top Playing Now, records specific composition problems, and proposes a living maintenance-reserve direction using the existing photos. This was read-only in Studio, with no Play, native changes, publication or device benchmark. The active gameplay chat retained native/source ownership; the audit began at `96850ed` and observed its later `3982df5` revision.
 
 The six terraces sit on a continuous island with grassy slopes, gravel beaches, rocky headlands, shallow turquoise water and an open horizon. The ocean is scenery. Archived the high enclosure and both older perimeter layers under `ServerStorage.IslandShoreArchive`. Lowered twelve existing shelf trees to their terrain. The cloud blocks and found props remain in the reserve.
 

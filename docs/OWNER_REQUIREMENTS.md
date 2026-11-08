@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — restore rock mining and the photographed earlier look
+
+The owner chooses rock mining again. Keep the random photo/pattern objects in the waterfront display, but remove them from the playable fields. Restore the attached earlier version's low-resolution grass, gravel, foliage, rock textures and colors, with lighting only a little brighter. Preserve the current map and subsequent gameplay fixes rather than reverting the whole game. This supersedes the earlier Arts & Crafts/Tech mining prototype and the assistant's recommendation to make junk the main mining identity.
+
+## November 8 latest — alive and distinctive on low-end devices
+
+The owner finds the current game dull, drab and dead. Research Roblox's top charts for low-end devices and identify what those games do well. Keep the existing low-resolution textures and develop a more distinctive result; an all-over saturated stud-texture treatment is explicitly rejected. See [chart research and the read-only visual audit](LOW_END_VISUAL_DIRECTION.md). Its proposals are not installed changes or owner acceptance.
+
 ## November 8 latest — keep old marks and shrink by health
 
 Preserve earlier tool marks on subsequent hits. Use the same health thresholds to shrink mineable objects regardless of whether damage came from a drone or a dropped tool.

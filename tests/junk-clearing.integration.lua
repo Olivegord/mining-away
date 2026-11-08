@@ -1,4 +1,9 @@
--- Exercise the real Quartz job dispatcher and economy against Roblox API doubles.
+-- The retained prototype is exercised explicitly; production/preview field
+-- initialization must stay on rocks even when display templates are available.
+for _,f in ipairs(patches) do
+ assert(not f.junk and #f.resources>0)
+ for _,r in ipairs(f.resources) do assert(r.kind~='Junk') end
+end
 local field=patches[1]
 for _,r in ipairs(field.resources) do resources[r.id]=nil;r.part:Destroy() end
 field.resources={};field.respawnQueue={}
@@ -102,7 +107,12 @@ for _=1,6 do advance(2.6);assert(nodeUsage(field)<=JunkField.Cap) end
 print('PASS Quartz fair claims, late-join priority, bowling damage, release and field cap')
 
 local ruby=patches[2]
-assert(ruby.cfg.Key=='Ruby' and ruby.junkTheme=='Tech' and #ruby.junkProps==6)
+assert(ruby.cfg.Key=='Ruby' and not ruby.junk)
+for _,r in ipairs(ruby.resources) do resources[r.id]=nil;r.part:Destroy() end
+ruby.resources={};ruby.respawnQueue={}
+ruby.junk=serverStorage.JunkCubeTemplates.Tech;ruby.junkTemplates=ruby.junk
+ruby.junkTheme='Tech';ruby.junkProps=JunkField.withTemplates({},JunkField.TechProps,ruby.junk)
+assert(#ruby.junkProps==6)
 local techPlayer,techCrew=join(310007);move(techPlayer,ruby.center)
 input(techPlayer,'Patch',ruby.id)
 assert(techCrew.drones[1].autoField~=ruby.id,'Ruby shop gate must still apply to Tech')

@@ -530,23 +530,8 @@ for _,f in ipairs(scene.fields) do
   table.insert(field.turrets,t)
  end
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
- -- The themed drops share the preview-only clearing system.
- if preview then
-  local library=game:GetService('ServerStorage'):FindFirstChild('JunkCubeTemplates')
-  if f.cfg.Key=='Quartz' then
-   field.junk=scene.map:FindFirstChild('QuarryMotifScenery')
-   if field.junk then
-    field.junkTheme='Arts & Crafts';field.junkTemplates=library
-    field.junkProps=JunkField.withTemplates(JunkField.Props,JunkField.TemplateProps,library)
-   end
-  elseif f.cfg.Key=='Ruby' and library then
-   local tech=library:FindFirstChild('Tech')
-   local props=JunkField.withTemplates({},JunkField.TechProps,tech)
-   if #props==#JunkField.TechProps then
-    field.junkTheme='Tech';field.junk=tech;field.junkTemplates=tech;field.junkProps=props
-   end
-  end
- end
+ -- All playable fields use mineral rocks, including Studio preview. Photo and
+ -- pattern templates remain available in the authored waterfront display.
  field.model:SetAttribute('JunkClearing',field.junk~=nil)
  field.model:SetAttribute('JunkTheme',field.junkTheme)
  table.insert(patches,field);restoreTurrets(field)
