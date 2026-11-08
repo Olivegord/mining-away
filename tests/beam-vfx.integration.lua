@@ -388,6 +388,40 @@ check('actual mining envelope surface contact target life and paused work remain
  assert(not outer.Enabled,'new life reused a stale contact')
  p:destroyMiningBeam(b);p:destroy();target:Destroy();view:Destroy()
 end)
+check('crystal beam follows a turned and shrunk contact between ray checks',function()
+ local p=Presentation.new({parent=root})
+ local target=Instance.new('UnionOperation');target.Size=Vector3.new(3.135000228881836,6.566902160644531,4.4872307777404785)
+ target.CFrame=CFrame.new(0,1,0);target.Parent=root;target:SetAttribute('CubicRock',false)
+ local view=Instance.new('Model');view.Parent=root
+ local emitter=Instance.new('Part');emitter.Position=from;emitter.Parent=view;view.PrimaryPart=emitter
+ local b=p:createMiningBeam(view,emitter);b.origin.WorldPosition=from
+ local previousRaycast=workspace.Raycast
+ local blocked=false;local anchor
+ workspace.Raycast=function(_,origin,delta,params)
+  if params.FilterType==Enum.RaycastFilterType.Include then
+   local at=target.CFrame:PointToObjectSpace(origin)
+   anchor=Vector3.new(at.X/target.Size.X,.4,at.Z/target.Size.Z)
+   return {Instance=target,Position=target.CFrame:PointToWorldSpace(anchor*target.Size),Normal=Vector3.yAxis}
+  end
+  if blocked then return {Instance=target,Position=origin+delta*.5} end
+  return nil
+ end
+ local s={alive=true,isMining=true,active=true,contact=true,key='crystal',life=1,part=target,serverSource=target,since=299,style='Cutter',droneRole='Striker'}
+ local function frame(now) p:beginFrame();p:queueMiningBeam(b,s,now);p:flushMiningBeams() end
+ frame(300)
+ assert(p.beamRays==2 and b.reference[1].Enabled)
+ near(anchor.X*target.Size.X,-.5675010681152344);near(anchor.Z*target.Size.Z,-.24361419677734375)
+ local before=b.endpoint.Position
+ target.Size*=.75;target.CFrame=CFrame.new(0,.5,0)*CFrame.Angles(0,math.pi/2,0)
+ frame(300.01)
+ assert(p.beamRays==0 and b.reference[1].Enabled,'a crystal turn interrupted the beam')
+ local tip=b.endpoint.Position
+ assert((tip-target.CFrame:PointToWorldSpace(anchor*target.Size)).Magnitude<1e-6)
+ assert(math.abs(tip.X-before.X)>.2 and math.abs(tip.Z-before.Z)>.2)
+ blocked=true;frame(300.1);assert(p.beamRays==2 and not b.reference[1].Enabled,'occluded contact stayed visible')
+ workspace.Raycast=previousRaycast
+ p:destroyMiningBeam(b);p:destroy();target:Destroy();view:Destroy()
+end)
 check('future receipts wait and stale orbital contacts stop light and new emission',function()
  realTime=400
  local view=RoleEffectView.new()

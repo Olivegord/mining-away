@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** original crystal meshes snap to a new facing at each damage stage and play Mining Away's original crack and break sounds. The only falling fragments are collectible ore, with no decorative rubble or projectile chain. The [starter patch](review/STARTER_PATCH.md), four miners, packs, upgrades and prestige are intact. See [crystal feedback verification](review/CRYSTAL_FEEDBACK.md).
+**Current implementation:** the mining beam now follows the original crystal mesh as it snaps to a new facing and shrinks. Cracks and breaks play the original Mining Away sounds. The only falling fragments are collectible ore, with no decorative rubble or projectile chain. The [starter patch](review/STARTER_PATCH.md), four miners, packs, upgrades and prestige are intact. See [crystal feedback verification](review/CRYSTAL_FEEDBACK.md).
 
 ## Identity and delivery state
 
@@ -11,18 +11,24 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `09ad694d01adfb9cca09d5cdcd5d6a6ce2384939264ee99e4ed981bfb302ccd6` | Original crystal turns, audio and collectible drops; every non-Source chunk and backup Source preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal feedback commit; [seven actual Edit hashes](review/crystal-feedback-native.json). |
+| Native-file SHA-256 | `a97f1bd2250c4b4a5a020a9faca5b7f210c7e6347c048103669dfab451cf34bd` | Crystal-local beam contact; every non-Source chunk and backup Source preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal beam commit; [seven actual Edit hashes](review/crystal-beam-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529**, loaded version **1229** | Reference inspected in Edit; no changes saved to it. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The crystal feedback Sources are installed in the exact shared place/universe. All seven managed Sources match the canonical snapshot by SHA-256; all three roots are `SyncedAsRoot`. The temporary crystal inspection was removed. Studio remains in Edit. Loaded version 90 is not publication evidence. |
-| Roblox publication | **No publication for the crystal feedback update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The crystal beam Source is installed in the exact shared place/universe. All seven managed Sources match the canonical snapshot by SHA-256; all three roots are `SyncedAsRoot`. The temporary crystal inspection was removed. Studio remains in Edit. Loaded version 90 is not publication evidence. |
+| Roblox publication | **No publication for the crystal beam update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — beam follows the crystal
+
+The live Mining Away client attaches its beam to `Crystal.Mesh.Attachment`, which is slightly off center. The updated renderer samples the visible crystal at that offset and stores the hit in normalized local coordinates. The contact moves with a turn or shrink between ray checks. It is no longer projected straight down beneath the emitter. Ordinary beam styling, timing and the shared occlusion budget are unchanged.
+
+In a scoped Studio Edit probe, the actual crystal union moved through three turn/shrink stages. The production contact sampler stayed on the surface before and after resampling, and the fixture was removed. Automated beam tests covered rotation, resizing, obstruction, fade and cleanup; no Play or multiplayer session was started. Shared Edit and the canonical file have matching Sources. No Roblox publication.
 
 ## Earlier follow-up — packs include their reward; one shared upgrade pool
 

@@ -110,18 +110,34 @@ function P:destroyMiningBeam(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
+-- Mining Away attaches its beam to an off-center marker on Crystal.Mesh.
+-- Keep its authored X/Z proportions; sample the actual visible surface below
+-- that marker so damage geometry cannot leave the tip suspended above it.
+local CRYSTAL_AIM_X = -.5675010681152344 / 3.135000228881836
+local CRYSTAL_AIM_Z = -.24361419677734375 / 4.4872307777404785
+local function followsCrystal(sample)
+ return sample.isMining==true and sample.serverSource~=nil and sample.serverSource:GetAttribute('CubicRock')==false
+end
 function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuery,vertical)
  if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return nil end
  if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
  if not noQuery and now>=(cache.nextSample or 0) and self.beamRays+2<=self.maxBeamRays then
   self.beamRays+=2;cache.nextSample=now+.08;cache.dueSince=cache.nextSample;cache.lastSample=now
-  local direction=vertical and Vector3.new(0,-math.max(.1,origin.Y-part.Position.Y+part.Size.Magnitude),0) or part.Position-origin
+  local attached=beam.followCrystal and cache==beam.surface
+  local rayOrigin=origin
+  local direction
+  if attached then
+   rayOrigin=part.CFrame:PointToWorldSpace(Vector3.new(CRYSTAL_AIM_X*part.Size.X,part.Size.Y*.5+.2,CRYSTAL_AIM_Z*part.Size.Z))
+   direction=part.CFrame:VectorToWorldSpace(Vector3.new(0,-part.Size.Y-.4,0))
+  else
+   direction=vertical and Vector3.new(0,-math.max(.1,origin.Y-part.Position.Y+part.Size.Magnitude),0) or part.Position-origin
+  end
   if direction.Magnitude<.01 then cache.anchor=nil;return nil end
   local include=RaycastParams.new();include.FilterType=Enum.RaycastFilterType.Include;include.FilterDescendantsInstances={part}
   -- Query the local rendered union/mesh, not the untouched server collider. The
   -- temporary query flag is reset even if the engine rejects the query.
   local previous=part.CanQuery;part.CanQuery=true
-  local ok,hit=pcall(function() return workspace:Raycast(origin,direction*1.5,include) end)
+  local ok,hit=pcall(function() return workspace:Raycast(rayOrigin,direction*1.5,include) end)
   part.CanQuery=previous
   if not ok or not hit or hit.Instance~=part then cache.anchor=nil;return nil end
   local exclude=RaycastParams.new();exclude.FilterType=Enum.RaycastFilterType.Exclude
@@ -182,6 +198,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if self.closed or not beam or not beam.origin.Parent then return end
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
+ beam.followCrystal=followsCrystal(sample)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
   beam.surface={};beam.secondarySurface={};beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
@@ -194,7 +211,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif sample.alive and beam.envelope.active and beam.surface.verifiedAt and now-beam.surface.verifiedAt<=.75 then
   beam.surface.fadeUntil=now+.2
  end
- if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery,beam.vertical) end
+ if sample.alive and part then point,normal=self:_surface(beam,beam.surface,beam.origin.WorldPosition,part,sample.serverSource,now,nil,noQuery,beam.vertical and not beam.followCrystal) end
  local valid=point~=nil and normal~=nil
  -- The server already supplied the charge deadline. Bridge only the small
  -- snapshot gap for continuous miners, cosmetically, with a verified contact.
@@ -237,12 +254,13 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if reference and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if visible then
   local origin=beam.origin.WorldPosition
-  if beam.vertical then
+  local vertical=beam.vertical and not beam.followCrystal
+  if vertical then
    -- Only the downward endpoint eases. Both X/Z coordinates are always the
    -- emitter's, and the endpoint can never ease inside the verified surface.
    beam.endY=beam.endY and math.max(point.Y,beam.endY+(point.Y-beam.endY)*(1-math.exp(-dt*20))) or point.Y
   end
-  local tip=beam.vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
+  local tip=vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
   local workerScale=.23;local alpha=beam.visibility
   if reference then beam.endpoint.Position=tip
   else
@@ -309,6 +327,7 @@ function P:queueMiningBeam(beam,sample,now)
  if self.closed or not beam or not beam.origin.Parent then return end
  local final;sample,final=finalContact(sample,now)
  beam.vertical=sample.isMining==true
+ beam.followCrystal=followsCrystal(sample)
  if not sample.alive or beam.cachedLife~=sample.life or beam.cacheKey~=sample.key then
   beam.surface={};beam.secondarySurface={};beam.branchHold=nil;beam.endY=nil;beam.visibility=0;beam.cachedLife=sample.life;beam.cacheKey=sample.key
  end
@@ -354,12 +373,12 @@ function P:queueMiningBeam(beam,sample,now)
 end
 function P:flushMiningBeams()
  local primary={};local secondary={}
- local function add(list,entry,cache,part,origin,source,ignored)
+ local function add(list,entry,cache,part,origin,source,ignored,vertical)
   if not part or not part.Parent or part.Transparency>=1 then cache.anchor=nil;return end
   if cache.part~=part then cache.part=part;cache.anchor=nil;cache.nextSample=0;cache.dueSince=entry.now;cache.lastSample=nil;cache.verifiedAt=nil;cache.fadeUntil=nil end
   if not cache.order then self.beamOrder+=1;cache.order=self.beamOrder end
   if entry.now>=(cache.nextSample or 0) then
-   table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored,vertical=entry.beam.vertical})
+   table.insert(list,{entry=entry,cache=cache,part=part,origin=origin,source=source,ignored=ignored,vertical=vertical})
   end
  end
  local function run(list,limit)
@@ -381,7 +400,7 @@ function P:flushMiningBeams()
   local b,s=e.beam,e.sample
   if s.alive and s.active then
    primaryCount+=1
-   add(primary,e,b.surface,s.part,b.origin.WorldPosition,s.serverSource,nil)
+   add(primary,e,b.surface,s.part,b.origin.WorldPosition,s.serverSource,nil,b.vertical and not b.followCrystal)
    if s.secondaryPart and s.secondaryKey then branchCount+=1 end
   end
  end
@@ -403,8 +422,8 @@ function P:flushMiningBeams()
  for _,e in ipairs(self.beamQueue) do
   local b,s=e.beam,e.sample
   if s.alive and s.active and s.secondaryPart and s.secondaryKey then
-   local point,normal=self:_surface(b,b.surface,b.origin.WorldPosition,s.part,s.serverSource,e.now,nil,true,b.vertical)
-   if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,branchOrigin(b,s.secondaryPart,point,normal),s.secondarySource,s.serverSource) end
+   local point,normal=self:_surface(b,b.surface,b.origin.WorldPosition,s.part,s.serverSource,e.now,nil,true,b.vertical and not b.followCrystal)
+   if point and normal then add(secondary,e,b.secondarySurface,s.secondaryPart,branchOrigin(b,s.secondaryPart,point,normal),s.secondarySource,s.serverSource,b.vertical) end
   end
  end
  run(secondary,reserved)
