@@ -58,9 +58,10 @@ def face(photo, corners, preview_width):
 
 
 def gumballs(photo):
-    top = (photo.height - photo.width) // 2
-    tile = photo.crop((0, top, photo.width, top + photo.width))
-    return {"tile": tile.resize((SIZE, SIZE), Image.Resampling.LANCZOS)}
+    left = (photo.width - photo.height) // 2
+    tile = photo.crop((left, 0, left + photo.height, photo.height))
+    tile = tile.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+    return {"tile": ImageEnhance.Brightness(tile).enhance(1.16)}
 
 
 def alphabet(photo):
@@ -138,7 +139,7 @@ if __name__ == "__main__":
     DESTINATION.mkdir(parents=True, exist_ok=True)
     objects = {
         "suggestion-box": plywood(args.plywood),
-        "gumballs": gumballs(photo("bulk-gumballs")),
+        "gumballs": gumballs(photo("gumballs-haribo")),
         "alphabet-block": alphabet(photo("alphabet")),
         "box-fan": fan(photo("fan")),
         "cube-aquarium": aquarium(photo("fish")),

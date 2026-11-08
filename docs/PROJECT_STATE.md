@@ -9,17 +9,27 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `31659a68a8522dbb58ff21623cf49f9b6f521bcaa41fd8483e060168ceb8932d` | Quartz junk prototype, 64×64 photo faces, and the authored 23-cube grid. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Quartz junk prototype and the ServiceDeck lineup in the open shared Edit document. |
+| Native-file SHA-256 | `5172c612a753169b401568e30745e85d355580b388250763c30b023e60804ef9` | Arts & Crafts and Tech previews, six Tech templates, and three waterfront displays. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Arts & Crafts and Tech preview Sources and the separated waterfront samples. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Junk cubes visible in Edit, November 8, 2026** | The open DRONEREVOLUTION Edit session has the lineup and the Quartz prototype Sources. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
+| Shared Studio entry point | **Themed junk samples visible in Edit, November 8, 2026** | The open DRONEREVOLUTION Edit session has the three display areas and the themed preview Sources. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
 | Roblox publication | **No publication in the November 8 pass** | Open Edit reports loaded version 70. The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — Arts & Crafts and Tech
+
+The waterfront pad has separated groups of 12 Arts & Crafts cubes, 8 Tech cubes, and 9 unassigned cubes under `Workspace.MiningAway.Map.JunkCubeAreas`. All 23 earlier samples are included. Six new 64×64 photo faces show a square chip on a green board, circuit traces, glass cartridge fuses, a fuse box, ribbon wires, and silver heatsink fins. The square crops rectify the component faces. The gumballs use one crop from Martial Bacquet's photo of a denser pile. Existing pattern scales and face assignments were preserved for all the other samples. [Sources and licenses](../assets/quarry-textures/README.md#junk-object-faces)
+
+In Studio preview, Quartz draws its junk from the Arts & Crafts selection and Ruby from the six Tech templates under `ServerStorage.JunkCubeTemplates.Tech`. Ruby keeps its existing unlock, hardness, and mineral identity. The Tech clearing falls back to normal Ruby ore when the library is incomplete. The server dispatches jobs in both fields and keeps crew ordering monotonic between fields. The core-loop and junk-clearing checks passed in API doubles, including the Ruby unlock, template selection, crew dispatch, and Ruby reward identity.
+
+Verified all 148 deck support samples and loaded the face assets in the actual DRONEREVOLUTION Edit viewport. Studio was open at entry and remained in Edit at place 124078027733625 / universe 10774898335, loaded version 70. There was no new native Play or Roblox publication. The checked scenery save replaced the previous display and updated the candy template while preserving all 50 Sources. Native Script Sync then installed the updated controllers and the canonical Source refresh preserved the map and backups.
+
+Reproduce the map pass using `tools/studio_junk_areas.lua` and `tools/refresh_junk_areas.py` on the previous grid revision. Write the staged sections to `display.b64` and `tech.b64`, and write the candy asset URL to `gumballs.txt`.
 
 ## Latest follow-up — 64×64 photo textures and the Edit grid
 

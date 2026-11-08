@@ -530,22 +530,27 @@ for _,f in ipairs(scene.fields) do
   table.insert(field.turrets,t)
  end
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
- -- The prototype runs in Studio on the authored quarry. Live servers retain
- -- the released Quartz rules even if these Sources are used in a later build.
- field.junk=preview and f.cfg.Key=='Quartz' and scene.map:FindFirstChild('QuarryMotifScenery') or nil
- field.model:SetAttribute('JunkClearing',field.junk~=nil)
- table.insert(patches,field);restoreTurrets(field)
- if field.junk then
-  field.junkTemplates=game:GetService('ServerStorage'):FindFirstChild('JunkCubeTemplates')
-  field.junkProps=table.clone(JunkField.Props)
-  if field.junkTemplates then
-   for _,spec in ipairs(JunkField.TemplateProps) do
-    local template=field.junkTemplates:FindFirstChild(spec.template)
-    if template and template:IsA('Part') then
-     local prop=table.clone(spec);prop.size=template.Size.X;table.insert(field.junkProps,prop)
-    end
+ -- The themed drops share the preview-only clearing system.
+ if preview then
+  local library=game:GetService('ServerStorage'):FindFirstChild('JunkCubeTemplates')
+  if f.cfg.Key=='Quartz' then
+   field.junk=scene.map:FindFirstChild('QuarryMotifScenery')
+   if field.junk then
+    field.junkTheme='Arts & Crafts';field.junkTemplates=library
+    field.junkProps=JunkField.withTemplates(JunkField.Props,JunkField.TemplateProps,library)
+   end
+  elseif f.cfg.Key=='Ruby' and library then
+   local tech=library:FindFirstChild('Tech')
+   local props=JunkField.withTemplates({},JunkField.TechProps,tech)
+   if #props==#JunkField.TechProps then
+    field.junkTheme='Tech';field.junk=tech;field.junkTemplates=tech;field.junkProps=props
    end
   end
+ end
+ field.model:SetAttribute('JunkClearing',field.junk~=nil)
+ field.model:SetAttribute('JunkTheme',field.junkTheme)
+ table.insert(patches,field);restoreTurrets(field)
+ if field.junk then
   field.nextJunkDrop=now+2.4
  else seedField(field) end
  field.model:SetAttribute('AlwaysUnlocked',field.cfg.AlwaysUnlocked==true)
@@ -772,7 +777,7 @@ function fracture:step()
  end
 end
 local function secondaryMining(d: any,primary: any,amount: number,radius: number)
- if primary.field.junk then return false end -- One claimed target per Quartz job.
+ if primary.field.junk then return false end -- One claimed target per salvage job.
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
   if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
@@ -1783,7 +1788,7 @@ function scene.dispatchJunk(field)
   for i,d in ipairs(crew.workers) do
    if chooseResource(d,field) then
     table.remove(crew.workers,i)
-    field.junkTurn=(field.junkTurn or 0)+1;crew.p.junkTurn=field.junkTurn;crew.turn=field.junkTurn
+    scene.junkTurn=(scene.junkTurn or 0)+1;crew.p.junkTurn=scene.junkTurn;crew.turn=scene.junkTurn
     d.state='Travel'
     return true
    end
@@ -2259,7 +2264,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
-  if field.junk then reject('Order the Quartz clearing to send your crew',field,d);return end
+  if field.junk then reject('Order the clearing to send your crew',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
   if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the plot to mine',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
@@ -2285,7 +2290,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(id)~='string' or #id>160 then reply('rejected','Invalid rock');return end
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
-  if r.field.junk then reply('rejected','Order the Quartz clearing to send your crew',r);return end
+  if r.field.junk then reply('rejected','Order the clearing to send your crew',r);return end
   p.oreQueue=p.oreQueue or {}
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
@@ -2341,7 +2346,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    end
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
-   if field.junk then notice(p,'Crew assigned to Quartz salvage. Press Recall to stop.') end
+   if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end
    commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Plot survey assigned',field)
   else
    local fleet={}
@@ -2511,7 +2516,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   end
   pickupStep(C.Tick)
   fracture:step()
-  if patches[1].junk then scene.dispatchJunk(patches[1]) end
+  for _,field in ipairs(patches) do if field.junk then scene.dispatchJunk(field) end end
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   scene.fieldTools:step(C.Tick)

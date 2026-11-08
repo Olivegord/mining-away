@@ -1714,7 +1714,7 @@ return P
 
 end)()
 local JunkField = (function()
--- Shared timings and finishes for the local Quartz prototype.
+-- Shared timings and finishes for the themed junk clearings.
 local J={BatchSize=4,Cap=10,LowWork=2,CrewCap=2,DropHeight=53,FallTime=.82,SettleTime=.32}
 J.Props={
  {name='Pip Block',template='PipsCube',size=5.8,work=54,ore=10,color={232,220,194},interior='Wool'},
@@ -1722,19 +1722,36 @@ J.Props={
  {name='Battered Crate',template='TimberCube',size=6.8,work=82,ore=15,color={164,103,76},interior='Cork'},
  {name='Knit Block',template='KnitCube',size=5.5,work=59,ore=11,color={211,153,155},interior='Foam'},
  {name='Daisy Cube',template='DaisiesCube',size=5.3,work=50,ore=9,color={224,196,154},interior='Wool'},
+ {name='Fired Brick',template='BrickLow',size=6.1,work=75,ore=14,color={179,95,77},interior='Cork'},
 }
 J.TemplateProps={
  {name='Suggestion Box',template='SuggestionBox',work=67,ore=12,interior='Wool'},
- {name='Gumballs',template='GumballDispenser',work=72,ore=13,interior='Wool'},
  {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10,interior='Foam'},
- {name='Box Fan',template='BoxFan',work=79,ore=14,interior='Cork'},
- {name='Cube Aquarium',template='CubeAquarium',work=68,ore=12,interior='Wool'},
- {name='Ice Cube',template='IceCube',work=61,ore=11,interior='Wool'},
- {name='Ticket Box',template='TicketBox',work=57,ore=10,interior='Cork'},
  {name='Moving Box',template='MovingBox',work=62,ore=11,interior='Foam'},
 }
+J.TechProps={
+ {name='Glass Fuses',template='CartridgeFuses',work=61,ore=12,interior='Circuit'},
+ {name='Motherboard',template='Motherboard',work=75,ore=15,interior='Circuit'},
+ {name='Ribbon Cable',template='RibbonCable',work=57,ore=11,interior='Foam'},
+ {name='Circuit Traces',template='CircuitTraces',work=66,ore=13,interior='Circuit'},
+ {name='Fuse Box',template='FuseBox',work=73,ore=14,interior='Circuit'},
+ {name='Heat Sink',template='HeatSink',work=81,ore=16,interior='Circuit'},
+}
+function J.withTemplates(props,specs,folder)
+ local result=table.clone(props)
+ if folder then
+  for _,spec in ipairs(specs) do
+   local template=folder:FindFirstChild(spec.template)
+   if template and template:IsA('Part') then
+    local prop=table.clone(spec);prop.size=template.Size.X;table.insert(result,prop)
+   end
+  end
+ end
+ return result
+end
 local interiors={Wool={Enum.Material.Fabric,Color3.fromRGB(248,244,231)},
- Cork={Enum.Material.Wood,Color3.fromRGB(215,174,120)},Foam={Enum.Material.Fabric,Color3.fromRGB(193,237,211)}}
+ Cork={Enum.Material.Wood,Color3.fromRGB(215,174,120)},Foam={Enum.Material.Fabric,Color3.fromRGB(193,237,211)},
+ Circuit={Enum.Material.Metal,Color3.fromRGB(148,120,82)}}
 function J.finish(name)
  local finish=interiors[name]
  if finish then return finish[1],finish[2] end
@@ -6741,22 +6758,27 @@ for _,f in ipairs(scene.fields) do
   table.insert(field.turrets,t)
  end
  if f.cfg.Turrets==0 then field.e.phase='Safe' end
- -- The prototype runs in Studio on the authored quarry. Live servers retain
- -- the released Quartz rules even if these Sources are used in a later build.
- field.junk=preview and f.cfg.Key=='Quartz' and scene.map:FindFirstChild('QuarryMotifScenery') or nil
- field.model:SetAttribute('JunkClearing',field.junk~=nil)
- table.insert(patches,field);restoreTurrets(field)
- if field.junk then
-  field.junkTemplates=game:GetService('ServerStorage'):FindFirstChild('JunkCubeTemplates')
-  field.junkProps=table.clone(JunkField.Props)
-  if field.junkTemplates then
-   for _,spec in ipairs(JunkField.TemplateProps) do
-    local template=field.junkTemplates:FindFirstChild(spec.template)
-    if template and template:IsA('Part') then
-     local prop=table.clone(spec);prop.size=template.Size.X;table.insert(field.junkProps,prop)
-    end
+ -- The themed drops share the preview-only clearing system.
+ if preview then
+  local library=game:GetService('ServerStorage'):FindFirstChild('JunkCubeTemplates')
+  if f.cfg.Key=='Quartz' then
+   field.junk=scene.map:FindFirstChild('QuarryMotifScenery')
+   if field.junk then
+    field.junkTheme='Arts & Crafts';field.junkTemplates=library
+    field.junkProps=JunkField.withTemplates(JunkField.Props,JunkField.TemplateProps,library)
+   end
+  elseif f.cfg.Key=='Ruby' and library then
+   local tech=library:FindFirstChild('Tech')
+   local props=JunkField.withTemplates({},JunkField.TechProps,tech)
+   if #props==#JunkField.TechProps then
+    field.junkTheme='Tech';field.junk=tech;field.junkTemplates=tech;field.junkProps=props
    end
   end
+ end
+ field.model:SetAttribute('JunkClearing',field.junk~=nil)
+ field.model:SetAttribute('JunkTheme',field.junkTheme)
+ table.insert(patches,field);restoreTurrets(field)
+ if field.junk then
   field.nextJunkDrop=now+2.4
  else seedField(field) end
  field.model:SetAttribute('AlwaysUnlocked',field.cfg.AlwaysUnlocked==true)
@@ -6983,7 +7005,7 @@ function fracture:step()
  end
 end
 local function secondaryMining(d: any,primary: any,amount: number,radius: number)
- if primary.field.junk then return false end -- One claimed target per Quartz job.
+ if primary.field.junk then return false end -- One claimed target per salvage job.
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
   if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
@@ -7994,7 +8016,7 @@ function scene.dispatchJunk(field)
   for i,d in ipairs(crew.workers) do
    if chooseResource(d,field) then
     table.remove(crew.workers,i)
-    field.junkTurn=(field.junkTurn or 0)+1;crew.p.junkTurn=field.junkTurn;crew.turn=field.junkTurn
+    scene.junkTurn=(scene.junkTurn or 0)+1;crew.p.junkTurn=scene.junkTurn;crew.turn=scene.junkTurn
     d.state='Travel'
     return true
    end
@@ -8470,7 +8492,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
-  if field.junk then reject('Order the Quartz clearing to send your crew',field,d);return end
+  if field.junk then reject('Order the clearing to send your crew',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
   if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the plot to mine',field,d);return end
   if field.cfg.Turrets>0 and field.e.phase=='Cleared' then grantClear(p,field) end
@@ -8496,7 +8518,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(id)~='string' or #id>160 then reply('rejected','Invalid rock');return end
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
-  if r.field.junk then reply('rejected','Order the Quartz clearing to send your crew',r);return end
+  if r.field.junk then reply('rejected','Order the clearing to send your crew',r);return end
   p.oreQueue=p.oreQueue or {}
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
@@ -8552,7 +8574,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    end
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
-   if field.junk then notice(p,'Crew assigned to Quartz salvage. Press Recall to stop.') end
+   if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end
    commandReply(pl,payload,'accepted',field.junk and 'Clearing order accepted' or 'Plot survey assigned',field)
   else
    local fleet={}
@@ -8722,7 +8744,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   end
   pickupStep(C.Tick)
   fracture:step()
-  if patches[1].junk then scene.dispatchJunk(patches[1]) end
+  for _,field in ipairs(patches) do if field.junk then scene.dispatchJunk(field) end end
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   scene.fieldTools:step(C.Tick)

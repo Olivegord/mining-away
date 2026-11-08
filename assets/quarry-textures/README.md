@@ -85,13 +85,13 @@ These 64×64 tiles are drawn for DRONEREVOLUTION. Regenerate them from the repos
 
 ## Junk object faces
 
-The 20 RGB images in `junk/` are 64×64 pixels each. They cover the eight object cube templates. The plywood and moving box faces use real CC0 color maps with original labels, hardware, and seams. The other faces use cropped, rectified, downsampled or composited photographs. The gumballs crop covers all six faces of its cube.
+The 26 RGB images in `junk/` are 64×64 pixels each. They cover the eight original object templates and six Tech templates. The plywood and moving box faces use real CC0 color maps with original labels, hardware, and seams. The other faces use cropped, rectified, downsampled or composited photographs. The gumballs crop covers all six faces of its cube.
 
 | Faces | Source and creator | License | Source filename for regeneration |
 | --- | --- | --- | --- |
 | Suggestion box | [Plywood](https://polyhaven.com/a/plywood), Poly Haven | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `plywood_diff_1k.jpg` |
 | Moving box | [Paper 005](https://ambientcg.com/view?id=Paper005), ambientCG | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `Paper005_1K-JPG_Color.jpg` |
-| Gumballs | [Bulk barn gum balls](https://commons.wikimedia.org/wiki/File:Bulk_barn_gum_balls_(19645672551).jpg), mark.watmough | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `bulk-gumballs.jpg` |
+| Gumballs | [Bubble gum at the Haribo factory](https://commons.wikimedia.org/wiki/File:Bubble_gum_at_the_Haribo_factory.jpg), Martial Bacquet | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) | `gumballs-haribo.jpg` |
 | Alphabet block | [A pile of alphabet wooden blocks](https://commons.wikimedia.org/wiki/File:A_pile_of_alphabet_wooden_blocks.jpg), Bobjgalindo | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | `alphabet.jpg` |
 | Box fan | [Two box fans](https://commons.wikimedia.org/wiki/File:Two_box_fans.jpg), Arbitrarily0 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) | `fan.jpg` |
 | Aquarium | [Goldfish community](https://commons.wikimedia.org/wiki/File:Goldfish_community.JPG), Humanfeather / Michelle Jo | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `fish.jpg` |
@@ -100,3 +100,18 @@ The 20 RGB images in `junk/` are 64×64 pixels each. They cover the eight object
 | Ticket box | [Take a Number](https://commons.wikimedia.org/wiki/File:Take_a_Number,_(14495402297).jpg), Mike Mozart | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `ticket.jpg` |
 
 The adapted photos in `junk/` retain the licenses listed above. Roblox asset IDs are in [the template authoring script](../../tools/studio_junk_cube_templates.lua). Regenerate with Pillow using `python3 tools/draw_junk_cubes.py <plywood_diff_1k.jpg> <Paper005_1K-JPG_Color.jpg> <photo-directory>`.
+
+### Tech faces
+
+The six Tech faces use tight, rectified crops at 64×64. Regenerate with NumPy and Pillow using `python3 tools/draw_junk_tech.py <photo-directory>`. The active asset IDs are in [the area authoring script](../../tools/studio_junk_areas.lua).
+
+| Face | Source and creator | License | Source filename |
+| --- | --- | --- | --- |
+| Motherboard | [RP2350 chip macro](https://commons.wikimedia.org/wiki/File:Macro_photograph_of_the_RP2350_microcontroller_on_a_Raspberry_Pi_Pico_2_board.jpg), Profpcde | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `chip-macro.jpg` (1280 px preview) |
+| Circuit traces | [Integrated circuits electronics](https://commons.wikimedia.org/wiki/File:Integrated_circuits_electronics.jpg), Paolo Neo | Public domain | `chips.jpg` |
+| Glass fuses | [Electrical fuses 1 A](https://commons.wikimedia.org/wiki/File:Electrical_fuses_1_A.jpg), F1jmm | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | `glass-fuses.jpg` |
+| Fuse box | [Closeup of the car fuses](https://commons.wikimedia.org/wiki/File:Closeup_of_the_car_fuses.jpg), Shixart1985 | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `blade-fuses.jpg` |
+| Ribbon cable | [60-Wire Flat Ribbon Cable](https://commons.wikimedia.org/wiki/File:60-Wire_Flat_Ribbon_Cable.jpg), s58y | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `ribbon.jpg` |
+| Heat sink | [Heat sink type-Straight](https://commons.wikimedia.org/wiki/File:Heat_sink_type-Straight.jpg), Project Kei | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | `heat-flat.jpg` |
+
+The adapted tiles retain the listed licenses.

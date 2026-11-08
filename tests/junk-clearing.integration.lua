@@ -89,3 +89,24 @@ move(second,field.center+Vector3.new(0,0,150));advance(.2)
 assert(jobs(q)==0,'leaving the clearing releases the claim')
 for _=1,6 do advance(2.6);assert(nodeUsage(field)<=JunkField.Cap) end
 print('PASS Quartz fair claims, late-join priority, bowling damage, release and field cap')
+
+local ruby=patches[2]
+assert(ruby.cfg.Key=='Ruby' and ruby.junkTheme=='Tech' and #ruby.junkProps==6)
+local techPlayer,techCrew=join(310007);move(techPlayer,ruby.center)
+input(techPlayer,'Patch',ruby.id)
+assert(techCrew.drones[1].autoField~=ruby.id,'Ruby shop gate must still apply to Tech')
+data(techCrew).run.shops.Ruby=true
+function workspace:Raycast(from,delta)
+ if delta.Y< -50 and math.abs(delta.X)+math.abs(delta.Z)<1e-6 then
+  local top=ruby.part.Position.Y+ruby.part.Size.Y/2
+  return {Instance=ruby.part,Position=Vector3.new(from.X,top,from.Z)}
+ end
+ return nil
+end
+input(techPlayer,'Patch',ruby.id);advance(5)
+local techTarget=assert(techCrew.drones[1].target,'Second clearing must dispatch a crew after the shop unlock')
+assert(techTarget.field==ruby and techTarget.kind=='Junk' and techTarget.part:GetAttribute('Mineral')=='Ruby')
+local registered={}
+for _,spec in ipairs(ruby.junkProps) do registered[spec.name]=true end
+for _,r in ipairs(ruby.resources) do assert(registered[r.part.Name],'Only Tech templates should land in Ruby') end
+print('PASS Ruby Tech templates, shop gate, dispatch and mineral identity')

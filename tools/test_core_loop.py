@@ -12,6 +12,17 @@ with tempfile.TemporaryDirectory(prefix='mining-core-loop-') as directory:
   subprocess.run([str(luau/'luau'),str(path)],check=True)
  path=Path(directory)/'junk-clearing.lua'
  path.write_text('\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
+  '''
+function runService:IsStudio() return true end
+local function addTechTemplates()
+ local library=Instance.new('Folder');library.Name='JunkCubeTemplates';library.Parent=serverStorage
+ local tech=Instance.new('Folder');tech.Name='Tech';tech.Parent=library
+ for _,name in ipairs({'CartridgeFuses','Motherboard','RibbonCable','CircuitTraces','FuseBox','HeatSink'}) do
+  local part=Instance.new('Part');part.Name=name;part.Size=Vector3.one*6;part.Parent=tech
+ end
+end
+addTechTemplates()
+''',
   bundle(),';(function()\n'+(ROOT/'tests/junk-clearing.integration.lua').read_text()+'\nend)()']))
  subprocess.run([str(luau/'luau'),str(path)],check=True)
  path=Path(directory)/'client.lua';path.write_text(client_bundle())
