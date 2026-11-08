@@ -2,7 +2,11 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
-## November 7 latest — sparse blocky quarry
+## November 7 latest — continuous ground and original detail
+
+Keep the original trees, flowers, rocks, mushrooms, and distinctive textures. Reduce clutter by fixing the ground and spacing those details. A single level should read as one uninterrupted surface. Keep the six mining elevations and deliberate terrace edges and ramps. Use the supplied reference for large quiet grass and gravel surfaces, with small, colorful patterned props.
+
+## Earlier November 7 direction — sparse blocky quarry
 
 Make the entire quarry much simpler and blockier while keeping its levels. Use the reference for open ground, bold color, simple textures, and occasional varied props. Keep the six mining elevations, connected routes, and recognizable biome silhouettes. Favor broad rectangular rock and grass steps over dense faceted walls, deep woodland, and complicated decoration.
 
