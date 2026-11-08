@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — match crystal spawns and the idle swarm
+
+Use the open Mining Away ruby patch as the reference for starter crystal placement, mesh size, health and respawn timing. Match its default drone spacing and height while the swarm follows the player. Keep the shiny red crystals, collectible ore, moving beam contact, four permanent starters and existing progression. No Roblox publication requested.
+
 ## November 8 latest — keep the beam on the turning crystal
 
 Follow Mining Away's crystal-local beam contact as the crystal snaps to a new facing and shrinks. Keep the contact on the visible crystal surface. No Roblox publication requested.

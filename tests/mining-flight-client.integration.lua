@@ -37,9 +37,11 @@ check('arrival remains bounded and converges across frame rates',function()
  assert((results[1]-results[3]).Magnitude<.01)
 end)
 check('reference flight uses a 10-stud ring and the original cruise and ease',function()
- for slot=1,4 do
-  local offset=Feel.followGoal(Vector3.zero,slot,4,0,.35,true)
-  assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-10)<1e-7)
+ local offsets={Vector3.new(0,7,10),Vector3.new(-10,7,0),Vector3.new(0,7,-10),Vector3.new(10,7,0)}
+ for slot,expected in ipairs(offsets) do
+  local offset=Feel.followGoal(Vector3.zero,slot,4,0,0)
+  assert((offset-expected).Magnitude<1e-7)
+  assert(math.abs((offset-offsets[slot%4+1]).Magnitude-math.sqrt(200))<1e-7)
  end
  for _,fps in ipairs({30,60,144}) do
   local dt=1/fps;local near,far=Vector3.zero,Vector3.zero

@@ -25,31 +25,30 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred,compact)
+local function fitsReference(x,z,halfX,halfZ,occupied)
+ if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
+ for _,other in ipairs(occupied or {}) do
+  local dx,dz=x-other.x,z-other.z
+  -- Nearby crystals can cluster like the reference. Leave enough space
+  -- between centers to avoid stacking two targets at the same contact.
+  if dx*dx+dz*dz<4 then return false end
+ end
+ return true
+end
+function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
+ if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
  if halfX<0 or halfZ<0 then return nil,0 end
- -- The compact starter field needs room for four miners to work in
- -- parallel. Visit distinct sites in random order instead of letting
- -- early random placements strand empty space between them.
- local sites
- if compact and not preferred and halfX>.45 and halfZ>.45 then
-  sites={}
-  for i=0,15 do sites[i+1]=i end
- end
- local attempts=preferred and 1 or (sites and #sites or P.MAX_ATTEMPTS)
+ local attempts=preferred and 1 or P.MAX_ATTEMPTS
  for attempt=1,attempts do
-  -- A grower's committed plan is rechecked exactly where it planted. It does
-  -- not roll a larger rock later or silently move its successful animation.
+  -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z
-  elseif sites then
-   local index=math.min(#sites,math.floor(random(0,#sites))+1)
-   local site=table.remove(sites,index)
-   x=(site%4/3*2-1)*(halfX-.45)+random(-.45,.45)
-   z=(math.floor(site/4)/3*2-1)*(halfZ-.45)+random(-.45,.45)
-  else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
-  if P.fits(x,z,width,depth,radius,occupied) and (not clear or clear(x,z,radius)) then
+  if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
+  local fits
+  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied)
+  else fits=P.fits(x,z,width,depth,radius,occupied) end
+  if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt
   end
  end

@@ -1,6 +1,6 @@
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -131,18 +131,13 @@ function F.formation(slot,count)
  local x,z=F.formationXZ(slot,count)
  return Vector3.new(x,0,z)
 end
-function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)*.2 end
+function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
 function F.followOffset(slot,count,time,maxStep60)
- local x,z=F.formationXZ(slot,count)
- return x,F.FollowHeight+F.hover(time,maxStep60),z
+ local angle=2*math.pi*slot/math.max(1,count)
+ return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,referenceMiner)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
- if referenceMiner and count<=5 then
-  local angle=2*math.pi*slot/count
-  x,z=math.cos(angle)*10,math.sin(angle)*10
- end
- if referenceMiner then y=F.FollowHeight+math.sin(time+maxStep60*200)/3 end
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)

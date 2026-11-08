@@ -37,9 +37,9 @@ check('60Hz yaw blend equals original .1 and other rates match',function()
 end)
 check('zero dt and reached goals never drift or NaN',function() near(F.approachScalar(1,10,.3,0),1);near(F.approachScalar(1,1,.3,1),1);near(F.turnAlpha(0),0) end)
 check('first six fleet sizes form stable radius10 ring',function()
- for count=1,6 do for slot=1,count do local x,z=F.formationXZ(slot,count);near(math.sqrt(x*x+z*z),10);near(F.hover(0,.35),math.sin(70)/3) end end
+ for count=1,6 do for slot=1,count do local x,y,z=F.followOffset(slot,count,0,.35);near(math.sqrt(x*x+z*z),10);near(y,7+math.sin(70)/3) end end
 end)
-check('hover amplitude and six second period preserve original',function()
+check('hover amplitude and period preserve original',function()
  for i=0,1000 do assert(math.abs(F.hover(i/100,.3))<=1/3) end
  near(F.hover(.4,.3),F.hover(.4+2*math.pi,.3))
 end)

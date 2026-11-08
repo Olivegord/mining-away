@@ -263,7 +263,7 @@ end)()
 local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -394,18 +394,13 @@ function F.formation(slot,count)
  local x,z=F.formationXZ(slot,count)
  return Vector3.new(x,0,z)
 end
-function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)*.2 end
+function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
 function F.followOffset(slot,count,time,maxStep60)
- local x,z=F.formationXZ(slot,count)
- return x,F.FollowHeight+F.hover(time,maxStep60),z
+ local angle=2*math.pi*slot/math.max(1,count)
+ return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,referenceMiner)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
- if referenceMiner and count<=5 then
-  local angle=2*math.pi*slot/count
-  x,z=math.cos(angle)*10,math.sin(angle)*10
- end
- if referenceMiner then y=F.FollowHeight+math.sin(time+maxStep60*200)/3 end
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -9479,9 +9474,10 @@ local function renderResource(r,now)
  local spawnAt=s:GetAttribute('SpawnAt') or now-2
  local readyAt=s:GetAttribute('ReadyAt') or spawnAt+2
  local junk=s:GetAttribute('Kind')=='Junk'
- -- Original TweenInfo default Quad/Out: size and rise share the same two-second envelope.
+ local reference=s:GetAttribute('ReferenceCrystal')==true
+ -- The open Mining Away uses the full-size crystal during its readiness delay.
  local growth=1
- if not junk then
+ if not junk and not reference then
   growth=Feel.growth(now,spawnAt)
   if readyAt-spawnAt~=2 then local g=math.clamp((now-spawnAt)/math.max(.01,readyAt-spawnAt),0,1);growth=1-(1-g)^2 end
  end
@@ -9491,7 +9487,7 @@ local function renderResource(r,now)
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
- local period=Feel.stageScale(stage,stageCount)
+ local period=reference and 1 or Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
@@ -9556,10 +9552,7 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   -- Avoidance is chosen once by the server. Observer-specific crowds must
-   -- not invent competing lanes and send the same drone different ways.
-   d.swarmSteer=s:GetAttribute('SwarmOffset') or Vector3.zero
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,referenceMiner)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0)+d.swarmSteer
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero

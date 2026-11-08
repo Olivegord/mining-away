@@ -3,6 +3,15 @@ local checks=0
 local function check(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));checks+=1;print('PASS Quartz server '..name) end
 RoleEffects.BreakerPhase=function() end;discoveries.TrySpawn=function() end
 local pl=player(310001);players.PlayerAdded:Fire(pl);local p=assert(profiles[pl.UserId]);local field=patches[1]
+check('new miners spawn in the four-slot reference formation',function()
+ local origin=characterRoot(p).Position
+ local offsets={Vector3.new(0,0,10),Vector3.new(-10,0,0),Vector3.new(0,0,-10),Vector3.new(10,0,0)}
+ for slot,d in ipairs(p.drones) do
+  local offset=d.pos-origin
+  assert((Vector3.new(offset.X,0,offset.Z)-offsets[slot]).Magnitude<1e-6,'starter fleet did not spawn in the reference ring')
+  assert(math.abs(offset.Y-7)<=1/3 and d.state=='Follow')
+ end
+end)
 local function input(action,payload) p.tokens=7;p.bucketAt=now;command.OnServerEvent:Fire(pl,action,payload) end
 local function move(position) pl.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0))) end
 local serial=0
@@ -15,7 +24,7 @@ local function tick()
  pickupStep(C.Tick)
 end
 local function sell() move(scene.converter.Position);input('Sell') end
-check('the small starter patch starts with two waves of shiny red crystals',function()
+check('the starter field starts with sixteen scattered full-size crystals',function()
  local originalRng=seed
  local crystal=Instance.new('UnionOperation')
  crystal.Size=Vector3.new(3.135,6.566902,4.487231)
@@ -24,8 +33,14 @@ check('the small starter patch starts with two waves of shiny red crystals',func
  for roll=1,24 do
   seed=Random.new(roll)
   seedField(field)
-  assert(nodeUsage(field)==12,'starter field did not fill at seed '..roll)
+  assert(nodeUsage(field)==16,'starter field did not fill at seed '..roll)
+  local occupied={}
   for _,r in ipairs(field.resources) do
+   local site=field.part.CFrame:PointToObjectSpace(r.position)
+   assert(site.X%1==0 and site.Z%1==0 and math.abs(site.X)<=15 and math.abs(site.Z)<=15 and math.abs(site.Y-3)<1e-5)
+   for _,other in ipairs(occupied) do assert((Vector3.new(site.X,0,site.Z)-other).Magnitude>=2) end
+   table.insert(occupied,Vector3.new(site.X,0,site.Z))
+   assert(r.maxHP>=50 and r.maxHP<=100 and r.hp==r.maxHP-10 and r.readyAt==r.spawnAt+2)
    assert(r.part.ClassName=='UnionOperation' and r.limit==1 and r.stageCount==3)
    assert((r.fullSize-crystal.Size).Magnitude<.0001)
    assert(r.part.Color.R==1 and r.part.Color.G==0 and r.part.Color.B==0 and r.part.Material==Enum.Material.Ice and r.part.Transparency==.2)
@@ -33,6 +48,34 @@ check('the small starter patch starts with two waves of shiny red crystals',func
   end
  end
  seed=originalRng
+end)
+check('the reference crystal stays full size and respawns after eight seconds with four workers',function()
+ move(field.center)
+ local r=field.resources[1]
+ r.readyAt=now
+ local miner=p.drones[1]
+ assert(assignOre(p,miner,r));miner.pos=committedStation(miner,r);miner.mining=true
+ assert(hitResource(miner,r,r.maxHP*.26) and r.stage==1 and (r.part.Size-r.fullSize).Magnitude==0)
+ local brokenAt=now
+ local before={};for _,rock in ipairs(field.resources) do before[rock.id]=true end
+ assert(hitResource(miner,r,1000) and r.paid and r.removeAt==brokenAt+2)
+ for _,drone in ipairs(p.drones) do drone.field=field.id end
+ local rate,count=respawnRate(field);assert(rate==1 and count==4)
+ assert(field.respawnQueue[1]==brokenAt+8)
+ local function advance(seconds)
+  for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
+ end
+ advance(7.8)
+ assert(nodeUsage(field)==15 and not r.part.Parent,'replacement spawned early or broken crystal lingered')
+ advance(.4)
+ assert(nodeUsage(field)==16,'replacement was late')
+ local replacement
+ for _,rock in ipairs(field.resources) do if not before[rock.id] then replacement=rock;break end end
+ assert(replacement and replacement.spawnAt>=brokenAt+8 and replacement.readyAt==replacement.spawnAt+2)
+ for _,drone in ipairs(p.drones) do leaveDroneField(p,drone) end
+ -- Isolate the paid-packs fixture from the ore earned in this timing case.
+ data(p).run.cargo={}
+ for id,drop in pairs(pickups) do if drop.owner==pl.UserId then drop.part:Destroy();pickups[id]=nil end end
 end)
 for _,r in ipairs(field.resources) do r.paid=true;r.hp=0 end
 local function mine()

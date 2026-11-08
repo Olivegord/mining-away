@@ -32,11 +32,12 @@ check('large replication delay never creates a teleport on resume',function()
  renderDrone(d,1/60,0);local prior=d.pos;d.source:SetAttribute('MotionPaused',false)
  for i=1,180 do renderDrone(d,1/60,i/60);assert((d.pos-prior).Magnitude<=.368*1.25+1e-6);prior=d.pos end
 end)
-check('live role flight heights survive pause-safe client rendering',function()
+check('idle roles share the exact ring independently of their work height and avoidance',function()
  for _,height in ipairs({4,7,10,12}) do
   local d=create('Follow',false);d.source:SetAttribute('FlightHeight',height)
-  local goal=Feel.followGoal(ownerRoot.Position,1,1,1,.368)+Vector3.new(0,height-7,0)
-  local expected=Feel.approach(Vector3.zero,goal,.368,1/60)
+  d.source:SetAttribute('SwarmOffset',Vector3.new(2,0,1))
+  local goal=Feel.followGoal(ownerRoot.Position,1,1,1,.368)
+  local expected=Feel.inertialApproach(Vector3.zero,goal,Vector3.zero,.368,1/60,false)
   renderDrone(d,1/60,1);assert((d.pos-expected).Magnitude<1e-8)
  end
 end)

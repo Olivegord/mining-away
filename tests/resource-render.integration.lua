@@ -29,4 +29,16 @@ assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==2)
+-- Reference-size crystals appear fully formed, then turn at a crack.
+local fixed=source:Clone()
+fixed:SetAttribute('ReferenceCrystal',true)
+fixed:SetAttribute('HP',75);fixed:SetAttribute('Stage',0);fixed:SetAttribute('BreakSerial',0)
+fixed:SetAttribute('SpawnAt',70);fixed:SetAttribute('ReadyAt',72)
+local fixedRecord={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(0,false,70,3)}
+renderResource(fixedRecord,70)
+local originalSize=fixedRecord.view.Size
+local originalDirection=fixedRecord.view.CFrame.LookVector
+assert(originalSize.X==3 and not fixedRecord.settled)
+fixed:SetAttribute('Stage',1);renderResource(fixedRecord,72.2)
+assert(fixedRecord.view.Size.X==3 and (fixedRecord.view.CFrame.LookVector-originalDirection).Magnitude>.2)
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

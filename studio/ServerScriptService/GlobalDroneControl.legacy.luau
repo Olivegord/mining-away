@@ -1382,7 +1382,7 @@ end)()
 local Config = (function()
 -- All numbers are provisional playtest tuning. No permanent fleet ownership cap.
 local fields={
- {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={255,0,0},ReferenceCrystals=true,Count=12,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={30,2,30}},
+ {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={255,0,0},ReferenceCrystals=true,Count=16,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={30,2,30}},
  {Name='Ruby Grove',Key='Ruby',Hardness=1.8,Color={226,75,112},Count=16,Ore=12,Value=2,Respawn=14,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Original='rubyPatch',Offset={-62.7,11.5,108.3},Size={42,2,42}},
  {Name='Cobalt Ridge',Key='Cobalt',Hardness=3.2,Color={89,150,234},Count=6,Ore=15,Value=4,Respawn=25,Turrets=1,TurretHP=260,Damage=19,ShotCooldown=1.8,RecommendedFleet=1,Original='cobaltPatch',Offset={1.9,18.5,-98.8},Size={42,2,42}},
  {Name='Violet Basin',Key='Violet',Hardness=5.2,Color={166,115,217},Count=9,Ore=16,Value=7,Respawn=35,Turrets=2,TurretHP=390,Damage=24,ShotCooldown=1.8,RecommendedFleet=3,Offset={106.4,28.5,-77.9},Size={47.6,2,44.8}},
@@ -1403,7 +1403,7 @@ end)()
 local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -1534,18 +1534,13 @@ function F.formation(slot,count)
  local x,z=F.formationXZ(slot,count)
  return Vector3.new(x,0,z)
 end
-function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)*.2 end
+function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
 function F.followOffset(slot,count,time,maxStep60)
- local x,z=F.formationXZ(slot,count)
- return x,F.FollowHeight+F.hover(time,maxStep60),z
+ local angle=2*math.pi*slot/math.max(1,count)
+ return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,referenceMiner)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
- if referenceMiner and count<=5 then
-  local angle=2*math.pi*slot/count
-  x,z=math.cos(angle)*10,math.sin(angle)*10
- end
- if referenceMiner then y=F.FollowHeight+math.sin(time+maxStep60*200)/3 end
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -1870,31 +1865,30 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred,compact)
+local function fitsReference(x,z,halfX,halfZ,occupied)
+ if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
+ for _,other in ipairs(occupied or {}) do
+  local dx,dz=x-other.x,z-other.z
+  -- Nearby crystals can cluster like the reference. Leave enough space
+  -- between centers to avoid stacking two targets at the same contact.
+  if dx*dx+dz*dz<4 then return false end
+ end
+ return true
+end
+function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
+ if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
  if halfX<0 or halfZ<0 then return nil,0 end
- -- The compact starter field needs room for four miners to work in
- -- parallel. Visit distinct sites in random order instead of letting
- -- early random placements strand empty space between them.
- local sites
- if compact and not preferred and halfX>.45 and halfZ>.45 then
-  sites={}
-  for i=0,15 do sites[i+1]=i end
- end
- local attempts=preferred and 1 or (sites and #sites or P.MAX_ATTEMPTS)
+ local attempts=preferred and 1 or P.MAX_ATTEMPTS
  for attempt=1,attempts do
-  -- A grower's committed plan is rechecked exactly where it planted. It does
-  -- not roll a larger rock later or silently move its successful animation.
+  -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z
-  elseif sites then
-   local index=math.min(#sites,math.floor(random(0,#sites))+1)
-   local site=table.remove(sites,index)
-   x=(site%4/3*2-1)*(halfX-.45)+random(-.45,.45)
-   z=(math.floor(site/4)/3*2-1)*(halfZ-.45)+random(-.45,.45)
-  else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
-  if P.fits(x,z,width,depth,radius,occupied) and (not clear or clear(x,z,radius)) then
+  if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
+  local fits
+  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied)
+  else fits=P.fits(x,z,width,depth,radius,occupied) end
+  if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt
   end
  end
@@ -6682,15 +6676,17 @@ local function randomTestFleet(p: any)
  p.player:SetAttribute('MA_TestLoadoutLabel',table.concat(labels,' · '))
  return includePurchasedSpecials(p,fleet)
 end
-local function spawnDrone(p,owned,slot)
+local function spawnDrone(p,owned,slot,origin)
  local stats=Ca.stats(data(p),owned,previewPerks(p))
  local roleName=owned.role or owned.type
  local role=RoleConfig.StudioRoles[roleName]
  local flightHeight=owned.flightHeight or (role and role.height) or Feel.FollowHeight
  -- Runtime presentation lift; never rewrite a permanent drone's base traits.
- if roleName=='Striker' then flightHeight=7
+ if roleName=='Striker' then flightHeight=Feel.ReferenceFollowHeight
  elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
- local pos=home+Vector3.new(0,flightHeight,0)+Feel.formation(slot,#runtimeFleet(p))
+ local hr=characterRoot(p)
+ origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
+ local pos=Feel.followGoal(origin,slot,#runtimeFleet(p),now,owned.base.maxStep60)
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or colors.Blue,roleName=='Striker')
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
@@ -6700,12 +6696,12 @@ local function spawnDrone(p,owned,slot)
   mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0,healAt=0,chargeAt=nil}
  drones[d.id]=d;table.insert(p.drones,d);return d
 end
-local function rebuildFleet(p)
+local function rebuildFleet(p,origin)
  for _,d in ipairs(p.drones) do release(d);spend(d);drones[d.id]=nil;d.model:Destroy() end
  p.drones={}
  local ids={};for _,owned in ipairs(runtimeFleet(p)) do if owned.role=='Courier' then table.insert(ids,owned.id) end end
  if Pro.reconcileCargo(data(p),ids) then p.dirty=true end
- for i,owned in ipairs(runtimeFleet(p)) do spawnDrone(p,owned,i) end
+ for i,owned in ipairs(runtimeFleet(p)) do spawnDrone(p,owned,i,origin) end
 end
 local function refreshStats(p)
  for _,d in ipairs(p.drones) do
@@ -6753,6 +6749,7 @@ local function respawnRate(field: any)
   local p=profiles[d.owner]
   if d.field==field.id and d.hp>0 and healthy(p) and characterRoot(p) then count+=1 end
  end
+ if field.cfg.ReferenceCrystals then return 1,count end
  local tuning=RoleConfig.Mining
  return math.min(tuning.RespawnRateMaximum,tuning.RespawnRateBase+math.max(0,count-1)*tuning.RespawnRatePerDrone),count
 end
@@ -6767,9 +6764,12 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  part:SetAttribute('CubicRock',not original)
- local shell=kind=='Geode';local size=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
+ local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
+ local shell=kind=='Geode';local size=reference and 3 or visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
+ -- The live reference's mesh center sits three studs above the patch center.
+ if reference then ground=field.part.Position.Y+3-fullSize.Y*.5+.06 end
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=junk and junk.name or kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=not junk;part.Size=fullSize;part.Position=finish
@@ -6777,7 +6777,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
- elseif field.cfg.ReferenceCrystals and kind=='Crystal' then
+ elseif reference then
   -- The original Mining Away crystal sample: a shiny red Ice union.
   part.Color=field.color;part.Material=Enum.Material.Ice;part.MaterialVariant=''
   part.Transparency=.2;part.Reflectance=0
@@ -6792,7 +6792,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  end
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
- local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
+ local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
   slots={},limit=(shell or (stageCount or 3)>3) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
@@ -6800,7 +6800,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  end
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false)
  resources[r.id]=r;table.insert(field.resources,r)
- for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
+ for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
 end
 function scene.junkLandingOccupied(position,radius)
@@ -6858,6 +6858,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
+ local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
  local excluded={field.model,droneFolder}
@@ -6865,7 +6866,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
- local visualSize=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local visualSize=reference and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
@@ -6881,7 +6882,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local preferred
  if plan then local p=field.part.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
  local selected=ResourcePlacement.sample(field.part.Size.X,field.part.Size.Z,radius,occupied,
-  function(a,b) return seed:NextNumber(a,b) end,function(x,z)
+  function(a,b)
+   if reference then return seed:NextInteger(a,b) end
+   return seed:NextNumber(a,b)
+  end,function(x,z)
    local candidate=field.part.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
    -- Authored trees also live outside Map. Check the footprint and overhead
    -- flight space against the actual world, including those branches.
@@ -6890,7 +6894,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
    end
    return true
-  end,preferred,field.cfg.ReferenceCrystals and kind=='Crystal')
+  end,preferred,reference)
  if not selected then return false end
  local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
@@ -7016,7 +7020,8 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   if accepted<units then pending[material]=(pending[material] or 0)+units-accepted end
   p.dirty=true;p.publishDirty=true;return
  end
- local ground=r.part:GetAttribute('GroundY') or r.field.part.Position.Y+r.field.part.Size.Y*.5
+ local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
+ local ground=r.referenceCrystal and fieldTop or (r.part:GetAttribute('GroundY') or fieldTop)
  local _,nodes=pendingOre(p)
  local nodeDrops=0
  for _,drop in pairs(pickups) do
@@ -7202,7 +7207,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if tool=='Greatsword' and not r.slice then
   r.slice=math.clamp(.5+r.part.CFrame:PointToObjectSpace(fractureContext.point).Y/r.part.Size.Y,.35,.65);r.part:SetAttribute('SliceScale',r.slice);shapeChanged=true
  end
- if tool=='Melt' or tool=='JellyGrenade' or (special and d.role=='Starforge') or (not abilityOrigin and d.mining and d.role=='Striker') then
+ if tool=='Melt' or tool=='JellyGrenade' or (special and d.role=='Starforge') or (not r.referenceCrystal and not abilityOrigin and d.mining and d.role=='Striker') then
   local rate=tool=='Melt' and 5 or tool=='JellyGrenade' and 1.6 or special and 2 or .9
   r.heat=math.min(1,(r.heat or 0)+amount/math.max(1,r.maxHP-10)*rate)
   local heat=math.floor(r.heat*4+1e-6)
@@ -7248,7 +7253,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  local scale=Feel.stageScale(r.stage,r.stageCount)
+  local scale=r.referenceCrystal and 1 or Feel.stageScale(r.stage,r.stageCount)
   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
  end
@@ -7274,7 +7279,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    if not r.consumableWorked then
     if scene.fieldTools then scene.fieldTools:onRock(p,r) end
    end
-   if not r.field.junk then table.insert(r.field.respawnQueue,r.field.respawnClock+r.field.cfg.Respawn) end
+   if not r.field.junk then
+    local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
+    table.insert(r.field.respawnQueue,respawnClock+r.field.cfg.Respawn)
+   end
   end
  end
  if not secondary and not abilityOrigin then
@@ -7481,7 +7489,7 @@ end
 local function move(d,goal,dt)
  d.intentGoal=goal
  local settling=d.target~=nil or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
- local weight=d.state=='Recover' and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
+ local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
  d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
  goal=goal+d.swarmOffset
@@ -7514,6 +7522,10 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  if d.repairTarget then
   if d.repairTarget.hp>0 and d.repairTarget.hp<d.repairTarget.stats.maxHealth then best=d.repairTarget
   else d.repairTarget=nil;d.repairChargeAt=nil;d.healTargetId=nil end
+ end
+ if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
+  d.state='Follow';d.mining=false;d.healTargetId=nil
+  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
@@ -7594,7 +7606,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
@@ -7639,7 +7651,7 @@ end
 local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  d.mining=false;d.state=state or 'Follow'
- move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+ move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -7854,7 +7866,16 @@ local function droneStep(d: any,dt: number)
  end
  local hr=characterRoot(p)
  if not hr and d.deployedCarrier and d.field and patches[d.field] then hr={Position=patches[d.field].center} end
- if not hr then if d.field then leaveField(p,nil,nil,true) end;move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,d.flightHeight or Feel.FollowHeight,0),dt);return end
+ if not hr then
+  if d.field then leaveField(p,nil,nil,true) end
+  if d.state=='Follow' then
+   local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0)
+   move(d,Feel.followGoal(spawnAt,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+  else
+   move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,d.flightHeight or Feel.FollowHeight,0),dt)
+  end
+  return
+ end
  if d.lingerUntil and not d.breaker then
   if now<d.lingerUntil then
    d.state='Recover';d.mining=false;move(d,d.lingerGoal or d.pos,dt);return
@@ -7883,7 +7904,7 @@ local function droneStep(d: any,dt: number)
   d.mining=false;d.field=nil
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt);return
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
   end
   if Pro.cargoUnits(data(p))>0 and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
@@ -7896,7 +7917,7 @@ local function droneStep(d: any,dt: number)
   else
    d.pickupAt=nil;d.deliveryRequested=false
    d.state='Follow'
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
   end
   return
  elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return
@@ -7925,7 +7946,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -7934,10 +7955,10 @@ local function droneStep(d: any,dt: number)
   d.mining=false;d.combatTarget=nil
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,height-Feel.FollowHeight,0)
+  if d.state~='Return' then d.state='Follow' end
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
-  if d.state~='Return' then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
  end
 end
@@ -8550,9 +8571,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   p.testRoll=(p.testRoll or 0)+1
   local owned={id=string.format('test:%d:add:%d',pl.UserId,p.testRoll),type=payload.role,role=payload.role,name=RoleConfig.Types[payload.role].DisplayName,flightHeight=role.height,base=Pro.clone(role.base)}
   table.insert(p.testFleet,owned)
-  local d=spawnDrone(p,owned,#p.testFleet);local hr=characterRoot(p)
-  d.pos=Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0)
-  d.goal=d.pos;d.model:PivotTo(CFrame.new(d.pos));snapshotDrone(d)
+  local d=spawnDrone(p,owned,#p.testFleet);snapshotDrone(d)
   pl:SetAttribute('MA_TestLoadoutLabel',tostring(#p.testFleet)..' preview drones')
   refreshStats(p);p.publishDirty=true
  elseif action=='NormalLoadout' then
@@ -8773,16 +8792,19 @@ addPlayer=function(pl)
  profiles[pl.UserId]=p
  pl:SetAttribute('MA_TestingEnabled',preview);pl:SetAttribute('MA_DevToolsEnabled',RunService:IsStudio());pl:SetAttribute('MA_NoRestock',false)
  pl:SetAttribute('MA_TestLoadoutLabel','Use RANDOM LOADOUT for 2–5 random drones')
+ local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0)
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
-  local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0);local firstField=scene.fields[1].center
+  local firstField=scene.fields[1].center
   scene.fieldTools:clear(p);p.hazardAt={}
-  leaveField(p,nil,nil,true);ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
+  if p.characterReady then leaveField(p,nil,nil,true) end
+  p.characterReady=true
+  ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
   if inStudio and not p.previewToolsGranted then p.previewToolsGranted=true;scene.fieldTools:previewLoadout(p) end
  end
  p.connection=pl.CharacterAdded:Connect(character)
- rebuildFleet(p);logistics:create(p);publish(p)
+ rebuildFleet(p,spawnAt);logistics:create(p);publish(p)
  if pl.Character then task.spawn(character,pl.Character) end
 end
 Players.PlayerAdded:Connect(function(pl) task.spawn(addPlayer,pl) end)
@@ -8853,7 +8875,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,d in pairs(drones) do snapshotDrone(d) end
   for _,field in ipairs(patches) do
    for _,r in ipairs(field.resources) do
-    local solid=not r.paid and now>=r.readyAt
+    local solid=not r.referenceCrystal and not r.paid and now>=r.readyAt
     if field.junk then
      if r.part.CanQuery~=solid then r.part.CanQuery=solid end
      if solid and not r.part.CanCollide then solid=not scene.junkLandingOccupied(r.position,r.fullSize.Magnitude*.5) end
@@ -8876,7 +8898,10 @@ RunService.Heartbeat:Connect(function(dt: number)
    local rate,count=respawnRate(field)
    field.model:SetAttribute('MiningDroneCount',count);field.model:SetAttribute('RespawnRate',rate)
    local replenishing=field.e.phase=='Safe' or field.e.phase=='Cleared' or scene.unlockedMiners(field)
-   if replenishing then field.respawnClock+=snapshotDt*rate end
+   if replenishing then
+    if field.cfg.ReferenceCrystals then field.respawnClock=now
+    else field.respawnClock+=snapshotDt*rate end
+   end
    table.sort(field.respawnQueue)
    local replenished=0
    while replenishing and #field.respawnQueue>0 and field.respawnClock>=field.respawnQueue[1] and replenished<field.cfg.Count do
