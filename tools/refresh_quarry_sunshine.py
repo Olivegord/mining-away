@@ -15,14 +15,14 @@ def validate_tree(e):
     assert e['path'] in {PREFIX+'Quartz.SteppedTree.'+n for n in ['Trunk','Canopy1','Canopy2','Canopy3']}
     assert e['before'].keys()==e['after'].keys()=={'position','size'}
 
-def merge(data, edits):
+def merge(data, edits, validate_part=validate_tree, allowed_properties=None):
     original=Native(data)
-    result,changed=patch_parts(original,edits['parts'],validate_edit=validate_tree)
+    result,changed=patch_parts(original,edits['parts'],validate_edit=validate_part)
     base=Native(result)
     updates=defaultdict(dict)
     for e in edits['properties']:
         path,name=e['path'],e['property']
-        assert name in ALLOWED.get(path,set()) or (path.startswith(PREFIX+'GroundLayers.') and path.endswith('.SecondaryGrain') and name in {'Transparency','StudsPerTileU','StudsPerTileV','Color3'})
+        assert name in (allowed_properties or ALLOWED).get(path,set()) or (path.startswith(PREFIX+'GroundLayers.') and path.endswith('.SecondaryGrain') and name in {'Transparency','StudsPerTileU','StudsPerTileV','Color3'})
         assert base.paths[path]
         for ref in base.paths[path]:
             cid,cls,i,_=base.instances[ref]

@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f800e98a2e7a93277e4e21e2ebb344a3e9cb9bba89a217ccc78ee4bddceab2e7` | Background save of the brighter lighting, stronger ground layers and relocated Quartz tree. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `2b13719c8b9b2f2d55fc8e33f45fc4abaa3bedf1801c92a6b41cddde903ccb11` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,15 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — brighter reference treatment and visible Quartz tree
+## Latest follow-up — rectangular meadow layers and fresh daylight
+
+Added 36 broad rectangular turf patches across the authored ground, with varied greens and independent texture offsets. They preserve the original fine grass material and sit only 0.055 studs above the turf; all are noncollidable, nonqueryable, nontouchable and cast no shadows. Their placements passed five ground samples each before authoring. Six biome turf palettes and the hub now use fresher greens; existing cross flowers use stronger yellow, pink, cyan and coral. Reduced the broad grain opacity so it does not obscure the patch boundaries.
+
+Consulted Roblox's global lighting and ColorCorrectionEffect documentation and searched gameplay references for Grow a Garden and Steal an Egg. Changed brightness to 2.6, exposure to 0.04, neutralized the warm top shift, reduced environment diffuse/specular contribution, and adjusted cool ambient fill. Kept the 8:30 sun direction, Realistic mode and 0.04 shadow softness. These are this project's authored settings, not claimed settings extracted from either referenced game. Sources: https://create.roblox.com/docs/environment/lighting and https://create.roblox.com/docs/reference/engine/classes/ColorCorrectionEffect .
+
+Studio was already open in Edit at entry and remains open in Edit. Inspected actual Quartz and hub screenshots in the shared DRONEREVOLUTION document (place 124078027733625, universe 10774898335). Verified 36 patch parts and their physics flags in Edit. No new Play, multiplayer or mobile test was run. Background save changed 148 surface tints, 42 lighting/texture properties and appended 89 instances; it preserved all 50 Sources and all unrelated existing native properties. build.py reported no Source changes. Shared Edit is current; public Roblox remains v43, with no publication performed. Reproduction: tools/studio_quarry_meadow.lua and tools/refresh_quarry_meadow.py.
+
+## Earlier follow-up — brighter reference treatment and visible Quartz tree
 
 The owner rejected the prior look. At entry Studio was already open in Play; the actual Client had the courtyard and its previous lighting (brightness 1.78, exposure -0.055), so missing installation was not the cause. Stopped Play and edited the same shared DRONEREVOLUTION document (place 124078027733625, universe 10774898335).
 

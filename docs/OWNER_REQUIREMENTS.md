@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — visible grass patches and cheerful game color
+
+The reference grass uses broad rectangular patches with different greens and texture phases. Fine grain over a whole slab alone does not match it. Keep walking surfaces flat, but make those patch boundaries visible. Research Roblox lighting and the visual direction of Grow a Garden / Steal an Egg; use fresher greens and colorful accents while retaining the photo textures, crisp shadows, sparse props, and existing mining levels.
+
 ## November 7 latest — restore the reference feel visibly
 
 The owner rejected the courtyard follow-up as too unlike the reference and could not see the layered ground or new tree. Keep the photo-textured grass/gravel and mining elevations, make the stepped tree plainly visible, and make the lighting brighter, colorful and happy. A successful save alone does not establish visual acceptance. Do not claim an exact recreation from parameter checks.
