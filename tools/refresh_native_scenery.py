@@ -38,6 +38,9 @@ CONTRAST_SCOPE = {
         "QuarryDrone_Painted", "QuarryDrone_Ribbed",
     }, {"MaterialVariant"}),
 }
+BASIN_SCOPE = {
+    "scenery": (MAP, {"QuarryBasin"}, {"Folder", "WedgePart"}),
+}
 
 
 class Native:
@@ -121,7 +124,7 @@ def close(first, second):
     return len(first) == len(second) and all(math.isclose(a, b, rel_tol=0, abs_tol=.0015) for a, b in zip(first, second))
 
 
-def patch_parts(base, edits, contrast=False):
+def patch_parts(base, edits, contrast=False, basin=False):
     batches = {}
     seen = set()
     equivalent = []
@@ -132,6 +135,8 @@ def patch_parts(base, edits, contrast=False):
         assert path.startswith(TERRACES) or (contrast and path == QUARTZ), f"Native edit outside authored terraces: {path}"
         if contrast:
             assert edit["after"].keys() <= {"color", "variant"}, "Contrast pass cannot alter geometry"
+        if basin:
+            assert path.endswith(".Turf") and edit["after"].keys() == {"color"}, "Basin only re-tints existing turf"
         assert edit["before"].keys() == edit["after"].keys() <= mapping.keys()
         candidates = []
         for ref in base.paths.get(path, []):
@@ -223,13 +228,14 @@ def read_section(directory, name):
     return subprocess.run(["zstd", "-d", "-q", "-c"], input=compressed, capture_output=True, check=True).stdout
 
 
-def merge(base, directory, contrast=False):
+def merge(base, directory, contrast=False, basin=False):
     plan = json.loads(read_section(directory, "edits"))
     assert plan.keys() == {"edits", "moves"} and plan["edits"]
-    assert bool(plan["moves"]) != contrast, "Unexpected archive operation for this pass"
+    assert bool(plan["moves"]) == (not contrast and not basin), "Unexpected archive operation for this pass"
     original = Native(base)
-    result, touched = patch_parts(original, plan["edits"], contrast)
-    for name, (parent, roots, allowed) in (CONTRAST_SCOPE if contrast else SCOPE).items():
+    result, touched = patch_parts(original, plan["edits"], contrast, basin)
+    scope = BASIN_SCOPE if basin else CONTRAST_SCOPE if contrast else SCOPE
+    for name, (parent, roots, allowed) in scope.items():
         model = read_section(directory, name)
         assert model.startswith(b"<roblox!\x89\xff\r\n\x1a\n"), "Expected Studio's native binary model export"
         scoped = Native(model)
@@ -272,12 +278,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export_dir", type=Path)
     parser.add_argument("--baseline-sha256", required=True)
-    parser.add_argument("--contrast", action="store_true", help="Use the quarry contrast pass allowlist")
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--contrast", action="store_true", help="Use the quarry contrast pass allowlist")
+    scope.add_argument("--basin", action="store_true", help="Use the quarry basin pass allowlist")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")
     args = parser.parse_args()
     data = CANONICAL_OUTPUT.read_bytes()
     assert sha256(data).hexdigest() == args.baseline_sha256, "Canonical file changed; reconcile before saving"
-    result, stats = merge(data, args.export_dir, args.contrast)
+    result, stats = merge(data, args.export_dir, args.contrast, args.basin)
     if args.write:
         write_snapshot(data, result)
     print(json.dumps({**stats, "wrote": args.write, "sha256": sha256(result).hexdigest()}, indent=2))

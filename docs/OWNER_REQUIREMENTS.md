@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — enclose the quarry and enlarge the terraces
+
+Use the supplied terrain image for scale and relief. Surround the quarry with high rock walls, add broad tiered landforms near the working areas, and use green, lime and warm ground patches to separate elevations. Let dark rock show below the grass. Fit the new land around the existing paths, mining beds, and biome landmarks. Save the authored map in Studio Edit and the canonical file through the background workflow.
+
 ## November 7 latest — drone silhouettes and selective texture contrast
 
 Give the drones recognizable shapes and materials from the quarry. Use quiet painted panels, rougher hardware, and clear effect cores; preserve each tool's motion, timing and function. Mix the stronger photo textures from the earlier look with the subdued finishes. Use strong mineral veins, rougher Quartz gravel, and selected lush turf patches against quieter surroundings.
