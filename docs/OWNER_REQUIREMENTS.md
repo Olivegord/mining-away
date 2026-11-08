@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — fix platform z-fighting
+
+Remove the flickering from overlapping platform surfaces. Preserve the restored stylized textures, restrained regional colors, rock mining and the waterfront sample display.
+
 ## November 8 latest — more colorful, without overdoing it
 
 Keep the restored stylized textures and rock mining. Make the world more colorful and stimulating while still looking good; realism is optional, but avoid an overdone treatment. Use restrained regional colors and retain readable mining surfaces.

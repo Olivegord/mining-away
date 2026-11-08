@@ -9,17 +9,29 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8ea8c29643431891c5b81d215c4610731665c62555e264644d62932bbf8ecdd0` | Restrained regional color pass over the restored textured rock fields. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Livelier regional colors and late-morning lighting; rock mining retained. |
+| Native-file SHA-256 | `f808afd5858223056d8908277fb83d10e2411dd062a9b7c0ec00b2df5ab50e44` | Platform overlap repair over the restrained regional palette. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Platform grass/path cuts and buried foundation insets; rock mining and palette retained. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The regional palette and late-morning lighting are installed. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
-| Roblox publication | **No publication in the color pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The platform overlap repairs, regional palette and late-morning lighting are installed. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the platform repair** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — platform overlap repair
+
+On the `17b47807b14de2449c69878481164805b120e7bc` baseline, cut the six terrace turf surfaces around the mining beds. Their grass tops were only 0.025 studs below the beds. Split the hub's intersecting paths and the two garden corners beneath the decorative gravel court, keeping the original surface finishes. The original parts remain with reduced footprints, plus fourteen small surface fragments in `Map.PlatformSurfaceFill`; no instances or Sources were removed. Inset four older EarthMass blocks by 0.2 studs per side, resolve the buried Cobalt foundation edge, and stop NorthOverlook's earth from intersecting its turf. Raise the two short horizontal bridges and their worn strips by 0.16 studs to separate their overlapping ends from the adjoining floors.
+
+All six field transforms/sizes, lighting, textures, regional colors, raised meadow patches, and the waterfront display (125 descendants) remain. The checked native save changes 22 existing part transforms/sizes and adds one folder with fourteen parts, preserving all 50 Sources and every original parent. The seven installed managed Source hashes match the snapshot, and all three Script Sync roots are `SyncedAsRoot`.
+
+Verified 2,515 actual Edit architecture ray probes with no missing support. Twenty samples changed by at most 0.16 studs: the two bridge adjustments and removal of up to 0.08-stud invisible collision overlays below the decorative court. All other sampled heights remain within 0.003 studs. A separate scan found zero near-coplanar grass/bed overlaps across all six beds. Inspected the actual Edit map close to Quartz and from the hub overview. This is static Edit verification, not a Play, low-end-device, moving-camera or multiplayer test.
+
+Studio was already open and remains open in Edit in **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**, loaded version **76**. The normal shared Studio entry point contains this repair; the public release was not changed or independently checked. No publication. The canonical file is `build/DRONE_GAME.rbxl`; `git log -1 -- build/DRONE_GAME.rbxl` identifies the integrated repair revision.
+
+Reproduce from the baseline using `python3 tools/refresh_platform_surfaces.py <directory>` and [the reviewed plan](review/platform-surfaces-plan.json). Execute its generated `stage.lua` in the matching Edit map, save `shared.PlatformSurfaces.export` as `fill.b64`, run the saver without `--write`, then apply `shared.PlatformSurfaces.apply()` and inspect. After successful verification run the saver with `--write` and `python3 tools/build.py`. The stage rolls back if support verification fails. No local save dialog or publication is needed.
 
 ## Latest follow-up — livelier, restrained regional colors
 
