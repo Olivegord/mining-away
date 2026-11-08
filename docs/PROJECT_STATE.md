@@ -25,7 +25,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 The authored Lighting service now uses Realistic lighting and shadow softness of 0.04. Global shadows, lighting quality priority, and the 8:30 sun direction retain their prior settings. The same Quartz camera angle in Studio Edit showed sharper outlines under the trees and cubes.
 
-The scoped background save changed only the two Lighting properties and preserved all 50 Sources. Studio was already open and was left in Edit. No Play test or lower graphics setting check was run. The last verified public Roblox release is v43.
+The scoped background save changed only the two Lighting properties and preserved all 50 Sources. A fresh Studio Play session from the shared entry point reported Realistic lighting, shadow softness of 0.04, an 8:30 sun, and all 69 motif props on both server and client. The canonical file was saved atomically during that test and its SHA-256 still matched the lighting revision. Studio was already open and was returned to Edit. The Play viewport and lower graphics levels were not visually checked. The last verified public Roblox release is v43.
 
 ## Earlier follow-up — visible quarry motifs
 
