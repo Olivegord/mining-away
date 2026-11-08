@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — livelier quarry and connected biomes
+
+Keep the low-resolution, realistic photo textures. Give the original trees dedicated canopy and bark textures so they belong in the scene. Dark surfaces are fine where there is contrast; avoid darkening the whole map, and add visible glow and local lights. Use free online sources without image generation.
+
+Give the mining patches distinct surrounding biomes and blend them along their approaches. The mushroom grove references show tall blue trumpet caps with cream rims and smaller coral fans with curved stems. Ruby's reference shows scarlet ground cover against cool, broken gray cliffs. Make a watery area with turquoise water, bright white rocks and green foliage. Compose the scene around a clear view and better scenery forms; the first tiny circular pools were rejected. Preserve the quarry's connected routes and mining layout. The ore should look shiny through its textures; keep the existing rock models and geometry.
+
 ## November 7 latest — low-resolution photo textures, visible sun, weighted ore
 
 Use free online texture photos with visibly low resolution. The reference cues are Brainchip Arena's large mortar seams and ribbed panels and Nullscape's worn, repeating tiles. Keep the quarry lively and preserve its existing setting and dawn lighting. Make the sun and rays more visible. Ore currency needs a heavier fall and landing, with a restrained sparkle and a short motion trail. The shipped texture files are sourced from Poly Haven. [Brainchip Arena](https://medal.tv/games/roblox/clips/nLt9rIzUkRVLyp6vG) · [Nullscape](https://www.youtube.com/watch?v=ndx3rRFgrYQ&t=12s) · [Texture sources](../assets/quarry-textures/README.md)

@@ -86,6 +86,10 @@ def module_bundle(names):
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')
+  if name=='World':
+   # Keep World helpers scoped to World; the game controller is near Luau's local limit.
+   biome=(ROOT/'src/QuarryBiomes.lua').read_text()
+   code=code.replace("require('./QuarryBiomes')",'(function()\n'+biome+'\nend)()')
   if 'Packs' in names[:names.index(name)]:code=code.replace("local Packs=require('./Packs')\n",'')
   if 'Shops' in names[:names.index(name)]:code=code.replace("local Shops=require('./Shops')\n",'')
   if 'DroneRoles' in names[:names.index(name)]:code=code.replace("local DroneRoles=require('./DroneRoles')\n",'')

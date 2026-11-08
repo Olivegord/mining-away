@@ -1,6 +1,6 @@
 # Quarry photo textures
 
-These 64×64 diffuse tiles come from photographs published by Poly Haven under its [CC0 asset license](https://polyhaven.com/license). The game uses the color maps at deliberately low resolution, with the quarry's authored lighting.
+These 64×64 diffuse tiles come from [Poly Haven's CC0 library](https://polyhaven.com/license) and CC0 photographs on Wikimedia Commons. The game uses the color maps at deliberately low resolution, with the quarry's authored lighting.
 
 | File | Source | Roblox image ID |
 | --- | --- | --- |
@@ -12,3 +12,11 @@ These 64×64 diffuse tiles come from photographs published by Poly Haven under i
 | `metal.png` | [Corrugated Iron](https://polyhaven.com/a/corrugated_iron) | `130262067528876` |
 | `timber.png` | [Wooden Planks](https://polyhaven.com/a/wooden_planks) | `86358766199540` |
 | `concrete.png` | [Concrete Floor](https://polyhaven.com/a/concrete_floor) | `108412286318300` |
+| `canopy.png` | [Green Healthy Seamless Vegetation](https://commons.wikimedia.org/wiki/File:Green_healthy_seamless_vegetation_leaves_foliage_dense_hedge_shrub_texture.jpg) | `125617899060932` |
+| `evergreen.png` | [Green Dark Vegetation](https://commons.wikimedia.org/wiki/File:Green_dark_vegetation_leaves_foliage_dense_bush_shrub_seamless_texture.jpg) | `133678056070638` |
+| `bark.png` | [Tree Bark 03](https://polyhaven.com/a/tree_bark_03) | `132987628304161` |
+| `ruby-leaves.png` | [Forest Leaves 03](https://polyhaven.com/a/forest_leaves_03), lifted and tinted for dawn | `116981632144499` |
+| `grey-stone.png` | [Rock 01](https://polyhaven.com/a/rock_01) | `113935833702067` |
+| `chalk-white.png` | [White Plaster Rough 01](https://polyhaven.com/a/white_plaster_rough_01), graded to cool white | `112016713025924` |
+| `ore-vein.png` | [Covellite, pyrite and quartz, GeoDIL no. 2274](https://commons.wikimedia.org/wiki/File:Covellite,_pyrite_and_quartz_(GeoDIL_number_-_2274).jpg), cropped and graded | `101826947844494` |
+| `ore-roughness.png` | Derived from the same GeoDIL photograph; bright mineral veins are smoother than the host stone | `134197243065883` |

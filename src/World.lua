@@ -221,9 +221,18 @@ end
 -- The authored terraces use the stud pack for nearly every surface, including
 -- earth, plants and wood. Map those finishes to actual surface materials at
 -- server startup so the original parts, placement and archives stay intact.
+local QuarryBiomes=require('./QuarryBiomes')
 local quarryVariants={}
+local polishedOre=false
 function W.applyQuarryVariant(part)
  part.MaterialVariant=quarryVariants[part.Material] or ''
+end
+function W.applyOreFinish(part)
+ W.applyQuarryVariant(part)
+ if polishedOre then
+  part.MaterialVariant='QuarryOre_Polished'
+  part.Reflectance=.11
+ end
 end
 function W.applyQuarryTextures(scene)
  if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
@@ -236,6 +245,7 @@ function W.applyQuarryTextures(scene)
  for _,variant in ipairs(game:GetService('MaterialService'):GetChildren()) do
   local base=variant:IsA('MaterialVariant') and variant.Name:match('^QuarryPhoto_(%w+)$')
   if base then quarryVariants[material[base]]=variant.Name end
+  if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Polished' then polishedOre=true end
  end
  local oldFinish={
   DR_MeadowFine={material.Grass,rgb(103,112,77)},
@@ -246,7 +256,7 @@ function W.applyQuarryTextures(scene)
   DR_ExposedRock={material.Slate,rgb(109,98,86)},
   DR_WornPath={material.Pavement,rgb(143,134,116)},
  }
- local function finish(part,base,tint)
+ local function finish(part,base,tint,foliageVariant)
   if part.Transparency>=1 or part.Material==material.Neon then return end
   if part.Material~=base or part.MaterialVariant~='' then
    -- Material changes can otherwise change friction and elasticity on paths.
@@ -254,7 +264,17 @@ function W.applyQuarryTextures(scene)
    part.Material=base;part.MaterialVariant=''
   end
   W.applyQuarryVariant(part)
-  part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
+  if foliageVariant then
+   part.MaterialVariant=foliageVariant;part.Color=tint
+  elseif base==material.Grass or base==material.LeafyGrass then
+   -- The aerial tile is olive in its diffuse map. A green tint keeps grass
+   -- legible against the orange cliffs under the authored dawn light.
+   part.Color=rgb(154,239,197):Lerp(tint,.12)
+  elseif base==material.Concrete or base==material.Pavement then
+   part.Color=rgb(211,228,251):Lerp(tint,.14)
+  else
+   part.Color=quarryVariants[base] and rgb(252,249,239):Lerp(tint,.18) or tint
+  end
   part.Reflectance=0
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
   part.FrontSurface=Enum.SurfaceType.Smooth;part.BackSurface=Enum.SurfaceType.Smooth
@@ -284,12 +304,14 @@ function W.applyQuarryTextures(scene)
     local prop=part.Parent.Name:lower()
     if prop:find('rock',1,true) then
      finish(part,material.Rock,rgb(109,110,107):Lerp(color,.16))
-    elseif color.G>color.R and color.G>color.B then
-     finish(part,material.LeafyGrass,rgb(94,108,67):Lerp(color,.19))
-    elseif prop:find('tree',1,true) then
-     finish(part,material.Wood,rgb(99,77,56):Lerp(color,.19))
     elseif prop=='model' and variant=='' then
-     finish(part,material.SmoothPlastic,rgb(227,203,156):Lerp(color,.57))
+     finish(part,material.SmoothPlastic,color:Lerp(rgb(227,203,156),.16))
+    elseif color.G>color.R and color.G>color.B then
+     local tall=prop:find('tree2',1,true)
+     local leaves=tall and 'QuarryFoliage_Evergreen' or 'QuarryFoliage_Canopy'
+     finish(part,material.LeafyGrass,rgb(194,232,202):Lerp(color,.14),leaves)
+    elseif prop:find('tree',1,true) then
+     finish(part,material.Wood,rgb(233,225,215):Lerp(color,.13),'QuarryFoliage_Bark')
     end
    elseif part.Name=='ServiceDeck' or part.Parent.Name=='WornRouteSurfaces' then
     finish(part,material.Concrete,rgb(130,123,108))
@@ -325,6 +347,38 @@ function W.applyQuarryTextures(scene)
  end
  local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
  if spawn then finish(spawn,material.Concrete,rgb(138,133,118)) end
+ local fixtures=Instance.new('Folder');fixtures.Name='QuarryLights';fixtures.Parent=scene.map
+ local routes=terraces:FindFirstChild('WalkableRoutes')
+ local function fixture(name,frame,size,tint,range,strength)
+  local lamp=block(fixtures,name,frame.Position,size,tint,material.Neon)
+  lamp.CFrame=frame;lamp.CastShadow=false
+  light(lamp,tint,range,strength)
+ end
+ for _,field in ipairs(scene.fields) do
+  local key=field.cfg.Key
+  local shop=scene.map:FindFirstChild(key..'Shop')
+  local board=shop and shop:FindFirstChild('ShopSign')
+  local tint=rgb(unpack(field.cfg.Color)):Lerp(rgb(247,245,233),.43)
+  if board and board:IsA('BasePart') then
+   local face=board:FindFirstChildWhichIsA('SurfaceGui')
+   local front=face and face.Face==Enum.NormalId.Back and 1 or -1
+   local frame=board.CFrame*CFrame.new(0,-board.Size.Y*.5-.08,front*(board.Size.Z*.5+.04))
+   fixture(key..'ShopGlow',frame,Vector3.new(board.Size.X*.67,.16,.22),tint,17,1.3)
+  end
+  local ramp=routes and routes:FindFirstChild(key..'Ramp')
+  if ramp and ramp:IsA('BasePart') then
+   local frame=ramp.CFrame*CFrame.new(ramp.Size.X*.5+.17,ramp.Size.Y*.5+.16,0)
+   fixture(key..'RampGlow',frame,Vector3.new(.24,.18,3.6),tint,13,1.25)
+  end
+ end
+ for _,name in ipairs({'Printer','PackStation','PrestigeStation'}) do
+  local station=scene.map:FindFirstChild(name,true)
+  if station and station:IsA('BasePart') then
+   local frame=station.CFrame*CFrame.new(0,station.Size.Y*.5+.07,-station.Size.Z*.32)
+   fixture(station.Name..'Glow',frame,Vector3.new(station.Size.X*.62,.14,.24),rgb(164,232,248),15,1.2)
+  end
+ end
+ QuarryBiomes.build(scene,terraces)
 end
 function W.ensureImpactField(root,fields)
  if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end

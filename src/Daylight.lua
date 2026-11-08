@@ -5,8 +5,14 @@ function Daylight.apply()
  local authored = workspace:FindFirstChild('MiningAway')
  local lighting = game:GetService('Lighting')
  if authored and authored:GetAttribute('DronerevolutionMapVersion') then
-  -- Keep the authored dawn, sky and grading. The sky's zero-size sun disk
-  -- hid the light source even though its SunRays effect was already enabled.
+  -- Keep the authored dawn and sky. Cooler fill gives the greens room to
+  -- separate from the warm key, which still comes from the same direction.
+  lighting.OutdoorAmbient=Color3.fromRGB(157,166,173)
+  lighting.ColorShift_Top=Color3.fromRGB(103,86,46)
+  lighting.ExposureCompensation=.22
+  lighting.EnvironmentSpecularScale=.32
+  local grade=lighting:FindFirstChildOfClass('ColorCorrectionEffect')
+  if grade then grade.Contrast=.29;grade.Saturation=.11 end
   local sky=lighting:FindFirstChildOfClass('Sky')
   if sky then sky.SunAngularSize=8 end
   local rays=lighting:FindFirstChildOfClass('SunRaysEffect')
