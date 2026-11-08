@@ -3299,7 +3299,7 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
    local part=Instance.new('Part');part.Name=name;part.Anchored=true
    part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.Material=Enum.Material.Metal
    part.MaterialVariant='';part.Color=color;part.Reflectance=0;part.Size=size*scale
-   part.TopSurface=Enum.SurfaceType.Studs;part.BottomSurface=Enum.SurfaceType.Smooth
+   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
    part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation;part.Parent=model;return part
   end
   if role=='Orbiter' then
@@ -3348,7 +3348,6 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
   shape('RepairCrossB',Vector3.new(.22,.05,.8),CFrame.new(0,.15,0),Color3.fromRGB(160,204,157),Enum.Material.Plastic)
  else
   body=shape('CourierBox',Vector3.new(1.5,.7,1.15),CFrame.new(),Color3.fromRGB(136,120,88),Enum.Material.DiamondPlate)
-  body.TopSurface=Enum.SurfaceType.Studs
   for _,side in ipairs({-1,1}) do
    shape('LiftDrum',Vector3.new(.8,.38,.38),CFrame.new(side*.9,0,0)*CFrame.Angles(0,0,math.pi/2),slate,Enum.Material.Metal,Enum.PartType.Cylinder)
   end
@@ -4192,6 +4191,103 @@ local function nativeFinish(part,material,studs)
  part.TopSurface=studs and Enum.SurfaceType.Studs or Enum.SurfaceType.Smooth
  part.BottomSurface=Enum.SurfaceType.Smooth
 end
+
+-- The authored terraces use the stud pack for nearly every surface, including
+-- earth, plants and wood. Map those finishes to actual surface materials at
+-- server startup so the original parts, placement and archives stay intact.
+function W.applyQuarryTextures(scene)
+ if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
+ local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
+ if not terraces then return end
+ local material=Enum.Material
+ local rgb=Color3.fromRGB
+ local oldFinish={
+  DR_MeadowFine={material.Grass,rgb(103,112,77)},
+  DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
+  DR_MineralDust={material.Pebble,rgb(132,122,109)},
+  DR_MineralSeams={material.Rock,rgb(113,105,98)},
+  DR_CliffStrata={material.Sandstone,rgb(126,104,82)},
+  DR_ExposedRock={material.Slate,rgb(109,98,86)},
+  DR_WornPath={material.Pavement,rgb(143,134,116)},
+ }
+ local function finish(part,base,tint)
+  if part.Transparency>=1 or part.Material==material.Neon then return end
+  if part.Material~=base or part.MaterialVariant~='' then
+   -- Material changes can otherwise change friction and elasticity on paths.
+   if not part.CustomPhysicalProperties then part.CustomPhysicalProperties=part.CurrentPhysicalProperties end
+   part.Material=base;part.MaterialVariant=''
+  end
+  part.Color=tint;part.Reflectance=0
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+  part.FrontSurface=Enum.SurfaceType.Smooth;part.BackSurface=Enum.SurfaceType.Smooth
+  part.LeftSurface=Enum.SurfaceType.Smooth;part.RightSurface=Enum.SurfaceType.Smooth
+ end
+ for _,group in ipairs(terraces:GetChildren()) do
+  for _,part in ipairs(group:GetDescendants()) do
+   if not part:IsA('BasePart') then continue end
+   local variant=part.MaterialVariant
+   local color=part.Color
+   local authored=oldFinish[variant]
+   if authored then
+    finish(part,authored[1],authored[2]:Lerp(color,.17))
+   elseif group.Name=='WalkableRoutes' then
+    local curb=part.Name:match('Curb$')
+    finish(part,curb and material.Concrete or material.Pavement,curb and rgb(105,99,90) or rgb(151,139,114))
+   elseif group.Name=='StudPackCliffs' then
+    if variant=='Studs' then finish(part,material.Grass,rgb(100,109,72):Lerp(color,.17))
+    elseif variant=='Universal' then finish(part,material.Rock,rgb(117,101,84):Lerp(color,.22)) end
+   elseif group.Name=='WoodenMarketStalls' then
+    if color.R>color.G*1.25 and color.G>color.B*1.2 then
+     finish(part,material.WoodPlanks,rgb(123,98,74):Lerp(color,.22))
+    else
+     finish(part,material.CorrodedMetal,rgb(123,126,124):Lerp(color,.28))
+    end
+   elseif group.Name=='AssetScenery' or group.Name=='MarketGardens' then
+    local prop=part.Parent.Name:lower()
+    if prop:find('rock',1,true) then
+     finish(part,material.Rock,rgb(109,110,107):Lerp(color,.16))
+    elseif color.G>color.R and color.G>color.B then
+     finish(part,material.LeafyGrass,rgb(94,108,67):Lerp(color,.19))
+    elseif prop:find('tree',1,true) then
+     finish(part,material.Wood,rgb(99,77,56):Lerp(color,.19))
+    elseif prop=='model' and variant=='' then
+     finish(part,material.Fabric,rgb(139,130,103):Lerp(color,.34))
+    end
+   elseif part.Name=='ServiceDeck' or part.Parent.Name=='WornRouteSurfaces' then
+    finish(part,material.Concrete,rgb(130,123,108))
+   end
+  end
+ end
+ for _,item in ipairs(terraces:GetDescendants()) do
+  if item:IsA('Texture') and item.Name=='Checker Texture' and item.Texture=='rbxassetid://1372654506' then item:Destroy() end
+ end
+ for _,field in ipairs(scene.fields) do
+  finish(field.part,material.Pebble,rgb(130,121,107):Lerp(field.part.Color,.24))
+  local border=field.model:FindFirstChild('Border')
+  if border and border:IsA('BasePart') then finish(border,material.Concrete,rgb(111,105,96):Lerp(border.Color,.25)) end
+ end
+ local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
+ if depot then
+  for _,part in ipairs(depot:GetDescendants()) do
+   if not part:IsA('BasePart') then continue end
+   if part.Name:match('Pad$') then
+    finish(part,material.Concrete,rgb(131,128,118):Lerp(part.Color,.21))
+   elseif part.Name=='Printer' or part.Name=='PackStation' or part.Name=='PrestigeStation' then
+    finish(part,material.CorrodedMetal,rgb(109,111,106):Lerp(part.Color,.28))
+   end
+  end
+ end
+ for _,part in ipairs(scene.map:GetChildren()) do
+  if part:IsA('BasePart') and part.Name:match('Shop$') then
+   finish(part,material.CorrodedMetal,rgb(112,115,111):Lerp(part.Color,.3))
+  end
+ end
+ if scene.converter and scene.converter:IsA('BasePart') then
+  finish(scene.converter,material.DiamondPlate,rgb(96,101,100))
+ end
+ local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+ if spawn then finish(spawn,material.Concrete,rgb(138,133,118)) end
+end
 function W.ensureImpactField(root,fields)
  if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end
  local quartz=fields:FindFirstChild('Quartz');local source=quartz and quartz:FindFirstChild('Field')
@@ -4993,10 +5089,10 @@ function L.new(ctx: any): any
     if not overflow then
      overflow=Instance.new('Folder');overflow.Name='LogisticsOverflow';overflow.Parent=terraces
     end
-    local function floorPart(parent: any,name: string,position: Vector3,size: Vector3,color: Color3,variant: string): ()
+    local function floorPart(parent: any,name: string,position: Vector3,size: Vector3,color: Color3,material: Enum.Material): ()
      local floor=Instance.new('Part');floor.Name=name;floor.Size=size;floor.Position=position
      floor.Anchored=true;floor.CanCollide=true;floor.CanQuery=true;floor.CanTouch=false
-     floor.Material=Enum.Material.Plastic;floor.MaterialVariant=variant;floor.Color=color
+     floor.Material=material;floor.Color=color
      floor.TopSurface=Enum.SurfaceType.Smooth;floor.BottomSurface=Enum.SurfaceType.Smooth
      floor:SetAttribute('AuthoredMapSurface',true);floor:SetAttribute('GeneratedLogisticsFloor',true)
      floor.Parent=parent
@@ -5004,8 +5100,8 @@ function L.new(ctx: any): any
     local function floorAssembly(name: string,x: number,z: number,width: number,depth: number): ()
      if overflow:FindFirstChild(name) then return end
      local assembly=Instance.new('Model');assembly.Name=name
-     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(215,181,116),'Studs')
-     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(159,83,46),'Universal')
+     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(130,123,108),Enum.Material.Concrete)
+     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(126,104,82),Enum.Material.Sandstone)
      assembly.Parent=overflow
     end
     -- Shared rows persist for this server, including when their first owner leaves.
@@ -5401,6 +5497,7 @@ local C: any,R: any=Config,Rules
 local Pro: any,Ca: any=Profile,Cards
 local scene: any=World.initialize()
 World.placeStart(scene)
+World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
@@ -5743,7 +5840,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
- part.Color=shell and Color3.fromRGB(96,85,117) or field.color;part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
+ part.Color=shell and Color3.fromRGB(100,91,108) or Color3.fromRGB(132,125,115):Lerp(field.color,.38)
+ part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,

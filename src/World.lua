@@ -217,6 +217,103 @@ local function nativeFinish(part,material,studs)
  part.TopSurface=studs and Enum.SurfaceType.Studs or Enum.SurfaceType.Smooth
  part.BottomSurface=Enum.SurfaceType.Smooth
 end
+
+-- The authored terraces use the stud pack for nearly every surface, including
+-- earth, plants and wood. Map those finishes to actual surface materials at
+-- server startup so the original parts, placement and archives stay intact.
+function W.applyQuarryTextures(scene)
+ if not scene.root:GetAttribute('DronerevolutionMapVersion') then return end
+ local terraces=scene.map:FindFirstChild('DronerevolutionTerraces')
+ if not terraces then return end
+ local material=Enum.Material
+ local rgb=Color3.fromRGB
+ local oldFinish={
+  DR_MeadowFine={material.Grass,rgb(103,112,77)},
+  DR_MeadowMoss={material.LeafyGrass,rgb(87,101,70)},
+  DR_MineralDust={material.Pebble,rgb(132,122,109)},
+  DR_MineralSeams={material.Rock,rgb(113,105,98)},
+  DR_CliffStrata={material.Sandstone,rgb(126,104,82)},
+  DR_ExposedRock={material.Slate,rgb(109,98,86)},
+  DR_WornPath={material.Pavement,rgb(143,134,116)},
+ }
+ local function finish(part,base,tint)
+  if part.Transparency>=1 or part.Material==material.Neon then return end
+  if part.Material~=base or part.MaterialVariant~='' then
+   -- Material changes can otherwise change friction and elasticity on paths.
+   if not part.CustomPhysicalProperties then part.CustomPhysicalProperties=part.CurrentPhysicalProperties end
+   part.Material=base;part.MaterialVariant=''
+  end
+  part.Color=tint;part.Reflectance=0
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+  part.FrontSurface=Enum.SurfaceType.Smooth;part.BackSurface=Enum.SurfaceType.Smooth
+  part.LeftSurface=Enum.SurfaceType.Smooth;part.RightSurface=Enum.SurfaceType.Smooth
+ end
+ for _,group in ipairs(terraces:GetChildren()) do
+  for _,part in ipairs(group:GetDescendants()) do
+   if not part:IsA('BasePart') then continue end
+   local variant=part.MaterialVariant
+   local color=part.Color
+   local authored=oldFinish[variant]
+   if authored then
+    finish(part,authored[1],authored[2]:Lerp(color,.17))
+   elseif group.Name=='WalkableRoutes' then
+    local curb=part.Name:match('Curb$')
+    finish(part,curb and material.Concrete or material.Pavement,curb and rgb(105,99,90) or rgb(151,139,114))
+   elseif group.Name=='StudPackCliffs' then
+    if variant=='Studs' then finish(part,material.Grass,rgb(100,109,72):Lerp(color,.17))
+    elseif variant=='Universal' then finish(part,material.Rock,rgb(117,101,84):Lerp(color,.22)) end
+   elseif group.Name=='WoodenMarketStalls' then
+    if color.R>color.G*1.25 and color.G>color.B*1.2 then
+     finish(part,material.WoodPlanks,rgb(123,98,74):Lerp(color,.22))
+    else
+     finish(part,material.CorrodedMetal,rgb(123,126,124):Lerp(color,.28))
+    end
+   elseif group.Name=='AssetScenery' or group.Name=='MarketGardens' then
+    local prop=part.Parent.Name:lower()
+    if prop:find('rock',1,true) then
+     finish(part,material.Rock,rgb(109,110,107):Lerp(color,.16))
+    elseif color.G>color.R and color.G>color.B then
+     finish(part,material.LeafyGrass,rgb(94,108,67):Lerp(color,.19))
+    elseif prop:find('tree',1,true) then
+     finish(part,material.Wood,rgb(99,77,56):Lerp(color,.19))
+    elseif prop=='model' and variant=='' then
+     finish(part,material.Fabric,rgb(139,130,103):Lerp(color,.34))
+    end
+   elseif part.Name=='ServiceDeck' or part.Parent.Name=='WornRouteSurfaces' then
+    finish(part,material.Concrete,rgb(130,123,108))
+   end
+  end
+ end
+ for _,item in ipairs(terraces:GetDescendants()) do
+  if item:IsA('Texture') and item.Name=='Checker Texture' and item.Texture=='rbxassetid://1372654506' then item:Destroy() end
+ end
+ for _,field in ipairs(scene.fields) do
+  finish(field.part,material.Pebble,rgb(130,121,107):Lerp(field.part.Color,.24))
+  local border=field.model:FindFirstChild('Border')
+  if border and border:IsA('BasePart') then finish(border,material.Concrete,rgb(111,105,96):Lerp(border.Color,.25)) end
+ end
+ local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
+ if depot then
+  for _,part in ipairs(depot:GetDescendants()) do
+   if not part:IsA('BasePart') then continue end
+   if part.Name:match('Pad$') then
+    finish(part,material.Concrete,rgb(131,128,118):Lerp(part.Color,.21))
+   elseif part.Name=='Printer' or part.Name=='PackStation' or part.Name=='PrestigeStation' then
+    finish(part,material.CorrodedMetal,rgb(109,111,106):Lerp(part.Color,.28))
+   end
+  end
+ end
+ for _,part in ipairs(scene.map:GetChildren()) do
+  if part:IsA('BasePart') and part.Name:match('Shop$') then
+   finish(part,material.CorrodedMetal,rgb(112,115,111):Lerp(part.Color,.3))
+  end
+ end
+ if scene.converter and scene.converter:IsA('BasePart') then
+  finish(scene.converter,material.DiamondPlate,rgb(96,101,100))
+ end
+ local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
+ if spawn then finish(spawn,material.Concrete,rgb(138,133,118)) end
+end
 function W.ensureImpactField(root,fields)
  if root:GetAttribute('DronerevolutionMapVersion') and fields:FindFirstChild('ImpactTest') then return end
  local quartz=fields:FindFirstChild('Quartz');local source=quartz and quartz:FindFirstChild('Field')

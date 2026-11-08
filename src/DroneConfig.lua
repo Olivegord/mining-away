@@ -294,7 +294,7 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
    local part=Instance.new('Part');part.Name=name;part.Anchored=true
    part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.Material=Enum.Material.Metal
    part.MaterialVariant='';part.Color=color;part.Reflectance=0;part.Size=size*scale
-   part.TopSurface=Enum.SurfaceType.Studs;part.BottomSurface=Enum.SurfaceType.Smooth
+   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
    part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation;part.Parent=model;return part
   end
   if role=='Orbiter' then
@@ -343,7 +343,6 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
   shape('RepairCrossB',Vector3.new(.22,.05,.8),CFrame.new(0,.15,0),Color3.fromRGB(160,204,157),Enum.Material.Plastic)
  else
   body=shape('CourierBox',Vector3.new(1.5,.7,1.15),CFrame.new(),Color3.fromRGB(136,120,88),Enum.Material.DiamondPlate)
-  body.TopSurface=Enum.SurfaceType.Studs
   for _,side in ipairs({-1,1}) do
    shape('LiftDrum',Vector3.new(.8,.38,.38),CFrame.new(side*.9,0,0)*CFrame.Angles(0,0,math.pi/2),slate,Enum.Material.Metal,Enum.PartType.Cylinder)
   end

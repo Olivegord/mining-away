@@ -358,7 +358,6 @@ function W:courier(drone,record,now)
   local anchor=part(root,'TransferOrigin');local contact=part(root,'BackpackContact')
   local tether=W.newCylinder(root,'PickupTether',GOLD)
   local parcel=part(root,'CourierParcel');parcel.Size=Vector3.new(.62,.42,.5);parcel.Material=Enum.Material.WoodPlanks;parcel.Color=Color3.fromRGB(171,139,79)
-  parcel.TopSurface=Enum.SurfaceType.Studs
   local band=part(root,'ParcelLatch');band.Size=Vector3.new(.65,.07,.53);band.Material=Enum.Material.Metal;band.Color=GOLD
   local drive=part(root,'CourierWake');local trails={}
   if detailed then for _,side in ipairs({-1,1}) do

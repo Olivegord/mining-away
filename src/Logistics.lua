@@ -221,10 +221,10 @@ function L.new(ctx: any): any
     if not overflow then
      overflow=Instance.new('Folder');overflow.Name='LogisticsOverflow';overflow.Parent=terraces
     end
-    local function floorPart(parent: any,name: string,position: Vector3,size: Vector3,color: Color3,variant: string): ()
+    local function floorPart(parent: any,name: string,position: Vector3,size: Vector3,color: Color3,material: Enum.Material): ()
      local floor=Instance.new('Part');floor.Name=name;floor.Size=size;floor.Position=position
      floor.Anchored=true;floor.CanCollide=true;floor.CanQuery=true;floor.CanTouch=false
-     floor.Material=Enum.Material.Plastic;floor.MaterialVariant=variant;floor.Color=color
+     floor.Material=material;floor.Color=color
      floor.TopSurface=Enum.SurfaceType.Smooth;floor.BottomSurface=Enum.SurfaceType.Smooth
      floor:SetAttribute('AuthoredMapSurface',true);floor:SetAttribute('GeneratedLogisticsFloor',true)
      floor.Parent=parent
@@ -232,8 +232,8 @@ function L.new(ctx: any): any
     local function floorAssembly(name: string,x: number,z: number,width: number,depth: number): ()
      if overflow:FindFirstChild(name) then return end
      local assembly=Instance.new('Model');assembly.Name=name
-     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(215,181,116),'Studs')
-     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(159,83,46),'Universal')
+     floorPart(assembly,'ApronSurface',v(x,surface-.5,z),v(width,1,depth),Color3.fromRGB(130,123,108),Enum.Material.Concrete)
+     floorPart(assembly,'EarthSupport',v(x,surface-2.75,z),v(width,3.5,depth),Color3.fromRGB(126,104,82),Enum.Material.Sandstone)
      assembly.Parent=overflow
     end
     -- Shared rows persist for this server, including when their first owner leaves.

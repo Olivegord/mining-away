@@ -10,6 +10,7 @@ local C: any,R: any=Config,Rules
 local Pro: any,Ca: any=Profile,Cards
 local scene: any=World.initialize()
 World.placeStart(scene)
+World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
@@ -352,7 +353,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
- part.Color=shell and Color3.fromRGB(96,85,117) or field.color;part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
+ part.Color=shell and Color3.fromRGB(100,91,108) or Color3.fromRGB(132,125,115):Lerp(field.color,.38)
+ part.Material=shell and Enum.Material.Slate or Enum.Material.Rock;part.Reflectance=0
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
