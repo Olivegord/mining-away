@@ -13,6 +13,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import tempfile
@@ -49,6 +50,9 @@ BIOME_REACH_SCOPE = {
 }
 ARRIVAL_SCOPE = {
     "scenery": (MAP, {"QuarryArrivalAccents"}, {"Folder", "Part", "WedgePart"}),
+}
+LIMINAL_RESERVE_SCOPE = {
+    "scenery": (MAP, {"LiminalReserve"}, {"Folder", "Part", "WedgePart", "Decal"}),
 }
 MOTIF_SCOPE = {
     "scenery": (MAP, {"QuarryMotifScenery"}, {"Folder", "Part"}),
@@ -176,7 +180,7 @@ def check_palette_edit(edit):
         assert old == "QuarryPhoto_Slate" and new == "QuarryPalette_Strata"
 
 
-def patch_parts(base, edits, contrast=False, basin=False, palette=False, validate_edit=None):
+def patch_parts(base, edits, contrast=False, basin=False, palette=False, validate_edit=None, *, color_tolerance=0):
     batches = {}
     seen = set()
     equivalent = []
@@ -218,7 +222,12 @@ def patch_parts(base, edits, contrast=False, basin=False, palette=False, validat
                 continue
             for key, expected in edit["before"].items():
                 value = before[key][index]
-                matched = close(value, expected) if key in ("position", "size") else value == (tuple(expected) if key=="color" else expected)
+                if key == "color":
+                    matched = close(value, expected, color_tolerance)
+                elif key in ("position", "size"):
+                    matched = close(value, expected)
+                else:
+                    matched = value == expected
                 if not matched:
                     break
             else:
@@ -394,6 +403,11 @@ def merge(base, directory, contrast=False, basin=False, addition=None, block_rim
         plan = {"edits": [], "moves": moves}
         result, touched = base, set()
         scope = RIM_SCOPE if block_rim else addition
+        if addition is LIMINAL_RESERVE_SCOPE:
+            edits = json.loads(read_section(directory, "tints"))
+            plan["edits"] = edits
+            # The previous turf pass's Color3 values round a byte differently in Edit.
+            result, touched = patch_parts(original, edits, validate_edit=check_reserve_tint, color_tolerance=1)
     else:
         plan = json.loads(read_section(directory, "edits"))
         assert plan.keys() == {"edits", "moves"} and plan["edits"]
@@ -436,6 +450,19 @@ def merge(base, directory, contrast=False, basin=False, addition=None, block_rim
     return result, stats
 
 
+def check_reserve_tint(edit):
+    path = edit["path"]
+    region = r"(?:Quartz|Impact|Ruby|Cobalt|Violet|Emerald)"
+    allowed = (
+        rf"{re.escape(MAP)}\.QuarryContinuousGround\.Terraces\.{region}\.(?:Turf|Earth)\d+",
+        rf"{re.escape(TERRACES)}(?:{region}|ImpactTest)Terrace\.(?:EarthMass|EarthBand)",
+        rf"{re.escape(TERRACES)}IslandGround\.Earth",
+        r"Workspace\.MiningAway\.Fields\.(?:Quartz|ImpactTest|Ruby|Cobalt|Violet|Emerald)\.Field",
+    )
+    assert any(re.fullmatch(pattern, path) for pattern in allowed), path
+    assert edit["before"].keys() == edit["after"].keys() == {"color"}, path
+
+
 def write_snapshot(expected, result):
     assert CANONICAL_OUTPUT.read_bytes() == expected, "Concurrent canonical edit"
     mode = CANONICAL_OUTPUT.stat().st_mode & 0o777
@@ -462,6 +489,8 @@ def main():
                        help="Append only the authored biome extensions")
     scope.add_argument("--arrival-accents", dest="addition", action="store_const", const=ARRIVAL_SCOPE,
                        help="Append only the spawn and biome approach accents")
+    scope.add_argument("--liminal-reserve", dest="addition", action="store_const", const=LIMINAL_RESERVE_SCOPE,
+                       help="Append only the reserve enclosure, landscapes, oddities, and cloud blocks")
     scope.add_argument("--quarry-motifs", dest="addition", action="store_const", const=MOTIF_SCOPE,
                        help="Append the eight original quarry patterns and their props")
     scope.add_argument("--junk-cubes", dest="addition", action="store_const", const=JUNK_CUBE_SCOPE,

@@ -9,19 +9,29 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `203f575fdf8f2ae4c10b9caba72c17c07e7f8e9859b21e7cf82093e2457cfb92` | Flat junk, direct rock selection, updated tool Sources, and five hidden plot borders. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Direct rock selection and dropped-tool overhaul, with the five trim edits. |
+| Native-file SHA-256 | `1a87f11287d66fb80c0c14be9d05b04be2a38854e0d9aec8c1deb7652c2cc135` | Enclosed nature reserve, six cloud blocks, natural terrace colors, and the cloud motion Source. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Liminal reserve scenery on top of the direct mining and tool overhaul. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The five decorative borders are hidden. All seven managed Sources match the canonical snapshot by SHA-256 and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The enclosure and reserve scenery are installed. All seven managed Sources match the workspace by byte count and fingerprint, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
 | Roblox publication | **No publication in the November 8 pass** | Open Edit reports loaded version 70. The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — flat junk and dropped-tool handling
+## Latest follow-up — the liminal nature reserve
+
+The four-sided enclosure rises to roughly 180 studs at its tallest and leaves the original skybox visible. Six cloud-printed blocks hang low over the terraces. The installed client moves them back and forth from a shared clock. The blocks are decorative and sit at their centers in Edit.
+
+Quartz remains a sparse meadow. Impact has dry grasses and sandstone, Ruby has repeated pine rows, Cobalt has a mushroom floor, Violet has a slate moor, and Emerald has pale chalk outcrops. Eighty-eight terrain and field surfaces were recolored. A freestanding door, oversized domino, lookout chair, maintenance dock, monitor, tiled stair and viewfinder sit along the approaches. The route and field geometry was preserved.
+
+Studio was already open and remained in Edit at place 124078027733625, universe 10774898335, loaded version 70. Inspected Quartz, Ruby and Violet in the Edit viewport. All 174 protected ground samples matched, and 256 horizontal rays confirmed the enclosure. Ran the installed motion code against detached copies of all six native cloud blocks, including both ends of the drift and the missing-folder case. The client bundle compiled. Live cloud motion and multiplayer were not playtested. No Roblox release was published.
+
+Reproduce with [the Edit stage](../tools/studio_liminal_reserve.lua) on `9ddcd1264ce66461a1c8d88562696d5ad987c0e5`. Export `shared.LiminalReserve.snapshot` as `scenery.b64` and `.tints` as `tints.b64`. Run [the checked saver](../tools/refresh_native_scenery.py) with `--liminal-reserve` and the previous canonical SHA-256, apply the stage in Studio, then rerun the saver with `--write`. The scenery step preserved all 50 Sources. Script Sync and the seven-Source refresh changed only the client controller Source.
+
+## Earlier follow-up — flat junk and dropped-tool handling
 
 Arts & Crafts and Tech junk keep their photo and pattern finishes on flat faces. Junk skips cavity geometry, including the former separate fabric, foam, cork and circuit interiors. Tool hits still damage junk, and sword slices and melting can lower its flat top. Ordinary ore keeps its existing damage geometry.
 

@@ -1069,6 +1069,22 @@ local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=r
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
+ local map=world:FindFirstChild('Map')
+ local reserve=map and map:FindFirstChild('LiminalReserve')
+ local clouds=reserve and reserve:FindFirstChild('CloudBlocks')
+ if clouds then
+  -- Authored blocks stay at their centers in Edit. Animate locally from a
+  -- shared clock so the scenery needs no replicated transform updates.
+  for _,cloud in ipairs(clouds:GetChildren()) do
+   local center=cloud:GetAttribute('DriftCenter')
+   local drift=cloud:GetAttribute('DriftVector')
+   local period=cloud:GetAttribute('DriftPeriod')
+   if cloud:IsA('BasePart') and center and drift and period and period>0 then
+    local phase=(now%period)/period*(2*math.pi)+(cloud:GetAttribute('DriftPhase') or 0)
+    cloud.Position=center+drift*math.sin(phase)
+   end
+  end
+ end
  roleEffectView:step(now)
  presentation:beginFrame()
  pickupView:update(dt,now)

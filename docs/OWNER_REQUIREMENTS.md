@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — an outdoor Backrooms reserve
+
+The map is a fake nature reserve where players and lost objects fall in. The drones are the reserve's old maintenance machines. Keep the existing skybox and add low floating blocks printed with clouds that drift back and forth. Enclose the basin fully with much higher walls. Keep the first clearing a sparse grassy meadow and give the other areas distinct, familiar landscapes that look deliberately staged. Place a few eclectic found objects among the scenery. Apply this map direction after the mining and tool handoff.
+
 ## November 8 latest — flat junk, direct mining and dropped tools
 
 Keep the patterned junk faces flat through damage. Remove plot borders and let players choose any available rock or junk cube in the area. Every usable dropped tool should act on an empty click and should help aim at nearby rocks when the intended target is clear. Rework how each tool is held and how the avatar winds up, uses it and recovers.
