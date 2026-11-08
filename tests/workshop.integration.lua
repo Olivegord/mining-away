@@ -15,6 +15,25 @@ local function tick()
  pickupStep(C.Tick)
 end
 local function sell() move(scene.converter.Position);input('Sell') end
+check('the small starter patch starts with two waves of shiny red crystals',function()
+ local originalRng=seed
+ local crystal=Instance.new('UnionOperation')
+ crystal.Size=Vector3.new(3.135,6.566902,4.487231)
+ scene.classicCrystal=crystal
+ field.part.Size=Vector3.new(unpack(field.cfg.Size))
+ for roll=1,24 do
+  seed=Random.new(roll)
+  seedField(field)
+  assert(nodeUsage(field)==12,'starter field did not fill at seed '..roll)
+  for _,r in ipairs(field.resources) do
+   assert(r.part.ClassName=='UnionOperation' and r.limit==1 and r.stageCount==3)
+   assert((r.fullSize-crystal.Size).Magnitude<.0001)
+   assert(r.part.Color.R==1 and r.part.Color.G==0 and r.part.Color.B==0 and r.part.Material==Enum.Material.Ice and r.part.Transparency==.2)
+   assert(r.part:GetAttribute('Mineral')=='Quartz' and r.ore==10)
+  end
+ end
+ seed=originalRng
+end)
 for _,r in ipairs(field.resources) do r.paid=true;r.hp=0 end
 local function mine()
  if Ca.capacity(data(p))-Pro.cargoUnits(data(p))<25 then sell() end
@@ -30,7 +49,7 @@ check('a single field order sends four workers to different rocks and retargets 
  local main,mainProfile=pl,p
  pl=player(310009);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId]);move(field.center)
  local seeds={}
- for i,x in ipairs({-15,-5,5,15,-10,0,10}) do
+ for i,x in ipairs({-11,-4,4,11,-10,0,10}) do
   local r=makeResource(field,field.center+Vector3.new(x,0,i<=4 and -5 or 7),'Crystal',55,10,3)
   r.readyAt=now;seeds[i]=r
  end

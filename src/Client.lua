@@ -809,7 +809,7 @@ local function renderResource(r,now)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
-  view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
+  view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
   local displaySize=full*math.max(.005,growth*period)*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)

@@ -353,7 +353,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  part:SetAttribute('CubicRock',not original)
- local shell=kind=='Geode';local size=visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
+ local shell=kind=='Geode';local size=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  local start=Vector3.new(position.X,ground,position.Z)
@@ -363,6 +363,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
+ elseif field.cfg.ReferenceCrystals and kind=='Crystal' then
+  -- The original Mining Away crystal sample: a shiny red Ice union.
+  part.Color=field.color;part.Material=Enum.Material.Ice;part.MaterialVariant=''
+  part.Transparency=.2;part.Reflectance=0
  elseif original then
   part.Color=field.cfg.Key=='Ruby' and original.Color or field.color
   part.Material=original.Material;part.MaterialVariant='';part.Reflectance=0
@@ -440,21 +444,21 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
- local boulder=not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
+ local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
  local excluded={field.model,droneFolder}
  for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
- local visualSize=mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local visualSize=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
- local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind)
+ local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
  local occupied={}
  for _,r in ipairs(field.resources) do if not r.paid then
   local p=field.part.CFrame:PointToObjectSpace(r.position)
-  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind)}
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,field.cfg.ReferenceCrystals and r.kind=='Crystal')}
  end end
  for _,t in ipairs(field.turrets) do
   local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
@@ -472,7 +476,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
    end
    return true
-  end,preferred)
+  end,preferred,field.cfg.ReferenceCrystals and kind=='Crystal')
  if not selected then return false end
  local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end

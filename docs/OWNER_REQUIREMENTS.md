@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — match the first Mining Away patch
+
+Match the reference ruby patch's 30 × 2 × 30 stud size. Clear the ground around the first field down to the checker baseplate, and use shiny red crystals. Keep Quartz as the reward so the existing packs, upgrades and prestige still work. No publication requested.
+
 ## November 8 latest — match the open Mining Away document
 
 Use the lighting, sky, bare finishes, checker floor, and simple trees from the owner's open **mining away**, place **14302916915**, universe **4945273529**. Match its drone movement, low mining downtime, and power closely inside the existing **DRONEREVOLUTION**. Keep packs, upgrades, and distinct drone types. When asked about starting count, the owner chose **four permanent drones for new players**. Existing saves keep their exact fleet, and prestige still earns another permanent drone. This replaces the earlier one-drone and quarry art directions. No publication requested.

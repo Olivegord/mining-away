@@ -1382,7 +1382,7 @@ end)()
 local Config = (function()
 -- All numbers are provisional playtest tuning. No permanent fleet ownership cap.
 local fields={
- {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={180,225,213},Count=12,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={47.6,2,47.6}},
+ {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={255,0,0},ReferenceCrystals=true,Count=12,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={30,2,30}},
  {Name='Ruby Grove',Key='Ruby',Hardness=1.8,Color={226,75,112},Count=16,Ore=12,Value=2,Respawn=14,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Original='rubyPatch',Offset={-62.7,11.5,108.3},Size={42,2,42}},
  {Name='Cobalt Ridge',Key='Cobalt',Hardness=3.2,Color={89,150,234},Count=6,Ore=15,Value=4,Respawn=25,Turrets=1,TurretHP=260,Damage=19,ShotCooldown=1.8,RecommendedFleet=1,Original='cobaltPatch',Offset={1.9,18.5,-98.8},Size={42,2,42}},
  {Name='Violet Basin',Key='Violet',Hardness=5.2,Color={166,115,217},Count=9,Ore=16,Value=7,Respawn=35,Turrets=2,TurretHP=390,Damage=24,ShotCooldown=1.8,RecommendedFleet=3,Offset={106.4,28.5,-77.9},Size={47.6,2,44.8}},
@@ -1873,9 +1873,11 @@ local ResourcePlacement = (function()
 -- All coordinates supplied here are in the field's horizontal local space.
 local P={MAX_ATTEMPTS=18,RETRY_SECONDS=2,EDGE_MARGIN=.75,GAP=.65}
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
-function P.radius(x,y,z,kind)
+function P.radius(x,y,z,kind,upright)
  if not finite(x) or not finite(y) or not finite(z) or x<=0 or y<=0 or z<=0 then return nil end
- local radius=math.sqrt(x*x+y*y+z*z)*.5
+ -- The starter crystals stay upright as they turn and shrink, so their
+ -- horizontal diagonal is sufficient. Other rocks keep the full reservation.
+ local radius=math.sqrt(x*x+z*z+(upright and 0 or y*y))*.5
  -- A shell reveals four shard centers four studs away. Reserve those actual
  -- future footprints too, so a small shell cannot grow shards into neighbors.
  if kind=='Geode' then radius=math.max(radius,4+math.sqrt(3)*(70/25*.8)*.5) end
@@ -1893,16 +1895,30 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred)
+function P.sample(width,depth,radius,occupied,random,clear,preferred,compact)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if halfX<0 or halfZ<0 then return nil,0 end
- local attempts=preferred and 1 or P.MAX_ATTEMPTS
+ -- The compact starter field needs room for four miners to work in
+ -- parallel. Visit distinct sites in random order instead of letting
+ -- early random placements strand empty space between them.
+ local sites
+ if compact and not preferred and halfX>.45 and halfZ>.45 then
+  sites={}
+  for i=0,15 do sites[i+1]=i end
+ end
+ local attempts=preferred and 1 or (sites and #sites or P.MAX_ATTEMPTS)
  for attempt=1,attempts do
   -- A grower's committed plan is rechecked exactly where it planted. It does
   -- not roll a larger rock later or silently move its successful animation.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
+  if preferred then x,z=preferred.x,preferred.z
+  elseif sites then
+   local index=math.min(#sites,math.floor(random(0,#sites))+1)
+   local site=table.remove(sites,index)
+   x=(site%4/3*2-1)*(halfX-.45)+random(-.45,.45)
+   z=(math.floor(site/4)/3*2-1)*(halfZ-.45)+random(-.45,.45)
+  else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
   if P.fits(x,z,width,depth,radius,occupied) and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt
   end
@@ -6776,7 +6792,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
  end
  part:SetAttribute('CubicRock',not original)
- local shell=kind=='Geode';local size=visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
+ local shell=kind=='Geode';local size=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  local start=Vector3.new(position.X,ground,position.Z)
@@ -6786,6 +6802,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
+ elseif field.cfg.ReferenceCrystals and kind=='Crystal' then
+  -- The original Mining Away crystal sample: a shiny red Ice union.
+  part.Color=field.color;part.Material=Enum.Material.Ice;part.MaterialVariant=''
+  part.Transparency=.2;part.Reflectance=0
  elseif original then
   part.Color=field.cfg.Key=='Ruby' and original.Color or field.color
   part.Material=original.Material;part.MaterialVariant='';part.Reflectance=0
@@ -6863,21 +6883,21 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
- local boulder=not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
+ local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
  local clearance=RaycastParams.new();clearance.FilterType=Enum.RaycastFilterType.Exclude
  local excluded={field.model,droneFolder}
  for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
- local visualSize=mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local visualSize=(field.cfg.ReferenceCrystals and kind=='Crystal') and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
- local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind)
+ local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
  local occupied={}
  for _,r in ipairs(field.resources) do if not r.paid then
   local p=field.part.CFrame:PointToObjectSpace(r.position)
-  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind)}
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,field.cfg.ReferenceCrystals and r.kind=='Crystal')}
  end end
  for _,t in ipairs(field.turrets) do
   local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
@@ -6895,7 +6915,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
    end
    return true
-  end,preferred)
+  end,preferred,field.cfg.ReferenceCrystals and kind=='Crystal')
  if not selected then return false end
  local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
