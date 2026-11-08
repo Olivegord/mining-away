@@ -9,19 +9,31 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `32e6e1a5ad78b36143a8c988ba0885499b33ee28ff13816935442b914a92558f` | Studio export of the authored material balance. All 50 Sources, including the 43 unmanaged Sources, match the previous snapshot. |
-| Installed game revision | `8e7ddaf688c7abf5db32b5cb7336425b919453db` | Short matte turf, clearer mining gravel, quieter cliff faces and mineral veins, and distinct path finishes. |
+| Native-file SHA-256 | `2ffebea168619de0a646fde62e3c1bf5c99103f844606a7fa2115a329b877b68` | Dialog-free scenery save and verified seven-Source refresh. All 43 unmanaged Sources match the prior snapshot. |
+| Installed Edit revision | `e08e6dbb7c688a9224ad6f4a38d8724226d115e9` | Distinct drone silhouettes and quarry hardware, plus selective texture contrast on the expanded map. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Texture balance installed November 7, 2026** | The material pass is present in Edit mode. Seven managed Sources and all three Script Sync roots were verified after publication. |
-| Published Roblox version | **v43, verified** | Studio recorded successful publication to the existing place at 7:24:52 PM Pacific on November 7. The Version History panel was not used. |
+| Shared Studio entry point | **Quarry and drone passes installed November 7, 2026** | The expanded map is visible in Edit, and the new drone Sources are installed there. Seven managed Sources and all three Script Sync roots were verified. |
+| Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — softer grass and distinct surface patterns
+## Latest follow-up — drone silhouettes and selective texture contrast
+
+All 14 roles now use visible, tool-specific hulls over their preserved rigs. The starter miner is rounded, the seeder is a wedge, the breaker carries a cylindrical ram, the orbital relay uses a dish, and the courier has an open sling. Existing specialist joints and timings are retained. Painted panels and ribbed metal use the quarry photos at drone scale. Solid fragments inherit their ore finish; energy, glass and smoke retain distinct treatments. Card previews, company deliveries and small scrap miners use the same hull builder.
+
+Quartz has the rougher warm field finish; eleven turf parts bring back richer grass variation. Quartz, Cobalt and Impact ore use strong veins while the other fields keep satin veins. The Quartz contrast mix was seen in the native Edit viewport, and the drone silhouettes were inspected in a temporary Edit lineup that was removed immediately. All 14 final rigs constructed with matching material variants in Studio; seven managed Sources matched both Studio and the saved file. The specialist/logistics, beam and core loop suites passed with API doubles. No fresh Play session, in-motion visual check, mobile test or multiplayer test was run. The update is locally committed; Roblox remains at v43.
+
+## Earlier follow-up — quarry depth and background saves
+
+Ruby has a continuous distant escarpment behind its original near outcrops. Cobalt extends onto connected outer forest shelves, with 16 additional canopy mushrooms and 48 smaller mushrooms. Four ordinary trees and three bushes were moved out of the playable forest and preserved in ServerStorage. Eighteen other authored trees were enlarged. Emerald has a deeper chalk backdrop and shoreline canopy; Violet has a separate slate ridge. Shared stone accents, gradual ground tints, and muted Ruby loam connect the approaches. Six fields now have patterned props or pavers.
+
+The background save merged Studio's native binary scenery and material exports into `build/DRONE_GAME.rbxl` and verified 337 scoped part edits, seven archive moves and all 50 Sources, with no Studio file dialog. The shared Edit viewport was inspected at Quartz, Ruby, Cobalt and Emerald. All six original mining beds matched their baseline transforms and collision; 39 ground rays checked the new forest connection, and all 31 Emerald causeway slabs remained collidable. Both new 64×64 textures loaded. Studio was already open and was left in Edit. No fresh Play, mobile, multiplayer or performance check was run. Roblox remains at v43.
+
+## Earlier follow-up — softer grass and distinct surface patterns
 
 The noisy, high-contrast grass was replaced with a short olive turf photo grade. Organic tiling and a smaller 10–12 stud tile soften the repetition. Five mining beds use a tighter gray pebble pattern with individual field tints; Emerald retains its light chalk bed. Cliffs and common stone use broader, softer marks; paved routes keep visible joints and the market and station pads keep their stronger patterns. Cubic ore retains its polish and roughness map with quieter vein contrast. All six new diffuse files are 64×64; [the texture library](../assets/quarry-textures/README.md) records the 32–64 px range, sources, and reproduction command.
 
