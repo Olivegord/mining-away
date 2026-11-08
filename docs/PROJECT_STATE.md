@@ -10,7 +10,7 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
 | Native-file SHA-256 | `dd6c8589d0be37bc892eb23c2b073d4e8bdfb87921447b1a133f742cc25e451f` | Quartz workshop scripts and 26 existing label/prompt properties; platform repair and palette retained. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Combined Quartz draft/level/prestige loop over baseline `9bed0b81c673abe36d82d1075252963d1713aff6`. |
+| Installed Edit revision | `36c678db4fd54f87181c261f4d220bb53a959224` | Combined Quartz draft/level/prestige loop; later handoff-only commits do not change the installed scripts or native hash. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |

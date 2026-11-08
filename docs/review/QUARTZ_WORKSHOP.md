@@ -1,6 +1,6 @@
 # Quartz workshop candidate — November 8, 2026
 
-Baseline: `9bed0b81c673abe36d82d1075252963d1713aff6`. The integration revision is the commit containing this document and `build/DRONE_GAME.rbxl` (`git log -1 -- build/DRONE_GAME.rbxl`). No Roblox publication.
+Baseline: `9bed0b81c673abe36d82d1075252963d1713aff6`. Installed gameplay/native revision: `36c678db4fd54f87181c261f4d220bb53a959224`. A later handoff-only commit records this exact revision without changing the build. No Roblox publication.
 
 ## The small loop
 
@@ -51,7 +51,7 @@ Only the two bundled managed Sources changed. The seven-source native refresh pr
 
 The full server fixture earns its pack, repeat level and 360-Quartz prestige through worker damage and pickups, without currency grants, in 350.74 seconds of simulated worker ticks. Station travel is supplied by the double: this is not measured player session length. A separate pacing model with 14-second sale trips estimates first-level throughput gains of 16.0% power, 11.3% ignition, 8.0% capacity and 18.4% yield. Route Runner's speed-only gain is 4.8%; its automatic-retargeting benefit is separately behavior-tested. The model excludes Prism's neighboring damage, human choice time and multiplayer contention.
 
-Consumable/deployment tests and beam-VFX checks pass. Broader existing checks are not all green: gadgets fail a contact-render assertion; energy effects fail an effect assertion; smooth animation fails a missing `droneConfig` fixture value; committed mining fails a missing `hp` fixture value. Each reproduces on an extracted, unchanged `9bed0b8` source/test baseline. Adding the Workshop module exposed a test-only Luau local-register limit; wrapping the appended mining fixture in a function fixes that compilation issue, after which it reaches the same baseline `hp` failure. Historical feel/radius and outbound-drop assertions also disagree with unchanged baseline behavior. These failures are recorded rather than treating the entire CI suite as passing or reverting accepted mining/VFX behavior.
+Consumable/deployment tests, beam-VFX checks and all 18 single-game preservation/release tests pass. A final `tools/build.py` run reports no native changes needed. Broader existing checks are not all green: gadgets fail a contact-render assertion; energy effects fail an effect assertion; smooth animation fails a missing `droneConfig` fixture value; committed mining fails a missing `hp` fixture value. Each reproduces on an extracted, unchanged `9bed0b8` source/test baseline. Adding the Workshop module exposed a test-only Luau local-register limit; wrapping the appended mining fixture in a function fixes that compilation issue, after which it reaches the same baseline `hp` failure. Historical feel/radius and outbound-drop assertions also disagree with unchanged baseline behavior. These failures are recorded rather than treating the entire CI suite as passing or reverting accepted mining/VFX behavior.
 
 ## Native evidence and limits
 

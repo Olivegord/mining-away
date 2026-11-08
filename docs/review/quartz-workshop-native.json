@@ -23,7 +23,7 @@
   },
   "date": "2026-11-08",
   "baselineGit": "9bed0b81c673abe36d82d1075252963d1713aff6",
-  "revision": "git log -1 -- build/DRONE_GAME.rbxl",
+  "revision": "36c678db4fd54f87181c261f4d220bb53a959224",
   "nativeFile": "build/DRONE_GAME.rbxl",
   "nativeSha256": "dd6c8589d0be37bc892eb23c2b073d4e8bdfb87921447b1a133f742cc25e451f",
   "publication": {
