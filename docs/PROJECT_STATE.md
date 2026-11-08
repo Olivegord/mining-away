@@ -9,19 +9,27 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `1a87f11287d66fb80c0c14be9d05b04be2a38854e0d9aec8c1deb7652c2cc135` | Enclosed nature reserve, six cloud blocks, natural terrace colors, and the cloud motion Source. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Liminal reserve scenery on top of the direct mining and tool overhaul. |
+| Native-file SHA-256 | `84d9fcff18d3fb14ea9393e0af5d3a901c2edfe3774fc8085e7d60f2101e5bdc` | Island shoreline, shallow water, open ocean, and relocated shelf trees. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The island coastline replaces the perimeter enclosure. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The enclosure and reserve scenery are installed. All seven managed Sources match the workspace by byte count and fingerprint, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
-| Roblox publication | **No publication in the November 8 pass** | Open Edit reports loaded version 70. The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed. All seven managed Sources match the workspace by byte count and fingerprint, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — the liminal nature reserve
+## Latest follow-up — the island reserve
+
+The six terraces sit on a continuous island with grassy slopes, gravel beaches, rocky headlands, shallow turquoise water and an open horizon. The ocean is scenery. Archived the high enclosure and both older perimeter layers under `ServerStorage.IslandShoreArchive`. Lowered twelve existing shelf trees to their terrain. The cloud blocks and found props remain in the reserve.
+
+Studio was open in Play when work began. Stopped the session and installed the island in Edit at place 124078027733625, universe 10774898335, loaded version 76 at handoff. The 303 protected field, route, hub and causeway samples matched, and 180 shoreline probes passed. Inspected the island from above and at the west shore in Edit. The scoped save preserved all 50 Sources and `python3 tools/build.py` verified the canonical snapshot. Studio remains in Edit. No new Play test or Roblox publication was performed.
+
+Reproduce on `4a69c7b5c7f4174f7ab53608fd696cb481e1b02d` with [the Edit stage](../tools/studio_reserve_island.lua) and [the checked saver](../tools/refresh_reserve_island.py). Extract `shared.ReserveIsland.scenery`, `.archive`, and `.trees` to their matching `.b64` files. Run the saver with the verified baseline hash, apply the stage, then rerun the saver with `--write`.
+
+## Earlier follow-up — the liminal nature reserve
 
 The four-sided enclosure rises to roughly 180 studs at its tallest and leaves the original skybox visible. Six cloud-printed blocks hang low over the terraces. The installed client moves them back and forth from a shared clock. The blocks are decorative and sit at their centers in Edit.
 

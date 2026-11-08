@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — make the reserve an island
+
+Replace the high walls with an island coastline and open water. Keep the six areas and their connected routes. The island supersedes the enclosed basin in the prior request.
+
 ## November 8 latest — an outdoor Backrooms reserve
 
 The map is a fake nature reserve where players and lost objects fall in. The drones are the reserve's old maintenance machines. Keep the existing skybox and add low floating blocks printed with clouds that drift back and forth. Enclose the basin fully with much higher walls. Keep the first clearing a sparse grassy meadow and give the other areas distinct, familiar landscapes that look deliberately staged. Place a few eclectic found objects among the scenery. Apply this map direction after the mining and tool handoff.
