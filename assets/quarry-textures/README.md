@@ -81,3 +81,4 @@ These 64×64 tiles are drawn for DRONEREVOLUTION. Regenerate them from the repos
 | `motif-blue-waves.png` | `109395106577220` |
 | `motif-blue-knit.png` | `126905018997201` |
 | `motif-gold-studs.png` | `107794782432490` |
+| `motif-fired-brick.png` | `119317200148174` |

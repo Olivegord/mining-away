@@ -81,6 +81,17 @@ def studs(x, y):
     return (218, 160, 35)
 
 
+def fired_brick(x, y):
+    row = int(y//16)
+    u, v = (x+16*(row%2)) % 32, y % 16
+    if u < 1.6 or v < 1.6:
+        return (222, 188, 163)
+    tone = (.08, .20, .03, .13)[row] + .04*sin(x*tau/32)
+    if u < 3 or v < 2.9:
+        tone += .16
+    return mix((160, 60, 49), (222, 111, 81), tone)
+
+
 def write_png(path, draw):
     random = Random(7351)
     rows = bytearray()
@@ -111,5 +122,6 @@ if __name__ == "__main__":
         "blue-waves": waves,
         "blue-knit": knit,
         "gold-studs": studs,
+        "fired-brick": fired_brick,
     }.items():
         write_png(DESTINATION / f"motif-{name}.png", draw)

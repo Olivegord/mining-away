@@ -173,7 +173,7 @@ def check_palette_edit(edit):
         assert old == "QuarryPhoto_Slate" and new == "QuarryPalette_Strata"
 
 
-def patch_parts(base, edits, contrast=False, basin=False, palette=False):
+def patch_parts(base, edits, contrast=False, basin=False, palette=False, validate_edit=None):
     batches = {}
     seen = set()
     equivalent = []
@@ -181,7 +181,9 @@ def patch_parts(base, edits, contrast=False, basin=False, palette=False):
                "color": ("Color3uint8", 0x1a), "variant": ("MaterialVariantSerialized", 1)}
     for edit in edits:
         path = edit["path"]
-        if palette:
+        if validate_edit is not None:
+            validate_edit(edit)
+        elif palette:
             check_palette_edit(edit)
         else:
             assert path.startswith(TERRACES) or (contrast and path == QUARTZ), f"Native edit outside authored terraces: {path}"

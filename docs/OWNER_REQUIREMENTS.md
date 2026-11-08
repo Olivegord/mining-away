@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — colorful courtyard and layered ground
+
+Use the reference's palette and layout together. Give the hub olive grass and quiet gray gravel around a rose focal block, red brick, plaid, small stepped trees, and colorful cross flowers. Bring the palette to the other fields while retaining their characters. Lift the shadow fill and soften highlight contrast while keeping clean shadow outlines. Layer a second ground grain at a different scale and offset so the grass and gravel repeat less obviously. Keep those layers visually flat.
+
 ## November 7 latest — sharper shadows
 
 Give the trees and patterned blocks clean, distinct cast-shadow edges like the reference. Keep the authored morning sun direction and use low shadow softness.

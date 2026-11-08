@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `920c8aad628a12d0199aa7ceab4aff15f986e331d4f2cb252858ba0b06993484` | Background save of the sharper quarry shadows. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Sharper sun shadows in the open shared Edit document. |
+| Native-file SHA-256 | `9ec303579a9c72477da2228a0e8a6fafb0c4597d38f9f27b876e5023dc3cd3f0` | Background save of the courtyard palette and layered ground. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Sharper shadows installed November 7, 2026** | The open Edit session uses Realistic lighting and shadow softness of 0.04. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
+| Shared Studio entry point | **Courtyard and layered ground installed November 7, 2026** | The open Edit session has the colorful hub and all six refreshed mining areas. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — sharper quarry shadows
+## Latest follow-up — courtyard color and layered ground
+
+The hub now has an olive grass border around gray gravel, with a rose-colored focal block, bright fired brick, plaid, smaller stepped trees, and cross flowers. Each field has its own turf, earth, and mining bed tints. Seven stepped trees and sixteen flower groups give the hub and clearings more color. Cobalt retains its mushroom canopy. A translucent texture layer uses wider tiles and offset coordinates over the finer base grain. The 27 grass and gravel layers are decorative and leave the authored ground and route geometry intact.
+
+Lifted ambient fill, reduced post contrast and lower lamp brightness preserve the sharp 0.04 shadow edge with calmer light and shade. Inspected the hub and Quartz in the shared Studio Edit viewport. The background save preserved all 50 Sources and the original hierarchy. Studio was returned to Edit before installation, and this revision was not run in Play. The last verified public Roblox release is v43.
+
+## Earlier follow-up — sharper quarry shadows
 
 The authored Lighting service now uses Realistic lighting and shadow softness of 0.04. Global shadows, lighting quality priority, and the 8:30 sun direction retain their prior settings. The same Quartz camera angle in Studio Edit showed sharper outlines under the trees and cubes.
 
