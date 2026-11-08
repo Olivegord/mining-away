@@ -9,19 +9,29 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3c0064f840260ae71e871204a6ddedf3163fee9b1ef052daa0e984edb1afb986` | Matches the combined quarry, effects and economy release. All non-Source chunks and unrelated Sources were preserved. |
-| Installed gameplay revision | `5ce27c1bd1ab668ff99670cd2f021b22d8eb67f3` | Grounded Orbital, visible cut pieces, impact cues and useful pack/shop choices on top of the quarry biome update. |
+| Native-file SHA-256 | `3b5ced6e1557935a7ef64d137793c8754700fd0cd3fe4fe5b73c3b199d4ff5ab` | Matches the quarry lighting release. Geometry, photo color maps, unrelated Sources, and backups were preserved. |
+| Installed game revision | `a8e33d786e052e7adb8f3cf63bb578c41a8c9fb2` | Brighter morning lighting, soft distance fog, an engine-bundled sun, and matte quarry surfaces on top of the combined v37 update. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Combined effects and quarry revision installed November 7, 2026** | All seven Sources matched after publication. Studio was left open in Edit with Play stopped. |
-| Published Roblox version | **v37, verified** | Studio recorded successful publication to the existing place at 6:35:44 PM Pacific on November 7. The Version History panel was not used. |
+| Shared Studio entry point | **Quarry lighting revision installed November 7, 2026** | All seven Sources and 61 scoped lighting and material properties matched after publication. Studio was left open in Edit with Play stopped. |
+| Published Roblox version | **v39, verified** | Studio recorded successful publication to the existing place at 6:45:05 PM Pacific on November 7. The Version History panel was not used. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — in-use effects, tools and useful upgrades
+## Latest follow-up — brighter morning and matte quarry surfaces
+
+The authored quarry uses soft morning lighting at **8:30**, a blue sky with Roblox's built-in sun, and pale distance fog through its Atmosphere. Open shadows and gentler contrast keep the nearby paths and mining fields readable. The old startup clock script is preserved and disabled in Lighting. The game no longer regrades this authored map at startup; Edit and Play use the same native lighting. The separate reference-layout fallback is unchanged.
+
+Three [roughness maps](../assets/quarry-textures/README.md) cover 18 scenery variants. Dirt, gravel and foliage get the driest finish; weathered stone, wood and paving are slightly smoother; diamond plate retains some sheen. All three new images returned `Success` through Studio's image preloader. The existing polished ore and its vein roughness are unchanged.
+
+The v37 baseline matched all seven Sources in the selected shared place and all three Script Sync roots reported `SyncedAsRoot`. The new server Source arrived through the same roots. `python3 tools/build.py` verifies the canonical Sources, and `python3 tools/test_core_loop.py` passed in production and Studio configurations using API doubles. The desktop Edit viewport rendered one unobstructed sun from spawn at about 34° elevation. No new Play session was run; the full textured scene in Play, mobile graphics, and multiplayer appearance were not tested during this pass.
+
+At `2026-11-08T02:45:05Z`, Studio logged `Publish succeeded for placeId 124078027733625`, `Published new changes in "DRONEREVOLUTION" to Roblox.`, and `Add publish notes to v39`. The post-publish audit confirmed all seven Sources, the 61 scoped native properties, healthy Script Sync roots, and Edit mode in the same place and universe. The open document's loaded `game.PlaceVersion` still reports 26; the publication receipt identifies the live release. Studio was already open and remains open.
+
+## Earlier follow-up — in-use effects, tools and useful upgrades
 
 Orbital now aims for 2.4 seconds with a thin red sight and a rock-sized circle. The strike column remains at ground level while its sparks track the melting rock top. Gridcutter scores the rotated rock and ejects nine textured pieces; Halver separates two wider chunks and the sword divides its detached slice into six. Specialist warmup carries into the first work gesture. Rock contact waves and debris scale with their source. Temporary deployed gadgets only spend their charge once a hit is accepted.
 
