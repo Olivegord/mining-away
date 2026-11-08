@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — photo textures and Studio Edit grid
+
+Use real photographs for the new junk cube textures. Keep faces low resolution at 64×64 pixels. The candy cube is covered with actual gumballs, with no dispenser. Show one cube for every Quartz junk type and each existing patterned prop finish in a grid on the tan waterfront ServiceDeck in the authored Workspace. The owner should be able to inspect the grid in Studio Edit.
+
 ## November 7 latest — natural basin landforms
 
 Add grassy mounds and broad raised plateaus. Blend the perimeter walls into rising ground so the map feels like a natural basin rather than a cage. Preserve mining beds, routes, smooth textures and selective bright grass accents.

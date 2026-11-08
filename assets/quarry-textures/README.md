@@ -85,6 +85,18 @@ These 64×64 tiles are drawn for DRONEREVOLUTION. Regenerate them from the repos
 
 ## Junk object faces
 
-The 23 RGB images in `junk/` are 64×64 pixels each. They cover eight one-part cube templates. The plywood suggestion box and alphabet block use a crop of [Poly Haven Plywood](https://polyhaven.com/a/plywood). The moving box uses a crop of [ambientCG Paper 005](https://ambientcg.com/view?id=Paper005). Both sources are CC0. Labels, hardware, glass reflections and object graphics are drawn for the game. All glass and ice details are painted into opaque faces.
+The 20 RGB images in `junk/` are 64×64 pixels each. They cover the eight object cube templates. The plywood and moving box faces use real CC0 color maps with original labels, hardware, and seams. The other faces use cropped, rectified, downsampled or composited photographs. The gumballs crop covers all six faces of its cube.
 
-Regenerate with Pillow using `python3 tools/draw_junk_cubes.py <plywood_diff_1k.jpg> <Paper005_1K-JPG_Color.jpg>`.
+| Faces | Source and creator | License | Source filename for regeneration |
+| --- | --- | --- | --- |
+| Suggestion box | [Plywood](https://polyhaven.com/a/plywood), Poly Haven | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `plywood_diff_1k.jpg` |
+| Moving box | [Paper 005](https://ambientcg.com/view?id=Paper005), ambientCG | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `Paper005_1K-JPG_Color.jpg` |
+| Gumballs | [Bulk barn gum balls](https://commons.wikimedia.org/wiki/File:Bulk_barn_gum_balls_(19645672551).jpg), mark.watmough | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `bulk-gumballs.jpg` |
+| Alphabet block | [A pile of alphabet wooden blocks](https://commons.wikimedia.org/wiki/File:A_pile_of_alphabet_wooden_blocks.jpg), Bobjgalindo | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | `alphabet.jpg` |
+| Box fan | [Two box fans](https://commons.wikimedia.org/wiki/File:Two_box_fans.jpg), Arbitrarily0 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) | `fan.jpg` |
+| Aquarium | [Goldfish community](https://commons.wikimedia.org/wiki/File:Goldfish_community.JPG), Humanfeather / Michelle Jo | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `fish.jpg` |
+| Ice | [Ice cubes (Day 143)](https://commons.wikimedia.org/wiki/File:Ice_cubes_(Day_143).jpg), Michael Scialdone | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `ice.jpg` |
+| Key | [Photo of a key](https://commons.wikimedia.org/wiki/File:Photo_of_a_key.jpg) | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) | `key.jpg` |
+| Ticket box | [Take a Number](https://commons.wikimedia.org/wiki/File:Take_a_Number,_(14495402297).jpg), Mike Mozart | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) | `ticket.jpg` |
+
+The adapted photos in `junk/` retain the licenses listed above. Roblox asset IDs are in [the template authoring script](../../tools/studio_junk_cube_templates.lua). Regenerate with Pillow using `python3 tools/draw_junk_cubes.py <plywood_diff_1k.jpg> <Paper005_1K-JPG_Color.jpg> <photo-directory>`.

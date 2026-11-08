@@ -524,7 +524,7 @@ J.Props={
 }
 J.TemplateProps={
  {name='Suggestion Box',template='SuggestionBox',work=67,ore=12,interior='Wool'},
- {name='Gumball Dispenser',template='GumballDispenser',work=72,ore=13,interior='Wool'},
+ {name='Gumballs',template='GumballDispenser',work=72,ore=13,interior='Wool'},
  {name='Alphabet Block',template='AlphabetBlock',work=52,ore=10,interior='Foam'},
  {name='Box Fan',template='BoxFan',work=79,ore=14,interior='Cork'},
  {name='Cube Aquarium',template='CubeAquarium',work=68,ore=12,interior='Wool'},

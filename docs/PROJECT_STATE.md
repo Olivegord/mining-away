@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 ## Identity and delivery state
 
@@ -9,17 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `5e5fd9abe504dd05c7ea68807aea3fbaa6c61a8032b4db0affb2d8baae1863f3` | Quartz junk prototype on top of the grassy basin and eight native junk cube templates. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Quartz junk prototype and template library in the open shared Edit document. |
+| Native-file SHA-256 | `31659a68a8522dbb58ff21623cf49f9b6f521bcaa41fd8483e060168ceb8932d` | Quartz junk prototype, 64×64 photo faces, and the authored 23-cube grid. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Quartz junk prototype and the ServiceDeck lineup in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quartz junk prototype installed November 7, 2026** | Play from the open DRONEREVOLUTION Edit session starts the prototype. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session's loaded place version is 26. |
-| Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
+| Shared Studio entry point | **Junk cubes visible in Edit, November 8, 2026** | The open DRONEREVOLUTION Edit session has the lineup and the Quartz prototype Sources. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 70. |
+| Roblox publication | **No publication in the November 8 pass** | Open Edit reports loaded version 70. The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — 64×64 photo textures and the Edit grid
+
+The Gumballs cube uses a close crop of photographed gumballs on all six faces. Alphabet block, fan, aquarium, ice and key, and ticket box use photo crops or composites. Plywood and moving box use real wood and cardboard grain with added face details. See [texture sources and credits](../assets/quarry-textures/README.md#junk-object-faces).
+
+The tan waterfront ServiceDeck has 23 anchored, noncollidable decorative cubes in a six-column grid at `Workspace.MiningAway.Map.JunkCubeLineup`. It includes all 13 Quartz junk types and 10 other authored patterned finishes. Verified all 115 deck support samples, the uploaded face images, and the grid in the actual Edit viewport. Studio was initially open and remained in Edit. The selected shared place was 124078027733625 / universe 10774898335 and reported loaded place version 70. This pass did not run Play or publish. The canonical file retains the unrelated Stud pack V1 reference, which is absent from the currently open Workspace.
+
+The background save appended 72 instances and changed 36 face URLs, preserving all 50 Sources before the runtime name change. Script Sync installed the two updated controller bundles and all seven managed Sources matched the canonical file. To reproduce the scoped art install, run `tools/studio_junk_cube_lineup.lua` in Edit on the pre-display revision and save its staged exports as `lineup.b64` and `face-edits.json`. Run `tools/refresh_junk_cube_lineup.py <export-directory> --baseline-sha256 <verified-sha256>`, apply the stage in Studio, then rerun the saver with `--write`.
 
 ## Latest follow-up — falling junk in Quartz
 

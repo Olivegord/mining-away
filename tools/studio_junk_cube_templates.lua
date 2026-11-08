@@ -9,12 +9,12 @@ assert(not storage:FindFirstChild("JunkCubeTemplates"), "Template library alread
 
 local specs = {
     SuggestionBox = {size=6.2, front="rbxassetid://72213799953835", side="rbxassetid://112004981306630", top="rbxassetid://110524207879393"},
-    GumballDispenser = {size=6, front="rbxassetid://106388902076745", side="rbxassetid://129022618967631", top="rbxassetid://113561068034390", back="rbxassetid://91784662841732"},
-    AlphabetBlock = {size=5.4, front="rbxassetid://76119583477215", side="rbxassetid://128489014480578", top="rbxassetid://97290003219397"},
-    BoxFan = {size=6.4, front="rbxassetid://93961949413835", side="rbxassetid://109061592871593", top="rbxassetid://118026330567753"},
-    CubeAquarium = {size=6.1, front="rbxassetid://122623759199725", side="rbxassetid://139358738414450", top="rbxassetid://82474460314139"},
-    IceCube = {size=5.6, front="rbxassetid://100819564990345", side="rbxassetid://94672407242314"},
-    TicketBox = {size=5.5, front="rbxassetid://76628551710533", side="rbxassetid://135381551727565"},
+    GumballDispenser = {size=6, front="rbxassetid://101810481156570", side="rbxassetid://101810481156570"},
+    AlphabetBlock = {size=5.4, front="rbxassetid://84999384725093", side="rbxassetid://125212600236177", top="rbxassetid://116071959828195"},
+    BoxFan = {size=6.4, front="rbxassetid://101403951748700", side="rbxassetid://113546682006582", top="rbxassetid://123619630591778"},
+    CubeAquarium = {size=6.1, front="rbxassetid://96542276756320", side="rbxassetid://85151127865076", top="rbxassetid://133217461882504"},
+    IceCube = {size=5.6, front="rbxassetid://88834508418674", side="rbxassetid://97206479305223"},
+    TicketBox = {size=5.5, front="rbxassetid://99341485540982", side="rbxassetid://84353698289172"},
     MovingBox = {size=6.6, front="rbxassetid://83882738096195", side="rbxassetid://133564101968592", top="rbxassetid://124988789231346"},
 }
 local folder = Instance.new("Folder")
