@@ -116,7 +116,7 @@ end
 function W:fracture(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  local anchor=part(self.parent,'RockFractureSmoke');anchor.CFrame=facing(position,normal)
- local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.12))
+ local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.32))
  dust.Texture=SMOKE;dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
  dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(3,6);dust.Drag=9
  dust.Acceleration=Vector3.new(0,.35,0);dust.SpreadAngle=Vector2.new(85,85)

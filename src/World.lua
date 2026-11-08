@@ -224,13 +224,14 @@ end
 local QuarryBiomes=require('./QuarryBiomes')
 local quarryVariants={}
 local polishedOre=false
+local veinedOre=false
 function W.applyQuarryVariant(part)
  part.MaterialVariant=quarryVariants[part.Material] or ''
 end
-function W.applyOreFinish(part)
+function W.applyOreFinish(part,strongVeins)
  W.applyQuarryVariant(part)
  if polishedOre then
-  part.MaterialVariant='QuarryOre_Polished'
+  part.MaterialVariant=strongVeins and veinedOre and 'QuarryOre_Veined' or 'QuarryOre_Polished'
   part.Reflectance=.11
  end
 end
@@ -246,6 +247,7 @@ function W.applyQuarryTextures(scene)
   local base=variant:IsA('MaterialVariant') and variant.Name:match('^QuarryPhoto_(%w+)$')
   if base then quarryVariants[material[base]]=variant.Name end
   if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Polished' then polishedOre=true end
+  if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Veined' then veinedOre=true end
  end
  -- The shared Edit map and canonical file already carry the authored scenery.
  -- Still register materials for runtime ore and debris on every server.

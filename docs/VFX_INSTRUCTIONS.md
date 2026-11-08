@@ -57,6 +57,8 @@ The original single-flash envelope begins at normalized flash time `0.64`, peaks
 
 ## Rules for the next VFX edit
 
+November 7 texture pass: solid specialist chips keep the source ore finish, and Halver's moving jaws use the same ribbed finish as drone hardware. Treat smoke, glass and glowing energy separately from solid materials. Preserve the established timings, colors, thin beam bodies and independent aftermath.
+
 November 7: The home demo and working specialists should carry their startup into the first work gesture. The Orbital uses a 2.4-second red sight and a pressure circle sized to the rock; its strike column stays grounded while contact particles follow the melting top. Gridcutter scores a three-by-three layer and separates the fitted blocks with an outward push. Halver sheds two wider ore pieces; the giant sword divides its detached slice into six. Keep the original rock surface on those pieces. See [effect and economy review](review/EFFECTS_AND_ECONOMY.md).
 
 - Watch the supplied reference at normal speed and inspect easing around transitions. Identify which layer leads, follows, contracts, accelerates or survives release before changing it. Do not invent an initial drifting stage.

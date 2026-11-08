@@ -2258,7 +2258,7 @@ end
 function W:fracture(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  local anchor=part(self.parent,'RockFractureSmoke');anchor.CFrame=facing(position,normal)
- local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.12))
+ local dust=particle(anchor,'FractureDust',Color3.fromRGB(112,107,99):Lerp(color,.32))
  dust.Texture=SMOKE;dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
  dust.Lifetime=NumberRange.new(.65,1.15);dust.Speed=NumberRange.new(3,6);dust.Drag=9
  dust.Acceleration=Vector3.new(0,.35,0);dust.SpreadAngle=Vector2.new(85,85)
@@ -4014,7 +4014,12 @@ local function part(e,name,size,color,material,shape)
 end
 local function fragments(e,n,color,material,shape)
  local result={}
- for i=1,n do result[i]=part(e,'ExtractedChip',Vector3.one,color or e.color,material or e.material,shape) end
+ local base=material or e.material
+ for i=1,n do
+  local chip=part(e,'ExtractedChip',Vector3.one,color or e.color,base,shape)
+  if base==e.material then chip.MaterialVariant=e.view.MaterialVariant end
+  result[i]=chip
+ end
  return result
 end
 local function ring(e,n,color,width)
@@ -4059,13 +4064,14 @@ local function build(e)
   end
   e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
-  e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal)}
+  e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal)}
+  for _,jaw in ipairs(e.jaws) do jaw.MaterialVariant='QuarryDrone_Ribbed' end
   e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,2,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf';piece.MaterialVariant=e.view.MaterialVariant end
+  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf' end
  elseif e.kind=='Gridcutter' then
   e.grid={};for i=1,4 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
   e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock';piece.MaterialVariant=e.view.MaterialVariant end
+  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock' end
   e.release=ring(e,12,Color3.fromRGB(255,120,145),.065)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
@@ -4074,7 +4080,7 @@ local function build(e)
   e.sun=part(e,'ContainedSun',Vector3.one,gold,Enum.Material.Neon,Enum.PartType.Ball)
   e.corona=part(e,'HeatEnvelope',Vector3.one,hot,Enum.Material.Neon,Enum.PartType.Ball)
   e.rays={};for i=1,3 do e.rays[i]=part(e,'HeatRay',Vector3.one,hot) end
-  e.fragments=fragments(e,10,hot,Enum.Material.Neon,Enum.PartType.Ball)
+  e.fragments=fragments(e,10,hot:Lerp(e.color,.28),e.material,Enum.PartType.Ball)
  elseif e.kind=='Frostbite' then
   e.shell=proxy(e);e.shell.Name='GrowingIce';e.shell.Color=ice;e.shell.Material=Enum.Material.Glass;e.shell.Transparency=1;e.shell.Reflectance=.16
   e.ring=ring(e,10,ice,.045);e.fragments=fragments(e,12,ice,Enum.Material.Glass)
@@ -5184,9 +5190,12 @@ function P:createMiningBeam(view,emitter)
  local holder=Instance.new('Folder');holder.Name='MiningBeam';holder.Parent=self.parent
  local muzzle=Instance.new('Attachment');muzzle.Name='RenderedMuzzle';muzzle.Parent=emitter
  local body=view.PrimaryPart
- if body then
-  -- Original emitter is enclosed in the authored shell. Exit from the actual
-  -- rendered underside, in emitter-local coordinates, and follow the viewmodel.
+ local optic=view:FindFirstChild('MiningOptic')
+ if optic and optic:IsA('BasePart') then
+  local exit=optic.CFrame:PointToWorldSpace(Vector3.new(-optic.Size.X*.5,0,0))
+  muzzle.Position=emitter.CFrame:PointToObjectSpace(exit)
+ elseif body then
+  -- Keep the captured emission point for rigs with no separate visible optic.
   local bottom=body.CFrame:PointToWorldSpace(Vector3.new(0,-body.Size.Y*.5,0))
   muzzle.Position=emitter.CFrame:PointToObjectSpace(bottom)
  end
@@ -6675,29 +6684,12 @@ local function mechanicVisual(parent,choice,compact)
   local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
   if not template or not template:IsA('Model') then return end
   local model=template:Clone();safe(model)
-  local shell=model:FindFirstChild('Mesh')
-  if shell and shell:IsA('BasePart') then
-   shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25);shell.Material=Enum.Material.SmoothPlastic
-   local eye=visualPart(model,Vector3.new(shell.Size.X*.74,shell.Size.Y*.15,.06),Vector3.zero,Color3.fromRGB(12,22,39))
-   eye.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.16,shell.Size.Z*.5+.035)
-   local optic=visualPart(model,Vector3.new(shell.Size.X*.57,shell.Size.Y*.065,.075),Vector3.zero,accent)
-   optic.CFrame=eye.CFrame*CFrame.new(0,0,.045)
-   local emitter=model:FindFirstChild('Emmiter',true)
-   if emitter and emitter:IsA('BasePart') then
-    emitter.Size=Vector3.one*(shell.Size.Y*.25);emitter.Color=accent
-    emitter.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.61,0)
-   end
+  if roles then
+   roles.decorate(model,role)
+  else
+   local shell=model:FindFirstChild('Mesh')
+   if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25) end
   end
-  if roles then roles.decorate(model,role) end
-  -- Show the authored bolt-on hardware clear of the original cubic shell.
-  -- This is an exploded card illustration, not a change to the world asset.
-  for _,hardware in ipairs(model:GetChildren()) do if hardware:IsA('BasePart') then
-   if hardware.Name:find('OrbitalLens') or hardware.Name=='FocusingMast' then hardware.CFrame+=Vector3.new(0,.8,0) end
-   if hardware.Name=='MiniDroneBay' or hardware.Name=='BayLatch' then
-    local localPosition=model:GetPivot():PointToObjectSpace(hardware.Position)
-    hardware.CFrame+=model:GetPivot().RightVector*(localPosition.X<0 and -.5 or .5)
-   end
-  end end
   safe(model)
   local _,bounds=model:GetBoundingBox();model:ScaleTo(model:GetScale()*size/math.max(bounds.X,bounds.Y,bounds.Z,.01))
   local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())
@@ -7011,6 +7003,8 @@ local function createCrate(parent)
  local shell=Color3.fromRGB(39,47,58)
  local body=block(model,'Shell',Vector3.new(1.88,1.12,1.58),shell,Enum.Material.Metal)
  local lid=block(model,'Lid',Vector3.new(1.94,.24,1.65),Color3.fromRGB(67,78,91),Enum.Material.Metal)
+ body.Material=Enum.Material.CorrodedMetal;body.MaterialVariant='QuarryDrone_Ribbed'
+ lid.Material=Enum.Material.Slate;lid.MaterialVariant='QuarryDrone_Painted'
  local seam=block(model,'Seal',Vector3.new(1.92,.055,1.62),idle,Enum.Material.Neon)
  local light=Instance.new('PointLight');light.Range=7;light.Color=idle;light.Parent=seam
  local sparks=Instance.new('ParticleEmitter')
@@ -7024,7 +7018,7 @@ local function createCrate(parent)
  return {model=model,body=body,lid=lid,seam=seam,light=light,sparks=sparks}
 end
 
-local function createDrone(parent)
+local function createDrone(parent,droneConfig)
  local template=workspace:FindFirstChild('Drone') or RS:FindFirstChild('Drone')
  if not template or not template:IsA('Model') then return nil end
  local drone=template:Clone()
@@ -7040,6 +7034,7 @@ local function createDrone(parent)
   elseif item:IsA('Beam') or item:IsA('Trail') or item:IsA('ParticleEmitter') or item:IsA('Light') then item.Enabled=false end
  end
  drone:ScaleTo(drone:GetScale()*.69)
+ if droneConfig then droneConfig.decorate(drone,'Courier',Color3.fromRGB(151,164,169)) end
  DroneOutline.attach(drone);drone.Parent=parent
  return drone
 end
@@ -7141,7 +7136,7 @@ function PackView:render(record,source,now,age,tier)
   dronePosition=top+side*(20*q^2)+Vector3.new(0,9*q^2,0)
  end
  if dronePosition and not record.courier and not record.triedCourier then
-  record.triedCourier=true;record.courier=createDrone(o.parent)
+  record.triedCourier=true;record.courier=createDrone(o.parent,o.droneConfig)
  end
  if record.courier then
   if dronePosition then record.courier:PivotTo(CFrame.lookAt(dronePosition,dronePosition+side))
@@ -7395,12 +7390,14 @@ function View.start(options)
    elseif node:IsA('BasePart') then node.Anchored=true;node.CastShadow=false;node.Reflectance=0 end
   end
   view:ScaleTo(view:GetScale()*.18)
+  if options.droneConfig then options.droneConfig.decorate(view,'Dart',Color3.fromRGB(179,176,113)) end
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
   DroneOutline.attach(view);view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
    local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
-   part.Material=Enum.Material.Metal;part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
+   part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
+   part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
@@ -8794,7 +8791,7 @@ local function cargoUnits(p)
 end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
 local packView=PackView.new({
- player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,
+ player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
@@ -9205,7 +9202,7 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,profile=function() return profile end,hidden=menusVisible})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.effectsGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do

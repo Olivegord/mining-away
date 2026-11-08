@@ -197,7 +197,7 @@ local function cargoUnits(p)
 end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
 local packView=PackView.new({
- player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,
+ player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
@@ -608,7 +608,7 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,profile=function() return profile end,hidden=menusVisible})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.effectsGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do

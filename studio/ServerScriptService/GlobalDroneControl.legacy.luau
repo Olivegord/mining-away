@@ -3273,29 +3273,78 @@ end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
 
--- Purely mechanical silhouettes. The mining drone keeps its authored shell;
--- support roles use a tiny disc or a two-drum box, with no face or character cues.
--- Call after ScaleTo, on either the server model or the local rendered clone.
-function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, BasePart?)
+-- Quarry machines share painted stone-gray panels and worn metal at working
+-- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
+-- This only builds the visible hull; flight, reach and articulation are unchanged.
+function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?): (Model, BasePart?, BasePart?)
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
  if model:GetAttribute('RoleGeometry')==role then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
- if specialDefinitions[role] then
-  local pose=model:GetPivot();local scale=model:GetScale()
-  local color=DroneConfig.Types[role].Color
-  local dark=Color3.fromRGB(48,55,63)
-  local pale=Color3.fromRGB(202,209,213)
-  local function hardware(name: string,size: Vector3,offset: CFrame,tint: Color3,material: Enum.Material,kind: Enum.PartType?,motion: string?,side: number?): Part
-   local part=Instance.new('Part');part.Name=name;part.Anchored=true
-   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
-   part.Material=material;part.MaterialVariant='';part.Color=tint;part.Reflectance=0
-   part.Size=size*scale;part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation
-   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-   if kind then part.Shape=kind end
-   if motion then part:SetAttribute('SpecialMotion',motion);part:SetAttribute('MotionSide',side or 1) end
-   part.Parent=model;return part
+ local def=DroneConfig.Types[role]
+ if not body or not def then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
+
+ local pose,scale=model:GetPivot(),model:GetScale()
+ local color=finishColor or def.Color
+ local dark=Color3.fromRGB(67,76,84)
+ local pale=Color3.fromRGB(211,219,219)
+ local painted=Color3.fromRGB(199,203,205):Lerp(color,.55)
+ local metal=Enum.Material.Metal
+ local slate=Enum.Material.Slate
+ local smooth=Enum.Material.SmoothPlastic
+ local cylinder=Enum.PartType.Cylinder
+ local vertical=CFrame.Angles(0,0,math.pi/2)
+ local foreAft=CFrame.Angles(0,math.pi/2,0)
+ body.Transparency=1;body.CastShadow=false
+ if emitter and emitter:IsA('BasePart') then emitter.Transparency=1;emitter.CastShadow=false end
+
+ local function hardware(name: string,size: Vector3,offset: CFrame,tint: Color3,material: Enum.Material,kind: Enum.PartType?,motion: string?,side: number?,wedge: boolean?): BasePart
+  local part: BasePart=if wedge then Instance.new('WedgePart') else Instance.new('Part')
+  part.Name=name;part.Anchored=true
+  part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+  part.Material=material;part.Color=tint;part.Reflectance=0
+  if material==metal then
+   part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
+  elseif material==slate then
+   part.MaterialVariant='QuarryDrone_Painted'
   end
-  local metal=Enum.Material.Metal
+  part.Size=size*scale;part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+  if kind and part:IsA('Part') then part.Shape=kind end
+  if motion then part:SetAttribute('SpecialMotion',motion);part:SetAttribute('MotionSide',side or 1) end
+  part.Parent=model;return part
+ end
+ local function pod(name: string,diameter: number,height: number,y: number,tint: Color3,material: Enum.Material)
+  return hardware(name,Vector3.new(height,diameter,diameter),CFrame.new(0,y,0)*vertical,tint,material,cylinder)
+ end
+ local function lens(name: string,point: Vector3,tint: Color3,radius: number)
+  return hardware(name,Vector3.new(.12,radius,radius),CFrame.new(point)*vertical,tint,Enum.Material.Neon,cylinder)
+ end
+
+ if specialDefinitions[role] then
+  -- Working assemblies retain their original joints and travel. Each now gets
+  -- a small chassis suited to its tool instead of the common square behind it.
+  if role=='Bubbler' then
+   pod('PressureManifold',1.48,.50,-.06,painted,slate)
+   pod('ManifoldSeal',1.30,.14,-.33,dark,metal)
+  elseif role=='Halver' then
+   hardware('ShearCounterweight',Vector3.new(.68,.62,1.95),CFrame.new(0,.16,.46),painted,slate,cylinder)
+   hardware('JawPump',Vector3.new(.56,.42,1.02),CFrame.new(0,.33,.58),dark,metal)
+  elseif role=='Gridcutter' then
+   hardware('RaisedBridge',Vector3.new(2.28,.33,.62),CFrame.new(0,.34,.43),painted,slate)
+   hardware('RelayCap',Vector3.new(.44,.78,.78),CFrame.new(0,.39,.39)*vertical,dark,metal,cylinder)
+  elseif role=='Singularity' then
+   pod('FieldSpindle',1.52,.36,-.14,painted,slate)
+   pod('SpindleClamp',1.12,.15,-.35,dark,metal)
+  elseif role=='Starforge' then
+   pod('ForgeBelly',1.65,.44,-.15,painted,slate)
+   pod('InsulatedGasket',1.41,.16,-.42,dark,metal)
+  elseif role=='Frostbite' then
+   hardware('CryoKeel',Vector3.new(.85,.46,2.10),CFrame.new(0,.03,.02),painted,slate,nil,nil,nil,true)
+   hardware('ColdPlate',Vector3.new(.62,.15,1.58),CFrame.new(0,-.20,.11),pale,metal)
+  else
+   hardware('ResonatorKeel',Vector3.new(2.45,.35,.75),CFrame.new(0,-.04,0),painted,slate,cylinder)
+   hardware('DampingPlate',Vector3.new(1.92,.16,.57),CFrame.new(0,-.24,0),dark,metal)
+  end
   if role=='Bubbler' then
    -- Two large pressure bulbs and their open roll cage read as rounded tanks,
    -- rather than another recolored copy of the small authored chassis.
@@ -3364,74 +3413,69 @@ function DroneConfig.decorate(model: Model, role: string): (Model, BasePart?, Ba
   end
   model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
  end
- if role=='Orbiter' or role=='Scrapper' then
-  -- Append working hardware to the authored drone; never replace its shell.
-  local pose=model:GetPivot();local scale=model:GetScale()
-  local function hardware(name: string,size: Vector3,offset: CFrame,color: Color3): Part
-   local part=Instance.new('Part');part.Name=name;part.Anchored=true
-   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.Material=Enum.Material.Metal
-   part.MaterialVariant='';part.Color=color;part.Reflectance=0;part.Size=size*scale
-   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-   part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation;part.Parent=model;return part
-  end
-  if role=='Orbiter' then
-   hardware('FocusingMast',Vector3.new(.15,.85,.15),CFrame.new(0,.62,0),Color3.fromRGB(90,96,98))
-   for i=1,3 do
-    local lens=hardware('OrbitalLens'..i,Vector3.new(.12,.8-i*.12,.8-i*.12),CFrame.new(0,.30+i*.23,0)*CFrame.Angles(0,0,math.pi/2),Color3.fromRGB(205,171,101))
-    lens.Shape=Enum.PartType.Cylinder
-   end
-  else
-   for _,side in ipairs({-1,1}) do
-    hardware('MiniDroneBay',Vector3.new(.4,.4,.95),CFrame.new(side*.78,-.26,0),Color3.fromRGB(104,117,85))
-    hardware('BayLatch',Vector3.new(.44,.06,.16),CFrame.new(side*.78,-.02,-.25),Color3.fromRGB(174,188,131))
-   end
-  end
-  model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
- end
- if role=='Dart' or role=='Charger' then
-  local pose=model:GetPivot();local scale=model:GetScale()
+ if role=='Striker' then
+  pod('RoundMinerHull',2.12,.48,.05,painted,slate)
+  pod('ShoulderRing',1.99,.16,-.26,dark,metal)
+  pod('CeramicNoseCap',1.47,.20,.38,pale,smooth)
+  local underside=Vector3.new(0,-body.Size.Y/(2*scale),0)
+  pod('OpticCollar',.82,.20,math.min(-.37,underside.Y+.12),dark,metal)
+  lens('MiningOptic',Vector3.new(underside.X,math.min(-.49,underside.Y),underside.Z),color,.32)
   for _,side in ipairs({-1,1}) do
-   local part=Instance.new('Part');part.Name=role=='Dart' and 'MineralSeeder' or 'ImpactDrum'
-   part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
-   part.Material=Enum.Material.Metal;part.MaterialVariant='';part.Reflectance=0;part.Color=Color3.fromRGB(72,80,82)
-   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-   part.Size=(role=='Dart' and Vector3.new(.7,.4,.4) or Vector3.new(.7,.8,.8))*scale
-   if part:IsA('Part') then part.Shape=Enum.PartType.Cylinder end
-   part.CFrame=pose*CFrame.new(side*(role=='Dart' and .85 or 1.1)*scale,-.12*scale,0);part.Parent=model
+   hardware('SideVent',Vector3.new(.32,.23,.66),CFrame.new(side*.91,.07,.15),dark,metal)
   end
-  model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
- end
- if role~='Medic' and role~='Courier' then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
- local pose=model:GetPivot();local scale=model:GetScale()
- -- Keep the captured template intact inside this disposable runtime clone.
- for _,part in ipairs(model:GetDescendants()) do if part:IsA('BasePart') then part.Transparency=1 end end
- local function shape(name: string,size: Vector3,offset: CFrame,color: Color3,material: Enum.Material,kind: Enum.PartType?): Part
-  local part=Instance.new('Part');part.Name=name;part.Size=size*scale;part.CFrame=pose*CFrame.new(offset.Position*scale)*offset.Rotation
-  part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=true
-  part.Material=material;part.MaterialVariant='';part.Reflectance=0;part.Color=color
-  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
-  if kind then part.Shape=kind end
-  part.Parent=model;return part
- end
- local slate=Color3.fromRGB(66,76,78)
- if role=='Medic' then
-  body=shape('RepairDisc',Vector3.new(.24,1.25,1.25),CFrame.Angles(0,0,math.pi/2),slate,Enum.Material.Metal,Enum.PartType.Cylinder)
-  shape('RepairCrossA',Vector3.new(.8,.05,.22),CFrame.new(0,.15,0),Color3.fromRGB(160,204,157),Enum.Material.Plastic)
-  shape('RepairCrossB',Vector3.new(.22,.05,.8),CFrame.new(0,.15,0),Color3.fromRGB(160,204,157),Enum.Material.Plastic)
- else
-  body=shape('CourierBox',Vector3.new(1.5,.7,1.15),CFrame.new(),Color3.fromRGB(136,120,88),Enum.Material.DiamondPlate)
+ elseif role=='Dart' then
+  hardware('SeedDartHull',Vector3.new(1.02,.54,2.4),CFrame.new(0,.14,-.09)*CFrame.Angles(0,math.pi,0),painted,slate,nil,nil,nil,true)
+  hardware('SeederKeel',Vector3.new(.76,.22,1.91),CFrame.new(0,-.22,.03),dark,metal)
   for _,side in ipairs({-1,1}) do
-   shape('LiftDrum',Vector3.new(.8,.38,.38),CFrame.new(side*.9,0,0)*CFrame.Angles(0,0,math.pi/2),slate,Enum.Material.Metal,Enum.PartType.Cylinder)
+   hardware('MineralSeeder',Vector3.new(1.34,.40,.40),CFrame.new(side*.58,-.08,.14)*foreAft,pale,metal,cylinder)
   end
-  shape('ParcelRail',Vector3.new(1.1,.10,.9),CFrame.new(0,-.42,0),slate,Enum.Material.Metal)
+  lens('SeedOutlet',Vector3.new(0,-.40,-.31),color,.23)
+ elseif role=='Charger' then
+  hardware('RamCylinder',Vector3.new(2.15,1.27,1.27),CFrame.new(0,.01,0)*foreAft,painted,slate,cylinder)
+  hardware('ForgedRamFace',Vector3.new(.30,1.32,1.32),CFrame.new(0,.01,-1.09)*foreAft,dark,metal,cylinder)
+  hardware('RamCap',Vector3.new(.12,.93,.93),CFrame.new(0,.01,-1.29)*foreAft,color,smooth,cylinder)
+  for _,side in ipairs({-1,1}) do
+   hardware('ImpactDrum',Vector3.new(.72,.74,.74),CFrame.new(side*.79,-.08,.32),dark,metal,cylinder)
+  end
+ elseif role=='Orbiter' then
+  pod('RelayUndercarriage',1.31,.52,-.10,dark,metal)
+  hardware('FocusingMast',Vector3.new(.20,.76,.20),CFrame.new(0,.34,0),dark,metal)
+  local dish=CFrame.new(0,.81,0)*CFrame.Angles(.26,0,-.17)*vertical
+  hardware('ReceiverDish',Vector3.new(.22,2.39,2.39),dish,painted,slate,cylinder)
+  hardware('DishInlay',Vector3.new(.12,1.99,1.99),dish*CFrame.new(.15,0,0),pale,smooth,cylinder)
+  hardware('OrbitalLens',Vector3.new(.23,.66,.66),dish*CFrame.new(.28,0,0),color,smooth,cylinder)
+  for _,side in ipairs({-1,1}) do
+   hardware('RelayWing',Vector3.new(.88,.11,.55),CFrame.new(side*.89,-.12,.29)*CFrame.Angles(0,0,side*.13),dark,metal)
+  end
+ elseif role=='Scrapper' then
+  hardware('FabricatorYoke',Vector3.new(2.06,.24,.56),CFrame.new(0,.13,.37),painted,slate)
+  for _,side in ipairs({-1,1}) do
+   hardware('MiniDroneBay',Vector3.new(1.47,.66,.66),CFrame.new(side*.62,.03,-.07)*foreAft,dark,metal,cylinder)
+   hardware('BayLatch',Vector3.new(.13,.69,.69),CFrame.new(side*.62,.03,-.79)*foreAft,painted,slate,cylinder)
+   hardware('BayMouth',Vector3.new(.09,.41,.41),CFrame.new(side*.62,.03,-.87)*foreAft,Color3.fromRGB(41,46,39),smooth,cylinder)
+  end
+  lens('FabricatorIndicator',Vector3.new(0,.33,.35),color,.26)
+ elseif role=='Medic' then
+  pod('RepairDisc',1.51,.24,.01,dark,metal)
+  pod('CeramicCover',1.32,.20,.20,pale,smooth)
+  hardware('RepairCrossA',Vector3.new(.76,.06,.21),CFrame.new(0,.33,0),color,smooth)
+  hardware('RepairCrossB',Vector3.new(.21,.06,.76),CFrame.new(0,.33,0),color,smooth)
+  lens('RepairOutlet',Vector3.new(0,-.29,0),color,.28)
+ elseif role=='Courier' then
+  hardware('ParcelSling',Vector3.new(1.05,.20,1.36),CFrame.new(0,-.38,0),painted,slate)
+  hardware('FrontKeel',Vector3.new(.91,.38,1.04),CFrame.new(0,-.07,-.27),painted,slate,nil,nil,nil,true)
+  for _,side in ipairs({-1,1}) do
+   hardware('LiftDrum',Vector3.new(.75,.48,.48),CFrame.new(side*.81,.09,0)*vertical,dark,metal,cylinder)
+   hardware('LiftDrumCap',Vector3.new(.13,.52,.52),CFrame.new(side*.81,.52,0)*vertical,pale,smooth,cylinder)
+   hardware('ParcelRail',Vector3.new(.13,.16,1.31),CFrame.new(side*.52,-.22,.05),dark,metal)
+  end
+  lens('ParcelIndicator',Vector3.new(0,-.49,.35),color,.22)
  end
- if not emitter or not emitter:IsA('BasePart') then emitter=shape('Emmiter',Vector3.one*.18,CFrame.new(),Color3.fromRGB(152,206,162),Enum.Material.Plastic) end
- emitter.Size=Vector3.one*.18*scale;emitter.CFrame=pose*CFrame.new(0,(role=='Medic' and -.20 or -.5)*scale,0)
- emitter.Material=Enum.Material.Plastic;emitter.Color=role=='Medic' and Color3.fromRGB(152,206,162) or Color3.fromRGB(221,187,108)
- emitter.Reflectance=0;emitter.Transparency=0
- local root=shape('SupportRoot',Vector3.one*.1,CFrame.new(),slate,Enum.Material.Plastic)
- root.Transparency=1;root.CastShadow=false;model.PrimaryPart=root;model:SetAttribute('RoleGeometry',role)
- return model,root,emitter
+ if (role=='Medic' or role=='Courier') and emitter and emitter:IsA('BasePart') then
+  emitter.Size=Vector3.one*.18*scale;emitter.CFrame=pose*CFrame.new(0,(role=='Medic' and -.20 or -.5)*scale,0)
+ end
+ model:SetAttribute('RoleGeometry',role)
+ return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
 end
 
 -- Equipment drops are rolled by the saved consumable rules, not timed buffs.
@@ -4747,13 +4791,14 @@ return Biomes
 end)()
 local quarryVariants={}
 local polishedOre=false
+local veinedOre=false
 function W.applyQuarryVariant(part)
  part.MaterialVariant=quarryVariants[part.Material] or ''
 end
-function W.applyOreFinish(part)
+function W.applyOreFinish(part,strongVeins)
  W.applyQuarryVariant(part)
  if polishedOre then
-  part.MaterialVariant='QuarryOre_Polished'
+  part.MaterialVariant=strongVeins and veinedOre and 'QuarryOre_Veined' or 'QuarryOre_Polished'
   part.Reflectance=.11
  end
 end
@@ -4769,6 +4814,7 @@ function W.applyQuarryTextures(scene)
   local base=variant:IsA('MaterialVariant') and variant.Name:match('^QuarryPhoto_(%w+)$')
   if base then quarryVariants[material[base]]=variant.Name end
   if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Polished' then polishedOre=true end
+  if variant:IsA('MaterialVariant') and variant.Name=='QuarryOre_Veined' then veinedOre=true end
  end
  -- The shared Edit map and canonical file already carry the authored scenery.
  -- Still register materials for runtime ore and debris on every server.
@@ -6468,7 +6514,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  part.Name=kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=true;part.Size=fullSize;part.Position=finish
  part.Color=shell and Color3.fromRGB(186,193,224):Lerp(field.color,.48) or Color3.fromRGB(228,239,248):Lerp(field.color,.66)
  part.Material=Enum.Material.Slate;part.Reflectance=0
- World.applyOreFinish(part)
+ World.applyOreFinish(part,field.cfg.Key=='Quartz' or field.cfg.Key=='Cobalt' or field.cfg.Key=='ImpactTest')
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,

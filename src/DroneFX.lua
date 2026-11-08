@@ -23,7 +23,12 @@ local function part(e,name,size,color,material,shape)
 end
 local function fragments(e,n,color,material,shape)
  local result={}
- for i=1,n do result[i]=part(e,'ExtractedChip',Vector3.one,color or e.color,material or e.material,shape) end
+ local base=material or e.material
+ for i=1,n do
+  local chip=part(e,'ExtractedChip',Vector3.one,color or e.color,base,shape)
+  if base==e.material then chip.MaterialVariant=e.view.MaterialVariant end
+  result[i]=chip
+ end
  return result
 end
 local function ring(e,n,color,width)
@@ -68,13 +73,14 @@ local function build(e)
   end
   e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
-  e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal)}
+  e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.CorrodedMetal)}
+  for _,jaw in ipairs(e.jaws) do jaw.MaterialVariant='QuarryDrone_Ribbed' end
   e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,2,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf';piece.MaterialVariant=e.view.MaterialVariant end
+  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf' end
  elseif e.kind=='Gridcutter' then
   e.grid={};for i=1,4 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
   e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9,e.color,e.material)
-  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock';piece.MaterialVariant=e.view.MaterialVariant end
+  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock' end
   e.release=ring(e,12,Color3.fromRGB(255,120,145),.065)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
@@ -83,7 +89,7 @@ local function build(e)
   e.sun=part(e,'ContainedSun',Vector3.one,gold,Enum.Material.Neon,Enum.PartType.Ball)
   e.corona=part(e,'HeatEnvelope',Vector3.one,hot,Enum.Material.Neon,Enum.PartType.Ball)
   e.rays={};for i=1,3 do e.rays[i]=part(e,'HeatRay',Vector3.one,hot) end
-  e.fragments=fragments(e,10,hot,Enum.Material.Neon,Enum.PartType.Ball)
+  e.fragments=fragments(e,10,hot:Lerp(e.color,.28),e.material,Enum.PartType.Ball)
  elseif e.kind=='Frostbite' then
   e.shell=proxy(e);e.shell.Name='GrowingIce';e.shell.Color=ice;e.shell.Material=Enum.Material.Glass;e.shell.Transparency=1;e.shell.Reflectance=.16
   e.ring=ring(e,10,ice,.045);e.fragments=fragments(e,12,ice,Enum.Material.Glass)

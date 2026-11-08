@@ -15,6 +15,8 @@ The quarry's repeating color tiles use a saved **32×32 to 64×64 pixel** range.
 
 Download the two linked 1K diffuse JPEGs as `grass_ground.jpg` and `ganges_river_pebbles.jpg`, then run `swift tools/balance_quarry_textures.swift <photo-directory>` from the repository root. The authored scales, pattern modes, and mining-bed tints are recorded in [the Studio material pass](../../tools/studio_balance_quarry.lua). Grass uses organic tiling at 10–12 studs per tile; gravel uses a regular 17-stud tile to keep each stone readable. Herringbone, checker pads, and directional wood provide the stronger patterns in small areas.
 
+The [contrast pass](../../tools/studio_quarry_contrast.lua) reuses the original strong vein photo for Quartz, Cobalt and the Impact field, and the older gravel on the Quartz bed. Eleven selected turf parts use the stronger grass grade. Drone panels reuse `stone-soft.png` at 0.92 studs per tile; working ribs use `metal.png` at 0.64 studs per tile, so the low-resolution patterns read on small hardware.
+
 Earlier source tiles and grades are retained for provenance:
 
 | File | Source | Roblox image ID |

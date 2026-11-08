@@ -83,9 +83,12 @@ function P:createMiningBeam(view,emitter)
  local holder=Instance.new('Folder');holder.Name='MiningBeam';holder.Parent=self.parent
  local muzzle=Instance.new('Attachment');muzzle.Name='RenderedMuzzle';muzzle.Parent=emitter
  local body=view.PrimaryPart
- if body then
-  -- Original emitter is enclosed in the authored shell. Exit from the actual
-  -- rendered underside, in emitter-local coordinates, and follow the viewmodel.
+ local optic=view:FindFirstChild('MiningOptic')
+ if optic and optic:IsA('BasePart') then
+  local exit=optic.CFrame:PointToWorldSpace(Vector3.new(-optic.Size.X*.5,0,0))
+  muzzle.Position=emitter.CFrame:PointToObjectSpace(exit)
+ elseif body then
+  -- Keep the captured emission point for rigs with no separate visible optic.
   local bottom=body.CFrame:PointToWorldSpace(Vector3.new(0,-body.Size.Y*.5,0))
   muzzle.Position=emitter.CFrame:PointToObjectSpace(bottom)
  end

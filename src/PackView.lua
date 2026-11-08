@@ -24,6 +24,8 @@ local function createCrate(parent)
  local shell=Color3.fromRGB(39,47,58)
  local body=block(model,'Shell',Vector3.new(1.88,1.12,1.58),shell,Enum.Material.Metal)
  local lid=block(model,'Lid',Vector3.new(1.94,.24,1.65),Color3.fromRGB(67,78,91),Enum.Material.Metal)
+ body.Material=Enum.Material.CorrodedMetal;body.MaterialVariant='QuarryDrone_Ribbed'
+ lid.Material=Enum.Material.Slate;lid.MaterialVariant='QuarryDrone_Painted'
  local seam=block(model,'Seal',Vector3.new(1.92,.055,1.62),idle,Enum.Material.Neon)
  local light=Instance.new('PointLight');light.Range=7;light.Color=idle;light.Parent=seam
  local sparks=Instance.new('ParticleEmitter')
@@ -37,7 +39,7 @@ local function createCrate(parent)
  return {model=model,body=body,lid=lid,seam=seam,light=light,sparks=sparks}
 end
 
-local function createDrone(parent)
+local function createDrone(parent,droneConfig)
  local template=workspace:FindFirstChild('Drone') or RS:FindFirstChild('Drone')
  if not template or not template:IsA('Model') then return nil end
  local drone=template:Clone()
@@ -53,6 +55,7 @@ local function createDrone(parent)
   elseif item:IsA('Beam') or item:IsA('Trail') or item:IsA('ParticleEmitter') or item:IsA('Light') then item.Enabled=false end
  end
  drone:ScaleTo(drone:GetScale()*.69)
+ if droneConfig then droneConfig.decorate(drone,'Courier',Color3.fromRGB(151,164,169)) end
  DroneOutline.attach(drone);drone.Parent=parent
  return drone
 end
@@ -154,7 +157,7 @@ function PackView:render(record,source,now,age,tier)
   dronePosition=top+side*(20*q^2)+Vector3.new(0,9*q^2,0)
  end
  if dronePosition and not record.courier and not record.triedCourier then
-  record.triedCourier=true;record.courier=createDrone(o.parent)
+  record.triedCourier=true;record.courier=createDrone(o.parent,o.droneConfig)
  end
  if record.courier then
   if dronePosition then record.courier:PivotTo(CFrame.lookAt(dronePosition,dronePosition+side))

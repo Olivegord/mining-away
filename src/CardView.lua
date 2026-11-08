@@ -143,29 +143,12 @@ local function mechanicVisual(parent,choice,compact)
   local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
   if not template or not template:IsA('Model') then return end
   local model=template:Clone();safe(model)
-  local shell=model:FindFirstChild('Mesh')
-  if shell and shell:IsA('BasePart') then
-   shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25);shell.Material=Enum.Material.SmoothPlastic
-   local eye=visualPart(model,Vector3.new(shell.Size.X*.74,shell.Size.Y*.15,.06),Vector3.zero,Color3.fromRGB(12,22,39))
-   eye.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.16,shell.Size.Z*.5+.035)
-   local optic=visualPart(model,Vector3.new(shell.Size.X*.57,shell.Size.Y*.065,.075),Vector3.zero,accent)
-   optic.CFrame=eye.CFrame*CFrame.new(0,0,.045)
-   local emitter=model:FindFirstChild('Emmiter',true)
-   if emitter and emitter:IsA('BasePart') then
-    emitter.Size=Vector3.one*(shell.Size.Y*.25);emitter.Color=accent
-    emitter.CFrame=shell.CFrame*CFrame.new(0,-shell.Size.Y*.61,0)
-   end
+  if roles then
+   roles.decorate(model,role)
+  else
+   local shell=model:FindFirstChild('Mesh')
+   if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25) end
   end
-  if roles then roles.decorate(model,role) end
-  -- Show the authored bolt-on hardware clear of the original cubic shell.
-  -- This is an exploded card illustration, not a change to the world asset.
-  for _,hardware in ipairs(model:GetChildren()) do if hardware:IsA('BasePart') then
-   if hardware.Name:find('OrbitalLens') or hardware.Name=='FocusingMast' then hardware.CFrame+=Vector3.new(0,.8,0) end
-   if hardware.Name=='MiniDroneBay' or hardware.Name=='BayLatch' then
-    local localPosition=model:GetPivot():PointToObjectSpace(hardware.Position)
-    hardware.CFrame+=model:GetPivot().RightVector*(localPosition.X<0 and -.5 or .5)
-   end
-  end end
   safe(model)
   local _,bounds=model:GetBoundingBox();model:ScaleTo(model:GetScale()*size/math.max(bounds.X,bounds.Y,bounds.Z,.01))
   local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())

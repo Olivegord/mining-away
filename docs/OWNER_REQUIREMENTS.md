@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — drone silhouettes and selective texture contrast
+
+Give the drones recognizable shapes and materials from the quarry. Use quiet painted panels, rougher hardware, and clear effect cores; preserve each tool's motion, timing and function. Mix the stronger photo textures from the earlier look with the subdued finishes. Use strong mineral veins, rougher Quartz gravel, and selected lush turf patches against quieter surroundings.
+
 ## November 7 latest — deeper biomes, patterned props, and background saves
 
 Use a few of the exemplar's bold patterns on distinct blocks throughout the quarry. Set a much larger Ruby cliff wall behind the original outcrops, with enough setback for separate depth layers. Extend the Cobalt grove and use dense mushroom canopy and understory there; remove ordinary trees from that biome. Increase tree scale elsewhere. Make each biome a coherent landform and blend its edges into neighboring ground and routes. Keep color textures in the recorded low-resolution range.

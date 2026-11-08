@@ -81,12 +81,14 @@ function View.start(options)
    elseif node:IsA('BasePart') then node.Anchored=true;node.CastShadow=false;node.Reflectance=0 end
   end
   view:ScaleTo(view:GetScale()*.18)
+  if options.droneConfig then options.droneConfig.decorate(view,'Dart',Color3.fromRGB(179,176,113)) end
   for _,part in ipairs(view:GetDescendants()) do if part:IsA('BasePart') then part.LocalTransparencyModifier=0;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false end end
   DroneOutline.attach(view);view.Parent=visualRoot;view:PivotTo(CFrame.new(position))
   local function beam(width,color)
    local part=Instance.new('Part');part.Name='TinyScrapChisel';part.Shape=Enum.PartType.Cylinder
    part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
-   part.Material=Enum.Material.Metal;part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
+   part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
+   part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
   local chisel=beam(.05,Color3.fromRGB(185,174,126))
   local tip=Instance.new('Attachment');tip.Position=Vector3.new(-.08,0,0);tip.Parent=chisel
