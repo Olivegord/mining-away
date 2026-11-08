@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — restore the old grass texture
+
+The added grass grain is rejected as too grainy. Restore the original grass finish while keeping the rectangular color patches.
+
 ## November 7 latest — visible grass patches and cheerful game color
 
 The reference grass uses broad rectangular patches with different greens and texture phases. Fine grain over a whole slab alone does not match it. Keep walking surfaces flat, but make those patch boundaries visible. Research Roblox lighting and the visual direction of Grow a Garden / Steal an Egg; use fresher greens and colorful accents while retaining the photo textures, crisp shadows, sparse props, and existing mining levels.
