@@ -69,7 +69,7 @@ November 7: The home demo and working specialists should carry their startup int
 - Sample cosmetic motion locally from replicated authoritative timing. Do not move damage/rewards to the client or change gameplay timing accidentally to repair a visual handoff.
 - Keep bounded reuse: four active rich charge rigs, six cached charge rigs, four active aftermath rigs and four cached aftermath rigs at this revision. Retain distance/reduced-effects handling, cancellation, idle disconnection and cleanup. Never replay missed bursts or audio cues for a late observer.
 - Use the existing home preview to inspect repeat cycles without chasing drones. It is cosmetic; display rocks and drones must not affect fleet ownership, resource health, rewards or progression.
-- Follow the root project rules: verify the exact shared place and connected roots, use Script Sync for routine changes, and refresh only the allowlisted Sources in `build/DRONE_GAME.rbxl`. Preserve unrelated edits. The standing authorization in AGENTS.md covers publication to the existing DRONEREVOLUTION starting place.
+- Follow the root project rules: verify the exact shared place and connected roots, use Script Sync for routine changes, and refresh only the allowlisted Sources in `build/DRONE_GAME.rbxl`. Preserve unrelated edits. Use the local save and shared Edit checks for routine work. Publish only when the owner asks for a release.
 
 ## Where the implementation lives
 

@@ -86,3 +86,5 @@ grade(assets + "paving.png", "paving-worn-joints",
       [RGB(107,115,123), RGB(144,149,152), RGB(176,178,175)]) { $0 }
 grade(assets + "ore-vein.png", "ore-satin-vein",
       [RGB(99,106,121), RGB(154,159,168), RGB(220,223,222)]) { blurred($0, passes: 1) }
+grade(assets + "ruby-leaves.png", "ruby-loam",
+      [RGB(116,73,65), RGB(159,103,82), RGB(191,137,108)]) { blurred($0, passes: 1) }

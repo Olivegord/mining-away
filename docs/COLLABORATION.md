@@ -22,7 +22,7 @@ On another computer, open the existing shared place, select each corresponding s
 
 Files can create scripts directly: `.legacy.luau` is a Legacy Script, `.local.luau` a LocalScript, and `.luau` a ModuleScript. New server/client RunContext scripts may use `.server.luau`/`.client.luau`. Deleting/renaming files also changes Studio instances. Existing disabled backup LocalScripts remain disabled; do not recreate or enable them. The three roots were verified, and disposable ModuleScript creation, disk-to-Studio editing, Studio-to-disk editing and deletion were tested in the actual shared Edit session. See [Roblox Script Sync](https://create.roblox.com/docs/scripting/sync).
 
-Script Sync updates the open Edit document; a new Play session runs the changed server code. It does **not** publish the game. Publish the existing shared place after tests and verify the successful publish in the Studio log, including the exact place ID. The owner has prohibited opening the Version History panel. The canonical native snapshot must still preserve authored map and unrelated scripts; never replace shared map edits with an older local snapshot.
+Script Sync updates the open Edit document; a new Play session runs the changed server code. It does **not** publish the game. When the owner asks for a release, publish the existing shared place after tests and verify the successful publish in the Studio log, including the exact place ID. The owner has prohibited opening the Version History panel. The canonical native snapshot must still preserve authored map and unrelated scripts; never replace shared map edits with an older local snapshot.
 
 ## Read access and contribution access
 
@@ -42,6 +42,16 @@ Roblox and GitHub access are independent. MideDibber's Playtest/Edit access to D
 
 ## Updating the shared Roblox game
 
-The owner grants standing permission to publish completed updates to this existing destination. Reconcile newer shared edits, verify the selected shared document IDs, then use **File → Publish** in that existing shared Studio document. Use Publish As only when recovering from the canonical native snapshot, targeting **DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
+Local saves are sufficient for routine work. Only publish when the owner asks for a release. Reconcile newer shared edits, verify the selected shared document IDs, then use **File → Publish** in that existing shared Studio document. Use Publish As only when recovering from the canonical native snapshot, targeting **DRONEREVOLUTION → existing start place 124078027733625 → Overwrite**. The universe must be **10774898335**. Check for newer collaborator edits before replacing the online contents.
 
 Verify publication success and the destination, then record the exact Git revision/native hash, publication time and Roblox version or other direct verification evidence in `docs/PROJECT_STATE.md`. If publication is not observed, say **unverified**. Do not create a new game, change sharing permissions, or delete/archive either experience as part of an ordinary update.
+
+## Background saves
+
+Do not open **Download a Copy**, **Save to File**, or a replacement dialog during routine work. The owner reported that it covers their browser. Source-only changes already have a background path: run Script Sync and then the native seven-Source refresh. Keep publishing separate from saving the local recovery snapshot.
+
+For the quarry depth pass, [the Studio authoring script](../tools/studio_quarry_depth.lua) exports only its new scenery and material instances using Studio's `SerializationService`. It also records old and new values for its existing-part edits and the exact archive moves. The four compressed exports (`scenery`, `variants`, `archive`, `edits`) live in the Studio tool context at `shared.QuarryDepthSnapshot`, outside the place. Read them in chunks (for example, `return {data = shared.QuarryDepthSnapshot.scenery:sub(1, 10000)}`) and join each section in a temporary `<section>.b64` file. Retain the pre-edit canonical SHA-256 and reconcile any newer shared edits before mirroring.
+
+Run `python3 tools/refresh_native_scenery.py <export-directory> --baseline-sha256 <verified-sha256>` with Zstandard available. Inspect the checked report, then add `--write` to update the existing canonical file atomically. It appends the new native binary model exports without reserializing the original place. It checks the old properties and preserves unrelated properties and Sources. Validate the result with `python3 tools/build.py` and inspect the shared Edit view. Clear the transient Studio export after verification.
+
+This helper is allowlisted for the depth pass. For future map work, extend the scoped export and verify the affected values and old baseline. Do not silently fall back to a file dialog for edits that need a different method.

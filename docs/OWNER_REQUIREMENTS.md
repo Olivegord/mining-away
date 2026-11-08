@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — deeper biomes, patterned props, and background saves
+
+Use a few of the exemplar's bold patterns on distinct blocks throughout the quarry. Set a much larger Ruby cliff wall behind the original outcrops, with enough setback for separate depth layers. Extend the Cobalt grove and use dense mushroom canopy and understory there; remove ordinary trees from that biome. Increase tree scale elsewhere. Make each biome a coherent landform and blend its edges into neighboring ground and routes. Keep color textures in the recorded low-resolution range.
+
+Do not open a local save/export dialog over the owner's browser for routine work. Prefer a [background snapshot](COLLABORATION.md#background-saves) and verify that it matches the shared Edit document. Local saves are sufficient; do not publish routine changes. Wait for an owner request to release.
+
 ## November 7 latest — balance quarry textures and retain low resolution
 
 Use the supplied reference for contrast and pattern hierarchy. Grass should read as soft olive turf with small clumps; give mining gravel clearer grains, keep broad cliff faces quieter, and reserve strong repeating shapes for selected paths and fixtures. Avoid the same high-contrast mottling across the world. Keep quarry color tiles in the **32×32 to 64×64 px** range; the current replacement tiles are **64×64 px**. See [texture sources and sizes](../assets/quarry-textures/README.md).

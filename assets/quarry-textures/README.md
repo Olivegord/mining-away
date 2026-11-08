@@ -1,6 +1,6 @@
 # Quarry photo textures
 
-The quarry's repeating color tiles use a saved **32×32 to 64×64 pixel** range. All six tiles in the current material pass are **64×64**. Keep source photos separately from the exported tiles, and do not upscale for upload. Flat roughness maps can be smaller. The tiles come from [Poly Haven's CC0 library](https://polyhaven.com/license) and CC0 photographs on Wikimedia Commons.
+The quarry's repeating color tiles use a saved **32×32 to 64×64 pixel** range. All current diffuse tiles are **64×64**. Keep source photos separately from the exported tiles, and do not upscale for upload. Flat roughness maps can be smaller. The tiles come from [Poly Haven's CC0 library](https://polyhaven.com/license) and CC0 photographs on Wikimedia Commons.
 
 | Current tile | Source and treatment | Roblox image ID |
 | --- | --- | --- |
@@ -10,6 +10,8 @@ The quarry's repeating color tiles use a saved **32×32 to 64×64 pixel** range.
 | `stone-soft.png` | Retained `rock.png`; low-contrast cool stone | `140053828439773` |
 | `paving-worn-joints.png` | Retained `paving.png`; distinct, low-glare paving joints | `129610805568567` |
 | `ore-satin-vein.png` | Retained `ore-vein.png`; quieter host stone and visible veins, with the existing ore roughness | `84604323769040` |
+| `accent-red-brick.png` | [Red Brick 03, Poly Haven](https://polyhaven.com/a/red_brick_03); 1K diffuse resized to 64×64 | `140062751462844` |
+| `ruby-loam.png` | Retained `ruby-leaves.png`; restrained terracotta loam grade for Ruby's ground and transition shelves | `104200953297371` |
 
 Download the two linked 1K diffuse JPEGs as `grass_ground.jpg` and `ganges_river_pebbles.jpg`, then run `swift tools/balance_quarry_textures.swift <photo-directory>` from the repository root. The authored scales, pattern modes, and mining-bed tints are recorded in [the Studio material pass](../../tools/studio_balance_quarry.lua). Grass uses organic tiling at 10–12 studs per tile; gravel uses a regular 17-stud tile to keep each stone readable. Herringbone, checker pads, and directional wood provide the stronger patterns in small areas.
 
