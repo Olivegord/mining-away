@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `1478aa676449c2bc63a86c11d1a6a917bf6c0a252487bbdfbb4e006d23e7e7f1` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `2beb2d81c315376973c205062c7e5208849189d047f9580825093d777b8192f3` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,13 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — clear daytime lighting and brighter colors with original textures
+## Latest follow-up — saturated green turf and warm earth
+
+Re-tinted 130 grass parts, including the 36 physical patches, to saturated lime/leaf greens. Re-tinted 105 dirt, earth mass, foundation and basal cliff parts to varied brown-orange/ochre. Retained all material images, geometry, collision and 13:00 bright lighting. Inspected Quartz in the actual shared Studio Edit viewport and verified the grass tint and time. Studio was already open in Edit and remains open in Edit. No new Play test.
+
+Saved through tools/studio_green_grass_warm_dirt.lua and tools/refresh_green_warm.py. Scope changes only Color3uint8; all 50 Sources, non-color properties and hierarchy were preserved, and build.py reported no Source change. Canonical file and shared DRONEREVOLUTION Edit entry point are current (place 124078027733625, universe 10774898335). Public release remains v43; not published.
+
+## Earlier follow-up — clear daytime lighting and brighter colors with original textures
 
 Moved the sun from 08:30 to 13:00, latitude 25, brightness 2, exposure 0.35, neutral ambient 190 and outdoor fill 210. Diffuse environment contribution is 0.45; post contrast is zero, brightness 0.025 and saturation 0.12. The actual sky already used engine daylight textures despite its misleading Simple Sunset Sky name; it was not replaced. Same-angle Quartz screenshots show shorter shadows and brighter shaded surfaces. Kept Realistic mode and sharp shadow edges.
 

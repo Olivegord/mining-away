@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — saturated grass and warm brown-orange dirt
+
+Make most grass surfaces richer and more saturated green. Use warm brown/orange for dirt and earth faces instead of the drab/pastel treatment. Keep the restored smoother grass texture, raised patches and bright midday lighting; do not copy pack materials.
+
 ## November 7 latest — brighter daylight and color, NEVER copy pack materials
 
 The owner imported Stud pack V1 to show vivid colors. Use it as a COLOR reference only. The owner emphatically rejected applying its studded materials to the quarry. Retain the existing foliage/bark textures, smoother grass and raised green patch parts. Improve both light and color: the long dark morning shadows were still depressing despite pastel scenery changes.
