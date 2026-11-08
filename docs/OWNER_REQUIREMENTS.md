@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — sharper shadows
+
+Give the trees and patterned blocks clean, distinct cast-shadow edges like the reference. Keep the authored morning sun direction and use low shadow softness.
+
 ## November 7 latest — more visible patterned surfaces
 
 Use the reference's variety of large, readable motifs on the first view from spawn and along each field approach. Include stars, daisies, blue and red gingham, dark dots, waves, knit, and studs alongside wood and brick. Put patterned cubes of different sizes and flush inlays in loose groups. Keep continuous terrain, clear routes, and the original trees, rocks, flowers, and mushrooms.
