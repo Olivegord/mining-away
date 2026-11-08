@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — restore the reference feel visibly
+
+The owner rejected the courtyard follow-up as too unlike the reference and could not see the layered ground or new tree. Keep the photo-textured grass/gravel and mining elevations, make the stepped tree plainly visible, and make the lighting brighter, colorful and happy. A successful save alone does not establish visual acceptance. Do not claim an exact recreation from parameter checks.
+
 ## November 7 latest — colorful courtyard and layered ground
 
 Use the reference's palette and layout together. Give the hub olive grass and quiet gray gravel around a rose focal block, red brick, plaid, small stepped trees, and colorful cross flowers. Bring the palette to the other fields while retaining their characters. Lift the shadow fill and soften highlight contrast while keeping clean shadow outlines. Layer a second ground grain at a different scale and offset so the grass and gravel repeat less obviously. Keep those layers visually flat.

@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `9ec303579a9c72477da2228a0e8a6fafb0c4597d38f9f27b876e5023dc3cd3f0` | Background save of the courtyard palette and layered ground. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `f800e98a2e7a93277e4e21e2ebb344a3e9cb9bba89a217ccc78ee4bddceab2e7` | Background save of the brighter lighting, stronger ground layers and relocated Quartz tree. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,15 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — courtyard color and layered ground
+## Latest follow-up — brighter reference treatment and visible Quartz tree
+
+The owner rejected the prior look. At entry Studio was already open in Play; the actual Client had the courtyard and its previous lighting (brightness 1.78, exposure -0.055), so missing installation was not the cause. Stopped Play and edited the same shared DRONEREVOLUTION document (place 124078027733625, universe 10774898335).
+
+Raised brightness to 2.3 and exposure to 0.10, lifted ambient fill, reduced post contrast, increased saturation slightly, and pushed fog onset from 85 to 260 studs. Kept the morning direction and sharp 0.04 shadow edges. Made all 27 secondary ground layers stronger and broader with separate grass/gravel tints. Enlarged the tiny Quartz stepped tree by 1.85 and moved it out from beside the tall tree into clear grass at (-126, 78). Corrected an intermediate yellow gravel tint and tree/prop overlap after inspecting screenshots.
+
+Inspected the final Quartz Edit viewport. This is an incremental reference correction, not a verified pixel-perfect recreation or owner acceptance. No new Play or multiplayer test was run. The checked scoped saver preserved the hierarchy, every unrelated native property and all 50 Sources; build.py confirmed seven managed Sources unchanged. Studio remains open in Edit. The shared Edit entry point is current; the public release remains v43. Reproduce using tools/studio_quarry_sunshine.lua and tools/refresh_quarry_sunshine.py; their JSON export records exact before/after properties and parent anchors for duplicate-named texture carriers.
+
+## Earlier follow-up — courtyard color and layered ground
 
 The hub now has an olive grass border around gray gravel, with a rose-colored focal block, bright fired brick, plaid, smaller stepped trees, and cross flowers. Each field has its own turf, earth, and mining bed tints. Seven stepped trees and sixteen flower groups give the hub and clearings more color. Cobalt retains its mushroom canopy. A translucent texture layer uses wider tiles and offset coordinates over the finer base grain. The 27 grass and gravel layers are decorative and leave the authored ground and route geometry intact.
 
