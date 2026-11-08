@@ -1,17 +1,24 @@
 --!strict
 -- Drone Blower revolution • Olivegord/mining-away • generated from editable source.
 local Workshop = (function()
--- Small Quartz run: draft three blueprints, then invest in those choices.
+-- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={SLOTS=3,PACK_PRICES={20,45,80},LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
- {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',max=6,step={mining=.5},color={246,113,93},icon='mining'},
- {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',max=6,step={startup=1},color={69,190,244},icon='startup'},
- {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
- {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',max=4,step={yield=.25},color={188,119,245},icon='crystal'},
- {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
- {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
+ {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
+ {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
+ {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
+ {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_THRUST',title='Thrusters',scope='Fleet',category='flight',tier=1,max=5,step={speed=.4},color={83,168,239},icon='flight'},
+ {id='Q_HOT_START',title='Hot Start',scope='Fleet',category='startup',tier=3,max=3,step={startup=2,mining=.25},color={248,144,75},icon='startup'},
+ {id='Q_CARGO_LOOP',title='Cargo Loop',scope='Fleet',category='cargo',tier=3,max=3,step={capacity=.5,yield=.125},color={236,173,63},icon='cargo'},
+ {id='Q_PRISM_DRIVE',title='Prism Drive',scope='Fleet',category='mining',tier=3,max=3,step={fork=.1,speed=.3},once={forkRange=6},color={75,179,230},icon='relay'},
+ {id='Q_OVERDRIVE',title='Overdrive Core',scope='Fleet',category='mining',tier=4,max=3,step={mining=1,startup=2},color={250,109,81},icon='mining'},
+ {id='Q_PRISM_CORE',title='Prismatic Core',scope='Fleet',category='mining',tier=4,max=2,step={fork=.2,yield=.25},once={forkRange=6},color={115,132,248},icon='relay'},
+ {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 function W.owned(p)
@@ -23,7 +30,7 @@ function W.find(p,id)
  for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
  return nil
 end
-function W.price(p) return W.PACK_PRICES[#W.owned(p)+1] end
+function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
 function W.effects(c,level)
  local effects={}
@@ -31,14 +38,17 @@ function W.effects(c,level)
  for k,v in pairs(c.once or {}) do effects[k]=v end
  return effects
 end
-function W.card(entry,tier)
+function W.card(entry,tier,ownedCount)
+ local before=ownedCount or 0
  local c={cardId=entry.id,title=entry.title,scope=entry.scope,category=entry.category,workshop=true,
-  level=math.min(tier,entry.max),maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
-  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[tier],packTier=tier,expires='This run'}
+  level=1,stackVersion=2,upgradeTier=entry.tier,maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
+  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[entry.tier],packTier=tier,expires='This run'}
+ if ownedCount~=nil then c.stackBefore=before end
  c.effects=W.effects(c,c.level)
- c.description='Starts at level '..c.level..'. Buy more levels in the Quartz Workshop.'
- c.headline='LEVEL '..c.level..' BLUEPRINT';c.purpose='Choose a build, then invest in it'
- c.tradeoff='Uses 1 of 3 build slots';c.stackText='Level '..c.level..' / '..c.maxLevel..' · This run'
+ c.description='Adds '..c.level..' stack'..(c.level==1 and '' or 's')..'. Duplicates combine.'
+ c.headline=before>0 and (before..'× → '..(before+c.level)..'×') or ((before+c.level)..'× NEW UPGRADE')
+ c.purpose='Collect upgrades and stack their effects';c.tradeoff='No equipment slots'
+ c.stackText=(before+c.level)..'× · This run'
  return c
 end
 function W.validate(c)
@@ -47,7 +57,12 @@ function W.validate(c)
  if not entry or c.workshop~=true or c.scope~=entry.scope or type(c.level)~='number' or c.level%1~=0
   or c.level<1 or c.level>entry.max or c.maxLevel~=entry.max or c.levelCost~=W.LEVEL_COST or c.levelGrowth~=W.LEVEL_GROWTH
   or type(c.step)~='table' or type(c.once)~='table' or type(c.effects)~='table'
-  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 or c.rarity~=W.TIERS[c.packTier] then return false end
+  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 then return false end
+ if c.stackVersion==2 then
+  if c.upgradeTier~=entry.tier or c.rarity~=W.TIERS[entry.tier] then return false end
+ elseif c.stackVersion~=nil or c.rarity~=W.TIERS[c.packTier] then return false end
+ if c.stackBefore~=nil and (type(c.stackBefore)~='number' or c.stackBefore%1~=0 or c.stackBefore<0
+  or c.stackBefore>=entry.max or c.level~=(c.stackVersion==2 and 1 or math.min(c.packTier,entry.max-c.stackBefore))) then return false end
  local function same(a,b)
   for k,v in pairs(a) do if b[k]~=v then return false end end
   for k,v in pairs(b) do if a[k]~=v then return false end end
@@ -2108,7 +2123,7 @@ return R
 end)()
 local Profile = (function()
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=9,CONTENT=1}
+local P={SCHEMA=10,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -2261,24 +2276,33 @@ function P.validate(p,uid)
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
  end
- local blueprintCount=0;for _ in pairs(blueprints) do blueprintCount+=1 end
- if blueprintCount>Workshop.SLOTS then return false,'Too many blueprints' end
  local offer=r.pendingOffer
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
   if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
   if offer.opened~=nil and type(offer.opened)~='boolean' then return false,'Invalid pack state' end
   if (offer.packTier~=nil or offer.opened==false) and (not integer(offer.packTier) or offer.packTier<1 or offer.packTier>4) then return false,'Invalid pack tier' end
-  local seen={}
+  local seen={};local guaranteed=false
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
+   if (offer.contentVersion or 0)>=13 and not c.workshop then return false,'Invalid guaranteed upgrade kind' end
    if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid offer choice rarity or blueprint' end
-   if c.workshop and (blueprints[c.cardId] or blueprintCount>=Workshop.SLOTS or c.packTier~=offer.packTier) then return false,'Invalid blueprint slot' end
+   if c.workshop then
+    local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
+    if c.packTier~=offer.packTier or before+c.level>c.maxLevel then return false,'Invalid upgrade stack' end
+    if (offer.contentVersion or 0)>=13 then
+     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 or c.upgradeTier>offer.packTier then return false,'Invalid guaranteed upgrade' end
+     guaranteed=guaranteed or c.upgradeTier==offer.packTier
+    elseif (offer.contentVersion or 0)>=12 then
+     if c.stackBefore~=before then return false,'Invalid saved stack count' end
+    elseif owned then return false,'Invalid legacy blueprint offer' end
+   end
    for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
    if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
   end
+  if (offer.contentVersion or 0)>=13 and not guaranteed then return false,'Pack rarity reward missing' end
  end
  if p.nextDroneSerial~=#p.fleet+1 then return false,'Invalid permanent serial' end
  if type(p.receipts)~='table' or #p.receipts>64 then return false,'Invalid receipt ledger' end
@@ -2418,6 +2442,7 @@ function P.migrate(raw,uid,seed)
   -- Honor already-earned run progress once; every new sale counts only Quartz.
   p.run.quartzEarnings=p.run.saleEarnings;p.schemaVersion=9
  end
+ if p.schemaVersion==9 then p.schemaVersion=10 end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -2629,7 +2654,7 @@ return Packs
 end)()
 local Cards = (function()
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=11,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=13,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -2728,7 +2753,8 @@ end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
- local forkCap=(Workshop.find(p,'Q_SPLIT') or (extra and extra.workshop and extra.cardId=='Q_SPLIT')) and .4 or .2
+ local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
+ for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
  local speed=clamp(1+(s.speed or 0),.1,3)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
@@ -2846,19 +2872,46 @@ local function validID(tx) return type(tx)=='string' and #tx>0 and #tx<=128 end
 function C.workshopOffer(p,tier,seed)
  local pool={}
  for _,entry in ipairs(Workshop.CATALOG) do
-  if not Workshop.find(p,entry.id) then
-   local c=Workshop.card(entry,tier)
+  local owned=Workshop.find(p,entry.id);local count=owned and owned.level or 0
+  if count<entry.max and entry.tier<=tier then
+   local c=Workshop.card(entry,tier,count)
    if beneficial(p,c) then
     c.preview,c.previewTargetName=preview(p,c)
     table.insert(pool,c)
    end
   end
  end
- local random=rng(seed)
- for i=#pool,2,-1 do local j=random(i);pool[i],pool[j]=pool[j],pool[i] end
  if #pool<3 then return nil end
- -- Three different mechanics, all with the same rarity's starting levels.
- return {pool[1],pool[2],pool[3]}
+ -- Do not put a strictly weaker version of another offered effect beside it.
+ local vectors,compatible={},{}
+ for i,c in ipairs(pool) do vectors[i]=vector(p,c);compatible[i]={} end
+ for i=1,#pool do for j=i+1,#pool do
+  local iBetter,jBetter=false,false
+  for key,value in pairs(vectors[i]) do
+   if value>vectors[j][key]+1e-8 then iBetter=true elseif value<vectors[j][key]-1e-8 then jBetter=true end
+  end
+  compatible[i][j]=iBetter and jBetter
+ end end
+ local triples,total={},0
+ for i=1,#pool-2 do
+  for j=i+1,#pool-1 do
+   if compatible[i][j] then
+    for k=j+1,#pool do
+     local guaranteed=pool[i].upgradeTier==tier or pool[j].upgradeTier==tier or pool[k].upgradeTier==tier
+     if compatible[i][k] and compatible[j][k] and guaranteed then
+      local weight=pool[i].upgradeTier+pool[j].upgradeTier+pool[k].upgradeTier
+      total+=weight;table.insert(triples,{i,j,k,weight})
+     end
+    end
+   end
+  end
+ end
+ if total==0 then return nil end
+ local random=rng(seed);local ticket=random(total);local selected=triples[1]
+ for _,triple in ipairs(triples) do ticket-=triple[4];if ticket<=0 then selected=triple;break end end
+ local chosen={pool[selected[1]],pool[selected[2]],pool[selected[3]]}
+ for i=#chosen,2,-1 do local j=random(i);chosen[i],chosen[j]=chosen[j],chosen[i] end
+ return chosen
 end
 function C.buy(p,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
@@ -2870,12 +2923,19 @@ function C.buy(p,tx,expectedRun,context)
  if context.expectedPackIndex~=p.run.packIndex then return false,'Stale pack index' end
  if context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
  local price=Workshop.price(p)
- if not price then return false,'Three blueprints chosen. Level your build or prestige for a new one.' end
  if Shops.balance(p,'Quartz')<price then return false,'Need '..price..' Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
- local tier=Packs.roll(rng(hash(tostring(seed)..':delivery'))(100))
- local choices=C.workshopOffer(p,tier,seed)
- if not choices then return false,'No three useful blueprints remain. Level your build or prestige.' end
+ local candidates,weights,total={},{66,24,8,2},0
+ for tier=1,4 do
+  candidates[tier]=C.workshopOffer(p,tier,hash(tostring(seed)..':'..tier))
+  if candidates[tier] then total+=weights[tier] end
+ end
+ if total==0 then return false,'No three useful choices remain. Stack owned upgrades or prestige.' end
+ -- Keep the original 66/24/8/2 odds when all tiers are useful. Exhausted tiers
+ -- leave the roll entirely, so a saved Legendary always has a Legendary reward.
+ local ticket=rng(hash(tostring(seed)..':delivery'))(total);local tier=1
+ for i=1,4 do if candidates[i] then ticket-=weights[i];if ticket<=0 then tier=i;break end end end
+ local choices=candidates[tier]
  local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,
   packIndex=p.run.packIndex+1,price=price,currency='Quartz',choices=choices,expires='This run',packTier=tier,opened=false}
  p.run.wallet.Quartz-=price;p.run.credits=p.run.wallet.Quartz
@@ -2883,7 +2943,7 @@ function C.buy(p,tx,expectedRun,context)
  record(p,'Buy',tx,offer);return true,clone(offer)
 end
 function C.workshopUpgrade(p,c)
- if c.level>=c.maxLevel then return nil,'Max level' end
+ if c.level>=c.maxLevel then return nil,'Fully stacked' end
  local nextCard=clone(c);nextCard.level+=1;nextCard.effects=Workshop.effects(nextCard,nextCard.level)
  local delta=clone(c);delta.effects={}
  for k,v in pairs(nextCard.effects) do delta.effects[k]=v-(c.effects[k] or 0) end
@@ -2892,7 +2952,7 @@ function C.workshopUpgrade(p,c)
  for key,n in pairs(after) do if n>(before[key] or 0)+1e-8 then useful=true;break end end
  if not useful then return nil,'Already at the effective cap' end
  nextCard.preview,nextCard.previewTargetName=preview(p,delta)
- nextCard.stackText='Level '..nextCard.level..' / '..nextCard.maxLevel..' · This run'
+ nextCard.stackText=nextCard.level..'× · This run'
  return nextCard
 end
 function C.workshopRows(p)
@@ -2909,10 +2969,10 @@ function C.upgrade(p,id,level,tx,expectedRun,context)
  local replay=receipt(p,'Workshop',tx)
  if replay then return replay.cardId==id and replay.runId==expectedRun and replay.previousLevel==level,replay end
  if not context or context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
- if p.run.pendingOffer then return false,'Choose your delivered blueprint first' end
+ if p.run.pendingOffer then return false,'Choose your delivered upgrade first' end
  local c=Workshop.find(p,id)
- if not c then return false,'Choose this blueprint from a pack first' end
- if c.level~=level then return false,'Level changed. Refresh the workshop.' end
+ if not c then return false,'Find this upgrade in a pack first' end
+ if c.level~=level then return false,'Stack changed. Refresh the workshop.' end
  local nextCard,reason=C.workshopUpgrade(p,c);if not nextCard then return false,reason end
  local cost=Workshop.levelCost(c)
  if Shops.balance(p,'Quartz')<cost then return false,'Need '..cost..' Quartz' end
@@ -2941,7 +3001,18 @@ function C.select(p,offerId,index,tx,expectedRun,context)
   local exists=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then exists=true end end
   if not exists then return false,'Saved target missing; refund offer through migration' end
  end
- if c.workshop and (#Workshop.owned(p)>=Workshop.SLOTS or Workshop.find(p,c.cardId)) then return false,'Blueprint slot unavailable' end
+ if c.workshop then
+  local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
+  if c.stackBefore~=nil and c.stackBefore~=before then return false,'Upgrade stack changed' end
+  if before+c.level>c.maxLevel then return false,'Upgrade stack reached its maximum' end
+  if owned then
+   c.level+=before;c.effects=Workshop.effects(c,c.level)
+   c.packTier=math.max(c.packTier,owned.packTier)
+   if c.stackVersion~=2 then c.rarity=Workshop.TIERS[c.packTier] end
+   for i,entry in ipairs(p.run.cards) do if entry==owned then table.remove(p.run.cards,i);break end end
+  end
+  c.stackBefore=nil;c.stackText=c.level..'× · This run'
+ end
  -- No mutable catalog lookup: the complete paid choice is the contract.
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
  local result={offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
@@ -8462,7 +8533,7 @@ local function buyShopUpgrade(p,pl,payload)
  transact(p,'shop:'..payload.txId,function(copy)
   local ok,result=Ca.upgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{atDepot=true,activeEncounter=false})
   if ok then return result end;return nil,result
- end,function(result) refreshStats(p);notice(p,result.title..' · level '..result.level);p.publishDirty=true end)
+ end,function(result) refreshStats(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true end)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end

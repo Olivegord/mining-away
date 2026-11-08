@@ -18,18 +18,18 @@ Open this same repository in Codex and start with:
 
 ## Current gameplay
 
-The current candidate connects **mine Quartz → sell → draft a blueprint → buy its levels → prestige → grow your permanent fleet**:
+The current candidate connects **mine Quartz → sell → buy a pack with one pick included → stack upgrades → prestige → grow your permanent fleet**:
 
 - A new player starts with one permanent drone and a 40-ore backpack.
 - Sell at the existing Converter pays spendable mineral currency immediately.
-- Either workshop counter sells packs at 20, 45 and 80 Quartz. Choose one of three blueprints per pack, with three build slots per run.
-- Common/Rare/Epic/Legendary blueprints start at levels 1/2/3/4. Buy more levels in the same shop, starting at 20 Quartz and increasing geometrically.
-- Power, ignition, carrying capacity, yield, automatic routing and nearby Prism damage are the six mechanics. The shop shows the next level's actual effect.
+- Both workshop counters open the same shop. Packs cost 20, 27, 36, 49, 66… Quartz. Their price includes one of three saved choices, with no payment at selection.
+- Rarity guarantees at least one upgrade of that tier. Legendary upgrades combine stronger effects; they still grant exactly one copy. Duplicates merge into 2×, 3×… with individual caps and no three-upgrade ownership restriction.
+- Buy another copy of any owned upgrade for 20, 34, 58, 98, 167… Quartz as its count rises. The shared pool has 13 upgrades covering power, ignition, capacity, yield, flight, automatic routing and nearby Prism damage.
 - First prestige requires 360 Quartz sold; spending keeps progress. Prestige clears the run build, adds a permanent mining drone and +25% base mining power, and keeps the existing fleet. New direct drone purchases are retired.
 - Rocks are cubic, snap smaller without spinning, and eject drops upward and outward. One drone type may work on a rock at a time.
 - Orbital Beacons and Scrap Capsules are stored consumables, placed deliberately through backpack pockets.
 
-See [Quartz design and actual test evidence](docs/review/QUARTZ_WORKSHOP.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
+See [Quartz design and actual test evidence](docs/review/QUARTZ_POOL.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
 
 ## Work on the same file
 

@@ -135,6 +135,10 @@ function U.icon(parent,kind,pos,size,color)
   shape(.45,.27,.10,.46,C.ink,.1);shape(.29,.45,.42,.10,C.ink,.1)
  elseif kind=='startup' then
   shape(.14,.14,.72,.72,tint,.9,nil,true);shape(.44,.28,.12,.30,C.ink,.1);shape(.44,.48,.27,.10,C.ink,.1,25)
+ elseif kind=='mining' then
+  shape(.43,.10,.20,.42,tint,.04,28,true)
+  shape(.25,.43,.50,.15,tint,.04,-5,true)
+  shape(.34,.49,.20,.40,tint,.04,28,true)
  elseif kind=='laser' or kind=='relay' then
   shape(.16,.16,.31,.31,tint,.12,nil,true)
   shape(.40,.42,.47,.12,tint,.12,45,true)

@@ -1,17 +1,24 @@
 --!strict
 -- Drone Blower revolution • Olivegord/mining-away • generated from editable source.
 local Workshop = (function()
--- Small Quartz run: draft three blueprints, then invest in those choices.
+-- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={SLOTS=3,PACK_PRICES={20,45,80},LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
- {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',max=6,step={mining=.5},color={246,113,93},icon='mining'},
- {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',max=6,step={startup=1},color={69,190,244},icon='startup'},
- {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
- {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',max=4,step={yield=.25},color={188,119,245},icon='crystal'},
- {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
- {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
+ {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
+ {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
+ {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
+ {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_THRUST',title='Thrusters',scope='Fleet',category='flight',tier=1,max=5,step={speed=.4},color={83,168,239},icon='flight'},
+ {id='Q_HOT_START',title='Hot Start',scope='Fleet',category='startup',tier=3,max=3,step={startup=2,mining=.25},color={248,144,75},icon='startup'},
+ {id='Q_CARGO_LOOP',title='Cargo Loop',scope='Fleet',category='cargo',tier=3,max=3,step={capacity=.5,yield=.125},color={236,173,63},icon='cargo'},
+ {id='Q_PRISM_DRIVE',title='Prism Drive',scope='Fleet',category='mining',tier=3,max=3,step={fork=.1,speed=.3},once={forkRange=6},color={75,179,230},icon='relay'},
+ {id='Q_OVERDRIVE',title='Overdrive Core',scope='Fleet',category='mining',tier=4,max=3,step={mining=1,startup=2},color={250,109,81},icon='mining'},
+ {id='Q_PRISM_CORE',title='Prismatic Core',scope='Fleet',category='mining',tier=4,max=2,step={fork=.2,yield=.25},once={forkRange=6},color={115,132,248},icon='relay'},
+ {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 function W.owned(p)
@@ -23,7 +30,7 @@ function W.find(p,id)
  for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
  return nil
 end
-function W.price(p) return W.PACK_PRICES[#W.owned(p)+1] end
+function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
 function W.effects(c,level)
  local effects={}
@@ -31,14 +38,17 @@ function W.effects(c,level)
  for k,v in pairs(c.once or {}) do effects[k]=v end
  return effects
 end
-function W.card(entry,tier)
+function W.card(entry,tier,ownedCount)
+ local before=ownedCount or 0
  local c={cardId=entry.id,title=entry.title,scope=entry.scope,category=entry.category,workshop=true,
-  level=math.min(tier,entry.max),maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
-  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[tier],packTier=tier,expires='This run'}
+  level=1,stackVersion=2,upgradeTier=entry.tier,maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
+  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[entry.tier],packTier=tier,expires='This run'}
+ if ownedCount~=nil then c.stackBefore=before end
  c.effects=W.effects(c,c.level)
- c.description='Starts at level '..c.level..'. Buy more levels in the Quartz Workshop.'
- c.headline='LEVEL '..c.level..' BLUEPRINT';c.purpose='Choose a build, then invest in it'
- c.tradeoff='Uses 1 of 3 build slots';c.stackText='Level '..c.level..' / '..c.maxLevel..' · This run'
+ c.description='Adds '..c.level..' stack'..(c.level==1 and '' or 's')..'. Duplicates combine.'
+ c.headline=before>0 and (before..'× → '..(before+c.level)..'×') or ((before+c.level)..'× NEW UPGRADE')
+ c.purpose='Collect upgrades and stack their effects';c.tradeoff='No equipment slots'
+ c.stackText=(before+c.level)..'× · This run'
  return c
 end
 function W.validate(c)
@@ -47,7 +57,12 @@ function W.validate(c)
  if not entry or c.workshop~=true or c.scope~=entry.scope or type(c.level)~='number' or c.level%1~=0
   or c.level<1 or c.level>entry.max or c.maxLevel~=entry.max or c.levelCost~=W.LEVEL_COST or c.levelGrowth~=W.LEVEL_GROWTH
   or type(c.step)~='table' or type(c.once)~='table' or type(c.effects)~='table'
-  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 or c.rarity~=W.TIERS[c.packTier] then return false end
+  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 then return false end
+ if c.stackVersion==2 then
+  if c.upgradeTier~=entry.tier or c.rarity~=W.TIERS[entry.tier] then return false end
+ elseif c.stackVersion~=nil or c.rarity~=W.TIERS[c.packTier] then return false end
+ if c.stackBefore~=nil and (type(c.stackBefore)~='number' or c.stackBefore%1~=0 or c.stackBefore<0
+  or c.stackBefore>=entry.max or c.level~=(c.stackVersion==2 and 1 or math.min(c.packTier,entry.max-c.stackBefore))) then return false end
  local function same(a,b)
   for k,v in pairs(a) do if b[k]~=v then return false end end
   for k,v in pairs(b) do if a[k]~=v then return false end end
@@ -6591,6 +6606,10 @@ function U.icon(parent,kind,pos,size,color)
   shape(.45,.27,.10,.46,C.ink,.1);shape(.29,.45,.42,.10,C.ink,.1)
  elseif kind=='startup' then
   shape(.14,.14,.72,.72,tint,.9,nil,true);shape(.44,.28,.12,.30,C.ink,.1);shape(.44,.48,.27,.10,C.ink,.1,25)
+ elseif kind=='mining' then
+  shape(.43,.10,.20,.42,tint,.04,28,true)
+  shape(.25,.43,.50,.15,tint,.04,-5,true)
+  shape(.34,.49,.20,.40,tint,.04,28,true)
  elseif kind=='laser' or kind=='relay' then
   shape(.16,.16,.31,.31,tint,.12,nil,true)
   shape(.40,.42,.47,.12,tint,.12,45,true)
@@ -6712,7 +6731,11 @@ function CardView.terms(choice,_targetOverride)
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles then target='Mining drones'
  else target='All drones' end
- if choice.workshop then return target..' · This run\n'..choice.rarity..' Lv '..choice.level..' · 1 of 3 slots' end
+ if choice.workshop then
+  local before=choice.stackBefore
+  local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
+  return target..' · This run\n'..count..' · '..choice.rarity
+ end
  local details={target..' · This run'}
  local losses={}
  for _,entry in ipairs({{'speed','drone speed'},{'mining','mining speed'},{'combat','attack damage'},{'health','drone health'},{'startup','startup speed'},{'yield','ore yield'},{'capacity','backpack space'}}) do
@@ -7387,57 +7410,106 @@ return PackView
 
 end)()
 local ShopView = (function()
--- The pack draft and repeat purchases live in one compact Quartz workshop.
+-- Compact Roblox-style upgrade rows: recognizable icon, stack count, effect and price.
 local V={}
-local function number(n) return string.format('%.3g',n) end
-local function previewText(rows)
- local result={}
- for _,r in ipairs(rows or {}) do
-  if #result<2 then table.insert(result,r.label..': '..number(r.before)..' → '..number(r.after)..(r.unit or '')) end
- end
- return table.concat(result,'\n')
+local INK=Color3.fromRGB(29,48,74)
+local BLUE=Color3.fromRGB(29,132,211)
+local WHITE=Color3.fromRGB(255,255,255)
+local function rounded(U,parent,pos,size,color,edge)
+ local box=U.frame(parent,pos,size,color);U.corner(box,12);U.stroke(box,edge or Color3.fromRGB(170,197,218),2)
+ return box
 end
-function V.render(U,parent,options)
- local p,width=options.profile,options.width
- local ink=U.palette.ink;local rows=p.workshop or {};local slots=#Workshop.owned(p)
- local price=Workshop.price(p);local pending=p.run.pendingOffer
- local hero=U.panel(parent,UDim2.fromOffset(0,2),UDim2.fromOffset(width,144),Color3.fromRGB(81,210,188),14)
- U.text(hero,UDim2.fromOffset(14,9),UDim2.new(1,-28,0,26),'MINE → DRAFT → LEVEL UP → PRESTIGE',width<400 and 15 or 18,ink,true)
- U.text(hero,UDim2.fromOffset(14,37),UDim2.new(1,-28,0,43),'Choose 1 of 3 blueprints. Keep 3 this run.\nBuy their next levels here; each level costs more.',16,ink)
- local action=pending and (pending.opened==false and 'Open your delivered crate' or 'Choose your blueprint')
-  or price and ('New blueprint · '..price..' Quartz  ('..slots..'/3 slots)') or 'Build chosen · level your blueprints'
- local buy=U.button(hero,UDim2.fromOffset(12,88),UDim2.new(1,-24,0,44),action,options.onPack,Color3.fromRGB(35,113,161))
- buy.Name='BuyWorkshopPack';buy.TextSize=16
- U.setEnabled(buy,options.canBuy and (pending~=nil or price~=nil and Shops.balance(p,'Quartz')>=price))
- local colors={{121,211,248},{255,210,86},{113,231,149},{209,150,255}}
- for i,name in ipairs(Workshop.TIERS) do
-  local chip=U.panel(parent,UDim2.fromOffset((i-1)*width/4,156),UDim2.fromOffset(width/4-5,48),Color3.fromRGB(unpack(colors[i])),9)
-  local label=U.text(chip,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),name..'\nLevel '..i,width<400 and 13 or 15,ink,true);label.TextXAlignment=Enum.TextXAlignment.Center
- end
- local columns=width>=620 and 3 or 1;local gap=10;local cellWidth=(width-gap*(columns-1))/columns
- for index=1,3 do
-  local row=rows[index];local c=row and row.card;local entry=c and Workshop.BY_ID[c.cardId]
-  local color=entry and Color3.fromRGB(unpack(entry.color)) or Color3.fromRGB(103,144,184)
-  local cell=U.panel(parent,UDim2.fromOffset((index-1)%columns*(cellWidth+gap),218+math.floor((index-1)/columns)*204),UDim2.fromOffset(cellWidth,194),color,12)
-  cell.Name='BlueprintSlot'..index
-  U.icon(cell,entry and entry.icon or 'cards',UDim2.fromOffset(12,12),UDim2.fromOffset(28,28),ink)
-  U.text(cell,UDim2.fromOffset(47,10),UDim2.new(1,-59,0,30),c and c.title or ('Build slot '..index),17,ink,true)
-  U.text(cell,UDim2.fromOffset(12,43),UDim2.new(1,-24,0,22),c and ('Level '..c.level..' / '..c.maxLevel..' · '..c.rarity) or 'Filled by your next pack',14,ink,true)
-  local detail=c and (row.next and previewText(row.next.preview) or 'Fully upgraded for this build.') or 'A new mechanic, or more levels in the ones you already picked?'
-  U.text(cell,UDim2.fromOffset(12,72),UDim2.new(1,-24,0,64),detail,16,ink)
-  if c then
-   local text=row.reason or ('Level '..(c.level+1)..' · '..row.cost..' Quartz')
-   local button=U.button(cell,UDim2.fromOffset(10,144),UDim2.new(1,-20,0,40),text,function() options.onBuy(c,c.level) end,color:Lerp(Color3.new(0,0,0),.62))
-   button.Name='LevelBlueprint_'..c.cardId;button.TextSize=16
-   U.setEnabled(button,options.canBuy and not pending and row.next~=nil and Shops.balance(p,'Quartz')>=row.cost)
+local function label(U,parent,pos,size,text,pixels,bold)
+ local t=U.text(parent,pos,size,text,pixels,INK,bold)
+ t.Font=bold and Enum.Font.FredokaOne or Enum.Font.SourceSansSemibold
+ return t
+end
+local function action(U,parent,pos,size,text,callback,enabled,color)
+ local b=U.button(parent,pos,size,text,callback,color or Color3.fromRGB(124,227,69))
+ U.unskin(b);U.corner(b,10);U.stroke(b,Color3.fromRGB(48,95,47),2)
+ U.setEnabled(b,enabled);b.BackgroundColor3=enabled and (color or Color3.fromRGB(124,227,69)) or Color3.fromRGB(224,232,238)
+ b.TextColor3=enabled and Color3.fromRGB(28,66,37) or Color3.fromRGB(94,115,131)
+ b.TextStrokeTransparency=1;b.Font=Enum.Font.FredokaOne;b.TextSize=15
+ return b
+end
+local function percent(value) return string.format('%g%%',value*100) end
+function V.effect(c)
+ local e=c.effects;local parts={}
+ if e.plotAuto then table.insert(parts,'Auto retarget') end
+ for _,k in ipairs({'mining','startup','capacity','speed','yield','fork'}) do
+  if e[k] then
+   local names={mining='mining power',startup='startup rate',capacity='backpack',speed='flight speed',yield='ore yield',fork='nearby damage'}
+   table.insert(parts,(k=='fork' and '' or '+')..percent(e[k])..' '..names[k])
   end
  end
- local y=218+math.ceil(3/columns)*204
+ return table.concat(parts,' · ')
+end
+local function nextEffect(row)
+ local r=row.next and row.next.preview and row.next.preview[1]
+ if not r then return 'Fully stacked' end
+ local unit=r.unit or '';if unit~='' and unit~='%' and unit~='×' then unit=' '..unit end
+ return string.format('Next: %s %g → %g%s',r.label,r.before,r.after,unit)
+end
+function V.decorate(U,sheet,title,subtitle,close)
+ U.unskin(sheet);sheet.BackgroundColor3=Color3.fromRGB(247,252,255);U.corner(sheet,20);U.stroke(sheet,INK,4)
+ title.Font=Enum.Font.FredokaOne;title.Text='Upgrades!';title.TextSize=30
+ title.TextColor3=BLUE;title.TextStrokeTransparency=1
+ subtitle.TextColor3=INK;subtitle.Font=Enum.Font.SourceSansSemibold;subtitle.TextSize=16
+ U.unskin(close);U.corner(close,10);U.stroke(close,Color3.fromRGB(116,34,58),3)
+ close.BackgroundColor3=Color3.fromRGB(244,78,113);close.TextColor3=WHITE;close.Font=Enum.Font.FredokaOne;close.TextSize=25;close.TextStrokeTransparency=1
+end
+function V.render(U,parent,options)
+ local p,width=options.profile,options.width;local narrow=width<500
+ local rows={};for _,r in ipairs(p.workshop or {}) do rows[r.card.cardId]=r end
+ local pending=p.run.pendingOffer;local price=Workshop.price(p);local balance=Shops.balance(p,'Quartz')
+ local packHeight=narrow and 166 or 118
+ local pack=rounded(U,parent,UDim2.fromOffset(2,2),UDim2.fromOffset(width-4,packHeight),Color3.fromRGB(225,245,255),BLUE);pack.Name='UpgradePack'
+ U.icon(pack,'cards',UDim2.fromOffset(12,14),UDim2.fromOffset(narrow and 44 or 62,narrow and 44 or 62),Color3.fromRGB(63,171,243))
+ local textX=narrow and 67 or 88
+ label(U,pack,UDim2.fromOffset(textX,10),UDim2.fromOffset(width-textX-(narrow and 14 or 164),28),'UPGRADE PACK',narrow and 20 or 23,true)
+ label(U,pack,UDim2.fromOffset(textX,40),UDim2.fromOffset(width-textX-(narrow and 14 or 164),38),'One pick included. Duplicates stack.',15,false)
+ local buyText=pending and (pending.opened==false and 'Open crate' or 'Choose upgrade') or ('Buy · '..price..' Quartz')
+ local buy=action(U,pack,UDim2.fromOffset(narrow and 12 or width-164,narrow and 82 or 22),UDim2.fromOffset(narrow and width-28 or 148,44),buyText,options.onPack,options.canBuy and (pending~=nil or balance>=price))
+ buy.Name='BuyWorkshopPack'
+ label(U,pack,UDim2.fromOffset(12,narrow and 130 or 82),UDim2.fromOffset(width-28,28),'Rarity guarantees an upgrade of that tier. No extra charge.',narrow and 12 or 14,false)
+ local y=packHeight+18
+ label(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,30),'YOUR UPGRADE POOL',18,true);y+=38
+ local entries={}
+ for _,entry in ipairs(Workshop.CATALOG) do if rows[entry.id] then table.insert(entries,entry) end end
+ for _,entry in ipairs(Workshop.CATALOG) do if not rows[entry.id] then table.insert(entries,entry) end end
+ for _,entry in ipairs(entries) do
+  local row=rows[entry.id];local c=row and row.card;local color=Color3.fromRGB(unpack(entry.color))
+  local h=narrow and (entry.tier>=3 and 154 or 134) or 88
+  local card=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(width-4,h),c and WHITE or Color3.fromRGB(238,245,250));card.Name='Upgrade_'..entry.id
+  local icon=rounded(U,card,UDim2.fromOffset(10,14),UDim2.fromOffset(narrow and 46 or 54,narrow and 46 or 54),color:Lerp(WHITE,.65),color)
+  U.icon(icon,entry.icon,UDim2.fromOffset(5,5),UDim2.fromOffset(narrow and 36 or 44,narrow and 36 or 44),color)
+  local x=narrow and 67 or 78
+  label(U,card,UDim2.fromOffset(x,9),UDim2.fromOffset(width-x-(narrow and 76 or 238),30),entry.title,narrow and 17 or 20,true)
+  local count=rounded(U,card,UDim2.fromOffset(width-(narrow and 70 or 222),11),UDim2.fromOffset(54,29),c and color:Lerp(WHITE,.45) or WHITE,c and color or Color3.fromRGB(187,205,218))
+  local number=label(U,count,UDim2.fromOffset(2,0),UDim2.new(1,-4,1,0),c and c.level..'×' or 'NEW',c and 20 or 13,true);number.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=c and V.effect(c) or V.effect(Workshop.card(entry,1))
+  if not c then detail=Workshop.TIERS[entry.tier]..' · '..detail
+  elseif entry.tier>=2 then detail=Workshop.TIERS[entry.tier]..' · '..detail end
+  if c and not narrow and entry.tier<3 then detail..='\n'..nextEffect(row) end
+  label(U,card,UDim2.fromOffset(x,39),UDim2.fromOffset(width-x-(narrow and 14 or 164),narrow and (entry.tier>=3 and 57 or 37) or 40),detail,14,false)
+  local pos=UDim2.fromOffset(width-154,narrow and h-52 or 24)
+  if c then
+   local cost=row.next and ('+1 · '..row.cost..' Quartz') or 'MAX'
+   local b=action(U,card,pos,UDim2.fromOffset(140,44),cost,function() options.onBuy(c,c.level) end,options.canBuy and not pending and row.next~=nil and balance>=row.cost)
+   b.Name='AddStack_'..entry.id
+   if narrow then label(U,card,UDim2.fromOffset(12,h-50),UDim2.fromOffset(width-176,40),row.next and 'Buy another stack' or 'Fully stacked',13,false) end
+  else
+   local t=label(U,card,pos,UDim2.fromOffset(140,44),'Find in packs',15,true);t.TextColor3=BLUE;t.TextXAlignment=Enum.TextXAlignment.Center
+  end
+  y+=h+9
+ end
  local pre=p.prestigePreview or {};local earned=pre.earnings or 0;local needed=pre.saleRequired or Workshop.PRESTIGE_BASE
- local progress=U.panel(parent,UDim2.fromOffset(0,y),UDim2.fromOffset(width,90),Color3.fromRGB(159,119,225),12)
- U.text(progress,UDim2.fromOffset(12,7),UDim2.new(1,-24,0,27),tostring(earned)..' / '..tostring(needed)..' Quartz sold · spending keeps progress',width<400 and 14 or 16,ink,true)
- local prestige=U.button(progress,UDim2.fromOffset(10,40),UDim2.new(1,-20,0,40),pre.eligible and 'Prestige ready · review your new drone' or 'Next prestige: +1 mining drone · review',options.onPrestige,Color3.fromRGB(96,52,160))
- prestige.Name='WorkshopPrestige';prestige.TextSize=16
+ local foot=rounded(U,parent,UDim2.fromOffset(2,y+5),UDim2.fromOffset(width-4,narrow and 128 or 83),Color3.fromRGB(242,233,255),Color3.fromRGB(166,124,213));foot.Name='PrestigeProgress'
+ label(U,foot,UDim2.fromOffset(12,9),UDim2.fromOffset(width-(narrow and 28 or 172),25),'NEXT: +1 PERMANENT DRONE',narrow and 15 or 17,true)
+ label(U,foot,UDim2.fromOffset(12,36),UDim2.fromOffset(width-(narrow and 28 or 172),25),earned..' / '..needed..' Quartz sold',15,false)
+ local bar=rounded(U,foot,UDim2.fromOffset(12,65),UDim2.fromOffset(width-(narrow and 28 or 176),6),WHITE,WHITE)
+ local fill=U.frame(bar,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(earned/math.max(1,needed),0,1),1),Color3.fromRGB(154,104,215));U.corner(fill,4)
+ action(U,foot,UDim2.fromOffset(narrow and 12 or width-154,narrow and 78 or 20),UDim2.fromOffset(narrow and width-28 or 140,40),pre.eligible and 'Prestige ready!' or 'View reward',options.onPrestige,true,Color3.fromRGB(211,177,255))
 end
 return V
 
@@ -8664,7 +8736,7 @@ function View.start(ctx)
   if self.tab=='Drones' then
    local pre=profile().prestigePreview or {}
    text(body,8,12,contentWidth-16,32,'GROW YOUR PERMANENT FLEET',19,C.accent)
-   U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, choose three blueprints and level your build. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
+   U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, open packs and stack your upgrades. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
    text(body,8,143,contentWidth-16,32,tostring(pre.earnings or 0)..' / '..tostring(pre.saleRequired or 360)..' Quartz sold',18,C.mineral)
    U.button(body,UDim2.fromOffset(8,190),UDim2.fromOffset(contentWidth-16,44),'Open Quartz Workshop',function() setOpen(false);ctx.openWorkshop() end,C.mineral)
    U.button(body,UDim2.fromOffset(8,246),UDim2.fromOffset(contentWidth-16,44),'Review prestige reward',function() setOpen(false);ctx.openPrestige() end,C.accent)
@@ -9093,7 +9165,7 @@ local function layoutModal()
  local v=viewport();local l=currentLayout()
  if l.short then l.headerHeight=64;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding) end
  if modalMode=='shop' then
-  l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
+  l.panelWidth=math.min(740,v.X-24);l.panelHeight=math.min(650,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='pack' then
@@ -9136,6 +9208,7 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
+ if mode~='shop' then U.skin(sheet,palette.panel,20);U.skin(close,palette.danger,11) end
  local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0
  local colorful=true
  local texture=sheet:FindFirstChild('StudSurface');if texture then texture.Visible=not inOffer end
@@ -9163,6 +9236,7 @@ local function menu(mode,title,subtitle,icon)
   modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
   modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
+ if mode=='shop' then ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211) end
  modal.Visible=true
  packView:setFocus(inOffer)
  if entering then
@@ -9246,7 +9320,7 @@ openOffer=function()
   local screen,visible=camera:WorldToScreenPoint(worldOrigin)
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
- local l=menu('offer','PICK A BLUEPRINT',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' · Starts at level '..tostring(offer.packTier)..' · Choose one') or 'Choose one · This run','cards')
+ local l=menu('offer','PICK AN UPGRADE',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' pack · Pick included · Choose one upgrade') or 'Choose one · This run','cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
@@ -9265,7 +9339,7 @@ openShop=function(_key)
  if not profile or not profile.run.wallet then return end
  activeShop='Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop','Quartz Workshop',comma(Shops.balance(profile,'Quartz'))..' Quartz · '..#Workshop.owned(profile)..'/3 build slots'..(allowed and '' or ' · '..reason),'crystal')
+ local l=menu('shop','Quartz Workshop',comma(Shops.balance(profile,'Quartz'))..' Quartz · Duplicates stack'..(allowed and '' or ' · '..reason),'crystal')
  ShopView.render(U,body,{profile=profile,shop='Quartz',width=l.bodyWidth-4,canBuy=allowed,
   onPack=function()
    if pending() then
@@ -9362,12 +9436,12 @@ openFleet=function()
 end
 openRunCards=function()
  if not profile then return end
- local l=menu('run','Your current build','Your chosen blueprints last until prestige. Buy their next levels in the workshop.','cards');local width=l.bodyWidth-6
+ local l=menu('run','Your current build','Your upgrades stack together until prestige. Find more in packs or buy another stack.','cards');local width=l.bodyWidth-6
  tabs(width,'run')
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine Quartz and sell it at SELL ORE. Open a workshop pack, choose a blueprint, then buy its next levels.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine Quartz and sell it at SELL ORE. Open a pack and pick an upgrade. Find it again or buy another stack to make it stronger.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Quartz Workshop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
@@ -9395,7 +9469,7 @@ openPrestige=function()
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Three blueprint slots and their levels\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run upgrades and their stacks\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
@@ -10011,10 +10085,10 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Draft a blueprint, level your build, earn a drone','Open' end
+  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Open packs, stack upgrades, earn drones','Open' end
   return nil
  elseif kind=='Pack' then
-  return openPack,'Quartz Workshop',pending() and 'Your delivered blueprint is waiting' or 'Packs, repeat upgrades and prestige','Open'
+  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Packs, repeat upgrades and prestige','Open'
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then

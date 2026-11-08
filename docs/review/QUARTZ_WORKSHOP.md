@@ -1,5 +1,7 @@
 # Quartz workshop candidate — November 8, 2026
 
+**Superseded:** the owner rejected the three-blueprint cap, workshop UI and rarity-as-extra-stacks rule. See [the implemented Quartz pool replacement](QUARTZ_POOL.md). This file preserves the earlier candidate's evidence and limits, not the current design.
+
 Baseline: `9bed0b81c673abe36d82d1075252963d1713aff6`. Installed gameplay/native revision: `36c678db4fd54f87181c261f4d220bb53a959224`. A later handoff-only commit records this exact revision without changing the build. No Roblox publication.
 
 ## The small loop

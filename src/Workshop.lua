@@ -1,14 +1,21 @@
--- Small Quartz run: draft three blueprints, then invest in those choices.
+-- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={SLOTS=3,PACK_PRICES={20,45,80},LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
- {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',max=6,step={mining=.5},color={246,113,93},icon='mining'},
- {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',max=6,step={startup=1},color={69,190,244},icon='startup'},
- {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
- {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',max=4,step={yield=.25},color={188,119,245},icon='crystal'},
- {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
- {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
+ {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
+ {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
+ {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
+ {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
+ {id='Q_THRUST',title='Thrusters',scope='Fleet',category='flight',tier=1,max=5,step={speed=.4},color={83,168,239},icon='flight'},
+ {id='Q_HOT_START',title='Hot Start',scope='Fleet',category='startup',tier=3,max=3,step={startup=2,mining=.25},color={248,144,75},icon='startup'},
+ {id='Q_CARGO_LOOP',title='Cargo Loop',scope='Fleet',category='cargo',tier=3,max=3,step={capacity=.5,yield=.125},color={236,173,63},icon='cargo'},
+ {id='Q_PRISM_DRIVE',title='Prism Drive',scope='Fleet',category='mining',tier=3,max=3,step={fork=.1,speed=.3},once={forkRange=6},color={75,179,230},icon='relay'},
+ {id='Q_OVERDRIVE',title='Overdrive Core',scope='Fleet',category='mining',tier=4,max=3,step={mining=1,startup=2},color={250,109,81},icon='mining'},
+ {id='Q_PRISM_CORE',title='Prismatic Core',scope='Fleet',category='mining',tier=4,max=2,step={fork=.2,yield=.25},once={forkRange=6},color={115,132,248},icon='relay'},
+ {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 function W.owned(p)
@@ -20,7 +27,7 @@ function W.find(p,id)
  for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
  return nil
 end
-function W.price(p) return W.PACK_PRICES[#W.owned(p)+1] end
+function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
 function W.effects(c,level)
  local effects={}
@@ -28,14 +35,17 @@ function W.effects(c,level)
  for k,v in pairs(c.once or {}) do effects[k]=v end
  return effects
 end
-function W.card(entry,tier)
+function W.card(entry,tier,ownedCount)
+ local before=ownedCount or 0
  local c={cardId=entry.id,title=entry.title,scope=entry.scope,category=entry.category,workshop=true,
-  level=math.min(tier,entry.max),maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
-  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[tier],packTier=tier,expires='This run'}
+  level=1,stackVersion=2,upgradeTier=entry.tier,maxLevel=entry.max,step=table.clone(entry.step),once=table.clone(entry.once or {}),
+  levelCost=W.LEVEL_COST,levelGrowth=W.LEVEL_GROWTH,rarity=W.TIERS[entry.tier],packTier=tier,expires='This run'}
+ if ownedCount~=nil then c.stackBefore=before end
  c.effects=W.effects(c,c.level)
- c.description='Starts at level '..c.level..'. Buy more levels in the Quartz Workshop.'
- c.headline='LEVEL '..c.level..' BLUEPRINT';c.purpose='Choose a build, then invest in it'
- c.tradeoff='Uses 1 of 3 build slots';c.stackText='Level '..c.level..' / '..c.maxLevel..' · This run'
+ c.description='Adds '..c.level..' stack'..(c.level==1 and '' or 's')..'. Duplicates combine.'
+ c.headline=before>0 and (before..'× → '..(before+c.level)..'×') or ((before+c.level)..'× NEW UPGRADE')
+ c.purpose='Collect upgrades and stack their effects';c.tradeoff='No equipment slots'
+ c.stackText=(before+c.level)..'× · This run'
  return c
 end
 function W.validate(c)
@@ -44,7 +54,12 @@ function W.validate(c)
  if not entry or c.workshop~=true or c.scope~=entry.scope or type(c.level)~='number' or c.level%1~=0
   or c.level<1 or c.level>entry.max or c.maxLevel~=entry.max or c.levelCost~=W.LEVEL_COST or c.levelGrowth~=W.LEVEL_GROWTH
   or type(c.step)~='table' or type(c.once)~='table' or type(c.effects)~='table'
-  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 or c.rarity~=W.TIERS[c.packTier] then return false end
+  or type(c.packTier)~='number' or c.packTier%1~=0 or c.packTier<1 or c.packTier>4 then return false end
+ if c.stackVersion==2 then
+  if c.upgradeTier~=entry.tier or c.rarity~=W.TIERS[entry.tier] then return false end
+ elseif c.stackVersion~=nil or c.rarity~=W.TIERS[c.packTier] then return false end
+ if c.stackBefore~=nil and (type(c.stackBefore)~='number' or c.stackBefore%1~=0 or c.stackBefore<0
+  or c.stackBefore>=entry.max or c.level~=(c.stackVersion==2 and 1 or math.min(c.packTier,entry.max-c.stackBefore))) then return false end
  local function same(a,b)
   for k,v in pairs(a) do if b[k]~=v then return false end end
   for k,v in pairs(b) do if a[k]~=v then return false end end

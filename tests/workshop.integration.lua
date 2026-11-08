@@ -52,7 +52,7 @@ check('one paid pack from the combined Quartz counter, hidden saved choices and 
  local index=1
  for i,c in ipairs(offer.choices) do if c.cardId=='Q_POWER' or c.cardId=='Q_IGNITION' then index=i;break end end
  move(shopStations.Quartz.Position);input('ChooseCard',quote({offerId=offer.id,index=index}))
- selected=assert(data(p).run.cards[1]);assert(selected.level==offer.packTier and not data(p).run.pendingOffer)
+ selected=assert(data(p).run.cards[1]);assert(selected.level==1 and not data(p).run.pendingOffer)
  assert(p.drones[1].stats.miningDPS==Ca.stats(data(p),data(p).fleet[1]).miningDPS)
  print('DRAFT '..selected.cardId..' '..selected.rarity..' level '..selected.level)
 end)
@@ -81,7 +81,7 @@ check('actual worker ticks pay all Quartz required for prestige after spending o
  input('Prestige',request);assert(#data(p).fleet==2)
  print(string.format('MODEL run1 %.2fs worker ticks (travel to stations supplied by double); starter rock %.2fs',now-beganAt,baseTime))
 end)
-check('reconnect preserves reward and the second earned run can buy another blueprint',function()
+check('reconnect preserves reward and the second earned run can buy another upgrade',function()
  local secondId=data(p).fleet[2].id;players.PlayerRemoving:Fire(pl)
  pl=player(310001);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId])
  assert(#data(p).fleet==2 and data(p).fleet[1].id==firstId and data(p).fleet[2].id==secondId)

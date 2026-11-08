@@ -49,7 +49,11 @@ function CardView.terms(choice,_targetOverride)
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles then target='Mining drones'
  else target='All drones' end
- if choice.workshop then return target..' · This run\n'..choice.rarity..' Lv '..choice.level..' · 1 of 3 slots' end
+ if choice.workshop then
+  local before=choice.stackBefore
+  local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
+  return target..' · This run\n'..count..' · '..choice.rarity
+ end
  local details={target..' · This run'}
  local losses={}
  for _,entry in ipairs({{'speed','drone speed'},{'mining','mining speed'},{'combat','attack damage'},{'health','drone health'},{'startup','startup speed'},{'yield','ore yield'},{'capacity','backpack space'}}) do

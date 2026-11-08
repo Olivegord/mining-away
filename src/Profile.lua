@@ -3,7 +3,7 @@ local Shops=require('./Shops')
 local DroneCatalog=require('./DroneCatalog')
 local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=9,CONTENT=1}
+local P={SCHEMA=10,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -156,24 +156,33 @@ function P.validate(p,uid)
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
  end
- local blueprintCount=0;for _ in pairs(blueprints) do blueprintCount+=1 end
- if blueprintCount>Workshop.SLOTS then return false,'Too many blueprints' end
  local offer=r.pendingOffer
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
   if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
   if offer.opened~=nil and type(offer.opened)~='boolean' then return false,'Invalid pack state' end
   if (offer.packTier~=nil or offer.opened==false) and (not integer(offer.packTier) or offer.packTier<1 or offer.packTier>4) then return false,'Invalid pack tier' end
-  local seen={}
+  local seen={};local guaranteed=false
   for _,c in ipairs(offer.choices) do
    if type(c)~='table' or type(c.cardId)~='string' or seen[c.cardId] or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid offer choice' end
+   if (offer.contentVersion or 0)>=13 and not c.workshop then return false,'Invalid guaranteed upgrade kind' end
    if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid offer choice rarity or blueprint' end
-   if c.workshop and (blueprints[c.cardId] or blueprintCount>=Workshop.SLOTS or c.packTier~=offer.packTier) then return false,'Invalid blueprint slot' end
+   if c.workshop then
+    local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
+    if c.packTier~=offer.packTier or before+c.level>c.maxLevel then return false,'Invalid upgrade stack' end
+    if (offer.contentVersion or 0)>=13 then
+     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 or c.upgradeTier>offer.packTier then return false,'Invalid guaranteed upgrade' end
+     guaranteed=guaranteed or c.upgradeTier==offer.packTier
+    elseif (offer.contentVersion or 0)>=12 then
+     if c.stackBefore~=before then return false,'Invalid saved stack count' end
+    elseif owned then return false,'Invalid legacy blueprint offer' end
+   end
    for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
    if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
   end
+  if (offer.contentVersion or 0)>=13 and not guaranteed then return false,'Pack rarity reward missing' end
  end
  if p.nextDroneSerial~=#p.fleet+1 then return false,'Invalid permanent serial' end
  if type(p.receipts)~='table' or #p.receipts>64 then return false,'Invalid receipt ledger' end
@@ -313,6 +322,7 @@ function P.migrate(raw,uid,seed)
   -- Honor already-earned run progress once; every new sale counts only Quartz.
   p.run.quartzEarnings=p.run.saleEarnings;p.schemaVersion=9
  end
+ if p.schemaVersion==9 then p.schemaVersion=10 end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.

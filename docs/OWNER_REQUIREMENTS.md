@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — implement the combined purchase loop
+
+After pointing out that a Legendary pack is unsatisfying when its upgrade costs more money the player cannot afford, the owner says: “think of a solution and add it to the game.” Implement an answer, without another design-approval pause. The chosen implementation charges once for the pack and includes one of its three choices; rarity guarantees a useful upgrade of that tier. Owned upgrades can be bought again at increasing Quartz prices. This is an implementation decision to test, not a claim that the owner has accepted the result. No Roblox publication is requested.
+
+## November 8 — reject slots and extra-stack rarity
+
+The owner rejects the three-blueprint restriction and the workshop UI. Use a shared upgrade pool; duplicate upgrades should merge and display a count such as 2×. Research the actual n-gon sidescroller upgrade loop and real Roblox UIs. The owner also rejects Common/Rare/Epic/Legendary = +1/+2/+3/+4 stacks. Preserve increasingly expensive repeat purchases like Leaf Blower Revolution and limited random offers like n-gon. The later instruction above authorizes implementing the solution.
+
 ## November 8 latest — one Quartz upgrade, pack, drone and prestige loop
 
 Start small and make progression depend only on Quartz. Combine the shop and pack system, and give pack rarity a real gameplay consequence. Combine roguelike limited choices with repeatable upgrades that become more expensive, taking inspiration from Leaf Blower Revolution. Connect that build to prestige and drone management. Keep it colorful and enjoyable, not gray and drab. Test whether upgrades have meaningful effects; automated correctness alone does not establish enjoyment. This request authorizes implementation and testing, not Roblox publication.

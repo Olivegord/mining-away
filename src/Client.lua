@@ -220,7 +220,7 @@ local function layoutModal()
  local v=viewport();local l=currentLayout()
  if l.short then l.headerHeight=64;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding) end
  if modalMode=='shop' then
-  l.panelWidth=math.min(760,v.X-24);l.panelHeight=math.min(566,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
+  l.panelWidth=math.min(740,v.X-24);l.panelHeight=math.min(650,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='pack' then
@@ -263,6 +263,7 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
+ if mode~='shop' then U.skin(sheet,palette.panel,20);U.skin(close,palette.danger,11) end
  local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0
  local colorful=true
  local texture=sheet:FindFirstChild('StudSurface');if texture then texture.Visible=not inOffer end
@@ -290,6 +291,7 @@ local function menu(mode,title,subtitle,icon)
   modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
   modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
+ if mode=='shop' then ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211) end
  modal.Visible=true
  packView:setFocus(inOffer)
  if entering then
@@ -373,7 +375,7 @@ openOffer=function()
   local screen,visible=camera:WorldToScreenPoint(worldOrigin)
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
- local l=menu('offer','PICK A BLUEPRINT',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' · Starts at level '..tostring(offer.packTier)..' · Choose one') or 'Choose one · This run','cards')
+ local l=menu('offer','PICK AN UPGRADE',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' pack · Pick included · Choose one upgrade') or 'Choose one · This run','cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
@@ -392,7 +394,7 @@ openShop=function(_key)
  if not profile or not profile.run.wallet then return end
  activeShop='Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop','Quartz Workshop',comma(Shops.balance(profile,'Quartz'))..' Quartz · '..#Workshop.owned(profile)..'/3 build slots'..(allowed and '' or ' · '..reason),'crystal')
+ local l=menu('shop','Quartz Workshop',comma(Shops.balance(profile,'Quartz'))..' Quartz · Duplicates stack'..(allowed and '' or ' · '..reason),'crystal')
  ShopView.render(U,body,{profile=profile,shop='Quartz',width=l.bodyWidth-4,canBuy=allowed,
   onPack=function()
    if pending() then
@@ -489,12 +491,12 @@ openFleet=function()
 end
 openRunCards=function()
  if not profile then return end
- local l=menu('run','Your current build','Your chosen blueprints last until prestige. Buy their next levels in the workshop.','cards');local width=l.bodyWidth-6
+ local l=menu('run','Your current build','Your upgrades stack together until prestige. Find more in packs or buy another stack.','cards');local width=l.bodyWidth-6
  tabs(width,'run')
  if #profile.run.cards==0 then
   U.icon(body,'cards',UDim2.fromOffset(math.max(0,(width-90)/2),84),UDim2.fromOffset(90,90),palette.mineral)
   local title=label(body,UDim2.fromOffset(6,196),UDim2.fromOffset(width-12,38),'Your first upgrade is waiting',26,palette.text,true);title.TextXAlignment=Enum.TextXAlignment.Center
-  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine Quartz and sell it at SELL ORE. Open a workshop pack, choose a blueprint, then buy its next levels.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
+  local detail=label(body,UDim2.fromOffset(12,247),UDim2.fromOffset(width-24,64),'Mine Quartz and sell it at SELL ORE. Open a pack and pick an upgrade. Find it again or buy another stack to make it stronger.',14,palette.muted);detail.TextXAlignment=Enum.TextXAlignment.Center
   label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Quartz Workshop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
@@ -522,7 +524,7 @@ openPrestige=function()
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Three blueprint slots and their levels\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run upgrades and their stacks\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
@@ -1138,10 +1140,10 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Draft a blueprint, level your build, earn a drone','Open' end
+  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Open packs, stack upgrades, earn drones','Open' end
   return nil
  elseif kind=='Pack' then
-  return openPack,'Quartz Workshop',pending() and 'Your delivered blueprint is waiting' or 'Packs, repeat upgrades and prestige','Open'
+  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Packs, repeat upgrades and prestige','Open'
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then

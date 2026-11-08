@@ -2143,7 +2143,7 @@ local function buyShopUpgrade(p,pl,payload)
  transact(p,'shop:'..payload.txId,function(copy)
   local ok,result=Ca.upgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{atDepot=true,activeEncounter=false})
   if ok then return result end;return nil,result
- end,function(result) refreshStats(p);notice(p,result.title..' · level '..result.level);p.publishDirty=true end)
+ end,function(result) refreshStats(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true end)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end

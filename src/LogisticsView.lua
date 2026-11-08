@@ -100,7 +100,7 @@ function View.start(ctx)
   if self.tab=='Drones' then
    local pre=profile().prestigePreview or {}
    text(body,8,12,contentWidth-16,32,'GROW YOUR PERMANENT FLEET',19,C.accent)
-   U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, choose three blueprints and level your build. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
+   U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, open packs and stack your upgrades. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
    text(body,8,143,contentWidth-16,32,tostring(pre.earnings or 0)..' / '..tostring(pre.saleRequired or 360)..' Quartz sold',18,C.mineral)
    U.button(body,UDim2.fromOffset(8,190),UDim2.fromOffset(contentWidth-16,44),'Open Quartz Workshop',function() setOpen(false);ctx.openWorkshop() end,C.mineral)
    U.button(body,UDim2.fromOffset(8,246),UDim2.fromOffset(contentWidth-16,44),'Review prestige reward',function() setOpen(false);ctx.openPrestige() end,C.accent)
