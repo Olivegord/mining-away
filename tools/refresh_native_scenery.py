@@ -2,8 +2,8 @@
 """Merge an exact scoped Studio scenery export into the sole canonical place.
 
 This workflow never opens Studio, uploads a place, or reserializes unrelated
-instances. The export directory contains the four compressed base64 sections
-produced by the companion Studio edit command.
+instances. The export directory contains compressed base64 sections produced
+by the corresponding Studio edit command.
 """
 import argparse
 import base64
@@ -40,6 +40,9 @@ CONTRAST_SCOPE = {
 }
 BASIN_SCOPE = {
     "scenery": (MAP, {"QuarryBasin"}, {"Folder", "WedgePart"}),
+}
+WOODLAND_SCOPE = {
+    "scenery": (MAP, {"QuarryWoodlands"}, {"Folder", "Model", "Part", "WedgePart"}),
 }
 
 
@@ -228,13 +231,18 @@ def read_section(directory, name):
     return subprocess.run(["zstd", "-d", "-q", "-c"], input=compressed, capture_output=True, check=True).stdout
 
 
-def merge(base, directory, contrast=False, basin=False):
-    plan = json.loads(read_section(directory, "edits"))
-    assert plan.keys() == {"edits", "moves"} and plan["edits"]
-    assert bool(plan["moves"]) == (not contrast and not basin), "Unexpected archive operation for this pass"
+def merge(base, directory, contrast=False, basin=False, woodlands=False):
     original = Native(base)
-    result, touched = patch_parts(original, plan["edits"], contrast, basin)
-    scope = BASIN_SCOPE if basin else CONTRAST_SCOPE if contrast else SCOPE
+    if woodlands:
+        plan = {"edits": [], "moves": []}
+        result, touched = base, set()
+        scope = WOODLAND_SCOPE
+    else:
+        plan = json.loads(read_section(directory, "edits"))
+        assert plan.keys() == {"edits", "moves"} and plan["edits"]
+        assert bool(plan["moves"]) == (not contrast and not basin), "Unexpected archive operation for this pass"
+        result, touched = patch_parts(original, plan["edits"], contrast, basin)
+        scope = BASIN_SCOPE if basin else CONTRAST_SCOPE if contrast else SCOPE
     for name, (parent, roots, allowed) in scope.items():
         model = read_section(directory, name)
         assert model.startswith(b"<roblox!\x89\xff\r\n\x1a\n"), "Expected Studio's native binary model export"
@@ -281,11 +289,12 @@ def main():
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--contrast", action="store_true", help="Use the quarry contrast pass allowlist")
     scope.add_argument("--basin", action="store_true", help="Use the quarry basin pass allowlist")
+    scope.add_argument("--woodlands", action="store_true", help="Append only the authored woodland scenery")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")
     args = parser.parse_args()
     data = CANONICAL_OUTPUT.read_bytes()
     assert sha256(data).hexdigest() == args.baseline_sha256, "Canonical file changed; reconcile before saving"
-    result, stats = merge(data, args.export_dir, args.contrast, args.basin)
+    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.woodlands)
     if args.write:
         write_snapshot(data, result)
     print(json.dumps({**stats, "wrote": args.write, "sha256": sha256(result).hexdigest()}, indent=2))

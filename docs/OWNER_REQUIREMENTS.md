@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — extend the wooded edges
+
+Extend the map with taller, denser woodland. Fill the unused edges around Quartz until its outer canopy reads as a wall of trees and leaves. Carry the larger woodland scale across the other suitable biomes, retain the clear Quartz entrance and mining space, and keep Cobalt's forest mushroom-only.
+
 ## November 7 latest — enclose the quarry and enlarge the terraces
 
 Use the supplied terrain image for scale and relief. Surround the quarry with high rock walls, add broad tiered landforms near the working areas, and use green, lime and warm ground patches to separate elevations. Let dark rock show below the grass. Fit the new land around the existing paths, mining beds, and biome landmarks. Save the authored map in Studio Edit and the canonical file through the background workflow.

@@ -57,3 +57,5 @@ Run `python3 tools/refresh_native_scenery.py <export-directory> --baseline-sha25
 The [contrast pass](../tools/studio_quarry_contrast.lua) uses the same workflow with two sections (`variants` and `edits`) at `shared.QuarryContrastSnapshot` and the `--contrast` flag. These helpers are allowlisted for their own changes. For future map work, extend the scoped export and verify the affected values and old baseline. Do not silently fall back to a file dialog for edits that need a different method.
 
 The [basin pass](../tools/studio_quarry_basin.lua) exports `scenery` and `edits` at `shared.QuarryBasinSnapshot`. Use `--basin` for both the checked report and the write. This scope adds the basin folder and updates only color values on existing turf. Its Studio authoring command checks clearance above the mining beds and routes before applying the turf edits.
+
+The [woodland pass](../tools/studio_quarry_woodlands.lua) exports a single `scenery` string at `shared.QuarryWoodlandsSnapshot`. Use `--woodlands` for the checked report and the write. This scope adds only `Workspace.MiningAway.Map.QuarryWoodlands`, including the five forest shelves and their tree models.
