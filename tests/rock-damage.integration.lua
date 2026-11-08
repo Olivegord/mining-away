@@ -115,13 +115,24 @@ cubicDamage:update(cube,30);cubicDamage:step(30)
 assert(cube.view:GetAttribute('PhysicalDamageKey')=='2:1' and cubicDamage.failures==0,'cube accepts both bite and dent subtraction')
 assert(assets.created==assetCount and cube.source.ClassName=='Part','cube damage must not rebuild the historical crystal mesh or replace authority')
 cubicDamage:destroy();checks+=1
-local junk=resource(0,1)
+local junk=resource(2,1)
+junk.source.ClassName='Part';junk.view.ClassName='Part'
 junk.source:SetAttribute('Kind','Junk')
 junk.source:SetAttribute('CubicRock',true)
-junk.source:SetAttribute('BallDentPoint',Vector3.new(.5,.3,0))
+junk.source:SetAttribute('BallDentPoint',Vector3.new(-.52,.3,0))
+junk.source:SetAttribute('BallDentSerial',1)
 junk.source:SetAttribute('MeltBand',2)
-local flat=RockDamage.new()
-flat:update(junk,31);flat:step(31)
-assert(flat.operations==0 and junk.view:GetAttribute('PhysicalDamageKey')==nil,'junk keeps planar patterned faces under tool damage')
-flat:destroy();checks+=1
+local oldSize=junk.source.Size
+local pattern=Instance.new('Decal');pattern.Parent=junk.view
+local shallow=RockDamage.new()
+shallow:update(junk,31);shallow:step(31)
+assert(shallow.operations==1 and shallow.failures==0 and junk.view:GetAttribute('PhysicalDamageKey')=='2:1:ball1:heat2')
+assert(pattern.Parent==junk.view and #junk.view:GetChildren()==1 and junk.source.Size==oldSize,'keep the printed face, without a separate shell or core')
+local specs=RockDamage.cutSpecs(2,1,0,Vector3.new(-.52,.3,0),1,2,.72,nil,true)
+for _,spec in ipairs(specs) do
+ local axis=spec.kind=='BowlingBall' and 'X' or 'Y'
+ assert(math.abs(spec.center[axis])==.5 and spec.size[axis]<=.29,'dents are shallow, open to the outside and follow the hit face')
+end
+assert(specs[4].center.X==-.5 and specs[4].center.Y==.3,'side dent follows the exact contact')
+shallow:destroy();checks+=1
 print('PASS '..checks..' physical rock damage queue/ownership checks (API double; native topology not established)')

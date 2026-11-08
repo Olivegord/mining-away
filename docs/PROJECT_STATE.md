@@ -9,17 +9,25 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `84d9fcff18d3fb14ea9393e0af5d3a901c2edfe3774fc8085e7d60f2101e5bdc` | Island shoreline, shallow water, open ocean, and relocated shelf trees. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The island coastline replaces the perimeter enclosure. |
+| Native-file SHA-256 | `6d6b2272a703fda9644779681246fc8e961181589e24621933e71eaab0e74a89` | Island reserve with the restored junk tool-mark Source. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Shallow tool marks on solid patterned junk. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed. All seven managed Sources match the workspace by byte count and fingerprint, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
-| Roblox publication | **No publication in the island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed alongside the shallow tool marks. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the tool-mark or island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — tool marks on solid junk
+
+Junk again renders physical tool impressions. Blunt hits press into the hit face, and heat leaves a shallow mark on top. The localized cuts use the existing client damage queue and one solid cube, with the pattern or photo decals retained. The previous hollow shell and separate interior remain removed. Sword slicing uses the existing path.
+
+Studio was open in Play on entry and left open in Edit at place 124078027733625, universe 10774898335, loaded version 76. An Edit fixture rendered the actual daisy and motherboard templates and measured a 0.51-stud dent in both 5.4-stud cubes. Inspected the viewport, verified the motherboard kept all six decals, and removed the temporary fixtures. Rock damage, field-tool and core-loop checks passed. No new Play session, multiplayer test or Roblox publication.
+
+Script Sync changed only ClientDroneControl. Verified all seven Edit Source hashes and the three sync roots. The native refresh preserved all non-Source data and backup scripts. Reproduce the canonical Source refresh with `python3 tools/build.py --previous-commit 96850ed8f033f318cb75ccbbbac08a74c6624ec9`.
 
 ## Latest follow-up — the island reserve
 
@@ -41,7 +49,7 @@ Reproduce with [the Edit stage](../tools/studio_liminal_reserve.lua) on `9ddcd12
 
 ## Earlier follow-up — flat junk and dropped-tool handling
 
-Arts & Crafts and Tech junk keep their photo and pattern finishes on flat faces. Junk skips cavity geometry, including the former separate fabric, foam, cork and circuit interiors. Tool hits still damage junk, and sword slices and melting can lower its flat top. Ordinary ore keeps its existing damage geometry.
+Arts & Crafts and Tech junk keep their photo and pattern finishes on flat faces. This pass removed cavity geometry, including the former separate fabric, foam, cork and circuit interiors. The later tool-mark pass restored shallow dents in the solid cubes. Tool hits still damage junk, and sword slices and melting can lower its flat top. Ordinary ore keeps its existing damage geometry.
 
 Players can click or drag over individual rocks and junk cubes to choose work. The Rock Scanner starts automatic follow-up after an explicit rock order. Five decorative border parts are now invisible in Edit and the runtime plot outlines are gone. The physical mining floors, resource spawning regions, mineral unlocks and guard encounters are retained. The themed clearings continue to run in Studio preview.
 

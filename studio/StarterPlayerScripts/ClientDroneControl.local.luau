@@ -3844,7 +3844,7 @@ function R.depthBand(bubbles,dents,depth)
  if count(bubbles)<R.MAX_CUTS and count(dents)<R.MAX_CUTS then return 0 end
  return math.clamp(math.floor(math.clamp(tonumber(depth) or 0,0,1)*6+1e-7),0,6)
 end
-function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount,heat,dentWidth,meltPoint)
+function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount,heat,dentWidth,meltPoint,shallow)
  local result={}
  for i=1,count(bubbles) do
   local center,diameter=R.bite(i,count(bubbles)>=R.MAX_CUTS and depthBand or 0)
@@ -3857,15 +3857,28 @@ function R.cutSpecs(bubbles,dents,depthBand,ballPoint,ballCount,heat,dentWidth,m
   -- the same cavity. Its lower rim never cuts through the grounded foot.
   result[#result+1]={center=Vector3.new(.025,.49,.015),size=Vector3.new(.60+.10*n+.20*pressure,.36+.10*n+.18*pressure,.60+.10*n+.20*pressure),kind='Smasher'}
  end
+ local faceAxis='Y'
  if ballPoint then
-  local axis='Y';if math.abs(ballPoint.X)>math.abs(ballPoint[axis]) then axis='X' end
-  if math.abs(ballPoint.Z)>math.abs(ballPoint[axis]) then axis='Z' end
+  if math.abs(ballPoint.X)>math.abs(ballPoint[faceAxis]) then faceAxis='X' end
+  if math.abs(ballPoint.Z)>math.abs(ballPoint[faceAxis]) then faceAxis='Z' end
   local width=(dentWidth or .65)+.035*math.clamp(ballCount or 1,1,4);local depth=width*.78
-  local size=Vector3.new(axis=='X' and depth or width,axis=='Y' and depth or width,axis=='Z' and depth or width)
+  local size=Vector3.new(faceAxis=='X' and depth or width,faceAxis=='Y' and depth or width,faceAxis=='Z' and depth or width)
   result[#result+1]={center=ballPoint,size=size,kind='BowlingBall'}
  end
  if heat and heat>0 then
   result[#result+1]={center=meltPoint or Vector3.new(0,.52,0),size=Vector3.new(.48+.12*heat,.35+.1*heat,.48+.12*heat),kind='Melt'}
+ end
+ if shallow then
+  -- Press into one solid cube. Leave the printed face planar away from
+  -- contact, with enough material under each mark to read as a dent.
+  for _,spec in ipairs(result) do
+   local axis=spec.kind=='BowlingBall' and faceAxis or 'Y'
+   local center,size=spec.center,spec.size
+   local face=center[axis]<0 and -.5 or .5
+   local depth=math.clamp(size[axis]*.39,.13,.29)
+   spec.center=Vector3.new(axis=='X' and face or center.X,axis=='Y' and face or center.Y,axis=='Z' and face or center.Z)
+   spec.size=Vector3.new(axis=='X' and depth or size.X,axis=='Y' and depth or size.Y,axis=='Z' and depth or size.Z)
+  end
  end
  return result
 end
@@ -3910,7 +3923,7 @@ function R.new(options)
   local key=bubbles..':'..dents..(band>0 and ':'..band or '')..(ball and ':ball'..(source:GetAttribute('BallDentSerial') or 0) or '')..(heat>0 and ':heat'..heat or '')
   if key==state.requested then return end
   state.requested=key;state.generation+=1
-  if source:GetAttribute('Kind')=='Junk' or (bubbles+dents==0 and not ball and heat==0) then return end
+  if bubbles+dents==0 and not ball and heat==0 then return end
   -- Only the local render clone is touched, never the replicated source.
   if not record.view:IsA('PartOperation') and not record.view:IsA('MeshPart') and source:GetAttribute('CubicRock')~=true then return end
   self.queued[record]={bubbles=bubbles,dents=dents,depthBand=band,ball=ball,ballCount=ballCount,heat=heat,meltPoint=source:GetAttribute('MeltPoint'),dentWidth=source:GetAttribute('DentWidth'),generation=state.generation,key=key,at=now}
@@ -3955,7 +3968,8 @@ function R.new(options)
   local base=template:Clone();clean(base)
   base.CFrame=CFrame.new();base.Size=Vector3.one*CANONICAL
   local cutters={}
-  for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount,request.heat,request.dentWidth,request.meltPoint)) do
+  local shallow=record.source:GetAttribute('Kind')=='Junk'
+ for _,spec in ipairs(R.cutSpecs(request.bubbles,request.dents,request.depthBand,request.ball,request.ballCount,request.heat,request.dentWidth,request.meltPoint,shallow)) do
    local cutter=Instance.new('Part');cutter.Shape=Enum.PartType.Ball
    cutter.Size=spec.size*CANONICAL;cutter.CFrame=CFrame.new(spec.center*CANONICAL)
    cutter.Anchored=true;cutter.CanCollide=false;cutter.CanTouch=false;cutter.CanQuery=false

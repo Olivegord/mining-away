@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — visible tool marks on flat junk
+
+Restore visible marks where tools hit junk. Keep the cubes solid and preserve their flat patterned faces around each mark.
+
 ## November 8 latest — make the reserve an island
 
 Replace the high walls with an island coastline and open water. Keep the six areas and their connected routes. The island supersedes the enclosed basin in the prior request.
