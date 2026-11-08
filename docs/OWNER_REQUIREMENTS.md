@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — taper the trees and rebuild the main wall
+
+Keep the woodland dense next to the clearings and thin it gradually across the outer shelves. Rebuild the main quarry wall from rectangular rock masses, with staggered columns and broad, stepped grass ledges. Use the existing low-resolution rock and turf materials.
+
 ## November 7 latest — extend the wooded edges
 
 Extend the map with taller, denser woodland. Fill the unused edges around Quartz until its outer canopy reads as a wall of trees and leaves. Carry the larger woodland scale across the other suitable biomes, retain the clear Quartz entrance and mining space, and keep Cobalt's forest mushroom-only.

@@ -59,3 +59,5 @@ The [contrast pass](../tools/studio_quarry_contrast.lua) uses the same workflow 
 The [basin pass](../tools/studio_quarry_basin.lua) exports `scenery` and `edits` at `shared.QuarryBasinSnapshot`. Use `--basin` for both the checked report and the write. This scope adds the basin folder and updates only color values on existing turf. Its Studio authoring command checks clearance above the mining beds and routes before applying the turf edits.
 
 The [woodland pass](../tools/studio_quarry_woodlands.lua) exports a single `scenery` string at `shared.QuarryWoodlandsSnapshot`. Use `--woodlands` for the checked report and the write. This scope adds only `Workspace.MiningAway.Map.QuarryWoodlands`, including the five forest shelves and their tree models.
+
+The [block rim pass](../tools/studio_quarry_block_rim.lua) exports `rim`, `archive`, and `moves` at `shared.QuarryBlockRimSnapshot`. Use `--block-rim`. This scope adds the rectangular rim and moves only the five former rim sections and selected outer woodland trees to `ServerStorage.QuarryRimArchive`. The exporter uses a child part position to distinguish trees with the same name.

@@ -44,6 +44,12 @@ BASIN_SCOPE = {
 WOODLAND_SCOPE = {
     "scenery": (MAP, {"QuarryWoodlands"}, {"Folder", "Model", "Part", "WedgePart"}),
 }
+RIM_SCOPE = {
+    "rim": (MAP, {"QuarryBlockRim"}, {"Folder", "Part"}),
+    "archive": ("ServerStorage", {"QuarryRimArchive"}, {"Folder"}),
+}
+RIM_WALLS = {"WestEscarpment", "NorthCrown", "EastChalkRim", "SouthwestGate", "SoutheastGate"}
+WOODLANDS = {f"{name}Woodland" for name in ("Quartz", "Ruby", "Violet", "Emerald", "Impact")}
 
 
 class Native:
@@ -209,21 +215,60 @@ def patch_parts(base, edits, contrast=False, basin=False):
     return b"".join(result), set(replacements)
 
 
-def reparent(data, moves):
+def rim_moves(native, moves):
+    wall_moves = set()
+    positions = {}
+    for move in moves:
+        parent_path, name = move["path"].rsplit(".", 1)
+        if move["parent"] == "ServerStorage.QuarryRimArchive.FormerRim":
+            assert parent_path == MAP+".QuarryBasin" and name in RIM_WALLS
+            child = native.one(move["path"])
+            assert native.instances[child][1] == "Folder"
+            wall_moves.add(name)
+        else:
+            assert move["parent"] == "ServerStorage.QuarryRimArchive.OuterTrees"
+            assert parent_path.rsplit(".", 1)[0] == MAP+".QuarryWoodlands"
+            assert parent_path.rsplit(".", 1)[1] in WOODLANDS and name in {"CanopyTree", "Evergreen"}
+            candidates = set(native.paths[move["path"]])
+            assert candidates and all(native.instances[ref][1] == "Model" for ref in candidates)
+            matches = set()
+            for ref in native.paths[move["path"]+"."+move["part"]]:
+                cid, cls, index, _ = native.instances[ref]
+                if cls != "Part" or native.parents[ref] not in candidates:
+                    continue
+                if cid not in positions:
+                    count = len(native.classes[cid][1])
+                    _, coords = split_cframe(native.prop(cid, "CFrame", 0x10), count)
+                    positions[cid] = unpack_vectors(coords, count)
+                if close(positions[cid][index], move["anchor"]):
+                    matches.add(native.parents[ref])
+            assert len(matches) == 1, f"Could not identify woodland tree {move}"
+            child = matches.pop()
+        yield child, native.one(move["parent"])
+    assert wall_moves == RIM_WALLS, "Expected the five previous rim sections"
+
+
+def reparent(data, moves, block_rim=False):
     native = Native(data)
     parents = native.parents.copy()
-    for move in moves:
-        assert move["path"].startswith(TERRACES+"AssetScenery.CobaltScenery.")
-        assert move["parent"] == ARCHIVE
-        child, parent = native.one(move["path"]), native.one(move["parent"])
-        assert native.instances[child][1] == "Model" and native.instances[parent][1] == "Folder"
-        parents[child] = parent
+    if block_rim:
+        relocated = dict(rim_moves(native, moves))
+    else:
+        relocated = {}
+        for move in moves:
+            assert move["path"].startswith(TERRACES+"AssetScenery.CobaltScenery.")
+            assert move["parent"] == ARCHIVE
+            child, parent = native.one(move["path"]), native.one(move["parent"])
+            assert native.instances[child][1] == "Model" and native.instances[parent][1] == "Folder"
+            relocated[child] = parent
+    assert len(relocated) == len(moves)
+    parents.update(relocated)
     result = [data[:32]]
     for kind, _, raw in native.chunks:
         if kind == b"PRNT":
             raw = chunk(b"PRNT", b"\0"+struct.pack("<I", len(parents))+pack_refs(parents)+pack_refs(parents.values()))
         result.append(raw)
-    return b"".join(result)
+    return b"".join(result), relocated
 
 
 def read_section(directory, name):
@@ -231,12 +276,13 @@ def read_section(directory, name):
     return subprocess.run(["zstd", "-d", "-q", "-c"], input=compressed, capture_output=True, check=True).stdout
 
 
-def merge(base, directory, contrast=False, basin=False, woodlands=False):
+def merge(base, directory, contrast=False, basin=False, woodlands=False, block_rim=False):
     original = Native(base)
-    if woodlands:
-        plan = {"edits": [], "moves": []}
+    if woodlands or block_rim:
+        moves = json.loads(read_section(directory, "moves")) if block_rim else []
+        plan = {"edits": [], "moves": moves}
         result, touched = base, set()
-        scope = WOODLAND_SCOPE
+        scope = RIM_SCOPE if block_rim else WOODLAND_SCOPE
     else:
         plan = json.loads(read_section(directory, "edits"))
         assert plan.keys() == {"edits", "moves"} and plan["edits"]
@@ -253,14 +299,14 @@ def merge(base, directory, contrast=False, basin=False, woodlands=False):
         current = Native(result)
         assert all(parent+"."+root not in current.paths for root in roots), f"{name} already exists"
         result = append_model(result, model, current.one(parent), chunks, chunk, u32, string, packstr)
+    moved = {}
     if plan["moves"]:
-        result = reparent(result, plan["moves"])
+        result, moved = reparent(result, plan["moves"], block_rim)
     final = Native(result)
     # No original instance was reserialized, and no other property changed.
     assert original.instances.items() <= final.instances.items()
     assert set(touched) == {key for key, old in original.props.items() if final.props[key] != old}
     assert script_inventory(original.chunks) == script_inventory(final.chunks)
-    moved = {original.one(move["path"]): final.one(move["parent"]) for move in plan["moves"]}
     assert all(final.parents[ref] == moved.get(ref, parent) for ref, parent in original.parents.items())
     return result, {
         "parts_updated": len(plan["edits"]), "archived_models": len(plan["moves"]),
@@ -290,11 +336,12 @@ def main():
     scope.add_argument("--contrast", action="store_true", help="Use the quarry contrast pass allowlist")
     scope.add_argument("--basin", action="store_true", help="Use the quarry basin pass allowlist")
     scope.add_argument("--woodlands", action="store_true", help="Append only the authored woodland scenery")
+    scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")
     args = parser.parse_args()
     data = CANONICAL_OUTPUT.read_bytes()
     assert sha256(data).hexdigest() == args.baseline_sha256, "Canonical file changed; reconcile before saving"
-    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.woodlands)
+    result, stats = merge(data, args.export_dir, args.contrast, args.basin, args.woodlands, args.block_rim)
     if args.write:
         write_snapshot(data, result)
     print(json.dumps({**stats, "wrote": args.write, "sha256": sha256(result).hexdigest()}, indent=2))
