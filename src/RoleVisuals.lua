@@ -26,7 +26,7 @@ function Effects.step(now)
    -- mark instead accelerates into contact; neither is an expanding ball.
    local u=t.last>=t.first and (1-math.exp(-q*14))*.88+.12*q or q*q*q
    local radius=(t.first+(t.last-t.first)*u)*.5
-   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,(1-q)^.7*.8,.035+.055*(1-q))
+   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,.035+.055*(1-q))
   end
  end
  for rig,t in pairs(beamTimelines) do
@@ -178,15 +178,16 @@ end
 
 -- These are one-shot phase cues. The authoritative drone moves through its
 -- windup/dive/recovery; none of these effects is a steady mining beam.
-function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
+function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,diameter: number?)
  local amber=Color3.fromRGB(220,164,81)
+ local scale=math.clamp((diameter or 3)/3,.65,3)
  if phase=='Windup' then
-  Effects.Pulse(target,amber,.2,1.4,.75)
+  Effects.Pulse(target,amber,.2*scale,2.4*scale,.75)
  elseif phase=='Dive' then
-  Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
+  Effects.Pulse(target,Color3.fromRGB(239,211,154),2*scale,.25*scale,.25)
  elseif phase=='Impact' then
   local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35,3.2,.18)
+  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35*scale,4.6*scale,.26)
   local shock=not BeamVFX.reduced() and part() or nil
   if shock then
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
@@ -200,7 +201,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
    dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
    dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
-   Effects.Pulse(target,amber,.6,5.2,.65)
+   Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
   -- The actual fracture creates authored crystal fragments in Presentation.
@@ -209,8 +210,8 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
   -- This is physical touchdown, distinct from the later damaging fracture.
   -- A single server receipt drives both the local thud and camera impulse.
   local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3,1.8,.12)
-  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2,.7,.9)
+  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3*scale,2.5*scale,.17)
+  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2*scale,1.1*scale,.9)
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
  end
@@ -289,22 +290,30 @@ local function watchBurn(owner: any,group: Folder)
 end
 local function targetSight(owner: any,target: any,duration: number?)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
- local value=part();if not value then group:Destroy();return end
- local radius=math.clamp((target.radius or 1)+.7,1.4,8)
- value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
- value:SetAttribute('AudioLoop','orbital_charge');value:SetAttribute('AudioAt',clock());value:SetAttribute('AudioUntil',clock()+2.6)
- value.Color=Color3.fromRGB(242,38,44);value.Transparency=.88
- value.Size=Vector3.new(.035,radius*2,radius*2)
- value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
+ local value=part();local cue=part()
+ if not value or not cue then if value then value:Destroy() end;if cue then cue:Destroy() end;group:Destroy();return end
+ local seconds=duration or 2.4
+ local radius=math.clamp((target.radius or 1)*1.5,1.65,12)
+ local floor=Vector3.new(target.x,(target.ground or target.y)+.065,target.z)
+ local red=Color3.fromRGB(255,40,48)
+ value.Name='ThinRedSight';value.Shape=Enum.PartType.Cylinder;value.Color=red;value.Transparency=.28
+ value.Size=Vector3.new(ORBITAL_HEIGHT,.052,.052)
+ value.CFrame=CFrame.new(floor+Vector3.yAxis*(ORBITAL_HEIGHT*.5))*CFrame.Angles(0,0,math.pi/2)
  value.Parent=group
+ cue.Name='OrbitalFootprint';cue.Transparency=1;cue.Size=Vector3.one*.025;cue.Position=floor;cue.Parent=group
+ cue:SetAttribute('AudioLoop','orbital_charge');cue:SetAttribute('AudioAt',clock());cue:SetAttribute('AudioUntil',clock()+seconds)
+ if not BeamVFX.reduced() and pulseCount<24 then
+  pulseCount+=1
+  pulseTimelines[cue]={at=clock(),duration=seconds,first=radius*2.85,last=radius*2,plane=PlaneBurst.create(cue,red),sight=true}
+ end
  local rig=BeamVFX.new(group,'Orbital',Color3.fromRGB(172,113,255))
  if rig then
   local camera=workspace.CurrentCamera
   local height=math.max(260,(camera and camera.CFrame.Position.Y or target.y)-target.y+180)
-  chargeTimelines[group]={rig=rig,at=clock(),duration=duration or 1.4,position=location(target)+Vector3.yAxis*height}
+  chargeTimelines[group]={rig=rig,at=clock(),duration=seconds,position=floor+Vector3.yAxis*height}
  end
- animate(value,1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.74})
- Debris:AddItem(group,2.6)
+ animate(value,seconds,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.06})
+ Debris:AddItem(group,seconds+1.15)
 end
 local function sustainedStrike(owner: any,event: any)
  local group=burns[owner]
@@ -313,11 +322,19 @@ local function sustainedStrike(owner: any,event: any)
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
   group:SetAttribute('StartedAt',event.startedAt or clock())
-  for index,width in ipairs({.68,.12}) do
+  local radius=math.clamp(event.target.radius or 1,1,8)
+  local floor=Vector3.new(event.target.x,(event.target.ground or event.target.y)+.045,event.target.z)
+  local age=workspace:GetServerTimeNow()-(event.startedAt or clock())
+  if age<.32 then
+   Effects.Pulse(floor,Color3.fromRGB(202,168,255),radius*1.25,radius*4.8,.88)
+   Effects.Pulse(location(event.target),ORBITAL_COLOR,radius*.45,radius*2.7,.52)
+  end
+  local scale=math.clamp(.75+radius*.2,1,1.85)
+  for index,width in ipairs({.78*scale,.18*scale}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
    value.Color=index==1 and Color3.fromRGB(155,94,245) or ORBITAL_COLOR
-   value.Transparency=index==1 and .94 or .82;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
+   value.Transparency=index==1 and .88 or .17;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
    value:SetAttribute('BurnTransparency',value.Transparency)
    if index==2 then
     local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
@@ -332,7 +349,7 @@ local function sustainedStrike(owner: any,event: any)
   local contact=part()
   if contact then
    contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
-   contact.Transparency=.78;contact.Size=Vector3.one*.55;contact.Parent=group;contact:SetAttribute('BurnTransparency',.78)
+   contact.Transparency=.56;contact.Size=Vector3.one*(.55*scale);contact.Parent=group;contact:SetAttribute('BurnTransparency',.56)
    local tip=Instance.new('Attachment');tip.Parent=contact
    local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=SPARK;sparks.Squash=NumberSequence.new(.65);sparks.Rotation=NumberRange.new(-180,180)
    sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
@@ -345,6 +362,7 @@ local function sustainedStrike(owner: any,event: any)
   group.Parent=folder();watchBurn(owner,group)
  end
  local position=location(event.target)
+ local ground=Vector3.new(position.X,(event.target.ground or position.Y)+.045,position.Z)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',clock())
  local fresh=workspace:GetServerTimeNow()-clock()<=.3
  local suspended=not fresh
@@ -353,7 +371,7 @@ local function sustainedStrike(owner: any,event: any)
   for _,v in ipairs(group:GetDescendants()) do if v:IsA('ParticleEmitter') then v.Enabled=fresh end end
  end
  for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(ground+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   value.CFrame=pose
   value.Transparency=not fresh and 1 or (value:GetAttribute('BurnTransparency') or value.Transparency)
  end end

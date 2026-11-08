@@ -1,6 +1,7 @@
 -- Production automatic charge/work logic; no Roblox renderer or network claims.
 local A=require('../src/DroneAbilities')
 local passed=0
+local orbitalReady=10+A.KINDS.Orbital.chargeSeconds
 local function test(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));passed+=1;print('PASS gadget '..name) end
 local function setup()
  local rocks={{id='big',hp=100,maxHP=100,x=0,y=0,z=0},{id='small',hp=20,maxHP=50,x=4,y=0,z=0},{id='near',hp=30,maxHP=60,x=7,y=0,z=0},{id='far',hp=30,maxHP=70,x=100,y=0,z=0}}
@@ -21,8 +22,8 @@ local function setup()
 end
 local function begin(s,c,kind,t) assert(A.begin(s,kind or 'Orbital',t or 10,c));return s.charge.token end
 local function deploy(s,c,kind,t)
- t=t or 10;begin(s,c,kind,t);A.step(s,t+A.CHARGE_SECONDS,.001,c);assert(not s.charge)
- return t+A.CHARGE_SECONDS
+ t=t or 10;begin(s,c,kind,t);local ready=s.charge.readyAt;A.step(s,ready,.001,c);assert(not s.charge)
+ return ready
 end
 local function burn(s,c,start,seconds) for n=1,math.ceil((seconds or 4.1)*60) do A.step(s,start+n/60,1/60,c) end end
 
@@ -36,46 +37,47 @@ test('largest eligible target has a stable ID tie break',function()
 end)
 test('one activation completes its fixed anticipation without a second input or timing window',function()
  local s,c,r,h=setup();begin(s,c);s.charge.actorId='orbiter:one'
- A.step(s,11.39,.01,c);assert(s.charge and not s.burn and #h==0)
- A.step(s,11.4,.01,c);assert(not s.charge and s.burn and s.burn.actorId=='orbiter:one')
+ A.step(s,orbitalReady-.01,.01,c);assert(s.charge and not s.burn and #h==0)
+ A.step(s,orbitalReady,.01,c);assert(not s.charge and s.burn and s.burn.actorId=='orbiter:one')
  assert(#h==1 and r[1].hp<100)
- local v=A.view(s,11.4);assert(not v.charge)
+ local v=A.view(s,orbitalReady);assert(not v.charge)
 end)
 test('charge view has no token or precision targets and cannot mutate authority',function()
  local s,c=setup();begin(s,c);local v=A.view(s,10.2)
- assert(v.charge.readyAt==11.4 and not v.charge.token and not v.charge.sweetStart and not v.target)
+ assert(v.charge.readyAt==orbitalReady and not v.charge.token and not v.charge.sweetStart and not v.target)
  v.charge.started=0;assert(s.charge.started==10)
 end)
 test('early forged and replayed confirm cannot accelerate or repeat work',function()
  local s,c,_,h=setup();local token=begin(s,c)
- assert(not A.confirm(s,token,10.9,c) and not A.confirm(s,'spoof',11.4,c));assert(#h==0 and s.charge)
- assert(A.confirm(s,token,11.4,c));A.step(s,11.5,.1,c);assert(#h==1)
- assert(not A.confirm(s,token,12,c) and #h==1)
+ assert(not A.confirm(s,token,10.9,c) and not A.confirm(s,'spoof',orbitalReady,c));assert(#h==0 and s.charge)
+ assert(A.confirm(s,token,orbitalReady,c));A.step(s,orbitalReady+.1,.1,c);assert(#h==1)
+ assert(not A.confirm(s,token,orbitalReady+.5,c) and #h==1)
 end)
 test('lost target canceled eligibility and expired charge do not spend cooldown',function()
  for _,failure in ipairs({'target','blocked','expired'}) do
   local s,c,r,h=setup();local token=begin(s,c)
   if failure=='target' then r[1].hp=0 elseif failure=='blocked' then c.blocked=true end
-  assert(not A.confirm(s,token,failure=='expired' and 12.6 or 11.4,c))
+  assert(not A.confirm(s,token,failure=='expired' and s.charge.expires+.1 or orbitalReady,c))
   assert(not s.charge and not s.cooldowns.Orbital and #h==0)
  end
 end)
 test('four seconds of accepted orbital work melts one biggest rock',function()
- local s,c,r,h=setup();local token=begin(s,c);assert(A.confirm(s,token,11.4,c));assert(#h==0)
- burn(s,c,11.4,2);assert(r[1].hp>45 and r[1].hp<55 and #h==120 and s.burn)
- burn(s,c,13.4,2.1);assert(r[1].hp<1e-6 and not s.burn)
+ local s,c,r,h=setup();local token=begin(s,c);assert(A.confirm(s,token,orbitalReady,c));assert(#h==0)
+ burn(s,c,orbitalReady,2);assert(r[1].hp>45 and r[1].hp<55 and #h==120 and s.burn)
+ burn(s,c,orbitalReady+2,2.1);assert(r[1].hp<1e-6 and not s.burn)
  for _,hit in ipairs(h) do assert(hit.id=='big' and hit.damage<1 and hit.origin.y==34) end
- assert(s.cooldowns.Orbital==56.4 and not A.begin(s,'Orbital',15,c))
+ assert(s.cooldowns.Orbital==orbitalReady+45 and not A.begin(s,'Orbital',15,c))
 end)
 test('player timing no longer grants neighboring hits or bonus bots',function()
- for _,time in ipairs({11.4,11.8,12.2}) do
+ for _,delay in ipairs({0,.4,.8}) do
+  local time=orbitalReady+delay
   local s,c,_,h=setup();local token=begin(s,c);A.confirm(s,token,time,c);burn(s,c,time,4.1)
   for _,hit in ipairs(h) do assert(hit.kind~='OrbitalRelay') end
-  s,c=setup();token=begin(s,c,'Scrap');A.confirm(s,token,time,c);assert(#s.swarm.bots==4)
+  s,c=setup();token=begin(s,c,'Scrap');A.confirm(s,token,s.charge.readyAt+delay,c);assert(#s.swarm.bots==4)
  end
 end)
 test('equipment upgrades alter actual cooldown and bot count',function()
- local s,c=setup();c.perks.orbitalCycle=true;deploy(s,c);assert(s.cooldowns.Orbital==41.4)
+ local s,c=setup();c.perks.orbitalCycle=true;deploy(s,c);assert(s.cooldowns.Orbital==orbitalReady+30)
  s,c=setup();c.perks.scrapBots=2;deploy(s,c,'Scrap');assert(#s.swarm.bots==6)
 end)
 test('saved cooldown hydrating and reconnect cannot refresh a strike',function()
@@ -91,14 +93,14 @@ test('full backpack permits burn while lost eligibility cancels it',function()
  c.blocked=true;A.step(s,start+.2,.1,c);assert(not s.burn)
 end)
 test('first blocked orbital contact refunds cooldown',function()
- local s,c=setup();c.hit=function() return false end;deploy(s,c);assert(not s.burn and s.cooldowns.Orbital<=11.4)
+ local s,c=setup();c.hit=function() return false end;deploy(s,c);assert(not s.burn and s.cooldowns.Orbital<=orbitalReady)
 end)
 test('storage pause preserves charge anticipation and remaining work without catch-up damage',function()
- local s,c,r=setup();begin(s,c);A.pause(s,3);assert(s.charge.readyAt==14.4 and s.charge.started==13)
- A.step(s,14.3,.1,c);assert(s.charge);A.step(s,14.4,.1,c);assert(s.burn)
+ local s,c,r=setup();begin(s,c);A.pause(s,3);assert(s.charge.readyAt==orbitalReady+3 and s.charge.started==13)
+ A.step(s,orbitalReady+2.9,.1,c);assert(s.charge);A.step(s,orbitalReady+3,.1,c);assert(s.burn)
  local hp=r[1].hp;local remaining=s.burn.remaining;A.pause(s,3)
  assert(r[1].hp==hp and s.burn.remaining==remaining)
- A.step(s,17.4,30,c);assert(hp-r[1].hp<=2.51)
+ A.step(s,orbitalReady+6,30,c);assert(hp-r[1].hp<=2.51)
 end)
 test('scrap auto deployment preserves hardware actor and lasts ten seconds',function()
  local s,c=setup();begin(s,c,'Scrap');s.charge.actorId='scrapper:one';A.step(s,11.4,.001,c)

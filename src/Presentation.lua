@@ -204,7 +204,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
-  BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneType])
+  BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneRole or sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
  if visible then
@@ -227,6 +227,9 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
   BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale,sample.warmupDuration)
+ elseif beam.vfx and sample.specialReleaseAt and now-sample.specialReleaseAt<.16 then
+  local origin=beam.origin.WorldPosition
+  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,nil,now-sample.specialReleaseAt,BeamVFX.MiningScale)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end

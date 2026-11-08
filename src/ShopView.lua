@@ -2,7 +2,7 @@ local V={}
 local icons={
  quartz_power='mining',quartz_scanner='combat',quartz_backpack='cargo',quartz_miner_focus='startup',
  ruby_pack_speed='cards',ruby_rotors='flight',ruby_courier_hold='cargo',ruby_breaker_head='hammer',
- cobalt_orbital='laser',cobalt_pack_discount='coin',cobalt_relay='relay',cobalt_scout_memory='seed',
+ cobalt_orbital='laser',cobalt_pack_discount='cargo',cobalt_relay='relay',cobalt_scout_memory='seed',
  violet_scrap='swarm',violet_courier='flight',violet_repair_kit='survival',
  emerald_orbital_cycle='laser',emerald_relay='relay',emerald_swarm_bay='swarm',emerald_pack_speed='cards',
 }
@@ -30,7 +30,9 @@ function V.render(U,parent,options)
   if entry.max>1 then title=title..'  '..owned..'/'..entry.max end
   U.text(cell,UDim2.fromOffset(54,7),UDim2.new(1,-64,0,24),title,16,U.palette.text,true)
   U.text(cell,UDim2.fromOffset(54,33),UDim2.new(1,-64,0,40),entry.description,16,U.palette.text)
-  local action=complete and (entry.unlock and 'Unlocked' or 'Owned') or why or ('Buy · '..cost..' '..key)
+  local balance=Shops.balance(p,key)
+  local action=complete and (entry.unlock and 'Unlocked' or 'Owned') or why or
+   (balance<cost and ('Need '..(cost-balance)..' more '..key) or ('Buy · '..cost..' '..key))
   local buy=U.button(cell,UDim2.fromOffset(10,76),UDim2.new(1,-20,0,44),action,function() options.onBuy(entry,owned) end,color)
   buy.Name='BuyUpgrade';buy.TextSize=16;U.setEnabled(buy,available==true)
  end end

@@ -38,7 +38,7 @@ check('actual command strike breaks largest node through normal reward path once
  -- cascade, which can legitimately extract additional ore from nearby nodes.
  for _,other in ipairs(r.field.resources) do if other~=r then other.paid=true;other.hp=0 end end
  input(pl,'Orbital','begin');local charge=assert(p.ability.charge);assert(charge.targetId==r.id)
- local cargo=Pro.cargoUnits(data(p));advance(1.45)
+ local cargo=Pro.cargoUnits(data(p));advance(charge.readyAt-now+.05)
  assert(not r.paid and p.ability.burn,'one activation automatically starts sustained work')
  advance(2);assert(r.hp>0 and r.hp<r.maxHP*.6,'burn should still be melting halfway through')
  advance(2.1);assert(r.paid,'four seconds of accepted contacts should melt the target')
@@ -98,7 +98,7 @@ check('scrap mining uses real hit path and persistence-busy periods preserve dep
 end)
 check('successful gadget cooldown is saved and rehydrated runtime rejects immediate reuse',function()
  local pl,p=fixture();data(p).run.shopLevels.cobalt_orbital=1;largeNode()
- input(pl,'Orbital','begin');local charge=assert(p.ability.charge);advance(1.45)
+ input(pl,'Orbital','begin');local charge=assert(p.ability.charge);advance(charge.readyAt-now+.05)
  local saved=data(p).run.abilityCooldowns.Orbital;assert(saved and saved>now)
  p.ability=nil;input(pl,'Orbital','begin');assert(not p.ability.charge and p.ability.cooldowns.Orbital==saved)
 end)

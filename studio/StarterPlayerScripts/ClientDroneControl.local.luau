@@ -36,7 +36,7 @@ S.CATALOG={
  item('ruby_rotors','Ruby','Faster drones','+25% flight speed per level','Faster travel and courier trips, with the original eased arrival. Adds to speed cards up to the existing 3× flight cap.',36,2,{speed=.25}),
  item('cobalt_violet','Cobalt','Unlock Violet','Opens the Violet field and shop','Opens Violet this run. Its stronger guards remain a separate fleet challenge.',180,1,nil,'Violet'),
  item('cobalt_orbital','Cobalt','Orbital laser','Strike the biggest ready rock','Unlocks a mining ability. Charge above a cleared field, then automatically melt its biggest ready rock over four seconds. Server cooldown and field limits apply.',60,1,{orbitalLaser=1}),
- item('cobalt_pack_discount','Cobalt','Cheaper packs','15% off packs per level','Reduces future Quartz pack prices by 15 percentage points per level, up to 30%. Already-paid offers keep their exact saved price and three choices.',45,2,{packDiscount=.15}),
+ item('cobalt_pack_discount','Cobalt','Rich extraction','+25% ore yield per level','Every mining drone recovers 25% more ore per level. Stacks with cards up to double yield. Existing levels of the old pack discount carry over.',45,2,{yield=.25,packDiscount=.15}),
  item('cobalt_relay','Cobalt','Split beam','Deal 15% damage to a nearby rock','Splits 15% of a mining tick into one eligible nearby crystal. Stacks with fork cards up to the existing 20% fork cap; no recursive hits.',75,1,{fork=.15}),
  item('violet_emerald','Violet','Unlock Emerald','Opens the Emerald field and shop','Opens the deepest field this run. Its guards and harder crystals require a developed fleet.',240,1,nil,'Emerald'),
  item('violet_scrap','Violet','Scrap-bot swarm','Deploy mining bots for 10s','Unlocks a short-lived mining ability. A miniature swarm works on ready rocks in your cleared field for ten seconds, then disappears. No permanent drones are consumed.',80,1,{scrapSwarm=1}),
@@ -91,11 +91,39 @@ function S.packSpeed(p) return 2^math.min(2,S.effects(p).packSpeed or 0) end
 function S.cost(entry,level) return math.floor(entry.cost*2^(level or 0)) end
 function S.balance(p,key) return (p.run.wallet or {})[key] or 0 end
 function S.unlocked(p,key) return p.run.shops and p.run.shops[key]==true end
+local capped={
+ quartz_power={'mining',3},ruby_rotors={'speed',2},cobalt_pack_discount={'yield',1},
+ cobalt_relay={'fork',.2,miner=true},emerald_relay={'forkRange',6,miner=true},violet_courier={'fullAuto',2,role='Courier'},
+ ruby_breaker_head={'geode',.8,role='Charger'},
+}
+local function roleOf(d)
+ local role=d.role or d.type
+ return ({Blue='Striker',Red='Charger',Green='Medic'})[role] or role
+end
+local function hasRoom(p,fleet,key,limit,role)
+ for _,d in ipairs(fleet) do
+  local actual=roleOf(d)
+  local support=actual=='Dart' or actual=='Courier' or actual=='Medic' or actual=='Orbiter' or actual=='Scrapper'
+  if (not role or actual==role) and not (support and (key=='mining' or key=='yield')) then
+   local effects=S.effects(p,actual);local amount=effects[key] or 0
+   for _,c in ipairs(p.run.cards) do
+    if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Individual' and c.targetDroneId==d.id)
+     or (c.scope=='Color' and c.type==d.type) or (c.scope=='Player' and key=='fullAuto' and actual=='Courier') then
+     amount+=c.effects[key] or 0
+    end
+   end
+   if amount<limit-1e-8 then return true end
+  end
+ end
+ return false
+end
 function S.reason(p,entry,context)
  if not S.unlocked(p,entry.shop) then return 'Unlock '..entry.shop..' first' end
+ local fleet=(context and context.fleet) or p.activeFleet or p.fleet
  if entry.id=='cobalt_orbital' and S.abilityUnlocked(p,'Orbital') then return 'Orbital laser already installed' end
  if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
  if entry.id=='ruby_pack_speed' and S.packSpeed(p)>=2 then return 'Pack reveal already accelerated' end
+ if entry.id=='emerald_pack_speed' and S.packSpeed(p)>=4 then return 'Pack reveal already at full speed' end
  if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Plot targeting already installed' end end end
  if entry.id=='quartz_backpack' then
   local capacity=S.effects(p).capacity or 0
@@ -103,13 +131,23 @@ function S.reason(p,entry,context)
   if capacity>=2 then return 'Backpack already at 120 ore' end
  end
  if entry.role then
-  local aliases={Blue='Striker',Red='Charger',Green='Medic'};local found=false
-  for _,d in ipairs((context and context.fleet) or p.activeFleet or p.fleet) do if (aliases[d.role or d.type] or d.role or d.type)==entry.role then found=true end end
-  if not found then return 'Requires '..entry.role..' hardware' end
+  local found=false
+  for _,d in ipairs(fleet) do if roleOf(d)==entry.role then found=true;break end end
+  local names={Striker='Miner',Charger='Breaker',Dart='Grower',Medic='Healer',Scrapper='Swarm Fabricator'}
+  if not found then return 'Requires a '..(names[entry.role] or entry.role) end
  end
  if entry.id=='violet_courier' then
-  local found=false;for _,d in ipairs(p.fleet) do if d.role=='Courier' then found=true end end
+  local found=false;for _,d in ipairs(fleet) do if roleOf(d)=='Courier' then found=true;break end end
   if not found then return 'Requires a Courier drone' end
+ end
+ local cap=capped[entry.id]
+ if cap then
+  if cap.miner then
+   local found=false;for _,d in ipairs(fleet) do if roleOf(d)=='Striker' then found=true;break end end
+   if not found then return 'Requires a Miner' end
+  end
+  if not hasRoom(p,fleet,cap[1],cap[2],cap.miner and 'Striker' or cap.role)
+   and not (entry.id=='emerald_relay' and hasRoom(p,fleet,'fork',.20,'Striker')) then return 'Already at the upgrade cap' end
  end
  return nil
 end
@@ -4022,10 +4060,13 @@ local function build(e)
   e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
   e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal)}
-  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,8)
+  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,2,e.color,e.material)
+  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf';piece.MaterialVariant=e.view.MaterialVariant end
  elseif e.kind=='Gridcutter' then
-  e.grid={};for i=1,6 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
-  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9)
+  e.grid={};for i=1,4 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
+  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9,e.color,e.material)
+  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock';piece.MaterialVariant=e.view.MaterialVariant end
+  e.release=ring(e,12,Color3.fromRGB(255,120,145),.065)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
   e.ring=ring(e,12,purple,.07);e.fragments=fragments(e,10)
@@ -4102,44 +4143,70 @@ local function bubblePose(e,t,age)
 end
 local function halverPose(e,t,age)
  local charge=smooth(t/(e.impact*.7));local cut=clamp((t-e.impact*.8)/(e.impact*.2))^3;local reset=recovery(age)
- local gap=e.radius*(1.1+.15*charge-.76*cut+.9*reset)
- local top=e.center+Vector3.new(0,e.size.Y*.4,0)
+ local size,frame=e.rockSize,e.rockFrame
+ local gap=size.X*(.56+.13*charge-.58*cut+.76*reset)
+ local top=frame*CFrame.new(0,size.Y*.43,0)
  for i,p in ipairs(e.jaws) do
   local side=i==1 and -1 or 1
-  p.CFrame=CFrame.new(top+Vector3.new(side*gap,.15*charge,0))*e.cf.Rotation*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
-  p.Size=Vector3.new(.09,e.radius*.28,e.radius*1.35);p.Transparency=.15+reset*.85
+  p.CFrame=top*CFrame.new(side*gap,.15*charge,0)*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
+  p.Size=Vector3.new(.12,size.Y*.21,size.Z*1.05);p.Transparency=.15+reset*.85
  end
- energyLine(e,e.cut,top+Vector3.new(0,0,-e.radius*.65),top+Vector3.new(0,0,e.radius*.65),.07,.9-cut*.8+reset*.9,'Lance')
- ballistic(e,age,'slab')
-end
-local function gridPose(e,t,age)
- local r=e.radius*.73;local top=e.center+Vector3.new(0,e.size.Y*.46,0)
- local scan=smooth(t/(e.impact*.83));local out=fade(e,age)
- for i,p in ipairs(e.grid) do
-  local axis=i>3;local coordinate=((i-1)%3-1)*r*.56
-  local a=axis and Vector3.new(-r,0,coordinate) or Vector3.new(coordinate,0,-r)
-  local b=axis and Vector3.new(r,0,coordinate) or Vector3.new(coordinate,0,r)
-  local visible=smooth((scan-(i-1)/7)*7)
-  energyLine(e,p,top+a,top+a:Lerp(b,visible),.055,1-visible*(1-out)*.8,'Gridcutter')
- end
- local x=-r+scan*r*2
- energyLine(e,e.scanner,top+Vector3.new(x,.04,-r),top+Vector3.new(x,.04,r),.10,.18+out*.82,'Gridcutter')
+ energyLine(e,e.cut,top:PointToWorldSpace(Vector3.new(0,0,-size.Z*.51)),top:PointToWorldSpace(Vector3.new(0,0,size.Z*.51)),.075,.97-cut*.9+reset*.9,'Lance')
  hideParts(e.fragments)
  if age then
+  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .36)
+  local travel=e.radius*.7*(1-math.exp(-age*9));local lift=math.max(0,(3+e.radius)*age-13*age^2)
+  for i,p in ipairs(e.fragments) do
+   local side=i==1 and -1 or 1
+   p.Size=safeSize(Vector3.new(size.X*.49,height,size.Z*.985))
+   p.CFrame=frame*CFrame.new(side*(size.X*.25+travel),(size.Y-height)*.5+lift,0)*CFrame.Angles(0,0,side*math.min(age,.44)*.62)
+   p.Transparency=smooth((age/e.tail-.48)/.52)
+  end
+ end
+end
+local function gridPose(e,t,age)
+ local frame,size=e.rockFrame,e.rockSize
+ local top=frame*CFrame.new(0,size.Y*.5+.035,0)
+ local x,z=size.X*.5,size.Z*.5
+ local width=math.clamp(e.radius*.023,.035,.12)
+ local scan=smooth(t/(e.impact*.83));local out=fade(e,age)
+ for i,p in ipairs(e.grid) do
+  local axis=i>2;local sign=i%2==1 and -1 or 1
+  local a=top:PointToWorldSpace(axis and Vector3.new(-x,0,sign*z/3) or Vector3.new(sign*x/3,0,-z))
+  local b=top:PointToWorldSpace(axis and Vector3.new(x,0,sign*z/3) or Vector3.new(sign*x/3,0,z))
+  local visible=smooth((scan-(i-1)/5)*5)
+  energyLine(e,p,a,a:Lerp(b,visible),width,1-visible*(1-out)*.88,'Gridcutter')
+ end
+ local scanX=-x+scan*x*2
+ energyLine(e,e.scanner,top:PointToWorldSpace(Vector3.new(scanX,.045,-z)),top:PointToWorldSpace(Vector3.new(scanX,.045,z)),width*1.6,.18+out*.82,'Gridcutter')
+ hideParts(e.fragments)
+ showRing(e.release,CFrame.new(top.Position),e.radius*(.35+1.3*(1-math.exp(-(age or 0)*13))),age and smooth(age/.42) or 1)
+ if age then
+  -- Tiles begin in the volume the blade just scored. The final pass releases
+  -- the whole remaining rock; other passes peel the upper layer off the cube.
+  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .31)
+  local launch=math.max(0,age-.035)
+  local impulse=math.clamp(e.radius*3.9,4,17)
+  local lift=math.clamp(e.radius*1.9,2.2,8)
   for i,p in ipairs(e.fragments) do
    local x1=(i-1)%3-1;local z1=math.floor((i-1)/3)-1
-   local origin=top+Vector3.new(x1*r*.56,0,z1*r*.56)
-   p.Size=safeSize(Vector3.new(r*.48,r*.18,r*.48)*(1-out*.65))
-   p.CFrame=CFrame.new(origin+Vector3.new(x1*(1-math.exp(-age*12))*.42,age*1.8-age*age*5,z1*(1-math.exp(-age*12))*.42))*e.cf.Rotation*CFrame.Angles(z1*age*.5,0,x1*age*.5);p.Transparency=out
+   local origin=frame:PointToWorldSpace(Vector3.new(x1*size.X/3,(size.Y-height)*.5,z1*size.Z/3))
+   local direction=frame:PointToWorldSpace(Vector3.new(x1,0,z1))-frame.Position
+   if direction.Magnitude>0 then direction=direction.Unit end
+   local travel=impulse*(1-math.exp(-launch*3.4))/3.4
+   local dy=math.max(-(size.Y-height)*.5,launch*(lift+(i%3)*.55)-launch^2*16)
+   p.Size=safeSize(Vector3.new(size.X/3,height,size.Z/3)*.97)
+   p.CFrame=CFrame.new(origin+direction*travel+Vector3.yAxis*dy)*frame.Rotation*CFrame.Angles(z1*launch,0,x1*launch)
+   p.Transparency=smooth((age/e.tail-.5)*2)
   end
  end
 end
 local function singularityPose(e,t,age)
  local r=e.radius;local grow=smooth(t/(e.impact*.75));local close=recovery(age)
  local center=e.center+Vector3.new(0,e.size.Y*.5+r*.55,0)
- local diameter=r*.46*grow*(1-close*.85)
+ local diameter=r*.63*grow*(1-close*.85)
  e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
- showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
+ showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*1.18),.15+math.max(close,fade(e,age))*.85)
  -- Keep the authored gravity well and chips. A pair of tightening hooks and
  -- two sharp cuts give this small well a different vocabulary from heat rays.
  -- This is a resource gravity well, not a laser emitter: no charge lens here.
@@ -4185,7 +4252,7 @@ local function frostbitePose(e,t,age)
  e.shell.CFrame=e.rockFrame;e.shell.Size=safeSize(e.rockSize*(1.006+.022*freeze))
  e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
  local wave=age and (1-math.exp(-age*18)) or 0
- showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and clamp(.2+age/.7) or 1)
+ showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.92+wave*1.03),age and clamp(.2+age/.7) or 1)
  ballistic(e,age,'ice')
 end
 local function resonatorPose(e,t,age)
@@ -4197,7 +4264,7 @@ local function resonatorPose(e,t,age)
   local radius=e.radius*(1.45-.7*phase*phase)
   if age then
    local a=math.max(0,age-(i-1)*.045)
-   radius=e.radius*(.55+.9*(1-math.exp(-a*18))+.15*a)
+   radius=e.radius*(.66+1.24*(1-math.exp(-a*18))+.15*a)
    strength=age<(i-1)*.045 and 0 or (1-clamp(a/.72))^.7
   end
   showRing(value,CFrame.new(center),radius,1-strength*.65)
@@ -4238,6 +4305,7 @@ function FX.new(world,options)
     -- the same budget and is freed when its source streams out or we suspend.
     hideParts(e.parts)
     if e.ring then PlaneBurst.hide(e.ring.plane) end
+    if e.release then PlaneBurst.hide(e.release.plane) end
     for _,ring in ipairs(e.rings or {}) do PlaneBurst.hide(ring.plane) end
     BeamVFX.hide(e.gravityVFX,false)
     if e.beams then for _,rig in pairs(e.beams) do BeamVFX.hide(rig,false) end end
@@ -4551,7 +4619,7 @@ function Effects.step(now)
    -- mark instead accelerates into contact; neither is an expanding ball.
    local u=t.last>=t.first and (1-math.exp(-q*14))*.88+.12*q or q*q*q
    local radius=(t.first+(t.last-t.first)*u)*.5
-   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,(1-q)^.7*.8,.035+.055*(1-q))
+   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,.035+.055*(1-q))
   end
  end
  for rig,t in pairs(beamTimelines) do
@@ -4703,15 +4771,16 @@ end
 
 -- These are one-shot phase cues. The authoritative drone moves through its
 -- windup/dive/recovery; none of these effects is a steady mining beam.
-function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
+function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,diameter: number?)
  local amber=Color3.fromRGB(220,164,81)
+ local scale=math.clamp((diameter or 3)/3,.65,3)
  if phase=='Windup' then
-  Effects.Pulse(target,amber,.2,1.4,.75)
+  Effects.Pulse(target,amber,.2*scale,2.4*scale,.75)
  elseif phase=='Dive' then
-  Effects.Pulse(target,Color3.fromRGB(239,211,154),1.1,.25,.25)
+  Effects.Pulse(target,Color3.fromRGB(239,211,154),2*scale,.25*scale,.25)
  elseif phase=='Impact' then
   local cue=part();if cue then cue.Name='ConfirmedMiningImpact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','Breaker');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35,3.2,.18)
+  Effects.Pulse(target,Color3.fromRGB(244,207,142),.35*scale,4.6*scale,.26)
   local shock=not BeamVFX.reduced() and part() or nil
   if shock then
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
@@ -4725,7 +4794,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
    dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
    dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
-   Effects.Pulse(target,amber,.6,5.2,.65)
+   Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
   -- The actual fracture creates authored crystal fragments in Presentation.
@@ -4734,8 +4803,8 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string)
   -- This is physical touchdown, distinct from the later damaging fracture.
   -- A single server receipt drives both the local thud and camera impulse.
   local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
-  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3,1.8,.12)
-  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2,.7,.9)
+  Effects.Pulse(target,Color3.fromRGB(244,211,155),.3*scale,2.5*scale,.17)
+  Effects.Pulse(target,Color3.fromRGB(255,206,107),.2*scale,1.1*scale,.9)
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
  end
@@ -4814,22 +4883,30 @@ local function watchBurn(owner: any,group: Folder)
 end
 local function targetSight(owner: any,target: any,duration: number?)
  local group=Instance.new('Folder');group.Name='OrbitalTargetSight';group.Parent=folder();markers[owner]=group
- local value=part();if not value then group:Destroy();return end
- local radius=math.clamp((target.radius or 1)+.7,1.4,8)
- value.Name='ThinRedTargetCylinder';value.Shape=Enum.PartType.Cylinder
- value:SetAttribute('AudioLoop','orbital_charge');value:SetAttribute('AudioAt',clock());value:SetAttribute('AudioUntil',clock()+2.6)
- value.Color=Color3.fromRGB(242,38,44);value.Transparency=.88
- value.Size=Vector3.new(.035,radius*2,radius*2)
- value.CFrame=CFrame.new(target.x,(target.ground or target.y)+.045,target.z)*CFrame.Angles(0,0,math.pi/2)
+ local value=part();local cue=part()
+ if not value or not cue then if value then value:Destroy() end;if cue then cue:Destroy() end;group:Destroy();return end
+ local seconds=duration or 2.4
+ local radius=math.clamp((target.radius or 1)*1.5,1.65,12)
+ local floor=Vector3.new(target.x,(target.ground or target.y)+.065,target.z)
+ local red=Color3.fromRGB(255,40,48)
+ value.Name='ThinRedSight';value.Shape=Enum.PartType.Cylinder;value.Color=red;value.Transparency=.28
+ value.Size=Vector3.new(ORBITAL_HEIGHT,.052,.052)
+ value.CFrame=CFrame.new(floor+Vector3.yAxis*(ORBITAL_HEIGHT*.5))*CFrame.Angles(0,0,math.pi/2)
  value.Parent=group
+ cue.Name='OrbitalFootprint';cue.Transparency=1;cue.Size=Vector3.one*.025;cue.Position=floor;cue.Parent=group
+ cue:SetAttribute('AudioLoop','orbital_charge');cue:SetAttribute('AudioAt',clock());cue:SetAttribute('AudioUntil',clock()+seconds)
+ if not BeamVFX.reduced() and pulseCount<24 then
+  pulseCount+=1
+  pulseTimelines[cue]={at=clock(),duration=seconds,first=radius*2.85,last=radius*2,plane=PlaneBurst.create(cue,red),sight=true}
+ end
  local rig=BeamVFX.new(group,'Orbital',Color3.fromRGB(172,113,255))
  if rig then
   local camera=workspace.CurrentCamera
   local height=math.max(260,(camera and camera.CFrame.Position.Y or target.y)-target.y+180)
-  chargeTimelines[group]={rig=rig,at=clock(),duration=duration or 1.4,position=location(target)+Vector3.yAxis*height}
+  chargeTimelines[group]={rig=rig,at=clock(),duration=seconds,position=floor+Vector3.yAxis*height}
  end
- animate(value,1.35,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.74})
- Debris:AddItem(group,2.6)
+ animate(value,seconds,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.06})
+ Debris:AddItem(group,seconds+1.15)
 end
 local function sustainedStrike(owner: any,event: any)
  local group=burns[owner]
@@ -4838,11 +4915,19 @@ local function sustainedStrike(owner: any,event: any)
   group=Instance.new('Folder');group.Name='OrbitalMelt';burns[owner]=group
   group:SetAttribute('OrbitalBurn',true)
   group:SetAttribute('StartedAt',event.startedAt or clock())
-  for index,width in ipairs({.68,.12}) do
+  local radius=math.clamp(event.target.radius or 1,1,8)
+  local floor=Vector3.new(event.target.x,(event.target.ground or event.target.y)+.045,event.target.z)
+  local age=workspace:GetServerTimeNow()-(event.startedAt or clock())
+  if age<.32 then
+   Effects.Pulse(floor,Color3.fromRGB(202,168,255),radius*1.25,radius*4.8,.88)
+   Effects.Pulse(location(event.target),ORBITAL_COLOR,radius*.45,radius*2.7,.52)
+  end
+  local scale=math.clamp(.75+radius*.2,1,1.85)
+  for index,width in ipairs({.78*scale,.18*scale}) do
    local value=part();if not value then break end
    value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
    value.Color=index==1 and Color3.fromRGB(155,94,245) or ORBITAL_COLOR
-   value.Transparency=index==1 and .94 or .82;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
+   value.Transparency=index==1 and .88 or .17;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
    value:SetAttribute('BurnTransparency',value.Transparency)
    if index==2 then
     local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
@@ -4857,7 +4942,7 @@ local function sustainedStrike(owner: any,event: any)
   local contact=part()
   if contact then
    contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
-   contact.Transparency=.78;contact.Size=Vector3.one*.55;contact.Parent=group;contact:SetAttribute('BurnTransparency',.78)
+   contact.Transparency=.56;contact.Size=Vector3.one*(.55*scale);contact.Parent=group;contact:SetAttribute('BurnTransparency',.56)
    local tip=Instance.new('Attachment');tip.Parent=contact
    local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=SPARK;sparks.Squash=NumberSequence.new(.65);sparks.Rotation=NumberRange.new(-180,180)
    sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
@@ -4870,6 +4955,7 @@ local function sustainedStrike(owner: any,event: any)
   group.Parent=folder();watchBurn(owner,group)
  end
  local position=location(event.target)
+ local ground=Vector3.new(position.X,(event.target.ground or position.Y)+.045,position.Z)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',clock())
  local fresh=workspace:GetServerTimeNow()-clock()<=.3
  local suspended=not fresh
@@ -4878,7 +4964,7 @@ local function sustainedStrike(owner: any,event: any)
   for _,v in ipairs(group:GetDescendants()) do if v:IsA('ParticleEmitter') then v.Enabled=fresh end end
  end
  for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(ground+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   value.CFrame=pose
   value.Transparency=not fresh and 1 or (value:GetAttribute('BurnTransparency') or value.Transparency)
  end end
@@ -4961,7 +5047,8 @@ function View.new()
      if not ended or r.started then
       if not r.ended then
        RoleVisuals.setTime(at)
-       RoleVisuals.Ability(owner,{kind='orbital',startedAt=node:GetAttribute('StartedAt') or at,target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z}})
+       RoleVisuals.Ability(owner,{kind='orbital',startedAt=node:GetAttribute('StartedAt') or at,target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z,
+        ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
        r.started=true
        if ended then RoleVisuals.setTime(ended);RoleVisuals.Ability(owner,{kind='orbitalEnd'});r.ended=true end
       end
@@ -4992,7 +5079,7 @@ function View.new()
       elseif kind=='Heal' then RoleVisuals.Heal(from,position)
       elseif kind=='Charge' then RoleVisuals.Charge(from,position,node:GetAttribute('Impact'))
       elseif kind=='Grow' then RoleVisuals.Grow(from,position,node:GetAttribute('Planted'))
-      elseif kind=='Breaker' then RoleVisuals.BreakerPhase(from,position,node:GetAttribute('Phase'))
+      elseif kind=='Breaker' then RoleVisuals.BreakerPhase(from,position,node:GetAttribute('Phase'),node:GetAttribute('Diameter'))
       elseif kind=='AbilityCharge' or kind=='AbilityPulse' then
        RoleVisuals.Ability(owner,{kind=kind=='AbilityCharge' and 'charge' or node:GetAttribute('Ability'),ability=node:GetAttribute('Ability'),duration=node:GetAttribute('Duration') or 1.4,target={x=position.X,y=position.Y,z=position.Z,ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
       end
@@ -5218,7 +5305,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
-  BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneType])
+  BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneRole or sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
  if visible then
@@ -5241,6 +5328,9 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
   BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale,sample.warmupDuration)
+ elseif beam.vfx and sample.specialReleaseAt and now-sample.specialReleaseAt<.16 then
+  local origin=beam.origin.WorldPosition
+  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,nil,now-sample.specialReleaseAt,BeamVFX.MiningScale)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
@@ -6102,7 +6192,7 @@ function Showcase.new(world,parent,config)
    local from=s.beam.origin.WorldPosition;local tip=Vector3.new(from.X,s.rock.Position.Y+s.rock.Size.Y*.5,from.Z)
    s.beam.marker.Position=tip
    if t<charge then BeamVFX.draw(s.rig,from,from-Vector3.yAxis,now,0,t/charge,nil,BeamVFX.MiningScale,charge)
-   elseif active and not special then BeamVFX.draw(s.rig,from,tip,now,1,nil,t-charge,BeamVFX.MiningScale)
+   elseif active and (not special or t-charge<.16) then BeamVFX.draw(s.rig,from,tip,now,special and 0 or 1,nil,t-charge,BeamVFX.MiningScale)
    else BeamVFX.hide(s.rig,false) end
    self.presentation.work:mining(s.beam,{alive=true,isMining=not special,active=active and not special,charging=t<charge,
     paused=false,warmupStart=start,warmupDuration=charge,key=s.index,life=1,style='Cutter',since=start+charge},tip,Vector3.yAxis,active and not special and 1 or 0,0,now)
@@ -7183,7 +7273,7 @@ local V={}
 local icons={
  quartz_power='mining',quartz_scanner='combat',quartz_backpack='cargo',quartz_miner_focus='startup',
  ruby_pack_speed='cards',ruby_rotors='flight',ruby_courier_hold='cargo',ruby_breaker_head='hammer',
- cobalt_orbital='laser',cobalt_pack_discount='coin',cobalt_relay='relay',cobalt_scout_memory='seed',
+ cobalt_orbital='laser',cobalt_pack_discount='cargo',cobalt_relay='relay',cobalt_scout_memory='seed',
  violet_scrap='swarm',violet_courier='flight',violet_repair_kit='survival',
  emerald_orbital_cycle='laser',emerald_relay='relay',emerald_swarm_bay='swarm',emerald_pack_speed='cards',
 }
@@ -7211,7 +7301,9 @@ function V.render(U,parent,options)
   if entry.max>1 then title=title..'  '..owned..'/'..entry.max end
   U.text(cell,UDim2.fromOffset(54,7),UDim2.new(1,-64,0,24),title,16,U.palette.text,true)
   U.text(cell,UDim2.fromOffset(54,33),UDim2.new(1,-64,0,40),entry.description,16,U.palette.text)
-  local action=complete and (entry.unlock and 'Unlocked' or 'Owned') or why or ('Buy · '..cost..' '..key)
+  local balance=Shops.balance(p,key)
+  local action=complete and (entry.unlock and 'Unlocked' or 'Owned') or why or
+   (balance<cost and ('Need '..(cost-balance)..' more '..key) or ('Buy · '..cost..' '..key))
   local buy=U.button(cell,UDim2.fromOffset(10,76),UDim2.new(1,-20,0,44),action,function() options.onBuy(entry,owned) end,color)
   buy.Name='BuyUpgrade';buy.TextSize=16;U.setEnabled(buy,available==true)
  end end
@@ -7244,22 +7336,31 @@ function View.start(options)
   if type(raw)=='string' then local ok,value=pcall(function() return Http:JSONDecode(raw) end);if ok and type(value)=='table' then state=value end end
  end
  decode();connect(player:GetAttributeChangedSignal('MA_Ability'),decode)
- local function nearestField()
+ local function nearestField(profile)
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
   local world=workspace:FindFirstChild('MiningAway');local fields=world and world:FindFirstChild('Fields')
   local best,id=math.huge,nil
-  if hr and fields then for _,field in ipairs(fields:GetChildren()) do
-   local floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor') or field:FindFirstChildWhichIsA('BasePart')
-   if floor then local d=(floor.Position-hr.Position).Magnitude;if d<best then best=d;id=field:GetAttribute('FieldId') or field:GetAttribute('Tier') end end
+  if hr and fields and profile and not player:GetAttribute('MA_InAssault') then for _,field in ipairs(fields:GetChildren()) do
+   local phase=field:GetAttribute('Phase')
+   local unlocked=field:GetAttribute('AlwaysUnlocked') or Shops.unlocked(profile,field.Name)
+   local cleared=phase=='Safe' or phase=='Cleared' or field.Name=='Quartz' or field.Name=='Ruby'
+    or (profile.clearedFields and profile.clearedFields[field.Name])
+   local floor=unlocked and cleared and (field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor') or field:FindFirstChildWhichIsA('BasePart'))
+   if floor then
+    local point=floor.CFrame:PointToObjectSpace(hr.Position)
+    if math.abs(point.X)<=floor.Size.X*.5+18 and math.abs(point.Z)<=floor.Size.Z*.5+18 and math.abs(point.Y)<=45 then
+     local d=point.Magnitude;if d<best then best=d;id=field:GetAttribute('FieldId') or field:GetAttribute('Tier') end
+    end
+   end
   end end
-  return best<=70 and id or nil
+  return id
  end
  local function activate(kind)
   if options.hidden() or os.clock()-lastSend<.15 then return end
   local profile=options.profile();if not enabled(profile,kind) or profile.pendingTransaction then return end
   local charge=state.runId==profile.run.id and state.charge or nil
   if charge then return end
-  local fieldId=nearestField();if not fieldId then return end
+  local fieldId=nearestField(profile);if not fieldId then return end
   lastSend=os.clock()
   options.command:FireServer('MiningAbility',{op='begin',kind=kind,fieldId=fieldId,runId=profile.run.id})
  end
@@ -7338,7 +7439,7 @@ function View.start(options)
    button.Text=busy and 'Saving…' or charging and (kind..'…') or remaining>0 and (kind..' '..remaining..'s') or (kind..(UIS.TouchEnabled and '' or ' ['..key..']'))
   end
   paint(orbital,'Orbital',hasOrbital,'G');paint(scrap,'Scrap',hasScrap,'B')
-  if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end
+  if now>=scanAt then scanAt=now+.2;nearby=(hasOrbital or hasScrap) and nearestField(profile)~=nil;scan() end
   for source,record in pairs(bots) do
    if not source.Parent or not source.Parent.Parent or now>=(source.Parent:GetAttribute('Expires') or 0) then remove(source,record)
    else
@@ -7607,26 +7708,56 @@ function V:impact(source)
   local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
  end
- local slab=source:GetAttribute('Slab')
- if slab and #self.chips<72 then
-  local p=Instance.new('Part');p.Name='SlicedRockSlab';p.Size=slab;p.Color=color;p.Material=Enum.Material.Rock
-  p.CanTouch=false;p.CanQuery=false;p.Position=position+Vector3.new(0,.28,0);p.Parent=self.ctx.localFX
-  p.AssemblyLinearVelocity=Vector3.new(13,12,-5);p.AssemblyAngularVelocity=Vector3.new(2,1,3)
-  self.chips[#self.chips+1]={part=p,at=now,expires=now+1.6}
+ local slab=source:GetAttribute('Slab');local size=source:GetAttribute('RockSize')
+ local rockFrame=source:GetAttribute('RockFrame')
+ local variant=source:GetAttribute('RockVariant') or ''
+ local material=Enum.Material[source:GetAttribute('RockMaterial') or 'Rock'] or Enum.Material.Rock
+ local radius=size and math.clamp(math.max(size.X,size.Z)*.5,.8,8) or 1
+ local reduced=BeamVFX.reduced()
+ if slab and rockFrame and #self.chips<=66 then
+  local frame=CFrame.new(position)*rockFrame.Rotation
+  local scale=math.clamp(radius,1,6)
+  local floor=rockFrame.Position.Y-size.Y*.5
+  -- One sweep across the selected cut plane. The detached volume is still
+  -- together until the pressure at its center throws the six pieces outward.
+  if not reduced then
+   local left=(frame*CFrame.new(-slab.X*.62,-slab.Y*.5,.02)).Position
+   local right=(frame*CFrame.new(slab.X*.62,-slab.Y*.5,.02)).Position
+   RoleVisuals.Beam(left,right,Color3.fromRGB(178,232,255),.14*scale,.16,'Lance')
+   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.46)
+  end
+  for i=1,6 do
+   local x=(i-1)%3-1;local z=i<=3 and -.25 or .25
+   local pose=frame*CFrame.new(x*slab.X/3,0,z*slab.Z)
+   local dir=(frame.RightVector*x-frame.LookVector*z*3).Unit
+   local p=Instance.new('Part');p.Name='SlicedOreBlock';p.Size=Vector3.new(slab.X/3,slab.Y,slab.Z*.5)*.976
+   p.Color=color;p.Material=material;p.MaterialVariant=variant;p.CFrame=pose;p.Anchored=true;p.CastShadow=false
+   p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=self.ctx.localFX
+   self.chips[#self.chips+1]={part=p,at=at,expires=at+1.15,pose=pose,velocity=dir*(4+scale*1.4),
+    rise=4+scale*.75,floor=floor+p.Size.Y*.5,spin=Vector3.new(z*2,0,x*.8)}
+  end
  end
+ if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47)
+ elseif kind=='BowlingBall' or kind=='Sledgehammer' then RoleVisuals.Pulse(position,Color3.fromRGB(238,203,154),radius*.8,radius*3.2,.37)
+ elseif kind=='MoltenTongs' then RoleVisuals.Pulse(position,color,radius*.6,radius*2.25,.58) end
  local count=kind=='JellyGrenade' and 18 or kind=='BowlingBall' and 12 or kind=='Shatter' and 10 or 5
+ if reduced then count=math.min(count,3) end
  for i=1,count do
   if #self.chips>=72 then break end
-  local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble';p.Size=Vector3.one*(.16+(i%4)*.09)
-  p.Color=color;p.Material=kind=='MoltenTongs' and Enum.Material.Neon or kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
-  p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false;p.CFrame=CFrame.new(position+Vector3.new(math.cos(angle)*.6,.4,math.sin(angle)*.6));p.Parent=self.ctx.localFX
-  p.AssemblyLinearVelocity=Vector3.new(math.cos(angle)*(8+i%7),13+i%9,math.sin(angle)*(8+i%7));p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
+  local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble'
+  local scale=math.clamp(radius*.52,.65,2.5)
+  local gel=kind=='JellyGrenade' and i%3==0
+  local ember=kind=='MoltenTongs'
+  p.Size=Vector3.new(.18+(i%4)*.10,.12+(i%3)*.07,.19+(i%5)*.053)*scale
+  p.Color=color;p.Material=ember and Enum.Material.Neon or gel and Enum.Material.Glass or kind=='Shatter' and Enum.Material.Metal or material
+  if gel or ember then p.Shape=Enum.PartType.Ball else p.MaterialVariant=variant end
+  local outward=Vector3.new(math.cos(angle),0,math.sin(angle))
+  local normal=source:GetAttribute('Normal') or Vector3.yAxis
+  p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false
+  p.CFrame=CFrame.new(position+normal*.22+outward*.32*scale);p.Parent=self.ctx.localFX
+  p.AssemblyLinearVelocity=outward*((5+i%7)*scale)+Vector3.yAxis*(7+i%9)+normal*(kind=='Crowbar' and 9 or 3)
+  p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
   self.chips[#self.chips+1]={part=p,at=now,expires=now+1.5}
- end
- if kind=='JellyGrenade' and #self.chips<72 then
-  local flash=Instance.new('Part');flash.Name='JellyBurst';flash.Shape=Enum.PartType.Ball;flash.Color=color;flash.Material=Enum.Material.Neon
-  flash.Anchored=true;flash.CanCollide=false;flash.CanTouch=false;flash.CanQuery=false;flash.Position=position;flash.Size=Vector3.one*.1;flash.Parent=self.ctx.localFX
-  self.chips[#self.chips+1]={part=flash,at=now,expires=now+.3,flash=true}
  end
 end
 function V:layout(item,active)
@@ -7639,7 +7770,7 @@ function V:layout(item,active)
  for i,slot in ipairs(self.slots) do
   local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset(((i-1)%columns)*(cell+6),math.floor((i-1)/columns)*(height+6))
   slot.icon.Size=UDim2.new(1,-8,0,height-35);slot.name.Position=UDim2.fromOffset(3,height-33)
-  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
+  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Deployed' and 'Deployed' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
   slot.fill.Size=UDim2.fromScale(entry and entry.hp/entry.maxHP or 0,1)
   slot.fill.BackgroundColor3=entry and entry.hp/entry.maxHP<=.25 and Color3.fromRGB(246,117,83) or Color3.fromRGB(156,231,102)
   slot.button.BackgroundColor3=self.state.selected==i and Color3.fromRGB(74,97,148) or Color3.fromRGB(45,49,63)
@@ -7687,7 +7818,14 @@ function V:step(dt,now)
   if now>=c.expires then c.part:Destroy();table.remove(self.chips,i)
   else
    local q=(now-c.at)/(c.expires-c.at)
-   if c.flash then c.part.Size=Vector3.one*(.1+q*17);c.part.Transparency=q else c.part.Transparency=math.clamp((q-.65)/.35,0,1) end
+   if c.pose then
+    local t=math.max(0,now-c.at-.075)
+    local center=c.pose.Position+c.velocity*((1-math.exp(-3*t))/3)
+    local height=math.max(c.floor,center.Y+c.rise*t-19*t*t)
+    local rotation=math.min(t,.38)
+    c.part.CFrame=CFrame.new(center.X,height,center.Z)*c.pose.Rotation*CFrame.Angles(c.spin.X*rotation,0,c.spin.Z*rotation)
+   end
+   c.part.Transparency=math.clamp((q-.65)/.35,0,1)
   end
  end
 end
@@ -9372,7 +9510,7 @@ local function renderDrone(d,dt,now)
  local kind=state=='Attack' and 'turret' or 'resource'
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
- elseif not active and not charging and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
+ elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id)
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
@@ -9380,6 +9518,11 @@ local function renderDrone(d,dt,now)
  local extra,extraSource
  if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
  local beamSince=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now)
+ local specialReleaseAt
+ if state=='SpecialMine' and source and source:GetAttribute('EffectDrone')==s:GetAttribute('DroneId') then
+  local started=source:GetAttribute('EffectStartedAt')
+  if started and started>=now-.16 and started<=now then specialReleaseAt=started end
+ end
  local breakAt,breakUntil
  -- A final hit retires the gameplay reservation immediately. Its short saved
  -- contact may finish the local fracture sequence while the drone moves on.
@@ -9399,7 +9542,7 @@ local function renderDrone(d,dt,now)
  end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
-  isMining=kind=='resource',charging=charging,
+  isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),

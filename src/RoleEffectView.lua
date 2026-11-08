@@ -30,7 +30,8 @@ function View.new()
      if not ended or r.started then
       if not r.ended then
        RoleVisuals.setTime(at)
-       RoleVisuals.Ability(owner,{kind='orbital',startedAt=node:GetAttribute('StartedAt') or at,target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z}})
+       RoleVisuals.Ability(owner,{kind='orbital',startedAt=node:GetAttribute('StartedAt') or at,target={x=pose.Position.X,y=pose.Position.Y,z=pose.Position.Z,
+        ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
        r.started=true
        if ended then RoleVisuals.setTime(ended);RoleVisuals.Ability(owner,{kind='orbitalEnd'});r.ended=true end
       end
@@ -61,7 +62,7 @@ function View.new()
       elseif kind=='Heal' then RoleVisuals.Heal(from,position)
       elseif kind=='Charge' then RoleVisuals.Charge(from,position,node:GetAttribute('Impact'))
       elseif kind=='Grow' then RoleVisuals.Grow(from,position,node:GetAttribute('Planted'))
-      elseif kind=='Breaker' then RoleVisuals.BreakerPhase(from,position,node:GetAttribute('Phase'))
+      elseif kind=='Breaker' then RoleVisuals.BreakerPhase(from,position,node:GetAttribute('Phase'),node:GetAttribute('Diameter'))
       elseif kind=='AbilityCharge' or kind=='AbilityPulse' then
        RoleVisuals.Ability(owner,{kind=kind=='AbilityCharge' and 'charge' or node:GetAttribute('Ability'),ability=node:GetAttribute('Ability'),duration=node:GetAttribute('Duration') or 1.4,target={x=position.X,y=position.Y,z=position.Z,ground=node:GetAttribute('Ground'),radius=node:GetAttribute('Radius')}})
       end

@@ -22,22 +22,31 @@ function View.start(options)
   if type(raw)=='string' then local ok,value=pcall(function() return Http:JSONDecode(raw) end);if ok and type(value)=='table' then state=value end end
  end
  decode();connect(player:GetAttributeChangedSignal('MA_Ability'),decode)
- local function nearestField()
+ local function nearestField(profile)
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
   local world=workspace:FindFirstChild('MiningAway');local fields=world and world:FindFirstChild('Fields')
   local best,id=math.huge,nil
-  if hr and fields then for _,field in ipairs(fields:GetChildren()) do
-   local floor=field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor') or field:FindFirstChildWhichIsA('BasePart')
-   if floor then local d=(floor.Position-hr.Position).Magnitude;if d<best then best=d;id=field:GetAttribute('FieldId') or field:GetAttribute('Tier') end end
+  if hr and fields and profile and not player:GetAttribute('MA_InAssault') then for _,field in ipairs(fields:GetChildren()) do
+   local phase=field:GetAttribute('Phase')
+   local unlocked=field:GetAttribute('AlwaysUnlocked') or Shops.unlocked(profile,field.Name)
+   local cleared=phase=='Safe' or phase=='Cleared' or field.Name=='Quartz' or field.Name=='Ruby'
+    or (profile.clearedFields and profile.clearedFields[field.Name])
+   local floor=unlocked and cleared and (field:FindFirstChild('Field') or field:FindFirstChild('FieldFloor') or field:FindFirstChildWhichIsA('BasePart'))
+   if floor then
+    local point=floor.CFrame:PointToObjectSpace(hr.Position)
+    if math.abs(point.X)<=floor.Size.X*.5+18 and math.abs(point.Z)<=floor.Size.Z*.5+18 and math.abs(point.Y)<=45 then
+     local d=point.Magnitude;if d<best then best=d;id=field:GetAttribute('FieldId') or field:GetAttribute('Tier') end
+    end
+   end
   end end
-  return best<=70 and id or nil
+  return id
  end
  local function activate(kind)
   if options.hidden() or os.clock()-lastSend<.15 then return end
   local profile=options.profile();if not enabled(profile,kind) or profile.pendingTransaction then return end
   local charge=state.runId==profile.run.id and state.charge or nil
   if charge then return end
-  local fieldId=nearestField();if not fieldId then return end
+  local fieldId=nearestField(profile);if not fieldId then return end
   lastSend=os.clock()
   options.command:FireServer('MiningAbility',{op='begin',kind=kind,fieldId=fieldId,runId=profile.run.id})
  end
@@ -116,7 +125,7 @@ function View.start(options)
    button.Text=busy and 'Saving…' or charging and (kind..'…') or remaining>0 and (kind..' '..remaining..'s') or (kind..(UIS.TouchEnabled and '' or ' ['..key..']'))
   end
   paint(orbital,'Orbital',hasOrbital,'G');paint(scrap,'Scrap',hasScrap,'B')
-  if now>=scanAt then scanAt=now+.2;nearby=nearestField()~=nil;scan() end
+  if now>=scanAt then scanAt=now+.2;nearby=(hasOrbital or hasScrap) and nearestField(profile)~=nil;scan() end
   for source,record in pairs(bots) do
    if not source.Parent or not source.Parent.Parent or now>=(source.Parent:GetAttribute('Expires') or 0) then remove(source,record)
    else

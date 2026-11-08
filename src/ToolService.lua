@@ -62,11 +62,25 @@ function S:remove(item)
   s.version+=1;self:publish(p)
  end
 end
-function S:marker(position,kind,color,normal,slab)
+function S:marker(position,kind,color,normal,slab,rock)
  local m=Instance.new('Part');m.Name=kind;m.Size=Vector3.one*.1;m.Transparency=1;m.Anchored=true
  m.CanCollide=false;m.CanQuery=false;m.CanTouch=false;m.Position=position
  m:SetAttribute('Kind',kind);m:SetAttribute('Color',color);m:SetAttribute('Normal',normal or Vector3.new(0,1,0))
- m:SetAttribute('Slab',slab);m:SetAttribute('StartedAt',self.ctx.now());m.Parent=self.effects;self.ctx.debris:AddItem(m,2.2)
+ m:SetAttribute('Slab',slab)
+ if rock then
+  m:SetAttribute('RockFrame',rock.frame);m:SetAttribute('RockSize',rock.size)
+  m:SetAttribute('RockMaterial',rock.material.Name);m:SetAttribute('RockVariant',rock.variant)
+ end
+ m:SetAttribute('StartedAt',self.ctx.now());m.Parent=self.effects;self.ctx.debris:AddItem(m,2.2)
+end
+function S:finishGadget(p,item,used)
+ if self.items[item.id]~=item or item.state~='Deployed' then return end
+ if used then self:remove(item);return end
+ local s=p.fieldTools
+ if s and s.runId==item.runId then
+  item.state='Held';s.version+=1;self:publish(p)
+  self.ctx.notice(p,'No mining contact · tool returned')
+ end
 end
 function S:worldPart(item,position)
  local def=ToolRules.ITEMS[item.kind];local p=Instance.new('Part');p.Name=item.kind
@@ -139,7 +153,9 @@ function S:command(p,action,payload)
  local target,offset=self:target(p,hr,def,payload.resourceId,payload.point)
  if def.gadget then
   if not target then self.ctx.notice(p,'Click a nearby rock to deploy');return end
-  if self.ctx.gadget(p,item,target,target.part.CFrame:PointToWorldSpace(offset*target.part.Size)) and not item.saved then self:remove(item) end
+  if self.ctx.gadget(p,item,target,target.part.CFrame:PointToWorldSpace(offset*target.part.Size)) and not item.saved then
+   item.state='Deployed';s.version+=1;self:publish(p)
+  end
   return
  end
  if not target then self.ctx.notice(p,'Click a spot on a nearby rock');return end
@@ -161,12 +177,15 @@ function S:release(p,s,attack)
  if (aim-hr.Position).Magnitude>def.range+1 or not ctx.clear(hr.Position,aim,p.player.Character,target.part) then self:publish(p);return end
  if def.melee then
   local part=target.part;local center=part.Position;local originalHeight=part.Size.Y
+  local rock={frame=part.CFrame,size=part.Size,material=part.Material,variant=part.MaterialVariant}
   local cut=math.clamp(.5+attack.offset.Y,.35,.65);local slab=item.kind=='Greatsword' and not target.slice and part.Size*Vector3.new(1,1-cut,1) or nil
   local fraction=item.kind=='Greatsword' and .5 or item.kind=='Sledgehammer' and .32 or .16
   local cap=item.kind=='Greatsword' and 720 or item.kind=='Sledgehammer' and 320 or 70
   if not ctx.hit(p,target,math.min((target.maxHP-10)*fraction,cap),hr.Position,item.kind,aim) then self:publish(p);return end
   item.hp-=1
-  self:marker(slab and (center+Vector3.new(0,(originalHeight-slab.Y)*.5,0)) or aim,item.kind,target.field.color,nil,slab)
+  if item.kind=='Greatsword' and target.paid then slab=rock.size end
+  self:marker(slab and (rock.frame:PointToWorldSpace(Vector3.new(0,(originalHeight-slab.Y)*.5,0))) or aim,
+   item.kind,part.Color,nil,slab,rock)
   if item.kind=='Sledgehammer' then
    ctx.hazards:blast(center+Vector3.new(0,1,0),7,12,'heavy')
    local n=0
@@ -202,15 +221,16 @@ function S:impact(p,item,point,normal,resource)
  if item.kind=='MoltenTongs' then
   item.state='Molten';item.stuck=resource;item.fuseAt=self.ctx.now()+1.75;item.nextMelt=self.ctx.now()
   item.part:SetAttribute('State','Molten');item.part:SetAttribute('FuseAt',item.fuseAt)
-  self:marker(point,'MoltenTongs',item.part.Color,normal)
+  self:marker(point,'MoltenTongs',item.part.Color,normal,nil,resource and {frame=resource.part.CFrame,size=resource.part.Size,material=resource.part.Material,variant=resource.part.MaterialVariant})
  elseif item.kind=='JellyGrenade' then
   self:marker(point,'JellyStick',item.part.Color,normal)
   item.state='Stuck';item.fuseAt=self.ctx.now()+def.fuse
   if resource then item.stuck=resource;item.offset=resource.part.CFrame:PointToObjectSpace(item.pos);item.baseSize=resource.part.Size end
   item.part:SetAttribute('State','Stuck');item.part:SetAttribute('FuseAt',item.fuseAt)
  else
+  local rock=resource and {frame=resource.part.CFrame,size=resource.part.Size,material=resource.part.Material,variant=resource.part.MaterialVariant}
   if resource then self.ctx.hit(p,resource,math.min((resource.maxHP-10)*.42,210),item.pos,'BowlingBall',point) end
-  self:marker(point,'BowlingBall',item.part.Color,normal)
+  self:marker(point,'BowlingBall',resource and resource.part.Color or item.part.Color,normal,nil,rock)
   self.ctx.hazards:blast(item.pos,5,18,'heavy')
   if item.hp<=0 then self:marker(item.pos,'Shatter',item.part.Color);self:remove(item);return end
   item.state='Recover';item.collectAt=self.ctx.now()+.65;item.expires=self.ctx.now()+ToolRules.WORLD_LIFETIME
@@ -259,7 +279,7 @@ function S:step(dt)
    end
    if now>=item.fuseAt then
     local origin=item.pos
-    self:marker(origin,'JellyGrenade',item.part.Color)
+    self:marker(origin,'JellyGrenade',item.part.Color,nil,nil,r and r.part.Parent and {frame=r.part.CFrame,size=r.part.Size,material=r.part.Material,variant=r.part.MaterialVariant})
     self.ctx.hazards:blast(origin,12,34,'explosion')
     for _,r2 in pairs(self.ctx.resources) do
      if not r2.paid and (r2.part.Position-origin).Magnitude<=12 then

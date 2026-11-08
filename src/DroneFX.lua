@@ -69,10 +69,13 @@ local function build(e)
   e.fragments=fragments(e,8,e.color,e.material)
  elseif e.kind=='Halver' then
   e.jaws={part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal),part(e,'CuttingJaw',Vector3.one,purple,Enum.Material.Metal)}
-  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,8)
+  e.cut=part(e,'ShearEdge',Vector3.one,cyan);e.fragments=fragments(e,2,e.color,e.material)
+  for _,piece in ipairs(e.fragments) do piece.Name='ShearedOreHalf';piece.MaterialVariant=e.view.MaterialVariant end
  elseif e.kind=='Gridcutter' then
-  e.grid={};for i=1,6 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
-  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9)
+  e.grid={};for i=1,4 do e.grid[i]=part(e,'CutLine',Vector3.one,Color3.fromRGB(255,92,109)) end
+  e.scanner=part(e,'ScanHead',Vector3.one,Color3.new(1,1,1));e.fragments=fragments(e,9,e.color,e.material)
+  for _,piece in ipairs(e.fragments) do piece.Name='GridcutOreBlock';piece.MaterialVariant=e.view.MaterialVariant end
+  e.release=ring(e,12,Color3.fromRGB(255,120,145),.065)
  elseif e.kind=='Singularity' then
   e.hole=part(e,'EventHorizon',Vector3.one,Color3.fromRGB(5,3,12),Enum.Material.SmoothPlastic,Enum.PartType.Ball)
   e.ring=ring(e,12,purple,.07);e.fragments=fragments(e,10)
@@ -149,44 +152,70 @@ local function bubblePose(e,t,age)
 end
 local function halverPose(e,t,age)
  local charge=smooth(t/(e.impact*.7));local cut=clamp((t-e.impact*.8)/(e.impact*.2))^3;local reset=recovery(age)
- local gap=e.radius*(1.1+.15*charge-.76*cut+.9*reset)
- local top=e.center+Vector3.new(0,e.size.Y*.4,0)
+ local size,frame=e.rockSize,e.rockFrame
+ local gap=size.X*(.56+.13*charge-.58*cut+.76*reset)
+ local top=frame*CFrame.new(0,size.Y*.43,0)
  for i,p in ipairs(e.jaws) do
   local side=i==1 and -1 or 1
-  p.CFrame=CFrame.new(top+Vector3.new(side*gap,.15*charge,0))*e.cf.Rotation*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
-  p.Size=Vector3.new(.09,e.radius*.28,e.radius*1.35);p.Transparency=.15+reset*.85
+  p.CFrame=top*CFrame.new(side*gap,.15*charge,0)*CFrame.Angles(0,0,side*(.18*charge-.24*cut)*(1-reset))
+  p.Size=Vector3.new(.12,size.Y*.21,size.Z*1.05);p.Transparency=.15+reset*.85
  end
- energyLine(e,e.cut,top+Vector3.new(0,0,-e.radius*.65),top+Vector3.new(0,0,e.radius*.65),.07,.9-cut*.8+reset*.9,'Lance')
- ballistic(e,age,'slab')
-end
-local function gridPose(e,t,age)
- local r=e.radius*.73;local top=e.center+Vector3.new(0,e.size.Y*.46,0)
- local scan=smooth(t/(e.impact*.83));local out=fade(e,age)
- for i,p in ipairs(e.grid) do
-  local axis=i>3;local coordinate=((i-1)%3-1)*r*.56
-  local a=axis and Vector3.new(-r,0,coordinate) or Vector3.new(coordinate,0,-r)
-  local b=axis and Vector3.new(r,0,coordinate) or Vector3.new(coordinate,0,r)
-  local visible=smooth((scan-(i-1)/7)*7)
-  energyLine(e,p,top+a,top+a:Lerp(b,visible),.055,1-visible*(1-out)*.8,'Gridcutter')
- end
- local x=-r+scan*r*2
- energyLine(e,e.scanner,top+Vector3.new(x,.04,-r),top+Vector3.new(x,.04,r),.10,.18+out*.82,'Gridcutter')
+ energyLine(e,e.cut,top:PointToWorldSpace(Vector3.new(0,0,-size.Z*.51)),top:PointToWorldSpace(Vector3.new(0,0,size.Z*.51)),.075,.97-cut*.9+reset*.9,'Lance')
  hideParts(e.fragments)
  if age then
+  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .36)
+  local travel=e.radius*.7*(1-math.exp(-age*9));local lift=math.max(0,(3+e.radius)*age-13*age^2)
+  for i,p in ipairs(e.fragments) do
+   local side=i==1 and -1 or 1
+   p.Size=safeSize(Vector3.new(size.X*.49,height,size.Z*.985))
+   p.CFrame=frame*CFrame.new(side*(size.X*.25+travel),(size.Y-height)*.5+lift,0)*CFrame.Angles(0,0,side*math.min(age,.44)*.62)
+   p.Transparency=smooth((age/e.tail-.48)/.52)
+  end
+ end
+end
+local function gridPose(e,t,age)
+ local frame,size=e.rockFrame,e.rockSize
+ local top=frame*CFrame.new(0,size.Y*.5+.035,0)
+ local x,z=size.X*.5,size.Z*.5
+ local width=math.clamp(e.radius*.023,.035,.12)
+ local scan=smooth(t/(e.impact*.83));local out=fade(e,age)
+ for i,p in ipairs(e.grid) do
+  local axis=i>2;local sign=i%2==1 and -1 or 1
+  local a=top:PointToWorldSpace(axis and Vector3.new(-x,0,sign*z/3) or Vector3.new(sign*x/3,0,-z))
+  local b=top:PointToWorldSpace(axis and Vector3.new(x,0,sign*z/3) or Vector3.new(sign*x/3,0,z))
+  local visible=smooth((scan-(i-1)/5)*5)
+  energyLine(e,p,a,a:Lerp(b,visible),width,1-visible*(1-out)*.88,'Gridcutter')
+ end
+ local scanX=-x+scan*x*2
+ energyLine(e,e.scanner,top:PointToWorldSpace(Vector3.new(scanX,.045,-z)),top:PointToWorldSpace(Vector3.new(scanX,.045,z)),width*1.6,.18+out*.82,'Gridcutter')
+ hideParts(e.fragments)
+ showRing(e.release,CFrame.new(top.Position),e.radius*(.35+1.3*(1-math.exp(-(age or 0)*13))),age and smooth(age/.42) or 1)
+ if age then
+  -- Tiles begin in the volume the blade just scored. The final pass releases
+  -- the whole remaining rock; other passes peel the upper layer off the cube.
+  local height=size.Y*(e.resource:GetAttribute('EffectDepleted') and 1 or .31)
+  local launch=math.max(0,age-.035)
+  local impulse=math.clamp(e.radius*3.9,4,17)
+  local lift=math.clamp(e.radius*1.9,2.2,8)
   for i,p in ipairs(e.fragments) do
    local x1=(i-1)%3-1;local z1=math.floor((i-1)/3)-1
-   local origin=top+Vector3.new(x1*r*.56,0,z1*r*.56)
-   p.Size=safeSize(Vector3.new(r*.48,r*.18,r*.48)*(1-out*.65))
-   p.CFrame=CFrame.new(origin+Vector3.new(x1*(1-math.exp(-age*12))*.42,age*1.8-age*age*5,z1*(1-math.exp(-age*12))*.42))*e.cf.Rotation*CFrame.Angles(z1*age*.5,0,x1*age*.5);p.Transparency=out
+   local origin=frame:PointToWorldSpace(Vector3.new(x1*size.X/3,(size.Y-height)*.5,z1*size.Z/3))
+   local direction=frame:PointToWorldSpace(Vector3.new(x1,0,z1))-frame.Position
+   if direction.Magnitude>0 then direction=direction.Unit end
+   local travel=impulse*(1-math.exp(-launch*3.4))/3.4
+   local dy=math.max(-(size.Y-height)*.5,launch*(lift+(i%3)*.55)-launch^2*16)
+   p.Size=safeSize(Vector3.new(size.X/3,height,size.Z/3)*.97)
+   p.CFrame=CFrame.new(origin+direction*travel+Vector3.yAxis*dy)*frame.Rotation*CFrame.Angles(z1*launch,0,x1*launch)
+   p.Transparency=smooth((age/e.tail-.5)*2)
   end
  end
 end
 local function singularityPose(e,t,age)
  local r=e.radius;local grow=smooth(t/(e.impact*.75));local close=recovery(age)
  local center=e.center+Vector3.new(0,e.size.Y*.5+r*.55,0)
- local diameter=r*.46*grow*(1-close*.85)
+ local diameter=r*.63*grow*(1-close*.85)
  e.hole.Position=center;e.hole.Size=Vector3.one*math.max(.025,diameter);e.hole.Transparency=math.max(close,fade(e,age))
- showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*.9),.15+math.max(close,fade(e,age))*.85)
+ showRing(e.ring,CFrame.new(center)*CFrame.Angles(.42,0,.25),math.max(.025,diameter*1.18),.15+math.max(close,fade(e,age))*.85)
  -- Keep the authored gravity well and chips. A pair of tightening hooks and
  -- two sharp cuts give this small well a different vocabulary from heat rays.
  -- This is a resource gravity well, not a laser emitter: no charge lens here.
@@ -232,7 +261,7 @@ local function frostbitePose(e,t,age)
  e.shell.CFrame=e.rockFrame;e.shell.Size=safeSize(e.rockSize*(1.006+.022*freeze))
  e.shell.Color=ice;e.shell.Transparency=1-freeze*.45*(1-shatter)
  local wave=age and (1-math.exp(-age*18)) or 0
- showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.8+wave*.7),age and clamp(.2+age/.7) or 1)
+ showRing(e.ring,CFrame.new(e.center+Vector3.new(0,e.size.Y*.15,0)),e.radius*(.92+wave*1.03),age and clamp(.2+age/.7) or 1)
  ballistic(e,age,'ice')
 end
 local function resonatorPose(e,t,age)
@@ -244,7 +273,7 @@ local function resonatorPose(e,t,age)
   local radius=e.radius*(1.45-.7*phase*phase)
   if age then
    local a=math.max(0,age-(i-1)*.045)
-   radius=e.radius*(.55+.9*(1-math.exp(-a*18))+.15*a)
+   radius=e.radius*(.66+1.24*(1-math.exp(-a*18))+.15*a)
    strength=age<(i-1)*.045 and 0 or (1-clamp(a/.72))^.7
   end
   showRing(value,CFrame.new(center),radius,1-strength*.65)
@@ -285,6 +314,7 @@ function FX.new(world,options)
     -- the same budget and is freed when its source streams out or we suspend.
     hideParts(e.parts)
     if e.ring then PlaneBurst.hide(e.ring.plane) end
+    if e.release then PlaneBurst.hide(e.release.plane) end
     for _,ring in ipairs(e.rings or {}) do PlaneBurst.hide(ring.plane) end
     BeamVFX.hide(e.gravityVFX,false)
     if e.beams then for _,rig in pairs(e.beams) do BeamVFX.hide(rig,false) end end

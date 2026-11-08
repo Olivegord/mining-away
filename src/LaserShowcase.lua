@@ -119,7 +119,7 @@ function Showcase.new(world,parent,config)
    local from=s.beam.origin.WorldPosition;local tip=Vector3.new(from.X,s.rock.Position.Y+s.rock.Size.Y*.5,from.Z)
    s.beam.marker.Position=tip
    if t<charge then BeamVFX.draw(s.rig,from,from-Vector3.yAxis,now,0,t/charge,nil,BeamVFX.MiningScale,charge)
-   elseif active and not special then BeamVFX.draw(s.rig,from,tip,now,1,nil,t-charge,BeamVFX.MiningScale)
+   elseif active and (not special or t-charge<.16) then BeamVFX.draw(s.rig,from,tip,now,special and 0 or 1,nil,t-charge,BeamVFX.MiningScale)
    else BeamVFX.hide(s.rig,false) end
    self.presentation.work:mining(s.beam,{alive=true,isMining=not special,active=active and not special,charging=t<charge,
     paused=false,warmupStart=start,warmupDuration=charge,key=s.index,life=1,style='Cutter',since=start+charge},tip,Vector3.yAxis,active and not special and 1 or 0,0,now)

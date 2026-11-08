@@ -6,6 +6,7 @@ function S:clear(p)
  local ctx=self.ctx;local active=p.supply
  if active then
   active.canceled=true
+  if active.finishTemporary then active.finishTemporary(false);active.finishTemporary=nil end
   ctx.effects.ClearAbility(tostring(p.player.UserId)..':tool')
   if active.beacon then active.beacon:Destroy();active.beacon=nil end
  end
@@ -41,10 +42,10 @@ function S:command(p,payload,verifiedPosition,verifiedTarget)
  end)
  if not started then ctx.notice(p,'Wait for the current save to finish') end
 end
-function S:drop(p,kind,target,point)
+function S:drop(p,kind,target,point,finish)
  local ctx=self.ctx
  if p.supply or ctx.data(p).consumables.pending then ctx.notice(p,'Your deployed tool is still working');return false end
- local record={kind=kind,fieldId=target.field.id,position=point,targetId=target.id,runId=ctx.data(p).run.id,temporary=true}
+ local record={kind=kind,fieldId=target.field.id,position=point,targetId=target.id,runId=ctx.data(p).run.id,temporary=true,finishTemporary=finish}
  record.state=ctx.abilities.new({},record.runId)
  local context=ctx.context(p,record);context.emit=function() end
  local ok,why=ctx.abilities.begin(record.state,kind,ctx.now(),context)

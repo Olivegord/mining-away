@@ -2,7 +2,7 @@ local Shops=require('./Shops')
 local Packs=require('./Packs')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=9,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=10,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -208,13 +208,15 @@ local function compatible(a,b)
  return not ((age and agt) or (bge and bgt) or (age and bge))
 end
 local function category(c)
- if c.effects.plotAuto or c.effects.orbitalLaser or c.effects.scrapSwarm then return 'mining'
- elseif c.effects.fullAuto then return 'cargo'
- elseif c.effects.combat or c.effects.rate or c.effects.crit or c.effects.splash or c.effects.finisher then return 'combat'
- elseif c.effects.health or c.effects.reduction or c.effects.shield or c.effects.salvage then return 'survival'
- elseif c.effects.capacity or c.effects.yield then return 'cargo'
- elseif c.effects.mining or c.effects.fork or c.effects.geode then return 'mining'
- elseif c.effects.startup then return 'startup' else return 'flight' end
+ local e=c.effects
+ local function boosts(k) return (e[k] or 0)>0 end
+ if boosts('plotAuto') or boosts('orbitalLaser') or boosts('scrapSwarm') then return 'mining'
+ elseif boosts('fullAuto') then return 'cargo'
+ elseif boosts('combat') or boosts('rate') or boosts('crit') or boosts('splash') or boosts('finisher') or boosts('range') then return 'combat'
+ elseif boosts('health') or boosts('reduction') or boosts('shield') or boosts('salvage') then return 'survival'
+ elseif boosts('capacity') or boosts('yield') then return 'cargo'
+ elseif boosts('mining') or boosts('fork') or boosts('geode') then return 'mining'
+ elseif boosts('startup') then return 'startup' else return 'flight' end
 end
 local function preview(p,c)
  local lines={}
@@ -241,8 +243,9 @@ local function preview(p,c)
  end
  return lines,target and target.name
 end
-local function resolve(p,entry,seed,combatVisible)
+local function resolve(p,entry,seed,combatVisible,multiTargetCombat)
  if (isCombat(entry) or entry.effects.range) and not combatVisible then return nil end
+ if multiTargetCombat==false and (entry.effects.splash or entry.effects.salvage) then return nil end
  if entry.effects.fullAuto then
   local exists=false;for _,d in ipairs(p.fleet) do if courier(d) then exists=true;break end end
   if not exists then return nil end
@@ -303,9 +306,13 @@ function C.buy(p,tx,expectedRun,context)
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
  local tier=Packs.roll(rng(hash(tostring(seed)..':delivery'))(100))
  local random=rng(seed);local pool={}
- for _,entry in ipairs(C.CATALOG) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
+ local function resolveEntry(entry)
+  local c=resolve(p,entry,seed,context.combatVisible==true,context.multiTargetCombat)
+  if c then table.insert(pool,c) end
+ end
+ for _,entry in ipairs(C.CATALOG) do resolveEntry(entry) end
  local function addFallback()
-  for _,entry in ipairs(C.FALLBACK) do local c=resolve(p,entry,seed,context.combatVisible==true);if c then table.insert(pool,c) end end
+  for _,entry in ipairs(C.FALLBACK) do resolveEntry(entry) end
  end
  if #pool<6 then addFallback() end
  pool=C.weightedOrder(pool,random)

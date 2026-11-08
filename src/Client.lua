@@ -913,7 +913,7 @@ local function renderDrone(d,dt,now)
  local kind=state=='Attack' and 'turret' or 'resource'
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
- elseif not active and not charging and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
+ elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
  local part,source,resource=resolveRenderedTarget(kind,id)
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
@@ -921,6 +921,11 @@ local function renderDrone(d,dt,now)
  local extra,extraSource
  if active and now<procUntil then extra,extraSource=resolveRenderedTarget(procKind,procId) end
  local beamSince=state=='Attack' and (s:GetAttribute('ShotAt') or now) or (s:GetAttribute('BeamSince') or now)
+ local specialReleaseAt
+ if state=='SpecialMine' and source and source:GetAttribute('EffectDrone')==s:GetAttribute('DroneId') then
+  local started=source:GetAttribute('EffectStartedAt')
+  if started and started>=now-.16 and started<=now then specialReleaseAt=started end
+ end
  local breakAt,breakUntil
  -- A final hit retires the gameplay reservation immediately. Its short saved
  -- contact may finish the local fracture sequence while the drone moves on.
@@ -940,7 +945,7 @@ local function renderDrone(d,dt,now)
  end
  presentation:queueMiningBeam(beam,{alive=alive,active=active,key=id,life=life,
   contact=active,
-  isMining=kind=='resource',charging=charging,
+  isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
   style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),

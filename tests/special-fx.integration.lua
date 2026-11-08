@@ -34,6 +34,13 @@ for kind,duration in pairs(durations) do
  ctrl:step(contact+.04,1/60)
  assert(ctrl.count>0 and view.LocalTransparencyModifier==.2,kind..' nonlethal immediately hands off to current fracture pose')
  assert(ctrl.active[p].rock.Transparency==1,kind..' removes old proxy after chunk')
+ if kind=='Gridcutter' then
+  local e=ctrl.active[p];local center=e.fragments[5]
+  assert(#e.fragments==9 and center.Size.X>e.rockSize.X*.31 and center.Size.Z>e.rockSize.Z*.31)
+  local corner=e.fragments[1];local before=(corner.Position-center.Position).Magnitude
+  ctrl:step(contact+.26,1/60)
+  assert((corner.Position-center.Position).Magnitude>before+.35,'cut blocks did not spread out from the center')
+ end
  local endOfTail=ctrl.active[p].tail*.99
  ctrl:step(contact+endOfTail,1/144)
  for _,part in ipairs(ctrl.active[p].parts) do assert(part.Transparency>.96,kind..' completes its tail before next cycle replaces geometry') end

@@ -95,6 +95,15 @@ test('pack discount affects future Quartz price, never paid offer or choices',fu
  assert(C.open(p,o.id));assert(C.select(p,o.id,2,'pick',p.run.id,{atDepot=true}));eq(#p.run.cards,1);eq(p.run.pendingOffer,nil)
  S.PACKS_FREE=true
 end)
+test('old discount levels grant real ore yield with free packs; a capped crew cannot pay for nothing',function()
+ local p=fresh();access(p,3);local d=p.fleet[1]
+ eq(C.price(p),0);eq(C.stats(p,d).yieldMultiplier,1)
+ assert(buy(p,'cobalt_pack_discount'));eq(C.stats(p,d).yieldMultiplier,1.25);eq(C.price(p),0)
+ table.insert(p.run.cards,{scope='Fleet',effects={yield=.75}})
+ local balance=S.balance(p,'Cobalt')
+ eq(buy(p,'cobalt_pack_discount','capped',1),false)
+ eq(S.balance(p,'Cobalt'),balance);eq(C.stats(p,d).yieldMultiplier,2)
+end)
 test('legacy universal counter cannot buy packs without Quartz',function()
  S.PACKS_FREE=false
  local p=fresh();p.run.credits=100000;eq(C.buy(p,'pack',p.run.id,{expectedPackIndex=0,atDepot=true}),false)

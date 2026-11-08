@@ -53,7 +53,7 @@ function Stands.mount(map,home,template)
    station:SetAttribute('Interaction','Shop');station:SetAttribute('ShopKey',key)
    local prompt=station:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
    prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop'
-   prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=station
+   prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
    stations[key]=station
   end
   return stations
@@ -75,7 +75,7 @@ function Stands.mount(map,home,template)
   -- Remove the obsolete face painted onto the low, far-field cube.
   for _,child in ipairs(station:GetChildren()) do if child:IsA('SurfaceGui') then child:Destroy() end end
   local prompt=station:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
-  prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.Parent=station
+  prompt.ActionText='View upgrades';prompt.ObjectText=key..' shop';prompt.MaxActivationDistance=12;prompt.RequiresLineOfSight=false;prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.HoldDuration=0;prompt.Enabled=true;prompt.Parent=station
   stations[key]=station
  end
  return stations

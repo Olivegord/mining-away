@@ -68,7 +68,7 @@ check('orbital placement selects the nearby outlined rock instead of largest in 
  local hp=r.hp;assert(r.hp==hp and not p.supply.started,'damage must wait until save acknowledgement')
  advance(.1);assert(p.supply.state.charge.targetId==r.id)
  input(pl,'Orbital',payload);assert(data(p).consumables.counts.Orbital==1)
- advance(5.6);assert(r.paid and not far.paid and not p.supply and not data(p).consumables.pending)
+ advance(6.6);assert(r.paid and not far.paid and not p.supply and not data(p).consumables.pending)
  assert(data(p).run.abilityCooldowns.Orbital>now+400,'consumable must not rewrite permanent equipment cooldown')
  assert(data(p).consumables.rocks==0,'consumable kills cannot mint another tool')
  local seen=false;for _,event in ipairs(events) do if event.owner==tostring(pl.UserId)..':tool' and event.kind=='orbital' then seen=true end end;assert(seen)
@@ -88,7 +88,7 @@ check('empty charge canceled by movement or a newly blocked beam returns the cha
  assert(not p.supply and data(p).consumables.counts.Orbital==1 and not r.paid)
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)));input(pl,'Orbital');advance(.1)
  local old=workspace.Raycast;local wall=Instance.new('Part');wall.Parent=workspace;workspace.Raycast=function(_,from,delta) return {Instance=wall,Position=from+delta*.5} end
- advance(1.8);workspace.Raycast=old;wall:Destroy()
+ advance(DroneAbilities.KINDS.Orbital.chargeSeconds+.2);workspace.Raycast=old;wall:Destroy()
  assert(not p.supply and data(p).consumables.counts.Orbital==1)
 end)
 check('scrap capsule deploys six miners at the marker and affects only its radius',function()
@@ -99,7 +99,7 @@ check('scrap capsule deploys six miners at the marker and affects only its radiu
  advance(9);assert(not p.supply and not far.paid and data(p).consumables.counts.Scrap==0)
 end)
 check('partial consumable work and geode descendants never create a drop loop',function()
- local pl,p=fixture('Orbital',1);local r=node(nil,5000,'Geode');input(pl,'Orbital');advance(5.8)
+ local pl,p=fixture('Orbital',1);local r=node(nil,5000,'Geode');input(pl,'Orbital');advance(6.8)
  assert(r.paid);advance(2.1)
  local children=0
  for _,child in ipairs(patches[1].resources) do if not child.paid and (child.kind=='Core' or child.kind=='Shard') then

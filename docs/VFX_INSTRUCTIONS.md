@@ -57,6 +57,8 @@ The original single-flash envelope begins at normalized flash time `0.64`, peaks
 
 ## Rules for the next VFX edit
 
+November 7: The home demo and working specialists should carry their startup into the first work gesture. The Orbital uses a 2.4-second red sight and a pressure circle sized to the rock; its strike column stays grounded while contact particles follow the melting top. Gridcutter scores a three-by-three layer and separates the fitted blocks with an outward push. Halver sheds two wider ore pieces; the giant sword divides its detached slice into six. Keep the original rock surface on those pieces. See [effect and economy review](review/EFFECTS_AND_ECONOMY.md).
+
 - Watch the supplied reference at normal speed and inspect easing around transitions. Identify which layer leads, follows, contracts, accelerates or survives release before changing it. Do not invent an initial drifting stage.
 - Treat charge, ignition and aftermath as one connected sequence. Smoke displacement, the planar impulse, colored dust, audio and tiny shake should communicate the same release event.
 - Preserve compact scale, thin lasers and readable silhouettes. Avoid large rotating structures, arbitrary orbiting parts, spherical release replacements, opaque clutter and broad featureless glow.
@@ -67,7 +69,7 @@ The original single-flash envelope begins at normalized flash time `0.64`, peaks
 - Sample cosmetic motion locally from replicated authoritative timing. Do not move damage/rewards to the client or change gameplay timing accidentally to repair a visual handoff.
 - Keep bounded reuse: four active rich charge rigs, six cached charge rigs, four active aftermath rigs and four cached aftermath rigs at this revision. Retain distance/reduced-effects handling, cancellation, idle disconnection and cleanup. Never replay missed bursts or audio cues for a late observer.
 - Use the existing home preview to inspect repeat cycles without chasing drones. It is cosmetic; display rocks and drones must not affect fleet ownership, resource health, rewards or progression.
-- Follow the root project rules: edit/save only `build/DRONE_GAME.rbxl`, verify selected document and existing source before installation, refresh only allowlisted Sources, preserve unrelated edits and record the integrated revision. No Roblox publishing is authorized.
+- Follow the root project rules: verify the exact shared place and connected roots, use Script Sync for routine changes, and refresh only the allowlisted Sources in `build/DRONE_GAME.rbxl`. Preserve unrelated edits. The standing authorization in AGENTS.md covers publication to the existing DRONEREVOLUTION starting place.
 
 ## Where the implementation lives
 

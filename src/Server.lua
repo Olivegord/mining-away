@@ -787,7 +787,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     r.part:SetAttribute('MeltPoint',Vector3.new(math.clamp(q.X,-.4,.4),.52,math.clamp(q.Z,-.4,.4)))
    end
    r.part:SetAttribute('MeltBand',heat);shapeChanged=true
-   if not broken then RoleEffects.Pulse(r.part.Position+Vector3.new(0,r.part.Size.Y*.5,0),Color3.fromRGB(255,125,56),.35,math.min(4,r.part.Size.X),.24) end
+   if not broken then RoleEffects.Pulse(r.part.Position+Vector3.new(0,r.part.Size.Y*.5,0),Color3.fromRGB(255,125,56),.35,math.min(13,r.part.Size.X*1.35),.32) end
   end
  end
  if contactKind=='FieldTool' and (tool=='BowlingBall' or tool=='Crowbar' or tool=='Sledgehammer') then
@@ -1363,21 +1363,22 @@ local function breakerDrone(d,p,hr,field,dt)
  local event
  phase,event=DroneRoles.stepBreaker(job,now,{valid=not r.paid and now>=r.readyAt and r.slots[d.id]~=nil,targetId=r.id,arrived=(d.pos-job.station).Magnitude<=.7,impactReached=now-job.phaseAt>=DroneRoles.BREAKER.diveDuration and (d.pos-job.impact).Magnitude<=.15})
  if phase~='Approach' then d.state='Breaker'..phase end
- if event=='windup' then publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Windup')
- elseif event=='dive' then job.diveStart=d.pos;publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Dive')
+ if event=='windup' then publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Windup',r.part.Size.X)
+ elseif event=='dive' then job.diveStart=d.pos;publishBreakerPhase(d,job);RoleEffects.BreakerPhase(d.pos,job.contact,'Dive',r.part.Size.X)
  elseif event=='contact' then
   d.velocity=Vector3.zero;d.pos=job.impact;d.goal=job.impact;d.intentGoal=job.impact
   d.contactSerial=(d.contactSerial or 0)+1;d.contactAt=now;publishBreakerPhase(d,job)
-  RoleEffects.BreakerPhase(d.pos,job.contact,'Hold')
+  RoleEffects.BreakerPhase(d.pos,job.contact,'Hold',r.part.Size.X)
  elseif event=='impact' then
   d.velocity=Vector3.zero
   -- Hold the physical weight on the surface before this single delayed fracture.
   -- The longer weight hold earns a larger hit, retaining its pre-hold work
   -- rate while the shell/perk multipliers continue to define the specialist.
+  local diameter=r.part.Size.X
   if hitResource(d,r,d.stats.miningDPS*3.2,false,nil,d.pos,'Breaker') then
    d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
    d.goal=job.station;d.intentGoal=job.station;publishBreakerPhase(d,job)
-   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact')
+   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact',diameter)
   else
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6
    release(d)
@@ -1836,7 +1837,16 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
   if not atStation(p,scene.packStation,20) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={combatVisible=true,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   -- Offer combat preparation one shop before the next uncleared guard.
+   -- A sole sentry cannot usefully trigger a chain or sustain a kill-to-kill perk.
+   local combat,multi=false,false
+   for index,field in ipairs(patches) do
+    if field.cfg.Turrets>0 and not copy.clearedFields[field.cfg.Key] and field.e.phase~='Cleared'
+     and Shops.unlocked(copy,patches[index-1].cfg.Key) then
+     combat=true;multi=multi or field.cfg.Turrets>1
+    end
+   end
+   local options: any={combatVisible=combat,multiTargetCombat=multi,expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -1922,6 +1932,9 @@ local function abilityContext(p,fieldId,operator,deployment)
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
    local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z)} or nil)
    if accepted then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
+   if accepted and deployment and deployment.finishTemporary then
+    deployment.finishTemporary(true);deployment.finishTemporary=nil
+   end
    if accepted and deployment and not deployment.temporary and Consumables.accept(data(p).consumables) then p.dirty=true;p.publishDirty=true end
    return accepted,resource.paid==true
   end,
@@ -1956,7 +1969,9 @@ scene.fieldTools=ToolRules.Service.new({world=root,players=profiles,resources=re
   return true
  end,
  gadget=function(p,item,target,point)
-  if not item.saved then return consumableService:drop(p,item.kind,target,point) end
+  if not item.saved then
+   return consumableService:drop(p,item.kind,target,point,function(used) scene.fieldTools:finishGadget(p,item,used) end)
+  end
   local profile=data(p)
   consumableService:command(p,{kind=item.kind,runId=profile.run.id,version=profile.consumables.version,txId=Http:GenerateGUID(false),fieldId=target.field.id},point,target.id)
   return true

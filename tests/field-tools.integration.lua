@@ -166,14 +166,22 @@ check('one inventory contains all eight preview items; dropped gadgets use the e
  local s=tools:state(p);for i,kind in ipairs(ToolRules.ORDER) do assert(s.slots[i].kind==kind) end
  local orbital=s.slots[6];equip(p,orbital);local r=node(4);local point=r.part.Position+Vector3.new(.2,r.part.Size.Y*.5,0)
  input(p,'UseFieldTool',contact(orbital,r,point))
- assert(p.supply and p.supply.temporary and p.supply.targetId==r.id and p.supply.position.X==point.X and not s.slots[6])
+ assert(p.supply and p.supply.temporary and p.supply.targetId==r.id and p.supply.position.X==point.X and orbital.state=='Deployed')
  assert(not data(p).consumables.pending)
  local emit=RoleEffects.Ability;RoleEffects.Ability=function() end
  local hp=r.hp;consumableService:step(p,.016)
  advance(1.6)
  for _=1,20 do advance(.05);consumableService:step(p,.05) end
  RoleEffects.Ability=emit
- assert(r.hp<hp and (r.part:GetAttribute('MeltBand') or 0)>0,'orbital did not use the shared melt')
+ assert(r.hp<hp and (r.part:GetAttribute('MeltBand') or 0)>0 and not s.slots[6],'first mining contact must melt the rock and spend the deployed tool')
+end)
+check('an interrupted orbital returns the same temporary tool before its first contact',function()
+ local pl,p=fixture();tools:previewLoadout(p)
+ local s=tools:state(p);local orbital=s.slots[6];local r=node(3)
+ equip(p,orbital);input(p,'UseFieldTool',contact(orbital,r));consumableService:step(p,.016)
+ assert(p.supply and orbital.state=='Deployed')
+ local hp=r.hp;pl.Character:PivotTo(CFrame.new(home));advance(.2);consumableService:step(p,.016)
+ assert(not p.supply and s.slots[6]==orbital and orbital.state=='Held' and orbital.hp==1 and r.hp==hp)
 end)
 check('runtime rocks become solid after growth and stop blocking on depletion',function()
  local _,p=fixture();local r=node(18);r.readyAt=now+.2

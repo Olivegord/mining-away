@@ -18,7 +18,7 @@ S.CATALOG={
  item('ruby_rotors','Ruby','Faster drones','+25% flight speed per level','Faster travel and courier trips, with the original eased arrival. Adds to speed cards up to the existing 3× flight cap.',36,2,{speed=.25}),
  item('cobalt_violet','Cobalt','Unlock Violet','Opens the Violet field and shop','Opens Violet this run. Its stronger guards remain a separate fleet challenge.',180,1,nil,'Violet'),
  item('cobalt_orbital','Cobalt','Orbital laser','Strike the biggest ready rock','Unlocks a mining ability. Charge above a cleared field, then automatically melt its biggest ready rock over four seconds. Server cooldown and field limits apply.',60,1,{orbitalLaser=1}),
- item('cobalt_pack_discount','Cobalt','Cheaper packs','15% off packs per level','Reduces future Quartz pack prices by 15 percentage points per level, up to 30%. Already-paid offers keep their exact saved price and three choices.',45,2,{packDiscount=.15}),
+ item('cobalt_pack_discount','Cobalt','Rich extraction','+25% ore yield per level','Every mining drone recovers 25% more ore per level. Stacks with cards up to double yield. Existing levels of the old pack discount carry over.',45,2,{yield=.25,packDiscount=.15}),
  item('cobalt_relay','Cobalt','Split beam','Deal 15% damage to a nearby rock','Splits 15% of a mining tick into one eligible nearby crystal. Stacks with fork cards up to the existing 20% fork cap; no recursive hits.',75,1,{fork=.15}),
  item('violet_emerald','Violet','Unlock Emerald','Opens the Emerald field and shop','Opens the deepest field this run. Its guards and harder crystals require a developed fleet.',240,1,nil,'Emerald'),
  item('violet_scrap','Violet','Scrap-bot swarm','Deploy mining bots for 10s','Unlocks a short-lived mining ability. A miniature swarm works on ready rocks in your cleared field for ten seconds, then disappears. No permanent drones are consumed.',80,1,{scrapSwarm=1}),
@@ -73,11 +73,39 @@ function S.packSpeed(p) return 2^math.min(2,S.effects(p).packSpeed or 0) end
 function S.cost(entry,level) return math.floor(entry.cost*2^(level or 0)) end
 function S.balance(p,key) return (p.run.wallet or {})[key] or 0 end
 function S.unlocked(p,key) return p.run.shops and p.run.shops[key]==true end
+local capped={
+ quartz_power={'mining',3},ruby_rotors={'speed',2},cobalt_pack_discount={'yield',1},
+ cobalt_relay={'fork',.2,miner=true},emerald_relay={'forkRange',6,miner=true},violet_courier={'fullAuto',2,role='Courier'},
+ ruby_breaker_head={'geode',.8,role='Charger'},
+}
+local function roleOf(d)
+ local role=d.role or d.type
+ return ({Blue='Striker',Red='Charger',Green='Medic'})[role] or role
+end
+local function hasRoom(p,fleet,key,limit,role)
+ for _,d in ipairs(fleet) do
+  local actual=roleOf(d)
+  local support=actual=='Dart' or actual=='Courier' or actual=='Medic' or actual=='Orbiter' or actual=='Scrapper'
+  if (not role or actual==role) and not (support and (key=='mining' or key=='yield')) then
+   local effects=S.effects(p,actual);local amount=effects[key] or 0
+   for _,c in ipairs(p.run.cards) do
+    if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Individual' and c.targetDroneId==d.id)
+     or (c.scope=='Color' and c.type==d.type) or (c.scope=='Player' and key=='fullAuto' and actual=='Courier') then
+     amount+=c.effects[key] or 0
+    end
+   end
+   if amount<limit-1e-8 then return true end
+  end
+ end
+ return false
+end
 function S.reason(p,entry,context)
  if not S.unlocked(p,entry.shop) then return 'Unlock '..entry.shop..' first' end
+ local fleet=(context and context.fleet) or p.activeFleet or p.fleet
  if entry.id=='cobalt_orbital' and S.abilityUnlocked(p,'Orbital') then return 'Orbital laser already installed' end
  if entry.id=='violet_scrap' and S.abilityUnlocked(p,'Scrap') then return 'Scrap swarm already installed' end
  if entry.id=='ruby_pack_speed' and S.packSpeed(p)>=2 then return 'Pack reveal already accelerated' end
+ if entry.id=='emerald_pack_speed' and S.packSpeed(p)>=4 then return 'Pack reveal already at full speed' end
  if entry.id=='quartz_scanner' then for _,c in ipairs(p.run.cards) do if (c.effects.plotAuto or 0)>0 then return 'Plot targeting already installed' end end end
  if entry.id=='quartz_backpack' then
   local capacity=S.effects(p).capacity or 0
@@ -85,13 +113,23 @@ function S.reason(p,entry,context)
   if capacity>=2 then return 'Backpack already at 120 ore' end
  end
  if entry.role then
-  local aliases={Blue='Striker',Red='Charger',Green='Medic'};local found=false
-  for _,d in ipairs((context and context.fleet) or p.activeFleet or p.fleet) do if (aliases[d.role or d.type] or d.role or d.type)==entry.role then found=true end end
-  if not found then return 'Requires '..entry.role..' hardware' end
+  local found=false
+  for _,d in ipairs(fleet) do if roleOf(d)==entry.role then found=true;break end end
+  local names={Striker='Miner',Charger='Breaker',Dart='Grower',Medic='Healer',Scrapper='Swarm Fabricator'}
+  if not found then return 'Requires a '..(names[entry.role] or entry.role) end
  end
  if entry.id=='violet_courier' then
-  local found=false;for _,d in ipairs(p.fleet) do if d.role=='Courier' then found=true end end
+  local found=false;for _,d in ipairs(fleet) do if roleOf(d)=='Courier' then found=true;break end end
   if not found then return 'Requires a Courier drone' end
+ end
+ local cap=capped[entry.id]
+ if cap then
+  if cap.miner then
+   local found=false;for _,d in ipairs(fleet) do if roleOf(d)=='Striker' then found=true;break end end
+   if not found then return 'Requires a Miner' end
+  end
+  if not hasRoom(p,fleet,cap[1],cap[2],cap.miner and 'Striker' or cap.role)
+   and not (entry.id=='emerald_relay' and hasRoom(p,fleet,'fork',.20,'Striker')) then return 'Already at the upgrade cap' end
  end
  return nil
 end

@@ -153,6 +153,9 @@ check('free delivery stays sealed until the owner finishes a nearby uninterrupte
  local request=quote({packIndex=0});input('BuyPack',request)
  local offer=Pro.clone(data(p).run.pendingOffer)
  assert(offer.opened==false and #offer.choices==3 and not visibleOffer().choices)
+ for _,choice in ipairs(offer.choices) do
+  assert(choice.category~='combat' and choice.category~='survival','starter offer contains a guard-only card')
+ end
  local wallet=data(p).run.wallet.Quartz
  assert(offer.price==0 and wallet==0,'free pack charged money or required a balance')
  local part=assert(p.packDelivery).part

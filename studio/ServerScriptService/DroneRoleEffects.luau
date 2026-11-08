@@ -40,8 +40,8 @@ end
 function Effects.Grow(from,target,planted)
  record('Grow',{From=from,Position=target,Planted=planted},1.8)
 end
-function Effects.BreakerPhase(position,target,phase)
- record('Breaker',{From=position,Position=target,Phase=phase},1.8)
+function Effects.BreakerPhase(position,target,phase,diameter)
+ record('Breaker',{From=position,Position=target,Phase=phase,Diameter=diameter},1.8)
 end
 local function endBurn(owner)
  local old=burns[owner];burns[owner]=nil
@@ -65,12 +65,13 @@ function Effects.Ability(owner,event,template)
  elseif kind=='orbitalEnd' then endBurn(owner)
  elseif kind=='charge' then
   clear(markers,owner)
-  markers[owner]=record('AbilityCharge',{Owner=owner,Ability=event.ability,Duration=event.duration or 1.4,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius},2.6)
+  local duration=event.duration or 1.4
+  markers[owner]=record('AbilityCharge',{Owner=owner,Ability=event.ability,Duration=duration,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius},duration+1.15)
  elseif kind=='orbital' then
   clear(markers,owner)
   local node=burns[owner]
   if not node or not node.Parent then
-   node=record('Orbital',{Owner=owner,Position=point(event.target),ContactAt=now})
+   node=record('Orbital',{Owner=owner,Position=point(event.target),Ground=event.target.ground,Radius=event.target.radius,ContactAt=now})
    burns[owner]=node;if not node then return end;watchBurn(owner,node)
   end
   -- ContactAt commits the complete sample. No replicated geometry moves.

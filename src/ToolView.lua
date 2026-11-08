@@ -107,26 +107,56 @@ function V:impact(source)
   local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
   self.ctx.presentation:kick(position,grenade and .14 or .075,now)
  end
- local slab=source:GetAttribute('Slab')
- if slab and #self.chips<72 then
-  local p=Instance.new('Part');p.Name='SlicedRockSlab';p.Size=slab;p.Color=color;p.Material=Enum.Material.Rock
-  p.CanTouch=false;p.CanQuery=false;p.Position=position+Vector3.new(0,.28,0);p.Parent=self.ctx.localFX
-  p.AssemblyLinearVelocity=Vector3.new(13,12,-5);p.AssemblyAngularVelocity=Vector3.new(2,1,3)
-  self.chips[#self.chips+1]={part=p,at=now,expires=now+1.6}
+ local slab=source:GetAttribute('Slab');local size=source:GetAttribute('RockSize')
+ local rockFrame=source:GetAttribute('RockFrame')
+ local variant=source:GetAttribute('RockVariant') or ''
+ local material=Enum.Material[source:GetAttribute('RockMaterial') or 'Rock'] or Enum.Material.Rock
+ local radius=size and math.clamp(math.max(size.X,size.Z)*.5,.8,8) or 1
+ local reduced=BeamVFX.reduced()
+ if slab and rockFrame and #self.chips<=66 then
+  local frame=CFrame.new(position)*rockFrame.Rotation
+  local scale=math.clamp(radius,1,6)
+  local floor=rockFrame.Position.Y-size.Y*.5
+  -- One sweep across the selected cut plane. The detached volume is still
+  -- together until the pressure at its center throws the six pieces outward.
+  if not reduced then
+   local left=(frame*CFrame.new(-slab.X*.62,-slab.Y*.5,.02)).Position
+   local right=(frame*CFrame.new(slab.X*.62,-slab.Y*.5,.02)).Position
+   RoleVisuals.Beam(left,right,Color3.fromRGB(178,232,255),.14*scale,.16,'Lance')
+   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.46)
+  end
+  for i=1,6 do
+   local x=(i-1)%3-1;local z=i<=3 and -.25 or .25
+   local pose=frame*CFrame.new(x*slab.X/3,0,z*slab.Z)
+   local dir=(frame.RightVector*x-frame.LookVector*z*3).Unit
+   local p=Instance.new('Part');p.Name='SlicedOreBlock';p.Size=Vector3.new(slab.X/3,slab.Y,slab.Z*.5)*.976
+   p.Color=color;p.Material=material;p.MaterialVariant=variant;p.CFrame=pose;p.Anchored=true;p.CastShadow=false
+   p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.Parent=self.ctx.localFX
+   self.chips[#self.chips+1]={part=p,at=at,expires=at+1.15,pose=pose,velocity=dir*(4+scale*1.4),
+    rise=4+scale*.75,floor=floor+p.Size.Y*.5,spin=Vector3.new(z*2,0,x*.8)}
+  end
  end
+ if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47)
+ elseif kind=='BowlingBall' or kind=='Sledgehammer' then RoleVisuals.Pulse(position,Color3.fromRGB(238,203,154),radius*.8,radius*3.2,.37)
+ elseif kind=='MoltenTongs' then RoleVisuals.Pulse(position,color,radius*.6,radius*2.25,.58) end
  local count=kind=='JellyGrenade' and 18 or kind=='BowlingBall' and 12 or kind=='Shatter' and 10 or 5
+ if reduced then count=math.min(count,3) end
  for i=1,count do
   if #self.chips>=72 then break end
-  local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble';p.Size=Vector3.one*(.16+(i%4)*.09)
-  p.Color=color;p.Material=kind=='MoltenTongs' and Enum.Material.Neon or kind=='Shatter' and Enum.Material.Metal or Enum.Material.Rock
-  p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false;p.CFrame=CFrame.new(position+Vector3.new(math.cos(angle)*.6,.4,math.sin(angle)*.6));p.Parent=self.ctx.localFX
-  p.AssemblyLinearVelocity=Vector3.new(math.cos(angle)*(8+i%7),13+i%9,math.sin(angle)*(8+i%7));p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
+  local angle=i*2.39996;local p=Instance.new('Part');p.Name='ToolRubble'
+  local scale=math.clamp(radius*.52,.65,2.5)
+  local gel=kind=='JellyGrenade' and i%3==0
+  local ember=kind=='MoltenTongs'
+  p.Size=Vector3.new(.18+(i%4)*.10,.12+(i%3)*.07,.19+(i%5)*.053)*scale
+  p.Color=color;p.Material=ember and Enum.Material.Neon or gel and Enum.Material.Glass or kind=='Shatter' and Enum.Material.Metal or material
+  if gel or ember then p.Shape=Enum.PartType.Ball else p.MaterialVariant=variant end
+  local outward=Vector3.new(math.cos(angle),0,math.sin(angle))
+  local normal=source:GetAttribute('Normal') or Vector3.yAxis
+  p.Anchored=false;p.CanCollide=true;p.CanTouch=false;p.CanQuery=false
+  p.CFrame=CFrame.new(position+normal*.22+outward*.32*scale);p.Parent=self.ctx.localFX
+  p.AssemblyLinearVelocity=outward*((5+i%7)*scale)+Vector3.yAxis*(7+i%9)+normal*(kind=='Crowbar' and 9 or 3)
+  p.AssemblyAngularVelocity=Vector3.new(i,5,-i)
   self.chips[#self.chips+1]={part=p,at=now,expires=now+1.5}
- end
- if kind=='JellyGrenade' and #self.chips<72 then
-  local flash=Instance.new('Part');flash.Name='JellyBurst';flash.Shape=Enum.PartType.Ball;flash.Color=color;flash.Material=Enum.Material.Neon
-  flash.Anchored=true;flash.CanCollide=false;flash.CanTouch=false;flash.CanQuery=false;flash.Position=position;flash.Size=Vector3.one*.1;flash.Parent=self.ctx.localFX
-  self.chips[#self.chips+1]={part=flash,at=now,expires=now+.3,flash=true}
  end
 end
 function V:layout(item,active)
@@ -139,7 +169,7 @@ function V:layout(item,active)
  for i,slot in ipairs(self.slots) do
   local entry=self.state.slots[i];slot.button.Size=UDim2.fromOffset(cell,height);slot.button.Position=UDim2.fromOffset(((i-1)%columns)*(cell+6),math.floor((i-1)/columns)*(height+6))
   slot.icon.Size=UDim2.new(1,-8,0,height-35);slot.name.Position=UDim2.fromOffset(3,height-33)
-  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
+  slot.name.Text=entry and (entry.state=='Held' and ToolRules.ITEMS[entry.kind].short or entry.state=='Recover' and 'Touch ball' or entry.state=='Windup' and 'Winding up' or entry.state=='Deployed' and 'Deployed' or entry.state=='Molten' and 'Melting' or entry.state=='Stuck' and 'Fusing…' or 'Thrown') or '—'
   slot.fill.Size=UDim2.fromScale(entry and entry.hp/entry.maxHP or 0,1)
   slot.fill.BackgroundColor3=entry and entry.hp/entry.maxHP<=.25 and Color3.fromRGB(246,117,83) or Color3.fromRGB(156,231,102)
   slot.button.BackgroundColor3=self.state.selected==i and Color3.fromRGB(74,97,148) or Color3.fromRGB(45,49,63)
@@ -187,7 +217,14 @@ function V:step(dt,now)
   if now>=c.expires then c.part:Destroy();table.remove(self.chips,i)
   else
    local q=(now-c.at)/(c.expires-c.at)
-   if c.flash then c.part.Size=Vector3.one*(.1+q*17);c.part.Transparency=q else c.part.Transparency=math.clamp((q-.65)/.35,0,1) end
+   if c.pose then
+    local t=math.max(0,now-c.at-.075)
+    local center=c.pose.Position+c.velocity*((1-math.exp(-3*t))/3)
+    local height=math.max(c.floor,center.Y+c.rise*t-19*t*t)
+    local rotation=math.min(t,.38)
+    c.part.CFrame=CFrame.new(center.X,height,center.Z)*c.pose.Rotation*CFrame.Angles(c.spin.X*rotation,0,c.spin.Z*rotation)
+   end
+   c.part.Transparency=math.clamp((q-.65)/.35,0,1)
   end
  end
 end

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — in-use mining effects, cards and shops
+
+Compare the effects on working drones to the demo. Give the Orbital a thin red sight that lasts a few seconds, run its firing column down to the ground, and scale the circles to the rock. Give gadgets and drones stronger rock reactions: a cut should visibly divide the rock, then a light central push should separate the pieces. Review the cards and shops for upgrades that do nothing useful in the player's current run. Preserve the existing map and its ore models.
+
 ## November 7 latest — livelier quarry and connected biomes
 
 Keep the low-resolution, realistic photo textures. Give the original trees dedicated canopy and bark textures so they belong in the scene. Dark surfaces are fine where there is contrast; avoid darkening the whole map, and add visible glow and local lights. Use free online sources without image generation.

@@ -1,7 +1,7 @@
 -- Authoritative, bounded mining gadgets. No rewards, ownership, input timestamps
 -- or client-selected targets are trusted here. Context owns the normal hit path.
 local A={}
-A.KINDS={Orbital={cooldown=45,burnSeconds=4},Scrap={cooldown=35}}
+A.KINDS={Orbital={cooldown=45,burnSeconds=4,chargeSeconds=2.4},Scrap={cooldown=35}}
 A.CHARGE_SECONDS=1.4
 A.ORBITAL_ORIGIN_HEIGHT=34
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
@@ -68,9 +68,11 @@ function A.begin(state,kind,now,ctx)
   end
  end
  state.sequence+=1
+ local duration=A.KINDS[kind].chargeSeconds or A.CHARGE_SECONDS
+ local expires=now+duration+1.1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=chosen.id,target=point(chosen),
-  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+A.CHARGE_SECONDS,expires=now+2.5}
- event(ctx,'charge',{ability=kind,target=chosen,expires=now+2.5,duration=A.CHARGE_SECONDS})
+  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+duration,expires=expires}
+ event(ctx,'charge',{ability=kind,target=chosen,expires=expires,duration=duration})
  return true,'Gadget charging'
 end
 function A.confirm(state,token,now,ctx)
@@ -112,7 +114,11 @@ end
 function A.step(state,now,dt,ctx,swarmContext)
  if not finite(now) or not finite(dt) or dt<=0 then return end
  if state.runId~=ctx.runId then A.cancel(state,ctx);state.runId=ctx.runId;state.cooldowns={};return end
- if state.charge and now>=state.charge.readyAt then A.confirm(state,state.charge.token,now,ctx) end
+ local charge=state.charge
+ if charge then
+  if not ctx.valid(charge.fieldId) or not ctx.unlocked(charge.kind) then state.charge=nil;event(ctx,'clearCharge')
+  elseif now>=charge.readyAt then A.confirm(state,charge.token,now,ctx) end
+ end
  local burn=state.burn
  if burn then
   local target
