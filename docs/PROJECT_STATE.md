@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `54e71186a271d723f900a0f0fffcd73a3b8af142dbea1f795d82fc087a9606ed` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `8265ce0259140c59a78bcecf2e199b492d9cd59edd862a8b03fb76fe474baffe` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,15 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — restore original grass grain
+## Latest follow-up — earlier smooth turf material and raised patch slabs
+
+Corrected the previous misunderstanding: 130 authored grass parts now use the earlier grass.png image 118972165990804 at a 17-stud organic tile scale, replacing grass-short.png 134439792116456. Three dedicated MaterialVariants preserve the existing Grass, Concrete and LeafyGrass base materials. The reference screenshot's precise asset identity cannot be established from pixels alone; this is the retained earlier grass image in the project's own provenance, visually checked against the desired smoother appearance.
+
+All 36 green patches are now solid slabs raised 0.22, 0.32 or 0.42 studs above their underlying turf, with collision, ray queries and shadows enabled. Their colors and locations are retained. Brighter lighting is unchanged. Inspected the actual Quartz Edit viewport at a lower angle to check the smooth grain and shallow physical edges. Verified all 36 patch sizes, flags and image IDs in Edit. No Play traversal or multiplayer test was run.
+
+Studio was already open in Edit and remains open in Edit, in the exact shared DRONEREVOLUTION place 124078027733625 / universe 10774898335. Background save through tools/refresh_soft_turf.py preserved all 50 Sources, unrelated properties and existing hierarchy; build.py reported no changes. Authoring script: tools/studio_restore_soft_turf.lua. Canonical file is current; public release remains v43 and was not published.
+
+## Earlier follow-up — restore original grass grain
 
 Disabled 52 added grass Texture overlays (36 patch fine-grain overlays and 16 broad turf overlays). The original grass ColorMap 134439792116456 is visible again; rectangular color patches, palette, lighting and gravel are retained. Applied to the exact shared DRONEREVOLUTION Edit document and saved to the canonical native file using tools/restore_grass_grain.py. Studio was already open in Edit and remains there. Inspected Quartz in Edit; no new Play test. Scoped save preserved all 50 Sources, hierarchy and unrelated properties; build.py reported no change. Public Roblox remains v43, not published.
 

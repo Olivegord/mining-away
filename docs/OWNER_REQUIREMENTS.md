@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — actual old grass material and physical layers
+
+Restore the smoother earlier grass image itself, not just disable overlays. Keep the green patches and brighter lighting. The patches should be actual solid parts raised above the turf, with visible shallow edges as in the reference. This supersedes the previous requirement that patches be visually flush.
+
 ## November 7 latest — restore the old grass texture
 
 The added grass grain is rejected as too grainy. Restore the original grass finish while keeping the rectangular color patches.
