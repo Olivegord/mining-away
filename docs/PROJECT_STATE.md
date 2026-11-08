@@ -9,19 +9,29 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3b5ced6e1557935a7ef64d137793c8754700fd0cd3fe4fe5b73c3b199d4ff5ab` | Matches the quarry lighting release. Geometry, photo color maps, unrelated Sources, and backups were preserved. |
-| Installed game revision | `a8e33d786e052e7adb8f3cf63bb578c41a8c9fb2` | Brighter morning lighting, soft distance fog, an engine-bundled sun, and matte quarry surfaces on top of the combined v37 update. |
+| Native-file SHA-256 | `4fdedd50196e3a3300ce630e62dc0416171f54e47109783191c2a616fe187378` | Studio export of the updated authored Workspace and its matching Sources. All 43 unmanaged Sources were preserved. |
+| Installed game revision | `3190785ca968d418a2f0e9156f61ee8855a1ff87` | Authored biome landmarks, visible distance fog, stronger photo textures, and selective architectural patterns. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quarry lighting revision installed November 7, 2026** | All seven Sources and 61 scoped lighting and material properties matched after publication. Studio was left open in Edit with Play stopped. |
-| Published Roblox version | **v39, verified** | Studio recorded successful publication to the existing place at 6:45:05 PM Pacific on November 7. The Version History panel was not used. |
+| Shared Studio entry point | **Authored quarry revision installed November 7, 2026** | Updated terrain, scenery, and finishes are present in Edit mode. Seven Sources and all three Script Sync roots were verified after publication. |
+| Published Roblox version | **v42, verified** | Studio recorded successful publication to the existing place at 7:13:00 PM Pacific on November 7. The Version History panel was not used. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — brighter morning and matte quarry surfaces
+## Latest follow-up — visible fog, readable textures, and current Edit Workspace
+
+The v39 Atmosphere was too subtle at quarry distances. Its instance is preserved in ServerStorage and the map now uses blue distance fog from **85 to 440 studs**, tuned in the existing Play session after a 42–300 draft washed out landmarks. The bundled sun and fixed morning clock remain. Seven [photo grades](../assets/quarry-textures/README.md) separate warm cliffs and gravel from cool paving, moss, softer tree foliage, and scarlet Ruby ground. Four market surfaces use herringbone, three service pads use worn checker, and the broad hub and mining beds stay visually quieter.
+
+The [composition pass](review/QUARRY_COMPOSITION.md) enlarged Cobalt's canopies and Ruby and Emerald's cliffs, added visible lanterns and connected Emerald's lagoon with a stone crossing. These changes were authored in the **shared Edit Workspace** and exported to `build/DRONE_GAME.rbxl`. `QuarrySceneryAuthored` prevents a second scenery build on server startup while retaining the material registry for runtime ore and debris. The original six mining beds remain collidable and unchanged in size and position. The authoring rule is in `AGENTS.md`.
+
+The combined desktop Edit viewport showed the sun, visible separation between near and distant scenery, the textured ground, and the landmarks. Studio confirmed all nine new texture assets loaded. The lagoon contains terrain water, and 31 collidable slabs connect to the far bank; a terrain ray immediately beyond the last slab hit within 0.3 studs of its top. The final Ruby tint and jagged crowns were inspected in Edit. The full final revision was not restarted in Play after the single comparison session; multiplayer, mobile and performance were not measured. Core-loop checks passed in both configurations using API doubles.
+
+All seven managed Sources matched the shared document after native Script Sync, and all three roots reported `SyncedAsRoot`. `python3 tools/build.py` verifies the canonical export and the saved document retains all 43 unmanaged Sources. At `2026-11-08T03:13:00Z`, Studio logged `Publish succeeded for placeId 124078027733625`, `Published new changes in "DRONEREVOLUTION" to Roblox.`, and `Add publish notes to v42`. The post-publish audit verified the same place and universe, seven Sources, six collidable mining beds, seven patterned surfaces, and 29 scoped native properties. Studio was open at the start and remains in Edit mode. Its originally loaded `game.PlaceVersion` remains 26; the receipt identifies the published revision.
+
+## Earlier follow-up — brighter morning and matte quarry surfaces
 
 The authored quarry uses soft morning lighting at **8:30**, a blue sky with Roblox's built-in sun, and pale distance fog through its Atmosphere. Open shadows and gentler contrast keep the nearby paths and mining fields readable. The old startup clock script is preserved and disabled in Lighting. The game no longer regrades this authored map at startup; Edit and Play use the same native lighting. The separate reference-layout fallback is unchanged.
 
