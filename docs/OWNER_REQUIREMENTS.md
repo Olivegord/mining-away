@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — brighter daylight and color, NEVER copy pack materials
+
+The owner imported Stud pack V1 to show vivid colors. Use it as a COLOR reference only. The owner emphatically rejected applying its studded materials to the quarry. Retain the existing foliage/bark textures, smoother grass and raised green patch parts. Improve both light and color: the long dark morning shadows were still depressing despite pastel scenery changes.
+
 ## November 7 latest — actual old grass material and physical layers
 
 Restore the smoother earlier grass image itself, not just disable overlays. Keep the green patches and brighter lighting. The patches should be actual solid parts raised above the turf, with visible shallow edges as in the reference. This supersedes the previous requirement that patches be visually flush.

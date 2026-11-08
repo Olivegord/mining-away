@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8265ce0259140c59a78bcecf2e199b492d9cd59edd862a8b03fb76fe474baffe` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `1478aa676449c2bc63a86c11d1a6a917bf6c0a252487bbdfbb4e006d23e7e7f1` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,19 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — earlier smooth turf material and raised patch slabs
+## Latest follow-up — clear daytime lighting and brighter colors with original textures
+
+Moved the sun from 08:30 to 13:00, latitude 25, brightness 2, exposure 0.35, neutral ambient 190 and outdoor fill 210. Diffuse environment contribution is 0.45; post contrast is zero, brightness 0.025 and saturation 0.12. The actual sky already used engine daylight textures despite its misleading Simple Sunset Sky name; it was not replaced. Same-angle Quartz screenshots show shorter shadows and brighter shaded surfaces. Kept Realistic mode and sharp shadow edges.
+
+The preceding color pass changed 166 surface finishes/tints: brighter colored stone faces, six mineral palettes and cream hub paths. Used gameplay screenshot references from https://www.ldplayer.net/blog/how-to-become-noob-to-pro-in-roblox-grow-garden.html and https://cellphones.com.vn/sforum/cach-choi-steal-egg-roblox . This is an interpretation of their color direction, not extracted lighting settings or a claim of exact recreation.
+
+During work the owner imported Workspace.Stud pack V1 (320 instances including root). It contains no Lua code and was captured in the canonical file. The owner rejected copying its materials. All 222 affected foliage/bark parts were restored to their prior MaterialVariant identities; only brighter lime/amber part tints remain. Live verification found ZERO QuarryPack_* material assignments in MiningAway.Map. The two unused variants are retained but not applied. The imported reference pack itself retains its own materials. Its snapshot records placement at capture time; later manual movements were not included in this scoped foliage save.
+
+Studio was open in Edit at entry and remains open in Edit, place 124078027733625 / universe 10774898335. Checked Quartz and hub views, then rechecked Quartz after restoring original textures. No new Play, multiplayer or traversal test. All scoped saves preserved 50 Sources, unrelated original properties and hierarchy. build.py reported no source change. Thirty-eight historical color values in the earlier stone pass required one-byte round-trip reconciliation; larger differences are rejected. Shared Edit has the new lighting and final textures. Public Roblox is still v43; not published.
+
+Reproduction helpers: studio_quarry_color_world.lua / refresh_quarry_color_world.py; refresh_clear_day.py; studio_pack_palette.lua / refresh_pack_palette.py for the imported reference snapshot; refresh_pack_colors_only.py restores the rejected material experiment using the pre-pack native revision 077b76a. Do NOT rerun the pack material stage without the restoration step; it is rejected behavior.
+
+## Earlier follow-up — earlier smooth turf material and raised patch slabs
 
 Corrected the previous misunderstanding: 130 authored grass parts now use the earlier grass.png image 118972165990804 at a 17-stud organic tile scale, replacing grass-short.png 134439792116456. Three dedicated MaterialVariants preserve the existing Grass, Concrete and LeafyGrass base materials. The reference screenshot's precise asset identity cannot be established from pixels alone; this is the retained earlier grass image in the project's own provenance, visually checked against the desired smoother appearance.
 

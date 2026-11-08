@@ -5,7 +5,7 @@ from collections import defaultdict
 from hashlib import sha256
 import json
 from pathlib import Path
-from build import CANONICAL_OUTPUT, chunk, script_inventory, string, u32
+from build import CANONICAL_OUTPUT, chunk, script_inventory, string, u32, string_values, packstr
 from refresh_native_scenery import Native, patch_parts, pack_vectors, unpack_vectors, close, write_snapshot, split_cframe
 from refresh_quarry_courtyard import pack_floats, unpack_floats
 
@@ -41,12 +41,12 @@ def merge(data, edits, validate_part=validate_tree, allowed_properties=None):
             cid=u32(payload);name,off=string(payload,4);key=(cid,name)
             if key in updates:
                 dtype=payload[off];count=len(base.classes[cid][1])
-                assert dtype in (4,12)
-                values=unpack_vectors(payload[off+1:],count) if dtype==12 else unpack_floats(payload[off+1:],count)
+                assert dtype in (1,4,12)
+                values=([v.decode() for v in string_values(payload[off+1:],0,count)] if dtype==1 else unpack_vectors(payload[off+1:],count) if dtype==12 else unpack_floats(payload[off+1:],count))
                 for i,(old,new) in updates[key].items():
-                    assert close(values[i],old) if dtype==12 else abs(values[i]-old)<.00001,(key,i,values[i],old)
+                    assert (values[i]==old if dtype==1 else close(values[i],old) if dtype==12 else abs(values[i]-old)<.00001),(key,i,values[i],old)
                     values[i]=new
-                encoded=pack_vectors(values) if dtype==12 else pack_floats(values)
+                encoded=b''.join(packstr(v) for v in values) if dtype==1 else pack_vectors(values) if dtype==12 else pack_floats(values)
                 raw=chunk(kind,payload[:off+1]+encoded);written.add(key)
         output.append(raw)
     assert written==updates.keys()
