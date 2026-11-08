@@ -155,6 +155,29 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuer
  end
  return point,normal
 end
+-- Mining Away's two flat beam ribbons. Render from the same verified contact
+-- as other miners; the original warm palette and width curve are cosmetic.
+local function drawReferenceBeam(beam,visible,width,sample,now)
+ if visible and not beam.reference then
+  local tip=Instance.new('Attachment');tip.Parent=beam.endpoint
+  local layers={}
+  for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
+   local b=Instance.new('Beam');b.Name=name;b.Attachment0=beam.origin;b.Attachment1=tip;b.FaceCamera=true
+   b.Color=ColorSequence.new(i==1 and Color3.new(.873579,.872877,.559136) or Color3.new(1,.622278,.095949))
+   b.Transparency=NumberSequence.new(i==1 and 0 or .85)
+   b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
+   b.Parent=beam.holder;layers[i]=b
+  end
+  beam.reference=layers
+ end
+ if not beam.reference then return end
+ local t=math.clamp((now-(sample.since or now))/2,0,1)
+ local inner=.3*(1-(1-t)^2)*width
+ for i,b in ipairs(beam.reference) do
+  local w=visible and (i==1 and inner or .5*width) or 0
+  b.Width0=w;b.Width1=w;b.Enabled=w>.001
+ end
+end
 function P:renderMiningBeam(beam,sample,now,noQuery)
  if self.closed or not beam or not beam.origin.Parent then return end
  local final;sample,final=finalContact(sample,now)
@@ -203,13 +226,15 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local visible=valid and width>.001
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
+ local reference=sample.droneRole=='Striker' and sample.isMining
  local charging=sample.alive and sample.charging and not sample.paused
- if (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
+ if not reference and (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
   BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneRole or sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
+ if reference and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if visible then
   local origin=beam.origin.WorldPosition
   if beam.vertical then
@@ -219,8 +244,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   end
   local tip=beam.vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
   local workerScale=.23;local alpha=beam.visibility
-  WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
-  WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
+  if reference then beam.endpoint.Position=tip
+  else
+   WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
+   WorkEffects.drawCylinder(beam.halo,origin,tip,(look.width0+(style=='Percussion' and .18 or .06)*pulse)*width*workerScale,1-.22*alpha)
+  end
   if beam.vfx then
    beam.halo.Transparency=1
    local releaseAt=predicted and deadline or (style=='Percussion' and (sample.pulseAt or sample.since) or sample.since)
@@ -236,10 +264,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
+ drawReferenceBeam(beam,reference and visible,width,sample,now)
  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
  beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
- self.work:mining(beam,sample,point,normal,width,pulse,now)
+ if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if self.audio and self.audio.setLoop then
   if visible and sample.active and sample.isMining and not sample.paused then
    self.audio:setLoop(beam,'cutting_hum',point,.45+.55*width,.9+.1*width)
@@ -538,7 +567,7 @@ function P:renderDrone(drone,_dt,now)
  end
  self.work:courier(drone,record,now)
  self.work:repair(drone,record,now)
- self.work:flight(drone,record,_dt,now)
+ if source:GetAttribute('Role')~='Striker' then self.work:flight(drone,record,_dt,now) end
  if not record.events.dead then record.pose=pose end
 end
 function P:destroyDrone(drone)

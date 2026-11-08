@@ -26,11 +26,38 @@ local function mine()
  assert(r.paid and Pro.cargoUnits(data(p))>before,'real mining/collection produced no reward')
  return now-started
 end
+check('a single field order sends four workers to different rocks and retargets without a card',function()
+ local main,mainProfile=pl,p
+ pl=player(310009);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId]);move(field.center)
+ local seeds={}
+ for i,x in ipairs({-15,-5,5,15,-10,0,10}) do
+  local r=makeResource(field,field.center+Vector3.new(x,0,i<=4 and -5 or 7),'Crystal',55,10,3)
+  r.readyAt=now;seeds[i]=r
+ end
+ input('Patch',field.id);tick()
+ local claimed={}
+ for _,d in ipairs(p.drones) do
+  assert(d.autoField==field.id and d.target and not claimed[d.target.id])
+  claimed[d.target.id]=true
+ end
+ for _=1,1500 do
+  tick()
+  for _,r in ipairs(seeds) do
+   if r.paid and not claimed[r.id] then
+    input('Recall')
+    for _,node in ipairs(seeds) do node.paid=true;node.hp=0 end
+    players.PlayerRemoving:Fire(pl);pl,p=main,mainProfile
+    return
+   end
+  end
+ end
+ error('No second wave of mining')
+end)
 local firstId,firstBase,offer,selected,baseTime
 local beganAt=now
-check('Studio and production both start with one drone, zero Quartz, actual rocks',function()
- assert(#p.drones==1 and #data(p).fleet==1 and not p.testFleet)
- assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==40)
+check('Studio and production both start with four permanent miners, zero Quartz, actual rocks',function()
+ assert(#p.drones==4 and #data(p).fleet==4 and not p.testFleet)
+ assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==100)
  assert(data(p).run.quartzEarnings==0 and p.drones[1].stats.plotAuto==0)
  firstId=p.drones[1].id;firstBase=Pro.clone(data(p).fleet[1].base)
  baseTime=mine();mine();sell()
@@ -73,18 +100,18 @@ check('actual worker ticks pay all Quartz required for prestige after spending o
  while data(p).run.quartzEarnings<Pro.milestone(data(p)).earnings do mine();sell() end
  local pre=Pro.prestigePreview(data(p));assert(pre.eligible and pre.winsRequired==0 and pre.field=='Quartz')
  local request=quote({confirm=true});move(shopStations.Quartz.Position);input('Prestige',request)
- assert(#p.drones==2 and #data(p).fleet==2 and data(p).prestiges==1)
+ assert(#p.drones==5 and #data(p).fleet==5 and data(p).prestiges==1)
  assert(data(p).fleet[1].id==firstId and data(p).fleet[1].base.miningDPS==firstBase.miningDPS)
- assert(DroneRoles.isWorker(data(p).fleet[2].role))
+ assert(DroneRoles.isWorker(data(p).fleet[5].role))
  assert(#data(p).run.cards==0 and data(p).run.wallet.Quartz==0 and data(p).run.quartzEarnings==0)
  assert(p.drones[1].stats.miningDPS==firstBase.miningDPS*1.25)
- input('Prestige',request);assert(#data(p).fleet==2)
+ input('Prestige',request);assert(#data(p).fleet==5)
  print(string.format('MODEL run1 %.2fs worker ticks (travel to stations supplied by double); starter rock %.2fs',now-beganAt,baseTime))
 end)
 check('reconnect preserves reward and the second earned run can buy another upgrade',function()
- local secondId=data(p).fleet[2].id;players.PlayerRemoving:Fire(pl)
+ local prestigeId=data(p).fleet[5].id;players.PlayerRemoving:Fire(pl)
  pl=player(310001);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId])
- assert(#data(p).fleet==2 and data(p).fleet[1].id==firstId and data(p).fleet[2].id==secondId)
+ assert(#data(p).fleet==5 and data(p).fleet[1].id==firstId and data(p).fleet[5].id==prestigeId)
  assert(data(p).prestiges==1 and p.drones[1].stats.miningDPS==37.5)
  mine();mine();sell();assert(data(p).run.wallet.Quartz>=20)
  move(scene.packStation.Position);input('BuyPack',quote({packIndex=0}));assert(data(p).run.pendingOffer.price==20)

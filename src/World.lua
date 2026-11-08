@@ -20,7 +20,7 @@ local function sanitize(model,query)
  end
 end
 W.sanitize=sanitize
-function W.drone(parent,template,pos,color)
+function W.drone(parent,template,pos,color,referenceMiner)
  local model=template and template:Clone() or Instance.new('Model');model.Name='Drone';sanitize(model,false)
  local part=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
  if not part or not part:IsA('BasePart') then part=W.part(model,'Hull',pos,Vector3.new(2,2,2),Color3.fromRGB(229,235,230)) end
@@ -32,7 +32,8 @@ function W.drone(parent,template,pos,color)
  local emitter=model:FindFirstChild('Emmiter',true)
  if not emitter or not emitter:IsA('BasePart') then emitter=W.part(model,'Emmiter',pos,Vector3.new(.24,.24,.24),color,Enum.Material.Neon) end
  emitter.Color=color;emitter.CanQuery=false;emitter.Material=Enum.Material.SmoothPlastic
- model:ScaleTo(model:GetScale()*.58);model:SetAttribute('ModelScale',.58)
+ local scale=referenceMiner and 1 or .58
+ model:ScaleTo(model:GetScale()*scale);model:SetAttribute('ModelScale',scale)
  model:SetAttribute('OriginalDrone',template~=nil)
  return model,part,emitter
 end

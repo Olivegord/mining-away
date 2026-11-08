@@ -36,4 +36,18 @@ check('arrival remains bounded and converges across frame rates',function()
  end
  assert((results[1]-results[3]).Magnitude<.01)
 end)
+check('reference flight uses a 10-stud ring and the original cruise and ease',function()
+ for slot=1,4 do
+  local offset=Feel.followGoal(Vector3.zero,slot,4,0,.35,true)
+  assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-10)<1e-7)
+ end
+ for _,fps in ipairs({30,60,144}) do
+  local dt=1/fps;local near,far=Vector3.zero,Vector3.zero
+  for _=1,fps do
+   near=Feel.referenceFlight(near,Vector3.new(1,0,0),.35,dt)
+   far=Feel.referenceFlight(far,Vector3.new(100,0,0),.35,dt)
+  end
+  assert(math.abs(near.X-(1-.97^60))<1e-7 and math.abs(far.X-21)<1e-7)
+ end
+end)
 print(checks..' production observer/shared-flight checks; native motion and network transport NOT VERIFIED')

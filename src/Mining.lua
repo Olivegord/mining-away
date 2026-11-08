@@ -1,6 +1,6 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
-local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -42,7 +42,7 @@ function M.contactMultiplier(role,_nodeKind,hardness,stage,count)
   local resistance=math.clamp(((hardness or 1)-1)/7,0,1)
   return 1+resistance*(1-progress)*1.5
  end
- if role=='Striker' or role=='Blue' then return 1+progress*.35 end
+ if (role=='Striker' or role=='Blue') and (hardness or 1)>1 then return 1+progress*.35 end
  return 1
 end
 function M.step(kind: string,charge: number?,dt: number,dps: number): (number,number,number)

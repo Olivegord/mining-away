@@ -363,28 +363,29 @@ check('actual mining envelope surface contact target life and paused work remain
  local s={alive=true,isMining=true,active=true,contact=true,key='ore',life=1,part=target,serverSource=target,since=300,style='Cutter',droneRole='Striker',warmupStart=299,warmupDuration=1}
  s.active=false;s.charging=true
  p:beginFrame();p:renderMiningBeam(b,s,299.93)
- assert(b.vfx.rich and b.vfx.rich.mask.Enabled and not b.vfx.body.Enabled)
+ assert(not b.reference and not b.vfx,'ordinary miner played the rich startup')
  p:beginFrame();p:renderMiningBeam(b,s,300)
- near(b.vfx.body.Width0,.162);assert(b.vfx.body.Enabled and b.vfx.rich and b.vfx.rich.mask.Enabled)
+ local inner,outer=unpack(b.reference)
+ assert(outer.Enabled and not inner.Enabled and outer.Attachment0==b.origin and outer.Attachment1.Parent==b.endpoint)
+ near(outer.Width0,.5)
  assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
  s.paused=true;p:beginFrame();p:renderMiningBeam(b,s,300.02)
- assert(not b.vfx or not b.vfx.body.Enabled,'paused prediction survived')
+ assert(not outer.Enabled,'paused prediction survived')
  s.paused=false;s.droneRole='Bubbler';p:beginFrame();p:renderMiningBeam(b,s,300.03)
- assert(not b.vfx or not b.vfx.body.Enabled,'specialist predicted a continuous beam')
+ assert(not outer.Enabled and (not b.vfx or not b.vfx.body.Enabled),'specialist predicted a continuous beam')
  s.droneRole='Striker';p:beginFrame();p:renderMiningBeam(b,s,300.16)
- assert(not b.vfx or not b.vfx.body.Enabled,'prediction extended past its bounded receipt window')
+ assert(not outer.Enabled,'prediction extended past its bounded receipt window')
  s.active=true;s.charging=false
- p:beginFrame();p:renderMiningBeam(b,s,300.17)
- near(b.vfx.body.Width0,.12);assert(p.beamRays<=12)
- assert(not b.vfx.rich,'release kept the charge rig')
- near((b.vfx.root.Position+b.vfx.b.Position).Y,1)
- s.paused=true;s.active=false;s.charging=false
+ p:beginFrame();p:renderMiningBeam(b,s,301)
+ near(inner.Width0,.225);near(outer.Width0,.5);near(b.endpoint.Position.Y,1)
+ assert(p.beamRays<=12 and not b.vfx)
+ s.active=false
  p:beginFrame();p:renderMiningBeam(b,s,301.01)
  p:beginFrame();p:renderMiningBeam(b,s,301.22)
- assert(not b.vfx or not b.vfx.body.Enabled)
- s.paused=false;s.active=true;s.key='next';s.life=2;s.since=302
+ assert(not inner.Enabled and not outer.Enabled,'original fade exceeded .2 seconds')
+ s.active=true;s.key='next';s.life=2;s.since=302
  blocked=true;p:beginFrame();p:renderMiningBeam(b,s,302.1)
- assert(not b.vfx or not b.vfx.body.Enabled,'new life reused a stale contact')
+ assert(not outer.Enabled,'new life reused a stale contact')
  p:destroyMiningBeam(b);p:destroy();target:Destroy();view:Destroy()
 end)
 check('future receipts wait and stale orbital contacts stop light and new emission',function()

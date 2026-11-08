@@ -1,6 +1,6 @@
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=7.2,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -20,6 +20,17 @@ function F.approach(position,goal,maxStep60,dt)
  if distance<1e-5 then return goal end
  local step=math.min(distance*F.alpha(.03,dt),math.max(0,maxStep60)*60*dt,distance)
  return position+delta/distance*step
+end
+-- Shared by the server and every observer. No extra thrust or braking layer.
+function F.referenceFlight(position,goal,maxStep60,dt,correction)
+ if dt<=0 then return position,Vector3.zero end
+ local nextPosition=F.approach(position,goal,maxStep60,dt)
+ if correction then
+  local step=nextPosition-position+correction*dt
+  local cap=maxStep60*60*dt
+  nextPosition=position+(step.Magnitude>cap and step.Unit*cap or step)
+ end
+ return nextPosition,(nextPosition-position)/dt
 end
 function F.approachWork(position,goal,maxStep60,dt)
  if dt<=0 then return position end
@@ -115,8 +126,13 @@ function F.followOffset(slot,count,time,maxStep60)
  local x,z=F.formationXZ(slot,count)
  return x,F.FollowHeight+F.hover(time,maxStep60),z
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,referenceMiner)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
+ if referenceMiner and count<=5 then
+  local angle=2*math.pi*slot/count
+  x,z=math.cos(angle)*10,math.sin(angle)*10
+ end
+ if referenceMiner then y=F.FollowHeight+math.sin(time+maxStep60*200)/3 end
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -285,6 +301,12 @@ function F.flightYaw(position,goal,velocity,lastYaw)
  end
  if Vector3.new(goal.X-position.X,0,goal.Z-position.Z).Magnitude>1 then return F.levelYaw(position,goal,lastYaw) end
  return lastYaw or 0
+end
+function F.referenceYaw(position,goal,maxStep60,ownerLook,lastYaw)
+ if ownerLook and (goal-position).Magnitude*.03<maxStep60 then
+  return F.levelYaw(Vector3.zero,ownerLook,lastYaw)
+ end
+ return F.levelYaw(position,goal,lastYaw)
 end
 function F.levelYaw(position,target,lastYaw)
  local dx,dz=target.X-position.X,target.Z-position.Z

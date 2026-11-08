@@ -1403,7 +1403,7 @@ end)()
 local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,WorkHeight=7.2,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -1423,6 +1423,17 @@ function F.approach(position,goal,maxStep60,dt)
  if distance<1e-5 then return goal end
  local step=math.min(distance*F.alpha(.03,dt),math.max(0,maxStep60)*60*dt,distance)
  return position+delta/distance*step
+end
+-- Shared by the server and every observer. No extra thrust or braking layer.
+function F.referenceFlight(position,goal,maxStep60,dt,correction)
+ if dt<=0 then return position,Vector3.zero end
+ local nextPosition=F.approach(position,goal,maxStep60,dt)
+ if correction then
+  local step=nextPosition-position+correction*dt
+  local cap=maxStep60*60*dt
+  nextPosition=position+(step.Magnitude>cap and step.Unit*cap or step)
+ end
+ return nextPosition,(nextPosition-position)/dt
 end
 function F.approachWork(position,goal,maxStep60,dt)
  if dt<=0 then return position end
@@ -1518,8 +1529,13 @@ function F.followOffset(slot,count,time,maxStep60)
  local x,z=F.formationXZ(slot,count)
  return x,F.FollowHeight+F.hover(time,maxStep60),z
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,referenceMiner)
  local x,y,z=F.followOffset(slot,count,time,maxStep60)
+ if referenceMiner and count<=5 then
+  local angle=2*math.pi*slot/count
+  x,z=math.cos(angle)*10,math.sin(angle)*10
+ end
+ if referenceMiner then y=F.FollowHeight+math.sin(time+maxStep60*200)/3 end
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -1689,6 +1705,12 @@ function F.flightYaw(position,goal,velocity,lastYaw)
  if Vector3.new(goal.X-position.X,0,goal.Z-position.Z).Magnitude>1 then return F.levelYaw(position,goal,lastYaw) end
  return lastYaw or 0
 end
+function F.referenceYaw(position,goal,maxStep60,ownerLook,lastYaw)
+ if ownerLook and (goal-position).Magnitude*.03<maxStep60 then
+  return F.levelYaw(Vector3.zero,ownerLook,lastYaw)
+ end
+ return F.levelYaw(position,goal,lastYaw)
+end
 function F.levelYaw(position,target,lastYaw)
  local dx,dz=target.X-position.X,target.Z-position.Z
  if dx*dx+dz*dz<1e-8 then return lastYaw or 0 end
@@ -1721,7 +1743,7 @@ end)()
 local Mining = (function()
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
-local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=3,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -1763,7 +1785,7 @@ function M.contactMultiplier(role,_nodeKind,hardness,stage,count)
   local resistance=math.clamp(((hardness or 1)-1)/7,0,1)
   return 1+resistance*(1-progress)*1.5
  end
- if role=='Striker' or role=='Blue' then return 1+progress*.35 end
+ if (role=='Striker' or role=='Blue') and (hardness or 1)>1 then return 1+progress*.35 end
  return 1
 end
 function M.step(kind: string,charge: number?,dt: number,dps: number): (number,number,number)
@@ -2123,7 +2145,7 @@ return R
 end)()
 local Profile = (function()
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=10,CONTENT=1}
+local P={SCHEMA=11,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -2225,13 +2247,20 @@ end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,nextDroneSerial=2,seed=seed,fleet={drone(uid,1,'Blue',seed)},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
+ local fleet={}
+ for serial=1,4 do
+  local miner=drone(uid,serial,'Blue',seed,1)
+  -- Mining Away starts its otherwise identical miners at 12–30 studs/second.
+  miner.base.maxStep60=(20+((seed+serial*17)%31))/100
+  fleet[serial]=miner
+ end
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=4,nextDroneSerial=5,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
  local toolsOK,toolsError=Consumables.validate(p.consumables);if not toolsOK then return false,toolsError end
  if not integer(p.prestiges) or not integer(p.purchasedDrones) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
- if not denseArray(p.fleet) or #p.fleet~=p.prestiges+1+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
+ if not denseArray(p.fleet) or (p.starterDrones~=1 and p.starterDrones~=4) or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
  for serial,d in ipairs(p.fleet) do
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
@@ -2443,6 +2472,7 @@ function P.migrate(raw,uid,seed)
   p.run.quartzEarnings=p.run.saleEarnings;p.schemaVersion=9
  end
  if p.schemaVersion==9 then p.schemaVersion=10 end
+ if p.schemaVersion==10 then p.starterDrones=1;p.schemaVersion=11 end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -2676,7 +2706,7 @@ C.CATALOG={
  card('F03','Combat Calibration','Fleet',{combat=.30},'+30% combat shot damage across your fleet'),
  card('F04','Reinforced Frames','Fleet',{health=.35},'+35% maximum hull; restore only the added hull'),
  card('F05','Ceramic Plating','Fleet',{reduction=.15},'Block 15 percentage points of incoming turret damage'),
- card('F06','Bigger Backpack','Player',{capacity=.35},'+35% player backpack space: 40 → 54 ore alone'),
+ card('F06','Bigger Backpack','Player',{capacity=.35},'+35% player backpack space'),
  card('F07','Warm Emitters','Fleet',{startup=.50},'+50% startup rate: one-third less laser warmup alone'),
  card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills your backpack faster'),
  card('C01','Blue Afterburners','Color',{speed=1},'+100% Blue flight speed: 2× alone','Blue'),
@@ -2748,7 +2778,8 @@ function C.capacity(p,extra)
  local n=Shops.effects(p).capacity or 0
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
- return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)
+ local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
+ return math.floor(base*clamp(1+n,.25,3)+.000001)
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
@@ -2756,13 +2787,14 @@ function C.stats(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
  for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
  local speed=clamp(1+(s.speed or 0),.1,3)
+ local cutter=DroneRoles.isMiner(d.role or d.type)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
  return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
-  warmup=math.max(.08,b.warmup*C.LASER_CHARGE_SCALE/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
+  warmup=math.max(cutter and .05 or .08,b.warmup*(cutter and .5 or C.LASER_CHARGE_SCALE)/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
@@ -4340,7 +4372,7 @@ local function sanitize(model,query)
  end
 end
 W.sanitize=sanitize
-function W.drone(parent,template,pos,color)
+function W.drone(parent,template,pos,color,referenceMiner)
  local model=template and template:Clone() or Instance.new('Model');model.Name='Drone';sanitize(model,false)
  local part=model.PrimaryPart or model:FindFirstChild('Mesh') or model:FindFirstChildWhichIsA('BasePart',true)
  if not part or not part:IsA('BasePart') then part=W.part(model,'Hull',pos,Vector3.new(2,2,2),Color3.fromRGB(229,235,230)) end
@@ -4352,7 +4384,8 @@ function W.drone(parent,template,pos,color)
  local emitter=model:FindFirstChild('Emmiter',true)
  if not emitter or not emitter:IsA('BasePart') then emitter=W.part(model,'Emmiter',pos,Vector3.new(.24,.24,.24),color,Enum.Material.Neon) end
  emitter.Color=color;emitter.CanQuery=false;emitter.Material=Enum.Material.SmoothPlastic
- model:ScaleTo(model:GetScale()*.58);model:SetAttribute('ModelScale',.58)
+ local scale=referenceMiner and 1 or .58
+ model:ScaleTo(model:GetScale()*scale);model:SetAttribute('ModelScale',scale)
  model:SetAttribute('OriginalDrone',template~=nil)
  return model,part,emitter
 end
@@ -6664,10 +6697,11 @@ local function spawnDrone(p,owned,slot)
  local role=RoleConfig.StudioRoles[roleName]
  local flightHeight=owned.flightHeight or (role and role.height) or Feel.FollowHeight
  -- Runtime presentation lift; never rewrite a permanent drone's base traits.
- if roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
+ if roleName=='Striker' then flightHeight=7
+ elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local pos=home+Vector3.new(0,flightHeight,0)+Feel.formation(slot,#runtimeFleet(p))
- local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or colors.Blue)
- model,body,emitter=RoleConfig.decorate(model,roleName)
+ local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or colors.Blue,roleName=='Striker')
+ if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,role=owned.role or owned.type,flightHeight=flightHeight,model=model,body=body,emitter=emitter,slot=slot,
   pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,
@@ -6717,6 +6751,7 @@ local function abilityLineOfSight(p,from,r)
 end
 scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=home,now=function() return now end,
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
+scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 local resourceSerial=0
 local function nodeUsage(field)
  local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
@@ -6733,14 +6768,16 @@ end
 local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
- -- The owner requested cubic mineable rocks. Keep the authored crystal asset
- -- intact in the native map; only runtime resource bodies change shape.
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
- local part=template and template:Clone() or Instance.new('Part');part.Shape=Enum.PartType.Block
- part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
- part:SetAttribute('CubicRock',true)
+ local original=not junk and kind=='Crystal' and (stageCount or 3)==3 and scene.classicCrystal
+ local part=(template or original) and (template or original):Clone() or Instance.new('Part')
+ if part:IsA('Part') then
+  part.Shape=Enum.PartType.Block
+  part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
+ end
+ part:SetAttribute('CubicRock',not original)
  local shell=kind=='Geode';local size=visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
- local fullSize=Vector3.one*size
+ local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
@@ -6749,10 +6786,14 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   part.Transparency=0;part.CastShadow=true
   if not template then part.Color=Color3.fromRGB(unpack(junk.color));part.Material=Enum.Material.SmoothPlastic end
   part.Reflectance=0;part:SetAttribute('JunkName',junk.name)
+ elseif original then
+  part.Color=field.cfg.Key=='Ruby' and original.Color or field.color
+  part.Material=original.Material;part.MaterialVariant='';part.Reflectance=0
  else
   part.Color=shell and Color3.fromRGB(186,193,224):Lerp(field.color,.48) or Color3.fromRGB(228,239,248):Lerp(field.color,.66)
   part.Material=Enum.Material.Slate;part.Reflectance=0
-  World.applyOreFinish(part,field.cfg.Key=='Quartz' or field.cfg.Key=='Cobalt' or field.cfg.Key=='ImpactTest')
+  if scene.classicCrystal then part.Material=Enum.Material.SmoothPlastic
+  else World.applyOreFinish(part,field.cfg.Key=='Quartz' or field.cfg.Key=='Cobalt' or field.cfg.Key=='ImpactTest') end
  end
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
@@ -6830,7 +6871,9 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
  local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
  local visualSize=mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
- local radius=ResourcePlacement.radius(visualSize,visualSize,visualSize,kind)
+ local original=kind=='Crystal' and not boulder and scene.classicCrystal
+ local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
+ local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind)
  local occupied={}
  for _,r in ipairs(field.resources) do if not r.paid then
   local p=field.part.CFrame:PointToObjectSpace(r.position)
@@ -7390,7 +7433,9 @@ local function chooseResource(d: any,field: any)
       if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
      end
     end
-    local value=Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
+    local value=if d.role=='Striker' and not field.junk then
+     (r.position-d.pos).Magnitude+(used>0 and 10000 or 0)
+     else Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
     if value<score then best=r;score=value end
    end
   end
@@ -7530,8 +7575,16 @@ local function move(d,goal,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
- d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
- d.yaw=Feel.approachYaw(d.yaw,Feel.flightYaw(d.pos,goal,d.velocity,d.yaw),dt)
+ local yaw
+ if d.role=='Striker' then
+  local p=profiles[d.owner];local hr=p and characterRoot(p)
+  yaw=Feel.referenceYaw(d.pos,goal,speed,hr and hr.CFrame.LookVector,d.yaw)
+  d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,speed,dt)
+ else
+  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
+  yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+ end
+ d.yaw=Feel.approachYaw(d.yaw,yaw,dt)
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
 local function supportDrone(d: any,p: any,hr: any,dt: number)
@@ -7598,15 +7651,15 @@ end
 local function mineDrone(d: any,p: any,field: any,dt: number)
  if d.combatTarget or d.state=='Attack' then release(d);d.chargeAt=nil;d.chargeTarget=nil end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
- -- Only the Rock Scanner card chooses an unclicked next resource.
- if not field.junk and not d.target and d.autoField==field.id and ((d.stats.plotAuto or 0)>0 or d.deployedCarrier) then chooseResource(d,field) end
+ -- A field order keeps the fleet moving; individual orders remain precise.
+ if not field.junk and not d.target and d.autoField==field.id then chooseResource(d,field) end
  local r=d.target
  if r then
   local goal=committedStation(d,r);d.state='Travel';move(d,goal,dt)
   if Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) and los(d.pos,r.position,r.part,{droneFolder}) then
    d.obstructedAt=nil
    d.warmAt=d.warmAt or now;d.state='Warmup'
-   if now-d.warmAt>=math.max(.08,d.stats.warmup) then
+   if now-d.warmAt>=d.stats.warmup then
     if not d.mining then d.beamSince=now end
     d.state='Mine';d.mining=true
     local damage,charge=Mining.step('Blue',d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
@@ -7625,15 +7678,15 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   -- Workers without a current stone regroup with the player. Plot orders may
   -- find another stone later; manual clicks are dispatched next simulation step.
   d.state='Follow';d.mining=false
-  if d.deployedCarrier then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
+  if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
- if not field.junk and not d.target and d.autoField==field.id and ((d.stats.plotAuto or 0)>0 or d.deployedCarrier) then chooseResource(d,field) end
+ if not field.junk and not d.target and d.autoField==field.id then chooseResource(d,field) end
  local r=d.target
  if not r or r.kind=='Geode' then mineDrone(d,p,field,dt);return end
  local goal=committedStation(d,r);d.state='Travel';d.mining=false;move(d,goal,dt)
@@ -7673,7 +7726,7 @@ end
 local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  d.mining=false;d.state=state or 'Follow'
- move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+ move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -7779,7 +7832,7 @@ local function breakerDrone(d,p,hr,field,dt)
  end
  local r=d.target
  if not r then
-  if d.deployedCarrier then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
+  if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
   else followRole(d,p,hr,dt) end
   return
  end
@@ -7917,7 +7970,7 @@ local function droneStep(d: any,dt: number)
   d.mining=false;d.field=nil
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt);return
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt);return
   end
   if Pro.cargoUnits(data(p))>0 and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
@@ -7930,7 +7983,7 @@ local function droneStep(d: any,dt: number)
   else
    d.pickupAt=nil;d.deliveryRequested=false
    d.state='Follow'
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
   end
   return
  elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return
@@ -7959,7 +8012,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
+    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -7968,7 +8021,7 @@ local function droneStep(d: any,dt: number)
   d.mining=false;d.combatTarget=nil
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,height-Feel.FollowHeight,0)
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,height-Feel.FollowHeight,0)
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if d.state~='Return' then d.state='Follow' end
@@ -8585,7 +8638,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   local owned={id=string.format('test:%d:add:%d',pl.UserId,p.testRoll),type=payload.role,role=payload.role,name=RoleConfig.Types[payload.role].DisplayName,flightHeight=role.height,base=Pro.clone(role.base)}
   table.insert(p.testFleet,owned)
   local d=spawnDrone(p,owned,#p.testFleet);local hr=characterRoot(p)
-  d.pos=Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0)
+  d.pos=Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Striker')+Vector3.new(0,d.flightHeight-Feel.FollowHeight,0)
   d.goal=d.pos;d.model:PivotTo(CFrame.new(d.pos));snapshotDrone(d)
   pl:SetAttribute('MA_TestLoadoutLabel',tostring(#p.testFleet)..' preview drones')
   refreshStats(p);p.publishDirty=true
@@ -8690,7 +8743,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    if activeAssault(p) then commandReply(pl,payload,'rejected','Recall fighting drones first',field);return end
    local assigned=0
    for _,d in ipairs(p.drones) do
-    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) and (field.junk or (d.stats.plotAuto or 0)>0) then
+    if not d.carrierId and d.hp>0 and DroneRoles.isWorker(d.role) then
      local old=d.field
      if old~=field.id then release(d);spend(d);d.field=field.id;d.state='Travel';d.shotAt=now end
      d.autoField=field.id;d.commandOutAt=nil;assigned+=1
@@ -8698,7 +8751,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
     end
    end
    if assigned==0 then
-    local reason=field.junk and 'An available miner or breaker is needed' or 'Click a rock to start mining.'
+    local reason='An available mining drone is needed'
     commandReply(pl,payload,'rejected',reason,field);notice(p,reason);return
    end
    if p.workField~=field.id then p.oreQueue={} end
@@ -8718,7 +8771,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
    for _,d in ipairs(fleet) do
     local old=d.field
     if old~=field.id then release(d);spend(d);d.field=field.id;d.state='Travel';d.shotAt=now end
-    d.autoField=(d.stats.plotAuto or 0)>0 and field.id or nil
+    d.autoField=field.id
     if old~=field.id then dropFieldIfEmpty(p,old) end
    end
    R.begin(field.e);wakeTurrets(field,pl)

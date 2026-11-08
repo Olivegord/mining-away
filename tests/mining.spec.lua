@@ -59,11 +59,13 @@ test('autonomous priorities value real work and a payable core instead of a free
  assert(M.style('Blue')=='Cutter' and M.style('Red')=='Percussion' and M.style('Green')=='Resonance')
  assert(string.find(M.description('Red'),'50%%'))
 end)
-test('all mineral work is three times the former health without inflating meshes',function()
+test('original Quartz crystals take 40–90 work at 30 DPS',function()
+ close(M.resource(50,'Crystal',1).work,40);close(M.resource(100,'Crystal',1).work,90)
+ close(M.contactMultiplier('Striker','Crystal',1,3,3),1)
  for _,kind in ipairs({'Crystal','Core','Shard','Geode'}) do
   local n=M.resource(75,kind,1)
   local mass=kind=='Geode' and 225 or 75
-  close(n.work,(mass-10)*3);assert(n.size<=6)
+  close(n.work,mass-10);assert(n.size<=6)
  end
 end)
 print(passed..' mining rules checks passed; not Studio results')

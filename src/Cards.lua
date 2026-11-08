@@ -24,7 +24,7 @@ C.CATALOG={
  card('F03','Combat Calibration','Fleet',{combat=.30},'+30% combat shot damage across your fleet'),
  card('F04','Reinforced Frames','Fleet',{health=.35},'+35% maximum hull; restore only the added hull'),
  card('F05','Ceramic Plating','Fleet',{reduction=.15},'Block 15 percentage points of incoming turret damage'),
- card('F06','Bigger Backpack','Player',{capacity=.35},'+35% player backpack space: 40 → 54 ore alone'),
+ card('F06','Bigger Backpack','Player',{capacity=.35},'+35% player backpack space'),
  card('F07','Warm Emitters','Fleet',{startup=.50},'+50% startup rate: one-third less laser warmup alone'),
  card('F08','Clean Extraction','Fleet',{yield=.20},'+20% ore from every broken crystal; fills your backpack faster'),
  card('C01','Blue Afterburners','Color',{speed=1},'+100% Blue flight speed: 2× alone','Blue'),
@@ -96,7 +96,8 @@ function C.capacity(p,extra)
  local n=Shops.effects(p).capacity or 0
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
- return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)
+ local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
+ return math.floor(base*clamp(1+n,.25,3)+.000001)
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
@@ -104,13 +105,14 @@ function C.stats(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
  for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
  local speed=clamp(1+(s.speed or 0),.1,3)
+ local cutter=DroneRoles.isMiner(d.role or d.type)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
  return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
-  warmup=math.max(.08,b.warmup*C.LASER_CHARGE_SCALE/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
+  warmup=math.max(cutter and .05 or .08,b.warmup*(cutter and .5 or C.LASER_CHARGE_SCALE)/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),

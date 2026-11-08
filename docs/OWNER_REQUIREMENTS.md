@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — match the open Mining Away document
+
+Use the lighting, sky, bare finishes, checker floor, and simple trees from the owner's open **mining away**, place **14302916915**, universe **4945273529**. Match its drone movement, low mining downtime, and power closely inside the existing **DRONEREVOLUTION**. Keep packs, upgrades, and distinct drone types. When asked about starting count, the owner chose **four permanent drones for new players**. Existing saves keep their exact fleet, and prestige still earns another permanent drone. This replaces the earlier one-drone and quarry art directions. No publication requested.
+
 ## November 8 latest — implement the combined purchase loop
 
 After pointing out that a Legendary pack is unsatisfying when its upgrade costs more money the player cannot afford, the owner says: “think of a solution and add it to the game.” Implement an answer, without another design-approval pause. The chosen implementation charges once for the pack and includes one of its three choices; rarity guarantees a useful upgrade of that tier. Owned upgrades can be bought again at increasing Quartz prices. This is an implementation decision to test, not a claim that the owner has accepted the result. No Roblox publication is requested.

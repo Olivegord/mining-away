@@ -653,7 +653,8 @@ local function registerDrone(source)
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  clone:ScaleTo(clone:GetScale()*(source:GetAttribute('ModelScale') or DroneConfig.Swarm.ModelScale))
- DroneConfig.decorate(clone,source:GetAttribute('Role') or kind)
+ local referenceMiner=source:GetAttribute('Role')=='Striker'
+ if not referenceMiner then DroneConfig.decorate(clone,source:GetAttribute('Role') or kind) end
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX;DroneOutline.attach(clone)
@@ -665,7 +666,10 @@ local function registerDrone(source)
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
- if typeColor and not clone:GetAttribute('RoleGeometry') then
+ if referenceMiner then
+  pivot.Color=Color3.fromRGB(163,162,165);pivot.Material=Enum.Material.Plastic;pivot.MaterialVariant=''
+  emitter.Color=pivot.Color;emitter.Material=pivot.Material;emitter.MaterialVariant=''
+ elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
   local trim=localPart(clone,'LowerChassis',pivot.Position);trim.Size=Vector3.new(pivot.Size.X*1.015,.055,pivot.Size.Z*1.015);trim.Transparency=0;trim.Color=Color3.fromRGB(23,35,46);trim.Material=Enum.Material.Metal;trim.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.35,0)
@@ -869,21 +873,22 @@ end
 local function renderDrone(d,dt,now)
  local previousPosition=d.pos
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
+ local referenceMiner=s:GetAttribute('Role')=='Striker'
  local logical=s:GetAttribute('Position');local goal=s:GetAttribute('Goal') or logical
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
+ local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
-  local owner=Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
-  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
    -- Avoidance is chosen once by the server. Observer-specific crowds must
    -- not invent competing lanes and send the same drone different ways.
    d.swarmSteer=s:GetAttribute('SwarmOffset') or Vector3.zero
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0)+d.swarmSteer
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,referenceMiner)+Vector3.new(0,(s:GetAttribute('FlightHeight') or Feel.FollowHeight)-Feel.FollowHeight,0)+d.swarmSteer
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -903,26 +908,27 @@ local function renderDrone(d,dt,now)
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
-  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction)
+  if referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
+  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction) end
  end
  if not motionPaused then
-  local targetYaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  local targetYaw=referenceMiner and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw) or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=state=='BreakerDive' or state=='BreakerImpact'
- local drift=(state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
+ local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
  -- Reading server time makes every observer see the same hop, and late joins
  -- never replay an old recall.
  local recallAt=s:GetAttribute('RecallAt') or -100
  local recallAge=now-recallAt;local hop,recallPitch=0,0
- if not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+ if not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
   local p=recallAge/.72
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
@@ -1168,8 +1174,7 @@ local function requestField(id)
  local fields=world:FindFirstChild('Fields')
  if fields then for _,field in ipairs(fields:GetChildren()) do
   if (field:GetAttribute('FieldId') or field:GetAttribute('Tier'))==id then
-   local phase=field:GetAttribute('Phase')
-   if not fieldUnlocked(field) and (phase=='Guarded' or phase=='Active') then command:FireServer('Patch',id) end
+   command:FireServer('Patch',id)
    return
   end
  end end

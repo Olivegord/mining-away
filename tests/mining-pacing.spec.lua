@@ -15,6 +15,6 @@ for _,field in ipairs(C.Fields) do if not field.TestField then
  assert(base>0 and upgraded<base and base<100)
  print(string.format('%s hardness %.1f: base %.2fs / +50%% cutter %.2fs / %d ore at value %d',field.Key,field.Hardness,base,upgraded,field.Ore,field.Value))
 end end
-assert(cut(8,1)>cut(1,1)*7,'hardness lost its actual work bottleneck')
+assert(cut(8,1)>cut(1,1)*6.5,'hardness lost its actual work bottleneck')
 assert(M.contactMultiplier('Charger','Geode',8,0,3)*M.efficiency('Red','Geode')>M.contactMultiplier('Striker','Geode',8,0,3)*3,'hard-shell specialization is cosmetic')
 print('PASS work difficulty and upgrade leverage. No retention, enjoyment or full-loop pacing claim.')

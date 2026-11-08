@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** the owner rejected the three-blueprint cap, old workshop UI and rarity-as-extra-copies, then authorized “think of a solution and add it to the game.” The replacement has a shared 13-upgrade pool, merged duplicate counts, increasingly expensive repeat purchases, and packs whose price includes a choice. Pack rarity guarantees at least one useful upgrade of that tier. It is installed and saved, with actual Edit source verification; enjoyment and full native interaction still require human testing. See [design and evidence](review/QUARTZ_POOL.md).
+**Current implementation:** DRONEREVOLUTION uses the sunset, sky, checker floor, block grove and crystal mesh copied from the owner's open **mining away**. The four permanent starter miners travel and work like the reference; a click on the bare field sends the crew to separate rocks and keeps them working. The shared Quartz pack, upgrade and prestige loop remains. See [the parity handoff](review/MINING_AWAY_PARITY.md).
 
 ## Identity and delivery state
 
@@ -11,19 +11,20 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `83159f31ab04bb552d32e6ce7b8905c34821888d4fe475977770fa4a7ccc039a` | Shared upgrade pool and replacement UI Sources; all non-Source chunks and unrelated/backup Sources preserved. |
-| Installed Edit revision | `54fdaa5dbb656a60d164f2dcbe286f6583faf1c4` | Quartz pool implementation commit; all seven actual Edit hashes recorded in `docs/review/quartz-pool-native.json`. |
+| Native-file SHA-256 | `d69a8b3eb7c1f577afa1d02bc940212d746b3b7bdb97e655cc8785ac80e909a0` | Reference art and updated managed Sources; all 50 existing Source slots preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The parity implementation commit; [seven actual Edit hashes](review/mining-away-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
+| Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529**, loaded version **1229** | Reference inspected in Edit; no changes saved to it. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The replacement Quartz pool is installed in the exact shared place/universe. All seven managed Sources match the modular inputs and canonical snapshot by SHA-256; all three roots are `SyncedAsRoot`. The temporary UI preview was removed. Play is stopped. Loaded version 90 is not publication evidence. |
-| Roblox publication | **No publication in the Quartz pool work** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The Mining Away transfer is installed in the exact shared place/universe. All seven managed Sources match the canonical snapshot by SHA-256; all three roots are `SyncedAsRoot`. The temporary crystal inspection was removed. Studio remains in Edit. Loaded version 90 is not publication evidence. |
+| Roblox publication | **No publication for the Mining Away transfer** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — packs include their reward; one shared upgrade pool
+## Earlier follow-up — packs include their reward; one shared upgrade pool
 
 Both counters open the same bright upgrade shop. Packs cost 20/27/36/49/66… Quartz and include one of three server-generated choices. A Legendary pack always offers at least one useful Legendary upgrade, even when buying the pack leaves zero Quartz. Each new pick grants one copy, and duplicates merge into 2×/3× rows. There is no three-upgrade ownership cap. Buy another owned copy for 20/34/58/98/167… Quartz as its count rises. The 13-upgrade pool spans ordinary single-stat upgrades and rarer combinations such as Overdrive Core, Prismatic Core and Autonomous Fleet. Capped effects and strictly inferior alternatives are filtered from drafts. Individual stack limits remain.
 
