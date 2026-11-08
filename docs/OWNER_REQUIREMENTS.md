@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — more visible patterned surfaces
+
+Use the reference's variety of large, readable motifs on the first view from spawn and along each field approach. Include stars, daisies, blue and red gingham, dark dots, waves, knit, and studs alongside wood and brick. Put patterned cubes of different sizes and flush inlays in loose groups. Keep continuous terrain, clear routes, and the original trees, rocks, flowers, and mushrooms.
+
 ## November 7 latest — continuous ground and original detail
 
 Keep the original trees, flowers, rocks, mushrooms, and distinctive textures. Reduce clutter by fixing the ground and spacing those details. A single level should read as one uninterrupted surface. Keep the six mining elevations and deliberate terrace edges and ramps. Use the supplied reference for large quiet grass and gravel surfaces, with small, colorful patterned props.

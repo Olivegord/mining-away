@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ab30b9f05af66f4dbc5621513c6dfe146e8789fe0de7bd134d248797a5b6b0d4` | Background save of the continuous quarry ground and restored scenery. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Continuous quarry ground and restored original details in the open shared Edit document. |
+| Native-file SHA-256 | `dcdabe4d48bf662f7fe6e5d9e6832accb36c6f99be69e57898f8691a97fd1e26` | Background save of the quarry motif props and eight material variants. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Patterned props across the hub and all six fields in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Continuous ground installed November 7, 2026** | The open Edit session has flat mining terraces and selected original scenery. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
+| Shared Studio entry point | **Quarry motifs installed November 7, 2026** | The open Edit session has the expanded pattern palette, the continuous terraces and restored scenery. All seven managed Sources match the workspace and all three roots report `SyncedAsRoot`. Its loaded place version is 26. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — continuous ground and original detail
+## Latest follow-up — visible quarry motifs
+
+Sixty-nine decorative accents across the hub and all six fields include 15 gingham inlays, stars, daisies, pips, blue waves and knit, and gold studs, alongside the existing brick and timber. Eight original 64×64 tiles are checked into the repository with their generator and Roblox image IDs. The largest patterns face the spawn and field approaches. The props have no collision, touch, or ray-query participation, and their footprints clear the mining beds, walkable routes, lagoon crossing, and station pads.
+
+All eight images preloaded successfully in the shared Studio Edit document. The hub and Quartz approach were inspected in the viewport. The scoped background save preserved all original instances and all 50 Sources. Studio was already open and was left in Edit. No Play test was run. The last verified public Roblox release is v43.
+
+## Earlier follow-up — continuous ground and original detail
 
 The owner rejected the sparse block pass because it removed detail while leaving jagged, overlapping turf. Fifteen flat slabs now form the six mining terraces. Extensions meet at the same height, with the original elevation changes at the ramps and clear terrace edges. Selected copies of 53 original details return trees, flowers, brush, rocks, and the authored blue trumpet and coral mushrooms. Fourteen small patterned accents provide color beside the quieter grass and gravel. The replaced ground and prior props are preserved in `ServerStorage.QuarryGroundArchive`.
 

@@ -50,6 +50,13 @@ BIOME_REACH_SCOPE = {
 ARRIVAL_SCOPE = {
     "scenery": (MAP, {"QuarryArrivalAccents"}, {"Folder", "Part", "WedgePart"}),
 }
+MOTIF_SCOPE = {
+    "scenery": (MAP, {"QuarryMotifScenery"}, {"Folder", "Part"}),
+    "variants": ("MaterialService", {
+        f"QuarryMotif_{name}" for name in
+        ("Stars", "Daisies", "BlueGingham", "RedGingham", "Pips", "Waves", "Knit", "Studs")
+    }, {"MaterialVariant"}),
+}
 PALETTE_VARIANTS = {f"QuarryPalette_{name}" for name in
                     ("LeafClumps", "LeafStipple", "LeafRibs", "Tufts", "Strata", "Pebbles")}
 PALETTE_SCOPE = {
@@ -450,6 +457,8 @@ def main():
                        help="Append only the authored biome extensions")
     scope.add_argument("--arrival-accents", dest="addition", action="store_const", const=ARRIVAL_SCOPE,
                        help="Append only the spawn and biome approach accents")
+    scope.add_argument("--quarry-motifs", dest="addition", action="store_const", const=MOTIF_SCOPE,
+                       help="Append the eight original quarry patterns and their props")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")
     scope.add_argument("--color-shapes", action="store_true", help="Save quarry palette and abstract accents")
     parser.add_argument("--write", action="store_true", help="Atomically update the canonical file after checks")

@@ -66,3 +66,18 @@ The scenery keeps its photo color maps. Three flat grayscale maps set the finish
 | `roughness-dry.png` (247/255) | Grass, gravel, sandstone dirt, foliage, bark, ruby leaves, and chalk | `78519593640803` |
 | `roughness-weathered.png` (227/255) | Rock, slate, paving, concrete, timber, and corroded metal | `86284392582578` |
 | `roughness-hardware.png` (184/255) | Diamond-plate hardware | `74787139837104` |
+
+## Original patterned accents
+
+These 64×64 tiles are drawn for DRONEREVOLUTION. Regenerate them from the repository root with `python3 tools/draw_quarry_motifs.py`. Their regular tile scales are recorded in [the Studio motif pass](../../tools/studio_quarry_motifs.lua).
+
+| Tile | Roblox image ID |
+| --- | --- |
+| `motif-orange-stars.png` | `130509631570789` |
+| `motif-violet-daisies.png` | `87001180278589` |
+| `motif-blue-gingham.png` | `83914366857318` |
+| `motif-red-gingham.png` | `111854869033768` |
+| `motif-cream-pips.png` | `140704715063691` |
+| `motif-blue-waves.png` | `109395106577220` |
+| `motif-blue-knit.png` | `126905018997201` |
+| `motif-gold-studs.png` | `107794782432490` |
