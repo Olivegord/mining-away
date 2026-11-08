@@ -9,19 +9,27 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `4fdedd50196e3a3300ce630e62dc0416171f54e47109783191c2a616fe187378` | Studio export of the updated authored Workspace and its matching Sources. All 43 unmanaged Sources were preserved. |
-| Installed game revision | `3190785ca968d418a2f0e9156f61ee8855a1ff87` | Authored biome landmarks, visible distance fog, stronger photo textures, and selective architectural patterns. |
+| Native-file SHA-256 | `32e6e1a5ad78b36143a8c988ba0885499b33ee28ff13816935442b914a92558f` | Studio export of the authored material balance. All 50 Sources, including the 43 unmanaged Sources, match the previous snapshot. |
+| Installed game revision | `8e7ddaf688c7abf5db32b5cb7336425b919453db` | Short matte turf, clearer mining gravel, quieter cliff faces and mineral veins, and distinct path finishes. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Authored quarry revision installed November 7, 2026** | Updated terrain, scenery, and finishes are present in Edit mode. Seven Sources and all three Script Sync roots were verified after publication. |
-| Published Roblox version | **v42, verified** | Studio recorded successful publication to the existing place at 7:13:00 PM Pacific on November 7. The Version History panel was not used. |
+| Shared Studio entry point | **Texture balance installed November 7, 2026** | The material pass is present in Edit mode. Seven managed Sources and all three Script Sync roots were verified after publication. |
+| Published Roblox version | **v43, verified** | Studio recorded successful publication to the existing place at 7:24:52 PM Pacific on November 7. The Version History panel was not used. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — visible fog, readable textures, and current Edit Workspace
+## Latest follow-up — softer grass and distinct surface patterns
+
+The noisy, high-contrast grass was replaced with a short olive turf photo grade. Organic tiling and a smaller 10–12 stud tile soften the repetition. Five mining beds use a tighter gray pebble pattern with individual field tints; Emerald retains its light chalk bed. Cliffs and common stone use broader, softer marks; paved routes keep visible joints and the market and station pads keep their stronger patterns. Cubic ore retains its polish and roughness map with quieter vein contrast. All six new diffuse files are 64×64; [the texture library](../assets/quarry-textures/README.md) records the 32–64 px range, sources, and reproduction command.
+
+The shared desktop Edit viewport was inspected at Quartz before and after the changes, and all six new Roblox images returned `Success` through Studio's image preloader. The saved snapshot passed `python3 tools/build.py`, retained all 50 Sources, and matched the old native hierarchy and semantic object references. Studio confirmed the same transforms, sizes and physics for all 6,574 authored quarry parts, including six collidable mining beds. The live collaborator panel showed only OliveGord, and the integration branch had no newer remote commits when checked before editing.
+
+At `2026-11-08T03:24:52Z`, Studio logged `Publish succeeded for placeId 124078027733625`, `Published new changes in "DRONEREVOLUTION" to Roblox.`, and `Add publish notes to v43`. A post-publish audit of the shared Studio entry point found the new material IDs and tints, verified all seven managed Sources and three `SyncedAsRoot` roots, and confirmed place **124078027733625**, universe **10774898335**, in Edit mode. The open session still reports its originally loaded `game.PlaceVersion` of 26; the publish receipt identifies v43. Studio was already open and remains open. The existing Play session was stopped; no fresh Play session, runtime ore appearance check, mobile test, or multiplayer test was run for this pass.
+
+## Earlier follow-up — visible fog, readable textures, and current Edit Workspace
 
 The v39 Atmosphere was too subtle at quarry distances. Its instance is preserved in ServerStorage and the map now uses blue distance fog from **85 to 440 studs**, tuned in the existing Play session after a 42–300 draft washed out landmarks. The bundled sun and fixed morning clock remain. Seven [photo grades](../assets/quarry-textures/README.md) separate warm cliffs and gravel from cool paving, moss, softer tree foliage, and scarlet Ruby ground. Four market surfaces use herringbone, three service pads use worn checker, and the broad hub and mining beds stay visually quieter.
 
