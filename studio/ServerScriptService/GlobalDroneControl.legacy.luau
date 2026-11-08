@@ -3894,27 +3894,13 @@ return H
 
 end)()
 local Daylight = (function()
--- Clear quarry daylight. Native sky/effects remain preserved in the file;
--- the mismatched sunset sky is archived only in the running server.
+-- Daylight fallback for the reference layout. The authored quarry stores its
+-- lighting in the native place so Edit and Play use the same sky and grade.
 local Daylight = {}
 function Daylight.apply()
  local authored = workspace:FindFirstChild('MiningAway')
+ if authored and authored:GetAttribute('DronerevolutionMapVersion') then return end
  local lighting = game:GetService('Lighting')
- if authored and authored:GetAttribute('DronerevolutionMapVersion') then
-  -- Keep the authored dawn and sky. Cooler fill gives the greens room to
-  -- separate from the warm key, which still comes from the same direction.
-  lighting.OutdoorAmbient=Color3.fromRGB(157,166,173)
-  lighting.ColorShift_Top=Color3.fromRGB(103,86,46)
-  lighting.ExposureCompensation=.22
-  lighting.EnvironmentSpecularScale=.32
-  local grade=lighting:FindFirstChildOfClass('ColorCorrectionEffect')
-  if grade then grade.Contrast=.29;grade.Saturation=.11 end
-  local sky=lighting:FindFirstChildOfClass('Sky')
-  if sky then sky.SunAngularSize=8 end
-  local rays=lighting:FindFirstChildOfClass('SunRaysEffect')
-  if rays then rays.Intensity=.17;rays.Spread=.85;rays.Enabled=true end
-  return
- end
  local storage=game:GetService('ServerStorage')
  local archive=storage:FindFirstChild('OriginalQuarrySky')
  if not archive then archive=Instance.new('Folder');archive.Name='OriginalQuarrySky';archive.Parent=storage end
@@ -5071,8 +5057,8 @@ end
 function W.initialize(): any
  restoreMiningFX()
  Daylight.apply()
- -- The preserved legacy light-cycle script sets dawn once on startup. Apply
- -- again after startup so script scheduling cannot restore the old yellow cast.
+ -- The reference layout can clone its old dawn setter during startup.
+ -- Reapply its fallback after those scripts run; the authored quarry is native.
  task.defer(Daylight.apply)
  local existing=workspace:FindFirstChild('MiningAway')
  if existing and existing:GetAttribute('EditableMap') then

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — brighter quarry lighting and dry surfaces
+
+After the quarry and gameplay changes are integrated, make the shared quarry feel brighter and more stylized. Keep some distance fog, make the sun render consistently, and give dry surfaces an appropriately matte finish. In particular, dirt should not look like shiny plastic. Preserve the authored routes, models, and low-resolution photo texture character.
+
 ## November 7 latest — in-use mining effects, cards and shops
 
 Compare the effects on working drones to the demo. Give the Orbital a thin red sight that lasts a few seconds, run its firing column down to the ground, and scale the circles to the rock. Give gadgets and drones stronger rock reactions: a cut should visibly divide the rock, then a light central push should separate the pieces. Review the cards and shops for upgrades that do nothing useful in the player's current run. Preserve the existing map and its ore models.

@@ -20,3 +20,11 @@ These 64×64 diffuse tiles come from [Poly Haven's CC0 library](https://polyhave
 | `chalk-white.png` | [White Plaster Rough 01](https://polyhaven.com/a/white_plaster_rough_01), graded to cool white | `112016713025924` |
 | `ore-vein.png` | [Covellite, pyrite and quartz, GeoDIL no. 2274](https://commons.wikimedia.org/wiki/File:Covellite,_pyrite_and_quartz_(GeoDIL_number_-_2274).jpg), cropped and graded | `101826947844494` |
 | `ore-roughness.png` | Derived from the same GeoDIL photograph; bright mineral veins are smoother than the host stone | `134197243065883` |
+
+The scenery keeps its photo color maps. Three flat grayscale maps set the finish without adding extra surface detail or metalness:
+
+| Roughness map | Used for | Roblox image ID |
+| --- | --- | --- |
+| `roughness-dry.png` (247/255) | Grass, gravel, sandstone dirt, foliage, bark, ruby leaves, and chalk | `78519593640803` |
+| `roughness-weathered.png` (227/255) | Rock, slate, paving, concrete, timber, and corroded metal | `86284392582578` |
+| `roughness-hardware.png` (184/255) | Diamond-plate hardware | `74787139837104` |

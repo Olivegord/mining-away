@@ -646,8 +646,8 @@ end
 function W.initialize(): any
  restoreMiningFX()
  Daylight.apply()
- -- The preserved legacy light-cycle script sets dawn once on startup. Apply
- -- again after startup so script scheduling cannot restore the old yellow cast.
+ -- The reference layout can clone its old dawn setter during startup.
+ -- Reapply its fallback after those scripts run; the authored quarry is native.
  task.defer(Daylight.apply)
  local existing=workspace:FindFirstChild('MiningAway')
  if existing and existing:GetAttribute('EditableMap') then
