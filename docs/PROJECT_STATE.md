@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 ## Identity and delivery state
 
@@ -9,19 +9,29 @@ Last substantive handoff: **November 6, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ebfa03a78fdb525344b4f04275c170af42fd112b771f189b452809b940c09a21` | Unified eight-tool hotbar, surface contact and melting; all non-Source chunks and unrelated Sources preserved. |
-| Installed gameplay revision | `git log -1 -- build/DRONE_GAME.rbxl` | The commit containing the direct-click tool Sources and matching native snapshot. |
+| Native-file SHA-256 | `07358546571be1516cd7f6d32de0d91d4b2a7b59eecfa5a00336264db8710e2c` | Weathered quarry texture Sources. All non-Source chunks and unrelated Sources were preserved. |
+| Installed gameplay revision | `add85ec0cd8839779475691d91a7f2437474afef` | The texture Sources and matching canonical snapshot. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Direct-click tools installed November 6, 2026** | All seven Sources matched before publishing. Studio remains open in Edit; the new revision has not been played in Studio. |
-| Published Roblox version | **v25, verified** | Studio logged successful publication of place `124078027733625` on November 6 at 10:08:01 PM Pacific and identified v25. Never reopen the history panel. |
+| Shared Studio entry point | **Weathered quarry textures installed November 7, 2026** | All seven Sources matched. One local Studio Play session in the shared document showed the updated textures at spawn. The change is applied at server startup. |
+| Published Roblox version | **v26, verified** | Studio logged successful publication of place `124078027733625` on November 7 at 5:16:07 PM Pacific and identified v26. Never reopen the history panel. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — click the rock, heavier tools, shared hotbar
+## Latest follow-up — weathered quarry textures
+
+The existing authored map gets sandstone and slate strata, rocky cliff faces, muted grasses, paved paths, timber stalls, corroded metal, and gravel field beds. Server startup applies Roblox's built-in material textures to the live scenery and removes the 648 identified legacy checker overlays from the runtime copy. Existing contact properties are captured before changing a part's material. The canonical Edit map retains its authored geometry and source assets. Cubic ore rocks keep their shape and a subdued mineral tint. Drone hardware and courier parcels have smooth faces, and logistics overflow matches the concrete service deck.
+
+The pre-export Git branch matched origin. The shared place opened at v25 with all seven baseline Sources matching the canonical file. Native Script Sync delivered the three changed Sources, and all seven final fingerprints matched with the three roots reporting `SyncedAsRoot`. The final `(bytes, rolling fingerprint)` pairs were `(466432, 1538555560)` for the server, `(546602, 1649114110)` for the client, and `(19914, 483666566)` for DroneConfig. Refresh the previous native snapshot with `python3 tools/build.py --previous-commit 176eb080d265311b5a5f24d7ec3b32a9fc8c9795`.
+
+In one Studio Play session through DRONEREVOLUTION, the spawn view showed the textured cliffs, stalls, paths, and display rocks. The server found zero legacy checker overlays, zero remaining material variants, and zero studded top faces on visible terrace parts. All six field floors remained collidable, and a spawned quartz rock remained cubic and collidable. The three changed bundles compiled, and the core loop and logistics checks passed with API doubles. Visual inspection covered the spawn view on desktop. The standalone Roblox client and other graphics settings were not separately tested.
+
+Play was stopped before publishing from the existing shared Edit document. At `2026-11-08T01:16:07Z`, Studio logged `Publish succeeded for placeId 124078027733625`, `Published new changes in "DRONEREVOLUTION" to Roblox.`, and `Add publish notes to v26`. The open document still reported its loaded `game.PlaceVersion` of 25. A final audit verified the installed Sources and Edit mode in the same place and universe, and Studio was closed to restore its initial state.
+
+## Earlier follow-up — click the rock, heavier tools, shared hotbar
 
 Equip a tool in slots **1–8**, then click the spot on a nearby rock. The server validates the rock, face point, range, cover, ownership and run; it retains the point through the windup. No arc preview or ground click auto-targeting. Bowling has a .44 s windup, quick downward flight and its three recoveries. Crowbar hits chip the selected face with a [Creator Store pipe impact](https://create.roblox.com/store/asset/9113500863). Jelly has a .42 s contact fuse and heat damage. The sword removes a grounded slice at the clicked height and launches the detached slab. Sledgehammer dents and chips nearby rocks. The circular tongs drop a hot steel ball above the chosen spot; contact burns the rock over 1.75 s. Orbital, molten steel, jelly and heat-producing drones share the bounded melt bands, glowing color, lower collider and top cavity.
 

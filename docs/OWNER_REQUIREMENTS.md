@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 7 latest — old realistic textures in the existing setting
+
+Replace the studded, brightly colored finish with realistic textures in the style of older games. Apply the direction across the existing world. Brainchip Arena and Nullscape [Delusional Descension] are texture references. Keep the authored quarry, layout, models, lighting, and gameplay. The [project state](PROJECT_STATE.md) records the texture choices and release.
+
 ## November 6 latest — click the rock surface and start Studio with the tools
 
 Click **where on the rock** to attack; remove the trajectory preview. Give the ball and crowbar heavier windups and the crowbar a metal pipe impact. Tighten jelly's stick and detonation. Add a giant sword that slices real rock geometry, plus a molten steel ball held in circular tongs that drops and melts the rock. Use more physical rock reactions and distinct sounds. Ore currency should visibly glow and sparkle. Scrap and Orbital are mining drops in the same hotbar; share the Orbital melt with other heat sources. Start a fresh Studio test with one of each tool.
