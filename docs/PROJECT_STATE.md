@@ -9,7 +9,7 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `2beb2d81c315376973c205062c7e5208849189d047f9580825093d777b8192f3` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
+| Native-file SHA-256 | `01489d80d52b7e3281275187c13fb49b2647f147f946b9eaeba12a70ec29cf94` | Background save of rectangular meadow layers, fresh turf and flower colors, and neutral daylight. All 50 Sources match the prior snapshot. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Courtyard palette and layered ground in the open shared Edit document. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
@@ -21,7 +21,17 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — saturated green turf and warm earth
+## Latest follow-up — softer meadow with selective bright patches
+
+Restored the f838cce ground/earth palette rather than keeping the all-over green/orange pass. Seven of the 36 raised grass patches deliberately regain the earlier bright lime/yellow-green colors. Eighteen soft yellow-green blends fade across grass surfaces using lit SurfaceGui gradient strips; the original grass texture and physical patches remain. Global midday lighting is unchanged.
+
+Added 204 plant groups from existing native assets: 16 tall tiered trees plus 3 tall Cobalt mushrooms, 21 small stepped trees, 30 bushes/small mushrooms, 77 grass tufts and 57 flower groups. Variable sizes and yaw, spacing reservations and planting near trees/bushes avoid uniform rows. Cobalt retains mushrooms instead of trees. Protected the mining beds, routes and station pads with placement margins; placement required five ground hits. All 204 final plant-group bottoms passed Edit ray checks within 0.65 studs. Decorative clones are anchored and have no collision/query/touch participation. Existing routes, level geometry and original models are retained.
+
+Studio was already open in Edit and remains open in Edit, in DRONEREVOLUTION place 124078027733625 / universe 10774898335. Inspected Quartz close and wide views after the tree and gradient corrections. Verified exactly seven bright accent patches. No Play, multiplayer, mobile or performance test was run. The scoped background save appended 6,149 instances (including cloned model descendants and gradient UI), restored only the prior color properties, and preserved all 50 Sources. build.py reported no changes. Public release remains v43; not published.
+
+Authoring helper: tools/studio_natural_meadow.lua. Saver: tools/refresh_natural_meadow.py with the f838cce canonical bytes as --previous-palette and exported scenery.b64/pops.json. Final tall-tree sizing was adjusted in Edit to preserve the originally reserved footprints. Studio export is the authoritative final geometry; fresh script generation is a deterministic starting layout rather than a byte-identical final export.
+
+## Earlier follow-up — saturated green turf and warm earth
 
 Re-tinted 130 grass parts, including the 36 physical patches, to saturated lime/leaf greens. Re-tinted 105 dirt, earth mass, foundation and basal cliff parts to varied brown-orange/ochre. Retained all material images, geometry, collision and 13:00 bright lighting. Inspected Quartz in the actual shared Studio Edit viewport and verified the grass tint and time. Studio was already open in Edit and remains open in Edit. No new Play test.
 
