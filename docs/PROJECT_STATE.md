@@ -9,19 +9,25 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3b9ceb9d52a3d5aa39e641839900122bdad1a0fe008fbac2f20d6c75994875bc` | Background save of the authored basin. All 50 Sources match the prior snapshot. |
-| Installed Edit revision | `424d030bfdb5efd93ca836a6782933ae15f51111` | High rock walls, stepped landforms, and ground color variation. |
+| Native-file SHA-256 | `922cb78ea3ad809d10dbcff957401bb61d2e6f0d765beaee53e7eb18e07baea2` | Background save of the authored woodlands. All 50 Sources match the prior snapshot. |
+| Installed Edit revision | `c56e7874c608f9900267e3fc09ac0d357688144d` | Five extended forest shelves and 122 trees around the quarry basin. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Quarry basin installed November 7, 2026** | The walled basin is visible in Edit. Seven managed Sources and all three Script Sync roots were verified. |
+| Shared Studio entry point | **Quarry woodlands installed November 7, 2026** | The extended terrain and trees are present in the open Edit session. Seven managed Sources and all three Script Sync roots were verified before the additive scenery change. |
 | Published Roblox version | **v43, verified; older than Edit** | Published revision `8e7ddaf688c7abf5db32b5cb7336425b919453db`. These updates were saved locally and not published. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — walled quarry basin
+## Latest follow-up — taller and denser woodland
+
+Five new forest shelves extend Quartz, Impact, Ruby, Violet, and Emerald. The Quartz clearing has 39 new trees with staggered rows and taller crowns behind them. Across the quarry, 122 broadleaf and evergreen trees use the existing authored models and low-resolution materials. The tallest new tree is about 59 studs. Cobalt's mushroom grove has no ordinary trees. The trees are decorative and have no collision.
+
+The Quartz canopy was inspected in the shared Studio Edit view. All 270 clearance probes over six mining beds and eight established routes passed. Raycasts found ground joins with less than 0.65 studs of elevation change on all five new shelves. The scoped background save added 2,588 instances and preserved all 50 Sources. Studio was already open and was left in Edit. Play movement and performance were not tested. The local integration branch records the revision, and the last verified Roblox publication remains v43.
+
+## Earlier follow-up — walled quarry basin
 
 Five connected rim sections frame the quarry in dark rock, with a lower gap at the south outlet. Seven terraced landforms sit closer to the fields. Their green caps and moss lips alternate with deep blue rock faces. Broad olive, lime, and jade patches run across the ledges and into 88 existing turf pieces. The scenery is authored in the shared Edit document and mirrored to the canonical file with the background saver. It adds 4,014 anchored terrain facets across 12 groups, with the highest crest around 197 studs above the world origin.
 
