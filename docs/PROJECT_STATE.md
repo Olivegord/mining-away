@@ -9,19 +9,27 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3c59194393afa8cc927c5c0947689ed190c4226a13217d6021a96f31d6ba1cc3` | Low-resolution photo material library and the matching Sources. Existing map geometry and unrelated Sources were preserved. |
-| Installed gameplay revision | `72b09b848f50264ff3e2a39f57d420f0bd589746` | Photo tiles, visible sun, and weighted ore pickup behavior. |
+| Native-file SHA-256 | `0f8885778fa5c0b3f3ecfec5d160df2483efbffd4bc0f3b1ba43453a612e9879` | Added the biome and ore photo materials and matching Sources. Existing map geometry and unrelated Sources were preserved. |
+| Installed gameplay revision | `2ae7b0f0a7c16b1a9d349769fa9c984f3638ee82` | Three connected biome treatments, living foliage, local lights, and polished ore textures. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Photo textures and ore effects installed November 7, 2026** | The shared document's Play test rendered the new quarry and collected real ore. All seven Sources matched. Studio was left open in Edit mode. |
-| Published Roblox version | **v29, verified** | Studio logged successful publication of place `124078027733625` on November 7 at 5:38:42 PM Pacific and identified v29. Never reopen the history panel. |
+| Shared Studio entry point | **Quarry biome revision installed November 7, 2026** | All seven Sources and new materials matched the open shared document. Play was stopped; Studio remains in Edit mode. |
+| Published Roblox version | **v29, verified; biome revision pending** | The last successful receipt was v29 on November 7 at 5:38:42 PM Pacific. The Mac locked before the next publish action. Never reopen the history panel. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — photo textures, dawn sun, and ore motion
+## Latest follow-up — connected quarry biomes and polished ore
+
+Emerald's causeway looks across a turquoise terrain lagoon framed by chalk rock formations and green banks. Cobalt has six blue and coral mushroom trees with cream rims. Ruby uses red leaf cover mixed into the green approaches and broken gray cliffs. The original mining beds, routes and rock geometry remain in place. Newly textured crowns and bark, cooler dawn fill and lights on depot fixtures and ramps restore contrast. The low-resolution ore photo adds mineral-colored veins and a roughness map. [Photo credits and asset IDs](../assets/quarry-textures/README.md)
+
+The shared desktop Studio preview rendered the new lagoon, cliff forms, shoreline foliage, mushrooms, lights and mineral textures. The server reported actual terrain water at the Emerald basin and retained cubic resource bodies using the new ore variant in every field. The final source revision removes the secondary Cobalt basin that crowded the view and softens Ruby's red tint. Those two adjustments were checked through Source sync and compilation without another native Play loop. The core loop and specialist/logistics suites passed. Native multiplayer, mobile rendering and a full effect regression were not tested in this pass.
+
+All seven Sources matched in the existing shared document with all three Script Sync roots `SyncedAsRoot`. Final `(bytes, rolling fingerprint)` pairs are `(486560, 1587287791)` for the server and `(546370, 1805193010)` for the client. The open document's loaded `game.PlaceVersion` remains 26. The original dawn sky, clock, and normal Studio start point remain in use.
+
+## Earlier follow-up — photo textures, dawn sun, and ore motion
 
 Eight CC0 photographs were resized to 64×64 and uploaded as diffuse-only textures. Twelve `QuarryPhoto_` variants live in the shared and canonical `MaterialService`. Startup applies the variants to the authored scenery, mineral fields and cubic rocks. The first Play attempt identified Roblox's restriction on writing `BaseMaterial` at runtime. Authoring the library in Studio Edit fixed startup. Studio serialized the twelve material instances for the canonical file, and the existing native import helper added them without replacing authored geometry or backup Sources. All eight image IDs returned `Success` in Studio. The renderer briefly reported that new compressed representations were still being generated, then the final Play view showed the photo textures in use. [Source photographs and asset IDs](../assets/quarry-textures/README.md)
 
