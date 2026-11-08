@@ -9,19 +9,29 @@ Last substantive handoff: **November 7, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `07358546571be1516cd7f6d32de0d91d4b2a7b59eecfa5a00336264db8710e2c` | Weathered quarry texture Sources. All non-Source chunks and unrelated Sources were preserved. |
-| Installed gameplay revision | `add85ec0cd8839779475691d91a7f2437474afef` | The texture Sources and matching canonical snapshot. |
+| Native-file SHA-256 | `3c59194393afa8cc927c5c0947689ed190c4226a13217d6021a96f31d6ba1cc3` | Low-resolution photo material library and the matching Sources. Existing map geometry and unrelated Sources were preserved. |
+| Installed gameplay revision | `72b09b848f50264ff3e2a39f57d420f0bd589746` | Photo tiles, visible sun, and weighted ore pickup behavior. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Weathered quarry textures installed November 7, 2026** | All seven Sources matched. One local Studio Play session in the shared document showed the updated textures at spawn. The change is applied at server startup. |
-| Published Roblox version | **v26, verified** | Studio logged successful publication of place `124078027733625` on November 7 at 5:16:07 PM Pacific and identified v26. Never reopen the history panel. |
+| Shared Studio entry point | **Photo textures and ore effects installed November 7, 2026** | The shared document's Play test rendered the new quarry and collected real ore. All seven Sources matched. Studio was left open in Edit mode. |
+| Published Roblox version | **v29, verified** | Studio logged successful publication of place `124078027733625` on November 7 at 5:38:42 PM Pacific and identified v29. Never reopen the history panel. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
-## Latest follow-up — weathered quarry textures
+## Latest follow-up — photo textures, dawn sun, and ore motion
+
+Eight CC0 photographs were resized to 64×64 and uploaded as diffuse-only textures. Twelve `QuarryPhoto_` variants live in the shared and canonical `MaterialService`. Startup applies the variants to the authored scenery, mineral fields and cubic rocks. The first Play attempt identified Roblox's restriction on writing `BaseMaterial` at runtime. Authoring the library in Studio Edit fixed startup. Studio serialized the twelve material instances for the canonical file, and the existing native import helper added them without replacing authored geometry or backup Sources. All eight image IDs returned `Success` in Studio. The renderer briefly reported that new compressed representations were still being generated, then the final Play view showed the photo textures in use. [Source photographs and asset IDs](../assets/quarry-textures/README.md)
+
+The original sky, 7:00 clock, latitude, brightness, and atmosphere are preserved. The sun disc has an 8° angular size and the existing SunRays intensity is 0.17. Ore flies outward, falls with stronger gravity, and can home only after contact. It uses short speed-gated trails and sparse four-point glints. The reduced-effects setting suppresses those details. Fracture debris takes the same material as its source rock.
+
+Native verification through the shared Studio entry point counted 2,079 textured terrace parts and zero legacy checker overlays. The sun disc rendered in the original sky. A normal `MineOre` order showed an enabled beam, ore impact near 25 studs/s, no homing before impact, 19 trail samples, no `Sparkles` instances, and a server-confirmed backpack receipt. The core loop, pickup, beam, temporary tools, rock damage and specialist/logistics suites passed. The old aggregate energy fixture's fracture count and the aggregate audio fixture's Luau register limit also fail at the pre-change baseline. Multiplayer, lower graphics settings, and every effect family in a live match remain unverified.
+
+All seven final Sources matched over Script Sync with all three roots `SyncedAsRoot`. Server and client `(bytes, rolling fingerprint)` pairs were `(467554, 620832586)` and `(546353, 999504026)`. At `2026-11-08T01:38:42Z`, Studio logged `Publish succeeded for placeId 124078027733625`, `Add publish notes to v29`, and `Published new changes in "DRONEREVOLUTION" to Roblox.` The post-publish audit found the same installed Sources in Edit mode. The open document retains its loaded `game.PlaceVersion` of 26 until reopened. Studio was open when work began and remained open after Play was stopped.
+
+## Earlier follow-up — weathered quarry textures
 
 The existing authored map gets sandstone and slate strata, rocky cliff faces, muted grasses, paved paths, timber stalls, corroded metal, and gravel field beds. Server startup applies Roblox's built-in material textures to the live scenery and removes the 648 identified legacy checker overlays from the runtime copy. Existing contact properties are captured before changing a part's material. The canonical Edit map retains its authored geometry and source assets. Cubic ore rocks keep their shape and a subdued mineral tint. Drone hardware and courier parcels have smooth faces, and logistics overflow matches the concrete service deck.
 
