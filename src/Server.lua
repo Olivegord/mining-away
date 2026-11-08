@@ -801,6 +801,12 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end
  return false
 end
+function scene.recordToolScar(r,point,width,depth,heat)
+ r.toolScars=r.toolScars or {}
+ if ToolRules.addScar(r.toolScars,point,width,depth,heat) then
+  r.part:SetAttribute('ToolScars',Http:JSONEncode(r.toolScars))
+ end
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
@@ -857,34 +863,28 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local tool=fractureContext and fractureContext.toolKind
  if tool=='Greatsword' and not r.slice then
   r.slice=math.clamp(.5+r.part.CFrame:PointToObjectSpace(fractureContext.point).Y/r.part.Size.Y,.35,.65);r.part:SetAttribute('SliceScale',r.slice);shapeChanged=true
-  r.damageBaseScale=r.damageBaseScale or Feel.stageScale(previous,r.stageCount);r.damageBaseStage=r.damageBaseStage or previous
-  r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',r.damageBaseStage)
  end
  if tool=='Melt' or tool=='JellyGrenade' or (special and d.role=='Starforge') or (not abilityOrigin and d.mining and d.role=='Striker') then
   local rate=tool=='Melt' and 5 or tool=='JellyGrenade' and 1.6 or special and 2 or .9
   r.heat=math.min(1,(r.heat or 0)+amount/math.max(1,r.maxHP-10)*rate)
   local heat=math.floor(r.heat*4+1e-6)
-  if heat~=(r.heatBand or 0) then
-   r.heatBand=heat
-   local contact=fractureContext and fractureContext.point
-   if contact then
-    local q=r.part.CFrame:PointToObjectSpace(contact)/r.part.Size
-    r.part:SetAttribute('MeltPoint',Vector3.new(math.clamp(q.X,-.4,.4),.52,math.clamp(q.Z,-.4,.4)))
-   end
-   r.part:SetAttribute('MeltBand',heat);shapeChanged=true
+  local changed=heat~=(r.heatBand or 0)
+  if not broken and (changed or tool=='Melt' or tool=='JellyGrenade') then
+   local contact=fractureContext and fractureContext.point or abilityOrigin
+   local point=contact and r.part.CFrame:PointToObjectSpace(contact)/r.part.Size or Vector3.zero
+   local band=math.max(1,heat)
+   scene.recordToolScar(r,point,.48+.12*band,.35+.1*band,true)
+  end
+  if changed then
+   r.heatBand=heat;r.part:SetAttribute('MeltBand',heat);shapeChanged=true
    if not broken then RoleEffects.Pulse(r.part.Position+Vector3.new(0,r.part.Size.Y*.5,0),Color3.fromRGB(255,125,56),.35,math.min(13,r.part.Size.X*1.35),.32) end
   end
  end
- if contactKind=='FieldTool' and (tool=='BowlingBall' or tool=='Crowbar' or tool=='Sledgehammer') then
-  r.ballDents=math.min(4,(r.ballDents or 0)+1)
+ if not broken and contactKind=='FieldTool' and (tool=='BowlingBall' or tool=='Crowbar' or tool=='Sledgehammer') then
   local point=r.part.CFrame:PointToObjectSpace(fractureContext.point or abilityOrigin)/r.part.Size
-  if tool=='Sledgehammer' then point=Vector3.new(0,.5,0) end
-  r.part:SetAttribute('DentWidth',tool=='Crowbar' and .44 or tool=='Sledgehammer' and .85 or .72)
-  r.part:SetAttribute('BallDentPoint',Vector3.new(math.clamp(point.X,-.53,.53),math.clamp(point.Y,-.53,.53),math.clamp(point.Z,-.53,.53)))
-  r.part:SetAttribute('BallDentSerial',(r.part:GetAttribute('BallDentSerial') or 0)+1);r.part:SetAttribute('BallDents',r.ballDents)
-  r.damageBaseScale=r.damageBaseScale or Feel.stageScale(previous,r.stageCount);r.damageBaseStage=r.damageBaseStage or previous
-  r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',r.damageBaseStage)
-  r.part:SetAttribute('DamageDepth',math.clamp(1-r.hp/math.max(1,r.maxHP-10),0,1));r.part:SetAttribute('DamageAt',now)
+  if tool=='Sledgehammer' and not fractureContext.point then point=Vector3.new(0,.5,0) end
+  local width=tool=='Crowbar' and .475 or tool=='Sledgehammer' and .885 or .755
+  scene.recordToolScar(r,point,width,width*.78,false)
  end
  if contactKind=='Breaker' then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),6,20,'heavy')
  elseif special then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),5,14,'special') end
@@ -901,10 +901,6 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.smashDents=math.min(6,(r.smashDents or 0)+1);r.part:SetAttribute('SmashDents',r.smashDents)
  end
  if (special and d.role=='Bubbler') or (contactKind=='Breaker' and d.role=='Charger') then
-  if not r.damageBaseScale then
-   r.damageBaseScale=Feel.stageScale(previous,r.stageCount);r.damageBaseStage=previous
-   r.part:SetAttribute('DamageBaseScale',r.damageBaseScale);r.part:SetAttribute('DamageBaseStage',previous)
-  end
   local depth=math.clamp(1-r.hp/math.max(1,r.maxHP-10),0,1)
   r.smashPressure=(r.smashDents or 0)>=6 and math.floor(depth*6+1e-7)/6 or 0
   r.part:SetAttribute('DamageDepth',depth)
@@ -918,9 +914,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  local scale=r.field.junk and 1 or Feel.resourceScale(r.stage,r.stageCount,r.damageBaseScale,r.damageBaseStage)
+  local scale=Feel.stageScale(r.stage,r.stageCount)
   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
-  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed)
+  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed)
  end
  r.part:SetAttribute('HP',actual)
  r.part:SetAttribute('Brittle',not broken and RockCascade.brittle(r.hp,r.maxHP))
@@ -1367,7 +1363,7 @@ local function publishBreakerPhase(d,job)
 end
 local function breakerSurface(r)
  local ground=r.part:GetAttribute('GroundY') or r.position.Y-r.fullSize.Y*.5
- local _,top=Feel.groundedRockFrame(r.position,r.part.Size,ground,r.damageBaseStage or r.stage,r.stageSeed)
+ local _,top=Feel.groundedRockFrame(r.position,r.part.Size,ground,r.stage,r.stageSeed)
  local contact=Vector3.new(r.position.X,top,r.position.Z)
  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
  local origin=contact+Vector3.new(0,2,0)
@@ -2012,10 +2008,8 @@ local function abilityContext(p,fieldId,operator,deployment)
    if offset.X*offset.X+offset.Z*offset.Z>radius*radius then return nil end
   end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
-  -- Scars retain a larger shell and its original fracture orientation. Ability
-  -- targeting must describe that current authoritative body, not the old
-  -- quarter-scale/rotating presentation that ordinary unscarred rocks use.
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.damageBaseStage or r.stage,r.stageSeed))
+  -- Gadgets survey the current health-scaled body and actual cut height.
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed))
   local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end

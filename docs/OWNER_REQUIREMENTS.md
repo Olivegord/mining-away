@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — keep old marks and shrink by health
+
+Preserve earlier tool marks on subsequent hits. Use the same health thresholds to shrink mineable objects regardless of whether damage came from a drone or a dropped tool.
+
 ## November 8 latest — visible tool marks on flat junk
 
 Restore visible marks where tools hit junk. Keep the cubes solid and preserve their flat patterned faces around each mark.

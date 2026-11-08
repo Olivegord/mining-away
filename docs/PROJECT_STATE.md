@@ -9,17 +9,27 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `6d6b2272a703fda9644779681246fc8e961181589e24621933e71eaab0e74a89` | Island reserve with the restored junk tool-mark Source. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Shallow tool marks on solid patterned junk. |
+| Native-file SHA-256 | `308adf69a0b9cf6cd492c58db75b2d9d918e9205e8010d84fc0d4264211e38df` | Island reserve with persistent tool marks and shared health scaling. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Persistent tool marks and health-scaled mining objects. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed alongside the shallow tool marks. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
-| Roblox publication | **No publication in the tool-mark or island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The island coast and ocean are installed alongside persistent tool marks and shared health sizing. All seven managed Sources match the canonical snapshot by SHA-256, and all three roots report `SyncedAsRoot`. The Edit session reports loaded place version 76. |
+| Roblox publication | **No publication in the tool-mark follow-ups or island pass** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — persistent tool marks and health-based size
+
+A resource keeps up to eight distinct impact or heat marks for its lifetime. Close hits of the same kind deepen the existing mark without erasing other marks. At capacity the earlier marks stay. The server replicates the full history so another observer can reconstruct the same solid surface. Marks stay attached as a resource shrinks.
+
+Junk and ore now use the same health-stage size rule for drone and tool damage. Sword slices and melt still change the shape of the top. Server and client use the same sizing equation and keep the resource grounded.
+
+Verified in shared Edit at place 124078027733625, universe 10774898335, loaded version 76. An Edit fixture measured the same depth for the original dent after a second dent was added. Both marks survived resizing and reconstruction on a fresh view with the six photo decals. Removed the fixtures. Field-tool, rock-damage, core-loop and consumable tests passed, including equal-size comparisons and heat marks. No new Play or multiplayer session. No Roblox publication.
+
+Script Sync delivered both controllers. All seven Source hashes and all three roots matched the canonical snapshot. The Source-only refresh preserved the island map and the backup scripts. Reproduce with `python3 tools/build.py --previous-commit 3982df59e023f32614a09793eab1877cfd94ed87`.
 
 ## Latest follow-up — tool marks on solid junk
 

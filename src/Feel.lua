@@ -266,13 +266,6 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
-function F.resourceScale(stage,count,scarBase,scarStage)
- if type(scarBase)~='number' then return F.stageScale(stage,count) end
- -- Once real cavities remove material, do not double-count the lost volume
- -- with a quarter-size collapse. Never enlarge an already chipped resource.
- local progress=math.clamp((stage-(scarStage or 0))/math.max(1,(count or 3)-(scarStage or 0)),0,1)
- return scarBase*(1-.18*progress)
-end
 function F.rockShape(slice,heat) return Vector3.new(1,(slice or 1)*(1-.0625*(heat or 0)),1) end
 function F.growthProgress(now,spawnAt) return math.clamp((now-spawnAt)/2,0,1) end
 function F.growth(now,spawnAt)

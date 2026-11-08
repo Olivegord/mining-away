@@ -7,7 +7,7 @@ function IM:SubstituteGeometry(other) self.Size=other.Size;substitutions+=1 end
 function IM:ApplyMesh(other) self.Size=other.Size;substitutions+=1 end
 local geometry={cuts=0,hook=nil,fail=false,malformed=false,outputs={}}
 function geometry:SubtractAsync(main,cutters,options)
- self.cuts+=1;assert(#cutters>0 and #cutters<=7 and options.SplitApart==false)
+ self.cuts+=1;assert(#cutters>0 and #cutters<=15 and options.SplitApart==false)
  assert(options.CollisionFidelity==Enum.CollisionFidelity.PreciseConvexDecomposition,'laser queries use carved collision shape')
  assert(main.Parent==nil and main.Size.X==4 and main.Size.Y==4 and main.Size.Z==4,'original at canonical bounds')
  assert(main.PivotOffset.Position.Magnitude==0,'local CSG operands never inherit legacy displaced pivots')
@@ -17,6 +17,7 @@ function geometry:SubtractAsync(main,cutters,options)
  local result=main:Clone();result.Size=self.malformed and Vector3.new(5.1,.73,1.78) or Vector3.new(3.8,3.6,3.84)
  self.outputs[#self.outputs+1]=result;return {result}
 end
+local scarHistory
 local previousService=game.GetService
 local assets={created=0,meshes={}}
 function assets:CreateEditableMesh()
@@ -32,7 +33,8 @@ function assets:CreateMeshPartAsync(content,_)
  local part=Instance.new('MeshPart');part.Size=Vector3.one*4;return part
 end
 function game:GetService(name)
- if name=='GeometryService' then return geometry elseif name=='AssetService' then return assets end
+ if name=='GeometryService' then return geometry elseif name=='AssetService' then return assets
+ elseif name=='HttpService' then return {JSONDecode=function() return scarHistory end} end
  return previousService(self,name)
 end
 local function resource(bubbles,dents)
@@ -119,20 +121,23 @@ local junk=resource(2,1)
 junk.source.ClassName='Part';junk.view.ClassName='Part'
 junk.source:SetAttribute('Kind','Junk')
 junk.source:SetAttribute('CubicRock',true)
-junk.source:SetAttribute('BallDentPoint',Vector3.new(-.52,.3,0))
-junk.source:SetAttribute('BallDentSerial',1)
-junk.source:SetAttribute('MeltBand',2)
+scarHistory={{-.5,.3,0,.755,.59,'X',false},{0,.5,0,.72,.55,'Y',true}}
+junk.source:SetAttribute('ToolScars','first-two')
 local oldSize=junk.source.Size
 local pattern=Instance.new('Decal');pattern.Parent=junk.view
 local shallow=RockDamage.new()
 shallow:update(junk,31);shallow:step(31)
-assert(shallow.operations==1 and shallow.failures==0 and junk.view:GetAttribute('PhysicalDamageKey')=='2:1:ball1:heat2')
+assert(shallow.operations==1 and shallow.failures==0 and junk.view:GetAttribute('PhysicalDamageKey')=='2:1:tools:first-two')
 assert(pattern.Parent==junk.view and #junk.view:GetChildren()==1 and junk.source.Size==oldSize,'keep the printed face, without a separate shell or core')
-local specs=RockDamage.cutSpecs(2,1,0,Vector3.new(-.52,.3,0),1,2,.72,nil,true)
+table.insert(scarHistory,{.5,0,0,.475,.37,'X',false})
+junk.source:SetAttribute('ToolScars','third')
+shallow:update(junk,32);shallow:step(32)
+assert(shallow.operations==2 and shallow.failures==0 and junk.view:GetAttribute('PhysicalDamageKey')=='2:1:tools:third')
+local specs=RockDamage.cutSpecs(2,1,0,scarHistory,true)
 for _,spec in ipairs(specs) do
- local axis=spec.kind=='BowlingBall' and 'X' or 'Y'
+ local axis=spec.axis or 'Y'
  assert(math.abs(spec.center[axis])==.5 and spec.size[axis]<=.29,'dents are shallow, open to the outside and follow the hit face')
 end
-assert(specs[4].center.X==-.5 and specs[4].center.Y==.3,'side dent follows the exact contact')
+assert(#specs==6 and specs[4].center.X==-.5 and specs[4].center.Y==.3 and specs[6].center.X==.5,'rebuild includes the older and newer side dents')
 shallow:destroy();checks+=1
 print('PASS '..checks..' physical rock damage queue/ownership checks (API double; native topology not established)')

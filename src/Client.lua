@@ -801,8 +801,7 @@ local function renderResource(r,now)
  end
  r.audioHealth=health
  local stage=r.visual.stage
- local scarBase,scarStage=s:GetAttribute('DamageBaseScale'),s:GetAttribute('DamageBaseStage')
- local period=junk and 1 or Feel.resourceScale(stage,stageCount,scarBase,scarStage)
+ local period=Feel.stageScale(stage,stageCount)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or 0
   local heat=s:GetAttribute('MeltBand') or 0

@@ -47,6 +47,35 @@ function T.surface(part,point,from)
  end
  return part.CFrame:PointToWorldSpace(q),q/part.Size
 end
+-- Keep old impacts for the life of the rock. Closely spaced hits on
+-- the same face deepen the same mark, keeping CSG work bounded.
+function T.addScar(history,point,width,depth,heat)
+ local axis='Y'
+ if not heat then
+  if math.abs(point.X)>math.abs(point[axis]) then axis='X' end
+  if math.abs(point.Z)>math.abs(point[axis]) then axis='Z' end
+ end
+ local face=(heat or point[axis]>=0) and .5 or -.5
+ local x=axis=='X' and face or math.clamp(point.X,-.49,.49)
+ local y=axis=='Y' and face or math.clamp(point.Y,-.49,.49)
+ local z=axis=='Z' and face or math.clamp(point.Z,-.49,.49)
+ local center=Vector3.new(x,y,z)
+ local faceIndex=axis=='X' and 1 or axis=='Y' and 2 or 3
+ for _,mark in ipairs(history) do
+  if mark[6]==axis and mark[7]==heat and mark[faceIndex]==face
+   and (Vector3.new(mark[1],mark[2],mark[3])-center).Magnitude<=.16 then
+   local growth=heat and 0 or .025
+   local wider=math.min(.96,math.max(width,mark[4]+growth))
+   local deeper=math.min(.75,math.max(depth,mark[5]+growth))
+   if wider==mark[4] and deeper==mark[5] then return false end
+   mark[4],mark[5]=wider,deeper
+   return true
+  end
+ end
+ if #history>=8 then return false end
+ table.insert(history,{x,y,z,width,depth,axis,heat})
+ return true
+end
 function T.drop(progress,roll,choice)
  progress.breaks=(progress.breaks or 0)+1;progress.dry=math.min(T.MAX_DRY,(progress.dry or 0)+1)
  if (progress.found or 0)==0 then return progress.dry>=2 and 'BowlingBall' or nil end
