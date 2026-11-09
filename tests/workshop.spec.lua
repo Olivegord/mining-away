@@ -18,8 +18,10 @@ local function same(a,b)
  for k,v in pairs(b) do if not same(v,a[k]) then return false end end
  return true
 end
-test('four real starter miners, no free packs or money',function()
- local p=P.new(44);eq(#p.fleet,4);for _,d in ipairs(p.fleet) do assert(Roles.isMiner(d.role) and d.base.maxStep60>=.2 and d.base.maxStep60<=.5) end;eq(p.run.wallet.Quartz,0);eq(C.price(p),20);eq(buy(p,'empty'),false);eq(p.run.packIndex,0)
+test('one real starter miner, no free packs or money',function()
+ local p=P.new(44);eq(#p.fleet,1);eq(p.nextDroneSerial,2)
+ local d=p.fleet[1];assert(Roles.isMiner(d.role) and d.base.maxStep60>=.2 and d.base.maxStep60<=.5)
+ eq(p.run.wallet.Quartz,0);eq(C.price(p),20);eq(buy(p,'empty'),false);eq(p.run.packIndex,0)
  assert(P.validate(p,44))
 end)
 test('shared pool allows more than three owned upgrades and stable repeated drafts across 150 seeds',function()
@@ -155,8 +157,8 @@ test('Quartz alone advances prestige, upgrades do not subtract progress, resets 
  p.run.cargo={Quartz=360};assert(P.sell(p,{Quartz=1},'quartz',p.run.id));eq(p.run.quartzEarnings,360)
  local ok,o=buy(p,'buy');assert(ok);eq(P.prestigePreview(p).eligible,false);assert(choose(p,o,1,'pick'))
  assert(P.prestigePreview(p).eligible);eq(p.run.quartzEarnings,360)
- local oldRun=p.run.id;assert(P.prestige(p,'prestige',oldRun,{atDepot=true,confirmed=true}));eq(#p.fleet,5);eq(p.fleet[1].id,id);assert(same(p.fleet[1].base,base))
- eq(#p.run.cards,0);eq(p.run.wallet.Quartz,0);eq(p.run.quartzEarnings,0);eq(C.price(p),20);assert(Roles.isWorker(p.fleet[5].role));eq(C.stats(p,p.fleet[1]).miningDPS,37.5)
+ local oldRun=p.run.id;assert(P.prestige(p,'prestige',oldRun,{atDepot=true,confirmed=true}));eq(#p.fleet,2);eq(p.fleet[1].id,id);assert(same(p.fleet[1].base,base))
+ eq(#p.run.cards,0);eq(p.run.wallet.Quartz,0);eq(p.run.quartzEarnings,0);eq(C.price(p),20);assert(Roles.isWorker(p.fleet[2].role));eq(C.stats(p,p.fleet[1]).miningDPS,37.5)
  assert(P.validate(p,44));local restored=assert(P.migrate(p,44));assert(same(p,restored))
  eq(C.upgrade(p,o.choices[1].cardId,1,'stale',oldRun,{atDepot=true}),false)
  for i=2,12 do
@@ -193,7 +195,7 @@ test('pack Stars credit once, Star Shop survives reload, and prestige resets bot
  p=assert(P.migrate(p,44));eq(p.run.stars,4);eq(W.selectorWidth(p),18)
  p.run.quartzEarnings=360
  assert(P.prestige(p,'prestige-stars',p.run.id,{atDepot=true,confirmed=true}))
- eq(p.run.stars,0);eq(W.selectorWidth(p),14);eq(#p.fleet,5)
+ eq(p.run.stars,0);eq(W.selectorWidth(p),14);eq(#p.fleet,2)
 end)
 test('pacing model quantifies first-level tradeoffs including selling travel',function()
  local p=P.new(44);local d=p.fleet[1]

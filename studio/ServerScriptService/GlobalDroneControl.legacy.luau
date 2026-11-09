@@ -2271,14 +2271,10 @@ end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
- local fleet={}
- for serial=1,4 do
-  local miner=drone(uid,serial,'Blue',seed,1)
-  -- Mining Away starts its otherwise identical miners at 12–30 studs/second.
-  miner.base.maxStep60=(20+((seed+serial*17)%31))/100
-  fleet[serial]=miner
- end
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=4,nextDroneSerial=5,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
+ local miner=drone(uid,1,'Blue',seed)
+ -- Preserve the Mining Away starter's 12–30 studs/second flight roll.
+ miner.base.maxStep60=(20+((seed+17)%31))/100
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=1,nextDroneSerial=2,seed=seed,fleet={miner},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end

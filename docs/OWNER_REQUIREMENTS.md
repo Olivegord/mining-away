@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## Latest — one starter drone
+
+New profiles start with one permanent mining drone. Existing profiles keep their fleets, including players who started with four drones. Prestige still adds one permanent drone.
+
 ## Latest — the Crystal Run and Stars
 
 The shop is on one side of the hub. In the other direction, one large crystal field forms the main mining route, with walls dividing zones as players walk deeper. Mouse or touch aims a square made of beams with a vertical fade. Click or tap to pin it. Crystals touching the square are available to drones. Repositioning changes their next target while work already underway finishes. Use yellow while the placed square is working, and green plus particles while an idle damaged crystal heals. A depleted mining drone returns to the charging station automatically. Players carry ore back to sell when their backpack fills.

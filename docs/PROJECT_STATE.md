@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run is the main mining route opposite the shop. Five walled zones hold up to 210 crystals, with harder, richer rock farther in. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. The route uses the existing Mining Away crystal mesh, shade, crack sounds and flight behavior. Unattended damaged crystals heal. Depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
+**Current implementation:** New players start with one permanent miner. Crystal Run is the main mining route opposite the shop. Five walled zones hold up to 210 crystals, with harder, richer rock farther in. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. The route uses the existing Mining Away crystal mesh, shade, crack sounds and flight behavior. Unattended damaged crystals heal. Depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,8 +11,8 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b2556e13262c902eb185f37d7de461c15f70937719dada356a8e91f9a06e6071` | Crystal Run with grid aiming and station keeping. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Seven actual Edit hashes](review/selector-grid-native.json). The authored route is the [Crystal Run map](review/crystal-run-native.json). |
+| Native-file SHA-256 | `6bb6d90410885c6630e3425a7596bf576cb140fbbf3c605d6b84ec29755df65b` | Crystal Run with one starter drone. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Seven actual Edit hashes](review/one-starter-drone-native.json). The authored route is the [Crystal Run map](review/crystal-run-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,10 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — one starter drone
+
+Fresh profiles in Studio and production start with one permanent Blue miner and use the existing 40-ore backpack for solo starts. Existing four-starter profiles retain their saved fleet, traits, progress, and 100-ore base capacity. The workshop suite exercised fresh starts, loading a saved four-miner profile, and a one-miner profile earning its second drone through prestige. All seven Sources matched in shared Edit. The existing Play session was stopped before syncing. No new Play session or Roblox publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 8249437`.
 
 ## Latest follow-up — grid aiming and station keeping
 

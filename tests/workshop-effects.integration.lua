@@ -60,8 +60,8 @@ local before=secondary.hp;assert(hitResource(ld,primary,30,false));assert(math.a
 assert(ld.stats.yieldMultiplier==1.25);players.PlayerRemoving:Fire(lp)
 print('PASS Legendary Prismatic Core applies 20% real nearby damage plus 25% yield in one copy')
 local ap,aprofile,ad,af=fixture('Q_AUTONOMOUS',1);local first,second=rock(af,0),rock(af,9)
-assert(Ca.capacity(data(aprofile))==150 and ad.stats.speedMultiplier==1.75)
+assert(Ca.capacity(data(aprofile))==60 and ad.stats.speedMultiplier==1.75)
 command.OnServerEvent:Fire(ap,'MineOre',first.id)
 for _=1,3000 do step(aprofile);if second.paid then break end end
 assert(first.paid and second.paid);players.PlayerRemoving:Fire(ap)
-print('PASS Legendary Autonomous Fleet retargets, flies 75% faster and carries 150 in one copy')
+print('PASS Legendary Autonomous Fleet retargets, flies 75% faster and adds 50% backpack capacity')
