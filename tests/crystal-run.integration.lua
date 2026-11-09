@@ -34,7 +34,7 @@ pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10)
 local pinned=p.miningSquare
 pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
 step(1);assert(d.target==a)
-d.pos=Feel.mineGoal(a.position,1,false,a.fullSize)
+d.pos=Feel.mineGoal(a.position,1,false,a.fullSize,a.referenceCrystal)
 step(32);assert(d.mining,'worker never began its real cut')
 local other=player(98701);players.PlayerAdded:Fire(other)
 local rival=profiles[other.UserId]
@@ -53,14 +53,14 @@ assert(Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,edge.par
 assert(not Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,a.part.CFrame,a.part.Size))
 
 -- Mining regenerates health and restores its stage, with a single ore ledger.
-d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize)
+d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
 assert(hitResource(d,b,65,false));local paid=b.extractedOre;assert(paid>0)
 release(d)
 local stage=b.stage
 for _=1,15 do now+=.23;scene.regrow(b,.23) end
 assert(b.hp==b.maxHP-10 and b.stage==0 and b.stage<stage and b.extractedOre==paid)
 step(15);assert(d.target==b)
-d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize)
+d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
 assert(hitResource(d,b,65,false));assert(b.extractedOre==paid,'regrowth duplicated layer payout')
 
 -- A depleted worker drops the reservation, physically approaches the pad,
@@ -112,7 +112,7 @@ for _,r in ipairs(f.resources) do
  local key=string.format('%d,%d',r.position.X,r.position.Z)
  assert(not positions[key],'coincident reference crystals');positions[key]=true
  counts[patch]=(counts[patch] or 0)+1
- assert(math.abs((Feel.mineGoal(r.position,1,false,r.fullSize)-r.position).Y-10)<.001)
+ assert(math.abs((Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal)-r.position).Y-7)<.001)
 end
 for _,patch in ipairs(f.clusters) do assert(counts[patch]==16) end
 local retired=f.resources[23]
@@ -121,6 +121,16 @@ local ok,_,plan=spawnResource(f,'Crystal',true)
 assert(ok and plan.cluster==retired.cluster,'grower preview must use the patch with a vacancy')
 local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
 assert(planted and replacement.cluster==retired.cluster and nodeUsage(f)==48)
+replacement.readyAt=now
+assert(assignOre(p,d,replacement))
+p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
+d.squareJob=p.miningSquare;d.lingerUntil=nil
+d.pos=committedStation(d,replacement)
+assert(math.abs(d.pos.Y-replacement.cluster.Position.Y-10)<.001)
+local before=replacement.hp
+step(1);assert(d.state=='Warmup' and replacement.hp==before)
+step(12);assert(d.mining and replacement.hp<before,'close cut still has the old pause')
+release(d)
 p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)
 assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)

@@ -29,7 +29,7 @@ local function specialRock(p,d,kind,hp,ore,fieldOverride)
  for _,r in ipairs(field.resources) do r.paid=true;r.hp=0 end
  p.player.Character:PivotTo(CFrame.new(field.center+Vector3.new(0,3,0)))
  local r=makeResource(field,field.center,kind or 'Crystal',hp or 20000,ore or 11,3)
- r.readyAt=now;assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize)
+ r.readyAt=now;assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,r.kind=='Geode',r.fullSize,r.referenceCrystal)
  d.goal=d.pos;d.velocity=Vector3.zero
  return r,field
 end
@@ -176,7 +176,7 @@ end)
 specialCheck('special mining requires authoritative overhead arrival and clear line of sight',function()
  local pl,p=specialOwner();local d=specialBuy(pl,p,'Bubbler');local r=specialRock(p,d)
  local hp=r.hp;d.pos=r.position+Vector3.new(4,6,5);specialTicks(d,C.Tick);assert(not d.specialJob);specialEq(r.hp,hp)
- d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)
+ d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal)
  local original=workspace.Raycast;workspace.Raycast=function() return {Instance=scene.packStation} end
  specialTicks(d,1.5);assert(not d.specialJob);specialEq(r.hp,hp);workspace.Raycast=original
 end)
@@ -402,7 +402,7 @@ specialCheck('different drone types cannot share special work; environmental col
  local pl,p=specialOwner();local special=specialBuy(pl,p,'Bubbler');local target=specialRock(p,special,'Crystal',20000,11)
  local job=specialWaitForJob(special)
  local miner=p.drones[1];local primary=makeResource(patches[1],target.position+Vector3.new(4,0,0),'Crystal',1000,10,3);primary.readyAt=now
- assert(assignOre(p,miner,primary));miner.pos=Feel.mineGoal(primary.position,miner.targetSlot,false,primary.fullSize);miner.goal=miner.pos
+ assert(assignOre(p,miner,primary));miner.pos=Feel.mineGoal(primary.position,miner.targetSlot,false,primary.fullSize,primary.referenceCrystal);miner.goal=miner.pos
  local before=pendingOre(p);specialEq(secondaryMining(miner,primary,99999,6),false)
  assert(not target.paid and special.specialJob==job and special.target==target)
  assert(hitResource(miner,target,99999,false,nil,miner.pos,'Fracture'))

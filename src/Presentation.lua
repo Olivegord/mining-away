@@ -288,9 +288,27 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
- beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
- if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
- beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
+ local glow=reference and visible and sample.active and not sample.paused
+ if glow and not beam.referenceGlow then
+  local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
+  halo.Size=Vector3.one;halo.Color=Color3.fromRGB(180,192,173);halo.Material=Enum.Material.Neon
+  beam.referenceGlow=halo
+ end
+ if beam.referenceGlow then
+  beam.referenceGlow.Transparency=glow and .8 or 1
+  if glow then beam.referenceGlow.Position=point end
+ end
+ if reference then
+  beam.marker.Size=Vector3.one*.5
+  beam.marker.Color=Color3.fromRGB(192,134,80);beam.marker.Material=Enum.Material.Neon
+  if glow then beam.marker.Position=point end
+  beam.marker.Transparency=glow and 0 or 1
+ else
+  beam.marker.Color=tint
+  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
+  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
+  beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
+ end
  if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if self.audio and self.audio.setLoop then
   if visible and sample.active and sample.isMining and not sample.paused and not reference then

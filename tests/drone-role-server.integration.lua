@@ -69,13 +69,13 @@ check('recall cancels planting and two growers cannot overlap or exceed replacem
 end)
 check('only the miner performs a continuous cutting beam after real warmup',function()
  local _,p,roles=fixture();local r=rock(1000);local d=roles.Striker[1];local hp=r.hp
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal)
  ticks(d,.3);assert(r.hp==hp and not d.mining)
  ticks(d,.8,true);assert(r.hp<hp and d.mining and d.model:GetAttribute('Mining')==true)
 end)
 check('breaker arrives winds up dives hits once and recovers even after a killing strike',function()
  local _,p,roles=fixture();local r=rock(20);local d=roles.Charger[1];local hp=r.hp
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)+Vector3.new(0,2,0)
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal)+Vector3.new(0,2,0)
  ticks(d,.7,true);assert(r.hp==hp and not d.mining)
  local held=false
  for _=1,120 do ticks(d,C.Tick,true)
@@ -97,7 +97,7 @@ check('breaker arrives winds up dives hits once and recovers even after a killin
 end)
 check('recall and busy storage cancel or pause breaker and grower work',function()
  local _,p,roles=fixture();local r=rock(500);local d=roles.Charger[1];local hp=r.hp
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize)+Vector3.new(0,2,0)
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal)+Vector3.new(0,2,0)
  ticks(d,.2);local elapsed=now-d.breaker.phaseAt;p.busy=true;ticks(d,1)
  assert(math.abs((now-d.breaker.phaseAt)-elapsed)<1e-5 and r.hp==hp)
  p.busy=false;leaveField(p);assert(not d.target and not d.breaker and not p.workField)
@@ -152,7 +152,7 @@ check('healer preserves real ally repair and never acquires mining',function()
 end)
 check('finished mining releases its reservation and lingers before choosing new work',function()
  local _,p,roles=fixture();local r=rock(20);local nextRock=rock(400,'Crystal',Vector3.new(12,0,0));local d=roles.Striker[1]
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal);d.goal=d.pos
  assert(hitResource(d,r,1000));assert(r.paid and not d.target and not next(r.slots))
  local untilTime=d.lingerUntil;assert(untilTime and math.abs(untilTime-now-1)<1e-8)
  p.oreQueue={nextRock.id}
@@ -166,14 +166,14 @@ check('finished mining releases its reservation and lingers before choosing new 
 end)
 check('storage pauses preserve the remaining post-mining recovery time',function()
  local _,p,roles=fixture();local r=rock(20);local d=roles.Striker[1]
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal);d.goal=d.pos
  assert(hitResource(d,r,1000));local remaining=d.lingerUntil-now;p.busy=true;ticks(d,2)
  assert(math.abs(d.lingerUntil-now-remaining)<1e-7);p.busy=false
  ticks(d,.5);assert(d.state=='Recover')
 end)
 check('a new explicit order cancels the completed-rock linger',function()
  local _,p,roles=fixture();local r=rock(20);local other=rock(400,'Crystal',Vector3.new(12,0,0));local d=roles.Striker[1]
- assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.goal=d.pos
+ assert(assignOre(p,d,r));d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal);d.goal=d.pos
  assert(hitResource(d,r,1000));assert(d.lingerUntil)
  assert(assignOre(p,d,other));assert(not d.lingerUntil and d.target==other)
 end)

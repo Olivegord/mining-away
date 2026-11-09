@@ -261,7 +261,7 @@ end)()
 local Feel = (function()
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,ReferenceFollowHeight=7,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,ReferenceCrystalPivot=3,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -305,8 +305,8 @@ function F.approachWork(position,goal,maxStep60,dt)
 end
 -- Original crystals snap to a new facing on each crack. Seed + stage give
 -- the same pose to the server collider, current observers and late joiners.
-function F.rockYaw(seed,stage,turn)
- local yaw=(seed*.01)%(2*math.pi)
+function F.rockYaw(seed,stage,turn,reference)
+ local yaw=reference and 0 or (seed*.01)%(2*math.pi)
  if turn then
   for i=1,stage do
    local roll=(seed*131+i*271)%83
@@ -315,9 +315,9 @@ function F.rockYaw(seed,stage,turn)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn)
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn),0),ground+size.Y-.06
+ return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn,reference),0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -512,10 +512,13 @@ function F.stationOffset(slot,geode,height)
  local angle=2*math.pi*((slot or 1)-1)/3
  return math.cos(angle)*.85,height,math.sin(angle)*.85
 end
-function F.mineGoal(resourcePosition,slot,geode,fullSize)
+function F.mineGoal(resourcePosition,slot,geode,fullSize,reference)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
  -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
+ -- Mining Away sends Crystal.Primary.Position + 10. The visible Mesh is
+ -- welded three studs above that primary, so its center-to-drone gap is seven.
+ if reference then height=F.WorkHeight-F.ReferenceCrystalPivot end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end
@@ -1132,6 +1135,7 @@ function Soundscape.new(effectParent)
   nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
  self.musicGroup=group(folder,'Music',0)
  self.effectsGroup=group(folder,'Actions',1)
+ self.crystalGroup=group(folder,'OriginalCrystals',1)
  local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=0;eq.HighGain=-3;eq.Parent=self.effectsGroup
  local compressor=Instance.new('CompressorSoundEffect');compressor.Name='ActionPeakControl'
  compressor.Threshold=-8;compressor.Ratio=3;compressor.Attack=.1;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
@@ -1204,6 +1208,7 @@ function Soundscape:toggleMusic()
 end
 function Soundscape:toggleEffects()
  self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or 1
+ self.crystalGroup.Volume=self.effectsGroup.Volume
  if self.effectsMuted then
   for key in pairs(self.loops) do self:stopLoop(key,true) end
   local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
@@ -5436,9 +5441,27 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
- beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
- if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
- beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
+ local glow=reference and visible and sample.active and not sample.paused
+ if glow and not beam.referenceGlow then
+  local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
+  halo.Size=Vector3.one;halo.Color=Color3.fromRGB(180,192,173);halo.Material=Enum.Material.Neon
+  beam.referenceGlow=halo
+ end
+ if beam.referenceGlow then
+  beam.referenceGlow.Transparency=glow and .8 or 1
+  if glow then beam.referenceGlow.Position=point end
+ end
+ if reference then
+  beam.marker.Size=Vector3.one*.5
+  beam.marker.Color=Color3.fromRGB(192,134,80);beam.marker.Material=Enum.Material.Neon
+  if glow then beam.marker.Position=point end
+  beam.marker.Transparency=glow and 0 or 1
+ else
+  beam.marker.Color=tint
+  beam.marker.Size=Vector3.one*(.09+(style=='Percussion' and .11 or .04)*pulse)
+  if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
+  beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
+ end
  if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
  if self.audio and self.audio.setLoop then
   if visible and sample.active and sample.isMining and not sample.paused and not reference then
@@ -8225,7 +8248,7 @@ function V.new(root,parent,audio)
   local r=self.byId[receipt.pickupId]
   if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
   local target=backpack(player,rootPart.Position)
-  if audio and os.clock()-self.lastSound>.09 then
+  if audio and not receipt.quiet and os.clock()-self.lastSound>.09 then
    local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
    self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
   end
@@ -8735,12 +8758,12 @@ local SelectorView = (function()
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
 local V={}
 V.__index=V
-local idle=ColorSequence.new(Color3.fromRGB(106,218,255))
-local active=ColorSequence.new(Color3.fromRGB(255,214,83))
-local preview=ColorSequence.new(Color3.fromRGB(185,239,255))
-local heights={.08,.32,.64,1.04,1.48}
-local widths={.18,.32,.42,.48,.52}
-local fades={.1,.35,.55,.74,.9}
+local idle=ColorSequence.new(Color3.fromRGB(167,212,218))
+local active=ColorSequence.new(Color3.fromRGB(255,215,123))
+local preview=ColorSequence.new(Color3.fromRGB(211,230,229))
+local heights={.06,.27,.54}
+local widths={.075,.11,.15}
+local fades={.28,.68,.87}
 
 local function marker(parent,isPreview)
  local anchor=Instance.new('Part')
@@ -8749,6 +8772,7 @@ local function marker(parent,isPreview)
  anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Parent=parent
  local layers={}
  for i,height in ipairs(heights) do
+  if isPreview and i>1 then break end
   local layer={height=height,corners={},beams={}}
   for n=1,4 do
    local corner=Instance.new('Attachment');corner.Parent=anchor;layer.corners[n]=corner
@@ -8756,9 +8780,9 @@ local function marker(parent,isPreview)
   for n=1,4 do
    local beam=Instance.new('Beam')
    beam.Attachment0=layer.corners[n];beam.Attachment1=layer.corners[n%4+1]
-   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.7;beam.LightInfluence=0
+   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.25;beam.LightInfluence=.25
    beam.Width0=widths[i];beam.Width1=widths[i];beam.Enabled=false
-   beam.Transparency=NumberSequence.new(isPreview and math.min(.98,fades[i]+.38) or fades[i])
+   beam.Transparency=NumberSequence.new(isPreview and .73 or fades[i])
    beam.Parent=anchor;layer.beams[n]=beam
   end
   layers[i]=layer
@@ -9512,7 +9536,7 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
 end)
 
 local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
-local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.effectsGroup)
+local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('SurfaceGui') then v:Destroy()
@@ -9723,7 +9747,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then
@@ -9749,7 +9773,10 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
- if event then crystalAudio:play(view.Position,event) end
+ if event then
+  -- The source plays from Crystal.Primary, not the visible union.
+  crystalAudio:play(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position,event)
+ end
  rockDamage:update(r,now)
  r.settled=now>=readyAt
 end

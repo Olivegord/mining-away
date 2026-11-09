@@ -31,7 +31,9 @@ function CrystalAudio:play(position: Vector3, event: string)
  sound.Volume = breaking and .3 or .05
  sound.PlaybackSpeed = 1
  sound.RollOffMode = Enum.RollOffMode.Inverse
- sound.RollOffMinDistance = 10; sound.RollOffMaxDistance = MAX_DISTANCE
+ -- Match the captured Sound itself; the local voice/distance budget above
+ -- limits instances without changing their falloff curve.
+ sound.RollOffMinDistance = 10; sound.RollOffMaxDistance = 10000
  sound.SoundGroup = self.soundGroup; sound.Parent = anchor
  self.voices += 1
  anchor.Destroying:Once(function() self.voices = math.max(0,self.voices-1) end)

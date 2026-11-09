@@ -1,12 +1,12 @@
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
 local V={}
 V.__index=V
-local idle=ColorSequence.new(Color3.fromRGB(106,218,255))
-local active=ColorSequence.new(Color3.fromRGB(255,214,83))
-local preview=ColorSequence.new(Color3.fromRGB(185,239,255))
-local heights={.08,.32,.64,1.04,1.48}
-local widths={.18,.32,.42,.48,.52}
-local fades={.1,.35,.55,.74,.9}
+local idle=ColorSequence.new(Color3.fromRGB(167,212,218))
+local active=ColorSequence.new(Color3.fromRGB(255,215,123))
+local preview=ColorSequence.new(Color3.fromRGB(211,230,229))
+local heights={.06,.27,.54}
+local widths={.075,.11,.15}
+local fades={.28,.68,.87}
 
 local function marker(parent,isPreview)
  local anchor=Instance.new('Part')
@@ -15,6 +15,7 @@ local function marker(parent,isPreview)
  anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Parent=parent
  local layers={}
  for i,height in ipairs(heights) do
+  if isPreview and i>1 then break end
   local layer={height=height,corners={},beams={}}
   for n=1,4 do
    local corner=Instance.new('Attachment');corner.Parent=anchor;layer.corners[n]=corner
@@ -22,9 +23,9 @@ local function marker(parent,isPreview)
   for n=1,4 do
    local beam=Instance.new('Beam')
    beam.Attachment0=layer.corners[n];beam.Attachment1=layer.corners[n%4+1]
-   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.7;beam.LightInfluence=0
+   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.25;beam.LightInfluence=.25
    beam.Width0=widths[i];beam.Width1=widths[i];beam.Enabled=false
-   beam.Transparency=NumberSequence.new(isPreview and math.min(.98,fades[i]+.38) or fades[i])
+   beam.Transparency=NumberSequence.new(isPreview and .73 or fades[i])
    beam.Parent=anchor;layer.beams[n]=beam
   end
   layers[i]=layer

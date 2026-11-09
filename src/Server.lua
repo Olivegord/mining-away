@@ -368,7 +368,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- The live reference's mesh center sits three studs above the patch center.
- if reference then ground=position.Y+3-fullSize.Y*.5+.06 end
+ if reference then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*.5+.06 end
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=junk and junk.name or kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=not junk;part.Size=fullSize;part.Position=finish
@@ -397,7 +397,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
- part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false)
+ part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference)
  if field.cfg.SelectionOnly then part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key) end
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
@@ -678,7 +678,7 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',ground+.22);chip:SetAttribute('Homing',false)
   chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',Vector3.new(vx,vy,vz));chip:SetAttribute('SnapshotAt',now)
   chip.Parent=pickupFolder
-  pickups[pickupSerial]={part=chip,owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,
+  pickups[pickupSerial]={part=chip,owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,quiet=r.referenceCrystal,
    x=position.X,y=position.Y,z=position.Z,vx=vx,vy=vy,vz=vz,age=0,spawnAt=now,floor=ground+.22,fieldPart=r.field.part}
  end
  p.dirty=true;p.publishDirty=true
@@ -727,7 +727,7 @@ local function pickupStep(dt)
      p.collectTotal=(p.collectTotal or 0)+accepted
      p.player:SetAttribute('CollectedOreTotal',p.collectTotal)
      local color=drop.part.Color
-     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,x=drop.x,y=drop.y,z=drop.z,
+     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,quiet=drop.quiet,x=drop.x,y=drop.y,z=drop.z,
       r=math.floor(color.R*255),g=math.floor(color.G*255),b=math.floor(color.B*255)}))
      if drop.units==0 then
       drop.part:SetAttribute('Units',0);drop.part:SetAttribute('CollectedPosition',target);drop.part:SetAttribute('CollectedAt',now)
@@ -807,8 +807,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
-  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
- elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ elseif d.target~=r or (d.pos-Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
@@ -886,7 +886,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('Stage',r.stage)
   local scale=Feel.stageScale(r.stage,r.stageCount)
   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
-  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
+  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
  end
  r.part:SetAttribute('HP',actual)
  if not broken and r.kind~='Geode' and r.stage>previous then award(recipient,r,false,true) end
@@ -1040,7 +1040,7 @@ function scene.regrow(r,dt)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
   r.part.Size=r.fullSize*Feel.stageScale(r.stage,r.stageCount)*Feel.rockShape(r.slice,r.heatBand)
-  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
+ r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
  end
  r.part:SetAttribute('HP',r.hp+10)
  if now>=(r.nextHealCue or 0) then r.nextHealCue=now+.48;r.part:SetAttribute('RegrowAt',now) end
@@ -1210,8 +1210,7 @@ function scene.holdSquare(d,p,dt)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
  local height=(d.flightHeight or Feel.FollowHeight)+Feel.hover(now,d.owned.base.maxStep60)
  if d.role=='Striker' and square.field.clusters then
-  -- Idle Mining Away workers hold 10 studs above the patch center; their
-  -- active cut is 10 above the full crystal center (three studs higher).
+  -- Park at the same low working altitude instead of rising after each cut.
   height=square.field.clusters[1].Position.Y+Feel.WorkHeight-square.center.Y
  end
  d.mining=false;d.state='HoldSelector'
@@ -1280,9 +1279,15 @@ end
 local function committedStation(d,r)
  if d.workTargetId~=r.id then
   d.workTargetId=r.id
-  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize)
+  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
  end
  return d.workStation
+end
+function scene.miningWarmup(d,r)
+ -- The reference starts cutting on arrival. Keep a short settling beat
+ -- for the replicated cut, and keep ignition upgrades proportional.
+ if r and r.cluster and d.role=='Striker' then return math.min(.16,d.stats.warmup*.3) end
+ return r and math.max(.08,d.stats.warmup) or d.stats.warmup
 end
 local function mineDrone(d: any,p: any,field: any,dt: number)
  if d.combatTarget or d.state=='Attack' then release(d);d.chargeAt=nil;d.chargeTarget=nil end
@@ -1295,7 +1300,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0) and los(d.pos,r.position,r.part,{droneFolder}) then
    d.obstructedAt=nil
    d.warmAt=d.warmAt or now;d.state='Warmup'
-   if now-d.warmAt>=d.stats.warmup then
+   if now-d.warmAt>=scene.miningWarmup(d,r) then
     if not d.mining then d.beamSince=now end
     d.state='Mine';d.mining=true
     local damage,charge=Mining.step('Blue',d.mineCharge,dt,d.stats.miningDPS);d.mineCharge=charge
@@ -1713,7 +1718,7 @@ local function snapshotDrone(d)
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
   Battery=scene.chargingStation and math.ceil(d.battery or 0) or nil,MaxBattery=scene.chargingStation and d.stats.batteryCapacity or nil,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
-  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=target and math.max(.08,d.stats.warmup) or d.stats.warmup,
+  TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
@@ -2590,7 +2595,9 @@ addPlayer=function(pl)
   p.characterReady=true
   scene.applyWalkSpeed(p)
   ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
-  if inStudio and not p.previewToolsGranted then p.previewToolsGranted=true;scene.fieldTools:previewLoadout(p) end
+  if inStudio and not p.previewToolsGranted and (not scene.runStart or root:GetAttribute('StudioToolPreview')==true) then
+   p.previewToolsGranted=true;scene.fieldTools:previewLoadout(p)
+  end
  end
  p.connection=pl.CharacterAdded:Connect(character)
  rebuildFleet(p,spawnAt);logistics:create(p);publish(p)

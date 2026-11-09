@@ -629,7 +629,7 @@ connect(player:GetAttributeChangedSignal('MA_Notice'),function()
 end)
 
 local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
-local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.effectsGroup)
+local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
   if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('SurfaceGui') then v:Destroy()
@@ -840,7 +840,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then
@@ -866,7 +866,10 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
- if event then crystalAudio:play(view.Position,event) end
+ if event then
+  -- The source plays from Crystal.Primary, not the visible union.
+  crystalAudio:play(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position,event)
+ end
  rockDamage:update(r,now)
  r.settled=now>=readyAt
 end

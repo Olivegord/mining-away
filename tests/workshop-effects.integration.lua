@@ -11,7 +11,7 @@ local function rock(f,x,hp)
  local r=makeResource(f,f.center+Vector3.new(x or 0,0,0),'Crystal',hp or 205,10,3);r.readyAt=now;return r
 end
 local function assign(d,r)
- release(d);d.target=r;d.targetSlot=1;d.field=r.field.id;r.slots[d.id]=1;d.pos=Feel.mineGoal(r.position,1,false,r.fullSize)
+ release(d);d.target=r;d.targetSlot=1;d.field=r.field.id;r.slots[d.id]=1;d.pos=Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal)
 end
 local function step(p)
  realTime+=C.Tick;now=realTime

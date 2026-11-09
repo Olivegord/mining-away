@@ -43,7 +43,7 @@ local function newResource(field,kind,hp,ore,at)
 end
 local function assignExact(pl,field,r,offset)
  local d=first(pl);release(d);d.field=field.id;d.target=r;d.targetSlot=1;r.slots[d.id]=1
- d.pos=Feel.mineGoal(r.position,1,r.kind=='Geode')+(offset or Vector3.zero);d.goal=Feel.mineGoal(r.position,1,r.kind=='Geode');d.state='Mine'
+ d.pos=Feel.mineGoal(r.position,1,r.kind=='Geode',nil,r.referenceCrystal)+(offset or Vector3.zero);d.goal=Feel.mineGoal(r.position,1,r.kind=='Geode',nil,r.referenceCrystal);d.state='Mine'
  teleport(pl,field.center+Vector3.new(0,3,0));return d
 end
 local function enlist(field,list)
@@ -218,7 +218,7 @@ check('final core reward stays whole, stops same-tick secondary work and sells e
  hitResource(d,core,2);eq(core.paid,true);eq(Profile.cargoUnits(data(p)),199);close(other.hp,90)
  eq(hitResource(d,core,2),false);eq(Profile.cargoUnits(data(p)),199)
  local sibling=p.drones[2];release(sibling);sibling.field=f.id;sibling.target=other;sibling.targetSlot=1;other.slots[sibling.id]=1
- sibling.pos=Feel.mineGoal(other.position,1,false);sibling.warmAt=now-sibling.stats.warmup-1
+ sibling.pos=Feel.mineGoal(other.position,1,false,nil,other.referenceCrystal);sibling.warmAt=now-sibling.stats.warmup-1
  eq(hitResource(sibling,other,999),false);close(other.hp,90)
  station(a,scene.converter);input(a,'Sell');eq(Profile.cargoUnits(data(p)),0);eq(data(p).run.credits,199)
  input(a,'Sell');eq(data(p).run.credits,199);eq(data(p).run.saleEarnings,199)
@@ -262,9 +262,9 @@ check('ordinary mining rejects growth and any station farther than one stud',fun
  local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',80,10)
  local d=assignExact(a,f,r,Vector3.new(1.01,0,0));local hp=r.hp
  eq(hitResource(d,r,100),false);eq(r.hp,hp)
- d.pos=Feel.mineGoal(r.position,1,false);eq(hitResource(d,r,100),false);eq(r.hp,hp)
+ d.pos=Feel.mineGoal(r.position,1,false,nil,r.referenceCrystal);eq(hitResource(d,r,100),false);eq(r.hp,hp)
  advance(2.01);release(d);assignExact(a,f,r,Vector3.new(1.01,0,0));eq(hitResource(d,r,1),false)
- d.pos=Feel.mineGoal(r.position,1,false);eq(hitResource(d,r,1),true);eq(r.hp,hp-1)
+ d.pos=Feel.mineGoal(r.position,1,false,nil,r.referenceCrystal);eq(hitResource(d,r,1),true);eq(r.hp,hp-1)
 end)
 check('beam and damage start only after exact overhead arrival and warmup',function()
  local a=fixture();local f=patches[1];local r=newResource(f,'Crystal',80,10);advance(2.01)
@@ -688,7 +688,7 @@ check('split fleet range disengagement preserves in-range sibling and its reserv
  input(a,'AssignSlot',{requestId='left',runId=data(p).run.id,fieldId=left.id,droneId=d1.id,life=d1.life,resourceId=leftRock.id});eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'accepted')
  input(a,'AssignSlot',{requestId='right',runId=data(p).run.id,fieldId=right.id,droneId=d2.id,life=d2.life,resourceId=rightRock.id});eq(Http:JSONDecode(gui:GetAttribute('MA_CommandState')).status,'accepted')
  teleport(a,right.center+Vector3.new(0,3,0));assert((a.Character.HumanoidRootPart.Position-left.center).Magnitude>(C.CommandRadius or 90))
- d2.pos=Feel.mineGoal(rightRock.position,1,false);d2.goal=d2.pos;advance(3.2)
+ d2.pos=Feel.mineGoal(rightRock.position,1,false,nil,rightRock.referenceCrystal);d2.goal=d2.pos;advance(3.2)
  eq(d1.field,nil);eq(leftRock.slots[d1.id],nil);eq(d2.field,right.id);eq(d2.target,rightRock);assert(rightRock.slots[d2.id])
 end)
 check('scoped drone withdrawal retains sibling field clearance and retires only withdrawn roster',function()

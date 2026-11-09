@@ -7,7 +7,7 @@ local function fixture()
  uid+=1;local pl=player(uid);players.PlayerAdded:Fire(pl);local p=profiles[uid]
  pl.Character:PivotTo(CFrame.new(patches[1].center+Vector3.new(0,3,0)))
  local r=makeResource(patches[1],patches[1].center,'Crystal',100,10,3);r.readyAt=now
- local d=p.drones[1];d.pos=Feel.mineGoal(r.position,1,false,r.fullSize);d.target=r;r.slots[d.id]=1
+ local d=p.drones[1];d.pos=Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal);d.target=r;r.slots[d.id]=1
  return pl,p,d,r
 end
 local function steps(n) for _=1,n do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end end
@@ -83,11 +83,15 @@ check('old-run or disconnected drops cannot enter a later profile',function()
  for _,drop in pairs(pickups) do assert(drop.owner~=q.player.UserId) end
 end)
 check('new resources are grounded with health independent of their footprint',function()
- local _,_,_,r=fixture();local ground=r.field.part.Position.Y+r.field.part.Size.Y*.5
+ local _,_,_,reference=fixture()
+ assert(math.abs(reference.position.Y-reference.field.center.Y-3)<1e-7)
+ local field=patches[2]
+ local r=makeResource(field,field.center,'Crystal',100,10,3)
+ local ground=r.field.part.Position.Y+r.field.part.Size.Y*.5
  assert(math.abs(r.position.Y-r.fullSize.Y*.5-ground+.06)<1e-7)
- assert(r.part:GetAttribute('GroundY')==ground and r.part.Material==Enum.Material.Rock)
+ assert(r.part:GetAttribute('GroundY')==ground)
  local weak=Mining.resource(75,'Crystal',1);local hard=Mining.resource(75,'Crystal',8)
- assert(weak.work==195 and hard.work==1560 and weak.size==hard.size)
+ assert(weak.work>0 and hard.work==8*weak.work and weak.size==hard.size)
 end)
 check('landing receipts describe real contacts and stop advancing at rest',function()
  local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}

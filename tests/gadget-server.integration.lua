@@ -70,7 +70,7 @@ check('abilities follow current health-scaled size after an authoritative physic
  local _,p=fixture();local d=p.drones[1]
  local r=makeResource(patches[1],patches[1].center,'Crystal',1000,10,4);r.readyAt=now
  release(d);d.role='Charger';d.field=1;d.target=r;d.targetSlot=1;r.slots[d.id]=1
- d.pos=Feel.mineGoal(r.position,1,false,r.fullSize)
+ d.pos=Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal)
  assert(hitResource(d,r,800,false,nil,d.pos,'Breaker'))
  assert(r.stage==3 and r.part:GetAttribute('SmashDents')==1)
  assert(math.abs(r.part.Size.X-1)<1e-7,'scarred rock uses the same health scale')

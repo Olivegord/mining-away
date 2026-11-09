@@ -56,7 +56,7 @@ function V.new(root,parent,audio)
   local r=self.byId[receipt.pickupId]
   if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
   local target=backpack(player,rootPart.Position)
-  if audio and os.clock()-self.lastSound>.09 then
+  if audio and not receipt.quiet and os.clock()-self.lastSound>.09 then
    local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
    self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
   end

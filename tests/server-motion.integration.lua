@@ -55,7 +55,7 @@ local function finishingContact(kind)
   local view=r.part:Clone();view.Parent=workspace
   finalResources[r.id]={source=r.part,view=view,visual={broken=false}}
  end
- d.field=f.id;d.target=primary;d.targetSlot=1;primary.slots[d.id]=1;d.pos=Feel.mineGoal(primary.position,1,false);d.goal=d.pos;d.state='Mine';d.mining=true;d.beamSince=now-1
+ d.field=f.id;d.target=primary;d.targetSlot=1;primary.slots[d.id]=1;d.pos=Feel.mineGoal(primary.position,1,false,nil,primary.referenceCrystal);d.goal=d.pos;d.state='Mine';d.mining=true;d.beamSince=now-1
  pl.Character:PivotTo(CFrame.new(f.center))
  local since=d.beamSince
  assert(hitResource(d,primary,100))

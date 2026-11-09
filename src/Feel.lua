@@ -1,6 +1,6 @@
 -- Original 2023 motion and crystal timing, with explicit elapsed-time correction.
 -- Scalar helpers stay engine-independent so the original equations are testable.
-local F = {FollowHeight=3.2,ReferenceFollowHeight=7,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
+local F = {FollowHeight=3.2,ReferenceFollowHeight=7,ReferenceCrystalPivot=3,WorkHeight=10,WorkClearance=5,SwarmSpacing=3.5,SwarmRadius=6,SwarmMaxOffset=2.2}
 function F.alpha(a, dt)
  if type(dt)~='number' or dt~=dt or dt<=0 then return 0 end
  return 1-(1-a)^(60*dt)
@@ -44,8 +44,8 @@ function F.approachWork(position,goal,maxStep60,dt)
 end
 -- Original crystals snap to a new facing on each crack. Seed + stage give
 -- the same pose to the server collider, current observers and late joiners.
-function F.rockYaw(seed,stage,turn)
- local yaw=(seed*.01)%(2*math.pi)
+function F.rockYaw(seed,stage,turn,reference)
+ local yaw=reference and 0 or (seed*.01)%(2*math.pi)
  if turn then
   for i=1,stage do
    local roll=(seed*131+i*271)%83
@@ -54,9 +54,9 @@ function F.rockYaw(seed,stage,turn)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn)
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn),0),ground+size.Y-.06
+ return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn,reference),0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -251,10 +251,13 @@ function F.stationOffset(slot,geode,height)
  local angle=2*math.pi*((slot or 1)-1)/3
  return math.cos(angle)*.85,height,math.sin(angle)*.85
 end
-function F.mineGoal(resourcePosition,slot,geode,fullSize)
+function F.mineGoal(resourcePosition,slot,geode,fullSize,reference)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
  -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
+ -- Mining Away sends Crystal.Primary.Position + 10. The visible Mesh is
+ -- welded three studs above that primary, so its center-to-drone gap is seven.
+ if reference then height=F.WorkHeight-F.ReferenceCrystalPivot end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end

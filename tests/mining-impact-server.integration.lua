@@ -12,14 +12,14 @@ local function fixture(fieldId)
 end
 local function node(d,field,hp,stages)
  local r=makeResource(field,field.center,'Crystal',hp or 100,10,3,stages);r.readyAt=now
- release(d);d.pos=Feel.mineGoal(r.position,1,r.limit>1,r.fullSize);d.target=r;d.targetSlot=1;d.field=field.id;r.slots[d.id]=1
+ release(d);d.pos=Feel.mineGoal(r.position,1,r.limit>1,r.fullSize,r.referenceCrystal);d.target=r;d.targetSlot=1;d.field=field.id;r.slots[d.id]=1
  return r
 end
 check('full bag accepts manual orders and continues actual miner damage',function()
  local pl,p,d,f=fixture();data(p).run.cargo={Quartz=Ca.capacity(data(p))};local r=node(d,f,500)
  release(d);p.tokens=7;p.bucketAt=now;command.OnServerEvent:Fire(pl,'MineOre',r.id)
  assert(d.target==r,'full bag rejected explicit mining order')
- d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize);d.velocity=Vector3.zero
+ d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal);d.velocity=Vector3.zero
  for _=1,math.ceil((d.stats.warmup+1)/C.Tick) do realTime+=C.Tick;now=realTime;mineDrone(d,p,f,C.Tick) end
  assert(r.hp<490 and d.mining,'mining stopped when backpack was full')
  assert(hitResource(d,r,10000));assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==40)

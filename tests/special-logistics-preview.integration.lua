@@ -51,7 +51,7 @@ check('one plot command assigns every miner and each reserves distinct real work
  assert(count==9)
  -- Completed specialists keep the plot order and select another ready rock.
  for _,d in ipairs(p.drones) do if DroneRoles.isSpecial(d.role) then
-  local previous=d.target;d.pos=Feel.mineGoal(previous.position,d.targetSlot,false,previous.fullSize)
+  local previous=d.target;d.pos=Feel.mineGoal(previous.position,d.targetSlot,false,previous.fullSize,previous.referenceCrystal)
   droneStep(d,C.Tick);now+=d.stats.warmup+C.Tick;realTime=now;droneStep(d,C.Tick)
   local job=assert(d.specialJob);local hp=previous.hp
   now=job.startedAt+job.duration*job.impact+C.Tick;realTime=now;droneStep(d,C.Tick)

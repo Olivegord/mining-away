@@ -85,6 +85,7 @@ function Soundscape.new(effectParent)
   nextIndex=1,current=nil,lastMusicVolume=-1,random=Random.new()},Soundscape)
  self.musicGroup=group(folder,'Music',0)
  self.effectsGroup=group(folder,'Actions',1)
+ self.crystalGroup=group(folder,'OriginalCrystals',1)
  local eq=Instance.new('EqualizerSoundEffect');eq.Name='GentleActionMix';eq.LowGain=0;eq.MidGain=0;eq.HighGain=-3;eq.Parent=self.effectsGroup
  local compressor=Instance.new('CompressorSoundEffect');compressor.Name='ActionPeakControl'
  compressor.Threshold=-8;compressor.Ratio=3;compressor.Attack=.1;compressor.Release=.18;compressor.GainMakeup=0;compressor.Parent=self.effectsGroup
@@ -157,6 +158,7 @@ function Soundscape:toggleMusic()
 end
 function Soundscape:toggleEffects()
  self.effectsMuted=not self.effectsMuted;self.effectsGroup.Volume=self.effectsMuted and 0 or 1
+ self.crystalGroup.Volume=self.effectsGroup.Volume
  if self.effectsMuted then
   for key in pairs(self.loops) do self:stopLoop(key,true) end
   local active=table.clone(self.active);for sound,anchor in pairs(active) do (anchor or sound):Destroy() end
