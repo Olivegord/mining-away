@@ -176,3 +176,72 @@ p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)
 assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)
 print('PASS full reference-sized patch populations, refill locality, mining and standby heights')
+
+-- Earn a first pack at the Workshop, then exercise all three actual choices.
+scene.runStart=f.center
+local shopper=player(98703);players.PlayerAdded:Fire(shopper)
+local buyer=profiles[shopper.UserId];local miner=buyer.drones[1]
+local function moveBuyer(position)
+ shopper.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0)))
+end
+local function input(action,tx,fields)
+ buyer.tokens=7;buyer.bucketAt=now
+ local payload=fields or {};payload.txId=tx;payload.runId=data(buyer).run.id
+ command.OnServerEvent:Fire(shopper,action,payload)
+end
+Pro.addCargo(data(buyer),'Quartz',20,100)
+moveBuyer(f.center);input('Sell','remote')
+assert(Pro.cargoUnits(data(buyer))==20 and data(buyer).run.wallet.Quartz==0,'sale worked away from the depot')
+moveBuyer(shopStations.Quartz.Position);input('Sell','sale')
+assert(Pro.cargoUnits(data(buyer))==0 and data(buyer).run.wallet.Quartz==20 and data(buyer).run.quartzEarnings==20)
+input('BuyPack','first',{packIndex=0})
+local first=assert(data(buyer).run.pendingOffer)
+assert(first.packTier==2 and data(buyer).run.wallet.Quartz==0)
+for i,id in ipairs(Workshop.FIRST_PACK) do assert(first.choices[i].cardId==id and #first.choices[i].preview>0) end
+local resumed=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_TWIN_BEAM')
+local delivery=assert(buyer.packDelivery)
+realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(buyer,now);moveBuyer(delivery.part.Position)
+delivery.prompt.PromptButtonHoldBegan:Fire(shopper)
+realTime+=Packs.duration(first.packTier)+.1;now=realTime
+delivery.prompt.Triggered:Fire(shopper)
+local opened=Pro.clone(data(buyer));assert(opened.run.pendingOffer.opened)
+moveBuyer(shopStations.Quartz.Position);input('ChooseCard','first-choice',{offerId=first.id,index=1})
+assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and miner.stats.forkFraction==.2)
+local function isolate()
+ release(miner)
+ for _,r in ipairs(f.resources) do r.paid=true;r.hp=0 end
+end
+local function hit(r,amount)
+ assert(assignOre(buyer,miner,r));miner.pos=committedStation(miner,r)
+ assert(hitResource(miner,r,amount))
+end
+isolate();local primary,adjacent=rock(0,100),rock(5,100)
+local adjacentHP=adjacent.hp
+hit(primary,20)
+assert(math.abs(adjacentHP-adjacent.hp-4)<.001,'Twin Beam did not damage a second crystal')
+local drill=Pro.clone(opened)
+assert(Ca.select(drill,first.id,2,'drill',drill.run.id,{atDepot=true}))
+buyer.session.data=drill;refreshStats(buyer)
+isolate();local shallow=rock(0,100)
+local shallowHP=shallow.hp;hit(shallow,20)
+assert(shallowHP-shallow.hp==20,'Deep Drill changed starter Quartz damage')
+isolate();f.cfg.Hardness=Workshop.DEEP_CUT_HARDNESS
+local deep=rock(0,175);local deepHP=deep.hp;hit(deep,20)
+assert(math.abs(deepHP-deep.hp-32)<.001,'Deep Drill did not improve deep crystal damage')
+release(miner)
+local magnet=Pro.clone(opened)
+assert(Ca.select(magnet,first.id,3,'magnet',magnet.run.id,{atDepot=true}))
+moveBuyer(f.center)
+local dropPosition=characterRoot(buyer).Position+Vector3.new(36,-3,0)
+local dropPart=World.part(pickupFolder,'MagnetTest',dropPosition,Vector3.one,Color3.new(1,1,1))
+pickups[-1]={part=dropPart,owner=shopper.UserId,runId=magnet.run.id,material='Quartz',units=1,spawnAt=now,age=1,
+ x=dropPosition.X,y=dropPosition.Y,z=dropPosition.Z,vx=0,vy=0,vz=0,floor=dropPosition.Y,landed=true}
+pickupStep(C.Tick);assert(not pickups[-1].homing,'base pickup reached ore 36 studs away')
+buyer.session.data=magnet;publish(buyer)
+for _=1,180 do
+ realTime+=C.Tick;now=realTime;pickupStep(C.Tick)
+ if not pickups[-1] then break end
+end
+assert(not pickups[-1] and Pro.cargoUnits(data(buyer))==1,'Ore Magnet failed to bring distant ore into the backpack')
+print('PASS Workshop sale, first paid crate, saved offer, Star reward, real Twin Beam, depth-specific laser damage and extended ore collection')

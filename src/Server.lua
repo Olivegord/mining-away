@@ -65,6 +65,7 @@ local function publish(p)
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.workshop=Ca.workshopRows(copy)
+ p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy)
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
@@ -398,7 +399,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference)
- if field.cfg.SelectionOnly then part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key) end
+ if field.cfg.SelectionOnly then
+  part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key)
+  part:SetAttribute('BaseOre',ore)
+ end
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
@@ -721,12 +725,12 @@ local function pickupStep(dt)
    end
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
-   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p)) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
+   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p)) and (target-from).Magnitude<=p.magnetRange
    if canCollect then
     if now>=(drop.queryAt or 0) then drop.clearPath=los(from,target,hr.Parent,{pickupFolder,droneFolder});drop.queryAt=now+.15 end
     canCollect=drop.clearPath==true
    end
-   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect)
+   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,p.magnetRange)
    if groundSpeed and groundSpeed>1 then
     drop.groundSerial=(drop.groundSerial or 0)+1
     drop.part:SetAttribute('GroundImpactAt',now)
@@ -831,6 +835,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
+ if not abilityOrigin and r.field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS then amount*=d.stats.deepCutMultiplier or 1 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
  if special then
@@ -1970,8 +1975,12 @@ local function serviceDeliveries(p: any)
  end
 end
 local function sellBackpack(p: any,automatic: boolean?)
- if activeAssault(p) or (not automatic and not atStation(p,scene.converter or scene.packStation,18)) then
-  if not automatic then notice(p,'Return to SELL ORE to sell your backpack.') end
+ if activeAssault(p) then
+  if not automatic then notice(p,'Recall your fighting drones before selling.') end
+  return
+ end
+ if not automatic and not (atStation(p,scene.converter or scene.packStation,18) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then
+  notice(p,'Sell your backpack at the Workshop or SELL ORE.')
   return
  end
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
@@ -2086,7 +2095,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
   if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result

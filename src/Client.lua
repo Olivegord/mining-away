@@ -294,7 +294,8 @@ local function menu(mode,title,subtitle,icon)
  else modalSubtitle.TextSize=12 end
  if mode=='shop' or mode=='stars' then
   ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
-  if mode=='stars' then modalTitle.Text='Star Shop';modalTitle.TextColor3=Color3.fromRGB(139,91,17) end
+  if mode=='stars' then modalTitle.Text='Star upgrades';modalTitle.TextColor3=Color3.fromRGB(139,91,17) end
+  if mode=='shop' and l.panelWidth<400 then modalTitle.Text='Workshop' end
  end
  modal.Visible=true
  packView:setFocus(inOffer)
@@ -399,8 +400,11 @@ openShop=function(_key)
  if not profile or not profile.run.wallet then return end
  activeShop='Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop','Quartz Workshop',comma(Shops.balance(profile,'Quartz'))..' Quartz · Duplicates stack'..(allowed and '' or ' · '..reason),'crystal')
- ShopView.render(U,body,{profile=profile,shop='Quartz',width=l.bodyWidth-4,canBuy=allowed,
+ local l=menu('shop','Quartz Workshop',allowed and 'Sell ore, buy a pack, improve your crew' or reason,'crystal')
+ ShopView.render(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,crystalRun=world.Map:FindFirstChild('CrystalRun')~=nil,
+  cargo=cargoUnits(profile),onSell=function()
+   if canAct('BuyUpgrade') then send('Sell') end
+  end,
   onPack=function()
    if pending() then
     if sealedPack() then modal.Visible=false;modalMode=nil;notice.Text='Hold E on your delivered crate.';noticeUntil=os.clock()+4 else openOffer() end
@@ -577,6 +581,7 @@ do
  local function menuContentKey(p)
   if not p or not p.run then return '' end
   local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
+  if modalMode=='shop' then table.insert(values,cargoUnits(p)) end
   for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
   table.insert(values,run.stars or 0)
   for _,entry in ipairs(Workshop.STAR_CATALOG) do table.insert(values,Workshop.starLevel(p,entry.id)) end
@@ -1164,10 +1169,10 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Open packs, stack upgrades, earn drones','Open' end
+  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Sell ore and upgrade your crew','Open' end
   return nil
  elseif kind=='Pack' then
-  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Packs, repeat upgrades and prestige','Open'
+  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Sell ore and upgrade your crew','Open'
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
@@ -1336,9 +1341,6 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 100
-  local packStation=world.Map:FindFirstChild('PackStation',true)
-  local prompt=packStation and packStation:FindFirstChildOfClass('ProximityPrompt')
-  if prompt then prompt.ActionText=Shops.packPromptText(profile.nextPackPrice or 0) end
   cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral

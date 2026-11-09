@@ -11,7 +11,7 @@ W.CATALOG={
  {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
  {id='Q_BATTERY',title='Battery Cell',scope='Fleet',category='flight',tier=1,max=4,step={battery=100},color={118,215,112},icon='startup'},
  {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
- {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
+ {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight',sideFields=true},
  {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
  {id='Q_THRUST',title='Thrusters',scope='Fleet',category='flight',tier=1,max=5,step={speed=.4},color={83,168,239},icon='flight'},
  {id='Q_HOT_START',title='Hot Start',scope='Fleet',category='startup',tier=3,max=3,step={startup=2,mining=.25},color={248,144,75},icon='startup'},
@@ -19,9 +19,14 @@ W.CATALOG={
  {id='Q_PRISM_DRIVE',title='Prism Drive',scope='Fleet',category='mining',tier=3,max=3,step={fork=.1,speed=.3},once={forkRange=6},color={75,179,230},icon='relay'},
  {id='Q_OVERDRIVE',title='Overdrive Core',scope='Fleet',category='mining',tier=4,max=3,step={mining=1,startup=2},color={250,109,81},icon='mining'},
  {id='Q_PRISM_CORE',title='Prismatic Core',scope='Fleet',category='mining',tier=4,max=2,step={fork=.2,yield=.25},once={forkRange=6},color={115,132,248},icon='relay'},
- {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
+ {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet',sideFields=true},
+ {id='Q_TWIN_BEAM',title='Twin Beam',scope='Fleet',category='mining',tier=2,max=2,step={fork=.2},once={forkRange=6},color={57,210,222},icon='relay',crystalRun=true},
+ {id='Q_DEEP_DRILL',title='Deep Drill',scope='Fleet',category='mining',tier=2,max=3,step={deepCut=.6},color={246,113,93},icon='mining',crystalRun=true},
+ {id='Q_ORE_MAGNET',title='Ore Magnet',scope='Player',category='cargo',tier=2,max=3,step={magnetRange=12},color={255,190,65},icon='cargo',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
+W.FIRST_PACK={'Q_TWIN_BEAM','Q_DEEP_DRILL','Q_ORE_MAGNET'}
+W.DEEP_CUT_HARDNESS=1.75
 W.STAR_CATALOG={
  {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
  {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
@@ -312,7 +317,7 @@ function Stands.mount(map,home,template)
  end
  addSign(template,'QUARTZ WORKSHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Quartz Workshop'
+ packPrompt.ActionText='Open Workshop';packPrompt.ObjectText='Quartz Workshop'
  packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
@@ -2054,12 +2059,12 @@ local function fall(s,dt)
  end
  return impact
 end
-function O.step(s,target,dt,attract)
+function O.step(s,target,dt,attract,magnetRange)
  if dt<=0 then return false end
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.landed==true and s.age>=O.SCATTER_TIME and distance<=O.MAGNET_RANGE
+ local pulling=attract and s.landed==true and s.age>=O.SCATTER_TIME and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
@@ -2180,7 +2185,7 @@ local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,St
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -2736,7 +2741,7 @@ return Packs
 end)()
 local Cards = (function()
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=13,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=14,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -2833,6 +2838,11 @@ function C.capacity(p,extra)
  return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
+function C.magnetBonus(p,extra)
+ local bonus=extra and (extra.effects.magnetRange or 0) or 0
+ for _,card in ipairs(p.run.cards) do bonus+=card.effects.magnetRange or 0 end
+ return bonus
+end
 function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
@@ -2849,6 +2859,7 @@ function C.stats(p,d,extra)
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
+  deepCutMultiplier=1+(cutter and (s.deepCut or 0) or 0),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   batteryCapacity=DroneRoles.isWorker(d.role or d.type) and (Workshop.BATTERY+(s.battery or 0)) or 0,
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
@@ -2886,9 +2897,9 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
- local out={capacity=C.capacity(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
+ local out={capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
   for k in pairs(statLabels) do if k~='shotInterval' then
@@ -2921,6 +2932,7 @@ end
 local function preview(p,c)
  local lines={}
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
+ if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
@@ -2931,12 +2943,12 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
+  for _,k in ipairs({'batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','deepCutMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
     if k=='damageReduction' or k=='critChance' or k=='splashFraction' or k=='forkFraction' or k=='salvageFraction' then scale=100;unit='%' end
-    if k=='geodeMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
+    if k=='geodeMultiplier' or k=='deepCutMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
     table.insert(lines,{label=statLabels[k],before=before[k]*scale,after=after[k]*scale,unit=unit})
    end
   end
@@ -2953,11 +2965,11 @@ local function record(p,operation,tx,result)
 end
 local function validID(tx) return type(tx)=='string' and #tx>0 and #tx<=128 end
 -- Expose only choices with a real benefit for the permanent fleet, including legacy caps.
-function C.workshopOffer(p,tier,seed)
+function C.workshopOffer(p,tier,seed,crystalRun)
  local pool={}
  for _,entry in ipairs(Workshop.CATALOG) do
   local owned=Workshop.find(p,entry.id);local count=owned and owned.level or 0
-  if count<entry.max and entry.tier<=tier then
+  if count<entry.max and entry.tier<=tier and (not entry.crystalRun or crystalRun) and (not entry.sideFields or not crystalRun) then
    local c=Workshop.card(entry,tier,count)
    if beneficial(p,c) then
     c.preview,c.previewTargetName=preview(p,c)
@@ -2997,6 +3009,20 @@ function C.workshopOffer(p,tier,seed)
  for i=#chosen,2,-1 do local j=random(i);chosen[i],chosen[j]=chosen[j],chosen[i] end
  return chosen
 end
+local function firstCrystalPack(p)
+ local choices={}
+ for _,id in ipairs(Workshop.FIRST_PACK) do
+  local entry=Workshop.BY_ID[id]
+  local owned=Workshop.find(p,id)
+  local level=owned and owned.level or 0
+  if level>=entry.max then return nil end
+  local c=Workshop.card(entry,2,level)
+  if not beneficial(p,c) then return nil end
+  c.preview,c.previewTargetName=preview(p,c)
+  table.insert(choices,c)
+ end
+ return choices
+end
 function C.buy(p,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
  if expectedRun~=p.run.id then return false,'Stale run' end
@@ -3009,17 +3035,20 @@ function C.buy(p,tx,expectedRun,context)
  local price=Workshop.price(p)
  if Shops.balance(p,'Quartz')<price then return false,'Need '..price..' Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
- local candidates,weights,total={},{66,24,8,2},0
- for tier=1,4 do
-  candidates[tier]=C.workshopOffer(p,tier,hash(tostring(seed)..':'..tier))
-  if candidates[tier] then total+=weights[tier] end
+ local tier=2
+ local choices=context.crystalRun and p.run.packIndex==0 and firstCrystalPack(p) or nil
+ if not choices then
+  local candidates,weights,total={},{66,24,8,2},0
+  for packTier=1,4 do
+   candidates[packTier]=C.workshopOffer(p,packTier,hash(tostring(seed)..':'..packTier),context.crystalRun)
+   if candidates[packTier] then total+=weights[packTier] end
+  end
+  if total==0 then return false,'No three useful choices remain. Stack owned upgrades or prestige.' end
+  -- Exhausted tiers leave the roll so a Legendary pack includes a Legendary choice.
+  local ticket=rng(hash(tostring(seed)..':delivery'))(total)
+  for i=1,4 do if candidates[i] then ticket-=weights[i];if ticket<=0 then tier=i;break end end end
+  choices=candidates[tier]
  end
- if total==0 then return false,'No three useful choices remain. Stack owned upgrades or prestige.' end
- -- Keep the original 66/24/8/2 odds when all tiers are useful. Exhausted tiers
- -- leave the roll entirely, so a saved Legendary always has a Legendary reward.
- local ticket=rng(hash(tostring(seed)..':delivery'))(total);local tier=1
- for i=1,4 do if candidates[i] then ticket-=weights[i];if ticket<=0 then tier=i;break end end end
- local choices=candidates[tier]
  local offer={id=p.run.id..':pack:'..(p.run.packIndex+1),runId=p.run.id,contentVersion=C.CONTENT_VERSION,seed=seed,
   packIndex=p.run.packIndex+1,price=price,currency='Quartz',choices=choices,expires='This run',packTier=tier,opened=false}
  p.run.wallet.Quartz-=price;p.run.credits=p.run.wallet.Quartz
@@ -6568,6 +6597,7 @@ local function publish(p)
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.workshop=Ca.workshopRows(copy)
+ p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy)
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
  copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
@@ -6901,7 +6931,10 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference)
- if field.cfg.SelectionOnly then part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key) end
+ if field.cfg.SelectionOnly then
+  part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key)
+  part:SetAttribute('BaseOre',ore)
+ end
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
@@ -7224,12 +7257,12 @@ local function pickupStep(dt)
    end
    local hr=characterRoot(p);local target=hr and hr.Position or Vector3.new(drop.x,drop.y,drop.z)
    local from=Vector3.new(drop.x,drop.y,drop.z)
-   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p)) and (target-from).Magnitude<=OreDrops.MAGNET_RANGE
+   local canCollect=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p)) and (target-from).Magnitude<=p.magnetRange
    if canCollect then
     if now>=(drop.queryAt or 0) then drop.clearPath=los(from,target,hr.Parent,{pickupFolder,droneFolder});drop.queryAt=now+.15 end
     canCollect=drop.clearPath==true
    end
-   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect)
+   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,p.magnetRange)
    if groundSpeed and groundSpeed>1 then
     drop.groundSerial=(drop.groundSerial or 0)+1
     drop.part:SetAttribute('GroundImpactAt',now)
@@ -7334,6 +7367,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local discoverySpeed=discoveries:Multiplier(p.player,'Speed')
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
+ if not abilityOrigin and r.field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS then amount*=d.stats.deepCutMultiplier or 1 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
  if special then
@@ -8473,8 +8507,12 @@ local function serviceDeliveries(p: any)
  end
 end
 local function sellBackpack(p: any,automatic: boolean?)
- if activeAssault(p) or (not automatic and not atStation(p,scene.converter or scene.packStation,18)) then
-  if not automatic then notice(p,'Return to SELL ORE to sell your backpack.') end
+ if activeAssault(p) then
+  if not automatic then notice(p,'Recall your fighting drones before selling.') end
+  return
+ end
+ if not automatic and not (atStation(p,scene.converter or scene.packStation,18) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then
+  notice(p,'Sell your backpack at the Workshop or SELL ORE.')
   return
  end
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
@@ -8589,7 +8627,7 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
   if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result

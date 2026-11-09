@@ -44,7 +44,7 @@ function HUD.styleWorldLabel(gui: BillboardGui)
  gui.AlwaysOnTop=false; gui.LightInfluence=0; gui.Adornee=anchor; gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
  gui.StudsOffset=Vector3.zero; gui.ExtentsOffset=Vector3.zero
  gui.StudsOffsetWorldSpace=Vector3.new(0,anchor.Size.Y*.5+3,0)
- local names={PackStation='PACK SHOP',PrestigeStation='PRESTIGE',Printer='DRONE PRINTER',Converter='SELL ORE'}
+ local names={PackStation='WORKSHOP',PrestigeStation='PRESTIGE',Printer='DRONE PRINTER',Converter='SELL ORE'}
  for _,label in gui:GetChildren() do
   if not label:IsA('TextLabel') then continue end
   if field then label.Text=tostring(field)..'  '..string.upper(anchor.Parent.Name)

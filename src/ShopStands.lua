@@ -50,7 +50,7 @@ function Stands.mount(map,home,template)
  end
  addSign(template,'QUARTZ WORKSHOP',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText=Shops.packPromptText(0);packPrompt.ObjectText='Quartz Workshop'
+ packPrompt.ActionText='Open Workshop';packPrompt.ObjectText='Quartz Workshop'
  packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template

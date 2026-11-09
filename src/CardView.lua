@@ -28,6 +28,9 @@ function CardView.summary(choice)
  add('range',amount(e.range or 0,'attack range'))
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
+ add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
+ add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
+ add('battery','+'..(e.battery or 0)..' battery capacity')
  add('splash','Hit a nearby sentry for '..percent(e.splash or 0)..' damage')
  add('shield','Start fights with '..percent(e.shield or 0)..' shield')
  add('finisher',amount(e.finisher or 0,'damage to weak sentries'))
@@ -46,6 +49,7 @@ function CardView.terms(choice,_targetOverride)
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif choice.scope=='Player' then target='Your backpack'
+ elseif (e.deepCut or 0)>0 or (e.fork or 0)>0 then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles then target='Mining drones'
  else target='All drones' end
@@ -92,7 +96,7 @@ function CardView.identity(choice)
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
  if has('fork') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
- if has('capacity') or has('fullAuto') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
+ if has('capacity') or has('fullAuto') or has('magnetRange') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
  if has('health') or has('reduction') or has('salvage') or has('shield') then return 'repair',Color3.fromRGB(12,125,65),Color3.fromRGB(164,255,180) end
  if has('combat') or has('rate') or has('crit') or has('splash') or has('finisher') or has('range') then return 'combat',Color3.fromRGB(178,30,80),Color3.fromRGB(255,161,198) end
  if has('speed') or has('startup') then return 'thrust',Color3.fromRGB(0,104,179),Color3.fromRGB(121,237,255) end
