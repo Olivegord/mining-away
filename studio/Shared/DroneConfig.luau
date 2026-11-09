@@ -26,7 +26,7 @@ local DroneConfig = {}
 
 -- Both the authoritative model and its client view clone use this same ratio.
 -- The original mesh, emitter and identity remain intact at worker scale.
-DroneConfig.Swarm = {ModelScale=.58}
+DroneConfig.Swarm = {ModelScale=.58,FleetViewScale=.94,MinerViewScale=1.22,FieldViewScale=1.16}
 
 DroneConfig.Settings = {
 	TestSquadMin = 2,
@@ -210,7 +210,7 @@ DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
 -- This only builds the visible hull; flight, reach and articulation are unchanged.
-function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?): (Model, BasePart?, BasePart?)
+function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, readable: boolean?): (Model, BasePart?, BasePart?)
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
  if model:GetAttribute('RoleGeometry')==role then return model,body,emitter and emitter:IsA('BasePart') and emitter or nil end
@@ -219,9 +219,9 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
 
  local pose,scale=model:GetPivot(),model:GetScale()
  local color=finishColor or def.Color
- local dark=Color3.fromRGB(67,76,84)
- local pale=Color3.fromRGB(211,219,219)
- local painted=Color3.fromRGB(199,203,205):Lerp(color,.55)
+ local dark=readable and Color3.fromRGB(37,47,63) or Color3.fromRGB(67,76,84)
+ local pale=readable and Color3.fromRGB(240,239,225) or Color3.fromRGB(211,219,219)
+ local painted=readable and color:Lerp(pale,.23) or Color3.fromRGB(199,203,205):Lerp(color,.55)
  local metal=Enum.Material.Metal
  local slate=Enum.Material.Slate
  local smooth=Enum.Material.SmoothPlastic
@@ -236,7 +236,9 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
   part.Name=name;part.Anchored=true
   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
   part.Material=material;part.Color=tint;part.Reflectance=0
-  if material==metal then
+  if readable and (material==metal or material==slate) then
+   part.Material=smooth
+  elseif material==metal then
    part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
   elseif material==slate then
    part.MaterialVariant='QuarryDrone_Painted'
@@ -252,6 +254,10 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
  end
  local function lens(name: string,point: Vector3,tint: Color3,radius: number)
   return hardware(name,Vector3.new(.12,radius,radius),CFrame.new(point)*vertical,tint,Enum.Material.Neon,cylinder)
+ end
+ local function shotMuzzle(part: BasePart,position: Vector3)
+  if not readable then return end
+  local mount=Instance.new('Attachment');mount.Name='ShotMuzzle';mount.Position=position;mount.Parent=part
  end
 
  if specialDefinitions[role] then
@@ -348,21 +354,25 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
   model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
  end
  if role=='Needler' then
-  hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
+  local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
+  shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)
   for _,side in ipairs({-1,1}) do
-   hardware('DartRail',Vector3.new(.23,.24,1.5),CFrame.new(side*.39,.07,-.79),dark,metal)
-   hardware('DartTip',Vector3.new(.19,.17,.34),CFrame.new(side*.39,.07,-1.55),color,Enum.Material.Neon)
+   hardware('DartRail',Vector3.new(.26,.29,1.5),CFrame.new(side*.52,.07,-.79),dark,metal,nil,'DartSlide')
+   hardware('DartTip',Vector3.new(.21,.20,.34),CFrame.new(side*.52,.07,-1.55),pale,smooth,nil,'DartSlide')
   end
+  hardware('RailCover',Vector3.new(1.24,.10,.38),CFrame.new(0,.28,.27),pale,smooth)
  elseif role=='Ballcaster' then
-  pod('CoilHull',1.75,.48,0,painted,slate)
-  hardware('LaunchRing',Vector3.new(.18,1.18,1.18),CFrame.new(0,.14,-.94)*foreAft,dark,metal,cylinder)
-  hardware('LoadedOrb',Vector3.one*.65,CFrame.new(0,.14,-1.12),color,Enum.Material.Neon,Enum.PartType.Ball)
+  pod('CoilHull',1.88,.58,0,painted,slate)
+  local ring=hardware('LaunchRing',Vector3.new(.24,1.28,1.28),CFrame.new(0,.14,-.96)*foreAft,dark,metal,cylinder,'BallSlide')
+  shotMuzzle(ring,Vector3.new(.16,0,0)*scale)
+  hardware('CoilFace',Vector3.new(.10,.94,.94),CFrame.new(0,.14,-1.10)*foreAft,pale,smooth,cylinder,'BallSlide')
+  hardware('LoadedOrb',Vector3.one*.62,CFrame.new(0,.14,-1.24),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
  elseif role=='Vacuum' then
   pod('VacuumHousing',1.82,.57,.03,painted,slate)
-  pod('WideIntake',1.46,.30,-.46,dark,metal)
-  lens('IntakeGlow',Vector3.new(0,-.62,0),color,.80)
+  hardware('WideIntake',Vector3.new(.30,1.46,1.46),CFrame.new(0,-.46,0)*vertical,dark,metal,cylinder,'Intake')
+  hardware('IntakeGlow',Vector3.new(.12,.80,.80),CFrame.new(0,-.62,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
   for _,side in ipairs({-1,1}) do
-   hardware('SuctionCanister',Vector3.new(1.34,.43,.43),CFrame.new(side*.92,.22,0)*foreAft,color,metal,cylinder)
+   hardware('SuctionCanister',Vector3.new(1.34,.52,.52),CFrame.new(side*.94,.22,0)*foreAft,pale,smooth,cylinder,'Canister',side)
   end
  elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)
@@ -378,7 +388,7 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
   hardware('SeedDartHull',Vector3.new(1.02,.54,2.4),CFrame.new(0,.14,-.09)*CFrame.Angles(0,math.pi,0),painted,slate,nil,nil,nil,true)
   hardware('SeederKeel',Vector3.new(.76,.22,1.91),CFrame.new(0,-.22,.03),dark,metal)
   for _,side in ipairs({-1,1}) do
-   hardware('MineralSeeder',Vector3.new(1.34,.40,.40),CFrame.new(side*.58,-.08,.14)*foreAft,pale,metal,cylinder)
+   hardware('MineralSeeder',Vector3.new(1.34,.40,.40),CFrame.new(side*.58,-.08,.14)*foreAft,pale,metal,cylinder,'Seeder',side)
   end
   lens('SeedOutlet',Vector3.new(0,-.40,-.31),color,.23)
  elseif role=='Charger' then

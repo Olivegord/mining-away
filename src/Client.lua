@@ -125,7 +125,7 @@ local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
 local TacticalHUD=require(RS.Shared:WaitForChild('TacticalHUD'))
 local colors={Blue=Color3.fromRGB(99,198,246),Red=Color3.fromRGB(243,117,112),Green=Color3.fromRGB(122,219,163),Dart=Color3.fromRGB(87,220,255),Striker=Color3.fromRGB(255,210,86),Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
-for _,name in ipairs(DroneConfig.TypeOrder) do colors[name]=DroneConfig.Types[name].Color end
+for name,definition in pairs(DroneConfig.Types) do colors[name]=definition.Color end
 local gui=Instance.new('ScreenGui');gui.Name='MiningAwayHUD';gui.ResetOnSpawn=false;gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=12;gui.Parent=player:WaitForChild('PlayerGui')
 soundscape:bindUI(gui)
 local safeRoot=U.frame(gui,UDim2.fromScale(0,0),UDim2.fromScale(1,1));safeRoot.Name='SafeContent';safeRoot.BackgroundTransparency=1
@@ -676,9 +676,13 @@ local function registerDrone(source)
  end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
- clone:ScaleTo(clone:GetScale()*(source:GetAttribute('ModelScale') or DroneConfig.Swarm.ModelScale))
- local referenceMiner=source:GetAttribute('Role')=='Striker'
- if not referenceMiner then DroneConfig.decorate(clone,source:GetAttribute('Role') or kind) end
+ local role=source:GetAttribute('Role')
+ local referenceMiner=role=='Striker'
+ local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart'
+ local swarm=DroneConfig.Swarm
+ local scale=if referenceMiner then swarm.MinerViewScale elseif fieldRole then swarm.FieldViewScale else swarm.FleetViewScale
+ clone:ScaleTo(clone:GetScale()*scale)
+ if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
@@ -691,8 +695,12 @@ local function registerDrone(source)
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if referenceMiner then
-  pivot.Color=Color3.fromRGB(163,162,165);pivot.Material=Enum.Material.Plastic;pivot.MaterialVariant=''
-  emitter.Color=pivot.Color;emitter.Material=pivot.Material;emitter.MaterialVariant=''
+  pivot.Color=Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
+  emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
+  local panel=localPart(clone,'MinerTopPanel',pivot.Position)
+  panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
+  panel.Color=Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
+  panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
@@ -704,6 +712,7 @@ local function registerDrone(source)
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
@@ -937,6 +946,10 @@ local function renderDrone(d,dt,now)
  end
  if not motionPaused then
   local targetYaw=referenceMiner and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw) or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+   local aim=s:GetAttribute('TargetPosition')
+   if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
+  end
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
  end
@@ -960,7 +973,7 @@ local function renderDrone(d,dt,now)
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
-  SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now)
+  SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  for part,original in pairs(d.parts) do
@@ -1116,7 +1129,7 @@ connect(RunService.RenderStepped,function(dt)
    end
   end
  end
- roleEffectView:step(now)
+ roleEffectView:step(now,droneIndex)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end

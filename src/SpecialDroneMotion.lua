@@ -3,6 +3,7 @@
 -- readable preparation, quick contact and longer mechanically damped recovery.
 local Motion={}
 local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
  if t<=.52 then return loaded*smooth((t-.12)/.4) end
@@ -12,7 +13,7 @@ end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 
 function Motion.new(model,role)
- if not roles[role] then return nil end
+ if not (roles[role] or fieldRoles[role]) then return nil end
  local record={model=model,role=role,parts={},scale=model:GetScale()}
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
@@ -79,9 +80,40 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
-function Motion.step(record,source,resource,now)
+local function fieldStep(record,state,now,dt,shot)
+ local recoil,reload=0,0
+ if shot and shot.Parent then
+  local started=shot:GetAttribute('StartedAt')
+  local paused=shot:GetAttribute('PausedAt') or 0
+  local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
+  if age>=0 then
+   recoil=smooth(age/.035)*(1-smooth(age/.28))
+   reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
+  end
+ end
+ local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant')
+ local engagement=record.engagement or 0
+ engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
+ record.engagement=engagement
+ local pivot=record.model:GetPivot()
+ for _,item in ipairs(record.parts) do
+  if not item.part.Parent then continue end
+  local kind=item.kind
+  local offset=Vector3.zero
+  if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
+  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
+  elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
+  elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
+  item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
+  if kind=='BallReload' then item.part.Size=item.size*(1-.82*reload) end
+ end
+end
+
+function Motion.step(record,source,resource,now,dt,shot)
  if not record or not record.model.Parent then return end
  local state=source:GetAttribute('State')
+ if fieldRoles[record.role] then fieldStep(record,state,now,dt,shot);return end
  local id=source:GetAttribute('DroneId')
  if resource and resource:GetAttribute('EffectDrone')==id then record.resource=resource end
  -- The final contact clears TargetId, but its mechanical recoil still finishes

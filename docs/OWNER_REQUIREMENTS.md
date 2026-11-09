@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — larger and clearer drones
+
+Make the drones larger, animate their visible models on the client and use game references to improve contrast against the mining fields. Keep the original miner mesh and the established direction for beam contact and world outlines.
+
 ## November 8 latest — drone automation, small upgrades and readable pickups
 
 Use Factorio, Satisfactory and Leaf Blower Revolution as references for a simple Roblox loop where the player can see which step is holding up production and automate it. The owner points to subtle upgrades in n-gon and Risk of Rain. Let small upgrades change what happens while mining. Make drones follow when the player gets too far from the pin. Start Studio with a crew that includes a side-firing dart drone, a side-firing energy-ball drone, a vacuum and automation to try. Show the amount of ore picked up on screen. Remove the current tool drops and keep mining drone-driven.

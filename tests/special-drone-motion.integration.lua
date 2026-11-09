@@ -101,3 +101,33 @@ end
 assert(SpecialDroneMotion.phase(resource,'wrong',11)==nil,'foreign timeline accepted')
 assert(SpecialDroneMotion.phase(resource,'fps',0/0)==nil,'nonfinite clock accepted')
 print(checks..' distinct specialist assembly, joint, pause, cancellation and shared-time API-double checks passed; not Studio visual validation')
+
+for _,test in ipairs({
+ {role='Needler',part='DartRail',state='SpecialMine',shot=true},
+ {role='Ballcaster',part='LaunchRing',state='SpecialMine',shot=true},
+ {role='Vacuum',part='WideIntake',state='Vacuum'},
+ {role='Dart',part='MineralSeeder',state='Plant'},
+}) do
+ local model=newModel(test.role)
+ local motion=assert(SpecialDroneMotion.new(model,test.role))
+ local source=Instance.new('Model');source:SetAttribute('State',test.state)
+ local hardware=assert(model:FindFirstChild(test.part));local initial=hardware.Position
+ local shot
+ if test.shot then
+  shot=Instance.new('Folder');shot.Parent=workspace;shot:SetAttribute('StartedAt',10)
+ end
+ SpecialDroneMotion.step(motion,source,nil,10.09,.09,shot)
+ local working=hardware.Position
+ assert((working-initial).Magnitude>.08,test.role..' hardware stayed still while working')
+ if shot then
+  shot:SetAttribute('PausedAt',10.09)
+  SpecialDroneMotion.step(motion,source,nil,12,.016,shot)
+  assert((hardware.Position-working).Magnitude<1e-6,'shot hardware ignored the replicated pause')
+  shot:Destroy()
+ end
+ source:SetAttribute('State','Follow')
+ for frame=1,60 do SpecialDroneMotion.step(motion,source,nil,12+frame/60,1/60,shot) end
+ assert((hardware.Position-initial).Magnitude<.001,'hardware did not settle after work')
+ model:Destroy();source:Destroy()
+end
+print('PASS local dart and ball launch hardware, vacuum intake and seeders move and settle')

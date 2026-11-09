@@ -4526,6 +4526,7 @@ local SpecialDroneMotion = (function()
 -- readable preparation, quick contact and longer mechanically damped recovery.
 local Motion={}
 local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
  if t<=.52 then return loaded*smooth((t-.12)/.4) end
@@ -4535,7 +4536,7 @@ end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 
 function Motion.new(model,role)
- if not roles[role] then return nil end
+ if not (roles[role] or fieldRoles[role]) then return nil end
  local record={model=model,role=role,parts={},scale=model:GetScale()}
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
@@ -4602,9 +4603,40 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
-function Motion.step(record,source,resource,now)
+local function fieldStep(record,state,now,dt,shot)
+ local recoil,reload=0,0
+ if shot and shot.Parent then
+  local started=shot:GetAttribute('StartedAt')
+  local paused=shot:GetAttribute('PausedAt') or 0
+  local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
+  if age>=0 then
+   recoil=smooth(age/.035)*(1-smooth(age/.28))
+   reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
+  end
+ end
+ local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant')
+ local engagement=record.engagement or 0
+ engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
+ record.engagement=engagement
+ local pivot=record.model:GetPivot()
+ for _,item in ipairs(record.parts) do
+  if not item.part.Parent then continue end
+  local kind=item.kind
+  local offset=Vector3.zero
+  if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
+  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
+  elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
+  elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
+  item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
+  if kind=='BallReload' then item.part.Size=item.size*(1-.82*reload) end
+ end
+end
+
+function Motion.step(record,source,resource,now,dt,shot)
  if not record or not record.model.Parent then return end
  local state=source:GetAttribute('State')
+ if fieldRoles[record.role] then fieldStep(record,state,now,dt,shot);return end
  local id=source:GetAttribute('DroneId')
  if resource and resource:GetAttribute('EffectDrone')==id then record.resource=resource end
  -- The final contact clears TargetId, but its mechanical recoil still finishes
@@ -5105,7 +5137,7 @@ function View.new()
  end
  local root=workspace:FindFirstChild('DroneRoleState');if root then attach(root) end
  self.connections[#self.connections+1]=workspace.ChildAdded:Connect(function(node) if node.Name=='DroneRoleState' then attach(node) end end)
- function self:step(now)
+ function self:step(now,droneIndex)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
@@ -5118,6 +5150,12 @@ function View.new()
     local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
     if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
     local progress=((paused>0 and paused or now)-at)/duration
+    local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
+    if drone and not r.bound and progress>=0 and progress<1 then
+     r.bound=true
+     local previous=drone.shotReceipt
+     if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
+    end
     if progress>=1 then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true
@@ -5130,8 +5168,11 @@ function View.new()
       value.Material=Enum.Material.Neon;value.Color=node:GetAttribute('Color')
       value.Size=ball and Vector3.one*1.1 or Vector3.new(.20,.20,1.4)
       if ball then value.Shape=Enum.PartType.Ball end
+      local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
+      if muzzle and (muzzle-from).Magnitude<2.5 and (to-muzzle).Magnitude>1 then r.launchFrom=muzzle end
       value.Parent=workspace.CurrentCamera;r.projectile=value
      end
+     from=r.launchFrom or from
      local direction=(to-from).Unit
      local center=from:Lerp(to,progress)-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
@@ -9171,7 +9212,7 @@ local palette=U.palette
 local DroneConfig=require(RS:WaitForChild('Shared'):WaitForChild('DroneConfig'))
 local TacticalHUD=require(RS.Shared:WaitForChild('TacticalHUD'))
 local colors={Blue=Color3.fromRGB(99,198,246),Red=Color3.fromRGB(243,117,112),Green=Color3.fromRGB(122,219,163),Dart=Color3.fromRGB(87,220,255),Striker=Color3.fromRGB(255,210,86),Medic=Color3.fromRGB(99,255,164),Charger=Color3.fromRGB(255,112,72)}
-for _,name in ipairs(DroneConfig.TypeOrder) do colors[name]=DroneConfig.Types[name].Color end
+for name,definition in pairs(DroneConfig.Types) do colors[name]=definition.Color end
 local gui=Instance.new('ScreenGui');gui.Name='MiningAwayHUD';gui.ResetOnSpawn=false;gui.ScreenInsets=Enum.ScreenInsets.CoreUISafeInsets;gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;gui.DisplayOrder=12;gui.Parent=player:WaitForChild('PlayerGui')
 soundscape:bindUI(gui)
 local safeRoot=U.frame(gui,UDim2.fromScale(0,0),UDim2.fromScale(1,1));safeRoot.Name='SafeContent';safeRoot.BackgroundTransparency=1
@@ -9722,9 +9763,13 @@ local function registerDrone(source)
  end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
- clone:ScaleTo(clone:GetScale()*(source:GetAttribute('ModelScale') or DroneConfig.Swarm.ModelScale))
- local referenceMiner=source:GetAttribute('Role')=='Striker'
- if not referenceMiner then DroneConfig.decorate(clone,source:GetAttribute('Role') or kind) end
+ local role=source:GetAttribute('Role')
+ local referenceMiner=role=='Striker'
+ local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart'
+ local swarm=DroneConfig.Swarm
+ local scale=if referenceMiner then swarm.MinerViewScale elseif fieldRole then swarm.FieldViewScale else swarm.FleetViewScale
+ clone:ScaleTo(clone:GetScale()*scale)
+ if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
@@ -9737,8 +9782,12 @@ local function registerDrone(source)
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if referenceMiner then
-  pivot.Color=Color3.fromRGB(163,162,165);pivot.Material=Enum.Material.Plastic;pivot.MaterialVariant=''
-  emitter.Color=pivot.Color;emitter.Material=pivot.Material;emitter.MaterialVariant=''
+  pivot.Color=Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
+  emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
+  local panel=localPart(clone,'MinerTopPanel',pivot.Position)
+  panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
+  panel.Color=Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
+  panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
@@ -9750,6 +9799,7 @@ local function registerDrone(source)
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
@@ -9983,6 +10033,10 @@ local function renderDrone(d,dt,now)
  end
  if not motionPaused then
   local targetYaw=referenceMiner and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw) or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+   local aim=s:GetAttribute('TargetPosition')
+   if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
+  end
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
  end
@@ -10006,7 +10060,7 @@ local function renderDrone(d,dt,now)
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
-  SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now)
+  SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  for part,original in pairs(d.parts) do
@@ -10162,7 +10216,7 @@ connect(RunService.RenderStepped,function(dt)
    end
   end
  end
- roleEffectView:step(now)
+ roleEffectView:step(now,droneIndex)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end

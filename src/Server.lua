@@ -1501,7 +1501,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local flight=projectile=='Dart' and .25 or .48
    d.specialJob.duration=math.max(cycle.duration,flight+.10);d.specialJob.impact=flight/d.specialJob.duration
    d.specialJob.contact=aim
-   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,flight)
+   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,flight,d.id)
   else
    for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
    r.part:SetAttribute('EffectSerial',r.specialSerial)

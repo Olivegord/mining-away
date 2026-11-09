@@ -14,7 +14,7 @@ function View.new()
  end
  local root=workspace:FindFirstChild('DroneRoleState');if root then attach(root) end
  self.connections[#self.connections+1]=workspace.ChildAdded:Connect(function(node) if node.Name=='DroneRoleState' then attach(node) end end)
- function self:step(now)
+ function self:step(now,droneIndex)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
@@ -27,6 +27,12 @@ function View.new()
     local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
     if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
     local progress=((paused>0 and paused or now)-at)/duration
+    local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
+    if drone and not r.bound and progress>=0 and progress<1 then
+     r.bound=true
+     local previous=drone.shotReceipt
+     if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
+    end
     if progress>=1 then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true
@@ -39,8 +45,11 @@ function View.new()
       value.Material=Enum.Material.Neon;value.Color=node:GetAttribute('Color')
       value.Size=ball and Vector3.one*1.1 or Vector3.new(.20,.20,1.4)
       if ball then value.Shape=Enum.PartType.Ball end
+      local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
+      if muzzle and (muzzle-from).Magnitude<2.5 and (to-muzzle).Magnitude>1 then r.launchFrom=muzzle end
       value.Parent=workspace.CurrentCamera;r.projectile=value
      end
+     from=r.launchFrom or from
      local direction=(to-from).Unit
      local center=from:Lerp(to,progress)-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)

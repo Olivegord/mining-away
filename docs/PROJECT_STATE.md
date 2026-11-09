@@ -11,18 +11,26 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f7ac2ad30393d3c8d07ce54be61f953f57fbccea70eac6f9290af8e4328b728e` | Drone automation, side shots and visible pickup amounts. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the automation follow-up below. |
+| Native-file SHA-256 | `a3429d45b81df287d8001d1dfd5542dab686f18594d44f88891264952eb08e60` | Larger visible drones and local working hardware. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the drone visibility follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Drone automation in shared DRONEREVOLUTION Edit** | All seven Sources and three sync roots verified on loaded version 112. Studio confirmed Save to Roblox after the test. The initially open editor remains open in Edit. |
+| Shared Studio entry point | **Larger, locally animated drones in shared DRONEREVOLUTION Edit** | All seven Sources and three sync roots verified on loaded version 112. Studio confirmed Save to Roblox after the test. The initially open editor remains open in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — drone visibility and motion
+
+The existing playtest showed three specialists on their small replicated proxies. The client renderer had used the purchase list as its set of known drone types. It now reads all role definitions and creates the visible local models for all five test drones. The dart thrower, ballcaster, vacuum and planter render at twice their former linear scale. The original miner renders 22% larger. Their panels use broader role colors, light trim and dark working hardware. The revised surfaces and silhouettes follow the readability approach described by [Valve](https://cdn.steamstatic.com/apps/valve/2007/NPAR07_IllustrativeRenderingInTeamFortress2.pdf) and [Riot](https://playvalorant.com/en-us/news/dev/the-art-of-valorant-map-environments/).
+
+Projectile receipts drive local launch hardware and carry the firing drone's ID so the shot can originate at the visible muzzle. The client also animates the vacuum intake and seed heads while those drones work. In the shared Studio place, all five proxies were hidden by their local views, both launchers and the planter moved, and the vacuum intake extended 0.31 studs while ore reached the backpack. The actual starter field was inspected in the desktop viewport. The workshop, flight and focused hardware tests passed. The broad specialist suite stopped at a schema-six fixture that also fails on `688790b`. Mobile readability and multiplayer remain unverified.
+
+The initially open Studio session returned to Edit at DRONEREVOLUTION place **124078027733625**, universe **10774898335**, loaded version **112**. All seven Sources matched and all three roots were `SyncedAsRoot`. Studio logged the successful Save to Roblox at **7:52 PM Pacific on November 8**. This revision is unpublished. Reproduce from `688790baaec95013069973137d83c52e255ff09b` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 688790b`.
 
 ## Latest follow-up — drone production loop
 
