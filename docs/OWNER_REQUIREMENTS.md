@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## Latest — the Crystal Run and Stars
+
+The shop is on one side of the hub. In the other direction, one large crystal field forms the main mining route, with walls dividing zones as players walk deeper. Mouse or touch aims a square made of beams with a vertical fade. Click or tap to pin it. Crystals touching the square are available to drones. Repositioning changes their next target while work already underway finishes. Use yellow while the placed square is working, and green plus particles while an idle damaged crystal heals. A depleted mining drone returns to the charging station automatically. Players carry ore back to sell when their backpack fills.
+
+Packs offer three upgrades and grant one chosen upgrade plus a positive amount of Stars. Upgrades can reduce chores or add battery capacity. A scrollable Star Shop shows costs and lets players buy effects such as +4 studs of selector width or faster walking. The owner confirmed that Stars and Star Shop purchases reset with the run on prestige. Permanent fleet rules still apply.
+
 ## November 8 latest — use Mining Away's actual rock shading and remove world outlines
 
 The pre-crack effect looked too black. Use the shade calculation from the enabled Mining Away script. Remove world outlines from drones and rock targeting. Retain the selection fill and health readout.

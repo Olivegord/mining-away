@@ -9,6 +9,7 @@ W.CATALOG={
  {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
  {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
  {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_BATTERY',title='Battery Cell',scope='Fleet',category='flight',tier=1,max=4,step={battery=100},color={118,215,112},icon='startup'},
  {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
  {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
  {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
@@ -21,6 +22,18 @@ W.CATALOG={
  {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
+W.STAR_CATALOG={
+ {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
+ {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
+ {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
+ {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
+ {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
+}
+W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
+W.BATTERY=100
+function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
+function W.starPrice(entry,level) return entry.cost+level end
+function W.selectorWidth(p) return 14+4*W.starLevel(p,'selector') end
 function W.owned(p)
  local result={}
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
@@ -657,6 +670,20 @@ local Mining = (function()
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+M.SELECTOR_RANGE=44
+-- Horizontal separating axes for the square and the crystal's current body.
+-- A crystal touching the boundary is eligible even if its center is outside.
+function M.selectorTouches(center,half,frame,size)
+ local x,z=center.X-frame.Position.X,center.Z-frame.Position.Z
+ local right,back=frame.RightVector,-frame.LookVector
+ local rx,rz=right.X,right.Z
+ local bx,bz=back.X,back.Z
+ local sx,sz=size.X*.5,size.Z*.5
+ return math.abs(x)<=half+math.abs(rx)*sx+math.abs(bx)*sz
+  and math.abs(z)<=half+math.abs(rz)*sx+math.abs(bz)*sz
+  and math.abs(x*rx+z*rz)<=sx+half*(math.abs(rx)+math.abs(rz))
+  and math.abs(x*bx+z*bz)<=sz+half*(math.abs(bx)+math.abs(bz))
+end
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -7310,6 +7337,7 @@ end
 local function percent(value) return string.format('%g%%',value*100) end
 function V.effect(c)
  local e=c.effects;local parts={}
+ if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget') end
  for _,k in ipairs({'mining','startup','capacity','speed','yield','fork'}) do
   if e[k] then
@@ -7342,12 +7370,16 @@ function V.render(U,parent,options)
  U.icon(pack,'cards',UDim2.fromOffset(12,14),UDim2.fromOffset(narrow and 44 or 62,narrow and 44 or 62),Color3.fromRGB(63,171,243))
  local textX=narrow and 67 or 88
  label(U,pack,UDim2.fromOffset(textX,10),UDim2.fromOffset(width-textX-(narrow and 14 or 164),28),'UPGRADE PACK',narrow and 20 or 23,true)
- label(U,pack,UDim2.fromOffset(textX,40),UDim2.fromOffset(width-textX-(narrow and 14 or 164),38),'One pick included. Duplicates stack.',15,false)
+ label(U,pack,UDim2.fromOffset(textX,40),UDim2.fromOffset(width-textX-(narrow and 14 or 164),38),'Choose 1 of 3 and earn 1–4 Stars.',15,false)
  local buyText=pending and (pending.opened==false and 'Open crate' or 'Choose upgrade') or ('Buy · '..price..' Quartz')
  local buy=action(U,pack,UDim2.fromOffset(narrow and 12 or width-164,narrow and 82 or 22),UDim2.fromOffset(narrow and width-28 or 148,44),buyText,options.onPack,options.canBuy and (pending~=nil or balance>=price))
  buy.Name='BuyWorkshopPack'
  label(U,pack,UDim2.fromOffset(12,narrow and 130 or 82),UDim2.fromOffset(width-28,28),'Rarity guarantees an upgrade of that tier. No extra charge.',narrow and 12 or 14,false)
  local y=packHeight+18
+ if options.onStars then
+  action(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,42),'Star Shop  ·  '..(p.run.stars or 0)..' Stars',options.onStars,true,Color3.fromRGB(255,221,119))
+  y+=53
+ end
  label(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,30),'YOUR UPGRADE POOL',18,true);y+=38
  local entries={}
  for _,entry in ipairs(Workshop.CATALOG) do if rows[entry.id] then table.insert(entries,entry) end end
@@ -7385,6 +7417,23 @@ function V.render(U,parent,options)
  local bar=rounded(U,foot,UDim2.fromOffset(12,65),UDim2.fromOffset(width-(narrow and 28 or 176),6),WHITE,WHITE)
  local fill=U.frame(bar,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(earned/math.max(1,needed),0,1),1),Color3.fromRGB(154,104,215));U.corner(fill,4)
  action(U,foot,UDim2.fromOffset(narrow and 12 or width-154,narrow and 78 or 20),UDim2.fromOffset(narrow and width-28 or 140,40),pre.eligible and 'Prestige ready!' or 'View reward',options.onPrestige,true,Color3.fromRGB(211,177,255))
+end
+function V.renderStars(U,parent,options)
+ local p,width=options.profile,options.width
+ local balance=p.run.stars or 0
+ action(U,parent,UDim2.fromOffset(4,3),UDim2.fromOffset(width-8,42),'Back to Quartz Workshop',options.onBack,true,Color3.fromRGB(174,218,255))
+ local y=56
+ for _,entry in ipairs(Workshop.STAR_CATALOG) do
+  local level=Workshop.starLevel(p,entry.id)
+  local price=Workshop.starPrice(entry,level)
+  local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
+  label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
+  label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),entry.description,15,false)
+  label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
+  action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
+   function() options.onBuy(entry.id,level) end,options.canBuy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
+  y+=111
+ end
 end
 return V
 
@@ -8293,6 +8342,9 @@ function V:update(dt,now)
   end
  end
  local marked={};local records=ctx.resources
+ local hovered=hover and records[hover]
+ local zone=hovered and hovered.source.Parent
+ if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then self:endDrag() end
  if not visible then self:endDrag() end
  if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
@@ -8344,7 +8396,7 @@ function V:update(dt,now)
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
-  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('Mineral') or 'Rock')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
@@ -8664,6 +8716,155 @@ end
 return View
 
 end)()
+local SelectorView = (function()
+-- Local aiming, pinned command feedback and bounded crystal healing cues.
+local V={}
+V.__index=V
+local idle=ColorSequence.new(Color3.fromRGB(106,218,255))
+local active=ColorSequence.new(Color3.fromRGB(255,214,83))
+local preview=ColorSequence.new(Color3.fromRGB(185,239,255))
+local heights={.08,.32,.64,1.04,1.48}
+local widths={.18,.32,.42,.48,.52}
+local fades={.1,.35,.55,.74,.9}
+
+local function marker(parent,isPreview)
+ local anchor=Instance.new('Part')
+ anchor.Name=isPreview and 'SelectorPreview' or 'MiningSelector'
+ anchor.Size=Vector3.one;anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Parent=parent
+ local layers={}
+ for i,height in ipairs(heights) do
+  local layer={height=height,corners={},beams={}}
+  for n=1,4 do
+   local corner=Instance.new('Attachment');corner.Parent=anchor;layer.corners[n]=corner
+  end
+  for n=1,4 do
+   local beam=Instance.new('Beam')
+   beam.Attachment0=layer.corners[n];beam.Attachment1=layer.corners[n%4+1]
+   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.7;beam.LightInfluence=0
+   beam.Width0=widths[i];beam.Width1=widths[i];beam.Enabled=false
+   beam.Transparency=NumberSequence.new(isPreview and math.min(.98,fades[i]+.38) or fades[i])
+   beam.Parent=anchor;layer.beams[n]=beam
+  end
+  layers[i]=layer
+ end
+ return {anchor=anchor,layers=layers}
+end
+
+local function show(mark,point,width,color)
+ local visible=point~=nil
+ if visible and mark.point~=point then mark.anchor.Position=point end
+ if visible and mark.width~=width then
+  local h=width*.5
+  for _,layer in ipairs(mark.layers) do
+   local y=layer.height
+   for i,corner in ipairs(layer.corners) do
+    corner.Position=Vector3.new((i==1 or i==4) and -h or h,y,i<=2 and -h or h)
+   end
+  end
+  mark.width=width
+ end
+ if visible~=mark.visible or visible and color~=mark.color then
+  for _,layer in ipairs(mark.layers) do for _,beam in ipairs(layer.beams) do
+   beam.Enabled=visible
+   if visible then beam.Color=color end
+  end end
+ end
+ mark.visible=visible;mark.point=point;mark.color=color
+end
+
+function V.new(options)
+ return setmetatable({options=options,cues={},clock=0},V)
+end
+function V:aim(ray)
+ local o=self.options
+ local run=o.world.Map:FindFirstChild('CrystalRun')
+ if not run or o.hidden() then return nil end
+ local character=o.player.Character
+ local hr=character and character:FindFirstChild('HumanoidRootPart')
+ if not hr then return nil end
+ local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
+ filter.FilterDescendantsInstances={character,o.parent}
+ local hit=workspace:Raycast(ray.Origin,ray.Direction*500,filter)
+ if not hit then return nil end
+ local zone=hit.Instance.Parent
+ if not zone or zone.Parent~=run then return nil end
+ local bed=zone:FindFirstChild('Field')
+ if not bed or hit.Instance~=bed and not hit.Instance:GetAttribute('ResourceId') then return nil end
+ local point=Vector3.new(hit.Position.X,bed.Position.Y+bed.Size.Y*.5,hit.Position.Z)
+ local delta=point-hr.Position
+ local localPoint=bed.CFrame:PointToObjectSpace(point)
+ local field=bed:GetAttribute('FieldId')
+ if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2
+  or math.abs(localPoint.X)>bed.Size.X*.5 or math.abs(localPoint.Z)>bed.Size.Z*.5 then return nil end
+ return point,field
+end
+function V:commit(ray)
+ local point,id=self:aim(ray)
+ local profile=self.options.profile()
+ if not point or not id or not profile then return false end
+ self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id})
+ return true
+end
+function V:showAim(dt,ray)
+ local o=self.options
+ local profile=o.profile()
+ local pin=not o.hidden() and o.player:GetAttribute('MA_Selector') or nil
+ if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
+  self.pinned=marker(o.parent,false);self.preview=marker(o.parent,true)
+ end
+ if not self.pinned or not profile then return end
+ local width=Workshop.selectorWidth(profile)
+ self.clock+=dt
+ if not ray then self.aimPoint=nil
+ elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
+ local point=self.aimPoint
+ if point and pin and (point-pin).Magnitude<.8 then point=nil end
+ show(self.pinned,pin,width,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
+ show(self.preview,point,width,preview)
+end
+
+function V:heal(view,now)
+ local camera=workspace.CurrentCamera
+ if not camera or (camera.CFrame.Position-view.Position).Magnitude>64 then return end
+ for i=1,2 do
+  local available
+  for _,cue in ipairs(self.cues) do if not cue.at then available=cue;break end end
+  if not available then
+   if #self.cues>=16 then return end
+   local gui=Instance.new('BillboardGui')
+   gui.Name='CrystalHealing';gui.Size=UDim2.fromOffset(22,22);gui.LightInfluence=0;gui.MaxDistance=68
+   gui.Parent=self.options.parent
+   local plus=Instance.new('TextLabel')
+   plus.Size=UDim2.fromScale(1,1);plus.BackgroundTransparency=1;plus.Font=Enum.Font.GothamBold
+   plus.Text='+';plus.TextColor3=Color3.fromRGB(138,255,151);plus.TextSize=22;plus.Parent=gui
+   available={gui=gui,text=plus};table.insert(self.cues,available)
+  end
+  available.at=now;available.side=i==1 and -1 or 1
+  available.gui.Adornee=view;available.gui.Enabled=true
+ end
+end
+function V:updateHealing(now)
+ for _,cue in ipairs(self.cues) do
+  if cue.at then
+   local age=now-cue.at
+   local view=cue.gui.Adornee
+   if age>=.65 or not view or not view.Parent then
+    cue.at=nil;cue.gui.Enabled=false;cue.gui.Adornee=nil
+   else
+    cue.gui.StudsOffsetWorldSpace=Vector3.new(cue.side*(.45+age*.55),view.Size.Y*.5+.4+age*2.5,cue.side*.3)
+    cue.text.TextTransparency=math.clamp((age-.24)/.41,0,1)
+   end
+  end
+ end
+end
+function V:destroy()
+ if self.pinned then self.pinned.anchor:Destroy();self.preview.anchor:Destroy() end
+ for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
+end
+return V
+
+end)()
 -- Presentation and bounded intent only. Gameplay never reads these local viewmodels.
 local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
@@ -8811,7 +9012,7 @@ local function button(parent,pos,size,text,callback,color)
  b:SetAttribute('EnabledColor',color or palette.mineral);return b
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
-local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop
+local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop,openStars
 local activeShop='Quartz'
 local noticeUntil=0
 local menuStation=nil
@@ -8826,6 +9027,8 @@ local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Rec
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local function menusVisible() return modal.Visible or (logisticsView and logisticsView:isOpen()) end
+local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
+ hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
@@ -8956,7 +9159,10 @@ local function menu(mode,title,subtitle,icon)
   modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
   modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
- if mode=='shop' then ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211) end
+ if mode=='shop' or mode=='stars' then
+  ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
+  if mode=='stars' then modalTitle.Text='Star Shop';modalTitle.TextColor3=Color3.fromRGB(139,91,17) end
+ end
  modal.Visible=true
  packView:setFocus(inOffer)
  if entering then
@@ -8975,7 +9181,7 @@ local function availability(action)
  if not profile then return false,'Connecting…' end
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
  if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
- if action=='BuyUpgrade' or action=='BuyPack' or action=='Prestige' then
+ if action=='BuyUpgrade' or action=='BuyStarUpgrade' or action=='BuyPack' or action=='Prestige' then
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
   for _,name in ipairs(action=='Prestige' and {'PackStation','QuartzShop','PrestigeStation'} or {'PackStation','QuartzShop'}) do
    local station=world.Map:FindFirstChild(name,true)
@@ -9040,7 +9246,8 @@ openOffer=function()
   local screen,visible=camera:WorldToScreenPoint(worldOrigin)
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
- local l=menu('offer','PICK AN UPGRADE',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' pack · Pick included · Choose one upgrade') or 'Choose one · This run','cards')
+ local stars=offer.packTier or 1
+ local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
@@ -9068,7 +9275,16 @@ openShop=function(_key)
   end,
   onBuy=function(c,level)
    if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop('Quartz') end
-  end,onPrestige=function() openPrestige() end})
+  end,onPrestige=function() openPrestige() end,onStars=function() openStars() end})
+end
+openStars=function()
+ if not profile then return end
+ local allowed,reason=availability('BuyStarUpgrade')
+ local l=menu('stars','Star Shop',comma(profile.run.stars or 0)..' Stars · Resets on prestige'..(allowed and '' or ' · '..reason),'cards')
+ ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,
+  onBack=function() openShop('Quartz') end,onBuy=function(id,level)
+   if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
+  end})
 end
 local function statTile(parent,x,y,width,title,value,color)
  local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);tile.BackgroundTransparency=1
@@ -9189,7 +9405,7 @@ openPrestige=function()
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run upgrades and their stacks\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run cards, stacks, Stars and Star Shop upgrades\nMineral balances and all cargo\nPack prices, field access and run sales',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
@@ -9210,6 +9426,7 @@ local function refreshModal()
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
  elseif mode=='shop' then openShop(activeShop)
+ elseif mode=='stars' then openStars()
  elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
@@ -9228,6 +9445,8 @@ do
   if not p or not p.run then return '' end
   local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
   for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
+  table.insert(values,run.stars or 0)
+  for _,entry in ipairs(Workshop.STAR_CATALOG) do table.insert(values,Workshop.starLevel(p,entry.id)) end
   for _,c in ipairs(run.cards) do table.insert(values,tostring(c.cardId)..'='..tostring(c.level or 0)) end
   local pre=p.prestigePreview or {}
   for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
@@ -9251,6 +9470,7 @@ do
   if actionPending then
    local offer=p.run.pendingOffer
    if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
+   if actionPending and actionPending.kind=='BuyStarUpgrade' and Workshop.starLevel(p,actionPending.upgradeId)>actionPending.level then actionPending=nil end
   end
   if changedRun and modalMode=='prestige' then modal.Visible=false end
   local offer=pending()
@@ -9466,6 +9686,14 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
+ local healed=s:GetAttribute('RegrowAt') or 0
+ if not broken and healed>0 then
+  if authoritativeStage<r.visual.knownStage then
+   r.visual=Feel.newStagePresentation(authoritativeStage,false,now,stageCount);r.crackHealth=nil
+  end
+  if healed~=(r.lastHeal or 0) and now-healed<.4 then selectorView:heal(view,now) end
+  r.lastHeal=healed
+ end
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
@@ -9750,6 +9978,7 @@ connect(RunService.RenderStepped,function(dt)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
+ selectorView:updateHealing(now)
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
  for _,t in pairs(turrets) do
@@ -9849,6 +10078,7 @@ local function assignField(target)
  while node and node~=workspace do
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
+   if node.Parent and node.Parent.Parent and node.Parent.Parent.Name=='CrystalRun' then return end
    local fieldId=node:GetAttribute('FieldId')
    if type(fieldId)=='number' and logisticsView and logisticsView.selected then requestField(fieldId);return end
    commandView:request(resourceId)
@@ -9857,16 +10087,33 @@ local function assignField(target)
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then return end
   local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
+  if node:GetAttribute('CrystalZone') or (node.Parent and node.Parent.Name=='CrystalRun') then return end
   if type(field)=='number' then requestField(field);return end
   node=node.Parent
  end
 end
 local mouse=player:GetMouse()
+connect(RunService.RenderStepped,function(dt)
+ local camera=workspace.CurrentCamera
+ local ray
+ if camera and not menusVisible() then
+  local touch=selectorView.touch
+  if touch and touch.active then
+   local point=touch.input.Position
+   ray=camera:ViewportPointToRay(point.X,point.Y)
+  elseif UIS.MouseEnabled and UIS:GetLastInputType()~=Enum.UserInputType.Touch then
+   local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+   if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
+  end
+ end
+ selectorView:showAim(dt,ray)
+end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
+ if selectorView:commit(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
  if hit then assignField(hit.Instance) end
@@ -9876,9 +10123,15 @@ connect(UIS.InputBegan,function(input,processed)
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
+ if input.UserInputType==Enum.UserInputType.Touch then
+  if selectorView.touch then selectorView.touch.active=false
+  elseif not menusVisible() then selectorView.touch={input=input,start=input.Position,active=true} end
+  return
+ end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
+   if selectorView:commit(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
   return
@@ -9894,12 +10147,17 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif key==Enum.KeyCode.ButtonR1 and not modal.Visible then
   local camera=workspace.CurrentCamera
-  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
+  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
   -- Number keys belong to the custom tool hotbar. Field commands use rocks.
  end
 end)
+connect(UIS.InputChanged,function(input)
+ local touch=selectorView.touch
+ if touch and touch.input==input and (input.Position-touch.start).Magnitude>14 then touch.active=false end
+end)
 connect(UIS.InputEnded,function(input)
+ if selectorView.touch and selectorView.touch.input==input then selectorView.touch=nil end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then commandView:endDrag() end
 end)
 local hudClock=0
@@ -9922,8 +10180,8 @@ connect(RunService.Heartbeat,function(dt)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
- if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop') then
-  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or 'Prestige'
+ if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
+  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
@@ -9996,7 +10254,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- packView:destroy();commandView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

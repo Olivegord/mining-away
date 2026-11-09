@@ -174,11 +174,26 @@ test('v8 profiles keep all ownership, modifiers and already-paid offers exactly'
   {cardId='D05',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1}},
   {cardId='F08',scope='Fleet',effects={yield=.20}},
  }}
- p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,11);eq(restored.starterDrones,1);eq(C.capacity(restored),40);eq(restored.run.quartzEarnings,177)
+ p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,P.SCHEMA);eq(restored.starterDrones,1);eq(C.capacity(restored),40);eq(restored.run.quartzEarnings,177)
  assert(same(restored.fleet,p.fleet));assert(same(restored.run.cards,p.run.cards));assert(same(restored.run.pendingOffer,old))
  local ok,o=buy(restored,'legacy');assert(ok);assert(same(o,old));assert(C.select(restored,o.id,2,'legacy-pick',restored.run.id,{atDepot=true}))
  eq(restored.run.shopLevels.quartz_power,2);assert(P.validate(restored,44))
  restored.run.cards[1].workshop=true;eq(P.validate(restored,44),false)
+end)
+test('pack Stars credit once, Star Shop survives reload, and prestige resets both',function()
+ local p=funded();local ok,offer=buy(p,'star-pack');assert(ok)
+ local chosen,result=choose(p,offer,1,'star-pick');assert(chosen)
+ eq(result.stars,offer.packTier);eq(p.run.stars,offer.packTier)
+ assert(C.select(p,offer.id,1,'star-pick',p.run.id,{atDepot=true}));eq(p.run.stars,offer.packTier)
+ p.run.stars=6
+ assert(P.buyStarUpgrade(p,'selector',0,'wide',p.run.id));eq(p.run.stars,4);eq(W.selectorWidth(p),18)
+ assert(P.buyStarUpgrade(p,'selector',0,'wide',p.run.id));eq(p.run.stars,4)
+ eq(P.buyStarUpgrade(p,'selector',0,'stale',p.run.id),false);eq(p.run.stars,4)
+ eq(P.buyStarUpgrade(p,'autosell',0,'unfunded',p.run.id),false)
+ p=assert(P.migrate(p,44));eq(p.run.stars,4);eq(W.selectorWidth(p),18)
+ p.run.quartzEarnings=360
+ assert(P.prestige(p,'prestige-stars',p.run.id,{atDepot=true,confirmed=true}))
+ eq(p.run.stars,0);eq(W.selectorWidth(p),14);eq(#p.fleet,5)
 end)
 test('pacing model quantifies first-level tradeoffs including selling travel',function()
  local p=P.new(44);local d=p.fleet[1]

@@ -9,6 +9,7 @@ W.CATALOG={
  {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
  {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
  {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_BATTERY',title='Battery Cell',scope='Fleet',category='flight',tier=1,max=4,step={battery=100},color={118,215,112},icon='startup'},
  {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
  {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
  {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
@@ -21,6 +22,18 @@ W.CATALOG={
  {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
+W.STAR_CATALOG={
+ {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
+ {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
+ {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
+ {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
+ {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
+}
+W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
+W.BATTERY=100
+function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
+function W.starPrice(entry,level) return entry.cost+level end
+function W.selectorWidth(p) return 14+4*W.starLevel(p,'selector') end
 function W.owned(p)
  local result={}
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
@@ -1750,6 +1763,20 @@ local Mining = (function()
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+M.SELECTOR_RANGE=44
+-- Horizontal separating axes for the square and the crystal's current body.
+-- A crystal touching the boundary is eligible even if its center is outside.
+function M.selectorTouches(center,half,frame,size)
+ local x,z=center.X-frame.Position.X,center.Z-frame.Position.Z
+ local right,back=frame.RightVector,-frame.LookVector
+ local rx,rz=right.X,right.Z
+ local bx,bz=back.X,back.Z
+ local sx,sz=size.X*.5,size.Z*.5
+ return math.abs(x)<=half+math.abs(rx)*sx+math.abs(bx)*sz
+  and math.abs(z)<=half+math.abs(rz)*sx+math.abs(bz)*sz
+  and math.abs(x*rx+z*rz)<=sx+half*(math.abs(rx)+math.abs(rz))
+  and math.abs(x*bx+z*bz)<=sz+half*(math.abs(bx)+math.abs(bz))
+end
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}
@@ -2131,13 +2158,13 @@ return R
 end)()
 local Profile = (function()
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=11,CONTENT=1}
+local P={SCHEMA=12,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -2151,6 +2178,7 @@ end
 P.clone=clone
 local function run(uid,index)
  local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,quartzEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
+ state.stars=0;state.starUpgrades={}
  Shops.fresh(state);return state
 end
 local function logisticsOwnership()
@@ -2289,9 +2317,14 @@ function P.validate(p,uid)
   if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
-  for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
+  for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>(k=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid modifier' end end
  end
  local offer=r.pendingOffer
+ if not integer(r.stars) or type(r.starUpgrades)~='table' then return false,'Invalid Star Shop state' end
+ for id,level in pairs(r.starUpgrades) do
+  local entry=Workshop.STAR_BY_ID[id]
+  if not entry or not integer(level) or level<1 or level>entry.max then return false,'Invalid Star Shop level' end
+ end
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
   if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
@@ -2312,7 +2345,7 @@ function P.validate(p,uid)
      if c.stackBefore~=before then return false,'Invalid saved stack count' end
     elseif owned then return false,'Invalid legacy blueprint offer' end
    end
-   for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
+  for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>(effect=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
    if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
@@ -2459,6 +2492,9 @@ function P.migrate(raw,uid,seed)
  end
  if p.schemaVersion==9 then p.schemaVersion=10 end
  if p.schemaVersion==10 then p.starterDrones=1;p.schemaVersion=11 end
+ if p.schemaVersion==11 and type(p.run)=='table' then
+  p.run.stars=0;p.run.starUpgrades={};p.schemaVersion=12
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -2475,6 +2511,20 @@ function P.record(p,operation,tx,result)
  table.insert(p.receipts,{operation=operation,id=tx,runId=p.run.id,result=clone(result)})
  while #p.receipts>64 do table.remove(p.receipts,1) end
  return true
+end
+function P.buyStarUpgrade(p,id,level,tx,expectedRun)
+ if expectedRun~=p.run.id or type(tx)~='string' or #tx<1 or #tx>128 or not integer(level) then return false,'Invalid Star Shop order' end
+ local replay=P.receipt(p,'StarUpgrade',tx)
+ if replay then return replay.id==id and replay.level==level+1,replay end
+ local entry=type(id)=='string' and Workshop.STAR_BY_ID[id]
+ if not entry then return false,'Invalid Star Shop upgrade' end
+ local owned=Workshop.starLevel(p,id)
+ if level~=owned or owned>=entry.max then return false,'Upgrade level changed' end
+ local price=Workshop.starPrice(entry,owned)
+ if p.run.stars<price then return false,'Need '..price..' Stars' end
+ p.run.stars-=price;p.run.starUpgrades[id]=owned+1
+ local result={id=id,level=owned+1,title=entry.title}
+ P.record(p,'StarUpgrade',tx,result);return true,result
 end
 function P.buyDrone(p,kind,tx,expectedRun,context)
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
@@ -2765,7 +2815,7 @@ function C.capacity(p,extra)
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
  local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
- return math.floor(base*clamp(1+n,.25,3)+.000001)
+ return math.floor(base*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
@@ -2785,6 +2835,7 @@ function C.stats(p,d,extra)
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
+  batteryCapacity=DroneRoles.isWorker(d.role or d.type) and (Workshop.BATTERY+(s.battery or 0)) or 0,
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
   growCooldown=5/clamp(1+(s.scanDuration or 0),1,2),healAmount=10*clamp(1+(s.healPower or 0),1,2),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
@@ -2820,7 +2871,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
@@ -2865,7 +2916,7 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
+  for _,k in ipairs({'batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
@@ -3033,7 +3084,9 @@ function C.select(p,offerId,index,tx,expectedRun,context)
  end
  -- No mutable catalog lookup: the complete paid choice is the contract.
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
- local result={offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
+ local stars=offer.packTier or 1
+ p.run.stars=(p.run.stars or 0)+stars
+ local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
  record(p,'Select',tx,result);return true,result
 end
 function C.refundInvalidOffer(p)
@@ -5491,13 +5544,39 @@ function W.initialize(): any
    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
   end
+  local run=map:FindFirstChild('CrystalRun')
+  local runStart,chargingStation
+  local runWalls={}
+  if run then
+   local hardness={1,1.7,2.55,3.6,4.9}
+   local yield={10,18,30,45,62}
+   for i=1,5 do
+    local original=Config.Fields[i]
+    local model=run:FindFirstChild(original.Key)
+    local part=model and model:FindFirstChild('Field')
+    assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
+    local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
+     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=30+4*i,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+    local id=#fieldMetadata+1
+    part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
+    runStart=runStart or part.Position
+    if i>1 then
+     local wall=model:FindFirstChild('WestWall')
+     assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
+     table.insert(runWalls,{z=wall.Position.Z,half=wall.Size.Z*.5+.45,cruise=wall.Position.Y+wall.Size.Y*.5+4})
+    end
+   end
+   chargingStation=run:FindFirstChild('ChargingStation')
+   assert(chargingStation and chargingStation:IsA('BasePart'),'Missing Crystal Run charging station')
+  end
   return {
    root=existing,map=map,home=home,
    printer=map:FindFirstChild('Printer',true),
    packStation=map:FindFirstChild('PackStation',true),
    prestigeStation=map:FindFirstChild('PrestigeStation',true),
    converter=workspace:FindFirstChild('Converter'),
-   fields=fieldMetadata,
+   fields=fieldMetadata,runStart=runStart,runWalls=runWalls,chargingStation=chargingStation,
    turretTemplate=game:GetService('ServerStorage'):FindFirstChild('OriginalConstructTemplate'),
    droneTemplate=workspace:FindFirstChild('Drone'),
    crystalTemplate=workspace:FindFirstChild('Crystal')
@@ -6480,7 +6559,7 @@ local function publish(p)
  -- The active preview crew is presentation data, never permanent ownership.
  copy.activeFleet=p.testFleet and Pro.clone(p.testFleet) or nil
  copy.droneStats={};copy.droneRoles={};for _,d in ipairs(p.drones) do copy.droneStats[d.id]=d.stats;copy.droneRoles[d.id]=d.role end
- local autoMine,autoHaul=false,false
+ local autoMine,autoHaul=scene.runStart~=nil,Workshop.starLevel(copy,'autosell')>0
  for _,d in ipairs(p.drones) do
   autoMine=autoMine or (DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0);autoHaul=autoHaul or d.role=='Courier'
  end
@@ -6500,6 +6579,10 @@ local function publish(p)
  p.player:SetAttribute('MA_Profile',Http:JSONEncode(copy))
  if scene.fieldTools then scene.fieldTools:refreshStock(p) end
  p.player:SetAttribute('MA_SaveStatus',p.session.lost and 'Session lost — progress paused' or (p.session.readOnly and 'Save uncertain — reconciling' or (preview and 'PREVIEW • not saved across restarts' or 'Saved • autosave active')))
+end
+function scene.applyWalkSpeed(p)
+ local humanoid=p.player.Character and p.player.Character:FindFirstChildOfClass('Humanoid')
+ if humanoid then humanoid.WalkSpeed=16+2*Workshop.starLevel(data(p),'walk') end
 end
 local function characterRoot(p: any): any
  local ch=p.player.Character;local h=ch and ch:FindFirstChildOfClass('Humanoid');local hr=ch and ch:FindFirstChild('HumanoidRootPart')
@@ -6557,7 +6640,7 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
  d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil;d.manualTarget=nil
  d.specialClear=nil;d.specialQueryAt=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
- d.target=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
+ d.target=nil;d.squareJob=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
  d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil
  d.lingerUntil=nil;d.lingerGoal=nil
  if not keepBreakContact then d.mineBreakContact=nil end
@@ -6575,7 +6658,7 @@ local function retireTarget(d,keepBreakContact)
  elseif impact and impact.phase~='Recover' then impact=nil end
  release(d,false,keepBreakContact);d.breaker=impact
  if finished then
-  local p=profiles[d.owner];local hasNext=d.autoField~=nil or (p and #(p.oreQueue or {})>0)
+  local p=profiles[d.owner];local hasNext=d.autoField~=nil or (p and (p.miningSquare~=nil or #(p.oreQueue or {})>0))
   d.lingerUntil=now+(hasNext and .2 or 1);d.lingerGoal=station
  end
 end
@@ -6598,6 +6681,7 @@ local function leaveDroneField(p: any,d: any)
 end
 local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?,keepCarriers: boolean?): ()
  p.oreQueue={};p.workField=nil
+ scene.clearSquare(p)
  if consumableService then consumableService:clear(p) end
  if p.ability then DroneAbilities.cancel(p.ability);RoleEffects.ClearAbility(p.player.UserId) end
  local runId=data(p).run.id
@@ -6609,7 +6693,7 @@ local function leaveField(p: any,keepField: number?,keepBreakContact: boolean?,k
  for _,d in ipairs(p.drones) do if not keepCarriers or not d.carrierId then release(d,false,keepBreakContact);spend(d);d.field=nil;d.autoField=nil;d.state=d.hp>0 and 'Return' or d.state end end
 end
 local function recallFromField(p)
- if not healthy(p) then return end
+ if not healthy(p) or p.miningSquare then return end
  local hr=characterRoot(p);if not hr then return end
  local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
  local field=p.workField and patches[p.workField]
@@ -6692,7 +6776,7 @@ local function spawnDrone(p,owned,slot,origin)
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,role=owned.role or owned.type,flightHeight=flightHeight,model=model,body=body,emitter=emitter,slot=slot,
-  pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,
+  pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,battery=stats.batteryCapacity,
   beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0,
   mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0,healAt=0,chargeAt=nil}
  drones[d.id]=d;table.insert(p.drones,d);return d
@@ -6708,12 +6792,13 @@ local function refreshStats(p)
  for _,d in ipairs(p.drones) do
   local old=d.stats.maxHealth;local stats=Ca.stats(data(p),d.owned,previewPerks(p))
   if d.hp>0 then d.hp=math.min(stats.maxHealth,math.max(1,d.hp+math.max(0,stats.maxHealth-old))) end
+  d.battery=math.min(stats.batteryCapacity,(d.battery or 0)+math.max(0,stats.batteryCapacity-d.stats.batteryCapacity))
   d.stats=stats
  end
 end
 local function kill(d)
  if d.hp<=0 then return end
- release(d);spend(d);d.field=nil;d.autoField=nil;R.reprint(d,now,C.Reprint+C.Assembly)
+ release(d);spend(d);d.field=nil;d.autoField=nil;d.recharging=nil;d.battery=d.stats.batteryCapacity;R.reprint(d,now,C.Reprint+C.Assembly)
  d.pickupAt=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
  d.repairChargeAt=nil;d.repairTarget=nil;d.healTargetId=nil;d.healUntil=0
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
@@ -6800,6 +6885,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false)
+ if field.cfg.SelectionOnly then part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key) end
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
  return r
@@ -6857,7 +6943,7 @@ function scene.replenishJunk(field)
 end
 local function spawnResource(field,forceKind,prepareOnly,plan)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
- local kind=forceKind or ((field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
+ local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local boulder=not field.cfg.ReferenceCrystals and not prepareOnly and not plan and kind=='Crystal' and (usage==0 or seed:NextNumber()<Mining.BOULDER_CHANCE)
@@ -6882,7 +6968,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  end
  local preferred
  if plan then local p=field.part.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
- local selected=ResourcePlacement.sample(field.part.Size.X,field.part.Size.Z,radius,occupied,
+ local inset=field.cfg.SelectionOnly and 8 or 0
+ local selected=ResourcePlacement.sample(field.part.Size.X-inset,field.part.Size.Z-inset,radius,occupied,
   function(a,b)
    if reference then return seed:NextInteger(a,b) end
    return seed:NextNumber(a,b)
@@ -6891,8 +6978,12 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
    -- Authored trees also live outside Map. Check the footprint and overhead
    -- flight space against the actual world, including those branches.
    for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
-    local origin=Vector3.new(candidate.X,field.center.Y+64,candidate.Z)+offset*visualSize
+    local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*visualSize
     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
+    if field.cfg.SelectionOnly then
+     local low=Vector3.new(origin.X,fieldTop-.05,origin.Z)
+     if workspace:Raycast(low,Vector3.new(0,19,0),clearance) then return false end
+    end
    end
    return true
   end,preferred,reference)
@@ -7133,6 +7224,7 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  table.sort(candidates,function(a,b) return a.distance==b.distance and a.resource.id<b.resource.id or a.distance<b.distance end)
  for _,candidate in ipairs(candidates) do
   local other=candidate.resource;local sameOwner=true
+  if d.squareJob and not Mining.selectorTouches(d.squareJob.center,d.squareJob.half,other.part.CFrame,other.part.Size) then continue end
   for id in pairs(other.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then sameOwner=false end end
   -- A teammate may help a fully occupied node; no foreign reservation is
   -- displaced, and the worker holding the node receives its ore.
@@ -7198,12 +7290,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   if r.hp>amount and r.hp-amount<=math.max(1,r.maxHP)*1e-10 then amount=r.hp end
  end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
- if secondary then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
+ if secondary and not r.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
  local shapeChanged=false
  local revealed=nil
  local broken=R.damage(r,amount)
+ r.lastHitAt=now
  local tool=fractureContext and fractureContext.toolKind
  if tool=='Greatsword' and not r.slice then
   r.slice=math.clamp(.5+r.part.CFrame:PointToObjectSpace(fractureContext.point).Y/r.part.Size.Y,.35,.65);r.part:SetAttribute('SliceScale',r.slice);shapeChanged=true
@@ -7230,8 +7323,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local width=tool=='Crowbar' and .475 or tool=='Sledgehammer' and .885 or .755
   scene.recordToolScar(r,point,width,width*.78,false)
  end
- if contactKind=='Breaker' then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),6,20,'heavy')
- elseif special then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),5,14,'special') end
+ if not r.field.cfg.SelectionOnly then
+  if contactKind=='Breaker' then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),6,20,'heavy')
+  elseif special then scene.hazards:blast(r.part.Position+Vector3.new(0,r.part.Size.Y*.5+.3,0),5,14,'special') end
+ end
  -- Persistent cosmetic history is emitted only by accepted authoritative hits.
  -- Observers/late joiners reconstruct the same cavities without authorizing
  -- damage from local CSG geometry, bubbles or collision debris.
@@ -7342,10 +7437,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  return true
 end
-local function chooseResource(d: any,field: any)
+local function chooseResource(d: any,field: any,square: any?)
  local best,score=nil,math.huge
  for _,r in ipairs(field.resources) do
-  if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id]) then
+  if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
+   and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
    if used<r.limit and not foreign and sameRockType(d,r) then
@@ -7355,7 +7451,9 @@ local function chooseResource(d: any,field: any)
       if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
      end
     end
-    local value=if d.role=='Striker' and not field.junk then
+    local value=if square and d.role=='Charger' then
+     (r.position-d.pos).Magnitude*.7-math.min(r.hp,1000)*.08
+     elseif d.role=='Striker' and not field.junk then
      (r.position-d.pos).Magnitude+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
     if value<score then best=r;score=value end
@@ -7368,6 +7466,49 @@ local function chooseResource(d: any,field: any)
   best.slots[d.id]=slot;updateSlots(best);d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mineCharge=0;d.mining=false
  end
  return best
+end
+function scene.clearSquare(p)
+ if not p.miningSquare then return end
+ p.miningSquare=nil
+ p.player:SetAttribute('MA_Selector',nil)
+ p.player:SetAttribute('MA_SelectorWorking',nil)
+end
+function scene.squareInRange(position,square)
+ local delta=position-square.center
+ return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=Mining.SELECTOR_RANGE^2
+end
+function scene.committedWork(d)
+ return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
+  or (d.breaker~=nil and d.breaker.phase~='Approach'))
+end
+function scene.squareStep(p,d,hr)
+ if not DroneRoles.isWorker(d.role) or d.carrierId then return end
+ local square=p.miningSquare
+ local canStart=square and scene.squareInRange(hr.Position,square) and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
+ if d.squareJob and (d.squareJob~=square or not canStart) and not scene.committedWork(d) then release(d);d.field=nil end
+ if not square or d.target or d.breaker or d.specialRecovery then return end
+ d.field=nil;d.autoField=nil
+ if not canStart or now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
+ d.squareSearchAt=now+.22;d.squareSearched=square
+ if chooseResource(d,square.field,square) then
+  d.field=square.field.id;d.squareJob=square;d.state='Travel'
+ end
+end
+function scene.regrow(r,dt)
+ if not r.field.cfg.SelectionOnly or r.paid or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
+ local maxWork=r.maxHP-10
+ if r.hp>=maxWork or now<(r.nextRegenAt or 0) then return end
+ r.nextRegenAt=now+.2
+ r.hp=math.min(maxWork,r.hp+maxWork*.42*math.max(.2,dt))
+ local previous=r.stage
+ r.stage=Feel.stage(r.hp+10,r.maxHP,r.stageCount)
+ if r.stage~=previous then
+  r.part:SetAttribute('Stage',r.stage)
+  r.part.Size=r.fullSize*Feel.stageScale(r.stage,r.stageCount)*Feel.rockShape(r.slice,r.heatBand)
+  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false)
+ end
+ r.part:SetAttribute('HP',r.hp+10)
+ if now>=(r.nextHealCue or 0) then r.nextHealCue=now+.48;r.part:SetAttribute('RegrowAt',now) end
 end
 local function eligible(d,field)
  local p=profiles[d.owner];return p and store:healthy(p.session) and characterRoot(p) and d.hp>0 and d.field==field.id and (d.pos-field.center).Magnitude<75
@@ -7485,9 +7626,19 @@ local function combatHit(d,field,target,stats)
  publishTurretHealth(target)
 end
 local function travelSpeed(d)
- return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ return d.stats.maxStep60*(d.state=='ToCharge' and 1.5 or d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
+ if scene.runWalls and (d.state=='ToCharge' or d.squareJob and (d.state=='Travel' or d.state=='BreakerApproach')) then
+  local near,far=math.max(d.pos.Z,goal.Z),math.min(d.pos.Z,goal.Z)
+  for _,wall in ipairs(scene.runWalls) do
+   if near>=wall.z-wall.half and far<=wall.z+wall.half and near-far>1 then
+    local altitude=wall.cruise
+    goal=if d.pos.Y<altitude-.7 then Vector3.new(d.pos.X,altitude,d.pos.Z) else Vector3.new(goal.X,math.max(altitude,goal.Y),goal.Z)
+    break
+   end
+  end
+ end
  d.intentGoal=goal
  local settling=d.target~=nil or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
  local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
@@ -7877,6 +8028,25 @@ local function droneStep(d: any,dt: number)
   end
   return
  end
+ if scene.chargingStation and not d.carrierId and d.stats.batteryCapacity>0 then
+  if scene.committedWork(d) and not d.recharging then
+   d.battery=math.max(0,d.battery-2*dt)
+  end
+  if d.battery<=0 and not d.recharging then
+   release(d);d.recharging=true
+  end
+  if d.recharging then
+   local pad=scene.chargingStation
+   local offset=Feel.formation(d.slot,#p.drones);if offset.Magnitude>3 then offset=offset.Unit*3 end
+   local goal=pad.Position+offset+Vector3.new(0,2.6,0)
+   d.state='ToCharge';move(d,goal,dt)
+   if (d.pos-goal).Magnitude<1.4 then
+    d.state='Charging';d.battery=math.min(d.stats.batteryCapacity,d.battery+35*(1+.3*Workshop.starLevel(data(p),'charge'))*dt)
+    if d.battery>=d.stats.batteryCapacity then d.recharging=nil end
+   end
+   return
+  end
+ end
  if d.lingerUntil and not d.breaker then
   if now<d.lingerUntil then
    d.state='Recover';d.mining=false;move(d,d.lingerGoal or d.pos,dt);return
@@ -7924,6 +8094,7 @@ local function droneStep(d: any,dt: number)
  elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return
  elseif d.role=='Dart' then growerDrone(d,p,hr,dt);return
  elseif DroneRoles.ability(d.role) then roleAbilityStep(d,p,hr,dt);return end
+ scene.squareStep(p,d,hr)
  if d.role=='Charger' and not d.field then
   local selected=workingField(p,hr)
   if selected then d.field=selected.id end
@@ -7942,7 +8113,7 @@ local function droneStep(d: any,dt: number)
   elseif playerCanMine(p,field) then
    if d.deployedCarrier and logistics:capacity(p)<=0 then
     release(d);d.state='StorageFull';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt)
-   elseif not d.deployedCarrier and not nearMiningField(hr.Position,field) then
+   elseif not d.deployedCarrier and not d.squareJob and not nearMiningField(hr.Position,field) then
     -- Ore goes into a backpack carried by the owner. Leaving the plot brings
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
@@ -7977,6 +8148,7 @@ local function snapshotDrone(d)
  local combatId=combatTarget and combatTarget.hp>0 and combatTarget.model.Parent and combatTarget.model:GetAttribute('TurretId') or ''
  local mining=not profiles[d.owner].busy and d.state=='Mine' and d.mining and target~=nil
  local values={Owner=d.owner,DroneId=d.id,DroneName=d.name,Name=d.name,Type=d.owned.type,Role=d.role,FlightHeight=d.flightHeight or Feel.FollowHeight,Life=d.life,State=d.state,HP=d.hp,MaxHP=d.stats.maxHealth,ChargeAt=d.chargeAt or 0,Firing=combatId~='',
+  Battery=scene.chargingStation and math.ceil(d.battery or 0) or nil,MaxBattery=scene.chargingStation and d.stats.batteryCapacity or nil,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=target and math.max(.08,d.stats.warmup) or d.stats.warmup,
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
@@ -8206,8 +8378,11 @@ local function serviceDeliveries(p: any)
   end
  end
 end
-local function sellBackpack(p: any)
- if not atStation(p,scene.converter or scene.packStation,18) or activeAssault(p) then notice(p,'Return to SELL ORE to sell your backpack.');return end
+local function sellBackpack(p: any,automatic: boolean?)
+ if activeAssault(p) or (not automatic and not atStation(p,scene.converter or scene.packStation,18)) then
+  if not automatic then notice(p,'Return to SELL ORE to sell your backpack.') end
+  return
+ end
  if Pro.cargoUnits(data(p))==0 then notice(p,'Your backpack is empty.');return end
  local tx,runId=Http:GenerateGUID(false),data(p).run.id
  transact(p,'sell:'..tx,function(copy)
@@ -8271,7 +8446,11 @@ local function chooseCard(p: any,pl: any,payload: any)
    p.pendingOfferTx=payload.txId
    local started=transact(p,'choose:'..payload.txId,function(copy: any)
     local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
-   end,function() refreshStats(p);notice(p,'Card installed • this run only.') end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
+   end,function(result)
+    refreshStats(p)
+    local stars=result.stars or 0
+    notice(p,stars>0 and ('Upgrade installed · +'..stars..' '..(stars==1 and 'Star' or 'Stars')) or 'Upgrade installed')
+   end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
 local function executePrestige(p: any,pl: any,payload: any)
@@ -8284,7 +8463,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end
  transact(p,'prestige:'..payload.txId,applyPrestige,function()
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
-  p.oreQueue={};p.testFleet=nil;RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);notice(p,'Prestige complete · +1 permanent drone and +25% base mining power.')
+  p.oreQueue={};p.workField=nil;scene.clearSquare(p);p.testFleet=nil;RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);scene.applyWalkSpeed(p);notice(p,'Prestige complete · +1 permanent drone and +25% base mining power.')
  end)
 end
 local packDelivery=PackDelivery.new({
@@ -8382,6 +8561,10 @@ local function abilityContext(p,fieldId,operator,deployment)
   targets=function(id,kind)
    local list={};if not valid(id) then return list end
    for _,r in ipairs(patches[id].resources) do
+    if r.field.cfg.SelectionOnly and not deployment then
+     local square=p.miningSquare
+     if not square or square.field~=r.field or not Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then continue end
+    end
     local target=targetRecord(r)
     if target then
      -- Survey the same vertical path that the authoritative orbital hit uses.
@@ -8523,6 +8706,36 @@ local function buyShopUpgrade(p,pl,payload)
   if ok then return result end;return nil,result
  end,function(result) refreshStats(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true end)
 end
+function scene.buyStarUpgrade(p,payload)
+ if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
+ if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then notice(p,'Visit the Quartz Workshop.');return end
+ transact(p,'stars:'..payload.txId,function(copy)
+  local ok,result=Pro.buyStarUpgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId)
+  if ok then return result end;return nil,result
+ end,function(result)
+  scene.applyWalkSpeed(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true
+ end)
+end
+function scene.placeSquare(p,payload)
+ if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then return end
+ local field=patches[payload.fieldId]
+ if not field or not field.cfg.SelectionOnly or activeAssault(p) then return end
+ local position=payload.position
+ if not R.finite(position.X) or not R.finite(position.Z) then return end
+ local part=field.part
+ local center=Vector3.new(position.X,part.Position.Y+part.Size.Y*.5,position.Z)
+ local point=part.CFrame:PointToObjectSpace(center)
+ local hr=characterRoot(p)
+ local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5}
+ if math.abs(point.X)>part.Size.X*.5 or math.abs(point.Z)>part.Size.Z*.5 or not hr or not scene.squareInRange(hr.Position,square) then return end
+ if p.miningSquare and p.miningSquare.field==field and p.miningSquare.half==square.half and (p.miningSquare.center-center).Magnitude<.1 then return end
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
+ local from=hr.Position+Vector3.new(0,1,0)
+ if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
+ p.oreQueue={};p.workField=field.id;p.miningSquare=square
+ p.player:SetAttribute('MA_SelectorWorking',false)
+ p.player:SetAttribute('MA_Selector',center)
+end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
  if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
@@ -8558,6 +8771,10 @@ local function commandPlayer(pl: any,action: any,payload: any)
   scene.fieldTools:command(p,action,payload)
  elseif action=='BuyUpgrade' then
   buyShopUpgrade(p,pl,payload)
+ elseif action=='BuyStarUpgrade' then
+  scene.buyStarUpgrade(p,payload)
+ elseif action=='PlaceSelector' then
+  scene.placeSquare(p,payload)
  elseif action=='DevFillBag' then
   if not RunService:IsStudio() then return end
   local field=p.workField and patches[p.workField] or patches[1]
@@ -8608,6 +8825,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   end
   if not R.finite(payload.fieldId) or payload.fieldId%1~=0 or type(payload.resourceId)~='string' or #payload.resourceId>160 then reject('Invalid request',nil,d);return end
   local field=patches[payload.fieldId];local r=resources[payload.resourceId]
+  if field and field.cfg.SelectionOnly then reject('Place the mining square to select crystals',field,d);return end
   if not field or (characterRoot(p).Position-field.center).Magnitude>(C.CommandRadius or 90) then reject('Too far from field',field,d);return end
   if not playerCanMine(p,field) or activeAssault(p) then reject('Clear guards first',field,d);return end
   if not nearMiningField(characterRoot(p).Position,field) then reject('Move closer to the mining area',field,d);return end
@@ -8634,6 +8852,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(id)~='string' or #id>160 then reply('rejected','Invalid rock');return end
   local r=resources[id];local hr=characterRoot(p)
   if not r or r.paid or r.hp<=0 or not r.part.Parent then reply('rejected','That rock has already broken');return end
+  if r.field.cfg.SelectionOnly then reply('rejected','Place the mining square to select crystals',r);return end
   p.oreQueue=p.oreQueue or {}
   for index,queued in ipairs(p.oreQueue) do if queued==id then
    if type(payload)=='table' and payload.toggle==true then
@@ -8655,7 +8874,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if used>=r.limit then reply('accepted','Crew already working this rock',r,mine);return end
   if #p.oreQueue>=16 then reply('rejected','16 orders queued. Click a queued rock to cancel it',r);return end
   if r.field.cfg.Turrets>0 and r.field.e.phase=='Cleared' then grantClear(p,r.field) end
-  p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true
+  scene.clearSquare(p);p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true
   local sent=dispatchOreQueue(p)
   if sent[r.id] then reply('accepted',used>0 and 'Helper sent' or 'Miner sent',r,sent[r.id]);return end
   reply('queued','Queued · next available worker',r)
@@ -8667,6 +8886,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if type(payload)=='table' and not validCommandId(payload.requestId) then return end
   if not R.finite(fieldId) or fieldId%1~=0 then commandReply(pl,payload,'rejected','Invalid field');return end
   local field=patches[fieldId];local hr=characterRoot(p)
+  if field and field.cfg.SelectionOnly then return end
   if not field or (hr.Position-field.center).Magnitude>(C.CommandRadius or 90) then commandReply(pl,payload,'rejected','Too far from field',field);return end
   if not field.cfg.AlwaysUnlocked and not Shops.unlocked(data(p),field.cfg.Key) then commandReply(pl,payload,'rejected','Buy access in the previous mineral shop first',field);return end
   local can=playerCanMine(p,field)
@@ -8687,6 +8907,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
     local reason='An available mining drone is needed'
     commandReply(pl,payload,'rejected',reason,field);notice(p,reason);return
    end
+   scene.clearSquare(p)
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
    if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end
@@ -8797,10 +9018,11 @@ addPlayer=function(pl)
  local function character(ch)
   local hr=ch:WaitForChild('HumanoidRootPart',10)
   if not hr or not pl.Parent then return end
-  local firstField=scene.fields[1].center
+  local firstField=scene.runStart or scene.fields[1].center
   scene.fieldTools:clear(p);p.hazardAt={}
   if p.characterReady then leaveField(p,nil,nil,true) end
   p.characterReady=true
+  scene.applyWalkSpeed(p)
   ch:PivotTo(CFrame.lookAt(spawnAt,Vector3.new(firstField.X,spawnAt.Y,firstField.Z)))
   if inStudio and not p.previewToolsGranted then p.previewToolsGranted=true;scene.fieldTools:previewLoadout(p) end
  end
@@ -8866,7 +9088,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end
   scene.fieldTools:step(C.Tick)
   for _,d in pairs(drones) do
-   if d.hp>0 and d.mining and d.target and not d.target.paid then scene.hazards:beam(d.pos,d.target.part.Position,4,'laser') end
+   if d.hp>0 and d.mining and d.target and not d.target.paid and not d.target.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,d.target.part.Position,4,'laser') end
   end
   for _,field in ipairs(patches) do turretStep(field);encounterStep(field) end
  end
@@ -8876,6 +9098,7 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,d in pairs(drones) do snapshotDrone(d) end
   for _,field in ipairs(patches) do
    for _,r in ipairs(field.resources) do
+    scene.regrow(r,snapshotDt)
     local solid=not r.referenceCrystal and not r.paid and now>=r.readyAt
     if field.junk then
      if r.part.CanQuery~=solid then r.part.CanQuery=solid end
@@ -8928,7 +9151,16 @@ RunService.Heartbeat:Connect(function(dt: number)
     local encoded=Http:JSONEncode(DroneAbilities.view(p.ability,now))
     if encoded~=p.lastAbilityJSON then p.lastAbilityJSON=encoded;p.player:SetAttribute('MA_Ability',encoded) end
    end
-   serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p));if not p.busy then settleRuntime(p) end;if p.publishDirty then p.publishDirty=false;publish(p) end end
+   serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p))
+   if p.miningSquare then
+    local working=false
+    for _,d in ipairs(p.drones) do if d.squareJob==p.miningSquare and scene.committedWork(d) then working=true;break end end
+    if p.player:GetAttribute('MA_SelectorWorking')~=working then p.player:SetAttribute('MA_SelectorWorking',working) end
+   end
+   if not p.busy then settleRuntime(p) end
+   if healthy(p) and Workshop.starLevel(data(p),'autosell')>0 and characterRoot(p) and Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) then sellBackpack(p,true) end
+   if p.publishDirty then p.publishDirty=false;publish(p) end
+  end
  end
  if autosaveElapsed>=30 then
   autosaveElapsed=0

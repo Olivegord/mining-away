@@ -23,6 +23,7 @@ end
 local function percent(value) return string.format('%g%%',value*100) end
 function V.effect(c)
  local e=c.effects;local parts={}
+ if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget') end
  for _,k in ipairs({'mining','startup','capacity','speed','yield','fork'}) do
   if e[k] then
@@ -55,12 +56,16 @@ function V.render(U,parent,options)
  U.icon(pack,'cards',UDim2.fromOffset(12,14),UDim2.fromOffset(narrow and 44 or 62,narrow and 44 or 62),Color3.fromRGB(63,171,243))
  local textX=narrow and 67 or 88
  label(U,pack,UDim2.fromOffset(textX,10),UDim2.fromOffset(width-textX-(narrow and 14 or 164),28),'UPGRADE PACK',narrow and 20 or 23,true)
- label(U,pack,UDim2.fromOffset(textX,40),UDim2.fromOffset(width-textX-(narrow and 14 or 164),38),'One pick included. Duplicates stack.',15,false)
+ label(U,pack,UDim2.fromOffset(textX,40),UDim2.fromOffset(width-textX-(narrow and 14 or 164),38),'Choose 1 of 3 and earn 1–4 Stars.',15,false)
  local buyText=pending and (pending.opened==false and 'Open crate' or 'Choose upgrade') or ('Buy · '..price..' Quartz')
  local buy=action(U,pack,UDim2.fromOffset(narrow and 12 or width-164,narrow and 82 or 22),UDim2.fromOffset(narrow and width-28 or 148,44),buyText,options.onPack,options.canBuy and (pending~=nil or balance>=price))
  buy.Name='BuyWorkshopPack'
  label(U,pack,UDim2.fromOffset(12,narrow and 130 or 82),UDim2.fromOffset(width-28,28),'Rarity guarantees an upgrade of that tier. No extra charge.',narrow and 12 or 14,false)
  local y=packHeight+18
+ if options.onStars then
+  action(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,42),'Star Shop  ·  '..(p.run.stars or 0)..' Stars',options.onStars,true,Color3.fromRGB(255,221,119))
+  y+=53
+ end
  label(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,30),'YOUR UPGRADE POOL',18,true);y+=38
  local entries={}
  for _,entry in ipairs(Workshop.CATALOG) do if rows[entry.id] then table.insert(entries,entry) end end
@@ -98,5 +103,22 @@ function V.render(U,parent,options)
  local bar=rounded(U,foot,UDim2.fromOffset(12,65),UDim2.fromOffset(width-(narrow and 28 or 176),6),WHITE,WHITE)
  local fill=U.frame(bar,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(earned/math.max(1,needed),0,1),1),Color3.fromRGB(154,104,215));U.corner(fill,4)
  action(U,foot,UDim2.fromOffset(narrow and 12 or width-154,narrow and 78 or 20),UDim2.fromOffset(narrow and width-28 or 140,40),pre.eligible and 'Prestige ready!' or 'View reward',options.onPrestige,true,Color3.fromRGB(211,177,255))
+end
+function V.renderStars(U,parent,options)
+ local p,width=options.profile,options.width
+ local balance=p.run.stars or 0
+ action(U,parent,UDim2.fromOffset(4,3),UDim2.fromOffset(width-8,42),'Back to Quartz Workshop',options.onBack,true,Color3.fromRGB(174,218,255))
+ local y=56
+ for _,entry in ipairs(Workshop.STAR_CATALOG) do
+  local level=Workshop.starLevel(p,entry.id)
+  local price=Workshop.starPrice(entry,level)
+  local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
+  label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
+  label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),entry.description,15,false)
+  label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
+  action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
+   function() options.onBuy(entry.id,level) end,options.canBuy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
+  y+=111
+ end
 end
 return V

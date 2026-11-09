@@ -109,6 +109,9 @@ function HUD.new(refs: any)
  refs.cargoText.TextXAlignment=Enum.TextXAlignment.Right
  refs.cargoTrack.Visible=false
  self.gain=text(self.cargo,'CollectedGain',0,24,160,22,18,C.gold);self.gain.Visible=false
+ self.battery=frame(refs.resources,'BatteryCounter',C.panel);plain(self.battery);self.battery.Visible=false
+ text(self.battery,'Caption',0,0,78,24,18,C.muted).Text='Battery'
+ self.batteryValue=text(self.battery,'Charge',78,0,82,24,18,C.text);self.batteryValue.TextXAlignment=Enum.TextXAlignment.Right
  self.collectedTotal=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
  self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
  for _,button in {refs.recall,refs.evade} do
@@ -134,7 +137,7 @@ end
 -- Count authoritative capabilities and orders, not cosmetic beam state. Special
 -- jobs and breaker windup keep their assignment; support never inflates miners.
 function HUD.activity(folder,ownerId)
- local a={total=0,living=0,miners=0,support=0,assigned=0,delivering=0,hp=0,maximum=0}
+ local a={total=0,living=0,miners=0,support=0,assigned=0,delivering=0,hp=0,maximum=0,battery=0,maxBattery=0,charging=0}
  if folder then for _,drone in folder:GetChildren() do
   if drone:GetAttribute('Owner')==ownerId then
    a.total+=1
@@ -148,6 +151,8 @@ function HUD.activity(folder,ownerId)
      if (type(target)=='string' and target~='') or (drone:GetAttribute('AutoFieldId') or 0)>0 then a.assigned+=1 end
     else a.support+=1 end
     local state=drone:GetAttribute('State')
+    a.battery+=drone:GetAttribute('Battery') or 0;a.maxBattery+=drone:GetAttribute('MaxBattery') or 0
+    if state=='ToCharge' or state=='Charging' then a.charging+=1 end
     if state=='Collect' or state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then a.delivering+=1 end
    end
   end
@@ -168,10 +173,17 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
    entry.value.Text=compact(wallet[minerals[i]] or 0)
   end
  end
- local height=(shown+1)*rowHeight
+ local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
+ local batteryVisible=activity.maxBattery>0
+ local height=(shown+1+(batteryVisible and 1 or 0))*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
  r.resources.Position=UDim2.fromOffset(0,sideY);r.resources.Size=UDim2.fromOffset(width,height);r.resources.Visible=not hidden
  self.cargo.Position=UDim2.fromOffset(0,shown*rowHeight);self.cargo.Size=UDim2.fromOffset(width,rowHeight)
+ self.battery.Visible=batteryVisible
+ self.battery.Position=UDim2.fromOffset(0,(shown+1)*rowHeight);self.battery.Size=UDim2.fromOffset(width,rowHeight)
+ local charge=math.floor(100*activity.battery/math.max(1,activity.maxBattery)+.5)
+ self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or charge..'%'
+ self.batteryValue.TextColor3=activity.charging>0 and C.green or charge<25 and C.gold or C.text
  r.cargoText.Position=UDim2.fromOffset(78,0);r.cargoText.Size=UDim2.fromOffset(width-78,rowHeight);r.cargoText.TextSize=18
  r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ',''):gsub(' / ','/')
  local backpack=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
@@ -185,11 +197,10 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  end
  self.collectedTotal=collected
  local age=now-(self.gainAt or -10);self.gain.Visible=age<.85
- self.gain.Position=UDim2.fromOffset(0,24-age*8);self.gain.TextTransparency=math.clamp((age-.5)/.35,0,1)
- local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
+ self.gain.Position=UDim2.fromOffset(0,(batteryVisible and 48 or 24)-age*8);self.gain.TextTransparency=math.clamp((age-.5)/.35,0,1)
  local working=activity.assigned;local delivering=activity.delivering
  if working>0 or delivering>0 then self.hasWorked=true end
- local showRecall=working>0 or delivering>0
+ local showRecall=working>0 or delivering>0 or Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
  self.dock.Visible=not hidden and (showRecall or fighting)
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
  local actions=(showRecall and 1 or 0)+(fighting and 1 or 0);local buttonHeight=touch and 44 or 24

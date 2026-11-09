@@ -58,6 +58,9 @@ function V:update(dt,now)
   end
  end
  local marked={};local records=ctx.resources
+ local hovered=hover and records[hover]
+ local zone=hovered and hovered.source.Parent
+ if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then self:endDrag() end
  if not visible then self:endDrag() end
  if self.dragging and hover and records[hover] and not (self.visited and self.visited[hover]) and os.clock()>=(self.nextPaint or 0) then
   self.nextPaint=os.clock()+.12;self:request(hover,true)
@@ -109,7 +112,7 @@ function V:update(dt,now)
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
-  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('Mineral') or 'Rock')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock')..(capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

@@ -1,6 +1,20 @@
 -- Pure mining rules shared by the authoritative server, UI and pacing model.
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
+M.SELECTOR_RANGE=44
+-- Horizontal separating axes for the square and the crystal's current body.
+-- A crystal touching the boundary is eligible even if its center is outside.
+function M.selectorTouches(center,half,frame,size)
+ local x,z=center.X-frame.Position.X,center.Z-frame.Position.Z
+ local right,back=frame.RightVector,-frame.LookVector
+ local rx,rz=right.X,right.Z
+ local bx,bz=back.X,back.Z
+ local sx,sz=size.X*.5,size.Z*.5
+ return math.abs(x)<=half+math.abs(rx)*sx+math.abs(bx)*sz
+  and math.abs(z)<=half+math.abs(rz)*sx+math.abs(bz)*sz
+  and math.abs(x*rx+z*rz)<=sx+half*(math.abs(rx)+math.abs(rz))
+  and math.abs(x*bx+z*bz)<=sz+half*(math.abs(bx)+math.abs(bz))
+end
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
 local styles={Blue='Cutter',Red='Percussion',Green='Resonance'}

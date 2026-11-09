@@ -97,7 +97,7 @@ function C.capacity(p,extra)
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
  local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
- return math.floor(base*clamp(1+n,.25,3)+.000001)
+ return math.floor(base*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
@@ -117,6 +117,7 @@ function C.stats(p,d,extra)
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
+  batteryCapacity=DroneRoles.isWorker(d.role or d.type) and (Workshop.BATTERY+(s.battery or 0)) or 0,
   courierCapacity=courier(d) and math.floor(8*clamp(1+(s.courierCapacity or 0),1,4)) or 0,
   growCooldown=5/clamp(1+(s.scanDuration or 0),1,2),healAmount=10*clamp(1+(s.healPower or 0),1,2),
   plotAuto=(s.plotAuto or 0)>0 and 1 or 0,fullAuto=courier(d) and clamp(s.fullAuto or 0,0,2) or 0}
@@ -152,7 +153,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={capacity=C.capacity(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
@@ -197,7 +198,7 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
+  for _,k in ipairs({'batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
@@ -365,7 +366,9 @@ function C.select(p,offerId,index,tx,expectedRun,context)
  end
  -- No mutable catalog lookup: the complete paid choice is the contract.
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
- local result={offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
+ local stars=offer.packTier or 1
+ p.run.stars=(p.run.stars or 0)+stars
+ local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
  record(p,'Select',tx,result);return true,result
 end
 function C.refundInvalidOffer(p)

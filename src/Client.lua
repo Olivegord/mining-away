@@ -145,7 +145,7 @@ local function button(parent,pos,size,text,callback,color)
  b:SetAttribute('EnabledColor',color or palette.mineral);return b
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
-local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop
+local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop,openStars
 local activeShop='Quartz'
 local noticeUntil=0
 local menuStation=nil
@@ -160,6 +160,8 @@ local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Rec
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
 local function menusVisible() return modal.Visible or (logisticsView and logisticsView:isOpen()) end
+local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
+ hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
 local modalEmblem=U.icon(sheet,'cards',UDim2.fromOffset(20,19),UDim2.fromOffset(54,54),palette.mineral)
@@ -290,7 +292,10 @@ local function menu(mode,title,subtitle,icon)
   modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
   modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
- if mode=='shop' then ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211) end
+ if mode=='shop' or mode=='stars' then
+  ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
+  if mode=='stars' then modalTitle.Text='Star Shop';modalTitle.TextColor3=Color3.fromRGB(139,91,17) end
+ end
  modal.Visible=true
  packView:setFocus(inOffer)
  if entering then
@@ -309,7 +314,7 @@ local function availability(action)
  if not profile then return false,'Connecting…' end
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
  if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
- if action=='BuyUpgrade' or action=='BuyPack' or action=='Prestige' then
+ if action=='BuyUpgrade' or action=='BuyStarUpgrade' or action=='BuyPack' or action=='Prestige' then
   local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
   for _,name in ipairs(action=='Prestige' and {'PackStation','QuartzShop','PrestigeStation'} or {'PackStation','QuartzShop'}) do
    local station=world.Map:FindFirstChild(name,true)
@@ -374,7 +379,8 @@ openOffer=function()
   local screen,visible=camera:WorldToScreenPoint(worldOrigin)
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
- local l=menu('offer','PICK AN UPGRADE',(offer.contentVersion or 0)>=11 and ((Packs.Tiers[offer.packTier] or 'Common')..' pack · Pick included · Choose one upgrade') or 'Choose one · This run','cards')
+ local stars=offer.packTier or 1
+ local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
@@ -402,7 +408,16 @@ openShop=function(_key)
   end,
   onBuy=function(c,level)
    if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop('Quartz') end
-  end,onPrestige=function() openPrestige() end})
+  end,onPrestige=function() openPrestige() end,onStars=function() openStars() end})
+end
+openStars=function()
+ if not profile then return end
+ local allowed,reason=availability('BuyStarUpgrade')
+ local l=menu('stars','Star Shop',comma(profile.run.stars or 0)..' Stars · Resets on prestige'..(allowed and '' or ' · '..reason),'cards')
+ ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,
+  onBack=function() openShop('Quartz') end,onBuy=function(id,level)
+   if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
+  end})
 end
 local function statTile(parent,x,y,width,title,value,color)
  local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);tile.BackgroundTransparency=1
@@ -523,7 +538,7 @@ openPrestige=function()
  local resetY=pair and 141 or 274
  local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
  label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run upgrades and their stacks\nCards, upgrades, balances and all cargo\nPack prices, field access and run sales',12,palette.text)
+ label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run cards, stacks, Stars and Star Shop upgrades\nMineral balances and all cargo\nPack prices, field access and run sales',12,palette.text)
  local y=pair and 284 or 417
  local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
  local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
@@ -544,6 +559,7 @@ local function refreshModal()
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
  elseif mode=='shop' then openShop(activeShop)
+ elseif mode=='stars' then openStars()
  elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
@@ -562,6 +578,8 @@ do
   if not p or not p.run then return '' end
   local run=p.run;local values={tostring(run.id),tostring(run.packIndex or 0),tostring(p.nextPackPrice or 0),tostring(p.capacity or 0),tostring(p.pendingTransaction),#(run.cards or {})}
   for _,key in ipairs(Shops.ORDER) do table.insert(values,Shops.balance(p,key));table.insert(values,tostring(Shops.unlocked(p,key))) end
+  table.insert(values,run.stars or 0)
+  for _,entry in ipairs(Workshop.STAR_CATALOG) do table.insert(values,Workshop.starLevel(p,entry.id)) end
   for _,c in ipairs(run.cards) do table.insert(values,tostring(c.cardId)..'='..tostring(c.level or 0)) end
   local pre=p.prestigePreview or {}
   for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
@@ -585,6 +603,7 @@ do
   if actionPending then
    local offer=p.run.pendingOffer
    if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
+   if actionPending and actionPending.kind=='BuyStarUpgrade' and Workshop.starLevel(p,actionPending.upgradeId)>actionPending.level then actionPending=nil end
   end
   if changedRun and modalMode=='prestige' then modal.Visible=false end
   local offer=pending()
@@ -800,6 +819,14 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
+ local healed=s:GetAttribute('RegrowAt') or 0
+ if not broken and healed>0 then
+  if authoritativeStage<r.visual.knownStage then
+   r.visual=Feel.newStagePresentation(authoritativeStage,false,now,stageCount);r.crackHealth=nil
+  end
+  if healed~=(r.lastHeal or 0) and now-healed<.4 then selectorView:heal(view,now) end
+  r.lastHeal=healed
+ end
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
@@ -1084,6 +1111,7 @@ connect(RunService.RenderStepped,function(dt)
  presentation:beginFrame()
  pickupView:update(dt,now)
  for _,r in pairs(resources) do renderResource(r,now) end
+ selectorView:updateHealing(now)
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
  for _,t in pairs(turrets) do
@@ -1183,6 +1211,7 @@ local function assignField(target)
  while node and node~=workspace do
   local resourceId=node:GetAttribute('ResourceId')
   if type(resourceId)=='string' and resourceId~='' then
+   if node.Parent and node.Parent.Parent and node.Parent.Parent.Name=='CrystalRun' then return end
    local fieldId=node:GetAttribute('FieldId')
    if type(fieldId)=='number' and logisticsView and logisticsView.selected then requestField(fieldId);return end
    commandView:request(resourceId)
@@ -1191,16 +1220,33 @@ local function assignField(target)
   local owner=node:GetAttribute('Owner')
   if owner==player.UserId and node:GetAttribute('DroneId') then return end
   local field=node:GetAttribute('FieldId') or node:GetAttribute('Patch') or node:GetAttribute('Tier')
+  if node:GetAttribute('CrystalZone') or (node.Parent and node.Parent.Name=='CrystalRun') then return end
   if type(field)=='number' then requestField(field);return end
   node=node.Parent
  end
 end
 local mouse=player:GetMouse()
+connect(RunService.RenderStepped,function(dt)
+ local camera=workspace.CurrentCamera
+ local ray
+ if camera and not menusVisible() then
+  local touch=selectorView.touch
+  if touch and touch.active then
+   local point=touch.input.Position
+   ray=camera:ViewportPointToRay(point.X,point.Y)
+  elseif UIS.MouseEnabled and UIS:GetLastInputType()~=Enum.UserInputType.Touch then
+   local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
+   if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
+  end
+ end
+ selectorView:showAim(dt,ray)
+end)
 connect(UIS.TouchTapInWorld,function(position,processed)
  if processed or menusVisible() or tacticalHUD:blocksPoint(position) then return end
  if toolView and toolView:click(position) then return end
  local camera=workspace.CurrentCamera;if not camera then return end
  local ray=camera:ScreenPointToRay(position.X,position.Y)
+ if selectorView:commit(ray) then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character}
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params)
  if hit then assignField(hit.Instance) end
@@ -1210,9 +1256,15 @@ connect(UIS.InputBegan,function(input,processed)
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
  if processed or UIS:GetFocusedTextBox() then return end
+ if input.UserInputType==Enum.UserInputType.Touch then
+  if selectorView.touch then selectorView.touch.active=false
+  elseif not menusVisible() then selectorView.touch={input=input,start=input.Position,active=true} end
+  return
+ end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then
   local point=UIS:GetMouseLocation()
   if not tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) then
+   if selectorView:commit(mouse.UnitRay) then return end
    commandView:beginDrag();assignField(mouse.Target)
   end
   return
@@ -1228,12 +1280,17 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
  elseif key==Enum.KeyCode.ButtonR1 and not modal.Visible then
   local camera=workspace.CurrentCamera
-  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
+  if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
   -- Number keys belong to the custom tool hotbar. Field commands use rocks.
  end
 end)
+connect(UIS.InputChanged,function(input)
+ local touch=selectorView.touch
+ if touch and touch.input==input and (input.Position-touch.start).Magnitude>14 then touch.active=false end
+end)
 connect(UIS.InputEnded,function(input)
+ if selectorView.touch and selectorView.touch.input==input then selectorView.touch=nil end
  if input.UserInputType==Enum.UserInputType.MouseButton1 then commandView:endDrag() end
 end)
 local hudClock=0
@@ -1256,8 +1313,8 @@ connect(RunService.Heartbeat,function(dt)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
- if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop') then
-  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or 'Prestige'
+ if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
+  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
@@ -1330,7 +1387,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- packView:destroy();commandView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

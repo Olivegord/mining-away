@@ -6,6 +6,7 @@ W.CATALOG={
  {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
  {id='Q_IGNITION',title='Quick Ignition',scope='Fleet',category='startup',tier=1,max=6,step={startup=1},color={69,190,244},icon='startup'},
  {id='Q_CARGO',title='Deep Pockets',scope='Player',category='cargo',tier=1,max=4,step={capacity=.5},color={255,190,65},icon='cargo'},
+ {id='Q_BATTERY',title='Battery Cell',scope='Fleet',category='flight',tier=1,max=4,step={battery=100},color={118,215,112},icon='startup'},
  {id='Q_YIELD',title='Quartz Polisher',scope='Fleet',category='cargo',tier=2,max=4,step={yield=.25},color={188,119,245},icon='crystal'},
  {id='Q_SCANNER',title='Route Runner',scope='Fleet',category='flight',tier=2,max=5,step={speed=.4},once={plotAuto=1},color={78,211,145},icon='flight'},
  {id='Q_SPLIT',title='Prism Relay',scope='Fleet',category='mining',tier=2,max=4,step={fork=.1},once={forkRange=6},color={57,210,222},icon='relay'},
@@ -18,6 +19,18 @@ W.CATALOG={
  {id='Q_AUTONOMOUS',title='Autonomous Fleet',scope='Fleet',category='flight',tier=4,max=2,step={speed=.75,capacity=.5},once={plotAuto=1},color={81,204,157},icon='fleet'},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
+W.STAR_CATALOG={
+ {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
+ {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
+ {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
+ {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
+ {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
+}
+W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
+W.BATTERY=100
+function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
+function W.starPrice(entry,level) return entry.cost+level end
+function W.selectorWidth(p) return 14+4*W.starLevel(p,'selector') end
 function W.owned(p)
  local result={}
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end

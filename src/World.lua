@@ -678,13 +678,39 @@ function W.initialize(): any
    assert(model and part and part:IsA('BasePart'),'Editable map is missing field '..cfg.Key)
    table.insert(fieldMetadata,{id=id,cfg=cfg,center=part.Position,part=part,model=model})
   end
+  local run=map:FindFirstChild('CrystalRun')
+  local runStart,chargingStation
+  local runWalls={}
+  if run then
+   local hardness={1,1.7,2.55,3.6,4.9}
+   local yield={10,18,30,45,62}
+   for i=1,5 do
+    local original=Config.Fields[i]
+    local model=run:FindFirstChild(original.Key)
+    local part=model and model:FindFirstChild('Field')
+    assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
+    local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
+     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=30+4*i,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+    local id=#fieldMetadata+1
+    part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
+    runStart=runStart or part.Position
+    if i>1 then
+     local wall=model:FindFirstChild('WestWall')
+     assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
+     table.insert(runWalls,{z=wall.Position.Z,half=wall.Size.Z*.5+.45,cruise=wall.Position.Y+wall.Size.Y*.5+4})
+    end
+   end
+   chargingStation=run:FindFirstChild('ChargingStation')
+   assert(chargingStation and chargingStation:IsA('BasePart'),'Missing Crystal Run charging station')
+  end
   return {
    root=existing,map=map,home=home,
    printer=map:FindFirstChild('Printer',true),
    packStation=map:FindFirstChild('PackStation',true),
    prestigeStation=map:FindFirstChild('PrestigeStation',true),
    converter=workspace:FindFirstChild('Converter'),
-   fields=fieldMetadata,
+   fields=fieldMetadata,runStart=runStart,runWalls=runWalls,chargingStation=chargingStation,
    turretTemplate=game:GetService('ServerStorage'):FindFirstChild('OriginalConstructTemplate'),
    droneTemplate=workspace:FindFirstChild('Drone'),
    crystalTemplate=workspace:FindFirstChild('Crystal')

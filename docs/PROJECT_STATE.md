@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** the starter field scatters 16 shiny red crystals with Mining Away's mesh size, health roll, and ordinary replacement timing. New and idle drones use the reference's 10-stud follow ring and 7-stud height. Rocks use Mining Away’s health-band shade and brighten on the hit after each crack. World drone and target outlines are removed. The starter crystals use the reference’s opaque red SmoothPlastic finish. The beam tracks each change in shape. Packs, upgrades and prestige still use Quartz.
+**Current implementation:** Crystal Run is the main mining route opposite the shop. Five walled zones hold up to 210 crystals, with harder, richer rock farther in. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. The route uses the existing Mining Away crystal mesh, shade, crack sounds and flight behavior. Unattended damaged crystals heal. Depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a08c1f902530316dca83945799de1eb952c08d43f6ce375cb264c729eecbca53` | Reference crystal shading and removal of world outlines. All non-Source chunks and backup Sources preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | The crystal shade and outline commit. [Seven actual Edit hashes](review/reference-shade-no-outlines-native.json). |
+| Native-file SHA-256 | `26ca4fe9632f5eb2d15e311b581da5e81350f9ca67444f1856178d86560e3669` | Crystal Run map and gameplay. All unrelated instances and backup Sources preserved. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Crystal Run. [Seven actual Edit hashes and route probes](review/crystal-run-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Current in shared Edit, November 8, 2026** | The damage appearance update is installed in shared Edit at the exact destination. All seven managed Source hashes match the canonical snapshot and all three roots are `SyncedAsRoot`. Studio remains in Edit on loaded version 90. |
-| Roblox publication | **No publication for the shade and outline update** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
+| Shared Studio entry point | **Crystal Run in shared Edit** | The map and all seven managed Source hashes match the canonical snapshot. All three roots are `SyncedAsRoot`. Studio was already open and remains in Edit on loaded version 90. |
+| Roblox publication | **No publication for Crystal Run** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — Crystal Run
+
+The new route keeps the original fields available as side areas. The shop-side charger and five open passages are authored in Edit. One original foundation was shortened below its unchanged upper surface and four piers support the old crossing. The scoped save adds 57 fixtures and updates the foundation position and size. The actual Edit route passed 357 floor probes, 245 crystal bed probes and 25 uninterrupted player and flight height probes.
+
+The initial square is 14 studs wide and pins within 44 studs. Edge contact counts within the selected zone. Yellow indicates active work. A full bag pauses new assignments, and a pin can resume when the player returns after a sale. A mining drone starts with 100 battery, uses two units per second of committed work, and returns to the shop charger at zero. Battery Cell adds 100 per stack. Heal cues and aim previews are local visuals. Crystal health, crew reservations, batteries, transactions and awards are server owned. The Star Shop offers selector width, walk speed, charging speed, backpack space and Auto Sell.
+
+Reproduce from `956f1d4` by running `tools/studio_crystal_run.lua` in the exact shared Edit place. Export `shared.CrystalRun.export` into `scenery.b64` in a scratch directory, run `python3 tools/refresh_crystal_run.py <directory> --baseline-sha256 a08c1f902530316dca83945799de1eb952c08d43f6ce375cb264c729eecbca53`, apply `shared.CrystalRun.apply()`, and rerun the saver with `--write`. With the updated modular Sources, run `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 956f1d4`. Verify the Studio roots and Sources separately.
+
+The workshop and mining flight suites exercise the production logic with API doubles. Studio Edit route geometry and the installed Sources were checked separately. No native Play or device run was started. Live controls, visual feedback, multiplayer, and full-loop pacing still need a gameplay check. No Roblox publication.
 
 ## Latest follow-up — reference shading and no world outlines
 

@@ -3,13 +3,13 @@ local Shops=require('./Shops')
 local DroneCatalog=require('./DroneCatalog')
 local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
-local P={SCHEMA=11,CONTENT=1}
+local P={SCHEMA=12,CONTENT=1}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -23,6 +23,7 @@ end
 P.clone=clone
 local function run(uid,index)
  local state={id=tostring(uid)..':run:'..index,index=index,credits=0,cargo={},droneCargo={},deliveries={},saleEarnings=0,quartzEarnings=0,packIndex=0,cards={},pendingOffer=nil,offersWithoutCombat=0,wins={},entitlements={},yieldRemainders={},abilityCooldowns={},logistics={storage={},launchCargo={},launchRemaining=0,backpackCargo={},pendingCargo={}}}
+ state.stars=0;state.starUpgrades={}
  Shops.fresh(state);return state
 end
 local function logisticsOwnership()
@@ -161,9 +162,14 @@ function P.validate(p,uid)
   if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
-  for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>100 then return false,'Invalid modifier' end end
+  for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>(k=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid modifier' end end
  end
  local offer=r.pendingOffer
+ if not integer(r.stars) or type(r.starUpgrades)~='table' then return false,'Invalid Star Shop state' end
+ for id,level in pairs(r.starUpgrades) do
+  local entry=Workshop.STAR_BY_ID[id]
+  if not entry or not integer(level) or level<1 or level>entry.max then return false,'Invalid Star Shop level' end
+ end
  if offer~=nil then
   if type(offer)~='table' or type(offer.id)~='string' or offer.runId~=r.id or not integer(offer.price) or type(offer.choices)~='table' or #offer.choices~=3 then return false,'Invalid paid offer' end
   if offer.currency~=nil and offer.currency~='Quartz' then return false,'Invalid paid offer currency' end
@@ -184,7 +190,7 @@ function P.validate(p,uid)
      if c.stackBefore~=before then return false,'Invalid saved stack count' end
     elseif owned then return false,'Invalid legacy blueprint offer' end
    end
-   for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>100 then return false,'Invalid saved offer modifier' end end
+  for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>(effect=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
    if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
@@ -331,6 +337,9 @@ function P.migrate(raw,uid,seed)
  end
  if p.schemaVersion==9 then p.schemaVersion=10 end
  if p.schemaVersion==10 then p.starterDrones=1;p.schemaVersion=11 end
+ if p.schemaVersion==11 and type(p.run)=='table' then
+  p.run.stars=0;p.run.starUpgrades={};p.schemaVersion=12
+ end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
@@ -347,6 +356,20 @@ function P.record(p,operation,tx,result)
  table.insert(p.receipts,{operation=operation,id=tx,runId=p.run.id,result=clone(result)})
  while #p.receipts>64 do table.remove(p.receipts,1) end
  return true
+end
+function P.buyStarUpgrade(p,id,level,tx,expectedRun)
+ if expectedRun~=p.run.id or type(tx)~='string' or #tx<1 or #tx>128 or not integer(level) then return false,'Invalid Star Shop order' end
+ local replay=P.receipt(p,'StarUpgrade',tx)
+ if replay then return replay.id==id and replay.level==level+1,replay end
+ local entry=type(id)=='string' and Workshop.STAR_BY_ID[id]
+ if not entry then return false,'Invalid Star Shop upgrade' end
+ local owned=Workshop.starLevel(p,id)
+ if level~=owned or owned>=entry.max then return false,'Upgrade level changed' end
+ local price=Workshop.starPrice(entry,owned)
+ if p.run.stars<price then return false,'Need '..price..' Stars' end
+ p.run.stars-=price;p.run.starUpgrades[id]=owned+1
+ local result={id=id,level=owned+1,title=entry.title}
+ P.record(p,'StarUpgrade',tx,result);return true,result
 end
 function P.buyDrone(p,kind,tx,expectedRun,context)
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
