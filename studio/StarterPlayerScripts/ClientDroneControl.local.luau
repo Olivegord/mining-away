@@ -55,14 +55,15 @@ W.CATALOG={
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
+ {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_AFTERSHOCK','Q_COMPACTOR'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_COMPACTOR'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
@@ -2893,6 +2894,24 @@ local Catalog = {
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Color={150,124,255},Description='Throws a heavy energy ball into the side of a crystal.'},
  },
 }
+Catalog.PrestigeRewards={
+ {kind='Blue',name='Laser Miner',tier=1,weight=45,job='Steady crystal cutting'},
+ {kind='Red',name='Breaker',tier=1,weight=25,job='Heavy hits on hard outer layers'},
+ {kind='Bubbler',name='Bubbler',tier=2,weight=15,job='Bubble cuts with 25% more ore'},
+ {kind='Gridcutter',name='Gridcutter',tier=2,weight=9,job='Quick passes with 20% more ore'},
+ {kind='Halver',name='Halver',tier=3,weight=5,job='Heavy cuts with 50% more ore'},
+ {kind='Singularity',name='Singularity',tier=4,weight=1,job='Fast gravity pulses with 50% more ore'},
+}
+function Catalog.prestigeReward(seed,index)
+ local prime=2147483647
+ local state=(seed*48271+index%prime*69621)%prime
+ local ticket=(state*48271)%prime%100+1
+ for _,reward in ipairs(Catalog.PrestigeRewards) do
+  ticket-=reward.weight
+  if ticket<=0 then return reward end
+ end
+ error('Prestige reward weights must total 100')
+end
 function Catalog.price(kind,fleet)
  local definition=Catalog.Types[kind];if not definition then return nil end
  if kind~='Laser' then return definition.Price end
@@ -6798,10 +6817,11 @@ local Packs = (function()
 -- Delivery and hold timing shared by authority and presentation.
 local Packs = {
  Range = 8,
- DeliveryTime = 1.7,
- DropTime = 1.27,
- DepartTime = 2.45,
+ DeliveryTime = 1.08,
+ DropTime = .73,
+ DepartTime = 1.65,
  Tiers = {'Common', 'Rare', 'Epic', 'Legendary'},
+ Palette = {{195,213,225},{89,208,255},{201,134,255},{255,205,78}},
 }
 local ends = {.42, 1.32, 2.65, 4.8}
 local work = {.60, .22, .12, .06}
@@ -6859,6 +6879,7 @@ function CardView.summary(choice)
  add('compactor','Presses 3 loose ore into 1 of the next tier.')
  add('batchPress','Your Compactor now needs 2 ore per press.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
+ add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -6890,7 +6911,7 @@ function CardView.summary(choice)
  return #lines>0 and table.concat(lines,'\n') or (choice.description or choice.title or 'Run upgrade')
 end
 
-function CardView.terms(choice,_targetOverride)
+function CardView.terms(choice,_targetOverride,hasBadge)
  local e=choice.effects or {};local target
  local work=(e.mining or 0)>0 or (e.startup or 0)>0 or (e.yield or 0)>0 or (e.fork or 0)>0 or (e.geode or 0)>0 or (e.plotAuto or 0)>0
  local allRoles=(e.speed or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0
@@ -6902,6 +6923,7 @@ function CardView.terms(choice,_targetOverride)
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
  elseif e.compactor then target='New drone at your pin'
  elseif e.batchPress then target='Your Compactor'
+ elseif e.shiftRelay then target='Your mining pin'
  elseif choice.scope=='Player' then target='Your backpack'
  elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
@@ -6913,7 +6935,7 @@ function CardView.terms(choice,_targetOverride)
   end
   local before=choice.stackBefore
   local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
-  return target..' · This run\n'..count..' · '..choice.rarity
+  return target..' · This run\n'..count..(hasBadge and '' or ' · '..(choice.rarity or 'Common'))
  end
  local details={target..' · This run'}
  local losses={}
@@ -6937,6 +6959,13 @@ local UserInputService=game:GetService('UserInputService')
 local serial=0
 local bindPrefix='UpgradeCards'..game:GetService('HttpService'):GenerateGUID(false)
 local FACE_PIXELS=3 -- Supersample the curved physical face; screen text stays native.
+local function rarityColor(tier) return Color3.fromRGB(table.unpack(Packs.Palette[tier] or Packs.Palette[1])) end
+local function reducedMotion()
+ local reduced=false
+ pcall(function() reduced=GuiService.ReducedMotionEnabled end)
+ local player=Players.LocalPlayer
+ return reduced or player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true
+end
 
 local function visualPart(parent,size,position,color,shape)
  local part=Instance.new('Part');part.Size=size;part.CFrame=CFrame.new(position);part.Color=color
@@ -6954,6 +6983,7 @@ function CardView.identity(choice)
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
  if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
  if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
+ if has('shiftRelay') then return 'cargo',Color3.fromRGB(158,94,21),Color3.fromRGB(255,221,123) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
@@ -7205,6 +7235,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
  local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice)
+ local tier=table.find(Packs.Tiers,choice.rarity) or (choice.rarity=='Uncommon' and 2 or 1)
+ local tierColor=rarityColor(tier)
  local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
  slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
  local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
@@ -7219,6 +7251,10 @@ function CardView.create(U,parent,choice,index,width,height,options)
  width-=16;height-=16
  local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
  card.Name='MountedCard';card.BackgroundTransparency=1
+ local badge=U.frame(card,UDim2.new(.5,-62,0,8),UDim2.fromOffset(124,25),tierColor)
+ badge.Name='RarityBadge';U.corner(badge,8);U.stroke(badge,p.ink,1.5)
+ local rarity=U.text(badge,UDim2.fromScale(0,0),UDim2.fromScale(1,1),string.upper(choice.rarity or Packs.Tiers[tier])..' '..string.rep('◆',tier),12,p.ink,true)
+ rarity.TextXAlignment=Enum.TextXAlignment.Center
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
@@ -7235,21 +7271,21 @@ function CardView.create(U,parent,choice,index,width,height,options)
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*FACE_PIXELS,height*FACE_PIXELS),p.paper);canvas.Name='CardCanvas'
  local border=CardView.housing(U,canvas,bodyColor,accentColor)
- local rim=bodyColor:Lerp(Color3.new(1,1,1),.3)
+ local rim=tierColor
  border.Color=bodyColor:Lerp(Color3.fromRGB(3,5,14),.75);border.Thickness=1.5*FACE_PIXELS
  -- Soft colored spill outside the bevel is drawn on a padded physical face.
  -- The enamel covers the overlapping centers, leaving only the feathered rim.
  local spill=Instance.new('Frame');spill.Name='RimGlow';spill.BackgroundTransparency=1;spill.Size=UDim2.fromScale(1,1);spill.ZIndex=canvas.ZIndex;spill.Parent=canvas
  for i=12,1,-1 do
   local spread=i*FACE_PIXELS
-  local halo=U.frame(spill,UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),bodyColor:Lerp(Color3.new(1,1,1),.12))
-  halo.BackgroundTransparency=.965;halo.ZIndex=spill.ZIndex;U.corner(halo,20*FACE_PIXELS+spread)
+  local halo=U.frame(spill,UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),tierColor)
+  halo.BackgroundTransparency=.985-tier*.009;halo.ZIndex=spill.ZIndex;U.corner(halo,20*FACE_PIXELS+spread)
  end
  local rimFace=U.frame(canvas,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1));rimFace.Name='RimBevel';rimFace.ZIndex=canvas.ZIndex;U.corner(rimFace,20*FACE_PIXELS)
  local inner=U.frame(rimFace,UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS),UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS),Color3.new(1,1,1));inner.Name='Enamel';inner.ZIndex=canvas.ZIndex;U.corner(inner,15*FACE_PIXELS)
  local enamel=Instance.new('UIGradient');enamel.Rotation=90;enamel.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.28,bodyColor:Lerp(Color3.new(1,1,1),.025)),ColorSequenceKeypoint.new(.62,bodyColor),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.33))});enamel.Parent=inner
  local rimLight=Instance.new('UIGradient');rimLight.Name='RimLight';rimLight.Rotation=118
- rimLight.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.88)),ColorSequenceKeypoint.new(.12,bodyColor:Lerp(Color3.new(1,1,1),.52)),ColorSequenceKeypoint.new(.40,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.63,bodyColor:Lerp(Color3.new(0,0,0),.22)),ColorSequenceKeypoint.new(.85,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.34))});rimLight.Parent=rimFace
+ rimLight.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,tierColor:Lerp(Color3.new(1,1,1),.66)),ColorSequenceKeypoint.new(.34,tierColor),ColorSequenceKeypoint.new(.60,tierColor:Lerp(p.ink,.36)),ColorSequenceKeypoint.new(.84,tierColor),ColorSequenceKeypoint.new(1,tierColor:Lerp(p.ink,.24))});rimLight.Parent=rimFace
  local edge=U.stroke(inner,bodyColor:Lerp(Color3.new(1,1,1),.5),FACE_PIXELS);edge.Transparency=.5
  local texture=canvas:FindFirstChild('StudTexture');texture.Position=UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS);texture.Size=UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS);texture:FindFirstChildOfClass('UICorner').CornerRadius=UDim.new(0,15*FACE_PIXELS)
  local rays=sunburst(U,canvas,compact,accentColor)
@@ -7269,7 +7305,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local effect=U.text(card,UDim2.new(0,12,effectY,0),UDim2.new(1,-24,compact and .33 or .30,0),display,compact and 16 or 18,p.white,true)
  effect.RichText=true;effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center
  effect.TextStrokeColor3=Color3.fromRGB(13,23,48);effect.TextStrokeTransparency=.5
- local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target),16,p.white,false)
+ local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target,true),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
  local focused,pressed,blend,selected=false,false,0,false
@@ -7287,7 +7323,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
  pcall(function() connect(GuiService:GetPropertyChangedSignal('ReducedMotionEnabled'),function() reducedMotion=GuiService.ReducedMotionEnabled end) end)
  serial=serial+1;local stepName=bindPrefix..'Card'..serial
- local dead=false;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
+ local dead=false;local landed=false;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
  local function dispose()
   if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
   for _,connection in ipairs(signals) do connection:Disconnect() end
@@ -7300,13 +7336,17 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
   local instant=quiet or options.skipReveal
-  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
+  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
   local progress=instant and 1 or math.clamp(age/(.55/revealSpeed),0,1)
   local reveal=1-(1-progress)^3
+  if progress>=.91 and not landed then
+   landed=true
+   if not options.skipReveal and options.onLand then options.onLand(tier) end
+  end
   choose.Visible=progress>=1 and finishedAt==nil
   local resultAge=finishedAt and clock-finishedAt or 0
   local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
-  if leaving>=1 then effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
+  if leaving>=1 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=(selected or focused and choose.Active) and 1 or 0
@@ -7318,13 +7358,15 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local latchPulse=instant and 0 or math.clamp(1-math.abs(progress-.91)/.09,0,1)
   local confirmPulse=installed and math.max(0,1-resultAge/.30) or 0
   socket.BackgroundTransparency=.55+.43*reveal
-  latch.BackgroundColor3=accentColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
+  latch.BackgroundColor3=tierColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
   latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
-  rail.Color=(selected or installed) and accentColor or Color3.fromRGB(119,147,168)
-  rail.Transparency=selected and .02 or .32
+  rail.Color=tierColor
+  rail.Transparency=selected and .02 or .58-tier*.07
   local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
   effect.Visible=progress>=.92 and leaving<.14;terms.Visible=effect.Visible
+  badge.Visible=effect.Visible
+  badge.Position=UDim2.new(.5,-62,0,8-lift)
   local bleed=0
   local x,y=(left+right)/2,(top+bottom)/2
   local origin=options.origin or Vector2.new(x+(2-index)*size.X*.22,y+size.Y*.43)
@@ -7355,8 +7397,11 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if sweep.Visible then sweep.Position=UDim2.fromScale(-.65+shine*2.1,-.25) end
   spot.GroupTransparency=quiet and 1 or 1-blend*.7
   spot.Position=UDim2.fromScale(.5+pointerX*.32,.3+pointerY*.22)
+  local arrival=math.clamp(1-math.abs(progress-.94)/.14,0,1)
+  if progress>=1 then arrival=math.clamp(1-(opening-.55)/.28,0,1)*.55 end
   local wink=not quiet and full and pulse>=0 and pulse<.65
-  flash.ImageTransparency=wink and (.15+.85*math.abs(pulse/.65-.5)*2) or 1
+  local intensity=wink and (1-math.abs(pulse/.65-.5)*2)*.75 or 0
+  flash.ImageTransparency=not quiet and 1-math.max(intensity,options.skipReveal and 0 or arrival*(tier-1)/3) or 1
   flash.Position=UDim2.fromScale(pointerX<0 and .08 or .92,pointerY<0 and .08 or .92)
   artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or pointerX*blend*.7),3+(quiet and 0 or -pointerY*blend*.35),7),Vector3.zero)
   effect.Text=choose.Text~='' and escape(choose.Text) or display
@@ -7364,22 +7409,68 @@ function CardView.create(U,parent,choice,index,width,height,options)
  return {root=slot,button=choose,select=function(value) selected=value end,
   finish=function(value) installed=value;finishedAt=os.clock() end}
 end
+
+-- The strip only reveals the committed result. The client supplies the motion.
+function CardView.revealDrone(U,parent,width,reward,audio,isVisible,onClose)
+ local p=U.palette
+ local view=U.frame(parent,UDim2.fromOffset(0,10),UDim2.fromOffset(width,110),p.ink)
+ view.Name='DroneRewardTicker';view.ClipsDescendants=true;U.corner(view,12)
+ local strip=U.frame(view,UDim2.fromOffset(0,8),UDim2.fromOffset(0,94),p.ink);strip.BackgroundTransparency=1
+ local cellWidth=math.min(134,math.floor(width*.46))
+ local catalog=DroneCatalog.PrestigeRewards
+ local winner=15
+ for i=1,winner+2 do
+  local entry=i==winner and {name=reward.rewardName,tier=reward.rewardTier} or catalog[(i+reward.prestiges-1)%#catalog+1]
+  local tint=rarityColor(entry.tier)
+  local cell=U.panel(strip,UDim2.fromOffset((i-1)*cellWidth+3,0),UDim2.fromOffset(cellWidth-6,94),p.ink:Lerp(tint,.25),8)
+  U.stroke(cell,tint,2)
+  U.icon(cell,'drone',UDim2.new(.5,-17,0,9),UDim2.fromOffset(34,34),tint)
+  local name=U.text(cell,UDim2.fromOffset(2,44),UDim2.new(1,-4,0,25),entry.name,15,p.white,true)
+  local tier=U.text(cell,UDim2.fromOffset(2,68),UDim2.new(1,-4,0,18),Packs.Tiers[entry.tier],12,tint,true)
+  name.TextXAlignment=Enum.TextXAlignment.Center;tier.TextXAlignment=Enum.TextXAlignment.Center
+ end
+ local marker=U.frame(view,UDim2.new(.5,-2,0,0),UDim2.fromOffset(4,13),p.white);marker.ZIndex=10
+ local detail=U.text(parent,UDim2.fromOffset(0,128),UDim2.fromOffset(width,56),'Adding a permanent drone…',18,p.text,true)
+ detail.TextXAlignment=Enum.TextXAlignment.Center
+ local settled=false
+ local tint=rarityColor(reward.rewardTier)
+ local trigger,connection
+ local function place(index) strip.Position=UDim2.fromOffset(width*.5-(index-.5)*cellWidth,8) end
+ local function settle()
+  if settled then return end
+  settled=true;place(winner);marker.BackgroundColor3=tint
+  detail.Text=reward.rewardName..' joined your fleet\n'..reward.rewardJob
+  trigger.Text='Continue';audio:play('pack_open',nil,{pitch=.95+reward.rewardTier*.11})
+  if connection then connection:Disconnect();connection=nil end
+ end
+ trigger=U.button(parent,UDim2.new(.5,-74,0,198),UDim2.fromOffset(148,40),'Skip reveal',function()
+  if settled then onClose() else settle() end
+ end,tint)
+ if reducedMotion() then settle();return end
+ local start=os.clock();local last=2
+ place(last)
+ connection=RunService.RenderStepped:Connect(function()
+  if not isVisible() then connection:Disconnect();connection=nil;return end
+  local t=math.clamp((os.clock()-start)/(1.45+.17*reward.rewardTier),0,1)
+  local index=2+(winner-2)*(1-(1-t)^3)
+  place(index)
+  local tick=math.floor(index+.5)
+  if tick~=last and tick<winner then last=tick;audio:play('pack_step',nil,{pitch=.82+t*.37}) end
+  if t>=1 then settle() end
+ end)
+ view.Destroying:Once(function() if connection then connection:Disconnect() end end)
+end
 return CardView
 
 end)()
 local PackView = (function()
 -- Each observer animates the same delivery from server timestamps.
 local RS=game:GetService('ReplicatedStorage')
-local UIS=game:GetService('UserInputService')
 local TweenService=game:GetService('TweenService')
 local PackView={}
 PackView.__index=PackView
-local colors={
- Color3.fromRGB(121,211,248),
- Color3.fromRGB(255,213,82),
- Color3.fromRGB(86,255,141),
- Color3.fromRGB(185,110,255),
-}
+local colors={}
+for index,rgb in ipairs(Packs.Palette) do colors[index]=Color3.fromRGB(table.unpack(rgb)) end
 local idle=Color3.fromRGB(75,209,220)
 local function block(parent,name,size,color,material)
  local part=Instance.new('Part')
@@ -7436,10 +7527,6 @@ function PackView.new(options)
  focus.Name='PackWorldBlur';focus.FocusDistance=1.2;focus.InFocusRadius=.65
  focus.FarIntensity=0;focus.NearIntensity=0;focus.Parent=game:GetService('Lighting')
  self.focus=focus
- self.connections={UIS.WindowFocusReleased:Connect(function()
-  for _,record in pairs(self.records) do if record.prompt then record.prompt:InputHoldEnd() end end
- end)}
- self.suppressed={}
  return self
 end
 
@@ -7451,58 +7538,7 @@ function PackView:setFocus(active)
  self.focusTween:Play()
 end
 
--- Keep Roblox's input/hold events; only the progress presentation is custom.
-function PackView:bindPrompt(record,source)
- local prompt=source:FindFirstChild('OpenPack')
- if not prompt then return end
- record.prompt=prompt
- if source:GetAttribute('Owner')~=self.options.player.UserId then return end
- local gui=Instance.new('BillboardGui')
- gui.Name='PackOpeningPrompt';gui.Adornee=source;gui.Size=UDim2.fromOffset(220,62)
- gui.StudsOffsetWorldSpace=Vector3.new(0,2.3,0);gui.AlwaysOnTop=true;gui.Active=true;gui.Enabled=false
- local button=Instance.new('TextButton')
- button.Name='Hold';button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(27,32,41)
- button.BackgroundTransparency=.12;button.BorderSizePixel=0;button.Text='';button.AutoButtonColor=false;button.Parent=gui
- local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
- local label=Instance.new('TextLabel')
- label.Name='Action';label.BackgroundTransparency=1;label.Position=UDim2.fromOffset(12,8)
- label.Size=UDim2.new(1,-24,0,28);label.Font=Enum.Font.GothamMedium;label.TextSize=17
- label.TextColor3=Color3.fromRGB(239,243,249);label.Text='[E]  Open pack';label.Parent=button
- local track=Instance.new('Frame');track.Name='Track';track.BorderSizePixel=0
- track.BackgroundColor3=Color3.fromRGB(69,77,90);track.Position=UDim2.fromOffset(12,44)
- track.Size=UDim2.new(1,-24,0,6);track.ClipsDescendants=true;track.Parent=button
- local fill=Instance.new('Frame');fill.Name='Progress';fill.BorderSizePixel=0
- fill.BackgroundColor3=idle;fill.Size=UDim2.fromScale(0,1);fill.Parent=track
- gui.Parent=self.options.player:WaitForChild('PlayerGui')
- record.indicator=gui;record.fill=fill
- local function finishPointer(input)
-  if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldEnd() end
- end
- record.connections={
-  prompt.PromptShown:Connect(function(inputType)
-   record.shown=true
-   label.Text=inputType==Enum.ProximityPromptInputType.Touch and 'Hold to open pack'
-    or inputType==Enum.ProximityPromptInputType.Gamepad and '[X]  Open pack' or '[E]  Open pack'
-  end),
-  prompt.PromptHidden:Connect(function() record.shown=false;gui.Enabled=false end),
-  prompt.PromptButtonHoldBegan:Connect(function()
-   record.holdAt=workspace:GetServerTimeNow();record.releaseAt=nil;record.completed=false
-  end),
-  prompt.PromptButtonHoldEnded:Connect(function() record.releaseAt=workspace:GetServerTimeNow()+.08 end),
-  prompt.Triggered:Connect(function() record.completed=true end),
-  button.InputBegan:Connect(function(input)
-   if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldBegin() end
-  end),
-  button.InputEnded:Connect(finishPointer),
-  UIS.InputEnded:Connect(finishPointer),
- }
- -- Register visibility handlers before allowing the first PromptShown event.
- prompt.Enabled=false
-end
-
 local function disposeRecord(record)
- if record.connections then for _,connection in ipairs(record.connections) do connection:Disconnect() end end
- if record.indicator then record.indicator:Destroy() end
  record.model:Destroy()
  if record.courier then record.courier:Destroy() end
 end
@@ -7546,20 +7582,9 @@ function PackView:render(record,source,now,age,tier)
   record.landed=true
   if age<Packs.DeliveryTime+.22 then o.audio:play('pack_land',position);record.sparks:Emit(12) end
  end
- local holdAt=source:GetAttribute('HoldAt')
  local openedAt=source:GetAttribute('OpenedAt')
- local progress,stage=0,0
- if openedAt then progress,stage=1,tier
- elseif holdAt then progress,stage=Packs.sample(tier,now-holdAt) end
- local color=colors[stage] or idle
- if stage~=record.stage then
-  record.stage=stage
-  record.seam.Color=color;record.light.Color=color;record.sparks.Color=ColorSequence.new(color)
-  if stage>0 and not openedAt then
-   record.sparks:Emit(7+stage*3)
-   o.audio:play('pack_step',position,{pitch=.78+stage*.16})
-  end
- end
+ local color=openedAt and colors[tier] or idle
+ record.seam.Color=color;record.light.Color=color
  local lift=0
  local fade=0
  if openedAt then
@@ -7568,7 +7593,8 @@ function PackView:render(record,source,now,age,tier)
    record.opened=true
    if ageOpen<.25 then
     o.audio:play('pack_open',position,{pitch=.9+tier*.075})
-    record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(12+tier*6)
+    record.sparks.Color=ColorSequence.new(color)
+    record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(10+tier*7)
    end
   end
   lift=math.clamp(ageOpen/.29,0,1)
@@ -7578,10 +7604,10 @@ function PackView:render(record,source,now,age,tier)
  record.body.CFrame=pose
  record.lid.CFrame=pose*CFrame.new(0,.66+.4*lift,0)*CFrame.Angles(-lift*1.28,0,0)
  record.seam.CFrame=pose*CFrame.new(0,.54,0)
- record.light.Brightness=(.4+progress*1.5)*(1-fade)
- record.sparks.Rate=openedAt and 0 or (stage>0 and 10+stage*5 or 5)
+ record.light.Brightness=(openedAt and (.6+tier*.6) or .4)*(1-fade)
+ record.sparks.Rate=openedAt and 0 or 3
  record.body.Transparency=fade;record.lid.Transparency=fade;record.seam.Transparency=fade
- return progress,color,holdAt,openedAt
+ return openedAt
 end
 
 function PackView:update(now)
@@ -7592,49 +7618,33 @@ function PackView:update(now)
  local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
  local camera=workspace.CurrentCamera
  self.target=nil
- if folder and camera then for _,source in ipairs(folder:GetChildren()) do
-  local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier')
-  if stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
+ if folder then for _,source in ipairs(folder:GetChildren()) do
+  local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier') or 1
+  local owner=source:GetAttribute('Owner')==player.UserId
+  local openedAt=source:GetAttribute('OpenedAt')
+  local eligible=owner and source:GetAttribute('Ready')==true and hr and hum and hum.Health>0 and not openedAt
+   and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden()
+  if eligible then self.target=source end
+  local prompt=source:FindFirstChild('OpenPack')
+  if prompt then
+   local enabled=eligible==true and not o.busy()
+   if prompt.Enabled~=enabled then prompt.Enabled=enabled end
+  end
+  if camera and stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
    local record=self.records[source]
    if not record then record=createCrate(o.parent);self.records[source]=record end
-   if not record.prompt then self:bindPrompt(record,source) end
    record.visible=true
-   local age=now-stamp
-   local _,_,_,openedAt=self:render(record,source,now,age,tier)
-   if source:GetAttribute('Owner')==player.UserId and hr and hum and hum.Health>0 and not openedAt
-    and age>=Packs.DeliveryTime and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden() then
-    self.target=source
-
-   end
+   self:render(record,source,now,now-stamp,tier)
   end
  end end
- for source,record in pairs(self.records) do
-  if record.prompt then
-   local enabled=source==self.target and not o.busy()
-   record.prompt.Enabled=enabled
-   if record.indicator then
-    record.indicator.Enabled=enabled and record.shown==true
-    if record.releaseAt and now>=record.releaseAt and not record.completed then record.holdAt=nil end
-    if not enabled and not record.completed then record.holdAt=nil end
-    local progress,stage=0,0
-    if record.completed then progress,stage=1,source:GetAttribute('Tier')
-    elseif record.holdAt then progress,stage=Packs.sample(source:GetAttribute('Tier'),now-record.holdAt) end
-    record.fill.Size=UDim2.fromScale(progress,1)
-    record.fill.BackgroundColor3=colors[stage] or idle
-   end
-  end
- end
  local map=o.world:FindFirstChild('Map')
- if self.target and map then
-  if not self.suppressing then
-   for _,prompt in ipairs(map:GetDescendants()) do
-    if prompt:IsA('ProximityPrompt') then self.suppressed[prompt]=prompt.Enabled;prompt.Enabled=false end
-   end
-   self.suppressing=true
-  end
- elseif self.suppressing then
-  for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
-  table.clear(self.suppressed);self.suppressing=false
+ if map and not self.counter then
+  local station=map:FindFirstChild('PackStation',true)
+  self.counter=station and station:FindFirstChildOfClass('ProximityPrompt')
+ end
+ if self.counter then
+  local enabled=not self.target and not o.hidden() and not o.busy()
+  if self.counter.Enabled~=enabled then self.counter.Enabled=enabled end
  end
  for source,record in pairs(self.records) do
   if not record.visible then
@@ -7645,9 +7655,7 @@ function PackView:update(now)
 end
 
 function PackView:destroy()
- for _,connection in ipairs(self.connections) do connection:Disconnect() end
  self.focus:Destroy()
- for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
  for _,record in pairs(self.records) do disposeRecord(record) end
  table.clear(self.records)
 end
@@ -7683,11 +7691,14 @@ function V.effect(c)
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
  if e.oreDuplicator then return 'This miner produces 2× ore' end
+ if e.compactor then return 'Presses loose ore into the next tier at your pin' end
+ if e.batchPress then return 'Compactor needs only 2 ore per press' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
+ if e.shiftRelay then table.insert(parts,'Emptier sales boost pin damage 50% for '..e.shiftRelay..'s') end
  if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
@@ -7714,61 +7725,15 @@ function V.decorate(U,sheet,title,subtitle,close)
  U.unskin(close);U.corner(close,10);U.stroke(close,Color3.fromRGB(116,34,58),3)
  close.BackgroundColor3=Color3.fromRGB(244,78,113);close.TextColor3=WHITE;close.Font=Enum.Font.FredokaOne;close.TextSize=25;close.TextStrokeTransparency=1
 end
-local GOLD=Color3.fromRGB(255,221,119)
-local PALE_BLUE=Color3.fromRGB(225,245,255)
-local function tab(U,parent,width,title,onChange)
- action(U,parent,UDim2.fromOffset(2,2),UDim2.fromOffset(width-4,40),title,onChange,true,GOLD)
-end
 function V.render(U,parent,options)
  local p,width=options.profile,options.width
  local pending=p.run.pendingOffer
- local price,balance=Workshop.price(p),Shops.balance(p,'Quartz')
- local ore=options.cargo or p.cargoUnits or 0
+ local balance=Shops.balance(p,'Quartz')
  local narrow=width<560
- local y=2
- if options.onStars then
-  tab(U,parent,width,'Automation  ·  '..(p.run.stars or 0)..' Stars',options.onStars)
-  y=52
- end
- local packWidth=narrow and width-4 or math.floor((width-14)/2)
- local sale=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(packWidth,122),WHITE)
- sale.Name='WorkshopSale'
- label(U,sale,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),balance..' Quartz available',19,true)
- local saleDetail=options.crystalRun and 'Sell here anytime. Emptiers haul 24 ore per trip.' or (ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.')
- label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),saleDetail,15,false)
- local sell=action(U,sale,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),
-  ore>0 and 'Sell '..ore..' ore' or 'Backpack empty',options.onSell,options.onSell~=nil and options.canBuy and ore>0)
- sell.Name='SellWorkshopOre'
- local pack=rounded(U,parent,UDim2.fromOffset(narrow and 2 or packWidth+12,narrow and y+132 or y),UDim2.fromOffset(packWidth,122),PALE_BLUE,BLUE)
- pack.Name='UpgradePack'
- local starter=options.crystalRun and p.run.packIndex==0
- local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
- if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
- label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Choose Double Beam, Aftershock or a Compactor. Earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
- if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
- elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
- label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
- local packText=pending and (pending.opened==false and 'Return to crate' or 'Choose upgrade') or ('Buy pack · '..price..' Quartz')
- local buy=action(U,pack,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),packText,
-  options.onPack,options.canBuy and (pending~=nil or balance>=price))
- buy.Name='BuyWorkshopPack'
- y+=narrow and 266 or 134
-
- local pre=p.prestigePreview or {}
- local earned,needed=pre.earnings or 0,pre.saleRequired or Workshop.PRESTIGE_BASE
- local goalWidth=width-(narrow and 28 or 178)
- local goal=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(width-4,narrow and 120 or 80),
-  Color3.fromRGB(242,233,255),Color3.fromRGB(166,124,213))
- goal.Name='PrestigeProgress'
- label(U,goal,UDim2.fromOffset(12,7),UDim2.fromOffset(goalWidth,24),'Next reward · 1 permanent drone',18,true)
- label(U,goal,UDim2.fromOffset(12,31),UDim2.fromOffset(goalWidth,22),earned..' / '..needed..' Quartz sold',15,false)
- local bar=rounded(U,goal,UDim2.fromOffset(12,58),UDim2.fromOffset(goalWidth,6),WHITE,WHITE)
- local fill=U.frame(bar,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(earned/math.max(1,needed),0,1),1),Color3.fromRGB(154,104,215))
- U.corner(fill,4)
- action(U,goal,UDim2.fromOffset(narrow and 12 or width-154,narrow and 73 or 20),UDim2.fromOffset(narrow and width-28 or 140,38),
-  pre.eligible and 'Prestige ready' or 'View prestige',options.onPrestige,true,Color3.fromRGB(211,177,255))
- y+=narrow and 130 or 90
+ local header=rounded(U,parent,UDim2.fromOffset(2,2),UDim2.fromOffset(width-4,76),WHITE)
+ label(U,header,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,28),balance..' Quartz available',19,true)
+ label(U,header,UDim2.fromOffset(12,36),UDim2.fromOffset(width-26,30),'Stack installed cards here. Find new cards at the Pack Counter.',15,false)
+ local y=88
  label(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,29),'Installed upgrades · this run',18,true)
  y+=34
 
@@ -7800,9 +7765,8 @@ end
 function V.renderStars(U,parent,options)
  local p,width=options.profile,options.width
  local balance=p.run.stars or 0
- tab(U,parent,width,'Back to Quartz upgrades',options.onBack)
- label(U,parent,UDim2.fromOffset(4,49),UDim2.fromOffset(width-8,44),'Choose a pack upgrade to earn Stars. Buy travel and automation perks here for this run.',15,false)
- local y=102
+ label(U,parent,UDim2.fromOffset(4,4),UDim2.fromOffset(width-8,44),'Choose a pack upgrade to earn Stars. Buy travel and automation perks here for this run.',15,false)
+ local y=55
  for _,entry in ipairs(Workshop.STAR_CATALOG) do
   local level=Workshop.starLevel(p,entry.id)
   local price=Workshop.starPrice(entry,level)
@@ -8943,9 +8907,8 @@ function View.start(ctx)
    text(body,8,12,contentWidth-16,32,'GROW YOUR PERMANENT FLEET',19,C.accent)
    U.text(body,UDim2.fromOffset(8,54),UDim2.fromOffset(contentWidth-16,80),'Mine Quartz, open packs and stack your upgrades. Prestige adds a permanent mining drone and +25% base mining power.',17,C.text)
    text(body,8,143,contentWidth-16,32,tostring(pre.earnings or 0)..' / '..tostring(pre.saleRequired or 360)..' Quartz sold',18,C.mineral)
-   U.button(body,UDim2.fromOffset(8,190),UDim2.fromOffset(contentWidth-16,44),'Open Quartz Workshop',function() setOpen(false);ctx.openWorkshop() end,C.mineral)
-   U.button(body,UDim2.fromOffset(8,246),UDim2.fromOffset(contentWidth-16,44),'Review prestige reward',function() setOpen(false);ctx.openPrestige() end,C.accent)
-   body.CanvasSize=UDim2.fromOffset(0,304)
+   U.text(body,UDim2.fromOffset(8,187),UDim2.fromOffset(contentWidth-16,48),'Visit the Prestige beacon to roll for your next drone.',15,C.muted)
+   body.CanvasSize=UDim2.fromOffset(0,242)
   elseif self.tab=='Storage' then
    local card=row(0,160)
    text(card,14,10,contentWidth-28,28,'ORBITAL STORAGE',19,C.accent)
@@ -9445,8 +9408,7 @@ local function button(parent,pos,size,text,callback,color)
  b:SetAttribute('EnabledColor',color or palette.mineral);return b
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
-local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop,openStars
-local activeShop='Quartz'
+local openOffer,openPrestige,openFleet,openRunCards,openShop,openStars
 local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
@@ -9492,7 +9454,7 @@ local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
  data=data or {};data.txId=tx();data.runId=profile.run.id
- actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
  if action=='ChooseCard' then offerUI.claim=actionPending end
  command:FireServer(action,data);return true
 end
@@ -9506,7 +9468,7 @@ local function cargoUnits(p)
 end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
 local packView=PackView.new({
- player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,droneConfig=DroneConfig,
+ player=player,world=world,parent=localFX,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
@@ -9531,10 +9493,9 @@ local function layoutModal()
   l.panelWidth=math.min(740,v.X-24);l.panelHeight=math.min(650,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
- if modalMode=='pack' then
-  l.panelWidth=math.min(380,l.panelWidth);l.panelHeight=math.min(l.short and 132 or 166,l.panelHeight)
-  l.panelPadding=16;l.headerHeight=l.short and 66 or 94
-  l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
+ if modalMode=='reward' then
+  l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(360,l.panelHeight)
+  l.bodyWidth=l.panelWidth-2*l.panelPadding;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='offer' then
@@ -9586,12 +9547,12 @@ local function menu(mode,title,subtitle,icon)
  local rounded=sheet:FindFirstChildOfClass('UICorner');if rounded then rounded.CornerRadius=UDim.new(0,inOffer and 28 or 20) end
  local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0;border.Color=inOffer and Color3.fromRGB(6,8,17) or palette.ink;border.Thickness=inOffer and 5 or 2 end
  if l.panelWidth<400 then
-  local shortTitles={shop='Quartz Workshop',pack='Pack shop',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
+  local shortTitles={shop='Quartz Workshop',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
  modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,l.short and 10 or 18),UDim2.fromOffset(l.short and 38 or l.panelWidth<400 and 42 or 54,l.short and 38 or l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
- local titles={shop='QUARTZ WORKSHOP',pack='PACK SHOP',offer='PICK A CARD',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
+ local titles={shop='QUARTZ WORKSHOP',offer='PICK A CARD',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modalEmblem.Visible=not inOffer
  if inOffer then
@@ -9614,36 +9575,20 @@ local function menu(mode,title,subtitle,icon)
  end
  return l
 end
-local function atHomeUI()
- local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
- local hub=world.Map:FindFirstChild('HubPad',true)
- local depot=world:GetAttribute('DepotHome') or (hub and hub.Position) or (spawn and spawn.Position)
- return hr and depot and (hr.Position-depot).Magnitude<30
-end
 local function availability(action)
  if not profile then return false,'Connecting…' end
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
  if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
- if action=='BuyUpgrade' or action=='BuyStarUpgrade' or action=='BuyPack' or action=='Prestige' then
-  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  for _,name in ipairs(action=='Prestige' and {'PackStation','QuartzShop','PrestigeStation'} or {'PackStation','QuartzShop'}) do
-   local station=world.Map:FindFirstChild(name,true)
-   if station and hr and (station.Position-hr.Position).Magnitude<20 then return true,'' end
-  end
-  return false,'Visit the Quartz Workshop'
+ local name,range,where
+ if action=='ChooseCard' then name,range,where='PackStation',24,'Pack Counter'
+ elseif action=='BuyUpgrade' then name,range,where='QuartzShop',15,'Quartz Workshop'
+ elseif action=='BuyStarUpgrade' then name,range,where='RubyShop',12,'Star Shop'
+ elseif action=='Prestige' then name,range,where='PrestigeStation',15,'Prestige beacon'
  end
- local packStation=world.Map:FindFirstChild('PackStation',true)
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- local quartz=world.Map:FindFirstChild('QuartzShop',true)
- local nearPack=hr and ((packStation and (hr.Position-packStation.Position).Magnitude<24) or (quartz and (hr.Position-quartz.Position).Magnitude<20))
- if action~='Prestige' and not atHomeUI() and not ((action=='BuyPack' or action=='ChooseCard') and nearPack) then return false,'Return to the depot' end
- local stationName=action=='BuyPack' and 'PackStation' or action=='Prestige' and 'PrestigeStation' or nil
- if stationName then
-  local station=world.Map:FindFirstChild(stationName,true)
-  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the Quartz Workshop' or 'Visit the fleet uplink to prestige' end
- end
- return true,''
+ local station=name and world.Map:FindFirstChild(name,true)
+ if station and hr and (hr.Position-station.Position).Magnitude<range then return true,'' end
+ return false,'Visit the '..(where or 'depot')
 end
 local function canAct(action) return availability(action or 'ChooseCard') end
 local function number(n)
@@ -9673,7 +9618,7 @@ local function updateOfferControls()
  local targets=hardware and offerUI.targets or {}
  local target=targets[offerUI.targetIndex or 0]
  local stars=offer.packTier or 1
- normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ('Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
+ normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ((Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
  for index,view in ipairs(offerViews) do
   enableAction(view.button,not choosing)
   view.select(offerUI.index==index)
@@ -9707,7 +9652,7 @@ openOffer=function()
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
  local stars=offer.packTier or 1
- local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
+ local l=menu('offer','PICK AN UPGRADE',(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
  offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
@@ -9726,7 +9671,7 @@ openOffer=function()
  offerUI.install.Name='InstallUpgrade'
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onLand=function(tier) soundscape:play('pack_step',nil,{pitch=.9+tier*.15}) end,onChoose=function()
    if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
    if offerUI.index~=index then
     offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
@@ -9739,35 +9684,21 @@ openOffer=function()
  end
  updateOfferControls()
 end
-openPack=function()
- openShop('Quartz')
-end
-openShop=function(_key)
+openShop=function()
  if not profile or not profile.run.wallet then return end
- activeShop='Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop','Quartz Workshop',allowed and 'Sell ore, buy a pack, improve your crew' or reason,'crystal')
- ShopView.render(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,crystalRun=world.Map:FindFirstChild('CrystalRun')~=nil,
-  cargo=cargoUnits(profile),onSell=function()
-   if canAct('BuyUpgrade') then send('Sell') end
-  end,
-  onPack=function()
-   if pending() then
-    if sealedPack() then modal.Visible=false;modalMode=nil;notice.Text='Hold E on your delivered crate.';noticeUntil=os.clock()+4 else openOffer() end
-   elseif canAct('BuyPack') and send('BuyPack',{packIndex=profile.run.packIndex}) then modal.Visible=false;modalMode=nil end
-  end,
-  onBuy=function(c,level)
-   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop('Quartz') end
-  end,onPrestige=function() openPrestige() end,onStars=function() openStars() end})
+ local l=menu('shop','Quartz Workshop',allowed and 'Improve your installed cards' or reason,'crystal')
+ ShopView.render(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,onBuy=function(c,level)
+  if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop() end
+ end})
 end
 openStars=function()
  if not profile then return end
  local allowed,reason=availability('BuyStarUpgrade')
  local l=menu('stars','Star Shop',comma(profile.run.stars or 0)..' Stars · Resets on prestige'..(allowed and '' or ' · '..reason),'cards')
- ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,
-  onBack=function() openShop('Quartz') end,onBuy=function(id,level)
-   if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
-  end})
+ ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,onBuy=function(id,level)
+  if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
+ end})
 end
 local function statTile(parent,x,y,width,title,value,color)
  local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);tile.BackgroundTransparency=1
@@ -9883,9 +9814,9 @@ openPrestige=function()
  local narrow=width<400
  local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
- U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),colors[pre.newType] or palette.mineral)
+ U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),palette.mineral)
  label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 '..(pre.newRole or pre.newType or 'new')..' drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 drone roll · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
@@ -9905,7 +9836,9 @@ openPrestige=function()
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
   if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
  end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can)
- label(body,UDim2.fromOffset(8,y+160),UDim2.fromOffset(width-10,31),'This confirmation begins a new run and clears the reset items above.',11,palette.muted)
+ local odds={}
+ for _,entry in ipairs(DroneCatalog.PrestigeRewards) do table.insert(odds,entry.name..' '..entry.weight..'%') end
+ label(body,UDim2.fromOffset(8,y+154),UDim2.fromOffset(width-10,62),table.concat(odds,'  ·  '),13,palette.text)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -9913,9 +9846,8 @@ local function refreshModal()
  local savedScroll=body.CanvasPosition;local mode=modalMode
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
- elseif mode=='shop' then openShop(activeShop)
+ elseif mode=='shop' then openShop()
  elseif mode=='stars' then openStars()
- elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
  elseif mode=='run' then openRunCards() end
@@ -9938,7 +9870,7 @@ do
   for _,entry in ipairs(Workshop.STAR_CATALOG) do table.insert(values,Workshop.starLevel(p,entry.id)) end
   for _,c in ipairs(run.cards) do table.insert(values,tostring(c.cardId)..'='..tostring(c.level or 0)) end
   local pre=p.prestigePreview or {}
-  for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
+  for _,key in ipairs({'earnings','wins','eligible','saleRequired','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
   for i,value in ipairs(values) do values[i]=tostring(value) end
   return table.concat(values,':')
  end
@@ -9958,14 +9890,17 @@ do
   end
   if actionPending then
    local offer=p.run.pendingOffer
-   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
+   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
    if actionPending and actionPending.kind=='BuyStarUpgrade' and Workshop.starLevel(p,actionPending.upgradeId)>actionPending.level then actionPending=nil end
   end
   if changedRun and modalMode=='prestige' then modal.Visible=false end
   local offer=pending()
-  if offer and offer.opened==false and (not oldProfile or not oldProfile.run.pendingOffer or oldProfile.run.pendingOffer.id~=offer.id) then
-   if modalMode=='pack' then modal.Visible=false;modalMode=nil end
-  elseif offer and offer.opened~=false and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
+  if offer and offer.opened~=false and offer.id~=lastOffer then
+   lastOffer=offer.id
+   if oldProfile then
+    if logisticsView then logisticsView:close() end
+    menuStation=nil;openOffer()
+   end
   elseif not offer and modalMode=='offer' then
    if not offerUI.completed then
     local claim=offerUI.claim
@@ -9975,9 +9910,9 @@ do
      enableAction(offerUI.install,false);enableAction(offerUI.target,false)
      for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
      task.delay(.32,function()
-      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then openShop('Quartz') end
+      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then modal.Visible=false;modalMode=nil end
      end)
-    elseif modal.Visible then openShop('Quartz') else modalMode=nil end
+    else modal.Visible=false;modalMode=nil end
    end
   elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
    updateOfferControls()
@@ -9992,6 +9927,19 @@ do
  end
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
+connect(player:GetAttributeChangedSignal('MA_ShowOffer'),function()
+ if pending() and not sealedPack() then menuStation=nil;openOffer() end
+end)
+connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
+ local ok,reward=pcall(Http.JSONDecode,Http,player:GetAttribute('MA_DroneReward') or '')
+ if not ok or type(reward)~='table' or not reward.rewardName then return end
+ menuStation=nil
+ if logisticsView then logisticsView:close() end
+ local l=menu('reward','DRONE UNLOCKED','Permanent crew · +25% base mining power','drone')
+ CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,
+  function() return modal.Visible and modalMode=='reward' end,
+  function() modal.Visible=false;modalMode=nil end)
+end)
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5
  if not actionPending or actionPending.kind~='ChooseCard' then actionPending=nil end
@@ -10551,7 +10499,7 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
- openFleet=openFleet,openWorkshop=openPack,openPrestige=openPrestige,openCards=function() if pending() and not sealedPack() then openOffer() else openRunCards() end end,
+ openFleet=openFleet,openCards=openRunCards,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
 if world:GetAttribute('FieldToolsEnabled')==true then
  toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
@@ -10564,10 +10512,10 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Sell ore and upgrade your crew','Open' end
+  if key=='Quartz' and profile then return openShop end
   return nil
- elseif kind=='Pack' then
-  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Sell ore and upgrade your crew','Open'
+ elseif kind=='Stars' then
+  return openStars
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
@@ -10580,7 +10528,7 @@ local function performStation(station)
  local action=stationAction(station)
  local hr=ownerRoot();local prompt=station:FindFirstChildOfClass('ProximityPrompt')
  if not hr or not prompt or not prompt.Enabled or (hr.Position-station.Position).Magnitude>prompt.MaxActivationDistance+1 then return end
- if menusVisible() or (station:GetAttribute('Interaction')=='Pack' and packView.target) then return end
+ if menusVisible() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();menuStation=station;action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -10701,6 +10649,11 @@ local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
+ if packView.counter and profile then
+  local offer=pending()
+  packView.counter.ActionText=offer and (offer.opened==false and 'Find your crate' or 'Choose card') or 'Buy pack'
+  packView.counter.ObjectText=offer and 'Pack Counter' or (comma(profile.nextPackPrice or 20)..' Quartz')
+ end
  if menuStation then
   local hr=ownerRoot();local prompt=menuStation:FindFirstChildOfClass('ProximityPrompt')
   if not menuStation.Parent or not hr or not prompt or (hr.Position-menuStation.Position).Magnitude>prompt.MaxActivationDistance+3 then
@@ -10716,8 +10669,8 @@ connect(RunService.Heartbeat,function(dt)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
- if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
-  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
+ if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
+  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end

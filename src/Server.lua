@@ -69,6 +69,7 @@ local function publish(p)
  p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy)
  p.fieldCharge=Workshop.effect(copy,'fieldCharge')
  p.compactorBatch=Workshop.compactorBatch(copy)
+ p.shiftSeconds=Workshop.effect(copy,'shiftRelay')
  p.vacuumReach=Workshop.starLevel(copy,'vacuum')>0 and 76 or 64
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
@@ -110,7 +111,7 @@ local function characterRoot(p: any): any
  return h and h.Health>0 and hr or nil
 end
 local function atStation(p,station,radius)
- local hr=characterRoot(p);return hr and (hr.Position-station.Position).Magnitude<(radius or 18)
+ local hr=characterRoot(p);return hr and station and (hr.Position-station.Position).Magnitude<(radius or 18)
 end
 local function atHome(p)
  local hr=characterRoot(p);return hr and ((hr.Position-home).Magnitude<30 or (scene.printer and (hr.Position-scene.printer.Position).Magnitude<16))
@@ -853,8 +854,10 @@ local function pickupStep(dt)
      local nextTier,units,remainder=Workshop.compaction(drop.material,drop.units,p.compactorBatch)
      local output={owner=drop.owner,runId=drop.runId,nodeId=drop.nodeId,material=nextTier.material,units=units,
       floor=drop.floor,fieldPart=drop.fieldPart,quiet=true,compacted=true,reachBonus=drop.reachBonus}
+     local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
      pressed=pressed or {}
-     table.insert(pressed,{template=drop.part,drop=output,position=target,color=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))})
+     table.insert(pressed,{template=drop.part,drop=output,position=target,color=tint})
+     RoleEffects.Pulse(target,tint,.4,2.4,.26)
      press.pressUntil=now+1.4
      drop.units=remainder;drop.part:SetAttribute('Units',remainder);drop.queryAt=0
      if remainder==0 then pickups[id]=nil end
@@ -966,6 +969,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   if r.hardness>=Workshop.DEEP_CUT_HARDNESS then amount*=d.stats.deepCutMultiplier or 1 end
   if d.battery>d.stats.batteryCapacity*.5 then amount*=1+(d.stats.liveWire or 0) end
  end
+ if (not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.shiftSquare and p.miningSquare==p.shiftSquare and now<(p.shiftUntil or 0) then amount*=1.5 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
  if special then
@@ -1175,6 +1179,7 @@ end
 function scene.clearSquare(p)
  if not p.miningSquare then return end
  p.miningSquare=nil
+ p.shiftSquare=nil;p.shiftUntil=nil
  p.player:SetAttribute('MA_Selector',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
  p.player:SetAttribute('MA_SelectorStatus',nil)
@@ -1205,6 +1210,8 @@ function scene.publishSquareStatus(p)
  end
  local status=if not healthy(p) or not characterRoot(p) then 'Paused'
   elseif Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) and Workshop.starLevel(data(p),'autosell')==0 then 'BagFull'
+  elseif working and p.shiftSquare==square and now<(p.shiftUntil or 0) then 'Surge'
+  elseif p.compactor and now<(p.compactor.pressUntil or 0) then 'Pressing'
   elseif (p.uncollectedOre or 0)>=20 and not p.vacuum then 'LooseOre'
   elseif working then 'Working'
   elseif finishing then 'FinishingCut'
@@ -2165,6 +2172,10 @@ local function serviceDeliveries(p: any)
     end
     if scene.runStart then
      local proceeds=result.quartz>0 and (' · +'..result.quartz..' Quartz') or ''
+     if p.miningSquare and (p.shiftSeconds or 0)>0 then
+      p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
+      proceeds..=' · Crew surge'
+     end
      notice(p,'Emptier sold '..result.units..' ore'..proceeds)
     end
     p.publishDirty=true
@@ -2284,22 +2295,23 @@ local function chooseCard(p: any,pl: any,payload: any)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
 local function executePrestige(p: any,pl: any,payload: any)
- if payload.confirm~=true or not (atStation(p,scene.prestigeStation,20) or atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return end
+ if payload.confirm~=true or not atStation(p,scene.prestigeStation,15) then return end
  local function applyPrestige(copy: any): (any, any)
   local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true}
   local ok: boolean,result: any=Pro.prestige(copy,payload.txId,payload.runId,context)
   if ok then return result end
   return nil,result
  end
- transact(p,'prestige:'..payload.txId,applyPrestige,function()
+ transact(p,'prestige:'..payload.txId,applyPrestige,function(result)
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
   p.oreQueue={};p.workField=nil;scene.clearSquare(p)
   p.testFleet=nil
-  RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);scene.applyWalkSpeed(p);notice(p,'Prestige complete · +1 permanent drone and +25% base mining power.')
+  RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);scene.applyWalkSpeed(p)
+  p.player:SetAttribute('MA_DroneReward',Http:JSONEncode(result))
  end)
 end
 local packDelivery=PackDelivery.new({
- root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, stations={scene.packStation,shopStations.Quartz}, healthy=healthy, atHome=atHome,
+ root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, healthy=healthy,
  inAssault=activeAssault, characterRoot=characterRoot,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
  offer=function(p) return data(p).run.pendingOffer end,
@@ -2312,20 +2324,19 @@ local packDelivery=PackDelivery.new({
  end,
 })
 local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
-if packPrompt then packPrompt.ActionText=Shops.packPromptText(0);packPrompt.MaxActivationDistance=14 end
 local function economyAction(p: any,pl: any,action: string,payload: any): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
  end
- if action~='Prestige' and not atHome(p) and not ((action=='BuyPack' or action=='ChooseCard') and (atStation(p,scene.packStation,24) or atStation(p,shopStations.Quartz,20))) then
-  notice(p,'Visit the Quartz Workshop or prestige beacon.')
+ if action=='ChooseCard' and not atStation(p,scene.packStation,24) then
+  notice(p,'Return to the Pack Counter to choose your upgrade.')
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Return to the depot') end
   return false
  end
  if action=='BuyPack' then
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
-  if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then return false end
+  if not atStation(p,scene.packStation,12) then return false end
   local function buyCard(copy: any): (any, any)
    local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
@@ -2343,6 +2354,19 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  return true
 end
+if packPrompt then packPrompt.Triggered:Connect(function(pl)
+ local p=profiles[pl.UserId]
+ if not healthy(p) or p.player~=pl or not atStation(p,scene.packStation,12) or activeAssault(p) or now<(p.nextPackPress or 0) then return end
+ p.nextPackPress=now+.45
+ local run=data(p).run
+ local offer=run.pendingOffer
+ if offer then
+  if offer.opened~=false then pl:SetAttribute('MA_ShowOffer',Http:GenerateGUID(false))
+  else packDelivery:spawn(p,offer,characterRoot(p).Position,now);notice(p,'Open your delivered pack beside the counter.') end
+  return
+ end
+ economyAction(p,pl,'BuyPack',{txId=Http:GenerateGUID(false),runId=run.id,packIndex=run.packIndex})
+end) end
 local function abilityContext(p,fieldId,operator,deployment)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)
@@ -2536,7 +2560,7 @@ local function miningAbility(p,payload)
 end
 local function buyShopUpgrade(p,pl,payload)
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
- if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then notice(p,'Visit the Quartz Workshop.');return end
+ if not atStation(p,shopStations.Quartz,15) then notice(p,'Visit the Quartz Workshop.');return end
  transact(p,'shop:'..payload.txId,function(copy)
   local ok,result=Ca.upgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId,{atDepot=true,activeEncounter=false})
   if ok then return result end;return nil,result
@@ -2544,7 +2568,7 @@ local function buyShopUpgrade(p,pl,payload)
 end
 function scene.buyStarUpgrade(p,payload)
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then return end
- if not (atStation(p,scene.packStation,20) or atStation(p,shopStations.Quartz,20)) then notice(p,'Visit the Quartz Workshop.');return end
+ if not atStation(p,shopStations.Ruby,12) then notice(p,'Visit the Star Shop.');return end
  transact(p,'stars:'..payload.txId,function(copy)
   local ok,result=Pro.buyStarUpgrade(copy,payload.upgradeId,payload.level,payload.txId,payload.runId)
   if ok then return result end;return nil,result

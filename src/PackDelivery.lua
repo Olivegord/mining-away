@@ -17,7 +17,6 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  if not offer or offer.opened~=false or p.leaving or p.packDelivery then return end
  local o=self.options
  local station=o.station.Position
- for _,candidate in ipairs(o.stations or {}) do if (candidate.Position-buyerPosition).Magnitude<(station-buyerPosition).Magnitude then station=candidate.Position end end
  local direction=flat(buyerPosition-station)
  if direction.Magnitude<9 then direction=flat(o.home-station) end
  if direction.Magnitude<.1 then direction=Vector3.new(0,0,1) end
@@ -47,7 +46,6 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  part.Transparency=1
  part:SetAttribute('OfferId',offer.id)
  part:SetAttribute('Owner',p.player.UserId)
- part:SetAttribute('Tier',offer.packTier)
  part:SetAttribute('Approach',sideways)
  part:SetAttribute('DeliveryAt',now)
  local prompt=Instance.new('ProximityPrompt')
@@ -55,28 +53,17 @@ function Delivery:spawn(p, offer, buyerPosition, now)
  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
  prompt.MaxActivationDistance=Packs.Range;prompt.RequiresLineOfSight=false
  prompt.Exclusivity=Enum.ProximityPromptExclusivity.OnePerButton
- prompt.Style=Enum.ProximityPromptStyle.Custom
- prompt.HoldDuration=Packs.duration(offer.packTier);prompt.Enabled=false;prompt.Parent=part
+ prompt.HoldDuration=0;prompt.Enabled=false;prompt.Parent=part
  local delivery={part=part,prompt=prompt,id=offer.id,tier=offer.packTier,readyAt=now+Packs.DeliveryTime}
  p.packDelivery=delivery
- prompt.PromptButtonHoldBegan:Connect(function(player)
-  local clock=o.getClock()
-  if player~=p.player or delivery.opening or delivery.start or not self:canHold(p,delivery,clock) then return end
-  delivery.start=clock;delivery.endAt=nil
-  part:SetAttribute('HoldAt',clock)
- end)
  prompt.Triggered:Connect(function(player)
-  local clock=o.getClock()
-  if player~=p.player or delivery.opening or not delivery.start or not self:canHold(p,delivery,clock) then return end
-  if clock-delivery.start+0.06<Packs.duration(delivery.tier) then self:release(delivery);return end
-  delivery.start=nil;delivery.endAt=nil
+  if player~=p.player or delivery.opening or not self:canOpen(p,delivery,o.getClock()) then return end
   delivery.opening=true;prompt.Enabled=false
   o.open(p,delivery.id,function(status)
-   if status=='rejected' and p.packDelivery==delivery then delivery.opening=false;self:release(delivery) end
+   if p.packDelivery~=delivery then return end
+   if status=='rejected' then delivery.opening=false
+   elseif status=='accepted' then self:reveal(delivery,o.getClock()) end
   end)
- end)
- prompt.PromptButtonHoldEnded:Connect(function(player)
-  if player==p.player and delivery.start and not delivery.opening then delivery.endAt=o.getClock()+.08 end
  end)
  part.Parent=self.folder
 end
@@ -86,17 +73,18 @@ function Delivery:clear(p)
  if delivery then delivery.part:Destroy();p.packDelivery=nil end
 end
 
-function Delivery:release(delivery)
- delivery.start=nil
- delivery.endAt=nil
- delivery.part:SetAttribute('HoldAt',nil)
-end
-
-function Delivery:canHold(p, delivery, now)
+function Delivery:canOpen(p, delivery, now)
  local o=self.options
- if now<delivery.readyAt or not o.healthy(p) or o.inAssault(p) then return false end
+ local offer=o.offer(p)
+ if not offer or offer.id~=delivery.id or offer.opened~=false or now<delivery.readyAt or not o.healthy(p) or o.inAssault(p) then return false end
  local hr=o.characterRoot(p)
  return hr and (hr.Position-delivery.part.Position).Magnitude<=Packs.Range
+end
+
+function Delivery:reveal(delivery,now)
+ delivery.openedAt=now
+ delivery.part:SetAttribute('Tier',delivery.tier)
+ delivery.part:SetAttribute('OpenedAt',now)
 end
 
 function Delivery:step(p, now)
@@ -108,7 +96,6 @@ function Delivery:step(p, now)
   if offer and offer.opened==false and o.healthy(p) then
    local hr=o.characterRoot(p)
    local near=hr and (hr.Position-o.station.Position).Magnitude<20
-   for _,station in ipairs(o.stations or {}) do near=near or (hr and (hr.Position-station.Position).Magnitude<20) end
    if near and now>=(p.nextPackDelivery or 0) then
     p.nextPackDelivery=now+1
     self:spawn(p,offer,hr.Position,now)
@@ -119,14 +106,12 @@ function Delivery:step(p, now)
  if not offer or offer.id~=delivery.id then self:clear(p);return end
  if offer.opened~=false then
   if not delivery.openedAt then
-   delivery.openedAt=now
-   delivery.part:SetAttribute('OpenedAt',now)
+   self:reveal(delivery,now)
   elseif now-delivery.openedAt>1.15 then self:clear(p) end
   return
  end
- delivery.prompt.Enabled=now>=delivery.readyAt and not delivery.opening
- if delivery.start and delivery.endAt and now>=delivery.endAt then self:release(delivery) end
- if delivery.start and not self:canHold(p,delivery,now) then self:release(delivery) end
+ if now>=delivery.readyAt and not delivery.ready then delivery.ready=true;delivery.part:SetAttribute('Ready',true) end
+ delivery.prompt.Enabled=delivery.ready==true and not delivery.opening
 end
 
 return Delivery

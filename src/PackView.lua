@@ -1,15 +1,10 @@
 -- Each observer animates the same delivery from server timestamps.
 local RS=game:GetService('ReplicatedStorage')
-local UIS=game:GetService('UserInputService')
 local TweenService=game:GetService('TweenService')
 local PackView={}
 PackView.__index=PackView
-local colors={
- Color3.fromRGB(121,211,248),
- Color3.fromRGB(255,213,82),
- Color3.fromRGB(86,255,141),
- Color3.fromRGB(185,110,255),
-}
+local colors={}
+for index,rgb in ipairs(Packs.Palette) do colors[index]=Color3.fromRGB(table.unpack(rgb)) end
 local idle=Color3.fromRGB(75,209,220)
 local function block(parent,name,size,color,material)
  local part=Instance.new('Part')
@@ -66,10 +61,6 @@ function PackView.new(options)
  focus.Name='PackWorldBlur';focus.FocusDistance=1.2;focus.InFocusRadius=.65
  focus.FarIntensity=0;focus.NearIntensity=0;focus.Parent=game:GetService('Lighting')
  self.focus=focus
- self.connections={UIS.WindowFocusReleased:Connect(function()
-  for _,record in pairs(self.records) do if record.prompt then record.prompt:InputHoldEnd() end end
- end)}
- self.suppressed={}
  return self
 end
 
@@ -81,58 +72,7 @@ function PackView:setFocus(active)
  self.focusTween:Play()
 end
 
--- Keep Roblox's input/hold events; only the progress presentation is custom.
-function PackView:bindPrompt(record,source)
- local prompt=source:FindFirstChild('OpenPack')
- if not prompt then return end
- record.prompt=prompt
- if source:GetAttribute('Owner')~=self.options.player.UserId then return end
- local gui=Instance.new('BillboardGui')
- gui.Name='PackOpeningPrompt';gui.Adornee=source;gui.Size=UDim2.fromOffset(220,62)
- gui.StudsOffsetWorldSpace=Vector3.new(0,2.3,0);gui.AlwaysOnTop=true;gui.Active=true;gui.Enabled=false
- local button=Instance.new('TextButton')
- button.Name='Hold';button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(27,32,41)
- button.BackgroundTransparency=.12;button.BorderSizePixel=0;button.Text='';button.AutoButtonColor=false;button.Parent=gui
- local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
- local label=Instance.new('TextLabel')
- label.Name='Action';label.BackgroundTransparency=1;label.Position=UDim2.fromOffset(12,8)
- label.Size=UDim2.new(1,-24,0,28);label.Font=Enum.Font.GothamMedium;label.TextSize=17
- label.TextColor3=Color3.fromRGB(239,243,249);label.Text='[E]  Open pack';label.Parent=button
- local track=Instance.new('Frame');track.Name='Track';track.BorderSizePixel=0
- track.BackgroundColor3=Color3.fromRGB(69,77,90);track.Position=UDim2.fromOffset(12,44)
- track.Size=UDim2.new(1,-24,0,6);track.ClipsDescendants=true;track.Parent=button
- local fill=Instance.new('Frame');fill.Name='Progress';fill.BorderSizePixel=0
- fill.BackgroundColor3=idle;fill.Size=UDim2.fromScale(0,1);fill.Parent=track
- gui.Parent=self.options.player:WaitForChild('PlayerGui')
- record.indicator=gui;record.fill=fill
- local function finishPointer(input)
-  if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldEnd() end
- end
- record.connections={
-  prompt.PromptShown:Connect(function(inputType)
-   record.shown=true
-   label.Text=inputType==Enum.ProximityPromptInputType.Touch and 'Hold to open pack'
-    or inputType==Enum.ProximityPromptInputType.Gamepad and '[X]  Open pack' or '[E]  Open pack'
-  end),
-  prompt.PromptHidden:Connect(function() record.shown=false;gui.Enabled=false end),
-  prompt.PromptButtonHoldBegan:Connect(function()
-   record.holdAt=workspace:GetServerTimeNow();record.releaseAt=nil;record.completed=false
-  end),
-  prompt.PromptButtonHoldEnded:Connect(function() record.releaseAt=workspace:GetServerTimeNow()+.08 end),
-  prompt.Triggered:Connect(function() record.completed=true end),
-  button.InputBegan:Connect(function(input)
-   if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then prompt:InputHoldBegin() end
-  end),
-  button.InputEnded:Connect(finishPointer),
-  UIS.InputEnded:Connect(finishPointer),
- }
- -- Register visibility handlers before allowing the first PromptShown event.
- prompt.Enabled=false
-end
-
 local function disposeRecord(record)
- if record.connections then for _,connection in ipairs(record.connections) do connection:Disconnect() end end
- if record.indicator then record.indicator:Destroy() end
  record.model:Destroy()
  if record.courier then record.courier:Destroy() end
 end
@@ -176,20 +116,9 @@ function PackView:render(record,source,now,age,tier)
   record.landed=true
   if age<Packs.DeliveryTime+.22 then o.audio:play('pack_land',position);record.sparks:Emit(12) end
  end
- local holdAt=source:GetAttribute('HoldAt')
  local openedAt=source:GetAttribute('OpenedAt')
- local progress,stage=0,0
- if openedAt then progress,stage=1,tier
- elseif holdAt then progress,stage=Packs.sample(tier,now-holdAt) end
- local color=colors[stage] or idle
- if stage~=record.stage then
-  record.stage=stage
-  record.seam.Color=color;record.light.Color=color;record.sparks.Color=ColorSequence.new(color)
-  if stage>0 and not openedAt then
-   record.sparks:Emit(7+stage*3)
-   o.audio:play('pack_step',position,{pitch=.78+stage*.16})
-  end
- end
+ local color=openedAt and colors[tier] or idle
+ record.seam.Color=color;record.light.Color=color
  local lift=0
  local fade=0
  if openedAt then
@@ -198,7 +127,8 @@ function PackView:render(record,source,now,age,tier)
    record.opened=true
    if ageOpen<.25 then
     o.audio:play('pack_open',position,{pitch=.9+tier*.075})
-    record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(12+tier*6)
+    record.sparks.Color=ColorSequence.new(color)
+    record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(10+tier*7)
    end
   end
   lift=math.clamp(ageOpen/.29,0,1)
@@ -208,10 +138,10 @@ function PackView:render(record,source,now,age,tier)
  record.body.CFrame=pose
  record.lid.CFrame=pose*CFrame.new(0,.66+.4*lift,0)*CFrame.Angles(-lift*1.28,0,0)
  record.seam.CFrame=pose*CFrame.new(0,.54,0)
- record.light.Brightness=(.4+progress*1.5)*(1-fade)
- record.sparks.Rate=openedAt and 0 or (stage>0 and 10+stage*5 or 5)
+ record.light.Brightness=(openedAt and (.6+tier*.6) or .4)*(1-fade)
+ record.sparks.Rate=openedAt and 0 or 3
  record.body.Transparency=fade;record.lid.Transparency=fade;record.seam.Transparency=fade
- return progress,color,holdAt,openedAt
+ return openedAt
 end
 
 function PackView:update(now)
@@ -222,49 +152,33 @@ function PackView:update(now)
  local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
  local camera=workspace.CurrentCamera
  self.target=nil
- if folder and camera then for _,source in ipairs(folder:GetChildren()) do
-  local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier')
-  if stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
+ if folder then for _,source in ipairs(folder:GetChildren()) do
+  local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier') or 1
+  local owner=source:GetAttribute('Owner')==player.UserId
+  local openedAt=source:GetAttribute('OpenedAt')
+  local eligible=owner and source:GetAttribute('Ready')==true and hr and hum and hum.Health>0 and not openedAt
+   and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden()
+  if eligible then self.target=source end
+  local prompt=source:FindFirstChild('OpenPack')
+  if prompt then
+   local enabled=eligible==true and not o.busy()
+   if prompt.Enabled~=enabled then prompt.Enabled=enabled end
+  end
+  if camera and stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
    local record=self.records[source]
    if not record then record=createCrate(o.parent);self.records[source]=record end
-   if not record.prompt then self:bindPrompt(record,source) end
    record.visible=true
-   local age=now-stamp
-   local _,_,_,openedAt=self:render(record,source,now,age,tier)
-   if source:GetAttribute('Owner')==player.UserId and hr and hum and hum.Health>0 and not openedAt
-    and age>=Packs.DeliveryTime and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden() then
-    self.target=source
-
-   end
+   self:render(record,source,now,now-stamp,tier)
   end
  end end
- for source,record in pairs(self.records) do
-  if record.prompt then
-   local enabled=source==self.target and not o.busy()
-   record.prompt.Enabled=enabled
-   if record.indicator then
-    record.indicator.Enabled=enabled and record.shown==true
-    if record.releaseAt and now>=record.releaseAt and not record.completed then record.holdAt=nil end
-    if not enabled and not record.completed then record.holdAt=nil end
-    local progress,stage=0,0
-    if record.completed then progress,stage=1,source:GetAttribute('Tier')
-    elseif record.holdAt then progress,stage=Packs.sample(source:GetAttribute('Tier'),now-record.holdAt) end
-    record.fill.Size=UDim2.fromScale(progress,1)
-    record.fill.BackgroundColor3=colors[stage] or idle
-   end
-  end
- end
  local map=o.world:FindFirstChild('Map')
- if self.target and map then
-  if not self.suppressing then
-   for _,prompt in ipairs(map:GetDescendants()) do
-    if prompt:IsA('ProximityPrompt') then self.suppressed[prompt]=prompt.Enabled;prompt.Enabled=false end
-   end
-   self.suppressing=true
-  end
- elseif self.suppressing then
-  for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
-  table.clear(self.suppressed);self.suppressing=false
+ if map and not self.counter then
+  local station=map:FindFirstChild('PackStation',true)
+  self.counter=station and station:FindFirstChildOfClass('ProximityPrompt')
+ end
+ if self.counter then
+  local enabled=not self.target and not o.hidden() and not o.busy()
+  if self.counter.Enabled~=enabled then self.counter.Enabled=enabled end
  end
  for source,record in pairs(self.records) do
   if not record.visible then
@@ -275,9 +189,7 @@ function PackView:update(now)
 end
 
 function PackView:destroy()
- for _,connection in ipairs(self.connections) do connection:Disconnect() end
  self.focus:Destroy()
- for prompt,enabled in pairs(self.suppressed) do if prompt.Parent then prompt.Enabled=enabled end end
  for _,record in pairs(self.records) do disposeRecord(record) end
  table.clear(self.records)
 end

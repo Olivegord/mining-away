@@ -1,10 +1,11 @@
 -- Delivery and hold timing shared by authority and presentation.
 local Packs = {
  Range = 8,
- DeliveryTime = 1.7,
- DropTime = 1.27,
- DepartTime = 2.45,
+ DeliveryTime = 1.08,
+ DropTime = .73,
+ DepartTime = 1.65,
  Tiers = {'Common', 'Rare', 'Epic', 'Legendary'},
+ Palette = {{195,213,225},{89,208,255},{201,134,255},{255,205,78}},
 }
 local ends = {.42, 1.32, 2.65, 4.8}
 local work = {.60, .22, .12, .06}

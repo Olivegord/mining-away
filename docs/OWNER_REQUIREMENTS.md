@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — physical counters, readable rarity and drone rolls
+
+Press E at the Pack Counter to buy, let the crate drop, then press E on the crate to open. Make card rarity clear in the reveal and give permanent drone unlocks a spinner ticker. Open each shop from its physical location and remove links that jump between different shops. Research automation, growing power and satisfying feedback, then improve the experience of watching the swarm work. Studio is subject to Screen Time.
+
 ## November 8 latest — harder deep fields and an automation-first crew
 
 Make later Crystal Run rocks much harder with a nonlinear health curve. Start with backpack emptiers and fewer projectile drones. Add a Compactor that sucks up loose rock bits and compresses them into the next tier for a better sale. Use Risk of Rain 2 as a reference for card upgrades that introduce new behaviors and combine into builds. Preserve existing permanent drones and paid choices.

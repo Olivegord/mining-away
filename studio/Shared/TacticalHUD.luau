@@ -92,7 +92,7 @@ local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Col
 local selectorText={
  Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
- BagFull='Sell at Workshop', LooseOre='Gather loose ore',
+ BagFull='Backpack full', LooseOre='Gather loose ore', Pressing='Compactor pressing', Surge='Crew surge · +50%',
 }
 local function compact(value)
  if value>=1e9 then return string.format('%.1fB',value/1e9) elseif value>=1e6 then return string.format('%.1fM',value/1e6) elseif value>=10000 then return string.format('%.1fk',value/1000) end
@@ -214,7 +214,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  end
  self.selectorStatus.Visible=pinText~=nil
  self.selectorStatus.Text=pinText or ''
- self.selectorStatus.TextColor3=(status=='Working' or status=='BagFull') and C.gold or C.text
+ self.selectorStatus.TextColor3=(status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
  self.selectorStatus.Position=UDim2.fromOffset(recallWidth+4,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-recallWidth-4),buttonHeight)
  r.recall.Text=touch and 'Recall' or 'Recall [R]';r.evade.Text=touch and 'Evade' or 'Evade [Q]'

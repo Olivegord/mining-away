@@ -26,11 +26,14 @@ function V.effect(c)
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
  if e.oreDuplicator then return 'This miner produces 2× ore' end
+ if e.compactor then return 'Presses loose ore into the next tier at your pin' end
+ if e.batchPress then return 'Compactor needs only 2 ore per press' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
+ if e.shiftRelay then table.insert(parts,'Emptier sales boost pin damage 50% for '..e.shiftRelay..'s') end
  if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
@@ -57,61 +60,15 @@ function V.decorate(U,sheet,title,subtitle,close)
  U.unskin(close);U.corner(close,10);U.stroke(close,Color3.fromRGB(116,34,58),3)
  close.BackgroundColor3=Color3.fromRGB(244,78,113);close.TextColor3=WHITE;close.Font=Enum.Font.FredokaOne;close.TextSize=25;close.TextStrokeTransparency=1
 end
-local GOLD=Color3.fromRGB(255,221,119)
-local PALE_BLUE=Color3.fromRGB(225,245,255)
-local function tab(U,parent,width,title,onChange)
- action(U,parent,UDim2.fromOffset(2,2),UDim2.fromOffset(width-4,40),title,onChange,true,GOLD)
-end
 function V.render(U,parent,options)
  local p,width=options.profile,options.width
  local pending=p.run.pendingOffer
- local price,balance=Workshop.price(p),Shops.balance(p,'Quartz')
- local ore=options.cargo or p.cargoUnits or 0
+ local balance=Shops.balance(p,'Quartz')
  local narrow=width<560
- local y=2
- if options.onStars then
-  tab(U,parent,width,'Automation  ·  '..(p.run.stars or 0)..' Stars',options.onStars)
-  y=52
- end
- local packWidth=narrow and width-4 or math.floor((width-14)/2)
- local sale=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(packWidth,122),WHITE)
- sale.Name='WorkshopSale'
- label(U,sale,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),balance..' Quartz available',19,true)
- local saleDetail=options.crystalRun and 'Sell here anytime. Emptiers haul 24 ore per trip.' or (ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.')
- label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),saleDetail,15,false)
- local sell=action(U,sale,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),
-  ore>0 and 'Sell '..ore..' ore' or 'Backpack empty',options.onSell,options.onSell~=nil and options.canBuy and ore>0)
- sell.Name='SellWorkshopOre'
- local pack=rounded(U,parent,UDim2.fromOffset(narrow and 2 or packWidth+12,narrow and y+132 or y),UDim2.fromOffset(packWidth,122),PALE_BLUE,BLUE)
- pack.Name='UpgradePack'
- local starter=options.crystalRun and p.run.packIndex==0
- local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
- if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
- label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Choose Double Beam, Aftershock or a Compactor. Earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
- if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
- elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
- label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
- local packText=pending and (pending.opened==false and 'Return to crate' or 'Choose upgrade') or ('Buy pack · '..price..' Quartz')
- local buy=action(U,pack,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),packText,
-  options.onPack,options.canBuy and (pending~=nil or balance>=price))
- buy.Name='BuyWorkshopPack'
- y+=narrow and 266 or 134
-
- local pre=p.prestigePreview or {}
- local earned,needed=pre.earnings or 0,pre.saleRequired or Workshop.PRESTIGE_BASE
- local goalWidth=width-(narrow and 28 or 178)
- local goal=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(width-4,narrow and 120 or 80),
-  Color3.fromRGB(242,233,255),Color3.fromRGB(166,124,213))
- goal.Name='PrestigeProgress'
- label(U,goal,UDim2.fromOffset(12,7),UDim2.fromOffset(goalWidth,24),'Next reward · 1 permanent drone',18,true)
- label(U,goal,UDim2.fromOffset(12,31),UDim2.fromOffset(goalWidth,22),earned..' / '..needed..' Quartz sold',15,false)
- local bar=rounded(U,goal,UDim2.fromOffset(12,58),UDim2.fromOffset(goalWidth,6),WHITE,WHITE)
- local fill=U.frame(bar,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(earned/math.max(1,needed),0,1),1),Color3.fromRGB(154,104,215))
- U.corner(fill,4)
- action(U,goal,UDim2.fromOffset(narrow and 12 or width-154,narrow and 73 or 20),UDim2.fromOffset(narrow and width-28 or 140,38),
-  pre.eligible and 'Prestige ready' or 'View prestige',options.onPrestige,true,Color3.fromRGB(211,177,255))
- y+=narrow and 130 or 90
+ local header=rounded(U,parent,UDim2.fromOffset(2,2),UDim2.fromOffset(width-4,76),WHITE)
+ label(U,header,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,28),balance..' Quartz available',19,true)
+ label(U,header,UDim2.fromOffset(12,36),UDim2.fromOffset(width-26,30),'Stack installed cards here. Find new cards at the Pack Counter.',15,false)
+ local y=88
  label(U,parent,UDim2.fromOffset(4,y),UDim2.fromOffset(width-8,29),'Installed upgrades · this run',18,true)
  y+=34
 
@@ -143,9 +100,8 @@ end
 function V.renderStars(U,parent,options)
  local p,width=options.profile,options.width
  local balance=p.run.stars or 0
- tab(U,parent,width,'Back to Quartz upgrades',options.onBack)
- label(U,parent,UDim2.fromOffset(4,49),UDim2.fromOffset(width-8,44),'Choose a pack upgrade to earn Stars. Buy travel and automation perks here for this run.',15,false)
- local y=102
+ label(U,parent,UDim2.fromOffset(4,4),UDim2.fromOffset(width-8,44),'Choose a pack upgrade to earn Stars. Buy travel and automation perks here for this run.',15,false)
+ local y=55
  for _,entry in ipairs(Workshop.STAR_CATALOG) do
   local level=Workshop.starLevel(p,entry.id)
   local price=Workshop.starPrice(entry,level)

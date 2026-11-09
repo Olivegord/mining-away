@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run starts new players and Studio tests with three permanent miners, two run Emptiers and a 100-ore backpack. Pin a plot, collect the ore and sell it manually or let Emptiers carry 24-ore parcels to the Workshop. Each deeper tier has 3× the previous tier's mineable work and 4× the sale price per ore. The first 20-Quartz pack offers Double Beam, Aftershock and a Compactor Drone. Later choices can improve the recipe, feed the Compactor earlier, or combine battery recovery with high-charge damage. Pickup numbers show what actually reached the backpack. Existing permanent fleets and paid offers are preserved. Crews follow when the player gets more than 100 studs from the pin horizontally. Tool drops and equipment are disabled. Prestige resets cards, Stars and purchased run automation.
+**Current implementation:** Crystal Run starts with three permanent miners, two run Emptiers and a 100-ore backpack. Pin a plot, gather ore and sell it manually or let Emptiers carry 24-ore parcels. Each deeper tier has 3× the prior tier's mineable work and 4× the sale price per ore. Buy a pack with E at the Pack Counter and open the dropped crate with E. A first 20-Quartz pack offers Double Beam, Loose Seams and a Compactor Drone. Install one and then visit the Quartz Workshop to stack cards or the Star Shop to buy automation. Prestige at the beacon rolls for one permanent worker and adds 25% base mining power. The ticker reveals the saved result. Prestige resets cards, Stars and purchased run automation. Existing fleets and already-paid offers are preserved.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e2e7f4c3b9abdb1caedc3f76c1719a0370da0e581bfe2c3a9ceb2c88d448c9b8` | Deep-field and automation revision. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the deep fields follow-up below. |
+| Native-file SHA-256 | `12acf7feab33419bede31f511480eb0a648228e5a2c28174736f112018ed5787` | Physical counters and reward reveals revision. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the reward follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Deep fields and automation in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved. Persistence across reopening the cloud Edit document was not independently checked. |
+| Shared Studio entry point | **Physical counters and reward reveals in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved. Persistence across reopening the cloud Edit document was not independently checked. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — physical shops, pack taps and drone rewards
+
+The Pack Counter quotes the player's price in its prompt. A confirmed Quartz purchase drops an owned crate, which takes a single press to open after landing. Pending crates can return after reconnect, and the counter can reopen a previously revealed offer. The Quartz Workshop, Star Shop, Drone Yard and Prestige beacon are separate destinations. The Star Shop occupies the previously inactive Ruby counter. Cross-shop menu shortcuts were removed. Common, Rare, Epic and Legendary cards use labeled rarity marks, distinct trim and effects that peak as the cards land. Fresh first packs include a Common Loose Seams alongside the Rare Double Beam and Compactor. Already-paid offers keep their original cards and tiers.
+
+Prestige still gives exactly one permanent worker and increases base mining power. The new draw can award a Laser Miner, Breaker, Bubbler, Gridcutter, Halver or Singularity. The beacon shows their odds before confirmation. The client ticker shows the same drone as the committed receipt. Shift Relay converts an actual Emptier sale into a 12-second +50% damage surge at the current pin, with stacks extending duration. The Compactor gives a brief pulse matching the ore it ejects. See [research and playtest criteria](MINING_SATISFACTION.md).
+
+Workshop, Crystal Run, persistence, mining flight and pickups passed using API or storage doubles. Coverage includes physical prompt range, foreign and early open rejection, one charge and one open, distinct first-offer rarity, prize receipts across an interrupted save, and Shift Relay at its activation and expiry boundaries. The longest rarity badge measured 94.5 pixels in a 124-pixel slot with Studio text metrics. No new native Play or device test ran. Actual motion, touch input, sound mix, multiplayer and enjoyment remain unverified.
+
+Studio was initially open. In the shared Edit document, place **124078027733625**, universe **10774898335**, loaded version **112**, all three Script Sync roots and seven Source fingerprints were verified. Edit still shows the Pack Counter, Quartz Workshop and Star Shop at their existing locations. The [scoped sign saver](../tools/refresh_workshop_signs.py) mirrored seven label or prompt property edits while preserving the hierarchy and all 50 Sources. The subsequent allowlisted refresh from `63c5b61` installed the new Sources in `build/DRONE_GAME.rbxl`. Studio remains in Edit. This revision is unpublished, and no independent remote Edit save receipt was checked.
 
 ## Latest follow-up — deep fields, Emptiers and card combinations
 

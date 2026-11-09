@@ -145,8 +145,7 @@ local function button(parent,pos,size,text,callback,color)
  b:SetAttribute('EnabledColor',color or palette.mineral);return b
 end
 local function enableAction(b,enabled) U.setEnabled(b,enabled) end
-local openOffer,openPack,openPrestige,openFleet,openRunCards,openShop,openStars
-local activeShop='Quartz'
+local openOffer,openPrestige,openFleet,openRunCards,openShop,openStars
 local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
@@ -192,7 +191,7 @@ local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
  data=data or {};data.txId=tx();data.runId=profile.run.id
- actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
  if action=='ChooseCard' then offerUI.claim=actionPending end
  command:FireServer(action,data);return true
 end
@@ -206,7 +205,7 @@ local function cargoUnits(p)
 end
 local function pending() return profile and profile.run and profile.run.pendingOffer end
 local packView=PackView.new({
- player=player,world=world,parent=localFX,interface=U,command=command,audio=soundscape,droneConfig=DroneConfig,
+ player=player,world=world,parent=localFX,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
@@ -231,10 +230,9 @@ local function layoutModal()
   l.panelWidth=math.min(740,v.X-24);l.panelHeight=math.min(650,v.Y-24);l.panelPadding=16;l.headerHeight=l.short and 64 or 100
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16);l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
- if modalMode=='pack' then
-  l.panelWidth=math.min(380,l.panelWidth);l.panelHeight=math.min(l.short and 132 or 166,l.panelHeight)
-  l.panelPadding=16;l.headerHeight=l.short and 66 or 94
-  l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
+ if modalMode=='reward' then
+  l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(360,l.panelHeight)
+  l.bodyWidth=l.panelWidth-2*l.panelPadding;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='offer' then
@@ -286,12 +284,12 @@ local function menu(mode,title,subtitle,icon)
  local rounded=sheet:FindFirstChildOfClass('UICorner');if rounded then rounded.CornerRadius=UDim.new(0,inOffer and 28 or 20) end
  local border=sheet:FindFirstChildOfClass('UIStroke');if border then border.Transparency=inOffer and 1 or 0;border.Color=inOffer and Color3.fromRGB(6,8,17) or palette.ink;border.Thickness=inOffer and 5 or 2 end
  if l.panelWidth<400 then
-  local shortTitles={shop='Quartz Workshop',pack='Pack shop',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
+  local shortTitles={shop='Quartz Workshop',offer='Pick a card',fleet='Your crew',run='Run upgrades',prestige='Grow your fleet'}
   modalTitle.Text=shortTitles[mode] or title;modalTitle.TextSize=mode=='prestige' and 18 or 20
  end
  if modalEmblem then modalEmblem:Destroy() end
  modalEmblem=U.icon(sheet,icon,UDim2.fromOffset(18,l.short and 10 or 18),UDim2.fromOffset(l.short and 38 or l.panelWidth<400 and 42 or 54,l.short and 38 or l.panelWidth<400 and 42 or 54),colorful and Color3.fromRGB(255,210,85) or palette.mineral)
- local titles={shop='QUARTZ WORKSHOP',pack='PACK SHOP',offer='PICK A CARD',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
+ local titles={shop='QUARTZ WORKSHOP',offer='PICK A CARD',fleet='YOUR FLEET',run='RUN UPGRADES',prestige='GROW YOUR FLEET'};modalTitle.Text=titles[mode] or title
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modalEmblem.Visible=not inOffer
  if inOffer then
@@ -314,36 +312,20 @@ local function menu(mode,title,subtitle,icon)
  end
  return l
 end
-local function atHomeUI()
- local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');local spawn=workspace:FindFirstChildWhichIsA('SpawnLocation',true)
- local hub=world.Map:FindFirstChild('HubPad',true)
- local depot=world:GetAttribute('DepotHome') or (hub and hub.Position) or (spawn and spawn.Position)
- return hr and depot and (hr.Position-depot).Magnitude<30
-end
 local function availability(action)
  if not profile then return false,'Connecting…' end
  if actionPending or profile.pendingTransaction then return false,'Waiting for confirmation…' end
  if player:GetAttribute('MA_InAssault') then return false,'Recall your fighting drones first' end
- if action=='BuyUpgrade' or action=='BuyStarUpgrade' or action=='BuyPack' or action=='Prestige' then
-  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  for _,name in ipairs(action=='Prestige' and {'PackStation','QuartzShop','PrestigeStation'} or {'PackStation','QuartzShop'}) do
-   local station=world.Map:FindFirstChild(name,true)
-   if station and hr and (station.Position-hr.Position).Magnitude<20 then return true,'' end
-  end
-  return false,'Visit the Quartz Workshop'
+ local name,range,where
+ if action=='ChooseCard' then name,range,where='PackStation',24,'Pack Counter'
+ elseif action=='BuyUpgrade' then name,range,where='QuartzShop',15,'Quartz Workshop'
+ elseif action=='BuyStarUpgrade' then name,range,where='RubyShop',12,'Star Shop'
+ elseif action=='Prestige' then name,range,where='PrestigeStation',15,'Prestige beacon'
  end
- local packStation=world.Map:FindFirstChild('PackStation',true)
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- local quartz=world.Map:FindFirstChild('QuartzShop',true)
- local nearPack=hr and ((packStation and (hr.Position-packStation.Position).Magnitude<24) or (quartz and (hr.Position-quartz.Position).Magnitude<20))
- if action~='Prestige' and not atHomeUI() and not ((action=='BuyPack' or action=='ChooseCard') and nearPack) then return false,'Return to the depot' end
- local stationName=action=='BuyPack' and 'PackStation' or action=='Prestige' and 'PrestigeStation' or nil
- if stationName then
-  local station=world.Map:FindFirstChild(stationName,true)
-  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  if not station or not hr or (hr.Position-station.Position).Magnitude>=20 then return false,action=='BuyPack' and 'Visit the Quartz Workshop' or 'Visit the fleet uplink to prestige' end
- end
- return true,''
+ local station=name and world.Map:FindFirstChild(name,true)
+ if station and hr and (hr.Position-station.Position).Magnitude<range then return true,'' end
+ return false,'Visit the '..(where or 'depot')
 end
 local function canAct(action) return availability(action or 'ChooseCard') end
 local function number(n)
@@ -373,7 +355,7 @@ local function updateOfferControls()
  local targets=hardware and offerUI.targets or {}
  local target=targets[offerUI.targetIndex or 0]
  local stars=offer.packTier or 1
- normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ('Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
+ normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ((Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
  for index,view in ipairs(offerViews) do
   enableAction(view.button,not choosing)
   view.select(offerUI.index==index)
@@ -407,7 +389,7 @@ openOffer=function()
   if visible then origin=Vector2.new(screen.X,screen.Y) end
  end
  local stars=offer.packTier or 1
- local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
+ local l=menu('offer','PICK AN UPGRADE',(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
  offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
  offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
@@ -426,7 +408,7 @@ openOffer=function()
  offerUI.install.Name='InstallUpgrade'
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onLand=function(tier) soundscape:play('pack_step',nil,{pitch=.9+tier*.15}) end,onChoose=function()
    if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
    if offerUI.index~=index then
     offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
@@ -439,35 +421,21 @@ openOffer=function()
  end
  updateOfferControls()
 end
-openPack=function()
- openShop('Quartz')
-end
-openShop=function(_key)
+openShop=function()
  if not profile or not profile.run.wallet then return end
- activeShop='Quartz'
  local allowed,reason=availability('BuyUpgrade')
- local l=menu('shop','Quartz Workshop',allowed and 'Sell ore, buy a pack, improve your crew' or reason,'crystal')
- ShopView.render(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,crystalRun=world.Map:FindFirstChild('CrystalRun')~=nil,
-  cargo=cargoUnits(profile),onSell=function()
-   if canAct('BuyUpgrade') then send('Sell') end
-  end,
-  onPack=function()
-   if pending() then
-    if sealedPack() then modal.Visible=false;modalMode=nil;notice.Text='Hold E on your delivered crate.';noticeUntil=os.clock()+4 else openOffer() end
-   elseif canAct('BuyPack') and send('BuyPack',{packIndex=profile.run.packIndex}) then modal.Visible=false;modalMode=nil end
-  end,
-  onBuy=function(c,level)
-   if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop('Quartz') end
-  end,onPrestige=function() openPrestige() end,onStars=function() openStars() end})
+ local l=menu('shop','Quartz Workshop',allowed and 'Improve your installed cards' or reason,'crystal')
+ ShopView.render(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,onBuy=function(c,level)
+  if canAct('BuyUpgrade') and send('BuyUpgrade',{upgradeId=c.cardId,level=level}) then openShop() end
+ end})
 end
 openStars=function()
  if not profile then return end
  local allowed,reason=availability('BuyStarUpgrade')
  local l=menu('stars','Star Shop',comma(profile.run.stars or 0)..' Stars · Resets on prestige'..(allowed and '' or ' · '..reason),'cards')
- ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,
-  onBack=function() openShop('Quartz') end,onBuy=function(id,level)
-   if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
-  end})
+ ShopView.renderStars(U,body,{profile=profile,width=l.bodyWidth-4,canBuy=allowed,onBuy=function(id,level)
+  if canAct('BuyStarUpgrade') and send('BuyStarUpgrade',{upgradeId=id,level=level}) then openStars() end
+ end})
 end
 local function statTile(parent,x,y,width,title,value,color)
  local tile=frame(parent,UDim2.fromOffset(x,y),UDim2.fromOffset(width,55),palette.panel);tile.BackgroundTransparency=1
@@ -583,9 +551,9 @@ openPrestige=function()
  local narrow=width<400
  local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
- U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),colors[pre.newType] or palette.mineral)
+ U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),palette.mineral)
  label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 '..(pre.newRole or pre.newType or 'new')..' drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 drone roll · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
@@ -605,7 +573,9 @@ openPrestige=function()
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
   if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
  end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can)
- label(body,UDim2.fromOffset(8,y+160),UDim2.fromOffset(width-10,31),'This confirmation begins a new run and clears the reset items above.',11,palette.muted)
+ local odds={}
+ for _,entry in ipairs(DroneCatalog.PrestigeRewards) do table.insert(odds,entry.name..' '..entry.weight..'%') end
+ label(body,UDim2.fromOffset(8,y+154),UDim2.fromOffset(width-10,62),table.concat(odds,'  ·  '),13,palette.text)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -613,9 +583,8 @@ local function refreshModal()
  local savedScroll=body.CanvasPosition;local mode=modalMode
  refreshSerial=refreshSerial+1;local serial=refreshSerial
  if mode=='offer' then if pending() then openOffer() end
- elseif mode=='shop' then openShop(activeShop)
+ elseif mode=='shop' then openShop()
  elseif mode=='stars' then openStars()
- elseif mode=='pack' then openPack()
  elseif mode=='prestige' then openPrestige()
  elseif mode=='fleet' then openFleet()
  elseif mode=='run' then openRunCards() end
@@ -638,7 +607,7 @@ do
   for _,entry in ipairs(Workshop.STAR_CATALOG) do table.insert(values,Workshop.starLevel(p,entry.id)) end
   for _,c in ipairs(run.cards) do table.insert(values,tostring(c.cardId)..'='..tostring(c.level or 0)) end
   local pre=p.prestigePreview or {}
-  for _,key in ipairs({'earnings','wins','eligible','saleRequired','newType','newRole','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
+  for _,key in ipairs({'earnings','wins','eligible','saleRequired','fleetBefore','fleetAfter'}) do table.insert(values,tostring(pre[key])) end
   for i,value in ipairs(values) do values[i]=tostring(value) end
   return table.concat(values,':')
  end
@@ -658,14 +627,17 @@ do
   end
   if actionPending then
    local offer=p.run.pendingOffer
-   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyPack' and p.run.packIndex>actionPending.packIndex) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
+   if changedRun or (actionPending.kind=='ChooseCard' and (not offer or offer.id~=actionPending.offerId)) or (actionPending.kind=='BuyUpgrade' and ((Workshop.find(p,actionPending.upgradeId) or {}).level or 0)>(actionPending.level or 0)) then actionPending=nil end
    if actionPending and actionPending.kind=='BuyStarUpgrade' and Workshop.starLevel(p,actionPending.upgradeId)>actionPending.level then actionPending=nil end
   end
   if changedRun and modalMode=='prestige' then modal.Visible=false end
   local offer=pending()
-  if offer and offer.opened==false and (not oldProfile or not oldProfile.run.pendingOffer or oldProfile.run.pendingOffer.id~=offer.id) then
-   if modalMode=='pack' then modal.Visible=false;modalMode=nil end
-  elseif offer and offer.opened~=false and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
+  if offer and offer.opened~=false and offer.id~=lastOffer then
+   lastOffer=offer.id
+   if oldProfile then
+    if logisticsView then logisticsView:close() end
+    menuStation=nil;openOffer()
+   end
   elseif not offer and modalMode=='offer' then
    if not offerUI.completed then
     local claim=offerUI.claim
@@ -675,9 +647,9 @@ do
      enableAction(offerUI.install,false);enableAction(offerUI.target,false)
      for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
      task.delay(.32,function()
-      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then openShop('Quartz') end
+      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then modal.Visible=false;modalMode=nil end
      end)
-    elseif modal.Visible then openShop('Quartz') else modalMode=nil end
+    else modal.Visible=false;modalMode=nil end
    end
   elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
    updateOfferControls()
@@ -692,6 +664,19 @@ do
  end
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
+connect(player:GetAttributeChangedSignal('MA_ShowOffer'),function()
+ if pending() and not sealedPack() then menuStation=nil;openOffer() end
+end)
+connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
+ local ok,reward=pcall(Http.JSONDecode,Http,player:GetAttribute('MA_DroneReward') or '')
+ if not ok or type(reward)~='table' or not reward.rewardName then return end
+ menuStation=nil
+ if logisticsView then logisticsView:close() end
+ local l=menu('reward','DRONE UNLOCKED','Permanent crew · +25% base mining power','drone')
+ CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,
+  function() return modal.Visible and modalMode=='reward' end,
+  function() modal.Visible=false;modalMode=nil end)
+end)
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5
  if not actionPending or actionPending.kind~='ChooseCard' then actionPending=nil end
@@ -1251,7 +1236,7 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
- openFleet=openFleet,openWorkshop=openPack,openPrestige=openPrestige,openCards=function() if pending() and not sealedPack() then openOffer() else openRunCards() end end,
+ openFleet=openFleet,openCards=openRunCards,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
 if world:GetAttribute('FieldToolsEnabled')==true then
  toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
@@ -1264,10 +1249,10 @@ local function stationAction(station)
  local kind=station:GetAttribute('Interaction')
  if kind=='Shop' then
   local key=station:GetAttribute('ShopKey')
-  if key=='Quartz' and profile then return openPack,'Quartz Workshop','Sell ore and upgrade your crew','Open' end
+  if key=='Quartz' and profile then return openShop end
   return nil
- elseif kind=='Pack' then
-  return openPack,'Quartz Workshop',pending() and 'Your upgrade pack is waiting' or 'Sell ore and upgrade your crew','Open'
+ elseif kind=='Stars' then
+  return openStars
  elseif kind=='Printer' then return function() logisticsView:toggle() end,'Drone yard','Manage your permanent fleet and transport','Browse'
  elseif kind=='Prestige' then return openPrestige,'Prestige','Keep your drones · gain permanent mining power','Review'
  elseif kind=='Sell' then
@@ -1280,7 +1265,7 @@ local function performStation(station)
  local action=stationAction(station)
  local hr=ownerRoot();local prompt=station:FindFirstChildOfClass('ProximityPrompt')
  if not hr or not prompt or not prompt.Enabled or (hr.Position-station.Position).Magnitude>prompt.MaxActivationDistance+1 then return end
- if menusVisible() or (station:GetAttribute('Interaction')=='Pack' and packView.target) then return end
+ if menusVisible() then return end
  if action and os.clock()-lastStationUse>.25 then lastStationUse=os.clock();menuStation=station;action() end
 end
 connect(game:GetService('ProximityPromptService').PromptTriggered,function(prompt,who)
@@ -1401,6 +1386,11 @@ local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
+ if packView.counter and profile then
+  local offer=pending()
+  packView.counter.ActionText=offer and (offer.opened==false and 'Find your crate' or 'Choose card') or 'Buy pack'
+  packView.counter.ObjectText=offer and 'Pack Counter' or (comma(profile.nextPackPrice or 20)..' Quartz')
+ end
  if menuStation then
   local hr=ownerRoot();local prompt=menuStation:FindFirstChildOfClass('ProximityPrompt')
   if not menuStation.Parent or not hr or not prompt or (hr.Position-menuStation.Position).Magnitude>prompt.MaxActivationDistance+3 then
@@ -1416,8 +1406,8 @@ connect(RunService.Heartbeat,function(dt)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
  testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
- if modal.Visible and (modalMode=='offer' or modalMode=='pack' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
-  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='pack' and 'BuyPack' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
+ if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
+  local action=modalMode=='offer' and 'ChooseCard' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
   local allowed,reason=availability(action);local signature=modalMode..':'..tostring(allowed)..':'..reason
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end

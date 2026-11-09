@@ -3,6 +3,7 @@ local C=require('../src/Cards')
 local W=require('../src/Workshop')
 local Roles=require('../src/DroneRoles')
 local Mining=require('../src/Mining')
+local DroneCatalog=require('../src/DroneCatalog')
 local tests=0
 local function test(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));tests+=1;print('PASS workshop '..name) end
 local function funded(seed)
@@ -117,7 +118,8 @@ test('Crystal Run drafts trigger effects and offers Batch Press only after Compa
  end
  review(false)
  local ok,offer=C.buy(p,'first-press',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true})
- assert(ok);eq(offer.choices[3].cardId,'Q_COMPACTOR');assert(choose(p,offer,3,'hire-press'))
+ assert(ok);eq(offer.choices[3].cardId,'Q_COMPACTOR');eq(offer.choices[2].rarity,'Common');eq(offer.choices[1].rarity,'Rare')
+ assert(choose(p,offer,3,'hire-press'))
  review(true)
  local nextTier,units,remaining=W.compaction('RunCobalt',5,2)
  eq(nextTier.material,'RunViolet');eq(units,2);eq(remaining,1)
@@ -137,6 +139,24 @@ test('Crystal Run work compounds without resizing and refined sales fund Quartz 
  local sold,receipt=P.sell(p,{Quartz=1,Ruby=2},'refined-sale',p.run.id)
  assert(sold);eq(receipt.credits,280);eq(p.run.wallet.Quartz,274);eq(p.run.wallet.Ruby,3);eq(p.run.quartzEarnings,274)
  assert(P.sell(p,{},'refined-sale',p.run.id));eq(p.run.wallet.Quartz,274);assert(P.validate(p,44))
+end)
+test('prestige preview keeps the roll hidden and every listed drone can be awarded',function()
+ local observed={}
+ for seed=1,2048 do
+  local reward=DroneCatalog.prestigeReward(seed,1)
+  observed[reward.kind]=(observed[reward.kind] or 0)+1
+ end
+ for _,reward in ipairs(DroneCatalog.PrestigeRewards) do
+  assert(observed[reward.kind] and math.abs(observed[reward.kind]/2048*100-reward.weight)<2)
+ end
+ local p=funded();p.run.quartzEarnings=360
+ local preview=P.prestigePreview(p)
+ assert(preview.eligible and not preview.newType and not preview.newRole)
+ local oldRun=p.run.id
+ local ok,reward=P.prestige(p,'reward',oldRun,{atDepot=true,confirmed=true})
+ assert(ok);eq(reward.droneType,p.fleet[4].type);eq(reward.droneId,p.fleet[4].id)
+ local replay,previous=P.prestige(p,'reward',oldRun,{atDepot=true,confirmed=true})
+ assert(replay and same(previous,reward));eq(#p.fleet,4)
 end)
 test('Legendary is affordable after spending the last Quartz and exhausted tiers leave the roll',function()
  local sawLegendary=false

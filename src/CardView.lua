@@ -18,6 +18,7 @@ function CardView.summary(choice)
  add('compactor','Presses 3 loose ore into 1 of the next tier.')
  add('batchPress','Your Compactor now needs 2 ore per press.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
+ add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -49,7 +50,7 @@ function CardView.summary(choice)
  return #lines>0 and table.concat(lines,'\n') or (choice.description or choice.title or 'Run upgrade')
 end
 
-function CardView.terms(choice,_targetOverride)
+function CardView.terms(choice,_targetOverride,hasBadge)
  local e=choice.effects or {};local target
  local work=(e.mining or 0)>0 or (e.startup or 0)>0 or (e.yield or 0)>0 or (e.fork or 0)>0 or (e.geode or 0)>0 or (e.plotAuto or 0)>0
  local allRoles=(e.speed or 0)>0 or (e.health or 0)>0 or (e.reduction or 0)>0 or (e.shield or 0)>0
@@ -61,6 +62,7 @@ function CardView.terms(choice,_targetOverride)
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
  elseif e.compactor then target='New drone at your pin'
  elseif e.batchPress then target='Your Compactor'
+ elseif e.shiftRelay then target='Your mining pin'
  elseif choice.scope=='Player' then target='Your backpack'
  elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
@@ -72,7 +74,7 @@ function CardView.terms(choice,_targetOverride)
   end
   local before=choice.stackBefore
   local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
-  return target..' · This run\n'..count..' · '..choice.rarity
+  return target..' · This run\n'..count..(hasBadge and '' or ' · '..(choice.rarity or 'Common'))
  end
  local details={target..' · This run'}
  local losses={}
@@ -96,6 +98,13 @@ local UserInputService=game:GetService('UserInputService')
 local serial=0
 local bindPrefix='UpgradeCards'..game:GetService('HttpService'):GenerateGUID(false)
 local FACE_PIXELS=3 -- Supersample the curved physical face; screen text stays native.
+local function rarityColor(tier) return Color3.fromRGB(table.unpack(Packs.Palette[tier] or Packs.Palette[1])) end
+local function reducedMotion()
+ local reduced=false
+ pcall(function() reduced=GuiService.ReducedMotionEnabled end)
+ local player=Players.LocalPlayer
+ return reduced or player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true
+end
 
 local function visualPart(parent,size,position,color,shape)
  local part=Instance.new('Part');part.Size=size;part.CFrame=CFrame.new(position);part.Color=color
@@ -113,6 +122,7 @@ function CardView.identity(choice)
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
  if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
  if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
+ if has('shiftRelay') then return 'cargo',Color3.fromRGB(158,94,21),Color3.fromRGB(255,221,123) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
@@ -364,6 +374,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
  local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice)
+ local tier=table.find(Packs.Tiers,choice.rarity) or (choice.rarity=='Uncommon' and 2 or 1)
+ local tierColor=rarityColor(tier)
  local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
  slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
  local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
@@ -378,6 +390,10 @@ function CardView.create(U,parent,choice,index,width,height,options)
  width-=16;height-=16
  local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
  card.Name='MountedCard';card.BackgroundTransparency=1
+ local badge=U.frame(card,UDim2.new(.5,-62,0,8),UDim2.fromOffset(124,25),tierColor)
+ badge.Name='RarityBadge';U.corner(badge,8);U.stroke(badge,p.ink,1.5)
+ local rarity=U.text(badge,UDim2.fromScale(0,0),UDim2.fromScale(1,1),string.upper(choice.rarity or Packs.Tiers[tier])..' '..string.rep('◆',tier),12,p.ink,true)
+ rarity.TextXAlignment=Enum.TextXAlignment.Center
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
@@ -394,21 +410,21 @@ function CardView.create(U,parent,choice,index,width,height,options)
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*FACE_PIXELS,height*FACE_PIXELS),p.paper);canvas.Name='CardCanvas'
  local border=CardView.housing(U,canvas,bodyColor,accentColor)
- local rim=bodyColor:Lerp(Color3.new(1,1,1),.3)
+ local rim=tierColor
  border.Color=bodyColor:Lerp(Color3.fromRGB(3,5,14),.75);border.Thickness=1.5*FACE_PIXELS
  -- Soft colored spill outside the bevel is drawn on a padded physical face.
  -- The enamel covers the overlapping centers, leaving only the feathered rim.
  local spill=Instance.new('Frame');spill.Name='RimGlow';spill.BackgroundTransparency=1;spill.Size=UDim2.fromScale(1,1);spill.ZIndex=canvas.ZIndex;spill.Parent=canvas
  for i=12,1,-1 do
   local spread=i*FACE_PIXELS
-  local halo=U.frame(spill,UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),bodyColor:Lerp(Color3.new(1,1,1),.12))
-  halo.BackgroundTransparency=.965;halo.ZIndex=spill.ZIndex;U.corner(halo,20*FACE_PIXELS+spread)
+  local halo=U.frame(spill,UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),tierColor)
+  halo.BackgroundTransparency=.985-tier*.009;halo.ZIndex=spill.ZIndex;U.corner(halo,20*FACE_PIXELS+spread)
  end
  local rimFace=U.frame(canvas,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1));rimFace.Name='RimBevel';rimFace.ZIndex=canvas.ZIndex;U.corner(rimFace,20*FACE_PIXELS)
  local inner=U.frame(rimFace,UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS),UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS),Color3.new(1,1,1));inner.Name='Enamel';inner.ZIndex=canvas.ZIndex;U.corner(inner,15*FACE_PIXELS)
  local enamel=Instance.new('UIGradient');enamel.Rotation=90;enamel.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.28,bodyColor:Lerp(Color3.new(1,1,1),.025)),ColorSequenceKeypoint.new(.62,bodyColor),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.33))});enamel.Parent=inner
  local rimLight=Instance.new('UIGradient');rimLight.Name='RimLight';rimLight.Rotation=118
- rimLight.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.88)),ColorSequenceKeypoint.new(.12,bodyColor:Lerp(Color3.new(1,1,1),.52)),ColorSequenceKeypoint.new(.40,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.63,bodyColor:Lerp(Color3.new(0,0,0),.22)),ColorSequenceKeypoint.new(.85,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.34))});rimLight.Parent=rimFace
+ rimLight.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,tierColor:Lerp(Color3.new(1,1,1),.66)),ColorSequenceKeypoint.new(.34,tierColor),ColorSequenceKeypoint.new(.60,tierColor:Lerp(p.ink,.36)),ColorSequenceKeypoint.new(.84,tierColor),ColorSequenceKeypoint.new(1,tierColor:Lerp(p.ink,.24))});rimLight.Parent=rimFace
  local edge=U.stroke(inner,bodyColor:Lerp(Color3.new(1,1,1),.5),FACE_PIXELS);edge.Transparency=.5
  local texture=canvas:FindFirstChild('StudTexture');texture.Position=UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS);texture.Size=UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS);texture:FindFirstChildOfClass('UICorner').CornerRadius=UDim.new(0,15*FACE_PIXELS)
  local rays=sunburst(U,canvas,compact,accentColor)
@@ -428,7 +444,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local effect=U.text(card,UDim2.new(0,12,effectY,0),UDim2.new(1,-24,compact and .33 or .30,0),display,compact and 16 or 18,p.white,true)
  effect.RichText=true;effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center
  effect.TextStrokeColor3=Color3.fromRGB(13,23,48);effect.TextStrokeTransparency=.5
- local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target),16,p.white,false)
+ local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target,true),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
  local focused,pressed,blend,selected=false,false,0,false
@@ -446,7 +462,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
  connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
  pcall(function() connect(GuiService:GetPropertyChangedSignal('ReducedMotionEnabled'),function() reducedMotion=GuiService.ReducedMotionEnabled end) end)
  serial=serial+1;local stepName=bindPrefix..'Card'..serial
- local dead=false;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
+ local dead=false;local landed=false;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
  local function dispose()
   if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
   for _,connection in ipairs(signals) do connection:Disconnect() end
@@ -459,13 +475,17 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
   local instant=quiet or options.skipReveal
-  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
+  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
   local progress=instant and 1 or math.clamp(age/(.55/revealSpeed),0,1)
   local reveal=1-(1-progress)^3
+  if progress>=.91 and not landed then
+   landed=true
+   if not options.skipReveal and options.onLand then options.onLand(tier) end
+  end
   choose.Visible=progress>=1 and finishedAt==nil
   local resultAge=finishedAt and clock-finishedAt or 0
   local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
-  if leaving>=1 then effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
+  if leaving>=1 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=(selected or focused and choose.Active) and 1 or 0
@@ -477,13 +497,15 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local latchPulse=instant and 0 or math.clamp(1-math.abs(progress-.91)/.09,0,1)
   local confirmPulse=installed and math.max(0,1-resultAge/.30) or 0
   socket.BackgroundTransparency=.55+.43*reveal
-  latch.BackgroundColor3=accentColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
+  latch.BackgroundColor3=tierColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
   latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
-  rail.Color=(selected or installed) and accentColor or Color3.fromRGB(119,147,168)
-  rail.Transparency=selected and .02 or .32
+  rail.Color=tierColor
+  rail.Transparency=selected and .02 or .58-tier*.07
   local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
   effect.Visible=progress>=.92 and leaving<.14;terms.Visible=effect.Visible
+  badge.Visible=effect.Visible
+  badge.Position=UDim2.new(.5,-62,0,8-lift)
   local bleed=0
   local x,y=(left+right)/2,(top+bottom)/2
   local origin=options.origin or Vector2.new(x+(2-index)*size.X*.22,y+size.Y*.43)
@@ -514,13 +536,67 @@ function CardView.create(U,parent,choice,index,width,height,options)
   if sweep.Visible then sweep.Position=UDim2.fromScale(-.65+shine*2.1,-.25) end
   spot.GroupTransparency=quiet and 1 or 1-blend*.7
   spot.Position=UDim2.fromScale(.5+pointerX*.32,.3+pointerY*.22)
+  local arrival=math.clamp(1-math.abs(progress-.94)/.14,0,1)
+  if progress>=1 then arrival=math.clamp(1-(opening-.55)/.28,0,1)*.55 end
   local wink=not quiet and full and pulse>=0 and pulse<.65
-  flash.ImageTransparency=wink and (.15+.85*math.abs(pulse/.65-.5)*2) or 1
+  local intensity=wink and (1-math.abs(pulse/.65-.5)*2)*.75 or 0
+  flash.ImageTransparency=not quiet and 1-math.max(intensity,options.skipReveal and 0 or arrival*(tier-1)/3) or 1
   flash.Position=UDim2.fromScale(pointerX<0 and .08 or .92,pointerY<0 and .08 or .92)
   artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or pointerX*blend*.7),3+(quiet and 0 or -pointerY*blend*.35),7),Vector3.zero)
   effect.Text=choose.Text~='' and escape(choose.Text) or display
  end)
  return {root=slot,button=choose,select=function(value) selected=value end,
   finish=function(value) installed=value;finishedAt=os.clock() end}
+end
+
+-- The strip only reveals the committed result. The client supplies the motion.
+function CardView.revealDrone(U,parent,width,reward,audio,isVisible,onClose)
+ local p=U.palette
+ local view=U.frame(parent,UDim2.fromOffset(0,10),UDim2.fromOffset(width,110),p.ink)
+ view.Name='DroneRewardTicker';view.ClipsDescendants=true;U.corner(view,12)
+ local strip=U.frame(view,UDim2.fromOffset(0,8),UDim2.fromOffset(0,94),p.ink);strip.BackgroundTransparency=1
+ local cellWidth=math.min(134,math.floor(width*.46))
+ local catalog=DroneCatalog.PrestigeRewards
+ local winner=15
+ for i=1,winner+2 do
+  local entry=i==winner and {name=reward.rewardName,tier=reward.rewardTier} or catalog[(i+reward.prestiges-1)%#catalog+1]
+  local tint=rarityColor(entry.tier)
+  local cell=U.panel(strip,UDim2.fromOffset((i-1)*cellWidth+3,0),UDim2.fromOffset(cellWidth-6,94),p.ink:Lerp(tint,.25),8)
+  U.stroke(cell,tint,2)
+  U.icon(cell,'drone',UDim2.new(.5,-17,0,9),UDim2.fromOffset(34,34),tint)
+  local name=U.text(cell,UDim2.fromOffset(2,44),UDim2.new(1,-4,0,25),entry.name,15,p.white,true)
+  local tier=U.text(cell,UDim2.fromOffset(2,68),UDim2.new(1,-4,0,18),Packs.Tiers[entry.tier],12,tint,true)
+  name.TextXAlignment=Enum.TextXAlignment.Center;tier.TextXAlignment=Enum.TextXAlignment.Center
+ end
+ local marker=U.frame(view,UDim2.new(.5,-2,0,0),UDim2.fromOffset(4,13),p.white);marker.ZIndex=10
+ local detail=U.text(parent,UDim2.fromOffset(0,128),UDim2.fromOffset(width,56),'Adding a permanent drone…',18,p.text,true)
+ detail.TextXAlignment=Enum.TextXAlignment.Center
+ local settled=false
+ local tint=rarityColor(reward.rewardTier)
+ local trigger,connection
+ local function place(index) strip.Position=UDim2.fromOffset(width*.5-(index-.5)*cellWidth,8) end
+ local function settle()
+  if settled then return end
+  settled=true;place(winner);marker.BackgroundColor3=tint
+  detail.Text=reward.rewardName..' joined your fleet\n'..reward.rewardJob
+  trigger.Text='Continue';audio:play('pack_open',nil,{pitch=.95+reward.rewardTier*.11})
+  if connection then connection:Disconnect();connection=nil end
+ end
+ trigger=U.button(parent,UDim2.new(.5,-74,0,198),UDim2.fromOffset(148,40),'Skip reveal',function()
+  if settled then onClose() else settle() end
+ end,tint)
+ if reducedMotion() then settle();return end
+ local start=os.clock();local last=2
+ place(last)
+ connection=RunService.RenderStepped:Connect(function()
+  if not isVisible() then connection:Disconnect();connection=nil;return end
+  local t=math.clamp((os.clock()-start)/(1.45+.17*reward.rewardTier),0,1)
+  local index=2+(winner-2)*(1-(1-t)^3)
+  place(index)
+  local tick=math.floor(index+.5)
+  if tick~=last and tick<winner then last=tick;audio:play('pack_step',nil,{pitch=.82+t*.37}) end
+  if t>=1 then settle() end
+ end)
+ view.Destroying:Once(function() if connection then connection:Disconnect() end end)
 end
 return CardView

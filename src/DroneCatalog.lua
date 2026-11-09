@@ -15,6 +15,24 @@ local Catalog = {
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Color={150,124,255},Description='Throws a heavy energy ball into the side of a crystal.'},
  },
 }
+Catalog.PrestigeRewards={
+ {kind='Blue',name='Laser Miner',tier=1,weight=45,job='Steady crystal cutting'},
+ {kind='Red',name='Breaker',tier=1,weight=25,job='Heavy hits on hard outer layers'},
+ {kind='Bubbler',name='Bubbler',tier=2,weight=15,job='Bubble cuts with 25% more ore'},
+ {kind='Gridcutter',name='Gridcutter',tier=2,weight=9,job='Quick passes with 20% more ore'},
+ {kind='Halver',name='Halver',tier=3,weight=5,job='Heavy cuts with 50% more ore'},
+ {kind='Singularity',name='Singularity',tier=4,weight=1,job='Fast gravity pulses with 50% more ore'},
+}
+function Catalog.prestigeReward(seed,index)
+ local prime=2147483647
+ local state=(seed*48271+index%prime*69621)%prime
+ local ticket=(state*48271)%prime%100+1
+ for _,reward in ipairs(Catalog.PrestigeRewards) do
+  ticket-=reward.weight
+  if ticket<=0 then return reward end
+ end
+ error('Prestige reward weights must total 100')
+end
 function Catalog.price(kind,fleet)
  local definition=Catalog.Types[kind];if not definition then return nil end
  if kind~='Laser' then return definition.Price end

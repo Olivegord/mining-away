@@ -2,7 +2,7 @@ local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=17,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=18,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -175,6 +175,7 @@ local function vector(p,c)
  local compactor=Workshop.hasCompactor(p,c)
  out.compactor=compactor and 1 or 0
  out.batchPress=compactor and Workshop.COMPACTOR_BATCH-Workshop.compactorBatch(p,c) or 0
+ out.shiftRelay=Workshop.effect(p,'shiftRelay',c)
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
   for k in pairs(statLabels) do if k~='shotInterval' then
@@ -207,6 +208,7 @@ end
 local function preview(p,c)
  local lines={}
  if c.effects.compactor then table.insert(lines,{label='Compactor drones',before=0,after=1,unit=''}) end
+ if c.effects.shiftRelay then table.insert(lines,{label='Mining boost after delivery',before=Workshop.effect(p,'shiftRelay'),after=Workshop.effect(p,'shiftRelay',c),unit='s'}) end
  if c.effects.batchPress then table.insert(lines,{label='Input per compressed ore',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='ore'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end

@@ -22,10 +22,13 @@ local function addSign(station,text,height)
 end
 local function quartzWorkshop(stations)
  for key,station in pairs(stations) do
+  local stars=key=='Ruby'
+  local title=stars and 'Star Shop' or key=='Quartz' and 'Quartz Workshop' or 'Future field'
+  if stars then station:SetAttribute('Interaction','Stars') end
   local prompt=station:FindFirstChildOfClass('ProximityPrompt')
-  if prompt then prompt.Enabled=key=='Quartz';prompt.ActionText='Open Quartz Workshop';prompt.ObjectText=key=='Quartz' and 'Quartz Workshop' or 'Future field' end
+  if prompt then prompt.Enabled=key=='Quartz' or stars;prompt.ActionText='Open';prompt.ObjectText=title end
   local sign=station:FindFirstChild('ShopSign')
-  if sign then for _,node in ipairs(sign:GetDescendants()) do if node:IsA('TextLabel') then node.Text=key=='Quartz' and 'QUARTZ WORKSHOP' or key:upper()..' · LATER' end end end
+  if sign then for _,node in ipairs(sign:GetDescendants()) do if node:IsA('TextLabel') then node.Text=title=='Future field' and key:upper()..' · LATER' or title:upper() end end end
  end
 end
 function Stands.mount(map,home,template)
@@ -48,10 +51,10 @@ function Stands.mount(map,home,template)
   prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.RequiresLineOfSight=false;prompt.Parent=printer
   addSign(printer,'DRONE YARD',3)
  end
- addSign(template,'QUARTZ WORKSHOP',3)
+ addSign(template,'PACK COUNTER',3)
  local packPrompt=template:FindFirstChildOfClass('ProximityPrompt') or Instance.new('ProximityPrompt')
- packPrompt.ActionText='Open Workshop';packPrompt.ObjectText='Quartz Workshop'
- packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.HoldDuration=0
+ packPrompt.ActionText='Buy pack';packPrompt.ObjectText='Upgrade packs'
+ packPrompt.KeyboardKeyCode=Enum.KeyCode.E;packPrompt.GamepadKeyCode=Enum.KeyCode.ButtonX;packPrompt.HoldDuration=0;packPrompt.Enabled=true
  packPrompt.MaxActivationDistance=12;packPrompt.RequiresLineOfSight=false
  packPrompt.Parent=template
  template:SetAttribute('Interaction','Pack')

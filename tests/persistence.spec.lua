@@ -196,7 +196,10 @@ check('actual Profile prestige crash retains identities and exactly one permanen
  end),false)
  eq(#s.data.fleet,#original);eq(s.readOnly,true);c.now=131
  local freshStore=Persistence.new(b,realOptions('real-B',c));local loaded=assert(freshStore:load(1))
- eq(#loaded.data.fleet,#original+1);eq(loaded.data.fleet[#original+1].type,'Red')
+ eq(#loaded.data.fleet,#original+1)
+ local award=assert(Profile.receipt(loaded.data,'Prestige','domain-prestige'))
+ eq(loaded.data.fleet[#original+1].type,award.droneType);eq(loaded.data.fleet[#original+1].id,award.droneId)
+ assert(award.rewardTier>=1 and award.rewardTier<=4 and #award.rewardName>0)
  for i,d in ipairs(original) do eq(loaded.data.fleet[i].id,d.id);for trait,value in pairs(d.base) do eq(loaded.data.fleet[i].base[trait],value) end end
  local ok,r=freshStore:transaction(loaded,'storage-prestige',function() error('must not prestige twice') end);eq(ok,true);eq(r.fleetCount,#original+1);eq(#loaded.data.fleet,#original+1)
 end)

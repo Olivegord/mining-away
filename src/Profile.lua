@@ -12,7 +12,7 @@ local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scra
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
-effectKeys.compactor=true;effectKeys.batchPress=true;effectKeys.liveWire=true
+effectKeys.compactor=true;effectKeys.batchPress=true;effectKeys.liveWire=true;effectKeys.shiftRelay=true
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -505,10 +505,7 @@ end
 function P.milestone(p)
  return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}
 end
-local prestigeKinds={'Red','Bubbler','Halver','Blue','Gridcutter','Singularity'}
-function P.nextType(p) return prestigeKinds[p.prestiges%#prestigeKinds+1] end
-local function prestigeDrone(p)
- local kind=P.nextType(p)
+local function prestigeDrone(p,kind)
  return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
   or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
 end
@@ -518,7 +515,7 @@ function P.prestigePreview(p)
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the workshop')
  return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  newType=P.nextType(p),newRole=prestigeDrone(p).role,cards=#p.run.cards,runId=p.run.id}
+  cards=#p.run.cards,runId=p.run.id}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -529,10 +526,11 @@ function P.prestige(p,tx,expectedRun,context)
  if not context.atDepot or context.activeEncounter then return false,'Recall your fighting drones and return to the depot' end
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
- local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=prestigeDrone(p)
+ local reward=DroneCatalog.prestigeReward(p.seed,p.run.index)
+ local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=prestigeDrone(p,reward.kind)
  Consumables.refund(p.consumables)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)
- local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,fleetCount=#p.fleet,prestiges=p.prestiges}
+ local result={oldRunId=oldRun,runId=p.run.id,droneId=awarded.id,droneType=awarded.type,rewardName=reward.name,rewardTier=reward.tier,rewardJob=reward.job,fleetCount=#p.fleet,prestiges=p.prestiges}
  P.record(p,'Prestige',tx,result);return true,result
 end
 return P
