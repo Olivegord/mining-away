@@ -94,3 +94,44 @@ pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 command.OnServerEvent:Fire(pl,'Recall');step(1)
 assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
 print('PASS Crystal Run grid pin, station keeping, recall, edge overlap, reservations, committed work, regrowth, charging, full-bag pause and Star Shop effects')
+
+-- Exercise the larger route's population budget and station geometry with
+-- the production spawner. A busy patch must not shift its rocks into a lane.
+f.cfg.Count,f.cfg.Ore=48,10
+f.clusters={}
+for i,x in ipairs({0,-34,34}) do
+ f.clusters[i]=World.part(zone,'Patch'..i,Vector3.new(x,4.512,-68),Vector3.new(30,2,30),f.color)
+end
+seedField(f)
+assert(#f.resources==48 and #f.respawnQueue==0)
+local counts,positions={},{}
+for _,r in ipairs(f.resources) do
+ local patch=r.cluster;local pos=r.position-patch.Position
+ assert(math.abs(pos.X)<=15 and math.abs(pos.Z)<=15 and pos.X%1==0 and pos.Z%1==0)
+ assert(math.abs(pos.Y-3)<.001)
+ local key=string.format('%d,%d',r.position.X,r.position.Z)
+ assert(not positions[key],'coincident reference crystals');positions[key]=true
+ counts[patch]=(counts[patch] or 0)+1
+ assert(math.abs((Feel.mineGoal(r.position,1,false,r.fullSize)-r.position).Y-10)<.001)
+end
+for _,patch in ipairs(f.clusters) do assert(counts[patch]==16) end
+local retired=f.resources[23]
+retired.paid=true
+local ok,_,plan=spawnResource(f,'Crystal',true)
+assert(ok and plan.cluster==retired.cluster,'grower preview must use the patch with a vacancy')
+local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
+assert(planted and replacement.cluster==retired.cluster and nodeUsage(f)==48)
+p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
+d.pos=Vector3.new(0,14.5,-68)
+assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)
+scene.runWalls={{x=-32.5,halfX=23.5,z=190,halfZ=2.625,cruise=13.84},
+ {x=32.5,halfX=23.5,z=190,halfZ=2.625,cruise=13.84}}
+d.state='ToCharge'
+d.pos=Vector3.new(0,8,215)
+local charge=Vector3.new(0,8,170)
+move(d,charge,C.Tick)
+assert(d.intentGoal==charge,'worker climbed despite clear divider opening')
+d.pos=Vector3.new(31,8,215)
+move(d,Vector3.new(31,8,170),C.Tick)
+assert(d.intentGoal.Z==215 and d.intentGoal.Y>13,'worker did not climb above solid divider')
+print('PASS full reference-sized patch populations, refill locality, mining and standby heights, and two-way divider clearance')

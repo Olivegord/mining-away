@@ -1903,17 +1903,17 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-local function fitsReference(x,z,halfX,halfZ,occupied)
+local function fitsReference(x,z,halfX,halfZ,occupied,gap)
  if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
  for _,other in ipairs(occupied or {}) do
   local dx,dz=x-other.x,z-other.z
-  -- Nearby crystals can cluster like the reference. Leave enough space
-  -- between centers to avoid stacking two targets at the same contact.
-  if dx*dx+dz*dz<4 then return false end
+  -- Mining Away scatters on whole studs, including adjacent centers.
+  -- Keep coincident clicks from selecting two crystals at the same point.
+  if dx*dx+dz*dz<gap*gap then return false end
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
+function P.sample(width,depth,radius,occupied,random,clear,preferred,reference,referenceGap)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
@@ -1924,7 +1924,7 @@ function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
   local x,z
   if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
   local fits
-  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied)
+  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end
   if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt
@@ -5561,16 +5561,25 @@ function W.initialize(): any
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
+    local clusters={}
+    for _,child in ipairs(model:GetChildren()) do
+     if child:IsA('BasePart') and child:GetAttribute('CrystalCluster') then table.insert(clusters,child) end
+    end
+    table.sort(clusters,function(a,b) return a.Name<b.Name end)
+    assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=30+4*i,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+     Hardness=hardness[i],Color=Config.Fields[1].Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
-    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
     runStart=runStart or part.Position
     if i>1 then
-     local wall=model:FindFirstChild('WestWall')
-     assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
-     table.insert(runWalls,{z=wall.Position.Z,half=wall.Size.Z*.5+.45,cruise=wall.Position.Y+wall.Size.Y*.5+4})
+     for _,name in ipairs({'WestWall','EastWall'}) do
+      local wall=model:FindFirstChild(name)
+      assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
+      table.insert(runWalls,{x=wall.Position.X,halfX=wall.Size.X*.5+2,z=wall.Position.Z,
+       halfZ=wall.Size.Z*.5+1.5,cruise=wall.Position.Y+wall.Size.Y*.5+3})
+     end
     end
    end
    chargingStation=run:FindFirstChild('ChargingStation')
@@ -6822,6 +6831,7 @@ function scene.unlockedMiners(field)
 end
 local function los(a,b,target,ignore)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances=ignore or {droneFolder}
+ if target and target:GetAttribute('ReferenceCrystal')==true then params.RespectCanCollide=true end
  local hit=workspace:Raycast(a,b-a,params)
  return hit==nil or hit.Instance==target or (target and hit.Instance:IsDescendantOf(target))
 end
@@ -6861,7 +6871,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- The live reference's mesh center sits three studs above the patch center.
- if reference then ground=field.part.Position.Y+3-fullSize.Y*.5+.06 end
+ if reference then ground=position.Y+3-fullSize.Y*.5+.06 end
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=junk and junk.name or kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=not junk;part.Size=fullSize;part.Position=finish
@@ -6963,41 +6973,63 @@ local function spawnResource(field,forceKind,prepareOnly,plan)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
- local occupied={}
- for _,r in ipairs(field.resources) do if not r.paid then
-  local p=field.part.CFrame:PointToObjectSpace(r.position)
-  occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,field.cfg.ReferenceCrystals and r.kind=='Crystal')}
- end end
- for _,t in ipairs(field.turrets) do
-  local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
-  occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
- end
- local preferred
- if plan then local p=field.part.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
- local inset=field.cfg.SelectionOnly and 8 or 0
- local selected=ResourcePlacement.sample(field.part.Size.X-inset,field.part.Size.Z-inset,radius,occupied,
-  function(a,b)
-   if reference then return seed:NextInteger(a,b) end
-   return seed:NextNumber(a,b)
-  end,function(x,z)
-   local candidate=field.part.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
-   -- Authored trees also live outside Map. Check the footprint and overhead
-   -- flight space against the actual world, including those branches.
-   for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
-    local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*visualSize
-    if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
-    if field.cfg.SelectionOnly then
-     local low=Vector3.new(origin.X,fieldTop-.05,origin.Z)
-     if workspace:Raycast(low,Vector3.new(0,19,0),clearance) then return false end
+ local function sample(patch,neighbors,inset)
+  local preferred
+  if plan then local p=patch.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
+  local selected=ResourcePlacement.sample(patch.Size.X-inset,patch.Size.Z-inset,radius,neighbors,
+   function(a,b)
+    if reference then return seed:NextInteger(a,b) end
+    return seed:NextNumber(a,b)
+   end,function(x,z)
+   local candidate=patch.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
+    -- Check the footprint and flight space against authored trees/fixtures.
+    for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
+     local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*visualSize
+     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
+     if field.cfg.SelectionOnly then
+      local low=Vector3.new(origin.X,fieldTop-.05,origin.Z)
+      if workspace:Raycast(low,Vector3.new(0,19,0),clearance) then return false end
+     end
     end
+    return true
+   end,preferred,reference,field.clusters and 1 or nil)
+  return selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
+ end
+ local spot,cluster
+ if field.clusters then
+  local choices={}
+  for _,patch in ipairs(field.clusters) do
+   local neighbors={}
+   for _,r in ipairs(field.resources) do if not r.paid and r.cluster==patch then
+    local p=patch.CFrame:PointToObjectSpace(r.position)
+    table.insert(neighbors,{x=p.X,z=p.Z})
+   end end
+   if #neighbors<16 and (not plan or plan.cluster==patch) then
+    table.insert(choices,{patch=patch,neighbors=neighbors})
    end
-   return true
-  end,preferred,reference)
- if not selected then return false end
- local spot=field.part.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
- if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
+  end
+  table.sort(choices,function(a,b) return #a.neighbors<#b.neighbors or #a.neighbors==#b.neighbors and a.patch.Name<b.patch.Name end)
+  for _,choice in ipairs(choices) do
+   cluster=choice.patch;spot=sample(cluster,choice.neighbors,0)
+   if spot then break end
+  end
+ else
+  local occupied={}
+  for _,r in ipairs(field.resources) do if not r.paid then
+   local p=field.part.CFrame:PointToObjectSpace(r.position)
+   occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference and r.kind=='Crystal')}
+  end end
+  for _,t in ipairs(field.turrets) do
+   local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
+   occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
+  end
+  spot=sample(field.part,occupied,field.cfg.SelectionOnly and 8 or 0)
+ end
+ if not spot then return false end
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,cluster=cluster} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local resource=makeResource(field,spot,kind,work+10,field.cfg.Ore*(boulder and Mining.BOULDER_WORK or 1),visualSize,boulder and 7 or 3)
+ resource.cluster=cluster
  return true,kind=='Geode' and 5 or 1,resource
 end
 local function seedField(field)
@@ -7048,7 +7080,7 @@ local function publishTurretHealth(t: any)
 end
 for _,f in ipairs(scene.fields) do
  local settings=table.clone(C);settings.EncounterPrefix=instanceId..':field:'..f.id
- local field={id=f.id,cfg=f.cfg,center=f.center,part=f.part,model=f.model,color=Color3.fromRGB(unpack(f.cfg.Color)),resources={},turrets={},respawnQueue={},e=R.newEncounter(settings)}
+ local field={id=f.id,cfg=f.cfg,center=f.center,part=f.part,model=f.model,clusters=f.clusters,color=Color3.fromRGB(unpack(f.cfg.Color)),resources={},turrets={},respawnQueue={},e=R.newEncounter(settings)}
  field.model:SetAttribute('Hardness',f.cfg.Hardness or 1);field.model:SetAttribute('OreValue',f.cfg.Value)
  for n=1,f.cfg.Turrets do
   local pos=f.center+Vector3.new((n-(f.cfg.Turrets+1)/2)*17,f.part.Size.Y/2+.5,-f.part.Size.Z*.32)
@@ -7636,12 +7668,19 @@ local function travelSpeed(d)
 end
 local function move(d,goal,dt)
  if scene.runWalls and (d.state=='ToCharge' or d.state=='HoldSelector' or d.squareJob and (d.state=='Travel' or d.state=='BreakerApproach')) then
-  local near,far=math.max(d.pos.Z,goal.Z),math.min(d.pos.Z,goal.Z)
+  local delta=goal-d.pos
   for _,wall in ipairs(scene.runWalls) do
-   if near>=wall.z-wall.half and far<=wall.z+wall.half and near-far>1 then
-    local altitude=wall.cruise
-    goal=if d.pos.Y<altitude-.7 then Vector3.new(d.pos.X,altitude,d.pos.Z) else Vector3.new(goal.X,math.max(altitude,goal.Y),goal.Z)
-    break
+   if math.abs(delta.Z)>.01 then
+    local t0,t1=(wall.z-wall.halfZ-d.pos.Z)/delta.Z,(wall.z+wall.halfZ-d.pos.Z)/delta.Z
+    local enter,exit=math.max(0,math.min(t0,t1)),math.min(1,math.max(t0,t1))
+    if enter<=exit then
+     local x0,x1=d.pos.X+delta.X*enter,d.pos.X+delta.X*exit
+     if math.min(x0,x1)<=wall.x+wall.halfX and math.max(x0,x1)>=wall.x-wall.halfX then
+      local altitude=wall.cruise
+      goal=if d.pos.Y<altitude-.7 then Vector3.new(d.pos.X,altitude,d.pos.Z) else Vector3.new(goal.X,math.max(altitude,goal.Y),goal.Z)
+      break
+     end
+    end
    end
   end
  end
@@ -7673,6 +7712,11 @@ function scene.holdSquare(d,p,dt)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
  local height=(d.flightHeight or Feel.FollowHeight)+Feel.hover(now,d.owned.base.maxStep60)
+ if d.role=='Striker' and square.field.clusters then
+  -- Idle Mining Away workers hold 10 studs above the patch center; their
+  -- active cut is 10 above the full crystal center (three studs higher).
+  height=square.field.clusters[1].Position.Y+Feel.WorkHeight-square.center.Y
+ end
  d.mining=false;d.state='HoldSelector'
  move(d,square.center+offset+Vector3.new(0,height,0),dt)
  return true

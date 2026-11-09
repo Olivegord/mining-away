@@ -144,6 +144,9 @@ function P:_surface(beam,cache,origin,part,serverSource,now,ignoredSource,noQuer
   local ignored={self.parent};if serverSource then table.insert(ignored,serverSource) end
   if ignoredSource and ignoredSource~=serverSource then table.insert(ignored,ignoredSource) end
   exclude.FilterDescendantsInstances=ignored
+  -- Closely scattered reference crystals are noncolliding. Resolve the
+  -- contact on the assigned crystal while still respecting authored walls.
+  if serverSource and serverSource:GetAttribute('ReferenceCrystal')==true then exclude.RespectCanCollide=true end
   local blocked=workspace:Raycast(origin,hit.Position-origin,exclude)
   if blocked and (blocked.Position-hit.Position).Magnitude>.12 then cache.anchor=nil;return nil end
   cache.anchor=F.surfaceAnchor(part.CFrame:PointToObjectSpace(hit.Position),part.Size)
@@ -179,8 +182,10 @@ local function drawReferenceBeam(beam,visible,width,sample,now)
   local layers={}
   for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
    local b=Instance.new('Beam');b.Name=name;b.Attachment0=beam.origin;b.Attachment1=tip;b.FaceCamera=true
-   b.Color=ColorSequence.new(i==1 and Color3.new(.873579,.872877,.559136) or Color3.new(1,.622278,.095949))
-   b.Transparency=NumberSequence.new(i==1 and 0 or .85)
+   -- The enabled reference clones MiningFX.Beam, whose inner color differs
+   -- from the unused beam embedded in the drone template.
+   b.Color=ColorSequence.new(i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487))
+   b.Transparency=i==1 and NumberSequence.new(0) or NumberSequence.new(.85625,.85)
    b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
    b.Parent=beam.holder;layers[i]=b
   end

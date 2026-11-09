@@ -25,17 +25,17 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-local function fitsReference(x,z,halfX,halfZ,occupied)
+local function fitsReference(x,z,halfX,halfZ,occupied,gap)
  if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
  for _,other in ipairs(occupied or {}) do
   local dx,dz=x-other.x,z-other.z
-  -- Nearby crystals can cluster like the reference. Leave enough space
-  -- between centers to avoid stacking two targets at the same contact.
-  if dx*dx+dz*dz<4 then return false end
+  -- Mining Away scatters on whole studs, including adjacent centers.
+  -- Keep coincident clicks from selecting two crystals at the same point.
+  if dx*dx+dz*dz<gap*gap then return false end
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
+function P.sample(width,depth,radius,occupied,random,clear,preferred,reference,referenceGap)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
@@ -46,7 +46,7 @@ function P.sample(width,depth,radius,occupied,random,clear,preferred,reference)
   local x,z
   if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
   local fits
-  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied)
+  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end
   if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt

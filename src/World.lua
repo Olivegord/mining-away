@@ -689,16 +689,25 @@ function W.initialize(): any
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
+    local clusters={}
+    for _,child in ipairs(model:GetChildren()) do
+     if child:IsA('BasePart') and child:GetAttribute('CrystalCluster') then table.insert(clusters,child) end
+    end
+    table.sort(clusters,function(a,b) return a.Name<b.Name end)
+    assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=30+4*i,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+     Hardness=hardness[i],Color=Config.Fields[1].Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
-    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
     runStart=runStart or part.Position
     if i>1 then
-     local wall=model:FindFirstChild('WestWall')
-     assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
-     table.insert(runWalls,{z=wall.Position.Z,half=wall.Size.Z*.5+.45,cruise=wall.Position.Y+wall.Size.Y*.5+4})
+     for _,name in ipairs({'WestWall','EastWall'}) do
+      local wall=model:FindFirstChild(name)
+      assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
+      table.insert(runWalls,{x=wall.Position.X,halfX=wall.Size.X*.5+2,z=wall.Position.Z,
+       halfZ=wall.Size.Z*.5+1.5,cruise=wall.Position.Y+wall.Size.Y*.5+3})
+     end
     end
    end
    chargingStation=run:FindFirstChild('ChargingStation')

@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New players start with one permanent miner. Crystal Run is the main mining route opposite the shop. Five walled zones hold up to 210 crystals, with harder, richer rock farther in. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. The route uses the existing Mining Away crystal mesh, shade, crack sounds and flight behavior. Unattended damaged crystals heal. Depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
+**Current implementation:** New players start with one permanent miner. Crystal Run extends outward past the service deck, away from the terraces. The five 108 × 64 stud zones hold up to 240 crystals in 15 patches based on Mining Away's ruby field. Deeper crystals take more work and pay more Quartz. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. Unattended damaged crystals heal, and depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `6bb6d90410885c6630e3425a7596bf576cb140fbbf3c605d6b84ec29755df65b` | Crystal Run with one starter drone. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Seven actual Edit hashes](review/one-starter-drone-native.json). The authored route is the [Crystal Run map](review/crystal-run-native.json). |
+| Native-file SHA-256 | `0137e8b7b46b74de84dc0d119e27c366b6d28ff6b8da9986c268d5fa44fc0652` | Outward Crystal Run with reference rock spacing and standby height. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/outward-crystal-run-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Crystal Run in shared Edit** | The map and all seven managed Source hashes match the canonical snapshot. All three roots are `SyncedAsRoot`. Studio was already open and remains in Edit on loaded version 90. |
+| Shared Studio entry point | **Outward Crystal Run in shared Edit** | The map and all seven managed Source hashes match the canonical snapshot. All three roots are `SyncedAsRoot`. DRONEREVOLUTION was already open and remains in Edit on loaded version 90. |
 | Roblox publication | **No publication for Crystal Run** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current public release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — outward Crystal Run
+
+The route starts at the far end of the service deck (Z 126) and runs south to Z 446. Each zone is 108 × 64 studs, up from 68 × 48, with a 22-stud opening in each divider. The original route was archived, its charger stayed at the depot, and its overlook supports stayed under the crossing. The original Mining Away grove shifted west together so it frames the first zones without blocking play. The old side fields, terrain and other fixtures remain.
+
+The read-only live reference was **mining away**, place **14302916915**, universe **4945273529**. Its enabled code uses 16 crystals on the ruby patch and three on the separate cobalt test patch. The expanded route repeats the ruby density: 16 whole-stud centers per 30 × 30 stud patch, including close neighbors (one stud apart in the reference sample). Coincident centers are rejected so the same contact cannot select two rocks. Each patch keeps its own population through respawns and Grower work. The red union measures 3.135 × 6.567 × 4.487 studs and is centered three studs above the patch center. Ordinary miners station ten studs above the full crystal center while cutting and ten above the patch center while waiting at a pin. Idle follow stays seven above the character root plus bob. The live MiningFX inner beam is RGB (192, 134, 80); the orange outer beam uses the reference transparency gradient. Exact lighting and six effect/sky property sets already matched the reference. The new beds use the original eight-stud checker texture and bare Plastic finishes.
+
+Native Edit passed 675 bed, 375 patch clearance and 113 approach/aisle probes, and the authored route was inspected from above. The workshop, committed flight, and beam suites passed with API doubles, including all 48 crystal spawns per zone, local refill, standby height and a worker choosing whether to climb a divider. The preexisting DRONEREVOLUTION Play was stopped. No new Play/device or multiplayer test was run; subjective mining and sell-trip pacing still need play. No Roblox publication or access changes.
+
+Reproduce from `8781d91` with [the background map workflow](COLLABORATION.md#background-saves) and `python3 tools/script_sync.py`, then `python3 tools/build.py --previous-commit 8781d91`. [The native receipt](review/outward-crystal-run-native.json) records the exact roots, source hashes, route probes and canonical checksum.
 
 ## Latest follow-up — one starter drone
 
