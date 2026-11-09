@@ -66,18 +66,19 @@ function V:aim(ray)
  if not hr then return nil end
  local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
  filter.FilterDescendantsInstances={character,o.parent}
+ -- Crystal proxies remain queryable for laser contact, but don't intercept aim.
+ filter.RespectCanCollide=true
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,filter)
  if not hit then return nil end
  local zone=hit.Instance.Parent
  if not zone or zone.Parent~=run then return nil end
  local bed=zone:FindFirstChild('Field')
- if not bed or hit.Instance~=bed and not hit.Instance:GetAttribute('ResourceId') then return nil end
- local point=Vector3.new(hit.Position.X,bed.Position.Y+bed.Size.Y*.5,hit.Position.Z)
+ if hit.Instance~=bed then return nil end
+ local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
+ if not point then return nil end
  local delta=point-hr.Position
- local localPoint=bed.CFrame:PointToObjectSpace(point)
  local field=bed:GetAttribute('FieldId')
- if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2
-  or math.abs(localPoint.X)>bed.Size.X*.5 or math.abs(localPoint.Z)>bed.Size.Z*.5 then return nil end
+ if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2 then return nil end
  return point,field
 end
 function V:commit(ray)

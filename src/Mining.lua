@@ -2,6 +2,16 @@
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
+local SELECTOR_GRID=2
+function M.selectorCenter(position,frame,size)
+ local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
+ local halfX,halfZ=size.X*.5,size.Z*.5
+ if math.abs(point.X)>halfX or math.abs(point.Z)>halfZ then return nil end
+ local maxX,maxZ=math.floor(halfX/SELECTOR_GRID),math.floor(halfZ/SELECTOR_GRID)
+ local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
+ local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
+ return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
+end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
 function M.selectorTouches(center,half,frame,size)

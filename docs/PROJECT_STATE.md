@@ -11,8 +11,8 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `26ca4fe9632f5eb2d15e311b581da5e81350f9ca67444f1856178d86560e3669` | Crystal Run map and gameplay. All unrelated instances and backup Sources preserved. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Crystal Run. [Seven actual Edit hashes and route probes](review/crystal-run-native.json). |
+| Native-file SHA-256 | `b2556e13262c902eb185f37d7de461c15f70937719dada356a8e91f9a06e6071` | Crystal Run with grid aiming and station keeping. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Seven actual Edit hashes](review/selector-grid-native.json). The authored route is the [Crystal Run map](review/crystal-run-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -24,11 +24,17 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
+## Latest follow-up — grid aiming and station keeping
+
+The preview and the server pin share a 2-stud grid. The aim ray passes through noncolliding Crystal Run rocks to the bed, while solid walls still block it. Drones keep working at the pin when the player leaves and wait over it when the backpack fills or no rock is ready. Miners still recharge and return. Recall clears the pin. The placement distance still applies when selecting a new cell.
+
+An existing Play session confirmed that the collision-filtered ray hit the ground through a real crystal. The workshop suite verified grid rounding, same-cell idempotence, work after departure, waiting when full and recall with API doubles. The existing Play session was stopped. All seven Sources matched the canonical snapshot in shared Edit. No new Play session or Roblox publication. Reproduce the Source refresh with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit fea2edd`.
+
 ## Latest follow-up — Crystal Run
 
 The new route keeps the original fields available as side areas. The shop-side charger and five open passages are authored in Edit. One original foundation was shortened below its unchanged upper surface and four piers support the old crossing. The scoped save adds 57 fixtures and updates the foundation position and size. The actual Edit route passed 357 floor probes, 245 crystal bed probes and 25 uninterrupted player and flight height probes.
 
-The initial square is 14 studs wide and pins within 44 studs. Edge contact counts within the selected zone. Yellow indicates active work. A full bag pauses new assignments, and a pin can resume when the player returns after a sale. A mining drone starts with 100 battery, uses two units per second of committed work, and returns to the shop charger at zero. Battery Cell adds 100 per stack. Heal cues and aim previews are local visuals. Crystal health, crew reservations, batteries, transactions and awards are server owned. The Star Shop offers selector width, walk speed, charging speed, backpack space and Auto Sell.
+The initial square is 14 studs wide and pins within 44 studs. Edge contact counts within the selected zone. Yellow indicates active work. A full bag pauses new assignments until the player sells. A mining drone starts with 100 battery, uses two units per second of committed work, and returns to the shop charger at zero. Battery Cell adds 100 per stack. Heal cues and aim previews are local visuals. Crystal health, crew reservations, batteries, transactions and awards are server owned. The Star Shop offers selector width, walk speed, charging speed, backpack space and Auto Sell.
 
 Reproduce from `956f1d4` by running `tools/studio_crystal_run.lua` in the exact shared Edit place. Export `shared.CrystalRun.export` into `scenery.b64` in a scratch directory, run `python3 tools/refresh_crystal_run.py <directory> --baseline-sha256 a08c1f902530316dca83945799de1eb952c08d43f6ce375cb264c729eecbca53`, apply `shared.CrystalRun.apply()`, and rerun the saver with `--write`. With the updated modular Sources, run `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 956f1d4`. Verify the Studio roots and Sources separately.
 

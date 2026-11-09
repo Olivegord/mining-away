@@ -29,7 +29,10 @@ local function step(n)
  for _=1,n do realTime+=C.Tick;now=realTime;droneStep(d,C.Tick) end
 end
 pin(200);assert(not p.miningSquare,'out-of-range pin accepted')
-pin(-10);assert(p.miningSquare and p.miningSquare.center.X==-10)
+pin(-34.5);assert(not p.miningSquare,'off-field point snapped back into the field')
+pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10)
+local pinned=p.miningSquare
+pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
 step(1);assert(d.target==a)
 d.pos=Feel.mineGoal(a.position,1,false,a.fullSize)
 step(32);assert(d.mining,'worker never began its real cut')
@@ -40,10 +43,12 @@ command.OnServerEvent:Fire(other,'PlaceSelector',{runId=data(rival).run.id,field
 droneStep(rival.drones[1],C.Tick)
 assert(rival.miningSquare and not rival.drones[1].target,'overlapping selector stole another crew’s reservation')
 players.PlayerRemoving:Fire(other)
-pin(13);step(1);assert(d.target==a,'moving the square interrupted a live cut')
+pin(13.3);assert(p.miningSquare.center.X==14)
+step(1);assert(d.target==a,'moving the square interrupted a live cut')
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 for _=1,600 do step(1);if a.paid then break end end
 assert(a.paid,'first committed target did not finish')
-step(80);assert(d.target==b,'next target did not use the moved square')
+step(80);assert(d.target==b,'the crew did not keep working at the moved square after the player left')
 assert(Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,edge.part.CFrame,edge.part.Size),'boundary overlap must count')
 assert(not Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,a.part.CFrame,a.part.Size))
 
@@ -69,7 +74,8 @@ release(d);d.field=nil
 local profile=data(p)
 local full=Ca.capacity(profile)
 Pro.addCargo(profile,'Quartz',full,full)
-step(30);assert(not d.target,'full backpack started a new mining job')
+step(30);assert(not d.target and d.state=='HoldSelector','full backpack should leave the crew stationed at the square')
+assert((d.goal-p.miningSquare.center).Magnitude<13,'idle crew left the square')
 profile.run.stars=8
 local function star(id,tx)
  command.OnServerEvent:Fire(pl,'BuyStarUpgrade',{runId=data(p).run.id,upgradeId=id,level=0,txId=tx})
@@ -84,4 +90,7 @@ pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
 local earnings=data(p).run.quartzEarnings
 for _=1,4 do realTime+=.13;heartbeat:Fire(.13) end
 assert(Pro.cargoUnits(data(p))==0 and data(p).run.quartzEarnings==earnings+full,'Auto Sell did not sell the full bag exactly once')
-print('PASS Crystal Run validated pin, edge overlap, multiplayer reservations, committed work, regrowth ledger, charging, full-bag pause and Star Shop effects')
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
+command.OnServerEvent:Fire(pl,'Recall');step(1)
+assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
+print('PASS Crystal Run grid pin, station keeping, recall, edge overlap, reservations, committed work, regrowth, charging, full-bag pause and Star Shop effects')

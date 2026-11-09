@@ -993,10 +993,10 @@ function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
 end
-function scene.squareStep(p,d,hr)
+function scene.squareStep(p,d)
  if not DroneRoles.isWorker(d.role) or d.carrierId then return end
  local square=p.miningSquare
- local canStart=square and scene.squareInRange(hr.Position,square) and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
+ local canStart=square and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
  if d.squareJob and (d.squareJob~=square or not canStart) and not scene.committedWork(d) then release(d);d.field=nil end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
@@ -1141,7 +1141,7 @@ local function travelSpeed(d)
  return d.stats.maxStep60*(d.state=='ToCharge' and 1.5 or d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
- if scene.runWalls and (d.state=='ToCharge' or d.squareJob and (d.state=='Travel' or d.state=='BreakerApproach')) then
+ if scene.runWalls and (d.state=='ToCharge' or d.state=='HoldSelector' or d.squareJob and (d.state=='Travel' or d.state=='BreakerApproach')) then
   local near,far=math.max(d.pos.Z,goal.Z),math.min(d.pos.Z,goal.Z)
   for _,wall in ipairs(scene.runWalls) do
    if near>=wall.z-wall.half and far<=wall.z+wall.half and near-far>1 then
@@ -1172,11 +1172,22 @@ local function move(d,goal,dt)
  d.yaw=Feel.approachYaw(d.yaw,yaw,dt)
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
+function scene.holdSquare(d,p,dt)
+ local square=p.miningSquare
+ if not square or d.carrierId then return false end
+ local offset=Feel.formation(d.slot,#p.drones)
+ local limit=math.max(0,square.half-2)
+ if offset.Magnitude>limit then offset=offset.Unit*limit end
+ local height=(d.flightHeight or Feel.FollowHeight)+Feel.hover(now,d.owned.base.maxStep60)
+ d.mining=false;d.state='HoldSelector'
+ move(d,square.center+offset+Vector3.new(0,height,0),dt)
+ return true
+end
 local function supportDrone(d: any,p: any,hr: any,dt: number)
  if d.target or d.combatTarget then release(d) end
  local best,score=nil,math.huge
  for _,ally in ipairs(p.drones) do
-  if ally~=d and ally.hp>0 and ally.role~='Courier' then
+  if ally~=d and ally.hp>0 and ally.role~='Courier' and (not p.miningSquare or not ally.recharging and scene.squareInRange(ally.pos,p.miningSquare)) then
    local distance=(ally.pos-d.pos).Magnitude
    local injured=ally.hp<ally.stats.maxHealth
    local rank=(injured and -1000 or 0)+(ally.target and -100 or 0)+distance
@@ -1189,6 +1200,7 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  end
  if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
   d.state='Follow';d.mining=false;d.healTargetId=nil
+  if scene.holdSquare(d,p,dt) then return end
   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
@@ -1314,6 +1326,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
 end
 local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
+ if scene.holdSquare(d,p,dt) then return end
  d.mining=false;d.state=state or 'Follow'
  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
 end
@@ -1587,6 +1600,7 @@ local function droneStep(d: any,dt: number)
   d.mining=false;d.field=nil
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
+   if scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
   end
   if Pro.cargoUnits(data(p))>0 and now>=(d.collectAfter or 0) then
@@ -1600,13 +1614,15 @@ local function droneStep(d: any,dt: number)
   else
    d.pickupAt=nil;d.deliveryRequested=false
    d.state='Follow'
+   if scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
   end
   return
  elseif d.role=='Medic' then supportDrone(d,p,hr,dt);return
  elseif d.role=='Dart' then growerDrone(d,p,hr,dt);return
  elseif DroneRoles.ability(d.role) then roleAbilityStep(d,p,hr,dt);return end
- scene.squareStep(p,d,hr)
+ scene.squareStep(p,d)
+ if not d.target and not d.breaker and scene.holdSquare(d,p,dt) then return end
  if d.role=='Charger' and not d.field then
   local selected=workingField(p,hr)
   if selected then d.field=selected.id end
@@ -2235,12 +2251,12 @@ function scene.placeSquare(p,payload)
  local position=payload.position
  if not R.finite(position.X) or not R.finite(position.Z) then return end
  local part=field.part
- local center=Vector3.new(position.X,part.Position.Y+part.Size.Y*.5,position.Z)
- local point=part.CFrame:PointToObjectSpace(center)
+ local center=Mining.selectorCenter(position,part.CFrame,part.Size)
+ if not center then return end
  local hr=characterRoot(p)
  local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5}
- if math.abs(point.X)>part.Size.X*.5 or math.abs(point.Z)>part.Size.Z*.5 or not hr or not scene.squareInRange(hr.Position,square) then return end
- if p.miningSquare and p.miningSquare.field==field and p.miningSquare.half==square.half and (p.miningSquare.center-center).Magnitude<.1 then return end
+ if not hr or not scene.squareInRange(hr.Position,square) then return end
+ if p.miningSquare and p.miningSquare.field==field and p.miningSquare.half==square.half and (p.miningSquare.center-center).Magnitude==0 then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
@@ -2254,6 +2270,10 @@ local function commandPlayer(pl: any,action: any,payload: any)
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
  if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end
+ if p.miningSquare and (action=='MineOre' or action=='Patch' or action=='AssignSlot' or action=='CancelDrone') then
+  local reason='Recall your fleet before giving it a different kind of order.'
+  notice(p,reason);commandReply(pl,payload,'rejected',reason);return
+ end
  if action=='BuyDrone' then
   local kind=type(payload)=='table' and payload.droneType or payload
   if type(kind)~='string' or not DroneCatalog.Types[kind] then return end
@@ -2386,7 +2406,7 @@ local function commandPlayer(pl: any,action: any,payload: any)
   if used>=r.limit then reply('accepted','Crew already working this rock',r,mine);return end
   if #p.oreQueue>=16 then reply('rejected','16 orders queued. Click a queued rock to cancel it',r);return end
   if r.field.cfg.Turrets>0 and r.field.e.phase=='Cleared' then grantClear(p,r.field) end
-  scene.clearSquare(p);p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true
+  p.workField=r.field.id;table.insert(p.oreQueue,r.id);p.publishDirty=true
   local sent=dispatchOreQueue(p)
   if sent[r.id] then reply('accepted',used>0 and 'Helper sent' or 'Miner sent',r,sent[r.id]);return end
   reply('queued','Queued · next available worker',r)
@@ -2419,7 +2439,6 @@ local function commandPlayer(pl: any,action: any,payload: any)
     local reason='An available mining drone is needed'
     commandReply(pl,payload,'rejected',reason,field);notice(p,reason);return
    end
-   scene.clearSquare(p)
    if p.workField~=field.id then p.oreQueue={} end
    p.workField=field.id
    if field.junk then notice(p,'Crew assigned to '..(field.junkTheme or 'salvage')..'. Press Recall to stop.') end

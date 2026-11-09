@@ -671,6 +671,16 @@ local Mining = (function()
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
+local SELECTOR_GRID=2
+function M.selectorCenter(position,frame,size)
+ local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
+ local halfX,halfZ=size.X*.5,size.Z*.5
+ if math.abs(point.X)>halfX or math.abs(point.Z)>halfZ then return nil end
+ local maxX,maxZ=math.floor(halfX/SELECTOR_GRID),math.floor(halfZ/SELECTOR_GRID)
+ local x=math.clamp(math.round(point.X/SELECTOR_GRID),-maxX,maxX)*SELECTOR_GRID
+ local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
+ return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
+end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
 function M.selectorTouches(center,half,frame,size)
@@ -8785,18 +8795,19 @@ function V:aim(ray)
  if not hr then return nil end
  local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
  filter.FilterDescendantsInstances={character,o.parent}
+ -- Crystal proxies remain queryable for laser contact, but don't intercept aim.
+ filter.RespectCanCollide=true
  local hit=workspace:Raycast(ray.Origin,ray.Direction*500,filter)
  if not hit then return nil end
  local zone=hit.Instance.Parent
  if not zone or zone.Parent~=run then return nil end
  local bed=zone:FindFirstChild('Field')
- if not bed or hit.Instance~=bed and not hit.Instance:GetAttribute('ResourceId') then return nil end
- local point=Vector3.new(hit.Position.X,bed.Position.Y+bed.Size.Y*.5,hit.Position.Z)
+ if hit.Instance~=bed then return nil end
+ local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
+ if not point then return nil end
  local delta=point-hr.Position
- local localPoint=bed.CFrame:PointToObjectSpace(point)
  local field=bed:GetAttribute('FieldId')
- if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2
-  or math.abs(localPoint.X)>bed.Size.X*.5 or math.abs(localPoint.Z)>bed.Size.Z*.5 then return nil end
+ if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2 then return nil end
  return point,field
 end
 function V:commit(ray)

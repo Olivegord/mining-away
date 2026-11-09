@@ -6,6 +6,8 @@ For the consolidated beam/VFX direction, critique-to-implementation record and s
 
 The shop is on one side of the hub. In the other direction, one large crystal field forms the main mining route, with walls dividing zones as players walk deeper. Mouse or touch aims a square made of beams with a vertical fade. Click or tap to pin it. Crystals touching the square are available to drones. Repositioning changes their next target while work already underway finishes. Use yellow while the placed square is working, and green plus particles while an idle damaged crystal heals. A depleted mining drone returns to the charging station automatically. Players carry ore back to sell when their backpack fills.
 
+The selector snaps to a grid and aims through crystals to the ground. Walking away leaves drones stationed at the pinned square until Recall. A full backpack pauses new mining jobs, and charged miners return to the pin.
+
 Packs offer three upgrades and grant one chosen upgrade plus a positive amount of Stars. Upgrades can reduce chores or add battery capacity. A scrollable Star Shop shows costs and lets players buy effects such as +4 studs of selector width or faster walking. The owner confirmed that Stars and Star Shop purchases reset with the run on prestige. Permanent fleet rules still apply.
 
 ## November 8 latest — use Mining Away's actual rock shading and remove world outlines
