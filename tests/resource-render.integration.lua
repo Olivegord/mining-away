@@ -27,9 +27,9 @@ assert(record.settled and record.visual.stage==2 and #cues==1,'one observed frac
 source:SetAttribute('HP',0);source:SetAttribute('BreakSerial',1)
 for frame=1,60 do renderResource(record,64+frame/60) end
 assert(record.settled and record.visual.broken and record.view.Transparency==1)
-assert(cues[#cues]=='break' and #cues==2,'break must occur exactly once')
+assert(#cues==1,'final break must be silent')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
-assert(reads==before and #cues==2)
+assert(reads==before and #cues==1)
 -- Mining Away shades the current health band. A crack retains that shade
 -- through the size change, and the next accepted hit uses the new band.
 local fixed=source:Clone()

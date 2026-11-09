@@ -866,9 +866,9 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
- if event then
+ if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
-  crystalAudio:play(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position,event)
+  crystalAudio:playCrack(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position)
  end
  rockDamage:update(r,now)
  r.settled=now>=readyAt

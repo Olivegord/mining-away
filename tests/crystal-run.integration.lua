@@ -21,7 +21,7 @@ local function rock(x,hp)
  r.readyAt=now
  return r
 end
-local a,b,edge=rock(-10,175),rock(13,100),rock(21,100)
+local a,b,edge=rock(-10,175),rock(13,100),rock(29,100)
 local function pin(x)
  command.OnServerEvent:Fire(pl,'PlaceSelector',{runId=data(p).run.id,fieldId=f.id,position=Vector3.new(x,5.5,-68)})
 end
@@ -30,7 +30,7 @@ local function step(n)
 end
 pin(200);assert(not p.miningSquare,'out-of-range pin accepted')
 pin(-34.5);assert(not p.miningSquare,'off-field point snapped back into the field')
-pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10)
+pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10 and p.miningSquare.half==15)
 local pinned=p.miningSquare
 pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
 step(1);assert(d.target==a)
@@ -115,6 +115,24 @@ for _,r in ipairs(f.resources) do
  assert(math.abs((Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal)-r.position).Y-7)<.001)
 end
 for _,patch in ipairs(f.clusters) do assert(counts[patch]==16) end
+local crewPlayer=player(98702);players.PlayerAdded:Fire(crewPlayer)
+local crew=profiles[crewPlayer.UserId]
+crewPlayer.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+command.OnServerEvent:Fire(crewPlayer,'PlaceSelector',{runId=data(crew).run.id,fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+assert(#crew.drones==3 and crew.miningSquare.half*2==f.clusters[1].Size.X)
+for _,r in ipairs(f.resources) do
+ if r.cluster==f.clusters[1] then
+  assert(Mining.selectorTouches(crew.miningSquare.center,crew.miningSquare.half,r.part.CFrame,r.part.Size))
+ end
+ r.readyAt=now
+end
+local reserved={}
+for _,worker in ipairs(crew.drones) do
+ droneStep(worker,C.Tick)
+ assert(worker.target and worker.target.cluster==f.clusters[1] and not reserved[worker.target])
+ reserved[worker.target]=true
+end
+players.PlayerRemoving:Fire(crewPlayer)
 local retired=f.resources[23]
 retired.paid=true
 local ok,_,plan=spawnResource(f,'Crystal',true)

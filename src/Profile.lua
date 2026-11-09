@@ -4,6 +4,8 @@ local DroneCatalog=require('./DroneCatalog')
 local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
 local P={SCHEMA=12,CONTENT=1}
+local STARTER_COUNT=3
+local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -106,16 +108,20 @@ end
 function P.new(uid,seed)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
- local miner=drone(uid,1,'Blue',seed)
- -- Preserve the Mining Away starter's 12–30 studs/second flight roll.
- miner.base.maxStep60=(20+((seed+17)%31))/100
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=1,nextDroneSerial=2,seed=seed,fleet={miner},run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
+ local fleet={}
+ for serial=1,STARTER_COUNT do
+  local miner=drone(uid,serial,'Blue',seed,1)
+  -- Use the reference's 12–30 studs/second flight roll for each basic miner.
+  miner.base.maxStep60=(20+((seed+serial*17)%31))/100
+  fleet[serial]=miner
+ end
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=STARTER_COUNT,nextDroneSerial=STARTER_COUNT+1,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
  local toolsOK,toolsError=Consumables.validate(p.consumables);if not toolsOK then return false,toolsError end
  if not integer(p.prestiges) or not integer(p.purchasedDrones) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
- if not denseArray(p.fleet) or (p.starterDrones~=1 and p.starterDrones~=4) or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
+ if not denseArray(p.fleet) or not supportedStarterCounts[p.starterDrones] or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
  for serial,d in ipairs(p.fleet) do
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end

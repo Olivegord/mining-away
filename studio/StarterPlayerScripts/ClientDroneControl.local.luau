@@ -33,7 +33,8 @@ W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=
 W.BATTERY=100
 function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
 function W.starPrice(entry,level) return entry.cost+level end
-function W.selectorWidth(p) return 14+4*W.starLevel(p,'selector') end
+-- A fresh selector is as wide as one authored Crystal Run plot.
+function W.selectorWidth(p) return 30+4*W.starLevel(p,'selector') end
 function W.owned(p)
  local result={}
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
@@ -9773,9 +9774,9 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
- if event then
+ if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
-  crystalAudio:play(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position,event)
+  crystalAudio:playCrack(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position)
  end
  rockDamage:update(r,now)
  r.settled=now>=readyAt

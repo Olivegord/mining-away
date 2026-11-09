@@ -1,23 +1,22 @@
 --!strict
--- Original Mining Away sounds, played only on replicated stage/break events.
+-- Original Mining Away crack on a replicated intermediate fracture.
 local ContentProvider = game:GetService('ContentProvider')
 local Debris = game:GetService('Debris')
 
 local CrystalAudio = {}
 CrystalAudio.__index = CrystalAudio
-local MAX_VOICES, STAGE_VOICES, MAX_DISTANCE = 10, 6, 85
-local CRACK, BREAK = 'rbxassetid://9119050085', 'rbxassetid://7158347304'
+local MAX_VOICES, MAX_DISTANCE = 6, 85
+local CRACK = 'rbxassetid://9119050085'
 
 function CrystalAudio.new(parent: Instance, soundGroup: SoundGroup?)
  local folder = Instance.new('Folder')
  folder.Name = 'CrystalAudio'; folder.Parent = parent
- task.spawn(function() pcall(function() ContentProvider:PreloadAsync({CRACK,BREAK}) end) end)
+ task.spawn(function() pcall(function() ContentProvider:PreloadAsync({CRACK}) end) end)
  return setmetatable({folder=folder,soundGroup=soundGroup,voices=0,closed=false},CrystalAudio)
 end
 
-function CrystalAudio:play(position: Vector3, event: string)
- local breaking = event == 'break'
- if self.closed or (not breaking and event ~= 'stage') or self.voices >= (breaking and MAX_VOICES or STAGE_VOICES) then return end
+function CrystalAudio:playCrack(position: Vector3)
+ if self.closed or self.voices >= MAX_VOICES then return end
  local camera = workspace.CurrentCamera
  if camera and (position-camera.CFrame.Position).Magnitude > MAX_DISTANCE then return end
 
@@ -26,9 +25,9 @@ function CrystalAudio:play(position: Vector3, event: string)
  anchor.Anchored = true; anchor.CanCollide = false; anchor.CanQuery = false; anchor.CanTouch = false; anchor.CastShadow = false
  anchor.Position = position; anchor.Parent = self.folder
  local sound = Instance.new('Sound')
- sound.Name = breaking and 'RockBreak' or 'RockCrack'
- sound.SoundId = breaking and BREAK or CRACK
- sound.Volume = breaking and .3 or .05
+ sound.Name = 'RockCrack'
+ sound.SoundId = CRACK
+ sound.Volume = .05
  sound.PlaybackSpeed = 1
  sound.RollOffMode = Enum.RollOffMode.Inverse
  -- Match the captured Sound itself; the local voice/distance budget above

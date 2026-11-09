@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New players start with one permanent miner. Crystal Run extends outward past the service deck, away from the terraces. The five 108 × 64 stud zones hold up to 240 crystals in 15 patches based on Mining Away's ruby field. Deeper crystals take more work and pay more Quartz. Players pin a beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. Unattended damaged crystals heal, and depleted miners recharge at the depot. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
+**Current implementation:** New players start with three permanent basic miners. Crystal Run extends outward past the service deck, away from the terraces. The five 108 × 64 stud zones hold up to 240 crystals in 15 plots based on Mining Away's ruby field. Deeper crystals take more work and pay more Quartz. Players pin a 30 × 30 stud beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. Unattended damaged crystals heal, depleted miners recharge at the depot, and the final crystal break is silent. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,8 +11,8 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `2ff00c5e5662628a6003fa33cef169536fbb0f4f69466460bdd0b2bc4ae8c8a2` | Outward Crystal Run with corrected cut height, crystal sound and world depth of field disabled. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/closer-cut-native.json). |
+| Native-file SHA-256 | `adc43d35c5c00eecb506a2b900e2ffb6a590e8c70ef63eabe959542e70f0861c` | Full plot selector, three basic starters, and silent final break. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/full-plot-starters-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,12 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — full plot selector, three starters and a silent final break
+
+The preview and server use the same 30 × 30 stud default square, matching each of the 15 authored plots. A Star Shop level adds four studs per side length. New profiles start with three permanent Blue miners with distinct IDs and individual reference flight speeds. Existing one-starter and four-starter saves remain valid with their fleet and progress. The final break clip was removed from playback and preload. Intermediate cracks and the ore payout still occur.
+
+The workshop and persistence checks covered fresh profiles, old saves, prestige and distinct rock reservations for all three starters from a single pin. The production client renderer check confirmed an intermediate crack and a silent final break. The committed flight, beam and audio checks passed. The broader gadget and consumable suites reproduced their baseline contact-render and scarred-rock assertions on `ba64758`. Native Edit confirmed the plot dimensions, all seven Source hashes and all three sync roots. The prior Play session was stopped. No new Play, listening test or Roblox publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ba64758`.
 
 ## Latest follow-up — closer cut, original sound, sharp world
 

@@ -3,12 +3,15 @@ local checks=0
 local function check(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));checks+=1;print('PASS Quartz server '..name) end
 RoleEffects.BreakerPhase=function() end;discoveries.TrySpawn=function() end
 local pl=player(310001);players.PlayerAdded:Fire(pl);local p=assert(profiles[pl.UserId]);local field=patches[1]
-check('the starter miner spawns in the reference follow position',function()
+check('the three starter miners spawn in distinct reference follow positions',function()
  local origin=characterRoot(p).Position
- assert(#p.drones==1)
- local d=p.drones[1];local offset=d.pos-origin
- assert((Vector3.new(offset.X,0,offset.Z)-Vector3.new(10,0,0)).Magnitude<1e-6)
- assert(math.abs(offset.Y-7)<=1/3 and d.state=='Follow')
+ assert(#p.drones==3)
+ for i,d in ipairs(p.drones) do
+  local offset=d.pos-origin
+  assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-10)<1e-6)
+  assert(math.abs(offset.Y-7)<=1/3 and d.state=='Follow')
+  for j=1,i-1 do assert((d.pos-p.drones[j].pos).Magnitude>16) end
+ end
 end)
 local function input(action,payload) p.tokens=7;p.bucketAt=now;command.OnServerEvent:Fire(pl,action,payload) end
 local function move(position) pl.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0))) end
@@ -59,7 +62,7 @@ check('the reference crystal shrinks when cracked and respawns after eight secon
  local before={};for _,rock in ipairs(field.resources) do before[rock.id]=true end
  assert(hitResource(miner,r,1000) and r.paid and r.removeAt==brokenAt+2)
  for _,drone in ipairs(p.drones) do drone.field=field.id end
- local rate,count=respawnRate(field);assert(rate==1 and count==1)
+ local rate,count=respawnRate(field);assert(rate==1 and count==#p.drones)
  assert(field.respawnQueue[1]==brokenAt+8)
  local function advance(seconds)
   for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
@@ -134,8 +137,8 @@ check('a saved four-miner fleet keeps its workers, traits and progress and still
 end)
 local firstId,firstBase,offer,selected,baseTime
 local beganAt=now
-check('Studio and production both start with one permanent miner, zero Quartz, actual rocks',function()
- assert(#p.drones==1 and #data(p).fleet==1 and not p.testFleet)
+check('Studio and production both start with three permanent miners, zero Quartz, actual rocks',function()
+ assert(#p.drones==3 and #data(p).fleet==3 and not p.testFleet)
  assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==40)
  assert(data(p).run.quartzEarnings==0 and p.drones[1].stats.plotAuto==0)
  firstId=p.drones[1].id;firstBase=Pro.clone(data(p).fleet[1].base)
@@ -179,18 +182,18 @@ check('actual worker ticks pay all Quartz required for prestige after spending o
  while data(p).run.quartzEarnings<Pro.milestone(data(p)).earnings do mine();sell() end
  local pre=Pro.prestigePreview(data(p));assert(pre.eligible and pre.winsRequired==0 and pre.field=='Quartz')
  local request=quote({confirm=true});move(shopStations.Quartz.Position);input('Prestige',request)
- assert(#p.drones==2 and #data(p).fleet==2 and data(p).prestiges==1)
+ assert(#p.drones==4 and #data(p).fleet==4 and data(p).prestiges==1)
  assert(data(p).fleet[1].id==firstId and data(p).fleet[1].base.miningDPS==firstBase.miningDPS)
- assert(DroneRoles.isWorker(data(p).fleet[2].role))
+ assert(DroneRoles.isWorker(data(p).fleet[4].role))
  assert(#data(p).run.cards==0 and data(p).run.wallet.Quartz==0 and data(p).run.quartzEarnings==0)
  assert(p.drones[1].stats.miningDPS==firstBase.miningDPS*1.25)
- input('Prestige',request);assert(#data(p).fleet==2)
+ input('Prestige',request);assert(#data(p).fleet==4)
  print(string.format('MODEL run1 %.2fs worker ticks (travel to stations supplied by double); starter rock %.2fs',now-beganAt,baseTime))
 end)
 check('reconnect preserves reward and the second earned run can buy another upgrade',function()
- local prestigeId=data(p).fleet[2].id;players.PlayerRemoving:Fire(pl)
+ local prestigeId=data(p).fleet[4].id;players.PlayerRemoving:Fire(pl)
  pl=player(310001);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId])
- assert(#data(p).fleet==2 and data(p).fleet[1].id==firstId and data(p).fleet[2].id==prestigeId)
+ assert(#data(p).fleet==4 and data(p).fleet[1].id==firstId and data(p).fleet[4].id==prestigeId)
  assert(data(p).prestiges==1 and p.drones[1].stats.miningDPS==37.5)
  mine();mine();sell();assert(data(p).run.wallet.Quartz>=20)
  move(scene.packStation.Position);input('BuyPack',quote({packIndex=0}));assert(data(p).run.pendingOffer.price==20)

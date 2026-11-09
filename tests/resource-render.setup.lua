@@ -1,5 +1,5 @@
 local cues={}
-local crystalAudio={play=function(_,_,event)table.insert(cues,event)end}
+local crystalAudio={playCrack=function()table.insert(cues,'stage')end}
 local soundscape={play=function() end}
 local presentation={resourceImpact=function()end,resourceRise=function()end}
 local rockDamage={update=function()end}

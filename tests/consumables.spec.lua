@@ -34,6 +34,7 @@ check('only the first accepted contact spends a reserved charge',function()
 end)
 check('v7 migration preserves fleet cargo cards and creates empty separate pockets',function()
  local p=P.new(44,123);p.schemaVersion=7;p.consumables=nil;p.run.cargo.Quartz=17
+ p.fleet={p.fleet[1]};p.starterDrones=nil;p.nextDroneSerial=2
  p.run.cards={{cardId='F01',scope='Fleet',effects={mining=.15}}}
  local n=assert(P.migrate(p,44));assert(n.schemaVersion==P.SCHEMA and n.consumables.counts.Orbital==0)
  assert(n.run.cargo.Quartz==17 and n.run.cards[1].cardId=='F01' and n.fleet[1].id==p.fleet[1].id and #n.fleet==1)
@@ -56,7 +57,7 @@ check('prestige keeps consumables but resets run cards and adds exactly one dron
  p.run.cards={{cardId='F01',scope='Fleet',effects={mining=.15}}}
  local milestone=P.milestone(p);p.run.saleEarnings=milestone.earnings;p.run.quartzEarnings=milestone.earnings;if milestone.wins>0 then p.clearedFields[milestone.field]=true end
  assert(P.prestige(p,'prestige',p.run.id,{atDepot=true,confirmed=true}))
- assert(#p.fleet==2 and #p.run.cards==0 and p.consumables.counts.Orbital==2 and p.consumables.collected==4)
+ assert(#p.fleet==4 and #p.run.cards==0 and p.consumables.counts.Orbital==2 and p.consumables.collected==4)
  assert(P.validate(p,44))
 end)
 -- Reproducible opportunity pacing, not a fun/retention measurement.

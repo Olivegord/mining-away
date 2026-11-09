@@ -194,11 +194,11 @@ check('actual Profile prestige crash retains identities and exactly one permanen
   local ok,r=Profile.prestige(p,'domain-prestige',runId,{atDepot=true,activeEncounter=false,confirmed=true})
   if ok then return r end;return nil,r
  end),false)
- eq(#s.data.fleet,1);eq(s.readOnly,true);c.now=131
+ eq(#s.data.fleet,#original);eq(s.readOnly,true);c.now=131
  local freshStore=Persistence.new(b,realOptions('real-B',c));local loaded=assert(freshStore:load(1))
- eq(#loaded.data.fleet,2);eq(loaded.data.fleet[2].type,'Red')
+ eq(#loaded.data.fleet,#original+1);eq(loaded.data.fleet[#original+1].type,'Red')
  for i,d in ipairs(original) do eq(loaded.data.fleet[i].id,d.id);for trait,value in pairs(d.base) do eq(loaded.data.fleet[i].base[trait],value) end end
- local ok,r=freshStore:transaction(loaded,'storage-prestige',function() error('must not prestige twice') end);eq(ok,true);eq(r.fleetCount,2);eq(#loaded.data.fleet,2)
+ local ok,r=freshStore:transaction(loaded,'storage-prestige',function() error('must not prestige twice') end);eq(ok,true);eq(r.fleetCount,#original+1);eq(#loaded.data.fleet,#original+1)
 end)
 
 check('signed Studio identities are accepted only by explicit isolated preview adapter',function()

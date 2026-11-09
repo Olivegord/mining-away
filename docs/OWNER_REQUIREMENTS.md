@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — one plot per square and three basic starters
+
+The default selector is the size of one Crystal Run mining plot (30 × 30 studs). New profiles start with three permanent basic Blue miners. Existing profiles keep their saved fleets, and prestige still adds one drone. Keep the intermediate crystal crack sound and make the final break silent.
+
 ## November 8 latest — lower the miners, restore the sound, remove depth of field
 
 The owner reports that the outward route's drones fly too high, the mining sounds differ, and the presentation is unsatisfying. Use the actual Mining Away cut, measured from its hidden crystal primary, as the comparison. Remove the world depth of field in DRONEREVOLUTION. This correction leaves the larger outward route in place.
@@ -10,7 +14,7 @@ The owner reports that the outward route's drones fly too high, the mining sound
 
 Use the other open Studio document, **mining away**, as the read-only reference for texture scale, lighting, crystal size and spacing, and drone height during mining. Send the main Crystal Run in the opposite direction, out past the service deck into the open checker field, and make the fields larger. Keep the current mining selector, charging, ore economy and shared game. No Roblox publication requested.
 
-## Latest — one starter drone
+## Earlier — one starter drone
 
 New profiles start with one permanent mining drone. Existing profiles keep their fleets, including players who started with four drones. Prestige still adds one permanent drone.
 
