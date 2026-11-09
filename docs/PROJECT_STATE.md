@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run is a drone production loop. Pin a plot, collect the ore, sell it at the Workshop and spend Stars on gathering, replanting or automatic sales. The first 20-Quartz pack offers Aftershock, Reclaim and Loose Seams. Pickup numbers show actual ore added to the backpack. Crews leave a pin and follow when the player gets more than 100 studs away horizontally. New profiles have three permanent miners and a 100-ore backpack. Studio starts with a temporary test crew that includes a miner, dart thrower, energy-ball thrower, vacuum and planter. Tool drops and equipment are disabled in this game. Run cards, Stars and Star upgrades reset on prestige.
+**Current implementation:** Crystal Run is a drone production loop. Pin a plot, collect the ore, sell it at the Workshop and spend Stars on gathering, replanting or automatic sales. The first 20-Quartz pack offers Double Beam, Twin Thrusters and Ore Duplicator. Pick one part and fit it to a permanent laser miner for the run. Pickup numbers show actual ore added to the backpack. Crews leave a pin and follow when the player gets more than 100 studs away horizontally. New profiles have three permanent miners and a 100-ore backpack. Studio starts with a temporary test crew that includes a miner, dart thrower, energy-ball thrower, vacuum and planter. Tool drops and equipment are disabled in this game. Run cards, Stars and Star upgrades reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a3429d45b81df287d8001d1dfd5542dab686f18594d44f88891264952eb08e60` | Larger visible drones and local working hardware. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the drone visibility follow-up below. |
+| Native-file SHA-256 | `d9e5bd79722482883587e806e362f1ad2ced41ff7269b7274591c8c5a3f43e0d` | Upgrade cards, slots and fitted drone hardware. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the fitted upgrades follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Larger, locally animated drones in shared DRONEREVOLUTION Edit** | All seven Sources and three sync roots verified on loaded version 112. Studio confirmed Save to Roblox after the test. The initially open editor remains open in Edit. |
+| Shared Studio entry point | **Fitted upgrade cards in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved; a separate remote Edit save receipt was not checked. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — fitted upgrades and card slots
+
+A fresh Crystal Run's first 20-Quartz pack has three parts. Double Beam fits two cyan emitters to a chosen permanent laser miner and doubles its laser damage against its current crystal. Twin Thrusters fits orange pods with exhaust trails and doubles the miner's top flight speed. Ore Duplicator fits gold cells and doubles the miner's ore output. These parts can also appear in later packs. The player selects the card, selects an eligible miner, and installs it. One copy of each part fits each miner; distinct parts can coexist and a later copy can go on another miner. Parts clear with the run on prestige. Previously paid offers and installed upgrades keep their saved effects.
+
+The three illustrated cards fly into visible slots in order. The slots show the current selection, and the tray holds the miner and install controls. The chosen slot flashes after the saved selection arrives; reduced motion bypasses the entrance. The double ribbons use separate muzzle attachments and the same verified crystal contact, with no additional beam ray or damage event.
+
+The workshop, Crystal Run, beam and mining-flight suites passed. Production logic exercised invalid and foreign targets, a conflicting replay, save reload, exact damage over real mining ticks, the top speed cap, and double ore through the pickup ledger. A detached native Edit check observed two enabled beam cores with separate muzzles and the same endpoint, and checked card text bounds at 1280×720, 667×375 and 320×568. No new Play or device simulation was run. In-game card motion, input, visual readability, multiplayer and enjoyment are still unverified.
+
+The existing shared Edit document was verified at place **124078027733625**, universe **10774898335**, loaded version **112**, with all three Script Sync roots connected and all seven Source fingerprints matching the canonical snapshot. The open editor remains in Edit. The authored map and backup Sources were preserved. This revision was not published. Reproduce from `1430ff281ce71c55932a08d4f7865780635b0b10` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 1430ff2`. Use `git log -1 -- build/DRONE_GAME.rbxl` for the exact source and native revision.
 
 ## Latest follow-up — drone visibility and motion
 

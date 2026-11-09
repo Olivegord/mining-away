@@ -199,43 +199,67 @@ local first=assert(data(buyer).run.pendingOffer)
 assert(first.packTier==2 and data(buyer).run.wallet.Quartz==0)
 for i,id in ipairs(Workshop.FIRST_PACK) do assert(first.choices[i].cardId==id and #first.choices[i].preview>0) end
 local resumed=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
-assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_AFTERSHOCK')
+assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_DOUBLE_BEAM')
+assert(not resumed.run.pendingOffer.choices[1].targetDroneId,'paid offer preassigned the part')
 local delivery=assert(buyer.packDelivery)
 realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(buyer,now);moveBuyer(delivery.part.Position)
 delivery.prompt.PromptButtonHoldBegan:Fire(shopper)
 realTime+=Packs.duration(first.packTier)+.1;now=realTime
 delivery.prompt.Triggered:Fire(shopper)
 local opened=Pro.clone(data(buyer));assert(opened.run.pendingOffer.opened)
-moveBuyer(shopStations.Quartz.Position);input('ChooseCard','first-choice',{offerId=first.id,index=1})
-assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and miner.stats.aftershock==.12)
+local otherMiner=buyer.drones[2]
+local baselineDPS=miner.stats.miningDPS
+moveBuyer(shopStations.Quartz.Position)
+input('ChooseCard','no-target',{offerId=first.id,index=1})
+input('ChooseCard','foreign-target',{offerId=first.id,index=1,targetDroneId='98700:drone:1'})
+assert(data(buyer).run.pendingOffer and data(buyer).run.stars==0,'invalid fit consumed a paid pack')
+input('ChooseCard','first-choice',{offerId=first.id,index=1,targetDroneId=miner.id})
+local installed=data(buyer).run.cards[1]
+assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and installed.targetDroneId==miner.id)
+assert(miner.stats.doubleBeam==1 and miner.stats.miningDPS==2*baselineDPS and otherMiner.stats.doubleBeam==0)
+local saved=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+assert(saved.run.cards[1].targetDroneId==miner.id)
+input('ChooseCard','first-choice',{offerId=first.id,index=1,targetDroneId=otherMiner.id})
+assert(#data(buyer).run.cards==1 and data(buyer).run.stars==2 and otherMiner.stats.doubleBeam==0)
+snapshotDrone(miner);snapshotDrone(otherMiner)
+assert(miner.model:GetAttribute('DoubleBeam')==true and otherMiner.model:GetAttribute('DoubleBeam')==false)
+
 local function isolate()
  release(miner)
  for _,r in ipairs(f.resources) do r.paid=true;r.hp=0 end
+end
+local function fit(index)
+ local copy=Pro.clone(opened)
+ assert(Ca.select(copy,first.id,index,'test-variant-'..index,copy.run.id,{atDepot=true,targetDroneId=miner.id}))
+ buyer.session.data=copy;refreshStats(buyer)
 end
 local function hit(r,amount)
  assert(assignOre(buyer,miner,r));miner.pos=committedStation(miner,r)
  assert(hitResource(miner,r,amount))
 end
-isolate();local primary,adjacent=rock(0,100),rock(5,100)
-local adjacentHP=adjacent.hp
-hit(primary,10)
-assert(adjacent.hp==adjacentHP,'echo triggered without a crack')
-assert(hitResource(miner,primary,20))
-assert(math.abs(adjacentHP-adjacent.hp-10.8)<.001,'Aftershock failed to damage its neighbor once')
-local reclaim=Pro.clone(opened)
-assert(Ca.select(reclaim,first.id,2,'reclaim',reclaim.run.id,{atDepot=true}))
-buyer.session.data=reclaim;refreshStats(buyer);isolate()
-local salvage=rock(0,100);miner.battery=45;hit(salvage,200)
-assert(salvage.paid and miner.battery==51,'Reclaim did not refund battery once')
-local seams=Pro.clone(opened)
-assert(Ca.select(seams,first.id,3,'seams',seams.run.id,{atDepot=true}))
-buyer.session.data=seams;refreshStats(buyer);isolate()
-local fragile=rock(0,100);hit(fragile,25)
-assert(fragile.extractedOre==5,'Loose Seams did not release extra ore at the first crack')
-local loose
-for _,drop in pairs(pickups) do if drop.nodeId==fragile.id then loose=drop;break end end
-assert(loose and loose.reachBonus==14)
-assert(hitResource(miner,fragile,200) and fragile.extractedOre==fragile.ore,'Loose Seams changed total base ore')
+local function timedCut()
+ isolate()
+ local rock=rock(0,1000)
+ assert(assignOre(buyer,miner,rock));miner.pos=committedStation(miner,rock)
+ mineDrone(miner,buyer,f,C.Tick)
+ miner.warmAt=now-10
+ local hp=rock.hp
+ for _=1,20 do realTime+=C.Tick;now=realTime;mineDrone(miner,buyer,f,C.Tick) end
+ return hp-rock.hp
+end
+local doubleDamage=timedCut()
+buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+local singleDamage=timedCut()
+assert(singleDamage>0 and math.abs(doubleDamage-2*singleDamage)<1e-8,'production laser ticks did not deal 2× damage')
+fit(2);snapshotDrone(miner)
+assert(travelSpeed(miner)==2*miner.owned.base.maxStep60 and miner.model:GetAttribute('TwinThrusters')==true)
+assert(not miner.model:GetAttribute('DoubleBeam') and otherMiner.stats.twinThrusters==0)
+fit(3);snapshotDrone(miner);isolate()
+local oreBefore=pendingOre(buyer)
+local rich=rock(0,100)
+hit(rich,40);assert(hitResource(miner,rich,200))
+assert(miner.model:GetAttribute('OreDuplicator')==true and otherMiner.stats.oreDuplicator==0)
+assert(pendingOre(buyer)-oreBefore==2*rich.ore,'duplicator did not pay exactly double ore through actual drops')
 
 moveBuyer(f.center)
 input('PlaceSelector','pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
@@ -254,7 +278,7 @@ droneStep(miner,C.Tick)
 assert(miner.recharging and (miner.intentGoal-buyer.miningSquare.center).Magnitude<10,'Field Charger still sent the drone to the depot')
 miner.pos=miner.intentGoal;droneStep(miner,C.Tick)
 assert(miner.battery>0 and miner.state=='Charging')
-print('PASS paid draft, durable choices, fracture echo, battery refund, conserved early drops, field charging and distance recall')
+print('PASS paid hardware draft, durable miner target, exact double primary damage/flight limit/ore, field charging and distance recall')
 
 moveBuyer(shopStations.Quartz.Position)
 input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})

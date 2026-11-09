@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — visible parts for a chosen drone
+
+Upgrade cards should offer self-evident visual changes the player can give to a specific drone. The owner’s example is Double Beam: two beams aimed at the same crystal, dealing twice that miner's laser damage. Cards should animate into visible offer slots. These slots present the three choices; they are not limits on equipped upgrades. Preserve the existing paid offer and run reset rules.
+
 ## November 8 latest — larger and clearer drones
 
 Make the drones larger, animate their visible models on the client and use game references to improve contrast against the mining fields. Keep the original miner mesh and the established direction for beam contact and world outlines.

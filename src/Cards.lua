@@ -2,7 +2,7 @@ local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=15,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=16,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -79,6 +79,11 @@ local function sums(p,d,extra)
  local s={}
  local function add(c)
   local applies=affects(c,d)
+  if not applies and c==extra and c.targetDroneId==nil and Workshop.isHardware(c) and Workshop.fits(d) then
+   -- Score the option against each chassis it could improve. Installed
+   -- effects still apply to only the one saved permanent ID.
+   applies=Workshop.find(p,c.cardId,d.id)==nil
+  end
   if applies then
    for k,n in pairs(c.effects) do
     if not (support(d) and (workEffects[k] or combatOnly[k])) then s[k]=(s[k] or 0)+n end
@@ -108,16 +113,20 @@ function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
  for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
- local speed=clamp(1+(s.speed or 0),.1,3)
  local cutter=DroneRoles.isMiner(d.role or d.type)
+ local doubleBeam=cutter and (s.doubleBeam or 0)>0 and 1 or 0
+ local twinThrusters=cutter and (s.twinThrusters or 0)>0 and 1 or 0
+ local oreDuplicator=cutter and (s.oreDuplicator or 0)>0 and 1 or 0
+ local speed=clamp(1+(s.speed or 0),.1,3)*(1+twinThrusters)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
- return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
+ return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25)*(1+doubleBeam) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
+  doubleBeam=doubleBeam,twinThrusters=twinThrusters,oreDuplicator=oreDuplicator,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(cutter and .05 or .08,b.warmup*(cutter and .5 or C.LASER_CHARGE_SCALE)/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
-  yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
+  yieldMultiplier=clamp(1+(s.yield or 0),.1,2)*(1+oreDuplicator),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,
@@ -159,7 +168,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
@@ -199,7 +208,7 @@ local function preview(p,c)
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
- for _,d in ipairs(p.fleet) do if affects(c,d) or (c.scope=='Player' and c.effects.fullAuto and courier(d)) then
+ for _,d in ipairs(p.fleet) do if affects(c,d) or (Workshop.isHardware(c) and c.targetDroneId==nil and Workshop.fits(d)) or (c.scope=='Player' and c.effects.fullAuto and courier(d)) then
   local before,after=C.stats(p,d),C.stats(p,d,c)
   for k in pairs(statLabels) do if math.abs(before[k]-after[k])>1e-8 then target=d;break end end
   if target then break end
@@ -319,6 +328,7 @@ function C.buy(p,tx,expectedRun,context)
  record(p,'Buy',tx,offer);return true,clone(offer)
 end
 function C.workshopUpgrade(p,c)
+ if Workshop.isHardware(c) then return nil,'Find another in a pack' end
  if c.level>=c.maxLevel then return nil,'Fully stacked' end
  local nextCard=clone(c);nextCard.level+=1;nextCard.effects=Workshop.effects(nextCard,nextCard.level)
  local delta=clone(c);delta.effects={}
@@ -366,19 +376,25 @@ end
 function C.select(p,offerId,index,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
  if expectedRun~=p.run.id then return false,'Stale run' end
- local replay=receipt(p,'Select',tx);if replay then return replay.offerId==offerId and replay.index==index and replay.runId==expectedRun,replay end
  context=context or {}
+ local replay=receipt(p,'Select',tx);if replay then return replay.offerId==offerId and replay.index==index and replay.runId==expectedRun and replay.selectedDroneId==context.targetDroneId,replay end
  if context.atDepot~=true or context.activeEncounter then return false,'Choose your card at the depot outside combat' end
  local offer=p.run.pendingOffer
  if not offer or offer.id~=offerId or offer.runId~=p.run.id then return false,'Offer is no longer pending' end
  if offer.opened==false then return false,'Open your delivered pack first' end
  if not finite(index) or index%1~=0 or index<1 or index>3 then return false,'Invalid card choice' end
- local c=clone(offer.choices[index]);if c.scope=='Individual' then
+ local c=clone(offer.choices[index])
+ if Workshop.isHardware(c) then
+  local target
+  for _,d in ipairs(Workshop.targets(p,c)) do if d.id==context.targetDroneId then target=d;break end end
+  if not target then return false,'Choose a miner without this part' end
+  c.targetDroneId=target.id;c.targetName=target.name;c.preview,c.previewTargetName=preview(p,c)
+ elseif c.scope=='Individual' then
   local exists=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then exists=true end end
   if not exists then return false,'Saved target missing; refund offer through migration' end
  end
  if c.workshop then
-  local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
+  local owned=Workshop.find(p,c.cardId,c.targetDroneId);local before=owned and owned.level or 0
   if c.stackBefore~=nil and c.stackBefore~=before then return false,'Upgrade stack changed' end
   if before+c.level>c.maxLevel then return false,'Upgrade stack reached its maximum' end
   if owned then
@@ -393,7 +409,7 @@ function C.select(p,offerId,index,tx,expectedRun,context)
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
  local stars=offer.packTier or 1
  p.run.stars=(p.run.stars or 0)+stars
- local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
+ local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index,selectedDroneId=Workshop.isHardware(c) and c.targetDroneId or nil}
  record(p,'Select',tx,result);return true,result
 end
 function C.refundInvalidOffer(p)
@@ -402,7 +418,9 @@ function C.refundInvalidOffer(p)
  if valid then
   for _,c in ipairs(o.choices) do
    if type(c.effects)~='table' then valid=false;break end
-   if c.scope=='Individual' then local found=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then found=true end end;if not found then valid=false;break end end
+   if Workshop.isHardware(c) then
+    if #Workshop.targets(p,c)==0 then valid=false;break end
+   elseif c.scope=='Individual' then local found=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then found=true end end;if not found then valid=false;break end end
   end
  end
  if valid then return false end

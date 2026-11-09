@@ -76,6 +76,29 @@ test('every rarity grants one duplicate copy and guarantees a matching-tier opti
  local p=funded();local prices={20,27,36,49,66,90}
  for i,price in ipairs(prices) do p.run.packIndex=i-1;eq(W.price(p),price) end
 end)
+test('hardware fits chosen permanent miners once each and clears on prestige',function()
+ local p=funded()
+ local first,second=p.fleet[1],p.fleet[2]
+ local ok,offer=C.buy(p,'fit-pack',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true})
+ assert(ok);eq(offer.choices[1].cardId,'Q_DOUBLE_BEAM');eq(#W.targets(p,offer.choices[1]),3)
+ p=assert(P.migrate(p,44));assert(same(offer,p.run.pendingOffer));assert(C.open(p,offer.id))
+ local function install(o,index,tx,target)
+  return C.select(p,o.id,index,tx,p.run.id,{atDepot=true,targetDroneId=target})
+ end
+ assert(install(offer,1,'fit-one',second.id));assert(P.validate(p,44))
+ eq(C.stats(p,p.fleet[1]).doubleBeam,0);eq(C.stats(p,p.fleet[2]).doubleBeam,1)
+ eq(#W.targets(p,offer.choices[1]),2)
+ assert(install(offer,1,'fit-one',second.id));eq(install(offer,1,'fit-one',first.id),false)
+ local nextOffer=P.clone(offer);nextOffer.id='repeat-fit';nextOffer.opened=true
+ p.run.pendingOffer=nextOffer
+ eq(install(nextOffer,1,'already-fit',second.id),false);assert(install(nextOffer,1,'fit-two',first.id))
+ eq(#p.run.cards,2);assert(P.validate(p,44));assert(same(p,assert(P.migrate(p,44))))
+ local duplicate=P.clone(p);table.insert(duplicate.run.cards,P.clone(duplicate.run.cards[1]))
+ eq(P.validate(duplicate,44),false)
+ p.run.quartzEarnings=360
+ assert(P.prestige(p,'reset-hardware',p.run.id,{atDepot=true,confirmed=true}))
+ eq(#p.run.cards,0);eq(p.fleet[2].id,second.id);eq(C.stats(p,p.fleet[2]).doubleBeam,0)
+end)
 test('Legendary is affordable after spending the last Quartz and exhausted tiers leave the roll',function()
  local sawLegendary=false
  for seed=1,1000 do
@@ -214,7 +237,9 @@ test('pacing model quantifies first-level tradeoffs including selling travel',fu
  local baseline,seconds=rate(p)
  print(string.format('MODEL baseline %.2f Quartz/min, %.2fs/job incl flight/warmup; excludes human decision time and cascades',baseline,seconds))
  for _,entry in ipairs(W.CATALOG) do
-  local q=P.clone(p);q.run.cards={W.card(entry,1)};local first=rate(q)
+  local q=P.clone(p);q.run.cards={W.card(entry,1)}
+  if W.isHardware(q.run.cards[1]) then q.run.cards[1].targetDroneId=q.fleet[1].id end
+  local first=rate(q)
   local delta=first/baseline-1
   print(string.format('MODEL %s level1 %.2f Quartz/min (%+.1f%%)',entry.id,first,delta*100))
   if entry.id=='Q_POWER' or entry.id=='Q_IGNITION' or entry.id=='Q_CARGO' or entry.id=='Q_YIELD' then assert(delta>0,entry.id..' must improve the modeled loop') end

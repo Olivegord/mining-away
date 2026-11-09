@@ -110,6 +110,64 @@ function P:destroyMiningBeam(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
+-- Fit only parts advertised by the authoritative drone snapshot. These are
+-- local pieces of the existing drone model, including for other observers.
+function P:syncMiningHardware(d,alive)
+ local source,beam=d.source,d.beam
+ local double=source:GetAttribute('DoubleBeam')==true
+ local boost=source:GetAttribute('TwinThrusters')==true
+ local duplicate=source:GetAttribute('OreDuplicator')==true
+ local key=(double and 1 or 0)+(boost and 2 or 0)+(duplicate and 4 or 0)
+ if key~=beam.hardwareKey then
+  beam.hardwareKey=key
+  for _,part in ipairs(beam.hardwareParts or {}) do d.parts[part]=nil;part:Destroy() end
+  beam.hardwareParts={};beam.thrusterTrails={};beam.twinOrigins=nil
+  if key==0 then return end
+  local base=d.emitter
+  local at=beam.origin.Position
+  local shell=d.view.PrimaryPart.Size
+  local function piece(name,size,offset,color,material)
+   local part=barePart(d.view,name);part.Size=size;part.CFrame=base.CFrame*CFrame.new(offset)
+   part.Color=color;part.Material=material;part.Transparency=0;part.CastShadow=false
+   table.insert(beam.hardwareParts,part);d.parts[part]=0
+   return part
+  end
+  local dark=Color3.fromRGB(29,48,60)
+  if double then
+   beam.twinOrigins={}
+   for i,side in ipairs({-1,1}) do
+    local offset=at+Vector3.new(side*math.max(.54,shell.X*.29),-.11,0)
+    piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
+    local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
+    local socket=Instance.new('Attachment');socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens;beam.twinOrigins[i]=socket
+   end
+  end
+  if boost then
+   for _,side in ipairs({-1,1}) do
+    local offset=Vector3.new(side*(shell.X*.5+.17),0,shell.Z*.23)
+    piece('ThrusterPod',Vector3.new(.60,.35,.92),offset,Color3.fromRGB(226,104,36),Enum.Material.SmoothPlastic)
+    local exhaust=piece('ThrusterExhaust',Vector3.new(.37,.20,.10),offset+Vector3.new(0,0,.47),HOT,Enum.Material.Neon)
+    local a=Instance.new('Attachment');a.Position=Vector3.new(-.13,0,.06);a.Parent=exhaust
+    local b=Instance.new('Attachment');b.Position=Vector3.new(.13,0,.06);b.Parent=exhaust
+    local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Color=ColorSequence.new(HOT)
+    trail.Lifetime=.16;trail.MinLength=.08;trail.LightEmission=.7;trail.Transparency=NumberSequence.new(.18,1);trail.Enabled=false;trail.Parent=exhaust
+    table.insert(beam.thrusterTrails,trail)
+   end
+  end
+  if duplicate then
+   local offset=Vector3.new(0,shell.Y*.5+.11,shell.Z*.16)
+   piece('OreDuplicatorTray',Vector3.new(.94,.21,.78),offset,dark,Enum.Material.Metal)
+   for _,side in ipairs({-1,1}) do
+    local ore=piece('OreDuplicatorCell',Vector3.new(.25,.29,.38),offset+Vector3.new(side*.21,.16,0),Color3.fromRGB(255,210,84),Enum.Material.Glass)
+    ore.CFrame*=CFrame.Angles(0,math.pi*.25,side*.22)
+   end
+  end
+ end
+ if boost then
+  local moving=alive and (source:GetAttribute('Velocity') or Vector3.zero).Magnitude>7
+  for _,trail in ipairs(beam.thrusterTrails) do trail.Enabled=moving end
+ end
+end
 -- Mining Away attaches its beam to an off-center marker on Crystal.Mesh.
 -- Keep its authored X/Z proportions; sample the actual visible surface below
 -- that marker so damage geometry cannot leave the tip suspended above it.
@@ -177,25 +235,34 @@ end
 -- Mining Away's two flat beam ribbons. Render from the same verified contact
 -- as other miners; the original warm palette and width curve are cosmetic.
 local function drawReferenceBeam(beam,visible,width,sample,now)
+ local origins=beam.twinOrigins
+ if beam.reference and beam.referenceOrigins~=origins then
+  for _,layer in ipairs(beam.reference) do layer:Destroy() end
+  beam.reference=nil
+ end
  if visible and not beam.reference then
-  local tip=Instance.new('Attachment');tip.Parent=beam.endpoint
+  local tip=beam.referenceTip
+  if not tip then tip=Instance.new('Attachment');tip.Parent=beam.endpoint;beam.referenceTip=tip end
   local layers={}
-  for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
-   local b=Instance.new('Beam');b.Name=name;b.Attachment0=beam.origin;b.Attachment1=tip;b.FaceCamera=true
+  for _,origin in ipairs(origins or {beam.origin}) do
+   for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
+    local b=Instance.new('Beam');b.Name=origins and (i==1 and 'DoubleBeamCore' or 'DoubleBeamHalo') or name
+    b.Attachment0=origin;b.Attachment1=tip;b.FaceCamera=true
    -- The enabled reference clones MiningFX.Beam, whose inner color differs
    -- from the unused beam embedded in the drone template.
-   b.Color=ColorSequence.new(i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487))
-   b.Transparency=i==1 and NumberSequence.new(0) or NumberSequence.new(.85625,.85)
-   b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
-   b.Parent=beam.holder;layers[i]=b
+    b.Color=ColorSequence.new(origins and (i==1 and Color3.fromRGB(196,250,255) or Color3.fromRGB(70,197,255)) or (i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487)))
+    b.Transparency=i==1 and NumberSequence.new(0) or NumberSequence.new(.85625,.85)
+    b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
+    b.Parent=beam.holder;table.insert(layers,b)
+   end
   end
-  beam.reference=layers
+  beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
  local t=math.clamp((now-(sample.since or now))/2,0,1)
  local inner=.3*(1-(1-t)^2)*width
  for i,b in ipairs(beam.reference) do
-  local w=visible and (i==1 and inner or .5*width) or 0
+  local w=visible and (i%2==1 and inner or .5*width)*(origins and .64 or 1) or 0
   b.Width0=w;b.Width1=w;b.Enabled=w>.001
  end
 end

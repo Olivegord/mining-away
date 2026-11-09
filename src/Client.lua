@@ -181,12 +181,19 @@ connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' th
 local modalMode,modalSize=nil,nil
 local actionPending=nil
 local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
-local function clearBody() table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil; for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
+local offerUI={}
+local function clearBody()
+ table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil
+ if offerUI.footer then offerUI.footer:Destroy();offerUI.footer=nil end
+ for _,x in ipairs(body:GetChildren()) do x:Destroy() end
+ body.CanvasPosition=Vector2.zero
+end
 local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
  data=data or {};data.txId=tx();data.runId=profile.run.id
- actionPending={kind=action,at=os.clock(),runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ if action=='ChooseCard' then offerUI.claim=actionPending end
  command:FireServer(action,data);return true
 end
 local function comma(n) local s=tostring(math.floor(tonumber(n) or 0));local r=s:reverse():gsub('(%d%d%d)','%1,'):reverse();return (r:gsub('^,','')) end
@@ -230,16 +237,15 @@ local function layoutModal()
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
- if modalMode=='offer' and l.short then
-  l.headerHeight=64;l.panelPadding=12;l.bodyWidth=l.panelWidth-24
-  l.bodyHeight=l.panelHeight-l.headerHeight-l.panelPadding;l.cardHeight=math.clamp(l.bodyHeight-2,212,256)
- end
- if modalMode=='offer' and l.cardColumns==3 then
-  l.panelWidth=math.min(820,v.X-24);l.panelPadding=12;l.bodyWidth=l.panelWidth-24
-  l.cardWidth=(l.bodyWidth-l.cardGap*2)/3;l.headerHeight=l.short and 64 or 100
+ if modalMode=='offer' then
+  l.cardColumns=v.X>=650 and 3 or 1;l.cardGap=l.cardColumns==3 and 10 or 12
+  l.panelWidth=math.min(l.cardColumns==3 and 770 or 432,l.panelWidth);l.panelPadding=8;l.bodyWidth=l.panelWidth-16
+  l.headerHeight=49;l.offerFooter=58
+  l.cardWidth=math.floor((l.bodyWidth-l.cardGap*(l.cardColumns-1))/l.cardColumns)
+  l.cardHeight=l.cardColumns==3 and math.clamp(l.panelHeight-l.headerHeight-l.offerFooter-6,212,314) or 234
   l.panelX=(v.X-l.panelWidth)/2
-  l.panelHeight=math.min(l.panelHeight,l.headerHeight+l.cardHeight+32)
-  l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
+  if l.cardColumns==3 then l.panelHeight=math.min(l.panelHeight,l.headerHeight+l.cardHeight+l.offerFooter+6) end
+  l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.offerFooter)
   l.panelY=math.floor((v.Y-l.panelHeight)*.65)
  end
  sheet.Size=UDim2.fromOffset(l.panelWidth,l.panelHeight);sheet.Position=UDim2.fromOffset(l.panelX,l.panelY);modalSize=v
@@ -289,8 +295,8 @@ local function menu(mode,title,subtitle,icon)
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modalEmblem.Visible=not inOffer
  if inOffer then
-  modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
-  modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
+  modalSubtitle.Position=UDim2.fromOffset(46,1)
+  modalSubtitle.Size=UDim2.new(1,-92,0,44);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
  if mode=='shop' or mode=='stars' then
   ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
@@ -299,7 +305,10 @@ local function menu(mode,title,subtitle,icon)
  end
  modal.Visible=true
  packView:setFocus(inOffer)
- if entering then
+ if inOffer then
+  if menuTween then menuTween:Cancel() end
+  sheetScale.Scale=1
+ elseif entering then
   if menuTween then menuTween:Cancel() end
   sheetScale.Scale=.98;menuTween=TweenService:Create(sheetScale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});menuTween:Play()
  end
@@ -357,12 +366,26 @@ end
 local function updateOfferControls()
  local usable,reason=availability('ChooseCard')
  local choosing=actionPending and actionPending.kind=='ChooseCard'
- normalSubtitle=choosing and 'Applying card…' or (not usable and reason or 'This run only')
+ local offer=pending()
+ if offerUI.completed or not offer or not offerUI.footer then return end
+ local choice=offer.choices[offerUI.index or 0]
+ local hardware=choice and Workshop.isHardware(choice)
+ local targets=hardware and offerUI.targets or {}
+ local target=targets[offerUI.targetIndex or 0]
+ local stars=offer.packTier or 1
+ normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ('Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
  for index,view in ipairs(offerViews) do
-  enableAction(view.button,usable)
-  local text=choosing and (actionPending.index==index and 'Installing…' or 'Please wait') or ''
-  if view.button.Text~=text then view.button.Text=text end
+  enableAction(view.button,not choosing)
+  view.select(offerUI.index==index)
  end
+ offerUI.target.Visible=hardware==true
+ offerUI.target.Text=target and ('Fit to '..target.name..(#targets>1 and '  ›' or '')) or 'No eligible miners'
+ enableAction(offerUI.target,#targets>1 and not choosing)
+ offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
+ offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
+ offerUI.install.Size=hardware and UDim2.new(.48,-6,0,44) or UDim2.fromOffset(math.min(280,offerUI.footer.Size.X.Offset-8),44)
+ offerUI.install.Text=choosing and 'Installing…' or (choice and ('Install '..choice.title) or 'Select a card')
+ enableAction(offerUI.install,usable and choice~=nil and (not hardware or target~=nil))
 end
 openOffer=function()
  local offer=pending();if not offer then return end
@@ -373,6 +396,9 @@ openOffer=function()
  local size=viewport()
  if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
  local skipReveal=presentedOfferId==offer.id
+ if not skipReveal then
+  offerUI.index=nil;offerUI.targets=nil;offerUI.targetIndex=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
+ end
  local origin
  local camera=workspace.CurrentCamera
  local worldOrigin=not skipReveal and packView:origin(offer.id)
@@ -383,11 +409,31 @@ openOffer=function()
  local stars=offer.packTier or 1
  local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
+ offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
+ offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
+ offerUI.target=button(offerUI.footer,UDim2.fromOffset(4,4),UDim2.new(.52,-6,0,44),'',function()
+  offerUI.targetIndex=offerUI.targetIndex%#offerUI.targets+1
+  updateOfferControls()
+ end,Color3.fromRGB(46,70,92))
+ offerUI.target.Name='ChooseMiner'
+ offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
+  if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
+  local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
+  local choice=offer.choices[offerUI.index]
+  if Workshop.isHardware(choice) and not target then return end
+  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=target and target.id}) then noticeUntil=0;updateOfferControls() end
+ end,palette.mineral)
+ offerUI.install.Name='InstallUpgrade'
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
-   if not pending() or pending().id~=offer.id or not canAct() then return end
-   if send('ChooseCard',{offerId=offer.id,index=index}) then updateOfferControls() end
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
+   if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
+   if offerUI.index~=index then
+    offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
+    -- Start with a miner the player can immediately see in the Studio crew.
+    for i,d in ipairs(offerUI.targets) do if profile.droneStats and profile.droneStats[d.id] then offerUI.targetIndex=i;break end end
+   end
+   updateOfferControls()
   end})
   offerViews[index]=view
  end
@@ -616,7 +662,19 @@ do
   if offer and offer.opened==false and (not oldProfile or not oldProfile.run.pendingOffer or oldProfile.run.pendingOffer.id~=offer.id) then
    if modalMode=='pack' then modal.Visible=false;modalMode=nil end
   elseif offer and offer.opened~=false and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
-  elseif not offer and modalMode=='offer' then openShop('Quartz')
+  elseif not offer and modalMode=='offer' then
+   if not offerUI.completed then
+    local claim=offerUI.claim
+    if claim and not changedRun and modal.Visible and offerIdentity==claim.offerId then
+     offerUI.completed=claim.offerId;offerUI.claim=nil
+     normalSubtitle='Upgrade installed'
+     enableAction(offerUI.install,false);enableAction(offerUI.target,false)
+     for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
+     task.delay(.32,function()
+      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then openShop('Quartz') end
+     end)
+    elseif modal.Visible then openShop('Quartz') else modalMode=nil end
+   end
   elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
    updateOfferControls()
   elseif modalMode=='fleet' or modalMode=='run' then
@@ -631,7 +689,23 @@ do
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
- notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
+ notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5
+ if not actionPending or actionPending.kind~='ChooseCard' then actionPending=nil end
+ refreshModal()
+end)
+connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
+ local claim=offerUI.claim
+ local raw=player.PlayerGui:GetAttribute('MA_OfferReceipt')
+ if not claim or type(raw)~='string' then return end
+ local ok,reply=pcall(Http.JSONDecode,Http,raw)
+ if not ok or type(reply)~='table' or reply.txId~=claim.txId or reply.runId~=claim.runId or reply.offerId~=claim.offerId then return end
+ if reply.status=='rejected' then
+  if actionPending==claim then actionPending=nil end
+  offerUI.claim=nil;notice.Text=reply.reason or 'Upgrade could not be installed';noticeUntil=os.clock()+5
+  updateOfferControls()
+ elseif reply.status=='uncertain' then
+  notice.Text='Checking your install…';noticeUntil=os.clock()+5
+ end
 end)
 
 local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
@@ -976,6 +1050,8 @@ local function renderDrone(d,dt,now)
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
+ local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
+ presentation:syncMiningHardware(d,alive)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
@@ -984,7 +1060,6 @@ local function renderDrone(d,dt,now)
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
  local attacking=state=='Attack' and s:GetAttribute('Firing')==true and s:GetAttribute('WorkPaused')~=true
- local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
  local active=alive and (mining or attacking)
  local charging=alive and state=='Warmup' and not mining and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('WarmupStart') or 0)>0
  local beam=d.beam
@@ -1343,6 +1418,7 @@ connect(RunService.Heartbeat,function(dt)
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
  if actionPending and os.clock()-actionPending.at>10 and not (profile and profile.pendingTransaction) then
+  if actionPending==offerUI.claim then offerUI.claim=nil end
   actionPending=nil;notice.Text='Still waiting for confirmation. You can retry.';noticeUntil=os.clock()+5;refreshModal()
  end
  if os.clock()>noticeUntil then notice.Text='' end

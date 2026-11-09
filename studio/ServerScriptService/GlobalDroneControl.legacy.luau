@@ -27,11 +27,14 @@ W.CATALOG={
  {id='Q_RECLAIM',title='Reclaim',scope='Fleet',category='flight',tier=1,max=3,step={reclaim=6},color={134,221,129},icon='startup',crystalRun=true},
  {id='Q_EARLY_DROP',title='Loose Seams',scope='Fleet',category='cargo',tier=1,max=2,step={earlyDrop=.25},color={255,190,65},icon='crystal',crystalRun=true},
  {id='Q_FIELD_CHARGE',title='Field Charger',scope='Player',category='flight',tier=3,max=2,step={fieldCharge=28},color={112,214,175},icon='startup',crystalRun=true},
+ {id='Q_DOUBLE_BEAM',title='Double Beam',scope='Individual',category='mining',tier=2,max=1,step={doubleBeam=1},color={91,208,255},icon='relay',crystalRun=true,hardware=true},
+ {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
+ {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_AFTERSHOCK','Q_RECLAIM','Q_EARLY_DROP'}
-W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_AFTERSHOCK=true,Q_RECLAIM=true,Q_EARLY_DROP=true,
- Q_FIELD_CHARGE=true,Q_TWIN_BEAM=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_TURBO_ROTOR','Q_ORE_DUPLICATOR'}
+W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
+ Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
@@ -58,9 +61,28 @@ function W.owned(p)
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
  return result
 end
-function W.find(p,id)
- for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
+function W.find(p,id,targetId)
+ for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id and c.targetDroneId==targetId then return c end end
  return nil
+end
+function W.isHardware(c)
+ local entry=c.workshop and W.BY_ID[c.cardId]
+ return type(entry)=='table' and entry.hardware==true
+end
+-- These physical parts fit the basic laser chassis only. Preview actors and
+-- permanent specialists cannot take a paid part that their rig cannot use.
+function W.fits(d)
+ local role=d.role or d.type
+ return role=='Striker' or role=='Blue'
+end
+function W.targets(p,c)
+ local result={}
+ if W.isHardware(c) then
+  for _,d in ipairs(p.fleet) do
+   if W.fits(d) and not W.find(p,c.cardId,d.id) then table.insert(result,d) end
+  end
+ end
+ return result
 end
 function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
@@ -2204,7 +2226,7 @@ local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,St
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -2319,7 +2341,7 @@ function P.validate(p,uid)
  for serial,d in ipairs(p.fleet) do
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
-  ids[d.id]=true
+  ids[d.id]=d
   if not roles[d.role] or (specialTypes[d.type] and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
@@ -2354,7 +2376,15 @@ function P.validate(p,uid)
  for _,c in ipairs(r.cards) do
   if type(c)~='table' or type(c.cardId)~='string' or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid run card' end
   if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid run card rarity or blueprint' end
-  if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
+  if c.workshop then
+   local key=c.cardId
+   if Workshop.isHardware(c) then
+    local target=ids[c.targetDroneId]
+    if not target or not Workshop.fits(target) then return false,'Invalid hardware target' end
+    key=key..':'..target.id
+   end
+   if blueprints[key] then return false,'Duplicate blueprint' end;blueprints[key]=true
+  end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>(k=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid modifier' end end
@@ -2388,7 +2418,9 @@ function P.validate(p,uid)
   for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>(effect=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
-   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
+   if Workshop.isHardware(c) then
+    if c.targetDroneId~=nil or #Workshop.targets(p,c)==0 then return false,'Invalid unassigned hardware offer' end
+   elseif c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
   end
   if (offer.contentVersion or 0)>=13 and not guaranteed then return false,'Pack rarity reward missing' end
  end
@@ -2487,7 +2519,7 @@ function P.migrate(raw,uid,seed)
  if type(pending)=='table' and type(pending.choices)=='table' and type(p.fleet)=='table' then
   local ids={};for _,d in ipairs(p.fleet) do if type(d)=='table' then ids[d.id]=true end end
   local missing=false
-  for _,choice in ipairs(pending.choices) do if type(choice)=='table' and choice.scope=='Individual' and not ids[choice.targetDroneId] then missing=true end end
+  for _,choice in ipairs(pending.choices) do if type(choice)=='table' and choice.scope=='Individual' and not Workshop.isHardware(choice) and not ids[choice.targetDroneId] then missing=true end end
   if missing then
    if not integer(pending.price) or not integer(p.run.credits) or p.run.credits+pending.price>=1e14 then return nil,'Cannot safely refund invalid saved offer' end
    if p.run.wallet and not integer(p.run.wallet.Quartz+pending.price) then return nil,'Refund exceeds wallet limit' end
@@ -2760,7 +2792,7 @@ return Packs
 end)()
 local Cards = (function()
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=15,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=16,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -2837,6 +2869,11 @@ local function sums(p,d,extra)
  local s={}
  local function add(c)
   local applies=affects(c,d)
+  if not applies and c==extra and c.targetDroneId==nil and Workshop.isHardware(c) and Workshop.fits(d) then
+   -- Score the option against each chassis it could improve. Installed
+   -- effects still apply to only the one saved permanent ID.
+   applies=Workshop.find(p,c.cardId,d.id)==nil
+  end
   if applies then
    for k,n in pairs(c.effects) do
     if not (support(d) and (workEffects[k] or combatOnly[k])) then s[k]=(s[k] or 0)+n end
@@ -2866,16 +2903,20 @@ function C.stats(p,d,extra)
  local b=d.base;local s=sums(p,d,extra)
  local forkCap=extra and extra.workshop and (extra.effects.fork or 0)>0 and .4 or .2
  for _,c in ipairs(p.run.cards) do if c.workshop and (c.effects.fork or 0)>0 then forkCap=.4;break end end
- local speed=clamp(1+(s.speed or 0),.1,3)
  local cutter=DroneRoles.isMiner(d.role or d.type)
+ local doubleBeam=cutter and (s.doubleBeam or 0)>0 and 1 or 0
+ local twinThrusters=cutter and (s.twinThrusters or 0)>0 and 1 or 0
+ local oreDuplicator=cutter and (s.oreDuplicator or 0)>0 and 1 or 0
+ local speed=clamp(1+(s.speed or 0),.1,3)*(1+twinThrusters)
  local interval=math.max(.15,b.shotInterval/math.max(.1,1+(s.rate or 0)))
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
- return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
+ return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25)*(1+doubleBeam) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
+  doubleBeam=doubleBeam,twinThrusters=twinThrusters,oreDuplicator=oreDuplicator,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(cutter and .05 or .08,b.warmup*(cutter and .5 or C.LASER_CHARGE_SCALE)/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
-  yieldMultiplier=clamp(1+(s.yield or 0),.1,2),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
+  yieldMultiplier=clamp(1+(s.yield or 0),.1,2)*(1+oreDuplicator),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
   aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,
@@ -2917,7 +2958,7 @@ function C.weightedOrder(items,random)
  end
  return ordered
 end
-local statLabels={aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+local statLabels={doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
 local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  for _,d in ipairs(p.fleet) do
@@ -2957,7 +2998,7 @@ local function preview(p,c)
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
- for _,d in ipairs(p.fleet) do if affects(c,d) or (c.scope=='Player' and c.effects.fullAuto and courier(d)) then
+ for _,d in ipairs(p.fleet) do if affects(c,d) or (Workshop.isHardware(c) and c.targetDroneId==nil and Workshop.fits(d)) or (c.scope=='Player' and c.effects.fullAuto and courier(d)) then
   local before,after=C.stats(p,d),C.stats(p,d,c)
   for k in pairs(statLabels) do if math.abs(before[k]-after[k])>1e-8 then target=d;break end end
   if target then break end
@@ -3077,6 +3118,7 @@ function C.buy(p,tx,expectedRun,context)
  record(p,'Buy',tx,offer);return true,clone(offer)
 end
 function C.workshopUpgrade(p,c)
+ if Workshop.isHardware(c) then return nil,'Find another in a pack' end
  if c.level>=c.maxLevel then return nil,'Fully stacked' end
  local nextCard=clone(c);nextCard.level+=1;nextCard.effects=Workshop.effects(nextCard,nextCard.level)
  local delta=clone(c);delta.effects={}
@@ -3124,19 +3166,25 @@ end
 function C.select(p,offerId,index,tx,expectedRun,context)
  if not validID(tx) then return false,'Invalid transaction ID' end
  if expectedRun~=p.run.id then return false,'Stale run' end
- local replay=receipt(p,'Select',tx);if replay then return replay.offerId==offerId and replay.index==index and replay.runId==expectedRun,replay end
  context=context or {}
+ local replay=receipt(p,'Select',tx);if replay then return replay.offerId==offerId and replay.index==index and replay.runId==expectedRun and replay.selectedDroneId==context.targetDroneId,replay end
  if context.atDepot~=true or context.activeEncounter then return false,'Choose your card at the depot outside combat' end
  local offer=p.run.pendingOffer
  if not offer or offer.id~=offerId or offer.runId~=p.run.id then return false,'Offer is no longer pending' end
  if offer.opened==false then return false,'Open your delivered pack first' end
  if not finite(index) or index%1~=0 or index<1 or index>3 then return false,'Invalid card choice' end
- local c=clone(offer.choices[index]);if c.scope=='Individual' then
+ local c=clone(offer.choices[index])
+ if Workshop.isHardware(c) then
+  local target
+  for _,d in ipairs(Workshop.targets(p,c)) do if d.id==context.targetDroneId then target=d;break end end
+  if not target then return false,'Choose a miner without this part' end
+  c.targetDroneId=target.id;c.targetName=target.name;c.preview,c.previewTargetName=preview(p,c)
+ elseif c.scope=='Individual' then
   local exists=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then exists=true end end
   if not exists then return false,'Saved target missing; refund offer through migration' end
  end
  if c.workshop then
-  local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
+  local owned=Workshop.find(p,c.cardId,c.targetDroneId);local before=owned and owned.level or 0
   if c.stackBefore~=nil and c.stackBefore~=before then return false,'Upgrade stack changed' end
   if before+c.level>c.maxLevel then return false,'Upgrade stack reached its maximum' end
   if owned then
@@ -3151,7 +3199,7 @@ function C.select(p,offerId,index,tx,expectedRun,context)
  table.insert(p.run.cards,c);p.run.pendingOffer=nil
  local stars=offer.packTier or 1
  p.run.stars=(p.run.stars or 0)+stars
- local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index}
+ local result={stars=stars,offerId=offer.id,runId=p.run.id,card=clone(c),index=index,selectedDroneId=Workshop.isHardware(c) and c.targetDroneId or nil}
  record(p,'Select',tx,result);return true,result
 end
 function C.refundInvalidOffer(p)
@@ -3160,7 +3208,9 @@ function C.refundInvalidOffer(p)
  if valid then
   for _,c in ipairs(o.choices) do
    if type(c.effects)~='table' then valid=false;break end
-   if c.scope=='Individual' then local found=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then found=true end end;if not found then valid=false;break end end
+   if Workshop.isHardware(c) then
+    if #Workshop.targets(p,c)==0 then valid=false;break end
+   elseif c.scope=='Individual' then local found=false;for _,d in ipairs(p.fleet) do if d.id==c.targetDroneId then found=true end end;if not found then valid=false;break end end
   end
  end
  if valid then return false end
@@ -7606,6 +7656,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,special==true)
+   if (recipient.stats.oreDuplicator or 0)>0 and not abilityOrigin then
+    RoleEffects.Pulse(r.part.Position,Color3.fromRGB(255,211,93),.45,3.5,.20)
+   end
    -- Tools never manufacture more tools, including rocks later finished by a
    -- normal drone. The rock's ordinary ore payout remains unchanged.
    if not r.consumableWorked then
@@ -7637,7 +7690,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
    end
   end
-  if broken and (secondaryId or Mining.kind(d.owned.type)=='Red') then
+  if broken and (secondaryId or d.stats.doubleBeam==1 or Mining.kind(d.owned.type)=='Red') then
    -- This short record is presentation only: scalar IDs/timestamps, no target,
    -- reservation, damage permission or resource reference survives retirement.
    d.mineBreakSerial=d.mineBreakSerial+1
@@ -8480,6 +8533,7 @@ local function snapshotDrone(d)
   Battery=scene.chargingStation and math.ceil(d.battery or 0) or nil,MaxBattery=scene.chargingStation and d.stats.batteryCapacity or nil,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
+  DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
@@ -8740,13 +8794,16 @@ local function offerReply(pl: any,payload: any,status: string,reason: string)
  offerReceiptSerial=offerReceiptSerial%1000000000+1
  gui:SetAttribute('MA_OfferReceipt',Http:JSONEncode({txId=payload.txId,runId=payload.runId,offerId=payload.offerId,status=status,reason=reason,serial=offerReceiptSerial}))
 end
-local function committedOffer(p: any,payload: any): boolean
- if not p or not validPayload(payload) then return false end
+local function committedOffer(p: any,payload: any): (boolean,boolean)
+ if not p or not validPayload(payload) then return false,false end
  for _,receipt in ipairs(p.session.receipts or {}) do
   local result=receipt.result
-  if receipt.id=='choose:'..payload.txId and type(result)=='table' and result.offerId==payload.offerId and result.runId==payload.runId then return true end
+  if receipt.id=='choose:'..payload.txId and type(result)=='table' then
+   local same=result.offerId==payload.offerId and result.runId==payload.runId and result.index==payload.index and result.selectedDroneId==payload.targetDroneId
+   return same,not same
+  end
  end
- return false
+ return false,false
 end
 local function offerUnavailable(p: any,pl: any,payload: any,reason: string)
  if committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed')
@@ -8778,14 +8835,14 @@ local function commandReply(pl: any,payload: any,status: any,reason: any,field: 
  gui:SetAttribute('MA_CommandState',Http:JSONEncode(state))
 end
 local function chooseCard(p: any,pl: any,payload: any)
-   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then offerReply(pl,payload,'rejected','Invalid choice');return end
+   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 or (payload.targetDroneId~=nil and (type(payload.targetDroneId)~='string' or #payload.targetDroneId>100)) then offerReply(pl,payload,'rejected','Invalid choice');return end
    p.pendingOfferTx=payload.txId
    local started=transact(p,'choose:'..payload.txId,function(copy: any)
-    local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+    local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false,targetDroneId=payload.targetDroneId});if ok then return r end;return nil,r
    end,function(result)
     refreshStats(p)
     local stars=result.stars or 0
-    notice(p,stars>0 and ('Upgrade installed · +'..stars..' '..(stars==1 and 'Star' or 'Stars')) or 'Upgrade installed')
+    notice(p,stars>0 and ((result.selectedDroneId and (result.card.title..' fitted to '..result.card.targetName) or 'Upgrade installed')..' · +'..stars..' '..(stars==1 and 'Star' or 'Stars')) or 'Upgrade installed')
    end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
@@ -9083,7 +9140,11 @@ function scene.placeSquare(p,payload)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
- if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
+ if action=='ChooseCard' then
+  local committed,conflict=committedOffer(p,payload)
+  if committed then offerReply(pl,payload,'accepted','Card installed');return end
+  if conflict then offerReply(pl,payload,'rejected','This install was already used');return end
+ end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
  if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end

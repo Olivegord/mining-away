@@ -24,11 +24,14 @@ W.CATALOG={
  {id='Q_RECLAIM',title='Reclaim',scope='Fleet',category='flight',tier=1,max=3,step={reclaim=6},color={134,221,129},icon='startup',crystalRun=true},
  {id='Q_EARLY_DROP',title='Loose Seams',scope='Fleet',category='cargo',tier=1,max=2,step={earlyDrop=.25},color={255,190,65},icon='crystal',crystalRun=true},
  {id='Q_FIELD_CHARGE',title='Field Charger',scope='Player',category='flight',tier=3,max=2,step={fieldCharge=28},color={112,214,175},icon='startup',crystalRun=true},
+ {id='Q_DOUBLE_BEAM',title='Double Beam',scope='Individual',category='mining',tier=2,max=1,step={doubleBeam=1},color={91,208,255},icon='relay',crystalRun=true,hardware=true},
+ {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
+ {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_AFTERSHOCK','Q_RECLAIM','Q_EARLY_DROP'}
-W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_AFTERSHOCK=true,Q_RECLAIM=true,Q_EARLY_DROP=true,
- Q_FIELD_CHARGE=true,Q_TWIN_BEAM=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_TURBO_ROTOR','Q_ORE_DUPLICATOR'}
+W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
+ Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
@@ -55,9 +58,28 @@ function W.owned(p)
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
  return result
 end
-function W.find(p,id)
- for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
+function W.find(p,id,targetId)
+ for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id and c.targetDroneId==targetId then return c end end
  return nil
+end
+function W.isHardware(c)
+ local entry=c.workshop and W.BY_ID[c.cardId]
+ return type(entry)=='table' and entry.hardware==true
+end
+-- These physical parts fit the basic laser chassis only. Preview actors and
+-- permanent specialists cannot take a paid part that their rig cannot use.
+function W.fits(d)
+ local role=d.role or d.type
+ return role=='Striker' or role=='Blue'
+end
+function W.targets(p,c)
+ local result={}
+ if W.isHardware(c) then
+  for _,d in ipairs(p.fleet) do
+   if W.fits(d) and not W.find(p,c.cardId,d.id) then table.insert(result,d) end
+  end
+ end
+ return result
 end
 function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end

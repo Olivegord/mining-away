@@ -6,6 +6,7 @@ local Players={}
 local ownerRoot=Instance.new('Part');ownerRoot.Position=Vector3.new(80,0,0)
 function Players:GetPlayerByUserId(_) return {Character={FindFirstChild=function(_,name) if name=='HumanoidRootPart' then return ownerRoot end end}} end
 local presentation={}
+function presentation:syncMiningHardware(_,_) end
 function presentation:renderDrone(_,_,_) end
 function presentation:renderMiningBeam(_,sample,_) self.lastBeam=sample end
 function presentation:queueMiningBeam(_,sample,_) self.lastBeam=sample end

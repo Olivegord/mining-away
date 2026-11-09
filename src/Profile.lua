@@ -11,7 +11,7 @@ local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,St
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
-local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true}
+local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -126,7 +126,7 @@ function P.validate(p,uid)
  for serial,d in ipairs(p.fleet) do
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
-  ids[d.id]=true
+  ids[d.id]=d
   if not roles[d.role] or (specialTypes[d.type] and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
@@ -161,7 +161,15 @@ function P.validate(p,uid)
  for _,c in ipairs(r.cards) do
   if type(c)~='table' or type(c.cardId)~='string' or type(c.effects)~='table' or not scopes[c.scope] then return false,'Invalid run card' end
   if not validRarity(c.rarity) or not Workshop.validate(c) then return false,'Invalid run card rarity or blueprint' end
-  if c.workshop then if blueprints[c.cardId] then return false,'Duplicate blueprint' end;blueprints[c.cardId]=true end
+  if c.workshop then
+   local key=c.cardId
+   if Workshop.isHardware(c) then
+    local target=ids[c.targetDroneId]
+    if not target or not Workshop.fits(target) then return false,'Invalid hardware target' end
+    key=key..':'..target.id
+   end
+   if blueprints[key] then return false,'Duplicate blueprint' end;blueprints[key]=true
+  end
   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Missing permanent card target' end
   if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid card color' end
   for k,v in pairs(c.effects) do if not effectKeys[k] or not finite(v) or math.abs(v)>(k=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid modifier' end end
@@ -195,7 +203,9 @@ function P.validate(p,uid)
   for effect,value in pairs(c.effects) do if not effectKeys[effect] or not finite(value) or math.abs(value)>(effect=='battery' and c.cardId=='Q_BATTERY' and 400 or 100) then return false,'Invalid saved offer modifier' end end
    if c.scope=='Color' and not table.find(types,c.type) then return false,'Invalid saved offer color' end
    seen[c.cardId]=true
-   if c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
+   if Workshop.isHardware(c) then
+    if c.targetDroneId~=nil or #Workshop.targets(p,c)==0 then return false,'Invalid unassigned hardware offer' end
+   elseif c.scope=='Individual' and not ids[c.targetDroneId] then return false,'Paid offer target missing' end
   end
   if (offer.contentVersion or 0)>=13 and not guaranteed then return false,'Pack rarity reward missing' end
  end
@@ -294,7 +304,7 @@ function P.migrate(raw,uid,seed)
  if type(pending)=='table' and type(pending.choices)=='table' and type(p.fleet)=='table' then
   local ids={};for _,d in ipairs(p.fleet) do if type(d)=='table' then ids[d.id]=true end end
   local missing=false
-  for _,choice in ipairs(pending.choices) do if type(choice)=='table' and choice.scope=='Individual' and not ids[choice.targetDroneId] then missing=true end end
+  for _,choice in ipairs(pending.choices) do if type(choice)=='table' and choice.scope=='Individual' and not Workshop.isHardware(choice) and not ids[choice.targetDroneId] then missing=true end end
   if missing then
    if not integer(pending.price) or not integer(p.run.credits) or p.run.credits+pending.price>=1e14 then return nil,'Cannot safely refund invalid saved offer' end
    if p.run.wallet and not integer(p.run.wallet.Quartz+pending.price) then return nil,'Refund exceeds wallet limit' end

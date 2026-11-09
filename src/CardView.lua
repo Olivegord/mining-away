@@ -12,6 +12,9 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
+ add('doubleBeam','Two lasers.\n2× damage to one crystal.')
+ add('twinThrusters','Two thrusters.\n2× top flight speed.')
+ add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -59,6 +62,9 @@ function CardView.terms(choice,_targetOverride)
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
  else target='All drones' end
  if choice.workshop then
+  if e.doubleBeam or e.twinThrusters or e.oreDuplicator then
+   return (choice.targetName or 'Fit to one miner')..' · This run'
+  end
   local before=choice.stackBefore
   local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
   return target..' · This run\n'..count..' · '..choice.rarity
@@ -97,6 +103,9 @@ end
 function CardView.identity(choice)
  local e=choice.effects or {}
  local function has(k) return type(e[k])=='number' and e[k]>0 end
+ if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
+ if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
+ if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
@@ -190,7 +199,30 @@ local function mechanicVisual(parent,choice,compact)
    crystal(.35+i%2*.12,position+Vector3.new(math.cos(a)*.95,.1+i%2*.25,math.sin(a)*.65),color,CFrame.Angles(.2,a,.3))
   end
  end
- if identity=='orbital' then
+ if identity=='double' then
+  drone('Striker',2.75,Vector3.new(0,1.3,0))
+  local tip=Vector3.new(0,-.74,.3)
+  crystal(1.8,Vector3.new(0,-1.45,.3),Color3.fromRGB(255,116,129),CFrame.Angles(.16,.6,-.12))
+  for _,side in ipairs({-1,1}) do
+   local muzzle=Vector3.new(side*.75,.71,.25)
+   visualPart(world,Vector3.new(.43,.26,.55),muzzle,accent)
+   ray(muzzle,tip,.105,accent)
+  end
+ elseif identity=='boost' then
+  drone('Striker',2.7,Vector3.new(.3,.25,0),CFrame.Angles(0,-.4,.10))
+  for _,side in ipairs({-1,1}) do
+   local pod=Vector3.new(.2,.15+side*.62,side*.72)
+   visualPart(world,Vector3.new(.82,.28,.38),pod,accent)
+   ray(pod-Vector3.xAxis*.35,pod-Vector3.xAxis*(side==1 and 2.2 or 1.75),.16,accent)
+  end
+ elseif identity=='duplicate' then
+  drone('Striker',2.7,Vector3.new(0,1,0))
+  for _,side in ipairs({-1,1}) do
+   local pos=Vector3.new(side*1.06,-.9,.32)
+   crystal(1.65,pos,accent,CFrame.Angles(0,side*.42,side*.22))
+   crystal(.7,pos+Vector3.new(side*.54,-.47,.5),accent,CFrame.Angles(0,side*.5,-side*.3))
+  end
+ elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
   ray(Vector3.new(0,.75,0),Vector3.new(0,-.9,0),.2,accent)
@@ -238,14 +270,11 @@ local function mechanicVisual(parent,choice,compact)
   crystal(2.7,Vector3.new(.45,-.7,0),accent,CFrame.Angles(0,.35,-.17))
   ray(Vector3.new(-.8,.6,0),Vector3.new(.1,.05,0),.11,accent);chips(Vector3.new(0,-1.5,0),body:Lerp(accent,.65))
  end
- -- Four offset black renders dilate the real model silhouette. Roblox's
- -- world Highlight is not required, and a frame outline cannot outline models.
- for _,offset in ipairs({{-1,-1},{-1,1},{1,-1},{1,1}}) do
-  local outline=viewport:Clone();outline.Name='ArtworkSilhouette';outline.CurrentCamera=camera
-  local copiedCamera=outline:FindFirstChildOfClass('Camera');if copiedCamera then copiedCamera:Destroy() end
-  outline.ImageColor3=Color3.new(0,0,0);outline.Position=viewport.Position+UDim2.fromOffset(offset[1]*2.5*FACE_PIXELS,offset[2]*2.5*FACE_PIXELS)
-  outline.ZIndex=viewport.ZIndex-1;outline.Parent=parent
- end
+ -- A single offset silhouette keeps the mechanism readable on enamel.
+ local outline=viewport:Clone();outline.Name='ArtworkSilhouette';outline.CurrentCamera=camera
+ local copiedCamera=outline:FindFirstChildOfClass('Camera');if copiedCamera then copiedCamera:Destroy() end
+ outline.ImageColor3=Color3.fromRGB(16,24,36);outline.Position=viewport.Position+UDim2.fromOffset(2*FACE_PIXELS,3*FACE_PIXELS)
+ outline.ZIndex=viewport.ZIndex-1;outline.Parent=parent
  return viewport,camera
 end
 
@@ -265,8 +294,8 @@ local function softGlow(U,parent,name,color)
  local glow=Instance.new('CanvasGroup');glow.Name=name;glow.BackgroundTransparency=1;glow.AnchorPoint=Vector2.new(.5,.5)
  glow.Size=UDim2.fromScale(1.1,.8);glow.Position=UDim2.fromScale(.5,.25);glow.GroupTransparency=1;glow.ZIndex=parent.ZIndex+1;glow.Parent=parent
  local previous=0
- for i=1,32 do
-  local radius=1-(i-1)/32
+ for i=1,12 do
+  local radius=1-(i-1)/12
   local opacity=.6*(math.exp(-radius*radius*4)-math.exp(-4))/(1-math.exp(-4))
   local alpha=(opacity-previous)/math.max(.001,1-previous);previous=opacity
   local disc=U.frame(glow,UDim2.fromScale((1-radius)/2,(1-radius)/2),UDim2.fromScale(radius,radius),color)
@@ -311,8 +340,21 @@ end
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
- local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice);local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
- card.Name='CardChoice'..tostring(index);card.LayoutOrder=index;card.BackgroundTransparency=1
+ local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice)
+ local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
+ slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
+ local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
+ socket.Name='UpgradeSlot';socket.BackgroundTransparency=.64;U.corner(socket,14)
+ local rail=U.stroke(socket,Color3.fromRGB(119,147,168),2);rail.Transparency=.32
+ local latch=U.frame(slot,UDim2.new(.5,-22,1,-12),UDim2.fromOffset(44,7),Color3.fromRGB(62,89,108))
+ latch.Name='SlotLatch';U.corner(latch,3)
+ for _,side in ipairs({0,1}) do
+  local handle=U.frame(slot,UDim2.new(side,side==0 and 0 or -6,.38,0),UDim2.new(0,6,.24,0),Color3.fromRGB(69,94,112))
+  U.corner(handle,3)
+ end
+ width-=16;height-=16
+ local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
+ card.Name='MountedCard';card.BackgroundTransparency=1
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
@@ -366,7 +408,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
- local focused,pressed,blend=false,false,0
+ local focused,pressed,blend,selected=false,false,0,false
+ local finishedAt,installed
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.13)/revealSpeed)
  local reducedMotion=options.reducedMotion==true
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
@@ -386,7 +429,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
   for _,connection in ipairs(signals) do connection:Disconnect() end
   surface:Destroy();model:Destroy()
  end
- connect(card.Destroying,dispose)
+ connect(slot.Destroying,dispose)
  RunService:BindToRenderStep(stepName,Enum.RenderPriority.Camera.Value+8,function(dt)
   if dead then return end
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
@@ -394,32 +437,42 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
   local instant=quiet or options.skipReveal
   if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
-  local progress=instant and 1 or math.clamp(age/(.67/revealSpeed),0,1)
+  local progress=instant and 1 or math.clamp(age/(.55/revealSpeed),0,1)
   local reveal=1-(1-progress)^3
-  choose.Visible=progress>=.85
+  choose.Visible=progress>=1 and finishedAt==nil
+  local resultAge=finishedAt and clock-finishedAt or 0
+  local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
+  if leaving>=1 then effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
-  local target=focused and choose.Active and 1 or 0
+  local target=(selected or focused and choose.Active) and 1 or 0
   if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
   local nx,ny=0,0
   if target==1 and UserInputService.MouseEnabled then local mouse=UserInputService:GetMouseLocation();nx=math.clamp((mouse.X-position.X)/math.max(1,size.X)*2-1,-1,1);ny=math.clamp((mouse.Y-position.Y)/math.max(1,size.Y)*2-1,-1,1) end
   local response=1-math.exp(-14*math.min(dt,.1));pointerX+=(nx-pointerX)*response;pointerY+=(ny-pointerY)*response
   blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local bob=not quiet and math.sin(clock*2.5+index*1.4)*3 or 0
-  local lift=bob+(full and not quiet and blend*7 or 0)-(pressed and 2 or 0)
+  local latchPulse=instant and 0 or math.clamp(1-math.abs(progress-.91)/.09,0,1)
+  local confirmPulse=installed and math.max(0,1-resultAge/.30) or 0
+  socket.BackgroundTransparency=.55+.43*reveal
+  latch.BackgroundColor3=accentColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
+  latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
+  rail.Color=(selected or installed) and accentColor or Color3.fromRGB(119,147,168)
+  rail.Transparency=selected and .02 or .32
+  local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=progress>=.79;terms.Visible=effect.Visible
-  local bleed=full and 12 or 0
+  effect.Visible=progress>=.92 and leaving<.14;terms.Visible=effect.Visible
+  local bleed=0
   local x,y=(left+right)/2,(top+bottom)/2
-  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.38,y+size.Y*.52)
+  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.22,y+size.Y*.43)
   local travel=1-reveal
-  local arc=math.sin(progress*math.pi)*math.min(46,size.Y*.14)
+  -- Approach the open dock, overshoot a few pixels, then drop into the latch.
+  local arc=math.sin(progress*math.pi)*math.min(27,size.Y*.11)+math.sin(math.clamp((progress-.76)/.24,0,1)*math.pi)*7
   local depth=1
-  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift,depth+.015)
-  local scale=.34+.66*reveal
+  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift+leaving*52,depth+.015)
+  local scale=(.44+.56*reveal)*(1-leaving*.34)
   local w=(onPlane(camera,right+bleed,y,depth)-onPlane(camera,left-bleed,y,depth)).Magnitude*scale
   local h=(onPlane(camera,x,top-bleed,depth)-onPlane(camera,x,bottom+bleed,depth)).Magnitude*scale
-  local tilt=full and not quiet and math.rad((index-2)*1.5+pointerX*blend*9+(index==1 and -1 or 1)*64*travel) or 0
+  local tilt=full and not quiet and math.rad(pointerX*blend*5+(index==1 and -1 or 1)*68*travel) or 0
   local pitch=full and not quiet and math.rad(-pointerY*blend*5-23*travel) or 0
   local roll=not quiet and math.rad((index-2)*20*travel) or 0
   part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
@@ -444,6 +497,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
   artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or pointerX*blend*.7),3+(quiet and 0 or -pointerY*blend*.35),7),Vector3.zero)
   effect.Text=choose.Text~='' and escape(choose.Text) or display
  end)
- return {root=card,button=choose}
+ return {root=slot,button=choose,select=function(value) selected=value end,
+  finish=function(value) installed=value;finishedAt=os.clock() end}
 end
 return CardView

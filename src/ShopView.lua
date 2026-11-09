@@ -23,6 +23,9 @@ end
 local function percent(value) return string.format('%g%%',value*100) end
 function V.effect(c)
  local e=c.effects;local parts={}
+ if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
+ if e.twinThrusters then return 'Two thrusters double top flight speed' end
+ if e.oreDuplicator then return 'This miner produces 2× ore' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
@@ -83,7 +86,7 @@ function V.render(U,parent,options)
  local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
  if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
  label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Pick a mining upgrade and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
+ local detail=starter and 'Fit one of three parts to a miner and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
  if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
  elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
  label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
@@ -123,11 +126,12 @@ function V.render(U,parent,options)
   local icon=rounded(U,card,UDim2.fromOffset(10,12),UDim2.fromOffset(42,42),color:Lerp(WHITE,.65),color)
   U.icon(icon,entry.icon,UDim2.fromOffset(4,4),UDim2.fromOffset(34,34),color)
   local copyWidth=width-(narrow and 76 or 228)
-  label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..'  '..c.level..'×',18,true)
+  local hardware=Workshop.isHardware(c)
+  label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
   label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),15,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
-   UDim2.fromOffset(narrow and width-28 or copyWidth,20),nextEffect(row),14,false)
-  local cost=row.next and ('Add stack · '..row.cost..' Quartz') or 'Maxed'
+   UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)
+  local cost=row.next and ('Add stack · '..row.cost..' Quartz') or (hardware and 'Installed' or 'Maxed')
   local b=action(U,card,UDim2.fromOffset(narrow and 12 or width-154,narrow and 101 or 30),UDim2.fromOffset(narrow and width-28 or 140,36),
    cost,function() options.onBuy(c,c.level) end,options.canBuy and not pending and row.next~=nil and balance>=row.cost)
   b.Name='AddStack_'..entry.id

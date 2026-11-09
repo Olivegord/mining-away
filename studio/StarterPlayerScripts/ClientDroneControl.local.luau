@@ -27,11 +27,14 @@ W.CATALOG={
  {id='Q_RECLAIM',title='Reclaim',scope='Fleet',category='flight',tier=1,max=3,step={reclaim=6},color={134,221,129},icon='startup',crystalRun=true},
  {id='Q_EARLY_DROP',title='Loose Seams',scope='Fleet',category='cargo',tier=1,max=2,step={earlyDrop=.25},color={255,190,65},icon='crystal',crystalRun=true},
  {id='Q_FIELD_CHARGE',title='Field Charger',scope='Player',category='flight',tier=3,max=2,step={fieldCharge=28},color={112,214,175},icon='startup',crystalRun=true},
+ {id='Q_DOUBLE_BEAM',title='Double Beam',scope='Individual',category='mining',tier=2,max=1,step={doubleBeam=1},color={91,208,255},icon='relay',crystalRun=true,hardware=true},
+ {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
+ {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_AFTERSHOCK','Q_RECLAIM','Q_EARLY_DROP'}
-W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_AFTERSHOCK=true,Q_RECLAIM=true,Q_EARLY_DROP=true,
- Q_FIELD_CHARGE=true,Q_TWIN_BEAM=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_TURBO_ROTOR','Q_ORE_DUPLICATOR'}
+W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
+ Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
@@ -58,9 +61,28 @@ function W.owned(p)
  for _,c in ipairs(p.run.cards) do if c.workshop then table.insert(result,c) end end
  return result
 end
-function W.find(p,id)
- for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id then return c end end
+function W.find(p,id,targetId)
+ for _,c in ipairs(p.run.cards) do if c.workshop and c.cardId==id and c.targetDroneId==targetId then return c end end
  return nil
+end
+function W.isHardware(c)
+ local entry=c.workshop and W.BY_ID[c.cardId]
+ return type(entry)=='table' and entry.hardware==true
+end
+-- These physical parts fit the basic laser chassis only. Preview actors and
+-- permanent specialists cannot take a paid part that their rig cannot use.
+function W.fits(d)
+ local role=d.role or d.type
+ return role=='Striker' or role=='Blue'
+end
+function W.targets(p,c)
+ local result={}
+ if W.isHardware(c) then
+  for _,d in ipairs(p.fleet) do
+   if W.fits(d) and not W.find(p,c.cardId,d.id) then table.insert(result,d) end
+  end
+ end
+ return result
 end
 function W.price(p) return math.min(1e12,math.floor(W.PACK_BASE*W.PACK_GROWTH^math.min(p.run.packIndex,84)+.5)) end
 function W.levelCost(c) return math.floor(c.levelCost*c.levelGrowth^(c.level-1)+.5) end
@@ -5351,6 +5373,64 @@ function P:destroyMiningBeam(beam)
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
+-- Fit only parts advertised by the authoritative drone snapshot. These are
+-- local pieces of the existing drone model, including for other observers.
+function P:syncMiningHardware(d,alive)
+ local source,beam=d.source,d.beam
+ local double=source:GetAttribute('DoubleBeam')==true
+ local boost=source:GetAttribute('TwinThrusters')==true
+ local duplicate=source:GetAttribute('OreDuplicator')==true
+ local key=(double and 1 or 0)+(boost and 2 or 0)+(duplicate and 4 or 0)
+ if key~=beam.hardwareKey then
+  beam.hardwareKey=key
+  for _,part in ipairs(beam.hardwareParts or {}) do d.parts[part]=nil;part:Destroy() end
+  beam.hardwareParts={};beam.thrusterTrails={};beam.twinOrigins=nil
+  if key==0 then return end
+  local base=d.emitter
+  local at=beam.origin.Position
+  local shell=d.view.PrimaryPart.Size
+  local function piece(name,size,offset,color,material)
+   local part=barePart(d.view,name);part.Size=size;part.CFrame=base.CFrame*CFrame.new(offset)
+   part.Color=color;part.Material=material;part.Transparency=0;part.CastShadow=false
+   table.insert(beam.hardwareParts,part);d.parts[part]=0
+   return part
+  end
+  local dark=Color3.fromRGB(29,48,60)
+  if double then
+   beam.twinOrigins={}
+   for i,side in ipairs({-1,1}) do
+    local offset=at+Vector3.new(side*math.max(.54,shell.X*.29),-.11,0)
+    piece('DoubleBeamHousing',Vector3.new(.50,.31,.61),offset+Vector3.yAxis*.10,dark,Enum.Material.Metal)
+    local lens=piece('DoubleBeamLens',Vector3.new(.31,.09,.44),offset-Vector3.yAxis*.10,Color3.fromRGB(116,232,255),Enum.Material.Neon)
+    local socket=Instance.new('Attachment');socket.Position=Vector3.new(0,-.045,0);socket.Parent=lens;beam.twinOrigins[i]=socket
+   end
+  end
+  if boost then
+   for _,side in ipairs({-1,1}) do
+    local offset=Vector3.new(side*(shell.X*.5+.17),0,shell.Z*.23)
+    piece('ThrusterPod',Vector3.new(.60,.35,.92),offset,Color3.fromRGB(226,104,36),Enum.Material.SmoothPlastic)
+    local exhaust=piece('ThrusterExhaust',Vector3.new(.37,.20,.10),offset+Vector3.new(0,0,.47),HOT,Enum.Material.Neon)
+    local a=Instance.new('Attachment');a.Position=Vector3.new(-.13,0,.06);a.Parent=exhaust
+    local b=Instance.new('Attachment');b.Position=Vector3.new(.13,0,.06);b.Parent=exhaust
+    local trail=Instance.new('Trail');trail.Attachment0=a;trail.Attachment1=b;trail.Color=ColorSequence.new(HOT)
+    trail.Lifetime=.16;trail.MinLength=.08;trail.LightEmission=.7;trail.Transparency=NumberSequence.new(.18,1);trail.Enabled=false;trail.Parent=exhaust
+    table.insert(beam.thrusterTrails,trail)
+   end
+  end
+  if duplicate then
+   local offset=Vector3.new(0,shell.Y*.5+.11,shell.Z*.16)
+   piece('OreDuplicatorTray',Vector3.new(.94,.21,.78),offset,dark,Enum.Material.Metal)
+   for _,side in ipairs({-1,1}) do
+    local ore=piece('OreDuplicatorCell',Vector3.new(.25,.29,.38),offset+Vector3.new(side*.21,.16,0),Color3.fromRGB(255,210,84),Enum.Material.Glass)
+    ore.CFrame*=CFrame.Angles(0,math.pi*.25,side*.22)
+   end
+  end
+ end
+ if boost then
+  local moving=alive and (source:GetAttribute('Velocity') or Vector3.zero).Magnitude>7
+  for _,trail in ipairs(beam.thrusterTrails) do trail.Enabled=moving end
+ end
+end
 -- Mining Away attaches its beam to an off-center marker on Crystal.Mesh.
 -- Keep its authored X/Z proportions; sample the actual visible surface below
 -- that marker so damage geometry cannot leave the tip suspended above it.
@@ -5418,25 +5498,34 @@ end
 -- Mining Away's two flat beam ribbons. Render from the same verified contact
 -- as other miners; the original warm palette and width curve are cosmetic.
 local function drawReferenceBeam(beam,visible,width,sample,now)
+ local origins=beam.twinOrigins
+ if beam.reference and beam.referenceOrigins~=origins then
+  for _,layer in ipairs(beam.reference) do layer:Destroy() end
+  beam.reference=nil
+ end
  if visible and not beam.reference then
-  local tip=Instance.new('Attachment');tip.Parent=beam.endpoint
+  local tip=beam.referenceTip
+  if not tip then tip=Instance.new('Attachment');tip.Parent=beam.endpoint;beam.referenceTip=tip end
   local layers={}
-  for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
-   local b=Instance.new('Beam');b.Name=name;b.Attachment0=beam.origin;b.Attachment1=tip;b.FaceCamera=true
+  for _,origin in ipairs(origins or {beam.origin}) do
+   for i,name in ipairs({'ReferenceInner','ReferenceOuter'}) do
+    local b=Instance.new('Beam');b.Name=origins and (i==1 and 'DoubleBeamCore' or 'DoubleBeamHalo') or name
+    b.Attachment0=origin;b.Attachment1=tip;b.FaceCamera=true
    -- The enabled reference clones MiningFX.Beam, whose inner color differs
    -- from the unused beam embedded in the drone template.
-   b.Color=ColorSequence.new(i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487))
-   b.Transparency=i==1 and NumberSequence.new(0) or NumberSequence.new(.85625,.85)
-   b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
-   b.Parent=beam.holder;layers[i]=b
+    b.Color=ColorSequence.new(origins and (i==1 and Color3.fromRGB(196,250,255) or Color3.fromRGB(70,197,255)) or (i==1 and Color3.fromRGB(192,134,80) or Color3.new(1,.622278,.0959487)))
+    b.Transparency=i==1 and NumberSequence.new(0) or NumberSequence.new(.85625,.85)
+    b.LightEmission=i==1 and 1 or .1;b.LightInfluence=i==1 and 1 or .6
+    b.Parent=beam.holder;table.insert(layers,b)
+   end
   end
-  beam.reference=layers
+  beam.reference=layers;beam.referenceOrigins=origins
  end
  if not beam.reference then return end
  local t=math.clamp((now-(sample.since or now))/2,0,1)
  local inner=.3*(1-(1-t)^2)*width
  for i,b in ipairs(beam.reference) do
-  local w=visible and (i==1 and inner or .5*width) or 0
+  local w=visible and (i%2==1 and inner or .5*width)*(origins and .64 or 1) or 0
   b.Width0=w;b.Width1=w;b.Enabled=w>.001
  end
 end
@@ -6722,6 +6811,9 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
+ add('doubleBeam','Two lasers.\n2× damage to one crystal.')
+ add('twinThrusters','Two thrusters.\n2× top flight speed.')
+ add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -6769,6 +6861,9 @@ function CardView.terms(choice,_targetOverride)
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
  else target='All drones' end
  if choice.workshop then
+  if e.doubleBeam or e.twinThrusters or e.oreDuplicator then
+   return (choice.targetName or 'Fit to one miner')..' · This run'
+  end
   local before=choice.stackBefore
   local count=before and (before>0 and (before..'× → '..(before+choice.level)..'×') or ('NEW · '..choice.level..'×')) or (choice.level..'×')
   return target..' · This run\n'..count..' · '..choice.rarity
@@ -6807,6 +6902,9 @@ end
 function CardView.identity(choice)
  local e=choice.effects or {}
  local function has(k) return type(e[k])=='number' and e[k]>0 end
+ if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
+ if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
+ if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
@@ -6900,7 +6998,30 @@ local function mechanicVisual(parent,choice,compact)
    crystal(.35+i%2*.12,position+Vector3.new(math.cos(a)*.95,.1+i%2*.25,math.sin(a)*.65),color,CFrame.Angles(.2,a,.3))
   end
  end
- if identity=='orbital' then
+ if identity=='double' then
+  drone('Striker',2.75,Vector3.new(0,1.3,0))
+  local tip=Vector3.new(0,-.74,.3)
+  crystal(1.8,Vector3.new(0,-1.45,.3),Color3.fromRGB(255,116,129),CFrame.Angles(.16,.6,-.12))
+  for _,side in ipairs({-1,1}) do
+   local muzzle=Vector3.new(side*.75,.71,.25)
+   visualPart(world,Vector3.new(.43,.26,.55),muzzle,accent)
+   ray(muzzle,tip,.105,accent)
+  end
+ elseif identity=='boost' then
+  drone('Striker',2.7,Vector3.new(.3,.25,0),CFrame.Angles(0,-.4,.10))
+  for _,side in ipairs({-1,1}) do
+   local pod=Vector3.new(.2,.15+side*.62,side*.72)
+   visualPart(world,Vector3.new(.82,.28,.38),pod,accent)
+   ray(pod-Vector3.xAxis*.35,pod-Vector3.xAxis*(side==1 and 2.2 or 1.75),.16,accent)
+  end
+ elseif identity=='duplicate' then
+  drone('Striker',2.7,Vector3.new(0,1,0))
+  for _,side in ipairs({-1,1}) do
+   local pos=Vector3.new(side*1.06,-.9,.32)
+   crystal(1.65,pos,accent,CFrame.Angles(0,side*.42,side*.22))
+   crystal(.7,pos+Vector3.new(side*.54,-.47,.5),accent,CFrame.Angles(0,side*.5,-side*.3))
+  end
+ elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
   ray(Vector3.new(0,.75,0),Vector3.new(0,-.9,0),.2,accent)
@@ -6948,14 +7069,11 @@ local function mechanicVisual(parent,choice,compact)
   crystal(2.7,Vector3.new(.45,-.7,0),accent,CFrame.Angles(0,.35,-.17))
   ray(Vector3.new(-.8,.6,0),Vector3.new(.1,.05,0),.11,accent);chips(Vector3.new(0,-1.5,0),body:Lerp(accent,.65))
  end
- -- Four offset black renders dilate the real model silhouette. Roblox's
- -- world Highlight is not required, and a frame outline cannot outline models.
- for _,offset in ipairs({{-1,-1},{-1,1},{1,-1},{1,1}}) do
-  local outline=viewport:Clone();outline.Name='ArtworkSilhouette';outline.CurrentCamera=camera
-  local copiedCamera=outline:FindFirstChildOfClass('Camera');if copiedCamera then copiedCamera:Destroy() end
-  outline.ImageColor3=Color3.new(0,0,0);outline.Position=viewport.Position+UDim2.fromOffset(offset[1]*2.5*FACE_PIXELS,offset[2]*2.5*FACE_PIXELS)
-  outline.ZIndex=viewport.ZIndex-1;outline.Parent=parent
- end
+ -- A single offset silhouette keeps the mechanism readable on enamel.
+ local outline=viewport:Clone();outline.Name='ArtworkSilhouette';outline.CurrentCamera=camera
+ local copiedCamera=outline:FindFirstChildOfClass('Camera');if copiedCamera then copiedCamera:Destroy() end
+ outline.ImageColor3=Color3.fromRGB(16,24,36);outline.Position=viewport.Position+UDim2.fromOffset(2*FACE_PIXELS,3*FACE_PIXELS)
+ outline.ZIndex=viewport.ZIndex-1;outline.Parent=parent
  return viewport,camera
 end
 
@@ -6975,8 +7093,8 @@ local function softGlow(U,parent,name,color)
  local glow=Instance.new('CanvasGroup');glow.Name=name;glow.BackgroundTransparency=1;glow.AnchorPoint=Vector2.new(.5,.5)
  glow.Size=UDim2.fromScale(1.1,.8);glow.Position=UDim2.fromScale(.5,.25);glow.GroupTransparency=1;glow.ZIndex=parent.ZIndex+1;glow.Parent=parent
  local previous=0
- for i=1,32 do
-  local radius=1-(i-1)/32
+ for i=1,12 do
+  local radius=1-(i-1)/12
   local opacity=.6*(math.exp(-radius*radius*4)-math.exp(-4))/(1-math.exp(-4))
   local alpha=(opacity-previous)/math.max(.001,1-previous);previous=opacity
   local disc=U.frame(glow,UDim2.fromScale((1-radius)/2,(1-radius)/2),UDim2.fromScale(radius,radius),color)
@@ -7021,8 +7139,21 @@ end
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
- local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice);local card=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.paper)
- card.Name='CardChoice'..tostring(index);card.LayoutOrder=index;card.BackgroundTransparency=1
+ local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice)
+ local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
+ slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
+ local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
+ socket.Name='UpgradeSlot';socket.BackgroundTransparency=.64;U.corner(socket,14)
+ local rail=U.stroke(socket,Color3.fromRGB(119,147,168),2);rail.Transparency=.32
+ local latch=U.frame(slot,UDim2.new(.5,-22,1,-12),UDim2.fromOffset(44,7),Color3.fromRGB(62,89,108))
+ latch.Name='SlotLatch';U.corner(latch,3)
+ for _,side in ipairs({0,1}) do
+  local handle=U.frame(slot,UDim2.new(side,side==0 and 0 or -6,.38,0),UDim2.new(0,6,.24,0),Color3.fromRGB(69,94,112))
+  U.corner(handle,3)
+ end
+ width-=16;height-=16
+ local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
+ card.Name='MountedCard';card.BackgroundTransparency=1
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
@@ -7076,7 +7207,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target),16,p.white,false)
  terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
- local focused,pressed,blend=false,false,0
+ local focused,pressed,blend,selected=false,false,0,false
+ local finishedAt,installed
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.13)/revealSpeed)
  local reducedMotion=options.reducedMotion==true
  pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
@@ -7096,7 +7228,7 @@ function CardView.create(U,parent,choice,index,width,height,options)
   for _,connection in ipairs(signals) do connection:Disconnect() end
   surface:Destroy();model:Destroy()
  end
- connect(card.Destroying,dispose)
+ connect(slot.Destroying,dispose)
  RunService:BindToRenderStep(stepName,Enum.RenderPriority.Camera.Value+8,function(dt)
   if dead then return end
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
@@ -7104,32 +7236,42 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
   local instant=quiet or options.skipReveal
   if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
-  local progress=instant and 1 or math.clamp(age/(.67/revealSpeed),0,1)
+  local progress=instant and 1 or math.clamp(age/(.55/revealSpeed),0,1)
   local reveal=1-(1-progress)^3
-  choose.Visible=progress>=.85
+  choose.Visible=progress>=1 and finishedAt==nil
+  local resultAge=finishedAt and clock-finishedAt or 0
+  local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
+  if leaving>=1 then effect.Visible=false;terms.Visible=false;surface.Enabled=false;return end
   local position,size=card.AbsolutePosition,card.AbsoluteSize
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
-  local target=focused and choose.Active and 1 or 0
+  local target=(selected or focused and choose.Active) and 1 or 0
   if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
   local nx,ny=0,0
   if target==1 and UserInputService.MouseEnabled then local mouse=UserInputService:GetMouseLocation();nx=math.clamp((mouse.X-position.X)/math.max(1,size.X)*2-1,-1,1);ny=math.clamp((mouse.Y-position.Y)/math.max(1,size.Y)*2-1,-1,1) end
   local response=1-math.exp(-14*math.min(dt,.1));pointerX+=(nx-pointerX)*response;pointerY+=(ny-pointerY)*response
   blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local bob=not quiet and math.sin(clock*2.5+index*1.4)*3 or 0
-  local lift=bob+(full and not quiet and blend*7 or 0)-(pressed and 2 or 0)
+  local latchPulse=instant and 0 or math.clamp(1-math.abs(progress-.91)/.09,0,1)
+  local confirmPulse=installed and math.max(0,1-resultAge/.30) or 0
+  socket.BackgroundTransparency=.55+.43*reveal
+  latch.BackgroundColor3=accentColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
+  latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
+  rail.Color=(selected or installed) and accentColor or Color3.fromRGB(119,147,168)
+  rail.Transparency=selected and .02 or .32
+  local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=progress>=.79;terms.Visible=effect.Visible
-  local bleed=full and 12 or 0
+  effect.Visible=progress>=.92 and leaving<.14;terms.Visible=effect.Visible
+  local bleed=0
   local x,y=(left+right)/2,(top+bottom)/2
-  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.38,y+size.Y*.52)
+  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.22,y+size.Y*.43)
   local travel=1-reveal
-  local arc=math.sin(progress*math.pi)*math.min(46,size.Y*.14)
+  -- Approach the open dock, overshoot a few pixels, then drop into the latch.
+  local arc=math.sin(progress*math.pi)*math.min(27,size.Y*.11)+math.sin(math.clamp((progress-.76)/.24,0,1)*math.pi)*7
   local depth=1
-  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift,depth+.015)
-  local scale=.34+.66*reveal
+  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift+leaving*52,depth+.015)
+  local scale=(.44+.56*reveal)*(1-leaving*.34)
   local w=(onPlane(camera,right+bleed,y,depth)-onPlane(camera,left-bleed,y,depth)).Magnitude*scale
   local h=(onPlane(camera,x,top-bleed,depth)-onPlane(camera,x,bottom+bleed,depth)).Magnitude*scale
-  local tilt=full and not quiet and math.rad((index-2)*1.5+pointerX*blend*9+(index==1 and -1 or 1)*64*travel) or 0
+  local tilt=full and not quiet and math.rad(pointerX*blend*5+(index==1 and -1 or 1)*68*travel) or 0
   local pitch=full and not quiet and math.rad(-pointerY*blend*5-23*travel) or 0
   local roll=not quiet and math.rad((index-2)*20*travel) or 0
   part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
@@ -7154,7 +7296,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
   artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or pointerX*blend*.7),3+(quiet and 0 or -pointerY*blend*.35),7),Vector3.zero)
   effect.Text=choose.Text~='' and escape(choose.Text) or display
  end)
- return {root=card,button=choose}
+ return {root=slot,button=choose,select=function(value) selected=value end,
+  finish=function(value) installed=value;finishedAt=os.clock() end}
 end
 return CardView
 
@@ -7472,6 +7615,9 @@ end
 local function percent(value) return string.format('%g%%',value*100) end
 function V.effect(c)
  local e=c.effects;local parts={}
+ if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
+ if e.twinThrusters then return 'Two thrusters double top flight speed' end
+ if e.oreDuplicator then return 'This miner produces 2× ore' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
@@ -7532,7 +7678,7 @@ function V.render(U,parent,options)
  local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
  if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
  label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Pick a mining upgrade and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
+ local detail=starter and 'Fit one of three parts to a miner and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
  if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
  elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
  label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
@@ -7572,11 +7718,12 @@ function V.render(U,parent,options)
   local icon=rounded(U,card,UDim2.fromOffset(10,12),UDim2.fromOffset(42,42),color:Lerp(WHITE,.65),color)
   U.icon(icon,entry.icon,UDim2.fromOffset(4,4),UDim2.fromOffset(34,34),color)
   local copyWidth=width-(narrow and 76 or 228)
-  label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..'  '..c.level..'×',18,true)
+  local hardware=Workshop.isHardware(c)
+  label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
   label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),15,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
-   UDim2.fromOffset(narrow and width-28 or copyWidth,20),nextEffect(row),14,false)
-  local cost=row.next and ('Add stack · '..row.cost..' Quartz') or 'Maxed'
+   UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)
+  local cost=row.next and ('Add stack · '..row.cost..' Quartz') or (hardware and 'Installed' or 'Maxed')
   local b=action(U,card,UDim2.fromOffset(narrow and 12 or width-154,narrow and 101 or 30),UDim2.fromOffset(narrow and width-28 or 140,36),
    cost,function() options.onBuy(c,c.level) end,options.canBuy and not pending and row.next~=nil and balance>=row.cost)
   b.Name='AddStack_'..entry.id
@@ -9268,12 +9415,19 @@ connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' th
 local modalMode,modalSize=nil,nil
 local actionPending=nil
 local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
-local function clearBody() table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil; for _,x in ipairs(body:GetChildren()) do x:Destroy() end;body.CanvasPosition=Vector2.zero end
+local offerUI={}
+local function clearBody()
+ table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil
+ if offerUI.footer then offerUI.footer:Destroy();offerUI.footer=nil end
+ for _,x in ipairs(body:GetChildren()) do x:Destroy() end
+ body.CanvasPosition=Vector2.zero
+end
 local function tx() return Http:GenerateGUID(false) end
 local function send(action,data)
  if not profile or not profile.run or actionPending or profile.pendingTransaction then return false end
  data=data or {};data.txId=tx();data.runId=profile.run.id
- actionPending={kind=action,at=os.clock(),runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ actionPending={kind=action,at=os.clock(),txId=data.txId,runId=profile.run.id,packIndex=profile.run.packIndex,offerId=profile.run.pendingOffer and profile.run.pendingOffer.id,upgradeId=data.upgradeId,level=data.level,index=data.index}
+ if action=='ChooseCard' then offerUI.claim=actionPending end
  command:FireServer(action,data);return true
 end
 local function comma(n) local s=tostring(math.floor(tonumber(n) or 0));local r=s:reverse():gsub('(%d%d%d)','%1,'):reverse();return (r:gsub('^,','')) end
@@ -9317,16 +9471,15 @@ local function layoutModal()
   l.bodyWidth=l.panelWidth-32;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
- if modalMode=='offer' and l.short then
-  l.headerHeight=64;l.panelPadding=12;l.bodyWidth=l.panelWidth-24
-  l.bodyHeight=l.panelHeight-l.headerHeight-l.panelPadding;l.cardHeight=math.clamp(l.bodyHeight-2,212,256)
- end
- if modalMode=='offer' and l.cardColumns==3 then
-  l.panelWidth=math.min(820,v.X-24);l.panelPadding=12;l.bodyWidth=l.panelWidth-24
-  l.cardWidth=(l.bodyWidth-l.cardGap*2)/3;l.headerHeight=l.short and 64 or 100
+ if modalMode=='offer' then
+  l.cardColumns=v.X>=650 and 3 or 1;l.cardGap=l.cardColumns==3 and 10 or 12
+  l.panelWidth=math.min(l.cardColumns==3 and 770 or 432,l.panelWidth);l.panelPadding=8;l.bodyWidth=l.panelWidth-16
+  l.headerHeight=49;l.offerFooter=58
+  l.cardWidth=math.floor((l.bodyWidth-l.cardGap*(l.cardColumns-1))/l.cardColumns)
+  l.cardHeight=l.cardColumns==3 and math.clamp(l.panelHeight-l.headerHeight-l.offerFooter-6,212,314) or 234
   l.panelX=(v.X-l.panelWidth)/2
-  l.panelHeight=math.min(l.panelHeight,l.headerHeight+l.cardHeight+32)
-  l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
+  if l.cardColumns==3 then l.panelHeight=math.min(l.panelHeight,l.headerHeight+l.cardHeight+l.offerFooter+6) end
+  l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.offerFooter)
   l.panelY=math.floor((v.Y-l.panelHeight)*.65)
  end
  sheet.Size=UDim2.fromOffset(l.panelWidth,l.panelHeight);sheet.Position=UDim2.fromOffset(l.panelX,l.panelY);modalSize=v
@@ -9376,8 +9529,8 @@ local function menu(mode,title,subtitle,icon)
  if colorful then modalTitle.Font=Enum.Font.Arcade;modalTitle.TextColor3=palette.white;modalTitle.TextStrokeTransparency=.45;modalSubtitle.TextColor3=Color3.fromRGB(202,209,231) else modalTitle.Font=Enum.Font.SourceSansBold end
  modalEmblem.Visible=not inOffer
  if inOffer then
-  modalSubtitle.Position=UDim2.fromOffset(52,l.headerHeight-37)
-  modalSubtitle.Size=UDim2.new(1,-104,0,27);modalSubtitle.TextSize=17
+  modalSubtitle.Position=UDim2.fromOffset(46,1)
+  modalSubtitle.Size=UDim2.new(1,-92,0,44);modalSubtitle.TextSize=17
  else modalSubtitle.TextSize=12 end
  if mode=='shop' or mode=='stars' then
   ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
@@ -9386,7 +9539,10 @@ local function menu(mode,title,subtitle,icon)
  end
  modal.Visible=true
  packView:setFocus(inOffer)
- if entering then
+ if inOffer then
+  if menuTween then menuTween:Cancel() end
+  sheetScale.Scale=1
+ elseif entering then
   if menuTween then menuTween:Cancel() end
   sheetScale.Scale=.98;menuTween=TweenService:Create(sheetScale,TweenInfo.new(.16,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Scale=1});menuTween:Play()
  end
@@ -9444,12 +9600,26 @@ end
 local function updateOfferControls()
  local usable,reason=availability('ChooseCard')
  local choosing=actionPending and actionPending.kind=='ChooseCard'
- normalSubtitle=choosing and 'Applying card…' or (not usable and reason or 'This run only')
+ local offer=pending()
+ if offerUI.completed or not offer or not offerUI.footer then return end
+ local choice=offer.choices[offerUI.index or 0]
+ local hardware=choice and Workshop.isHardware(choice)
+ local targets=hardware and offerUI.targets or {}
+ local target=targets[offerUI.targetIndex or 0]
+ local stars=offer.packTier or 1
+ normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ('Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
  for index,view in ipairs(offerViews) do
-  enableAction(view.button,usable)
-  local text=choosing and (actionPending.index==index and 'Installing…' or 'Please wait') or ''
-  if view.button.Text~=text then view.button.Text=text end
+  enableAction(view.button,not choosing)
+  view.select(offerUI.index==index)
  end
+ offerUI.target.Visible=hardware==true
+ offerUI.target.Text=target and ('Fit to '..target.name..(#targets>1 and '  ›' or '')) or 'No eligible miners'
+ enableAction(offerUI.target,#targets>1 and not choosing)
+ offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
+ offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
+ offerUI.install.Size=hardware and UDim2.new(.48,-6,0,44) or UDim2.fromOffset(math.min(280,offerUI.footer.Size.X.Offset-8),44)
+ offerUI.install.Text=choosing and 'Installing…' or (choice and ('Install '..choice.title) or 'Select a card')
+ enableAction(offerUI.install,usable and choice~=nil and (not hardware or target~=nil))
 end
 openOffer=function()
  local offer=pending();if not offer then return end
@@ -9460,6 +9630,9 @@ openOffer=function()
  local size=viewport()
  if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
  local skipReveal=presentedOfferId==offer.id
+ if not skipReveal then
+  offerUI.index=nil;offerUI.targets=nil;offerUI.targetIndex=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
+ end
  local origin
  local camera=workspace.CurrentCamera
  local worldOrigin=not skipReveal and packView:origin(offer.id)
@@ -9470,11 +9643,31 @@ openOffer=function()
  local stars=offer.packTier or 1
  local l=menu('offer','PICK AN UPGRADE','Choose one upgrade · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
  offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
+ offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
+ offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
+ offerUI.target=button(offerUI.footer,UDim2.fromOffset(4,4),UDim2.new(.52,-6,0,44),'',function()
+  offerUI.targetIndex=offerUI.targetIndex%#offerUI.targets+1
+  updateOfferControls()
+ end,Color3.fromRGB(46,70,92))
+ offerUI.target.Name='ChooseMiner'
+ offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
+  if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
+  local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
+  local choice=offer.choices[offerUI.index]
+  if Workshop.isHardware(choice) and not target then return end
+  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=target and target.id}) then noticeUntil=0;updateOfferControls() end
+ end,palette.mineral)
+ offerUI.install.Name='InstallUpgrade'
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardColumns==3 and l.cardWidth-4 or math.min(460,l.cardWidth-6),l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
-   if not pending() or pending().id~=offer.id or not canAct() then return end
-   if send('ChooseCard',{offerId=offer.id,index=index}) then updateOfferControls() end
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onChoose=function()
+   if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
+   if offerUI.index~=index then
+    offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
+    -- Start with a miner the player can immediately see in the Studio crew.
+    for i,d in ipairs(offerUI.targets) do if profile.droneStats and profile.droneStats[d.id] then offerUI.targetIndex=i;break end end
+   end
+   updateOfferControls()
   end})
   offerViews[index]=view
  end
@@ -9703,7 +9896,19 @@ do
   if offer and offer.opened==false and (not oldProfile or not oldProfile.run.pendingOffer or oldProfile.run.pendingOffer.id~=offer.id) then
    if modalMode=='pack' then modal.Visible=false;modalMode=nil end
   elseif offer and offer.opened~=false and offer.id~=lastOffer then lastOffer=offer.id;openOffer()
-  elseif not offer and modalMode=='offer' then openShop('Quartz')
+  elseif not offer and modalMode=='offer' then
+   if not offerUI.completed then
+    local claim=offerUI.claim
+    if claim and not changedRun and modal.Visible and offerIdentity==claim.offerId then
+     offerUI.completed=claim.offerId;offerUI.claim=nil
+     normalSubtitle='Upgrade installed'
+     enableAction(offerUI.install,false);enableAction(offerUI.target,false)
+     for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
+     task.delay(.32,function()
+      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then openShop('Quartz') end
+     end)
+    elseif modal.Visible then openShop('Quartz') else modalMode=nil end
+   end
   elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
    updateOfferControls()
   elseif modalMode=='fleet' or modalMode=='run' then
@@ -9718,7 +9923,23 @@ do
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
- notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5;actionPending=nil;refreshModal()
+ notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5
+ if not actionPending or actionPending.kind~='ChooseCard' then actionPending=nil end
+ refreshModal()
+end)
+connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
+ local claim=offerUI.claim
+ local raw=player.PlayerGui:GetAttribute('MA_OfferReceipt')
+ if not claim or type(raw)~='string' then return end
+ local ok,reply=pcall(Http.JSONDecode,Http,raw)
+ if not ok or type(reply)~='table' or reply.txId~=claim.txId or reply.runId~=claim.runId or reply.offerId~=claim.offerId then return end
+ if reply.status=='rejected' then
+  if actionPending==claim then actionPending=nil end
+  offerUI.claim=nil;notice.Text=reply.reason or 'Upgrade could not be installed';noticeUntil=os.clock()+5
+  updateOfferControls()
+ elseif reply.status=='uncertain' then
+  notice.Text='Checking your install…';noticeUntil=os.clock()+5
+ end
 end)
 
 local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
@@ -10063,6 +10284,8 @@ local function renderDrone(d,dt,now)
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
+ local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
+ presentation:syncMiningHardware(d,alive)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
@@ -10071,7 +10294,6 @@ local function renderDrone(d,dt,now)
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
  local attacking=state=='Attack' and s:GetAttribute('Firing')==true and s:GetAttribute('WorkPaused')~=true
- local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
  local active=alive and (mining or attacking)
  local charging=alive and state=='Warmup' and not mining and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('WarmupStart') or 0)>0
  local beam=d.beam
@@ -10430,6 +10652,7 @@ connect(RunService.Heartbeat,function(dt)
   if signature~=availabilitySignature then availabilitySignature=signature;if modalMode=='offer' then updateOfferControls() else refreshModal() end end
  end
  if actionPending and os.clock()-actionPending.at>10 and not (profile and profile.pendingTransaction) then
+  if actionPending==offerUI.claim then offerUI.claim=nil end
   actionPending=nil;notice.Text='Still waiting for confirmation. You can retry.';noticeUntil=os.clock()+5;refreshModal()
  end
  if os.clock()>noticeUntil then notice.Text='' end

@@ -1012,6 +1012,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
    award(recipient,r,special==true)
+   if (recipient.stats.oreDuplicator or 0)>0 and not abilityOrigin then
+    RoleEffects.Pulse(r.part.Position,Color3.fromRGB(255,211,93),.45,3.5,.20)
+   end
    -- Tools never manufacture more tools, including rocks later finished by a
    -- normal drone. The rock's ordinary ore payout remains unchanged.
    if not r.consumableWorked then
@@ -1043,7 +1046,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
    end
   end
-  if broken and (secondaryId or Mining.kind(d.owned.type)=='Red') then
+  if broken and (secondaryId or d.stats.doubleBeam==1 or Mining.kind(d.owned.type)=='Red') then
    -- This short record is presentation only: scalar IDs/timestamps, no target,
    -- reservation, damage permission or resource reference survives retirement.
    d.mineBreakSerial=d.mineBreakSerial+1
@@ -1886,6 +1889,7 @@ local function snapshotDrone(d)
   Battery=scene.chargingStation and math.ceil(d.battery or 0) or nil,MaxBattery=scene.chargingStation and d.stats.batteryCapacity or nil,
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
+  DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
   MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
@@ -2146,13 +2150,16 @@ local function offerReply(pl: any,payload: any,status: string,reason: string)
  offerReceiptSerial=offerReceiptSerial%1000000000+1
  gui:SetAttribute('MA_OfferReceipt',Http:JSONEncode({txId=payload.txId,runId=payload.runId,offerId=payload.offerId,status=status,reason=reason,serial=offerReceiptSerial}))
 end
-local function committedOffer(p: any,payload: any): boolean
- if not p or not validPayload(payload) then return false end
+local function committedOffer(p: any,payload: any): (boolean,boolean)
+ if not p or not validPayload(payload) then return false,false end
  for _,receipt in ipairs(p.session.receipts or {}) do
   local result=receipt.result
-  if receipt.id=='choose:'..payload.txId and type(result)=='table' and result.offerId==payload.offerId and result.runId==payload.runId then return true end
+  if receipt.id=='choose:'..payload.txId and type(result)=='table' then
+   local same=result.offerId==payload.offerId and result.runId==payload.runId and result.index==payload.index and result.selectedDroneId==payload.targetDroneId
+   return same,not same
+  end
  end
- return false
+ return false,false
 end
 local function offerUnavailable(p: any,pl: any,payload: any,reason: string)
  if committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed')
@@ -2184,14 +2191,14 @@ local function commandReply(pl: any,payload: any,status: any,reason: any,field: 
  gui:SetAttribute('MA_CommandState',Http:JSONEncode(state))
 end
 local function chooseCard(p: any,pl: any,payload: any)
-   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 then offerReply(pl,payload,'rejected','Invalid choice');return end
+   if type(payload.offerId)~='string' or #payload.offerId>160 or not R.finite(payload.index) or payload.index%1~=0 or payload.index<1 or payload.index>3 or (payload.targetDroneId~=nil and (type(payload.targetDroneId)~='string' or #payload.targetDroneId>100)) then offerReply(pl,payload,'rejected','Invalid choice');return end
    p.pendingOfferTx=payload.txId
    local started=transact(p,'choose:'..payload.txId,function(copy: any)
-    local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false});if ok then return r end;return nil,r
+    local ok: boolean,r: any=Ca.select(copy,payload.offerId,payload.index,payload.txId,payload.runId,{atDepot=true,activeEncounter=false,targetDroneId=payload.targetDroneId});if ok then return r end;return nil,r
    end,function(result)
     refreshStats(p)
     local stars=result.stars or 0
-    notice(p,stars>0 and ('Upgrade installed · +'..stars..' '..(stars==1 and 'Star' or 'Stars')) or 'Upgrade installed')
+    notice(p,stars>0 and ((result.selectedDroneId and (result.card.title..' fitted to '..result.card.targetName) or 'Upgrade installed')..' · +'..stars..' '..(stars==1 and 'Star' or 'Stars')) or 'Upgrade installed')
    end,function(status,reason) if status~='uncertain' then p.pendingOfferTx=nil end;offerReply(pl,payload,status,reason) end)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
@@ -2489,7 +2496,11 @@ function scene.placeSquare(p,payload)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
  local p=profiles[pl.UserId];if not p or p.player~=pl then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerReply(pl,payload,'rejected','Fleet unavailable') end;return end
- if action=='ChooseCard' and committedOffer(p,payload) then offerReply(pl,payload,'accepted','Card installed');return end
+ if action=='ChooseCard' then
+  local committed,conflict=committedOffer(p,payload)
+  if committed then offerReply(pl,payload,'accepted','Card installed');return end
+  if conflict then offerReply(pl,payload,'rejected','This install was already used');return end
+ end
  local duration=math.max(0,now-p.bucketAt);p.tokens=math.min(7,p.tokens+duration*3);p.bucketAt=now
  if p.tokens<1 then if now>=(p.nextCommandRejection or 0) then p.nextCommandRejection=now+.35;commandReply(pl,payload,'rejected','Too many commands');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Too many commands') end end;return end;p.tokens=p.tokens-1
  if type(action)~='string' or #action>24 or not healthy(p) or not characterRoot(p) then commandReply(pl,payload,'rejected','Fleet unavailable');if action=='ChooseCard' then offerUnavailable(p,pl,payload,'Fleet unavailable') end;return end
