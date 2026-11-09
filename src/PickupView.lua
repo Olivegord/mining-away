@@ -3,6 +3,7 @@
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local V={};V.__index=V
+local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -20,6 +21,7 @@ local function sample(r,source,now)
   floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true})
  while #r.samples>5 do table.remove(r.samples,1) end
  r.velocity=velocity
+ r.units=source:GetAttribute('Units') or 1
  r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
 end
 function V.new(root,parent,audio)
@@ -34,7 +36,7 @@ function V.new(root,parent,audio)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,seed=id,
+  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
@@ -72,13 +74,16 @@ function V:update(dt,now)
     r.collectTarget=source:GetAttribute('CollectedPosition')
    end
   end
-  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt);local scale=1;local done=false
+  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+  local scale=1;local glow=0;local done=false
   if r.collectAt then
-   local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/.24;local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
-   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,math.sin(math.clamp(t,0,1)*math.pi)*.18,0)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1));scale=math.max(.04,shrink);done=t>=1
+   local lift=math.sin(math.clamp(t,0,1)*math.pi)
+   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
+   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
+   scale=math.max(.04,shrink*(1+.16*lift));glow=.28*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
    -- late to replay a sound. A streamed/stalled observer must still settle.
@@ -100,13 +105,20 @@ function V:update(dt,now)
    r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
+   local latest=r.samples[#r.samples]
+   local pulling=latest and latest.homing and not r.collectAt and not r.removedAt
+   local targetPull=pulling and 1 or 0
+   r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
+   if r.pull<.001 then r.pull=0 end
+   local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
+   scale*=pile*(1+.14*r.pull)
+   glow=math.max(glow,.22*r.pull)
    local age=math.max(0,now-PickupMotion.DELAY-r.born)
    local tumble=PickupMotion.tumble(age,r.landAge)
    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
    local position=r.pos
-   local latest=r.samples[#r.samples]
    if not r.collectAt and latest and latest.floor then
-    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
+    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
     -- Lift the entire trajectory by the rotated support extent, preserving
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
@@ -114,7 +126,7 @@ function V:update(dt,now)
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
    r.view.Size=r.size*scale;r.view.Transparency=1-opacity
-
+   if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
   end
  end
 end

@@ -680,9 +680,8 @@ function W.initialize(): any
   end
   local run=map:FindFirstChild('CrystalRun')
   local runStart,chargingStation
-  local runWalls={}
   if run then
-   local hardness={1,1.7,2.55,3.6,4.9}
+   local hardness={1,1.75,2.65,3.75,5.1}
    local yield={10,18,30,45,62}
    for i=1,5 do
     local original=Config.Fields[i]
@@ -696,19 +695,11 @@ function W.initialize(): any
     table.sort(clusters,function(a,b) return a.Name<b.Name end)
     assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=hardness[i],Color=Config.Fields[1].Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
     runStart=runStart or part.Position
-    if i>1 then
-     for _,name in ipairs({'WestWall','EastWall'}) do
-      local wall=model:FindFirstChild(name)
-      assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
-      table.insert(runWalls,{x=wall.Position.X,halfX=wall.Size.X*.5+2,z=wall.Position.Z,
-       halfZ=wall.Size.Z*.5+1.5,cruise=wall.Position.Y+wall.Size.Y*.5+3})
-     end
-    end
    end
    chargingStation=run:FindFirstChild('ChargingStation')
    assert(chargingStation and chargingStation:IsA('BasePart'),'Missing Crystal Run charging station')
@@ -719,7 +710,7 @@ function W.initialize(): any
    packStation=map:FindFirstChild('PackStation',true),
    prestigeStation=map:FindFirstChild('PrestigeStation',true),
    converter=workspace:FindFirstChild('Converter'),
-   fields=fieldMetadata,runStart=runStart,runWalls=runWalls,chargingStation=chargingStation,
+   fields=fieldMetadata,runStart=runStart,chargingStation=chargingStation,
    turretTemplate=game:GetService('ServerStorage'):FindFirstChild('OriginalConstructTemplate'),
    droneTemplate=workspace:FindFirstChild('Drone'),
    crystalTemplate=workspace:FindFirstChild('Crystal')

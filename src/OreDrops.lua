@@ -1,7 +1,7 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=70,
- AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.18}
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,GRAVITY=70,
+ AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -10,8 +10,8 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- local speed=10.5+(serial%5)*.65
- return math.cos(angle)*speed,17+index*.8,math.sin(angle)*speed
+ local speed=7.5+(serial%5)*.5
+ return math.cos(angle)*speed,15+index*.8,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)

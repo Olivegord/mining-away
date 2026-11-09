@@ -335,8 +335,8 @@ function Soundscape:observeProfile(previous,current)
  elseif (after.saleEarnings or 0)>(before.saleEarnings or 0) then self:play('sale') end
  if before.id==after.id then
   local function cargo(run) local total=0;for _,units in pairs(run.cargo or {}) do total+=units end;return total end
-  local capacity=current.capacity or 40
-  if cargo(before)<(previous.capacity or 40) and cargo(after)>=capacity then self:play('full') end
+  local capacity=current.capacity or 100
+  if cargo(before)<(previous.capacity or 100) and cargo(after)>=capacity then self:play('full') end
  end
 end
 function Soundscape:destroy()

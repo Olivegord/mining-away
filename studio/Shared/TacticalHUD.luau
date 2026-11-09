@@ -187,7 +187,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.cargoText.Position=UDim2.fromOffset(78,0);r.cargoText.Size=UDim2.fromOffset(width-78,rowHeight);r.cargoText.TextSize=18
  r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ',''):gsub(' / ','/')
  local backpack=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
- local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 40
+ local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 100
  local full=backpack>=capacity
  r.cargoText.TextColor3=full and C.gold or C.text
  local now=os.clock();local collected=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0

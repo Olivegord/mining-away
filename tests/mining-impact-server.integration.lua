@@ -22,16 +22,16 @@ check('full bag accepts manual orders and continues actual miner damage',functio
  d.pos=Feel.mineGoal(r.position,d.targetSlot,false,r.fullSize,r.referenceCrystal);d.velocity=Vector3.zero
  for _=1,math.ceil((d.stats.warmup+1)/C.Tick) do realTime+=C.Tick;now=realTime;mineDrone(d,p,f,C.Tick) end
  assert(r.hp<490 and d.mining,'mining stopped when backpack was full')
- assert(hitResource(d,r,10000));assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==40)
+ assert(hitResource(d,r,10000));assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==100)
 end)
 check('ground rewards stay bounded and conserve ore after many full-bag breaks',function()
- local _,p,d,f=fixture();data(p).run.cargo={Quartz=40}
+ local _,p,d,f=fixture();data(p).run.cargo={Quartz=100}
  for _=1,100 do local r=node(d,f,100);assert(hitResource(d,r,1000)) end
  local units,nodes=pendingOre(p);assert(units==1000 and nodes<=OreDrops.MAX_NODES)
  local parts=0;for _,drop in pairs(pickups) do if drop.owner==d.owner then parts+=1 end end;assert(parts<=64)
- data(p).run.cargo={Quartz=39}
+ data(p).run.cargo={Quartz=99}
  for _=1,150 do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
- assert(Pro.cargoUnits(data(p))==40 and pendingOre(p)==999,'partial collection lost ore or exceeded capacity')
+ assert(Pro.cargoUnits(data(p))==100 and pendingOre(p)==999,'partial collection lost ore or exceeded capacity')
 end)
 check('test field is always open beside Quartz and all rock work is exactly tenfold',function()
  local _,p,d,f=fixture(6);assert(f.cfg.AlwaysUnlocked and playerCanMine(p,f))

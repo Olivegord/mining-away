@@ -9,7 +9,7 @@ local run=Instance.new('Folder');run.Name='CrystalRun';run.Parent=scene.map
 local zone=Instance.new('Folder');zone.Name='TestZone';zone.Parent=run
 local bed=World.part(zone,'Field',Vector3.new(0,5,-68),Vector3.new(68,1,48),Color3.new(1,1,1))
 scene.chargingStation=World.part(run,'ChargingStation',Vector3.new(0,5,-41),Vector3.new(4,1,4),Color3.new(1,1,1))
-local f={id=#patches+1,cfg={Key='Quartz',SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,Hardness=1,Turrets=0,Respawn=8},
+local f={id=#patches+1,cfg={Key='Quartz',SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,Hardness=1,Count=3,Ore=20,Turrets=0,Respawn=8},
  part=bed,model=zone,center=bed.Position,color=Color3.new(1,0,0),resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
 f.e.phase='Safe';patches[f.id]=f
 local pl=player(98700);players.PlayerAdded:Fire(pl)
@@ -74,8 +74,13 @@ release(d);d.field=nil
 local profile=data(p)
 local full=Ca.capacity(profile)
 Pro.addCargo(profile,'Quartz',full,full)
-step(30);assert(not d.target and d.state=='HoldSelector','full backpack should leave the crew stationed at the square')
-assert((d.goal-p.miningSquare.center).Magnitude<13,'idle crew left the square')
+local oreBefore=pendingOre(p)
+step(30);local overflowTarget=assert(d.target,'full backpack prevented a new mining job')
+assert(d.squareJob==p.miningSquare)
+d.pos=committedStation(d,overflowTarget)
+for _=1,600 do step(1);if overflowTarget.paid then break end end
+assert(overflowTarget.paid and pendingOre(p)>oreBefore,'mining a full bag did not leave collectible ore')
+assert(Pro.cargoUnits(profile)==100 and full==100)
 profile.run.stars=8
 local function star(id,tx)
  command.OnServerEvent:Fire(pl,'BuyStarUpgrade',{runId=data(p).run.id,upgradeId=id,level=0,txId=tx})
@@ -89,11 +94,11 @@ assert(pl.Character:FindFirstChildOfClass('Humanoid').WalkSpeed==18,'walk speed 
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
 local earnings=data(p).run.quartzEarnings
 for _=1,4 do realTime+=.13;heartbeat:Fire(.13) end
-assert(Pro.cargoUnits(data(p))==0 and data(p).run.quartzEarnings==earnings+full,'Auto Sell did not sell the full bag exactly once')
+assert(Pro.cargoUnits(data(p))<full and data(p).run.quartzEarnings==earnings+full,'Auto Sell did not sell the full bag exactly once')
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 command.OnServerEvent:Fire(pl,'Recall');step(1)
 assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
-print('PASS Crystal Run grid pin, station keeping, recall, edge overlap, reservations, committed work, regrowth, charging, full-bag pause and Star Shop effects')
+print('PASS Crystal Run grid pin, station keeping, recall, edge overlap, reservations, committed work, regrowth, charging, mining with a full bag and Star Shop effects')
 
 -- Exercise the larger route's population budget and station geometry with
 -- the production spawner. A busy patch must not shift its rocks into a lane.
@@ -152,14 +157,4 @@ release(d)
 p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)
 assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)
-scene.runWalls={{x=-32.5,halfX=23.5,z=190,halfZ=2.625,cruise=13.84},
- {x=32.5,halfX=23.5,z=190,halfZ=2.625,cruise=13.84}}
-d.state='ToCharge'
-d.pos=Vector3.new(0,8,215)
-local charge=Vector3.new(0,8,170)
-move(d,charge,C.Tick)
-assert(d.intentGoal==charge,'worker climbed despite clear divider opening')
-d.pos=Vector3.new(31,8,215)
-move(d,Vector3.new(31,8,170),C.Tick)
-assert(d.intentGoal.Z==215 and d.intentGoal.Y>13,'worker did not climb above solid divider')
-print('PASS full reference-sized patch populations, refill locality, mining and standby heights, and two-way divider clearance')
+print('PASS full reference-sized patch populations, refill locality, mining and standby heights')

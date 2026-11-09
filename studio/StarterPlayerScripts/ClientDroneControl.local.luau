@@ -1386,8 +1386,8 @@ function Soundscape:observeProfile(previous,current)
  elseif (after.saleEarnings or 0)>(before.saleEarnings or 0) then self:play('sale') end
  if before.id==after.id then
   local function cargo(run) local total=0;for _,units in pairs(run.cargo or {}) do total+=units end;return total end
-  local capacity=current.capacity or 40
-  if cargo(before)<(previous.capacity or 40) and cargo(after)>=capacity then self:play('full') end
+  local capacity=current.capacity or 100
+  if cargo(before)<(previous.capacity or 100) and cargo(after)>=capacity then self:play('full') end
  end
 end
 function Soundscape:destroy()
@@ -8196,6 +8196,7 @@ local PickupView = (function()
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local V={};V.__index=V
+local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -8213,6 +8214,7 @@ local function sample(r,source,now)
   floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true})
  while #r.samples>5 do table.remove(r.samples,1) end
  r.velocity=velocity
+ r.units=source:GetAttribute('Units') or 1
  r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
 end
 function V.new(root,parent,audio)
@@ -8227,7 +8229,7 @@ function V.new(root,parent,audio)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,seed=id,
+  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
@@ -8265,13 +8267,16 @@ function V:update(dt,now)
     r.collectTarget=source:GetAttribute('CollectedPosition')
    end
   end
-  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt);local scale=1;local done=false
+  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+  local scale=1;local glow=0;local done=false
   if r.collectAt then
-   local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/.24;local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
-   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,math.sin(math.clamp(t,0,1)*math.pi)*.18,0)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1));scale=math.max(.04,shrink);done=t>=1
+   local lift=math.sin(math.clamp(t,0,1)*math.pi)
+   r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
+   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
+   scale=math.max(.04,shrink*(1+.16*lift));glow=.28*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
    -- late to replay a sound. A streamed/stalled observer must still settle.
@@ -8293,13 +8298,20 @@ function V:update(dt,now)
    r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
+   local latest=r.samples[#r.samples]
+   local pulling=latest and latest.homing and not r.collectAt and not r.removedAt
+   local targetPull=pulling and 1 or 0
+   r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
+   if r.pull<.001 then r.pull=0 end
+   local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
+   scale*=pile*(1+.14*r.pull)
+   glow=math.max(glow,.22*r.pull)
    local age=math.max(0,now-PickupMotion.DELAY-r.born)
    local tumble=PickupMotion.tumble(age,r.landAge)
    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
    local position=r.pos
-   local latest=r.samples[#r.samples]
    if not r.collectAt and latest and latest.floor then
-    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
+    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
     -- Lift the entire trajectory by the rotated support extent, preserving
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
@@ -8307,7 +8319,7 @@ function V:update(dt,now)
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
    r.view.Size=r.size*scale;r.view.Transparency=1-opacity
-
+   if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
   end
  end
 end
@@ -9059,7 +9071,7 @@ local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
-local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 40',11,palette.muted,true)
+local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 100',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
@@ -10243,7 +10255,7 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
-  local amount=cargoUnits(profile);local capacity=profile.capacity or 40
+  local amount=cargoUnits(profile);local capacity=profile.capacity or 100
   local packStation=world.Map:FindFirstChild('PackStation',true)
   local prompt=packStation and packStation:FindFirstChildOfClass('ProximityPrompt')
   if prompt then prompt.ActionText=Shops.packPromptText(profile.nextPackPrice or 0) end

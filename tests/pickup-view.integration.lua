@@ -36,7 +36,7 @@ check('confirmed collection arrives at the visible backpack instead of the torso
  view:update(1/60,realTime)
  view:update(1/60,realTime+.11)
  assert(r.pos.Z>.3 and r.pos.Y>1 and r.view.Size.Y<.58)
- view:update(1/60,realTime+.23)
+ view:update(1/60,realTime+.25)
  assert(view.records[source]==nil and view.byId[1]==nil and not r.view.Parent)
 end)
 check('destroy disconnects observers without granting or changing units',function()

@@ -2004,8 +2004,8 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=18,FADE_SECONDS=5,GRAVITY=70,
- AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.18}
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,GRAVITY=70,
+ AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -2014,8 +2014,8 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- local speed=10.5+(serial%5)*.65
- return math.cos(angle)*speed,17+index*.8,math.sin(angle)*speed
+ local speed=7.5+(serial%5)*.5
+ return math.cos(angle)*speed,15+index*.8,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -2736,7 +2736,7 @@ return Packs
 end)()
 local Cards = (function()
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=13,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=13,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -2830,8 +2830,7 @@ function C.capacity(p,extra)
  local n=Shops.effects(p).capacity or 0
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
- local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
- return math.floor(base*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
+ return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)
@@ -5562,9 +5561,8 @@ function W.initialize(): any
   end
   local run=map:FindFirstChild('CrystalRun')
   local runStart,chargingStation
-  local runWalls={}
   if run then
-   local hardness={1,1.7,2.55,3.6,4.9}
+   local hardness={1,1.75,2.65,3.75,5.1}
    local yield={10,18,30,45,62}
    for i=1,5 do
     local original=Config.Fields[i]
@@ -5578,19 +5576,11 @@ function W.initialize(): any
     table.sort(clusters,function(a,b) return a.Name<b.Name end)
     assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=hardness[i],Color=Config.Fields[1].Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
     runStart=runStart or part.Position
-    if i>1 then
-     for _,name in ipairs({'WestWall','EastWall'}) do
-      local wall=model:FindFirstChild(name)
-      assert(wall and wall:IsA('BasePart'),'Missing Crystal Run divider')
-      table.insert(runWalls,{x=wall.Position.X,halfX=wall.Size.X*.5+2,z=wall.Position.Z,
-       halfZ=wall.Size.Z*.5+1.5,cruise=wall.Position.Y+wall.Size.Y*.5+3})
-     end
-    end
    end
    chargingStation=run:FindFirstChild('ChargingStation')
    assert(chargingStation and chargingStation:IsA('BasePart'),'Missing Crystal Run charging station')
@@ -5601,7 +5591,7 @@ function W.initialize(): any
    packStation=map:FindFirstChild('PackStation',true),
    prestigeStation=map:FindFirstChild('PrestigeStation',true),
    converter=workspace:FindFirstChild('Converter'),
-   fields=fieldMetadata,runStart=runStart,runWalls=runWalls,chargingStation=chargingStation,
+   fields=fieldMetadata,runStart=runStart,chargingStation=chargingStation,
    turretTemplate=game:GetService('ServerStorage'):FindFirstChild('OriginalConstructTemplate'),
    droneTemplate=workspace:FindFirstChild('Drone'),
    crystalTemplate=workspace:FindFirstChild('Crystal')
@@ -7160,20 +7150,35 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   if accepted<units then pending[material]=(pending[material] or 0)+units-accepted end
   p.dirty=true;p.publishDirty=true;return
  end
+ if units<=0 then p.dirty=true;return end
  local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
  local ground=r.referenceCrystal and fieldTop or (r.part:GetAttribute('GroundY') or fieldTop)
  local _,nodes=pendingOre(p)
  local nodeDrops=0
  for _,drop in pairs(pickups) do
-  if drop.owner==d.owner and drop.runId==profile.run.id and drop.nodeId==r.id then nodeDrops+=1 end
+  if drop.owner==d.owner and drop.runId==profile.run.id and drop.nodeId==r.id
+   and not OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then nodeDrops+=1 end
  end
  if nodes>=OreDrops.MAX_NODES or nodeDrops>=4 then
-  -- Full bags never stop mining. Coalesce further rewards of this mineral
-  -- into one existing physical fragment without losing an integer ore unit.
-  for _,drop in pairs(pickups) do
-   if drop.owner==d.owner and drop.runId==profile.run.id and drop.material==material then
-    drop.units+=units;drop.part:SetAttribute('Units',drop.units);p.dirty=true;p.publishDirty=true;return
+  -- Consolidate overflow at a nearby pile of the same ore. Renew the pile's
+  -- lifetime without restarting the existing fragment's motion or spin.
+  local nearest,nearestId,distance=nil,nil,math.huge
+  for id,drop in pairs(pickups) do
+   if drop.owner==d.owner and drop.runId==profile.run.id and drop.material==material
+    and (nodeDrops<4 or drop.nodeId==r.id) and not OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then
+    local delta=Vector3.new(drop.x,drop.y,drop.z)-r.position
+    local dist=delta:Dot(delta)
+    if not nearest or dist<distance or dist==distance and id<nearestId then
+     nearest,nearestId,distance=drop,id,dist
+    end
    end
+  end
+  if nearest then
+   nearest.units+=units;nearest.refreshedAt=now
+   nearest.part:SetAttribute('Units',nearest.units)
+   nearest.part:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS)
+   nearest.part:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME)
+   p.dirty=true;p.publishDirty=true;return
   end
  end
  for index,n in ipairs(OreDrops.partition(units,4-nodeDrops)) do
@@ -7183,7 +7188,7 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   local chip=r.part:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
   -- Never inherit ResourceId: pickups are not mineable replacement rocks.
   for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
-  chip.Name='OreFragment';chip.Size=Vector3.new(.48,.58,.44);chip.Position=position;chip.Material=r.part.Material;chip.MaterialVariant=r.part.MaterialVariant
+  chip.Name='OreFragment';chip.Size=Vector3.new(.64,.74,.56);chip.Position=position;chip.Material=r.part.Material;chip.MaterialVariant=r.part.MaterialVariant
   -- Rewards retain their material hue independently of fracture shading.
   chip.Color=r.field.color
   chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
@@ -7199,7 +7204,7 @@ end
 local function pickupStep(dt)
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
-  if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.spawnAt,now) then
+  if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
   elseif healthy(p) then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
@@ -7251,7 +7256,7 @@ local function pickupStep(dt)
    if pickups[id] then
     local position=Vector3.new(drop.x,drop.y,drop.z)
     if now>=(drop.snapshotAt or 0) then
-     drop.part.Position=position;drop.part.Transparency=OreDrops.fade(drop.spawnAt,now)
+     drop.part.Position=position;drop.part.Transparency=OreDrops.fade(drop.refreshedAt or drop.spawnAt,now)
      drop.snapshotAt=now+C.Snapshot;drop.part:SetAttribute('Position',position)
      drop.part:SetAttribute('Velocity',Vector3.new(drop.vx,drop.vy,drop.vz));drop.part:SetAttribute('Homing',drop.homing==true);drop.part:SetAttribute('SnapshotAt',now)
     end
@@ -7532,11 +7537,10 @@ end
 function scene.squareStep(p,d)
  if not DroneRoles.isWorker(d.role) or d.carrierId then return end
  local square=p.miningSquare
- local canStart=square and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
- if d.squareJob and (d.squareJob~=square or not canStart) and not scene.committedWork(d) then release(d);d.field=nil end
+ if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then release(d);d.field=nil end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
- if not canStart or now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
+ if now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
  d.squareSearchAt=now+.22;d.squareSearched=square
  if chooseResource(d,square.field,square) then
   d.field=square.field.id;d.squareJob=square;d.state='Travel'
@@ -7677,23 +7681,6 @@ local function travelSpeed(d)
  return d.stats.maxStep60*(d.state=='ToCharge' and 1.5 or d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
- if scene.runWalls and (d.state=='ToCharge' or d.state=='HoldSelector' or d.squareJob and (d.state=='Travel' or d.state=='BreakerApproach')) then
-  local delta=goal-d.pos
-  for _,wall in ipairs(scene.runWalls) do
-   if math.abs(delta.Z)>.01 then
-    local t0,t1=(wall.z-wall.halfZ-d.pos.Z)/delta.Z,(wall.z+wall.halfZ-d.pos.Z)/delta.Z
-    local enter,exit=math.max(0,math.min(t0,t1)),math.min(1,math.max(t0,t1))
-    if enter<=exit then
-     local x0,x1=d.pos.X+delta.X*enter,d.pos.X+delta.X*exit
-     if math.min(x0,x1)<=wall.x+wall.halfX and math.max(x0,x1)>=wall.x-wall.halfX then
-      local altitude=wall.cruise
-      goal=if d.pos.Y<altitude-.7 then Vector3.new(d.pos.X,altitude,d.pos.Z) else Vector3.new(goal.X,math.max(altitude,goal.Y),goal.Z)
-      break
-     end
-    end
-   end
-  end
- end
  d.intentGoal=goal
  local settling=d.target~=nil or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
  local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
@@ -8384,10 +8371,9 @@ function scene.dispatchJunk(field)
   local hr=healthy(p) and characterRoot(p)
   if not hr then continue end
   local active,workers=0,{}
-  local canCarry=Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
   for _,d in ipairs(p.drones) do
    if d.hp>0 and d.field==field.id and d.autoField==field.id and (d.deployedCarrier or (not d.carrierId and nearMiningField(hr.Position,field))) then
-    local room=if d.deployedCarrier then logistics:capacity(p)>0 else canCarry
+    local room=not d.deployedCarrier or logistics:capacity(p)>0
     if d.target and (not room or d.target.paid or not d.target.part.Parent) then release(d) end
     if d.target then active+=1
     elseif room and DroneRoles.isWorker(d.role) and not d.breaker and not d.lingerUntil and not d.specialRecovery then

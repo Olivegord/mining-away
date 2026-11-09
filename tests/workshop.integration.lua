@@ -139,7 +139,7 @@ local firstId,firstBase,offer,selected,baseTime
 local beganAt=now
 check('Studio and production both start with three permanent miners, zero Quartz, actual rocks',function()
  assert(#p.drones==3 and #data(p).fleet==3 and not p.testFleet)
- assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==40)
+ assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==100)
  assert(data(p).run.quartzEarnings==0 and p.drones[1].stats.plotAuto==0)
  firstId=p.drones[1].id;firstBase=Pro.clone(data(p).fleet[1].base)
  baseTime=mine();mine();sell()

@@ -62,8 +62,33 @@ check('another nearby player cannot attract or steal the owners fragments',funct
 end)
 check('a full backpack leaves real fragments until selling makes space',function()
  local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
- steps(100);assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==40)
+ steps(100);assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==100)
+ realTime+=60;now=realTime;pickupStep(C.Tick)
+ assert(pendingOre(p)==10,'ore vanished during a sell trip')
  data(p).run.cargo={};steps(100);assert(pendingOre(p)==0 and Pro.cargoUnits(data(p))==10)
+end)
+check('overflow adds to a nearby pile and extends its expiry without relaunching it',function()
+ local _,p,d,starter=fixture()
+ data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ local field=starter.field
+ local function mineAt(x)
+  local r=makeResource(field,field.center+Vector3.new(x,0,0),'Crystal',100,10,3)
+  r.readyAt=now;release(d);d.target=r;d.targetSlot=1;r.slots[d.id]=1
+  d.pos=committedStation(d,r)
+  assert(hitResource(d,r,500))
+  return r
+ end
+ local firstTime=now
+ local near=mineAt(-12)
+ for _=2,OreDrops.MAX_NODES do mineAt(12) end
+ realTime+=65;now=realTime
+ mineAt(-12)
+ local units,nodes=pendingOre(p)
+ assert(units==(OreDrops.MAX_NODES+1)*10 and nodes==OreDrops.MAX_NODES)
+ local refreshed
+ for _,drop in pairs(pickups) do if drop.owner==d.owner and drop.refreshedAt then refreshed=drop end end
+ assert(refreshed and refreshed.nodeId==near.id and refreshed.spawnAt==firstTime)
+ assert(refreshed.part:GetAttribute('ExpiresAt')==now+OreDrops.LIFETIME)
 end)
 check('save uncertainty pauses pickup without mutating or deleting rewards',function()
  local _,p,d,r=fixture();assert(hitResource(d,r,500));p.busy=true;steps(100)
@@ -107,7 +132,7 @@ check('landing receipts describe real contacts and stop advancing at rest',funct
  assert(found);steps(120)
  for id,serial in pairs(serials) do assert(pickups[id].part:GetAttribute('GroundImpactSerial')==serial) end
 end)
-check('full bags cannot stockpile rewards beyond the wall-clock expiry',function()
+check('full bags keep uncollected ore until its wall-clock expiry',function()
  local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
  local born=now;local found=false
  for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then

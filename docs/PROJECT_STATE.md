@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New players start with three permanent basic miners. Crystal Run extends outward past the service deck, away from the terraces. The five 108 × 64 stud zones hold up to 240 crystals in 15 plots based on Mining Away's ruby field. Deeper crystals take more work and pay more Quartz. Players pin a 30 × 30 stud beam square to dispatch idle miners, finish committed work when the square moves, carry ore back to sell, and spend Quartz on packs. Unattended damaged crystals heal, depleted miners recharge at the depot, and the final crystal break is silent. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
+**Current implementation:** New players start with three permanent basic miners and a 100-ore backpack. Crystal Run extends outward past the service deck. Its five open 108 × 64 stud zones hold up to 240 crystals in 15 plots based on Mining Away's ruby field. Deeper zones have distinct crystal colors, higher health and larger Quartz payouts. A pinned 30 × 30 stud square keeps workers mining while the player carries ore back to sell. Uncollected ore waits on the ground for up to 90 seconds. Unattended damaged crystals heal, depleted miners recharge at the depot, and the final crystal break is silent. A pack grants 1–4 Stars when its choice is confirmed. Stars and all Star Shop purchases reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,8 +11,8 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `adc43d35c5c00eecb506a2b900e2ffb6a590e8c70ef63eabe959542e70f0861c` | Full plot selector, three basic starters, and silent final break. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/full-plot-starters-native.json). |
+| Native-file SHA-256 | `9ea6b77a8ec013a2348b3b9ae50035e5d94ec16d19e62df0a573335c22bab06a` | Open Crystal Run, full-bag mining and 100-ore base backpack. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/open-run-pickups-native.json). |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,16 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — open plots and overflow ore
+
+Crystal Run miners continue to start new jobs at their pin while the 100-ore base backpack is full. Only pickup checks bag space. Loose ore has a 90-second lifetime. Excess fragments consolidate into a nearby pile of the same material when the node budget is reached, renewing that pile's lifetime. Fragments are larger and scatter closer to the rock. They bounce, brighten as they home, and arc into the visible backpack. Piles with more ore render larger and use the existing HUD pickup count. The original ownership and payout ledger still governs collection.
+
+The five zones use red, pink, blue, violet and green crystals. Health increases with depth. For the same roll of 75, the five starting health values are 75, 123.75, 182.25, 253.75 and 341.5. Seventeen divider, cap and end wall pieces moved to `ServerStorage.CrystalRunDividers`. Five existing signs now sit at ground level outside the beds. Studio Edit passed 1,120 floor probes and 28 clear paths across the route. The detached zone setup check used the authored beds and actual health calculation to verify the colors and health ramp.
+
+The workshop, pickup, audio, flight and beam suites passed. Production logic with API doubles checked new mining jobs and overflow drops at full capacity, a 60-second sell trip, nearby pile consolidation and partial collection. The existing target Play session was stopped for installation. All seven Sources and all three Script Sync roots were verified in shared Edit. A new gameplay session and the feel of the pickups remain to be playtested. This revision is unpublished.
+
+Reproduce the map from `bc2b72e` using [the open route Edit script](../tools/studio_open_crystal_run.lua) and [the scoped saver](../tools/refresh_open_crystal_run.py). Write its staged export to `archive.b64`, apply `shared.OpenCrystalRun.apply()`, and save the receipt as `verified.json` in the same scratch directory. Run the saver with that directory and `--baseline-sha256 adc43d35c5c00eecb506a2b900e2ffb6a590e8c70ef63eabe959542e70f0861c --write`, followed by `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit bc2b72e`.
 
 ## Latest follow-up — full plot selector, three starters and a silent final break
 

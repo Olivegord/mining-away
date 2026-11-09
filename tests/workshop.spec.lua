@@ -181,7 +181,7 @@ test('v8 profiles keep all ownership, modifiers and already-paid offers exactly'
   {cardId='D05',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1}},
   {cardId='F08',scope='Fleet',effects={yield=.20}},
  }}
- p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,P.SCHEMA);eq(restored.starterDrones,1);eq(C.capacity(restored),40);eq(restored.run.quartzEarnings,177)
+ p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,P.SCHEMA);eq(restored.starterDrones,1);eq(C.capacity(restored),100);eq(restored.run.quartzEarnings,177)
  assert(same(restored.fleet,p.fleet));assert(same(restored.run.cards,p.run.cards));assert(same(restored.run.pendingOffer,old))
  local ok,o=buy(restored,'legacy');assert(ok);assert(same(o,old));assert(C.select(restored,o.id,2,'legacy-pick',restored.run.id,{atDepot=true}))
  eq(restored.run.shopLevels.quartz_power,2);assert(P.validate(restored,44))

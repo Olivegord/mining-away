@@ -2,7 +2,7 @@ local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=13,BASE_CAPACITY=40,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=13,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -96,8 +96,7 @@ function C.capacity(p,extra)
  local n=Shops.effects(p).capacity or 0
  for _,c in ipairs(p.run.cards) do n=n+(c.effects.capacity or 0) end
  if extra then n=n+(extra.effects.capacity or 0) end
- local base=p.starterDrones==4 and 100 or C.BASE_CAPACITY
- return math.floor(base*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
+ return math.floor(C.BASE_CAPACITY*clamp(1+n,.25,3)+.000001)+10*Workshop.starLevel(p,'backpack')
 end
 function C.droneCapacity(p,_owned,extra) return C.capacity(p,extra) end
 function C.stats(p,d,extra)

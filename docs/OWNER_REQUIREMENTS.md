@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — open plots and keep mining with a full bag
+
+The base backpack holds 100 ore. Drones keep mining at the pin when the bag fills. Ore stays on the ground for collection after a sale, with readable movement into the backpack. Remove the walls from Crystal Run and give deeper zones distinct crystal colors and more health.
+
 ## November 8 latest — one plot per square and three basic starters
 
 The default selector is the size of one Crystal Run mining plot (30 × 30 studs). New profiles start with three permanent basic Blue miners. Existing profiles keep their saved fleets, and prestige still adds one drone. Keep the intermediate crystal crack sound and make the final break silent.
@@ -22,7 +26,7 @@ New profiles start with one permanent mining drone. Existing profiles keep their
 
 The shop is on one side of the hub. In the other direction, one large crystal field forms the main mining route, with walls dividing zones as players walk deeper. Mouse or touch aims a square made of beams with a vertical fade. Click or tap to pin it. Crystals touching the square are available to drones. Repositioning changes their next target while work already underway finishes. Use yellow while the placed square is working, and green plus particles while an idle damaged crystal heals. A depleted mining drone returns to the charging station automatically. Players carry ore back to sell when their backpack fills.
 
-The selector snaps to a grid and aims through crystals to the ground. Walking away leaves drones stationed at the pinned square until Recall. A full backpack pauses new mining jobs, and charged miners return to the pin.
+The selector snaps to a grid and aims through crystals to the ground. Walking away leaves drones stationed at the pinned square until Recall, and charged miners return to the pin. The later full-bag rule keeps miners working while the player sells.
 
 Packs offer three upgrades and grant one chosen upgrade plus a positive amount of Stars. Upgrades can reduce chores or add battery capacity. A scrollable Star Shop shows costs and lets players buy effects such as +4 studs of selector width or faster walking. The owner confirmed that Stars and Star Shop purchases reset with the run on prestige. Permanent fleet rules still apply.
 
