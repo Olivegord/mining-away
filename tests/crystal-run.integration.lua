@@ -93,7 +93,7 @@ local oreBefore=pendingOre(p)
 step(30);local overflowTarget=assert(d.target,'full backpack prevented a new mining job')
 assert(d.squareJob==p.miningSquare)
 d.pos=committedStation(d,overflowTarget)
-step(32);assert(d.mining);status('Working')
+step(32);assert(d.mining);status('BagFull')
 for _=1,600 do step(1);if overflowTarget.paid then break end end
 assert(overflowTarget.paid and pendingOre(p)>oreBefore,'mining a full bag did not leave collectible ore')
 assert(Pro.cargoUnits(profile)==100 and full==100)
@@ -199,7 +199,7 @@ local first=assert(data(buyer).run.pendingOffer)
 assert(first.packTier==2 and data(buyer).run.wallet.Quartz==0)
 for i,id in ipairs(Workshop.FIRST_PACK) do assert(first.choices[i].cardId==id and #first.choices[i].preview>0) end
 local resumed=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
-assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_TWIN_BEAM')
+assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_AFTERSHOCK')
 local delivery=assert(buyer.packDelivery)
 realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(buyer,now);moveBuyer(delivery.part.Position)
 delivery.prompt.PromptButtonHoldBegan:Fire(shopper)
@@ -207,7 +207,7 @@ realTime+=Packs.duration(first.packTier)+.1;now=realTime
 delivery.prompt.Triggered:Fire(shopper)
 local opened=Pro.clone(data(buyer));assert(opened.run.pendingOffer.opened)
 moveBuyer(shopStations.Quartz.Position);input('ChooseCard','first-choice',{offerId=first.id,index=1})
-assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and miner.stats.forkFraction==.2)
+assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and miner.stats.aftershock==.12)
 local function isolate()
  release(miner)
  for _,r in ipairs(f.resources) do r.paid=true;r.hp=0 end
@@ -218,30 +218,108 @@ local function hit(r,amount)
 end
 isolate();local primary,adjacent=rock(0,100),rock(5,100)
 local adjacentHP=adjacent.hp
-hit(primary,20)
-assert(math.abs(adjacentHP-adjacent.hp-4)<.001,'Twin Beam did not damage a second crystal')
-local drill=Pro.clone(opened)
-assert(Ca.select(drill,first.id,2,'drill',drill.run.id,{atDepot=true}))
-buyer.session.data=drill;refreshStats(buyer)
-isolate();local shallow=rock(0,100)
-local shallowHP=shallow.hp;hit(shallow,20)
-assert(shallowHP-shallow.hp==20,'Deep Drill changed starter Quartz damage')
-isolate();f.cfg.Hardness=Workshop.DEEP_CUT_HARDNESS
-local deep=rock(0,175);local deepHP=deep.hp;hit(deep,20)
-assert(math.abs(deepHP-deep.hp-32)<.001,'Deep Drill did not improve deep crystal damage')
-release(miner)
-local magnet=Pro.clone(opened)
-assert(Ca.select(magnet,first.id,3,'magnet',magnet.run.id,{atDepot=true}))
+hit(primary,10)
+assert(adjacent.hp==adjacentHP,'echo triggered without a crack')
+assert(hitResource(miner,primary,20))
+assert(math.abs(adjacentHP-adjacent.hp-10.8)<.001,'Aftershock failed to damage its neighbor once')
+local reclaim=Pro.clone(opened)
+assert(Ca.select(reclaim,first.id,2,'reclaim',reclaim.run.id,{atDepot=true}))
+buyer.session.data=reclaim;refreshStats(buyer);isolate()
+local salvage=rock(0,100);miner.battery=45;hit(salvage,200)
+assert(salvage.paid and miner.battery==51,'Reclaim did not refund battery once')
+local seams=Pro.clone(opened)
+assert(Ca.select(seams,first.id,3,'seams',seams.run.id,{atDepot=true}))
+buyer.session.data=seams;refreshStats(buyer);isolate()
+local fragile=rock(0,100);hit(fragile,25)
+assert(fragile.extractedOre==5,'Loose Seams did not release extra ore at the first crack')
+local loose
+for _,drop in pairs(pickups) do if drop.nodeId==fragile.id then loose=drop;break end end
+assert(loose and loose.reachBonus==14)
+assert(hitResource(miner,fragile,200) and fragile.extractedOre==fragile.ore,'Loose Seams changed total base ore')
+
 moveBuyer(f.center)
-local dropPosition=characterRoot(buyer).Position+Vector3.new(36,-3,0)
-local dropPart=World.part(pickupFolder,'MagnetTest',dropPosition,Vector3.one,Color3.new(1,1,1))
-pickups[-1]={part=dropPart,owner=shopper.UserId,runId=magnet.run.id,material='Quartz',units=1,spawnAt=now,age=1,
+input('PlaceSelector','pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+assert(buyer.miningSquare)
+moveBuyer(f.center+Vector3.new(80,0,0));recallFromField(buyer)
+assert(buyer.miningSquare,'nearby selling trip lost the pin')
+moveBuyer(f.center+Vector3.new(101,0,0));recallFromField(buyer)
+assert(not buyer.miningSquare and not miner.target and miner.state=='Follow','distant player did not get the crew back')
+
+moveBuyer(f.center)
+input('PlaceSelector','charger-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_FIELD_CHARGE,3))
+publish(buyer)
+miner.battery=0
+droneStep(miner,C.Tick)
+assert(miner.recharging and (miner.intentGoal-buyer.miningSquare.center).Magnitude<10,'Field Charger still sent the drone to the depot')
+miner.pos=miner.intentGoal;droneStep(miner,C.Tick)
+assert(miner.battery>0 and miner.state=='Charging')
+print('PASS paid draft, durable choices, fracture echo, battery refund, conserved early drops, field charging and distance recall')
+
+moveBuyer(shopStations.Quartz.Position)
+input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})
+assert(data(buyer).run.stars==0 and buyer.vacuum and #buyer.drones==4 and #data(buyer).fleet==3)
+input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})
+assert(#buyer.drones==4,'replayed hire added a duplicate automation drone')
+data(buyer).run.stars=3
+input('BuyStarUpgrade','hire-planter',{upgradeId='cultivator',level=0})
+local planter=buyer.drones[5]
+assert(planter.role=='Dart' and #data(buyer).fleet==3 and Pro.validate(data(buyer),shopper.UserId))
+moveBuyer(f.center)
+local count,queued=nodeUsage(f),#f.respawnQueue
+growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+assert(planter.growPlan and planter.growPlan.cluster==f.clusters[1],'planter picked another patch')
+planter.pos=planter.intentGoal
+for _=1,100 do
+ realTime+=C.Tick;now=realTime;growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+ if nodeUsage(f)>count then break end
+end
+assert(nodeUsage(f)==count+1 and #f.respawnQueue==queued-1,'planter did not consume one actual vacancy')
+print('PASS Star hires are run-only and idempotent, planter replaces one real vacant crystal at the pin')
+
+inStudio=true
+local tester=player(98704);players.PlayerAdded:Fire(tester)
+local testCrew=profiles[tester.UserId]
+tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
+assert(#testCrew.drones==5 and #data(testCrew).fleet==3 and Ca.capacity(data(testCrew),previewPerks(testCrew))==100)
+assert(testCrew.drones[1].role=='Striker' and testCrew.drones[2].role=='Needler' and testCrew.drones[3].role=='Ballcaster')
+assert(testCrew.vacuum==testCrew.drones[4] and testCrew.drones[5].role=='Dart')
+for i=2,3 do
+ local actor=testCrew.drones[i];local target=rock(i*4,150)
+ assert(assignOre(testCrew,actor,target))
+ local station=committedStation(actor,target)
+ local offset=station-target.position
+ assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-9)<.001,'projectile was not aimed from the side')
+ actor.pos=station
+ local before=target.hp
+ for _=1,50 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  if actor.specialJob then break end
+ end
+ assert(actor.specialJob and actor.specialJob.projectile and target.hp==before,'shot damaged before it traveled')
+ for _=1,60 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  if target.hp<before then break end
+ end
+ assert(target.hp<before,'projectile failed to apply authoritative work')
+ release(actor)
+end
+for id,drop in pairs(pickups) do
+ if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end
+end
+local dropPosition=characterRoot(testCrew).Position+Vector3.new(40,-2,0)
+local dropPart=World.part(pickupFolder,'VacuumTest',dropPosition,Vector3.one,Color3.new(1,1,1))
+pickups[-1]={part=dropPart,owner=tester.UserId,runId=data(testCrew).run.id,material='Quartz',units=2,spawnAt=now,age=1,
  x=dropPosition.X,y=dropPosition.Y,z=dropPosition.Z,vx=0,vy=0,vz=0,floor=dropPosition.Y,landed=true}
-pickupStep(C.Tick);assert(not pickups[-1].homing,'base pickup reached ore 36 studs away')
-buyer.session.data=magnet;publish(buyer)
-for _=1,180 do
+pickupStep(C.Tick)
+assert(testCrew.vacuumTarget and testCrew.vacuumTarget.id==-1 and not pickups[-1].homing)
+testCrew.vacuum.pos=testCrew.vacuumTarget.position
+local relayed=false
+for _=1,200 do
  realTime+=C.Tick;now=realTime;pickupStep(C.Tick)
  if not pickups[-1] then break end
+ if pickups[-1].relayUntil then relayed=true end
 end
-assert(not pickups[-1] and Pro.cargoUnits(data(buyer))==1,'Ore Magnet failed to bring distant ore into the backpack')
-print('PASS Workshop sale, first paid crate, saved offer, Star reward, real Twin Beam, depth-specific laser damage and extended ore collection')
+assert(relayed and not pickups[-1] and Pro.cargoUnits(data(testCrew))==2,string.format('vacuum relay=%s, drop=%s, backpack=%d',tostring(relayed),tostring(pickups[-1]),Pro.cargoUnits(data(testCrew))))
+assert(Pro.validate(data(testCrew),tester.UserId))
+print('PASS temporary Studio starter crew, side-on darts and balls with flight time, vacuum intake and backpack relay')

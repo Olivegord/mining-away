@@ -20,16 +20,29 @@ W.CATALOG={
  {id='Q_TWIN_BEAM',title='Twin Beam',scope='Fleet',category='mining',tier=2,max=2,step={fork=.2},once={forkRange=6},color={57,210,222},icon='relay',crystalRun=true},
  {id='Q_DEEP_DRILL',title='Deep Drill',scope='Fleet',category='mining',tier=2,max=3,step={deepCut=.6},color={246,113,93},icon='mining',crystalRun=true},
  {id='Q_ORE_MAGNET',title='Ore Magnet',scope='Player',category='cargo',tier=2,max=3,step={magnetRange=12},color={255,190,65},icon='cargo',crystalRun=true},
+ {id='Q_AFTERSHOCK',title='Aftershock',scope='Fleet',category='mining',tier=2,max=3,step={aftershock=.12},color={110,195,255},icon='relay',crystalRun=true},
+ {id='Q_RECLAIM',title='Reclaim',scope='Fleet',category='flight',tier=1,max=3,step={reclaim=6},color={134,221,129},icon='startup',crystalRun=true},
+ {id='Q_EARLY_DROP',title='Loose Seams',scope='Fleet',category='cargo',tier=1,max=2,step={earlyDrop=.25},color={255,190,65},icon='crystal',crystalRun=true},
+ {id='Q_FIELD_CHARGE',title='Field Charger',scope='Player',category='flight',tier=3,max=2,step={fieldCharge=28},color={112,214,175},icon='startup',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_TWIN_BEAM','Q_DEEP_DRILL','Q_ORE_MAGNET'}
+W.FIRST_PACK={'Q_AFTERSHOCK','Q_RECLAIM','Q_EARLY_DROP'}
+W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_AFTERSHOCK=true,Q_RECLAIM=true,Q_EARLY_DROP=true,
+ Q_FIELD_CHARGE=true,Q_TWIN_BEAM=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
 W.DEEP_CUT_HARDNESS=1.75
+function W.effect(p,key,extra)
+ local total=extra and (extra.effects[key] or 0) or 0
+ for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
+ return total
+end
 W.STAR_CATALOG={
+ {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum'},
+ {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart'},
+ {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
  {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
  {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
  {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
  {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
- {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
 }
 W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
 W.BATTERY=100

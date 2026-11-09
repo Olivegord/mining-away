@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** The Quartz Workshop sells backpack ore, delivers upgrade packs, shows installed stacks and tracks the next permanent drone. A run's first Crystal Run pack costs 20 Quartz and offers Twin Beam, Deep Drill or Ore Magnet. Choosing one grants two Stars for travel and automation perks. New players start with three permanent basic miners and a 100-ore backpack. Crystal Run's five open zones hold up to 240 crystals. Deeper zones have distinct colors, harder crystals and larger Quartz payouts. A pinned 30 × 30 stud square keeps workers mining while the player carries ore back to sell. Loose ore waits for up to 90 seconds. Unattended crystals heal, depleted miners recharge at the depot, and the final break is silent. Run cards, Stars and Star upgrades reset on prestige.
+**Current implementation:** Crystal Run is a drone production loop. Pin a plot, collect the ore, sell it at the Workshop and spend Stars on gathering, replanting or automatic sales. The first 20-Quartz pack offers Aftershock, Reclaim and Loose Seams. Pickup numbers show actual ore added to the backpack. Crews leave a pin and follow when the player gets more than 100 studs away horizontally. New profiles have three permanent miners and a 100-ore backpack. Studio starts with a temporary test crew that includes a miner, dart thrower, energy-ball thrower, vacuum and planter. Tool drops and equipment are disabled in this game. Run cards, Stars and Star upgrades reset on prestige.
 
 ## Identity and delivery state
 
@@ -11,18 +11,30 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `00d945b4bcc70d17fdaf80cb4e6eb20009ed0b1c89cd37e2886197345c9e447e` | Workshop sale and first Crystal Run pack. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the Workshop follow-up below. |
+| Native-file SHA-256 | `f7ac2ad30393d3c8d07ce54be61f953f57fbccea70eac6f9290af8e4328b728e` | Drone automation, side shots and visible pickup amounts. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the automation follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Workshop changes in shared DRONEREVOLUTION Edit** | All seven managed Sources matched the canonical snapshot. All three roots were `SyncedAsRoot`. Studio loaded version 111, confirmed Save to Roblox, and was closed after verification because it started closed. |
+| Shared Studio entry point | **Drone automation in shared DRONEREVOLUTION Edit** | All seven Sources and three sync roots verified on loaded version 112. Studio confirmed Save to Roblox after the test. The initially open editor remains open in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — drone production loop
+
+The first pack lets laser cracks echo into one eligible neighboring crystal, refunds six battery per break, or lets more of the same ore arrive early from farther away. Later packs still offer three saved choices and increasing stack prices. Field Charger lets depleted workers recharge at an active pin. The Workshop Automation tab offers a Vacuum Drone for two Stars, a Crystal Planter for three and Auto Sell for six. The vacuum pulls loose ore through its intake toward the owner's backpack and stops gathering when the bag is full. The planter consumes an actual vacancy at the pin. A full bag or ore left out of reach appears in the pin status. Loose ore can keep accumulating while the bag is full.
+
+The five-drone Studio crew replaces the active test roster and preserves the three permanent starter records. The dart and energy ball fly to crystals from the side and apply damage on arrival. The 100-stud horizontal leash clears the pin and its reservations and brings the crew along. Players still see one local pickup count beside the backpack, grouped from authoritative receipts. Dropped and carried tools are disabled in the Crystal Run game. Old saved equipment records remain valid.
+
+The workshop, mining-flight and pickup checks passed with API doubles. The final native Studio smoke test spawned the five test drones, observed both projectile types and a visible `+15 ore` burst, and later measured 67 collected ore in a 67-unit backpack. It found no tool inventory, drops or hotbar. Moving the player 105 studs from the pin cleared it and put all five drones into Follow. The session was stopped. Long-session pacing, player enjoyment and multiplayer remain unverified.
+
+Studio was already open. The selected Team Create document was DRONEREVOLUTION, place **124078027733625**, universe **10774898335**, loaded version **112**. All seven managed Source fingerprints matched the canonical file and all three roots were `SyncedAsRoot`. Studio logged `Saved new changes in "DRONEREVOLUTION" to Roblox.` at **6:41 PM Pacific on November 8** from File → Save to Roblox. The verified shared Edit document remains open. No Roblox release was published.
+
+Reproduce from `f24e64a687efa0ef59fc5383c5e8b76c762b9a68` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f24e64a`. The Source refresh preserved the authored map, other native properties and backup Sources.
 
 ## Latest follow-up — Workshop and Crystal Run choices
 

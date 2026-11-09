@@ -177,6 +177,14 @@ for _,name in ipairs(specialOrder) do
  DroneConfig.Types[name]={DisplayName=name,Description=definition.description,Color=color,Accent=color:Lerp(Color3.new(1,1,1),.55),Scale=.9,MaxHealth=definition.health,Speed=24,FlightHeight=3.4,AttackStyle='Special',AttackRange=24,AttackCooldown=.9,Damage=name=='Singularity' and 18 or 12,Weight=1,MiningDuration=definition.duration}
  table.insert(DroneConfig.TypeOrder,name)
 end
+local fieldTestRoles={
+ Needler={label='Dart thrower',color=Color3.fromRGB(255,195,94),detail='Throws quick darts into the side of a crystal.'},
+ Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Launches a slower, heavier energy ball from the side.'},
+ Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
+}
+for name,role in pairs(fieldTestRoles) do
+ DroneConfig.Types[name]={DisplayName=role.label,Description=role.detail,Color=role.color,Accent=role.color:Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=80,Speed=26,FlightHeight=3.2,AttackStyle='Special',AttackRange=20,AttackCooldown=1,Damage=12,Weight=1}
+end
 
 -- The active place retains its original elapsed-time motion and mining equations.
 -- These runtime traits preserve the prior Studio role tuning and never enter saved fleets.
@@ -192,6 +200,9 @@ DroneConfig.StudioRoles = {
 for _,name in ipairs(specialOrder) do
  local definition=specialDefinitions[name]
  DroneConfig.StudioRoles[name]={height=3.4,base={miningDPS=30,combatDPS=name=='Singularity' and 20 or 12,maxHealth=definition.health,maxStep60=.38,warmup=.8,range=24,shotInterval=.8}}
+end
+for name in pairs(fieldTestRoles) do
+ DroneConfig.StudioRoles[name]={height=3.2,base={miningDPS=30,combatDPS=12,maxHealth=80,maxStep60=.43,warmup=.065,range=20,shotInterval=1}}
 end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
@@ -336,7 +347,24 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?):
   end
   model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
  end
- if role=='Striker' then
+ if role=='Needler' then
+  hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
+  for _,side in ipairs({-1,1}) do
+   hardware('DartRail',Vector3.new(.23,.24,1.5),CFrame.new(side*.39,.07,-.79),dark,metal)
+   hardware('DartTip',Vector3.new(.19,.17,.34),CFrame.new(side*.39,.07,-1.55),color,Enum.Material.Neon)
+  end
+ elseif role=='Ballcaster' then
+  pod('CoilHull',1.75,.48,0,painted,slate)
+  hardware('LaunchRing',Vector3.new(.18,1.18,1.18),CFrame.new(0,.14,-.94)*foreAft,dark,metal,cylinder)
+  hardware('LoadedOrb',Vector3.one*.65,CFrame.new(0,.14,-1.12),color,Enum.Material.Neon,Enum.PartType.Ball)
+ elseif role=='Vacuum' then
+  pod('VacuumHousing',1.82,.57,.03,painted,slate)
+  pod('WideIntake',1.46,.30,-.46,dark,metal)
+  lens('IntakeGlow',Vector3.new(0,-.62,0),color,.80)
+  for _,side in ipairs({-1,1}) do
+   hardware('SuctionCanister',Vector3.new(1.34,.43,.43),CFrame.new(side*.92,.22,0)*foreAft,color,metal,cylinder)
+  end
+ elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)
   pod('ShoulderRing',1.99,.16,-.26,dark,metal)
   pod('CeramicNoseCap',1.47,.20,.38,pale,smooth)

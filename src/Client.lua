@@ -436,14 +436,14 @@ end
 openFleet=function()
  if not profile then return end
  local crew=profile.activeFleet or profile.fleet
- local l=menu('fleet','Meet your crew',profile.activeFleet and ('Studio role test · '..#crew..' active drones · '..#profile.fleet..' permanent owned') or 'Your drones stay with you. Run upgrades change the stats below.','drone');local width=l.bodyWidth-6
+ local l=menu('fleet','Meet your crew',profile.fieldCrewPreview and 'Test crew · Cut, collect and replant' or profile.testCrewActive and ('Studio role test · '..#crew..' active drones') or (#profile.fleet..' permanent · '..#crew..' active this run'),'drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
  local rosterY=64
  if player:GetAttribute('MA_TestingEnabled')==true then
   local half=(width-12)/2
   local reroll=button(body,UDim2.fromOffset(3,57),UDim2.fromOffset(half,44),'Random 2–5 [T]',function() command:FireServer('TestLoadout');modal.Visible=false end,palette.paper)
   reroll.Name='RerollTestCrew'
-  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),profile.activeFleet and 'Permanent fleet' or 'All drone types',function() command:FireServer(profile.activeFleet and 'NormalLoadout' or 'RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
+  local roles=button(body,UDim2.fromOffset(half+15,57),UDim2.fromOffset(half,44),profile.testCrewActive and 'Use saved fleet' or 'All drone types',function() command:FireServer(profile.testCrewActive and 'NormalLoadout' or 'RoleLoadout');modal.Visible=false end,palette.mineral);roles.Name='RestoreRoleCrew'
   if player:GetAttribute('MA_DevToolsEnabled')==true then
   local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
@@ -466,7 +466,8 @@ openFleet=function()
   local row=U.panel(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,258),tint:Lerp(palette.panel,.36),14);row.Name='FleetDrone'..index
   U.icon(row,'drone',UDim2.fromOffset(13,14),UDim2.fromOffset(62,62),tint)
   label(row,UDim2.fromOffset(87,14),UDim2.new(1,-102,0,33),d.name or ('Drone '..index),24,palette.text,true)
-  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),(profile.activeFleet and 'Test · ' or '')..(d.role or d.type or 'Blue'),16,palette.muted,true)
+  local source=d.id:sub(1,5)=='test:' and 'Test · ' or d.id:sub(1,#profile.run.id)==profile.run.id and 'This run · ' or ''
+  local identity=label(row,UDim2.fromOffset(87,50),UDim2.new(1,-102,0,24),source..(d.role or d.type or 'Blue'),16,palette.muted,true)
   local count=0;for _,c in ipairs(profile.run.cards) do if c.scope=='Fleet' or c.scope=='Tradeoff' or (c.scope=='Color' and c.type==d.type) or (c.scope=='Individual' and c.targetDroneId==d.id) then count=count+1 end end
   identity.Text=identity.Text..' · '..tostring(count)..' upgrades'
   local tileWidth=(rowWidth-42)/2
@@ -1160,10 +1161,12 @@ logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,local
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  openFleet=openFleet,openWorkshop=openPack,openPrestige=openPrestige,openCards=function() if pending() and not sealedPack() then openOffer() else openRunCards() end end,
  notify=function(message) notice.Text=message;noticeUntil=os.clock()+5 end})
-toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
- audio=soundscape,presentation=presentation,hidden=menusVisible,
- blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) or (toolView and toolView:blocks(point-game:GetService('GuiService'):GetGuiInset())) end,
- onSelect=function() logisticsView.selected=nil end})
+if world:GetAttribute('FieldToolsEnabled')==true then
+ toolView=ToolView.new({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,
+  audio=soundscape,presentation=presentation,hidden=menusVisible,
+  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) or (toolView and toolView:blocks(point-game:GetService('GuiService'):GetGuiInset())) end,
+  onSelect=function() logisticsView.selected=nil end})
+end
 local function ownerRoot() return player.Character and player.Character:FindFirstChild('HumanoidRootPart') end
 local function stationAction(station)
  local kind=station:GetAttribute('Interaction')

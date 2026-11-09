@@ -92,6 +92,7 @@ local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Col
 local selectorText={
  Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
+ BagFull='Sell at Workshop', LooseOre='Gather loose ore',
 }
 local function compact(value)
  if value>=1e9 then return string.format('%.1fB',value/1e9) elseif value>=1e6 then return string.format('%.1fM',value/1e6) elseif value>=10000 then return string.format('%.1fk',value/1000) end
@@ -112,11 +113,9 @@ function HUD.new(refs: any)
  refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.text;refs.cargoText.TextWrapped=false;refs.cargoText.Font=Enum.Font.SourceSansBold
  refs.cargoText.TextXAlignment=Enum.TextXAlignment.Right
  refs.cargoTrack.Visible=false
- self.gain=text(self.cargo,'CollectedGain',0,24,160,22,18,C.gold);self.gain.Visible=false
  self.battery=frame(refs.resources,'BatteryCounter',C.panel);plain(self.battery);self.battery.Visible=false
  text(self.battery,'Caption',0,0,78,24,18,C.muted).Text='Battery'
  self.batteryValue=text(self.battery,'Charge',78,0,82,24,18,C.text);self.batteryValue.TextXAlignment=Enum.TextXAlignment.Right
- self.collectedTotal=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
  self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
  self.selectorStatus=text(self.dock,'SelectorStatus',0,0,0,0,16,C.muted)
  self.selectorStatus.Visible=false;self.selectorStatus.TextStrokeTransparency=.45
@@ -196,14 +195,6 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 100
  local full=backpack>=capacity
  r.cargoText.TextColor3=full and C.gold or C.text
- local now=os.clock();local collected=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
- if collected>self.collectedTotal then
-  self.gainUnits=(now-(self.gainAt or -10)<.65 and (self.gainUnits or 0) or 0)+collected-self.collectedTotal
-  self.gainAt=now;self.gain.Text='+'..self.gainUnits..' ore'
- end
- self.collectedTotal=collected
- local age=now-(self.gainAt or -10);self.gain.Visible=age<.85
- self.gain.Position=UDim2.fromOffset(0,(batteryVisible and 48 or 24)-age*8);self.gain.TextTransparency=math.clamp((age-.5)/.35,0,1)
  local working=activity.assigned;local delivering=activity.delivering
  if working>0 or delivering>0 then self.hasWorked=true end
  local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
@@ -223,7 +214,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  end
  self.selectorStatus.Visible=pinText~=nil
  self.selectorStatus.Text=pinText or ''
- self.selectorStatus.TextColor3=status=='Working' and C.gold or C.text
+ self.selectorStatus.TextColor3=(status=='Working' or status=='BagFull') and C.gold or C.text
  self.selectorStatus.Position=UDim2.fromOffset(recallWidth+4,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-recallWidth-4),buttonHeight)
  r.recall.Text=touch and 'Recall' or 'Recall [R]';r.evade.Text=touch and 'Evade' or 'Evade [Q]'

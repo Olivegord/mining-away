@@ -2,6 +2,7 @@
 -- Drone types are permanent; these behaviors do not rewrite saved base traits.
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
+M.SELECTOR_LEASH=100
 local SELECTOR_GRID=2
 function M.selectorCenter(position,frame,size)
  local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
@@ -51,8 +52,8 @@ function M.resource(roll: number,kind: string,hardness: number?)
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
-function M.extractedOre(ore: number,stage: number,count: number): number
- return math.floor(ore*M.EXTRACTION_SHARE*math.clamp(stage/math.max(1,count),0,1))
+function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
+ return math.floor(ore*math.min(1,M.EXTRACTION_SHARE+(bonus or 0))*math.clamp(stage/math.max(1,count),0,1))
 end
 function M.efficiency(kind: string,nodeKind: string): number
  return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1

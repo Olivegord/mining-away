@@ -18,9 +18,33 @@ function View.new()
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
+    if r.projectile then r.projectile:Destroy() end
     if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
     if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     self.records[node]=nil
+   elseif kind=='MiningShot' then
+    local from=node:GetAttribute('From');local to=node:GetAttribute('Position')
+    local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
+    if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
+    local progress=((paused>0 and paused or now)-at)/duration
+    if progress>=1 then
+     if r.projectile then r.projectile:Destroy();r.projectile=nil end
+     r.started=true
+    elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
+     local value=r.projectile
+     if not value then
+      local ball=node:GetAttribute('Shape')=='Ball'
+      value=Instance.new('Part');value.Name='MiningProjectile';value.Anchored=true
+      value.CanCollide=false;value.CanTouch=false;value.CanQuery=false;value.CastShadow=false
+      value.Material=Enum.Material.Neon;value.Color=node:GetAttribute('Color')
+      value.Size=ball and Vector3.one*1.1 or Vector3.new(.20,.20,1.4)
+      if ball then value.Shape=Enum.PartType.Ball end
+      value.Parent=workspace.CurrentCamera;r.projectile=value
+     end
+     local direction=(to-from).Unit
+     local center=from:Lerp(to,progress)-direction*(value.Size.Z*.5)
+     value.CFrame=CFrame.lookAt(center,center+direction)
+    end
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
     if typeof(position)=='Vector3' and type(at)=='number' and now>=at then
@@ -74,6 +98,7 @@ function View.new()
  end
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
+  for _,r in pairs(self.records) do if r.projectile then r.projectile:Destroy() end end
   table.clear(self.records);RoleVisuals.destroy()
  end
  return self

@@ -31,6 +31,9 @@ end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
+function Effects.Projectile(shape,from,to,color,startedAt,flight)
+ return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Duration=flight},4)
+end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)
 end

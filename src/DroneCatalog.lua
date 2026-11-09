@@ -11,6 +11,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
+  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts from beside a crystal.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Color={150,124,255},Description='Throws a heavy energy ball into the side of a crystal.'},
  },
 }
 function Catalog.price(kind,fleet)

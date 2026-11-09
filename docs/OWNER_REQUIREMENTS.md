@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — drone automation, small upgrades and readable pickups
+
+Use Factorio, Satisfactory and Leaf Blower Revolution as references for a simple Roblox loop where the player can see which step is holding up production and automate it. The owner points to subtle upgrades in n-gon and Risk of Rain. Let small upgrades change what happens while mining. Make drones follow when the player gets too far from the pin. Start Studio with a crew that includes a side-firing dart drone, a side-firing energy-ball drone, a vacuum and automation to try. Show the amount of ore picked up on screen. Remove the current tool drops and keep mining drone-driven.
+
 ## November 8 latest — open plots and keep mining with a full bag
 
 The base backpack holds 100 ore. Drones keep mining at the pin when the bag fills. Ore stays on the ground for collection after a sale, with readable movement into the backpack. Remove the walls from Crystal Run and give deeper zones distinct crystal colors and more health.

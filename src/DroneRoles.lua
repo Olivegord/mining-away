@@ -19,6 +19,9 @@ local definitions={
  Starforge={job='Solar refiner',worker=true,combat=true,special='Starforge'},
  Frostbite={job='Cryogenic shatterer',worker=true,combat=true,special='Frostbite'},
  Resonator={job='Resonance extractor',worker=true,combat=true,special='Resonator'},
+ Needler={job='Dart thrower',worker=true,special='Needler'},
+ Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
+ Vacuum={job='Collects loose ore'},
 }
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function R.canonical(role) return legacy[role] or role end

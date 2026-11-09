@@ -25,6 +25,10 @@ function V.effect(c)
  local e=c.effects;local parts={}
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
+ if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
+ if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
+ if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
+ if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
  if e.magnetRange then table.insert(parts,'+'..e.magnetRange..' studs of ore pickup reach') end
  for _,k in ipairs({'mining','startup','capacity','speed','yield','fork'}) do
@@ -62,7 +66,7 @@ function V.render(U,parent,options)
  local narrow=width<560
  local y=2
  if options.onStars then
-  tab(U,parent,width,'Star upgrades  ·  '..(p.run.stars or 0)..' Stars',options.onStars)
+  tab(U,parent,width,'Automation  ·  '..(p.run.stars or 0)..' Stars',options.onStars)
   y=52
  end
  local packWidth=narrow and width-4 or math.floor((width-14)/2)
@@ -141,7 +145,10 @@ function V.renderStars(U,parent,options)
   local price=Workshop.starPrice(entry,level)
   local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
   label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
-  label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),entry.description,15,false)
+  local detail=entry.description
+  if p.fieldCrewPreview and entry.id=='vacuum' then detail='Increases the test vacuum’s reach.' end
+  if p.fieldCrewPreview and entry.id=='cultivator' then detail='The test planter replants more often.' end
+  label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),detail,15,false)
   label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
   action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
    function() options.onBuy(entry.id,level) end,options.canBuy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
