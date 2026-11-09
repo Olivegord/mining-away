@@ -1022,6 +1022,7 @@ function scene.clearSquare(p)
  p.miningSquare=nil
  p.player:SetAttribute('MA_Selector',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
+ p.player:SetAttribute('MA_SelectorStatus',nil)
 end
 function scene.squareInRange(position,square)
  local delta=position-square.center
@@ -1030,6 +1031,32 @@ end
 function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
+end
+-- Project the current jobs onto one player-facing status. This never grants
+-- work or takes a reservation, and bag capacity is only a pickup concern.
+function scene.publishSquareStatus(p)
+ local square=p.miningSquare
+ if not square then return end
+ local working,finishing,moving=false,false,false
+ local available,recharging=0,0
+ for _,d in ipairs(p.drones) do
+  if d.hp<=0 or d.carrierId or not DroneRoles.isWorker(d.role) then continue end
+  available+=1
+  if d.recharging then recharging+=1 end
+  if scene.committedWork(d) then
+   if d.squareJob==square then working=true;break end
+   finishing=true
+  elseif d.squareJob==square and d.target then moving=true end
+ end
+ local status=if not healthy(p) or not characterRoot(p) then 'Paused'
+  elseif working then 'Working'
+  elseif finishing then 'FinishingCut'
+  elseif moving then 'Moving'
+  elseif available==0 then 'NoMiners'
+  elseif recharging==available then 'Recharging'
+  else 'Waiting'
+ if p.player:GetAttribute('MA_SelectorStatus')~=status then p.player:SetAttribute('MA_SelectorStatus',status) end
+ if p.player:GetAttribute('MA_SelectorWorking')~=working then p.player:SetAttribute('MA_SelectorWorking',working) end
 end
 function scene.squareStep(p,d)
  if not DroneRoles.isWorker(d.role) or d.carrierId then return end
@@ -2297,7 +2324,7 @@ function scene.placeSquare(p,payload)
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
- p.player:SetAttribute('MA_SelectorWorking',false)
+ scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_Selector',center)
 end
 local function commandPlayer(pl: any,action: any,payload: any)
@@ -2721,11 +2748,7 @@ RunService.Heartbeat:Connect(function(dt: number)
     if encoded~=p.lastAbilityJSON then p.lastAbilityJSON=encoded;p.player:SetAttribute('MA_Ability',encoded) end
    end
    serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p))
-   if p.miningSquare then
-    local working=false
-    for _,d in ipairs(p.drones) do if d.squareJob==p.miningSquare and scene.committedWork(d) then working=true;break end end
-    if p.player:GetAttribute('MA_SelectorWorking')~=working then p.player:SetAttribute('MA_SelectorWorking',working) end
-   end
+   scene.publishSquareStatus(p)
    if not p.busy then settleRuntime(p) end
    if healthy(p) and Workshop.starLevel(data(p),'autosell')>0 and characterRoot(p) and Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) then sellBackpack(p,true) end
    if p.publishDirty then p.publishDirty=false;publish(p) end

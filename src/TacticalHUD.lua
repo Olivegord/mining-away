@@ -89,6 +89,10 @@ end
 -- Flat side readouts appear as their mineral areas are unlocked.
 local minerals={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Color3.fromRGB(114,177,255),Color3.fromRGB(198,154,255),Color3.fromRGB(100,229,165)}
+local selectorText={
+ Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
+ Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
+}
 local function compact(value)
  if value>=1e9 then return string.format('%.1fB',value/1e9) elseif value>=1e6 then return string.format('%.1fM',value/1e6) elseif value>=10000 then return string.format('%.1fk',value/1000) end
  return tostring(math.floor(value))
@@ -114,6 +118,8 @@ function HUD.new(refs: any)
  self.batteryValue=text(self.battery,'Charge',78,0,82,24,18,C.text);self.batteryValue.TextXAlignment=Enum.TextXAlignment.Right
  self.collectedTotal=Players.LocalPlayer:GetAttribute('CollectedOreTotal') or 0
  self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
+ self.selectorStatus=text(self.dock,'SelectorStatus',0,0,0,0,16,C.muted)
+ self.selectorStatus.Visible=false;self.selectorStatus.TextStrokeTransparency=.45
  for _,button in {refs.recall,refs.evade} do
   button.Parent=self.dock;plain(button);button.Active=true;button.TextSize=16
   button.TextXAlignment=Enum.TextXAlignment.Left;button.TextStrokeTransparency=1
@@ -200,16 +206,26 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.gain.Position=UDim2.fromOffset(0,(batteryVisible and 48 or 24)-age*8);self.gain.TextTransparency=math.clamp((age-.5)/.35,0,1)
  local working=activity.assigned;local delivering=activity.delivering
  if working>0 or delivering>0 then self.hasWorked=true end
- local showRecall=working>0 or delivering>0 or Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
+ local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
+ local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
+ local pinText=pinned and type(status)=='string' and selectorText[status] or nil
+ local showRecall=working>0 or delivering>0 or pinned
  self.dock.Visible=not hidden and (showRecall or fighting)
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
  local actions=(showRecall and 1 or 0)+(fighting and 1 or 0);local buttonHeight=touch and 44 or 24
- self.dock.Size=UDim2.fromOffset(width,actions*buttonHeight)
+ local recallWidth=pinText and 84 or width
+ local dockWidth=pinText and math.min(w,224) or width
+ self.dock.Size=UDim2.fromOffset(dockWidth,actions*buttonHeight)
  self.dock.Position=UDim2.fromOffset(0,sideY+height+24)
  local y=0
  for _,entry in ipairs({{r.recall,showRecall},{r.evade,fighting}}) do
-  entry[1].Visible=entry[2];if entry[2] then entry[1].Position=UDim2.fromOffset(0,y);entry[1].Size=UDim2.fromOffset(width,buttonHeight);y+=buttonHeight end
+  entry[1].Visible=entry[2];if entry[2] then entry[1].Position=UDim2.fromOffset(0,y);entry[1].Size=UDim2.fromOffset(entry[1]==r.recall and recallWidth or width,buttonHeight);y+=buttonHeight end
  end
+ self.selectorStatus.Visible=pinText~=nil
+ self.selectorStatus.Text=pinText or ''
+ self.selectorStatus.TextColor3=status=='Working' and C.gold or C.text
+ self.selectorStatus.Position=UDim2.fromOffset(recallWidth+4,0)
+ self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-recallWidth-4),buttonHeight)
  r.recall.Text=touch and 'Recall' or 'Recall [R]';r.evade.Text=touch and 'Evade' or 'Evade [Q]'
  r.unload.Visible=false;r.test.Visible=false;r.context.Visible=false
  r.enemy.Position=UDim2.fromOffset((w-math.min(280,w-24))/2,8);r.enemy.Size=UDim2.fromOffset(math.min(280,w-24),36)

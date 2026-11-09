@@ -28,22 +28,36 @@ end
 local function step(n)
  for _=1,n do realTime+=C.Tick;now=realTime;droneStep(d,C.Tick) end
 end
+local function status(expected)
+ scene.publishSquareStatus(p)
+ local actual=pl:GetAttribute('MA_SelectorStatus')
+ assert(actual==expected,'selector status: expected '..tostring(expected)..', got '..tostring(actual))
+end
 pin(200);assert(not p.miningSquare,'out-of-range pin accepted')
+status(nil)
 pin(-34.5);assert(not p.miningSquare,'off-field point snapped back into the field')
 pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10 and p.miningSquare.half==15)
+assert(pl:GetAttribute('MA_SelectorStatus')=='Waiting','initial status must publish with the pin')
+status('Waiting')
+d.carrierId='carrier-test';status('NoMiners');d.carrierId=nil
 local pinned=p.miningSquare
 pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
-step(1);assert(d.target==a)
+step(1);assert(d.target==a);status('Moving')
 d.pos=Feel.mineGoal(a.position,1,false,a.fullSize,a.referenceCrystal)
 step(32);assert(d.mining,'worker never began its real cut')
+status('Working');assert(pl:GetAttribute('MA_SelectorWorking')==true)
+p.busy=true;status('Paused');assert(d.target==a);p.busy=false
+status('Working')
 local other=player(98701);players.PlayerAdded:Fire(other)
 local rival=profiles[other.UserId]
 other.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
 command.OnServerEvent:Fire(other,'PlaceSelector',{runId=data(rival).run.id,fieldId=f.id,position=Vector3.new(-10,5.5,-68)})
 droneStep(rival.drones[1],C.Tick)
 assert(rival.miningSquare and not rival.drones[1].target,'overlapping selector stole another crew’s reservation')
+scene.publishSquareStatus(rival);assert(other:GetAttribute('MA_SelectorStatus')=='Waiting')
 players.PlayerRemoving:Fire(other)
 pin(13.3);assert(p.miningSquare.center.X==14)
+assert(pl:GetAttribute('MA_SelectorStatus')=='FinishingCut' and pl:GetAttribute('MA_SelectorWorking')==false)
 step(1);assert(d.target==a,'moving the square interrupted a live cut')
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 for _=1,600 do step(1);if a.paid then break end end
@@ -67,6 +81,7 @@ assert(hitResource(d,b,65,false));assert(b.extractedOre==paid,'regrowth duplicat
 -- charges there and resumes against the latest pin.
 d.battery=0
 step(1);assert(d.state=='ToCharge' and d.recharging and not d.target)
+status('Recharging')
 for _=1,1200 do step(1);if not d.recharging then break end end
 assert(not d.recharging and d.battery==d.stats.batteryCapacity,'failed to recharge at the pad')
 step(15);assert(d.target and d.squareJob==p.miningSquare,'charged worker failed to resume')
@@ -78,6 +93,7 @@ local oreBefore=pendingOre(p)
 step(30);local overflowTarget=assert(d.target,'full backpack prevented a new mining job')
 assert(d.squareJob==p.miningSquare)
 d.pos=committedStation(d,overflowTarget)
+step(32);assert(d.mining);status('Working')
 for _=1,600 do step(1);if overflowTarget.paid then break end end
 assert(overflowTarget.paid and pendingOre(p)>oreBefore,'mining a full bag did not leave collectible ore')
 assert(Pro.cargoUnits(profile)==100 and full==100)
@@ -98,7 +114,9 @@ assert(Pro.cargoUnits(data(p))<full and data(p).run.quartzEarnings==earnings+ful
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 command.OnServerEvent:Fire(pl,'Recall');step(1)
 assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
-print('PASS Crystal Run grid pin, station keeping, recall, edge overlap, reservations, committed work, regrowth, charging, mining with a full bag and Star Shop effects')
+assert(pl:GetAttribute('MA_Selector')==nil and pl:GetAttribute('MA_SelectorWorking')==nil)
+status(nil)
+print('PASS Crystal Run pin, status transitions, reservations, recall, edge overlap, committed work, regrowth, charging, full-bag mining and Star Shop effects')
 
 -- Exercise the larger route's population budget and station geometry with
 -- the production spawner. A busy patch must not shift its rocks into a lane.

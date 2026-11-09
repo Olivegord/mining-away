@@ -11,8 +11,8 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `9ea6b77a8ec013a2348b3b9ae50035e5d94ec16d19e62df0a573335c22bab06a` | Open Crystal Run, full-bag mining and 100-ore base backpack. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | [Native Edit and Source receipt](review/open-run-pickups-native.json). |
+| Native-file SHA-256 | `3896b20ef1fbebd5dbf519490bd099103df17548c530d7d13be60542cec3e7a0` | Open Crystal Run with the mining pin status readout. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the selector status follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,16 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — mining pin status and state machine inventory
+
+The Recall row now shows whether workers are heading to the pin, mining, finishing an earlier cut, recharging, waiting or paused. The server derives `MA_SelectorStatus` from the current jobs and save gate. The yellow pin still uses `MA_SelectorWorking`. Full bags continue to leave collectible ore on the ground. The [state machine inventory](game/architecture.md#state-machine-inventory) maps gameplay, persistence and presentation lifecycles to their owners and inspection points.
+
+DRONEREVOLUTION was already open in Play. That session was stopped. The shared Edit document was verified at place **124078027733625**, universe **10774898335**, loaded version **90**. All three roots report `SyncedAsRoot` and all seven Source hashes match the canonical file. Script Sync changed `GlobalDroneControl` (`89875fcb3e9b5243cdb4d8c261842b717b57d72465c1938a129c08aa634dfeff`) and `TacticalHUD` (`d9aa8892306603f4c1a0d224c93f36e3d56a4e98540f4818eef581e2095645f2`). The native refresh preserved every non-Source chunk and unrelated Source. Shared Edit has five zones, fifteen plots and zero divider parts in Crystal Run. Roblox publication status for this revision is unpublished. The last documented publication receipt remains v43.
+
+The workshop, mining-flight and pickup suites passed with API doubles. The Crystal Run fixture exercises pin status, repinning, reservation isolation, recharge and resume, save pause, full-bag overflow and recall. Studio Edit measured the widest status at 106.5 pixels in a 136-pixel slot and the keyboard Recall label at 55 pixels in an 84-pixel button. A new native gameplay, touch/device or multiplayer test was not run.
+
+Reproduce from `83d452bb1a5d33bedac0abca4346012335bee5b3` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 83d452b`.
 
 ## Latest follow-up — open plots and overflow ore
 
