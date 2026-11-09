@@ -12,6 +12,7 @@ local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scra
 for role in pairs(specialTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
+effectKeys.compactor=true;effectKeys.batchPress=true;effectKeys.liveWire=true
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -35,6 +36,9 @@ local function cargoId(p,id)
  if type(id)~='string' or #id>160 then return false end
  if type(p.fleet)~='table' then return false end
  for _,d in ipairs(p.fleet) do if type(d)=='table' and d.id==id then return true end end
+ if p.run and type(p.run.id)=='string' then
+  for slot=1,Workshop.EMPTIERS do if id==Workshop.emptierId(p.run.id,slot) then return true end end
+ end
  -- Studio roles have separate own-player bags; they never become permanent units.
  local prefix='test:'..tostring(p.userId)..':'
  return string.sub(id,1,#prefix)==prefix and string.match(string.sub(id,#prefix+1),'^%d+:%d+$')~=nil
@@ -62,7 +66,7 @@ local function denseArray(value,limit)
 end
 local function mineralBag(bag)
  if not validBag(bag) then return false end
- for material in pairs(bag) do if not Shops.COLORS[material] then return false end end
+ for material in pairs(bag) do if not Shops.COLORS[material] and not Workshop.CRYSTAL_BY_MATERIAL[material] then return false end end
  return true
 end
 local function validateLogistics(p,ids)
@@ -468,14 +472,14 @@ function P.finishDelivery(p,droneId,prices,tx,expectedRun)
  if not manifest or manifest.id~=tx or manifest.runId~=expectedRun then return false,'Delivery no longer pending' end
  local amount=0
  for material,units in pairs(manifest.cargo) do
-  local price=prices[material];if not finite(price) or price<0 then return false,'Unknown material value' end
+  local price=Shops.oreValue(prices,material);if not finite(price) or price<0 then return false,'Unknown material value' end
   amount=amount+units*price
  end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
- local deposited,depositError=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,depositError end
- p.run.deliveries[droneId]=nil;p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.cargo.Quartz or 0)
- local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount}
+ local deposited,quartz=Shops.deposit(p.run,manifest.cargo);if not deposited then return false,quartz end
+ p.run.deliveries[droneId]=nil;p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=quartz
+ local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(manifest.cargo),credits=amount,quartz=quartz}
  P.record(p,'FinishDelivery',tx,result);return true,result
 end
 function P.sell(p,prices,tx,expectedRun)
@@ -488,12 +492,15 @@ function P.sell(p,prices,tx,expectedRun)
  local units=P.cargoUnits(p);if units==0 then return false,'Backpack is empty' end
  local manifest=clone(p.run.cargo)
  local amount=0
- for material,n in pairs(p.run.cargo) do local value=prices[material];if not finite(value) or value<0 then return false,'Unknown material value' end;amount=amount+n*value end
+ for material,n in pairs(p.run.cargo) do
+  local value=Shops.oreValue(prices,material);if not finite(value) or value<0 then return false,'Unknown material value' end
+  amount+=n*value
+ end
  amount=math.floor(amount)
  if not integer(amount) or p.run.credits+amount>=1e14 or p.run.saleEarnings+amount>=1e14 then return false,'Sale limit exceeded' end
- local deposited,depositError=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,depositError end
- p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=(manifest.Quartz or 0)
- local result={credits=amount,earnings=amount,units=units,cargo=manifest,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
+ local deposited,quartz=Shops.deposit(p.run,p.run.cargo);if not deposited then return false,quartz end
+ p.run.cargo={};p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings=p.run.saleEarnings+amount;p.run.quartzEarnings+=quartz
+ local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
 function P.milestone(p)
  return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}

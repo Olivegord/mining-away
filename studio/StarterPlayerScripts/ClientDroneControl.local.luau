@@ -4,6 +4,28 @@ local Workshop = (function()
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
 local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+-- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
+W.CRYSTAL_TIERS={
+ {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='RunRuby',name='Ruby',hardness=3,value=4,cracks=3},
+ {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
+ {material='RunViolet',name='Violet',hardness=27,value=64,cracks=5},
+ {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
+}
+W.CRYSTAL_BY_MATERIAL={}
+for i,tier in ipairs(W.CRYSTAL_TIERS) do
+ tier.nextTier=W.CRYSTAL_TIERS[i+1]
+ W.CRYSTAL_BY_MATERIAL[tier.material]=tier
+end
+W.EMPTIERS=2
+W.EMPTIER_BATCH=24
+W.COMPACTOR_BATCH=3
+function W.emptierId(runId,slot) return runId..':emptier:'..slot end
+function W.compaction(material,units,batch)
+ local tier=W.CRYSTAL_BY_MATERIAL[material]
+ if not tier or not tier.nextTier then return nil,0,units end
+ return tier.nextTier,math.floor(units/batch),units%batch
+end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
  {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
@@ -30,17 +52,25 @@ W.CATALOG={
  {id='Q_DOUBLE_BEAM',title='Double Beam',scope='Individual',category='mining',tier=2,max=1,step={doubleBeam=1},color={91,208,255},icon='relay',crystalRun=true,hardware=true},
  {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
+ {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
+ {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_TURBO_ROTOR','Q_ORE_DUPLICATOR'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_AFTERSHOCK','Q_COMPACTOR'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
- Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
+ Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
+W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
  return total
 end
+function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
+function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum'},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart'},
@@ -263,13 +293,24 @@ function S.reason(p,entry,context)
  end
  return nil
 end
+function S.oreValue(prices,material)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+ return tier and material~='Quartz' and tier.value or (prices and prices[material])
+end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
+ local deposit={}
  for key,n in pairs(bag) do
-  if not S.COLORS[key] or not integer(n) or not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
+  local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
+  if (not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=tier and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(tier and tier.value or 1)
  end
- for key,n in pairs(bag) do run.wallet[key]=run.wallet[key]+n end
- return true
+ for key,n in pairs(deposit) do
+  if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
+ end
+ for key,n in pairs(deposit) do run.wallet[key]+=n end
+ return true,deposit.Quartz or 0
 end
 function S.buy(p,id,level,tx,expectedRun,context)
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
@@ -4548,7 +4589,7 @@ local SpecialDroneMotion = (function()
 -- readable preparation, quick contact and longer mechanically damped recovery.
 local Motion={}
 local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
-local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true}
+local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true,Compactor=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
  if t<=.52 then return loaded*smooth((t-.12)/.4) end
@@ -4636,7 +4677,7 @@ local function fieldStep(record,state,now,dt,shot)
    reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
   end
  end
- local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant')
+ local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and state=='Press')
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
@@ -4648,6 +4689,7 @@ local function fieldStep(record,state,now,dt,shot)
   if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
   elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='PressJaw' then offset=Vector3.new(-item.side*.57*engagement,0,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
@@ -6814,6 +6856,9 @@ function CardView.summary(choice)
  add('doubleBeam','Two lasers.\n2× damage to one crystal.')
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
  add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
+ add('compactor','Presses 3 loose ore into 1 of the next tier.')
+ add('batchPress','Your Compactor now needs 2 ore per press.')
+ add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -6831,7 +6876,7 @@ function CardView.summary(choice)
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
- add('aftershock','Laser cracks hit one nearby crystal')
+ add('aftershock','Each laser crack or break sends a shock into one nearby crystal.')
  add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
  add('earlyDrop','Cracks drop more ore that flies farther to you')
  add('fieldCharge','Depleted drones recharge at your pin')
@@ -6855,8 +6900,10 @@ function CardView.terms(choice,_targetOverride)
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
+ elseif e.compactor then target='New drone at your pin'
+ elseif e.batchPress then target='Your Compactor'
  elseif choice.scope=='Player' then target='Your backpack'
- elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 then target='Laser miners'
+ elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
  else target='All drones' end
@@ -6905,10 +6952,13 @@ function CardView.identity(choice)
  if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
  if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
+ if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
- if has('fork') or has('aftershock') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('aftershock') then return 'aftershock',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('fork') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
  if has('capacity') or has('fullAuto') or has('magnetRange') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
  if has('health') or has('reduction') or has('salvage') or has('shield') then return 'repair',Color3.fromRGB(12,125,65),Color3.fromRGB(164,255,180) end
  if has('combat') or has('rate') or has('crit') or has('splash') or has('finisher') or has('range') then return 'combat',Color3.fromRGB(178,30,80),Color3.fromRGB(255,161,198) end
@@ -7021,6 +7071,13 @@ local function mechanicVisual(parent,choice,compact)
    crystal(1.65,pos,accent,CFrame.Angles(0,side*.42,side*.22))
    crystal(.7,pos+Vector3.new(side*.54,-.47,.5),accent,CFrame.Angles(0,side*.5,-side*.3))
   end
+ elseif identity=='press' then
+  drone('Compactor',2.5,Vector3.new(0,.45,0),CFrame.Angles(0,-.2,0))
+  local inputs=choice.effects.batchPress and 2 or 3
+  for i=1,inputs do
+   crystal(.66,Vector3.new(-1.55,-1.6+(i-1)*.57,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
+  end
+  crystal(1.58,Vector3.new(1.25,-1.18,.48),Color3.fromRGB(250,91,143),CFrame.Angles(0,-.3,-.22))
  elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
@@ -7033,6 +7090,14 @@ local function mechanicVisual(parent,choice,compact)
    ray(Vector3.new(x,y-.4,0),Vector3.new(x*.6,-1.1,0),.065,accent)
   end
   crystal(1.7,Vector3.new(0,-1.6,0),Color3.fromRGB(185,122,255),CFrame.Angles(0,.4,-.15));chips(Vector3.new(0,-1.5,0),accent)
+ elseif identity=='aftershock' then
+  drone('Striker',1.85,Vector3.new(-.8,1.25,0))
+  crystal(1.7,Vector3.new(-.8,-1.25,0),Color3.fromRGB(255,116,129),CFrame.Angles(.16,.6,-.12))
+  crystal(1.4,Vector3.new(1.18,-1.1,.15),Color3.fromRGB(247,139,205),CFrame.Angles(.12,.4,.22))
+  ray(Vector3.new(-.8,.67,0),Vector3.new(-.8,-.65,0),.095,accent)
+  local bend=Vector3.new(.16,-.72,.3)
+  ray(Vector3.new(-.45,-1,.16),bend,.078,accent)
+  ray(bend,Vector3.new(.87,-1.05,.24),.078,accent)
  elseif identity=='prism' then
   drone('Striker',1.85,Vector3.new(0,1.25,0),CFrame.Angles(0,-.3,.08))
   local prism=visualPart(world,Vector3.new(.85,1.1,.85),Vector3.new(0,-.15,0),accent)
@@ -7622,6 +7687,7 @@ function V.effect(c)
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
+ if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
@@ -7668,7 +7734,8 @@ function V.render(U,parent,options)
  local sale=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(packWidth,122),WHITE)
  sale.Name='WorkshopSale'
  label(U,sale,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),balance..' Quartz available',19,true)
- label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.',15,false)
+ local saleDetail=options.crystalRun and 'Sell here anytime. Emptiers haul 24 ore per trip.' or (ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.')
+ label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),saleDetail,15,false)
  local sell=action(U,sale,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),
   ore>0 and 'Sell '..ore..' ore' or 'Backpack empty',options.onSell,options.onSell~=nil and options.canBuy and ore>0)
  sell.Name='SellWorkshopOre'
@@ -7678,7 +7745,7 @@ function V.render(U,parent,options)
  local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
  if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
  label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Fit one of three parts to a miner and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
+ local detail=starter and 'Choose Double Beam, Aftershock or a Compactor. Earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
  if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
  elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
  label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
@@ -7742,8 +7809,6 @@ function V.renderStars(U,parent,options)
   local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
   label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
   local detail=entry.description
-  if p.fieldCrewPreview and entry.id=='vacuum' then detail='Increases the test vacuum’s reach.' end
-  if p.fieldCrewPreview and entry.id=='cultivator' then detail='The test planter replants more often.' end
   label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),detail,15,false)
   label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
   action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
@@ -8760,8 +8825,9 @@ function V:update(dt,now)
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
-  self.meter.Size=UDim2.fromOffset(ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  local value=s:GetAttribute('OreValue')
+  self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
+  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz/ore') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
@@ -9716,7 +9782,7 @@ end
 openFleet=function()
  if not profile then return end
  local crew=profile.activeFleet or profile.fleet
- local l=menu('fleet','Meet your crew',profile.fieldCrewPreview and 'Test crew · Cut, collect and replant' or profile.testCrewActive and ('Studio role test · '..#crew..' active drones') or (#profile.fleet..' permanent · '..#crew..' active this run'),'drone');local width=l.bodyWidth-6
+ local l=menu('fleet','Meet your crew',profile.testCrewActive and ('Studio role test · '..#crew..' active drones') or (#profile.fleet..' permanent · '..#crew..' active this run'),'drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
  local rosterY=64
  if player:GetAttribute('MA_TestingEnabled')==true then
@@ -9756,8 +9822,12 @@ openFleet=function()
    statTile(row,14,91,tileWidth,'REPAIR',tostring(DroneConfig.Types.Medic.HealAmount)..' health')
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(DroneConfig.Courier.BatchUnits)..' ore')
-   statTile(row,tileWidth+28,91,tileWidth,'JOB','Haul to storage')
+   local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' ore')
+   statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
+  elseif role=='Compactor' then
+   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' loose ore')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 next-tier ore')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -9986,7 +10056,7 @@ local function registerDrone(source)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart'
+ local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart' or role=='Compactor'
  local swarm=DroneConfig.Swarm
  local scale=if referenceMiner then swarm.MinerViewScale elseif fieldRole then swarm.FieldViewScale else swarm.FleetViewScale
  clone:ScaleTo(clone:GetScale()*scale)

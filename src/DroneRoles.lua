@@ -22,6 +22,7 @@ local definitions={
  Needler={job='Dart thrower',worker=true,special='Needler'},
  Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
  Vacuum={job='Collects loose ore'},
+ Compactor={job='Compresses loose ore into the next tier'},
 }
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function R.canonical(role) return legacy[role] or role end

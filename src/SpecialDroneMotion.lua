@@ -3,7 +3,7 @@
 -- readable preparation, quick contact and longer mechanically damped recovery.
 local Motion={}
 local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
-local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true}
+local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true,Compactor=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
  if t<=.52 then return loaded*smooth((t-.12)/.4) end
@@ -91,7 +91,7 @@ local function fieldStep(record,state,now,dt,shot)
    reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
   end
  end
- local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant')
+ local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and state=='Press')
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
@@ -103,6 +103,7 @@ local function fieldStep(record,state,now,dt,shot)
   if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
   elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='PressJaw' then offset=Vector3.new(-item.side*.57*engagement,0,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base

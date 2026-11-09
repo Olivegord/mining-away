@@ -30,6 +30,7 @@ function V.effect(c)
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
+ if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
@@ -76,7 +77,8 @@ function V.render(U,parent,options)
  local sale=rounded(U,parent,UDim2.fromOffset(2,y),UDim2.fromOffset(packWidth,122),WHITE)
  sale.Name='WorkshopSale'
  label(U,sale,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),balance..' Quartz available',19,true)
- label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.',15,false)
+ local saleDetail=options.crystalRun and 'Sell here anytime. Emptiers haul 24 ore per trip.' or (ore>0 and 'Sell what you picked up to fund upgrades.' or 'Collect ore in the field and bring it here.')
+ label(U,sale,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),saleDetail,15,false)
  local sell=action(U,sale,UDim2.fromOffset(12,75),UDim2.fromOffset(packWidth-24,37),
   ore>0 and 'Sell '..ore..' ore' or 'Backpack empty',options.onSell,options.onSell~=nil and options.canBuy and ore>0)
  sell.Name='SellWorkshopOre'
@@ -86,7 +88,7 @@ function V.render(U,parent,options)
  local packTitle=starter and 'First upgrade pack' or 'Upgrade pack'
  if pending then packTitle=pending.opened==false and 'Your crate is waiting' or 'Your three choices are ready' end
  label(U,pack,UDim2.fromOffset(12,7),UDim2.fromOffset(packWidth-24,25),packTitle,19,true)
- local detail=starter and 'Fit one of three parts to a miner and earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
+ local detail=starter and 'Choose Double Beam, Aftershock or a Compactor. Earn 2 Stars.' or 'Pick 1 of 3 upgrades and earn 1–4 Stars.'
  if pending then detail=pending.opened==false and 'Open the delivered crate beside the stand.' or 'Your pack already includes one upgrade.'
  elseif balance<price then detail='Sell '..(price-balance)..' more Quartz to afford this pack.' end
  label(U,pack,UDim2.fromOffset(12,32),UDim2.fromOffset(packWidth-24,37),detail,15,false)
@@ -150,8 +152,6 @@ function V.renderStars(U,parent,options)
   local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
   label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
   local detail=entry.description
-  if p.fieldCrewPreview and entry.id=='vacuum' then detail='Increases the test vacuum’s reach.' end
-  if p.fieldCrewPreview and entry.id=='cultivator' then detail='The test planter replants more often.' end
   label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),detail,15,false)
   label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
   action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',

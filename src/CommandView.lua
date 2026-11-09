@@ -114,8 +114,9 @@ function V:update(dt,now)
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
-  self.meter.Size=UDim2.fromOffset(ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  local value=s:GetAttribute('OreValue')
+  self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
+  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz/ore') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

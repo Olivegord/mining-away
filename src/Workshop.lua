@@ -1,6 +1,28 @@
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
 local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+-- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
+W.CRYSTAL_TIERS={
+ {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='RunRuby',name='Ruby',hardness=3,value=4,cracks=3},
+ {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
+ {material='RunViolet',name='Violet',hardness=27,value=64,cracks=5},
+ {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
+}
+W.CRYSTAL_BY_MATERIAL={}
+for i,tier in ipairs(W.CRYSTAL_TIERS) do
+ tier.nextTier=W.CRYSTAL_TIERS[i+1]
+ W.CRYSTAL_BY_MATERIAL[tier.material]=tier
+end
+W.EMPTIERS=2
+W.EMPTIER_BATCH=24
+W.COMPACTOR_BATCH=3
+function W.emptierId(runId,slot) return runId..':emptier:'..slot end
+function W.compaction(material,units,batch)
+ local tier=W.CRYSTAL_BY_MATERIAL[material]
+ if not tier or not tier.nextTier then return nil,0,units end
+ return tier.nextTier,math.floor(units/batch),units%batch
+end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
  {id='Q_POWER',title='Power Cell',scope='Fleet',category='mining',tier=1,max=6,step={mining=.5},color={246,113,93},icon='mining'},
@@ -27,17 +49,25 @@ W.CATALOG={
  {id='Q_DOUBLE_BEAM',title='Double Beam',scope='Individual',category='mining',tier=2,max=1,step={doubleBeam=1},color={91,208,255},icon='relay',crystalRun=true,hardware=true},
  {id='Q_TURBO_ROTOR',title='Twin Thrusters',scope='Individual',category='flight',tier=2,max=1,step={twinThrusters=1},color={255,137,66},icon='flight',crystalRun=true,hardware=true},
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
+ {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
+ {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_TURBO_ROTOR','Q_ORE_DUPLICATOR'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_AFTERSHOCK','Q_COMPACTOR'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
- Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true}
+ Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
+W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
  return total
 end
+function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
+function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum'},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart'},

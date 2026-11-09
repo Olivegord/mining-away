@@ -1,9 +1,16 @@
 -- Typed mineral storage and permanent transport ownership for the existing game.
 -- Currency changes use working-copy transactions; ordinary mining deposits are
 -- non-yielding and become part of the next fenced profile save.
+local Workshop=require('./Workshop')
+local Shops=require('./Shops')
 local L: any={CAPACITY=120,LAUNCH_SECONDS=6,CARRIER_PRICE=1500,BACKPACK_PRICE=750}
 local materials={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 local mineral={Quartz=true,Ruby=true,Cobalt=true,Violet=true,Emerald=true}
+for _,tier in ipairs(Workshop.CRYSTAL_TIERS) do
+ if not mineral[tier.material] then
+  table.insert(materials,tier.material);mineral[tier.material]=true
+ end
+end
 local miningRoles={Striker=true,Charger=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local function integer(n: any): any return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end
 local function clone(t: any): any local out={};for k,v in pairs(t or {}) do out[k]=type(v)=='table' and clone(v) or v end;return out end
@@ -58,14 +65,15 @@ function L.finishLaunch(p: any, values: any): (any, any)
  if state.launchRemaining>0 then return false,'Cargo capsule is still in flight' end
  local units,earnings=L.bagUnits(state.launchCargo),0
  for key,n in pairs(state.launchCargo) do
-  local value=values and values[key] or 1
-  if not mineral[key] or not integer(n) or not integer(p.run.wallet[key]+n) or type(value)~='number' or value<0 or value~=value then return false,'Invalid launch manifest' end
+  local value=Shops.oreValue(values,key) or 1
+  if not mineral[key] or not integer(n) or type(value)~='number' or value<0 or value~=value then return false,'Invalid launch manifest' end
   earnings+=n*value
  end
  earnings=math.floor(earnings)
  if not integer(earnings) or not integer(p.run.saleEarnings+earnings) then return false,'Launch earnings limit reached' end
  local manifest=clone(state.launchCargo)
- add(p.run.wallet,manifest);p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings;p.run.quartzEarnings+=(manifest.Quartz or 0)
+ local deposited,quartz=Shops.deposit(p.run,manifest);if not deposited then return false,quartz end
+ p.run.credits=p.run.wallet.Quartz;p.run.saleEarnings+=earnings;p.run.quartzEarnings+=quartz
  state.launchCargo={};state.launchRemaining=0;p.logistics.launches+=1
  return true,{units=units,earnings=earnings,cargo=manifest,runId=p.run.id,launch=p.logistics.launches}
 end

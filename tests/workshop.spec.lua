@@ -99,6 +99,45 @@ test('hardware fits chosen permanent miners once each and clears on prestige',fu
  assert(P.prestige(p,'reset-hardware',p.run.id,{atDepot=true,confirmed=true}))
  eq(#p.run.cards,0);eq(p.fleet[2].id,second.id);eq(C.stats(p,p.fleet[2]).doubleBeam,0)
 end)
+test('Crystal Run drafts trigger effects and offers Batch Press only after Compactor',function()
+ local p=funded()
+ local function review(ownsPress)
+  local sawBatch=false
+  for tier=1,4 do for seed=1,80 do
+   local offer=assert(C.workshopOffer(p,tier,C.hash('crystal:'..seed..':draft:'..tier),true))
+   local trigger,rarity=false,false
+   for _,choice in ipairs(offer) do
+    trigger=trigger or W.TRIGGER_CARDS[choice.cardId]==true
+    rarity=rarity or choice.upgradeTier==tier
+    if choice.cardId=='Q_BATCH_PRESS' then sawBatch=true end
+   end
+   assert(trigger and rarity)
+  end end
+  eq(sawBatch,ownsPress)
+ end
+ review(false)
+ local ok,offer=C.buy(p,'first-press',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true})
+ assert(ok);eq(offer.choices[3].cardId,'Q_COMPACTOR');assert(choose(p,offer,3,'hire-press'))
+ review(true)
+ local nextTier,units,remaining=W.compaction('RunCobalt',5,2)
+ eq(nextTier.material,'RunViolet');eq(units,2);eq(remaining,1)
+ local highest,n,rest=W.compaction('RunEmerald',6,2)
+ eq(highest,nil);eq(n,0);eq(rest,6)
+ p.run.quartzEarnings=360
+ assert(P.prestige(p,'reset-press',p.run.id,{atDepot=true,confirmed=true}));eq(W.hasCompactor(p),false)
+end)
+test('Crystal Run work compounds without resizing and refined sales fund Quartz progression',function()
+ local starter=Mining.resource(75,'Crystal',1)
+ for i,tier in ipairs(W.CRYSTAL_TIERS) do
+  local rock=Mining.resource(75,'Crystal',tier.hardness)
+  eq(rock.work,starter.work*3^(i-1));eq(rock.size,starter.size);eq(tier.value,4^(i-1))
+ end
+ local p=P.new(44)
+ p.run.cargo={Quartz=2,Ruby=3,RunRuby=4,RunEmerald=1}
+ local sold,receipt=P.sell(p,{Quartz=1,Ruby=2},'refined-sale',p.run.id)
+ assert(sold);eq(receipt.credits,280);eq(p.run.wallet.Quartz,274);eq(p.run.wallet.Ruby,3);eq(p.run.quartzEarnings,274)
+ assert(P.sell(p,{},'refined-sale',p.run.id));eq(p.run.wallet.Quartz,274);assert(P.validate(p,44))
+end)
 test('Legendary is affordable after spending the last Quartz and exhausted tiers leave the roll',function()
  local sawLegendary=false
  for seed=1,1000 do

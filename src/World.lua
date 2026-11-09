@@ -1,5 +1,6 @@
 -- Runtime map assembly around the original spawn, fields and Converter.
 -- The source binary remains untouched. Authored assets are cloned, never rebuilt as boxes.
+local Workshop=require('./Workshop')
 local W={}
 function W.part(parent,name,pos,size,color,material)
  local p=Instance.new('Part');p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false;p.CanTouch=false
@@ -681,9 +682,7 @@ function W.initialize(): any
   local run=map:FindFirstChild('CrystalRun')
   local runStart,chargingStation
   if run then
-   local hardness={1,1.75,2.65,3.75,5.1}
-   local yield={10,18,30,45,62}
-   for i=1,5 do
+   for i,tier in ipairs(Workshop.CRYSTAL_TIERS) do
     local original=Config.Fields[i]
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
@@ -694,8 +693,8 @@ function W.initialize(): any
     end
     table.sort(clusters,function(a,b) return a.Name<b.Name end)
     assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
-    local cfg={Name=original.Key,Key=original.Key,Material='Quartz',AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=hardness[i],Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=yield[i],Value=1,Respawn=8+i-1,Turrets=0}
+    local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}

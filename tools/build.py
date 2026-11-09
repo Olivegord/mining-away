@@ -72,7 +72,7 @@ def chunks(b):
   yield kind,(decompress(raw,ul) if cl else raw),b[start:i]
 def chunk(k,d):return k+struct.pack('<III',0,len(d),0)+d
 def module_bundle(names):
- if any(name in names for name in ('Shops','Cards','Profile','ShopView')) and 'Workshop' not in names:
+ if any(name in names for name in ('Shops','Cards','Profile','ShopView','World')) and 'Workshop' not in names:
   names=('Workshop',)+tuple(names)
  if 'Cards' in names and 'Packs' not in names:
   names=tuple(n for name in names for n in (('Packs','Cards') if name=='Cards' else (name,)))

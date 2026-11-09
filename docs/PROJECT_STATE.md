@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run is a drone production loop. Pin a plot, collect the ore, sell it at the Workshop and spend Stars on gathering, replanting or automatic sales. The first 20-Quartz pack offers Double Beam, Twin Thrusters and Ore Duplicator. Pick one part and fit it to a permanent laser miner for the run. Pickup numbers show actual ore added to the backpack. Crews leave a pin and follow when the player gets more than 100 studs away horizontally. New profiles have three permanent miners and a 100-ore backpack. Studio starts with a temporary test crew that includes a miner, dart thrower, energy-ball thrower, vacuum and planter. Tool drops and equipment are disabled in this game. Run cards, Stars and Star upgrades reset on prestige.
+**Current implementation:** Crystal Run starts new players and Studio tests with three permanent miners, two run Emptiers and a 100-ore backpack. Pin a plot, collect the ore and sell it manually or let Emptiers carry 24-ore parcels to the Workshop. Each deeper tier has 3× the previous tier's mineable work and 4× the sale price per ore. The first 20-Quartz pack offers Double Beam, Aftershock and a Compactor Drone. Later choices can improve the recipe, feed the Compactor earlier, or combine battery recovery with high-charge damage. Pickup numbers show what actually reached the backpack. Existing permanent fleets and paid offers are preserved. Crews follow when the player gets more than 100 studs from the pin horizontally. Tool drops and equipment are disabled. Prestige resets cards, Stars and purchased run automation.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `d9e5bd79722482883587e806e362f1ad2ced41ff7269b7274591c8c5a3f43e0d` | Upgrade cards, slots and fitted drone hardware. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the fitted upgrades follow-up below. |
+| Native-file SHA-256 | `e2e7f4c3b9abdb1caedc3f76c1719a0370da0e581bfe2c3a9ceb2c88d448c9b8` | Deep-field and automation revision. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the deep fields follow-up below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Fitted upgrade cards in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved; a separate remote Edit save receipt was not checked. |
+| Shared Studio entry point | **Deep fields and automation in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved. Persistence across reopening the cloud Edit document was not independently checked. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## Latest follow-up — deep fields, Emptiers and card combinations
+
+Quartz through Emerald have 1×, 3×, 9×, 27× and 81× starter mineable work at equal crystal rolls. Violet and Emerald fracture more often during the cut. Their ore sells for 64 and 256 Quartz per unit. Active pins preserve interrupted deep cuts through recharge trips, and returning miners prioritize those cuts. Existing side-field ores still credit their original wallets.
+
+Both starting Emptiers carry saved 24-ore parcels from the backpack to the Workshop. The first pack's Compactor gathers owned loose piles within reach of the pin, produces one next-tier ore for every three input units, and leaves leftovers collectible. Its output can wait on the ground when the bag is full. Batch Press lowers the input to two and enters the draft only after the Compactor is installed. Aftershock turns laser cracks and breaks into a hit on one nearby rock. Live Wire boosts laser hits above half battery, and Reclaim can extend that window. Fresh draws favor behavior changes when compatible choices exist. Paid offers, the three animated choice slots and existing fitted upgrades remain valid.
+
+Workshop, Crystal Run, persistence, committed flight, pickup and beam suites passed with Roblox API or storage doubles. The production logic exercised Compactor ownership, leftovers, the full-bag case, Batch Press and its reprocessing guard, automatic sale and replay, the Live Wire threshold and deep recharge. The legacy shops and specialist logistics suites stop at the same starter-count or schema-six fixtures on `5d3c437`. In-game pacing, input, appearance, live DataStore and multiplayer remain unverified.
+
+Studio was already open. In shared DRONEREVOLUTION Edit, place **124078027733625**, universe **10774898335**, loaded version **112**, all seven Source fingerprints match the canonical file and the three roots report `SyncedAsRoot`. The authored route still has five zones and 15 plots. The checked refresh preserved all other native chunks and backup Sources. Studio remains in Edit. No Roblox release or independent cloud Edit save receipt was obtained. Reproduce from `5d3c437a804ceb7bba9e94d51b57f71045a79005` with `python3 tools/build.py --previous-commit 5d3c437` and `python3 tools/script_sync.py`.
 
 ## Latest follow-up — fitted upgrades and card slots
 

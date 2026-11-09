@@ -2,7 +2,7 @@ local Workshop=require('./Workshop')
 local Shops=require('./Shops')
 local DroneRoles=require('./DroneRoles')
 -- Data-driven run modifiers. Complete resolved choices are saved before disclosure.
-local C={CONTENT_VERSION=16,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
+local C={CONTENT_VERSION=17,BASE_CAPACITY=100,LASER_CHARGE_SCALE=4}
 -- Relative priority weights for the seeded candidate ordering; these are not final probabilities.
 C.RARITY_WEIGHTS={Common=6,Uncommon=3,Rare=1}
 local rare={G01=true,G02=true,F09=true,F10=true,F11=true,D13=true,D14=true,D15=true,D16=true,D17=true,D18=true,D19=true,D20=true,A02=true}
@@ -73,7 +73,7 @@ local function support(d)
  return not DroneRoles.isWorker(d.role or d.type)
 end
 local function courier(d) return (d.role or d.type)=='Courier' end
-local workEffects={mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true,aftershock=true,reclaim=true,earlyDrop=true}
+local workEffects={mining=true,startup=true,yield=true,fork=true,geode=true,forkRange=true,plotAuto=true,aftershock=true,reclaim=true,earlyDrop=true,liveWire=true}
 local combatOnly={combat=true,rate=true,crit=true,splash=true,chain=true,range=true,finisher=true,salvage=true}
 local function sums(p,d,extra)
  local s={}
@@ -129,7 +129,7 @@ function C.stats(p,d,extra)
   yieldMultiplier=clamp(1+(s.yield or 0),.1,2)*(1+oreDuplicator),damageReduction=clamp(s.reduction or 0,0,.5),critChance=clamp(s.crit or 0,0,.3),
   splashFraction=clamp(s.splash or 0,0,.25),splashRange=6+clamp(s.chain or 0,0,16),forkFraction=DroneRoles.isMiner(d.role or d.type) and clamp(s.fork or 0,0,forkCap) or 0,forkRange=DroneRoles.isMiner(d.role or d.type) and (6+clamp(s.forkRange or 0,0,6)) or 0,
   geodeMultiplier=1+clamp(s.geode or 0,0,.8),finisherMultiplier=1+clamp(s.finisher or 0,0,.75),salvageFraction=clamp(s.salvage or 0,0,.3),
-  aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,
+  aftershock=cutter and (s.aftershock or 0) or 0,reclaim=s.reclaim or 0,earlyDrop=s.earlyDrop or 0,liveWire=cutter and (s.liveWire or 0) or 0,
   deepCutMultiplier=1+(cutter and (s.deepCut or 0) or 0),
   entryShield=b.maxHealth*clamp(s.shield or 0,0,.2),capacity=C.droneCapacity(p,d,extra),
   batteryCapacity=DroneRoles.isWorker(d.role or d.type) and (Workshop.BATTERY+(s.battery or 0)) or 0,
@@ -169,8 +169,12 @@ function C.weightedOrder(items,random)
  return ordered
 end
 local statLabels={doubleBeam='Laser count bonus',twinThrusters='Thruster kit',oreDuplicator='Duplicator kit',aftershock='Crack echo damage',reclaim='Battery per break',earlyDrop='Extra early ore',batteryCapacity='Battery capacity',miningDPS='Mining / sec',combatDPS='Combat / sec',maxHealth='Hull',maxStep60='Flight speed',warmup='Laser warmup',range='Combat reach',yieldMultiplier='Ore yield',damageReduction='Damage blocked',critChance='Critical chance',splashFraction='Arc damage',splashRange='Arc reach',forkFraction='Split damage',forkRange='Split reach',geodeMultiplier='Geode damage',deepCutMultiplier='Deep crystal damage',finisherMultiplier='Finishing damage',salvageFraction='Repair on kill',entryShield='Entry shield',shotInterval='Shot interval',plotAuto='Automatic targeting',fullAuto='Courier speed bonus'}
+statLabels.liveWire='High-battery damage bonus'
 local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
+ local compactor=Workshop.hasCompactor(p,c)
+ out.compactor=compactor and 1 or 0
+ out.batchPress=compactor and Workshop.COMPACTOR_BATCH-Workshop.compactorBatch(p,c) or 0
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
   for k in pairs(statLabels) do if k~='shotInterval' then
@@ -202,6 +206,8 @@ local function beneficial(p,c)
 end
 local function preview(p,c)
  local lines={}
+ if c.effects.compactor then table.insert(lines,{label='Compactor drones',before=0,after=1,unit=''}) end
+ if c.effects.batchPress then table.insert(lines,{label='Input per compressed ore',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='ore'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end
@@ -215,11 +221,11 @@ local function preview(p,c)
  end end
  if target then
   local before,after=C.stats(p,target),C.stats(p,target,c)
-  for _,k in ipairs({'aftershock','reclaim','earlyDrop','batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','deepCutMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
+  for _,k in ipairs({'aftershock','reclaim','earlyDrop','liveWire','batteryCapacity','miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','yieldMultiplier','damageReduction','critChance','splashFraction','splashRange','forkFraction','forkRange','geodeMultiplier','deepCutMultiplier','finisherMultiplier','salvageFraction','entryShield','shotInterval','plotAuto','fullAuto'}) do
    if math.abs(before[k]-after[k])>1e-8 then
     local scale=k=='maxStep60' and 60 or 1
     local unit=(k=='warmup' or k=='shotInterval') and 's' or (k=='maxStep60' and 'studs/s' or ((k=='range' or k=='splashRange' or k=='forkRange') and 'studs' or ''))
-    if k=='aftershock' or k=='earlyDrop' or k=='damageReduction' or k=='critChance' or k=='splashFraction' or k=='forkFraction' or k=='salvageFraction' then scale=100;unit='%' end
+    if k=='aftershock' or k=='earlyDrop' or k=='liveWire' or k=='damageReduction' or k=='critChance' or k=='splashFraction' or k=='forkFraction' or k=='salvageFraction' then scale=100;unit='%' end
     if k=='geodeMultiplier' or k=='deepCutMultiplier' or k=='finisherMultiplier' or k=='yieldMultiplier' then unit='×' end
     table.insert(lines,{label=statLabels[k],before=before[k]*scale,after=after[k]*scale,unit=unit})
    end
@@ -261,6 +267,7 @@ function C.workshopOffer(p,tier,seed,crystalRun)
   compatible[i][j]=iBetter and jBetter
  end end
  local triples,total={},0
+ local triggerTriples,triggerTotal={},0
  for i=1,#pool-2 do
   for j=i+1,#pool-1 do
    if compatible[i][j] then
@@ -268,12 +275,17 @@ function C.workshopOffer(p,tier,seed,crystalRun)
      local guaranteed=pool[i].upgradeTier==tier or pool[j].upgradeTier==tier or pool[k].upgradeTier==tier
      if compatible[i][k] and compatible[j][k] and guaranteed then
       local weight=pool[i].upgradeTier+pool[j].upgradeTier+pool[k].upgradeTier
-      total+=weight;table.insert(triples,{i,j,k,weight})
+      local triple={i,j,k,weight}
+      total+=weight;table.insert(triples,triple)
+      if crystalRun and (Workshop.TRIGGER_CARDS[pool[i].cardId] or Workshop.TRIGGER_CARDS[pool[j].cardId] or Workshop.TRIGGER_CARDS[pool[k].cardId]) then
+       triggerTotal+=weight;table.insert(triggerTriples,triple)
+      end
      end
     end
    end
   end
  end
+ if triggerTotal>0 then triples,total=triggerTriples,triggerTotal end
  if total==0 then return nil end
  local random=rng(seed);local ticket=random(total);local selected=triples[1]
  for _,triple in ipairs(triples) do ticket-=triple[4];if ticket<=0 then selected=triple;break end end

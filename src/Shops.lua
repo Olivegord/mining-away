@@ -1,5 +1,6 @@
 -- Pure mineral economy. Catalog prices are provisional playtest tuning;
 -- ownership, quoted levels, spending and receipts are server transactions.
+local Workshop=require('./Workshop')
 local S={ORDER={'Quartz','Ruby','Cobalt','Violet','Emerald'},PACK_CURRENCY='Quartz',PACKS_FREE=false}
 function S.packPromptText(price)
  return 'Open Quartz Workshop'
@@ -133,13 +134,24 @@ function S.reason(p,entry,context)
  end
  return nil
 end
+function S.oreValue(prices,material)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+ return tier and material~='Quartz' and tier.value or (prices and prices[material])
+end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
+ local deposit={}
  for key,n in pairs(bag) do
-  if not S.COLORS[key] or not integer(n) or not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
+  local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
+  if (not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=tier and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(tier and tier.value or 1)
  end
- for key,n in pairs(bag) do run.wallet[key]=run.wallet[key]+n end
- return true
+ for key,n in pairs(deposit) do
+  if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
+ end
+ for key,n in pairs(deposit) do run.wallet[key]+=n end
+ return true,deposit.Quartz or 0
 end
 function S.buy(p,id,level,tx,expectedRun,context)
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end

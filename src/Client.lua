@@ -482,7 +482,7 @@ end
 openFleet=function()
  if not profile then return end
  local crew=profile.activeFleet or profile.fleet
- local l=menu('fleet','Meet your crew',profile.fieldCrewPreview and 'Test crew · Cut, collect and replant' or profile.testCrewActive and ('Studio role test · '..#crew..' active drones') or (#profile.fleet..' permanent · '..#crew..' active this run'),'drone');local width=l.bodyWidth-6
+ local l=menu('fleet','Meet your crew',profile.testCrewActive and ('Studio role test · '..#crew..' active drones') or (#profile.fleet..' permanent · '..#crew..' active this run'),'drone');local width=l.bodyWidth-6
  tabs(width,'fleet')
  local rosterY=64
  if player:GetAttribute('MA_TestingEnabled')==true then
@@ -522,8 +522,12 @@ openFleet=function()
    statTile(row,14,91,tileWidth,'REPAIR',tostring(DroneConfig.Types.Medic.HealAmount)..' health')
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(DroneConfig.Courier.BatchUnits)..' ore')
-   statTile(row,tileWidth+28,91,tileWidth,'JOB','Haul to storage')
+   local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' ore')
+   statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
+  elseif role=='Compactor' then
+   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' loose ore')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 next-tier ore')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -752,7 +756,7 @@ local function registerDrone(source)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart'
+ local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart' or role=='Compactor'
  local swarm=DroneConfig.Swarm
  local scale=if referenceMiner then swarm.MinerViewScale elseif fieldRole then swarm.FieldViewScale else swarm.FleetViewScale
  clone:ScaleTo(clone:GetScale()*scale)

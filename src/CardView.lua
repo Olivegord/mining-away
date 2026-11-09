@@ -15,6 +15,9 @@ function CardView.summary(choice)
  add('doubleBeam','Two lasers.\n2× damage to one crystal.')
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
  add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
+ add('compactor','Presses 3 loose ore into 1 of the next tier.')
+ add('batchPress','Your Compactor now needs 2 ore per press.')
+ add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -32,7 +35,7 @@ function CardView.summary(choice)
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
- add('aftershock','Laser cracks hit one nearby crystal')
+ add('aftershock','Each laser crack or break sends a shock into one nearby crystal.')
  add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
  add('earlyDrop','Cracks drop more ore that flies farther to you')
  add('fieldCharge','Depleted drones recharge at your pin')
@@ -56,8 +59,10 @@ function CardView.terms(choice,_targetOverride)
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
+ elseif e.compactor then target='New drone at your pin'
+ elseif e.batchPress then target='Your Compactor'
  elseif choice.scope=='Player' then target='Your backpack'
- elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 then target='Laser miners'
+ elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
  else target='All drones' end
@@ -106,10 +111,13 @@ function CardView.identity(choice)
  if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
  if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
+ if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
- if has('fork') or has('aftershock') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('aftershock') then return 'aftershock',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('fork') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
  if has('capacity') or has('fullAuto') or has('magnetRange') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
  if has('health') or has('reduction') or has('salvage') or has('shield') then return 'repair',Color3.fromRGB(12,125,65),Color3.fromRGB(164,255,180) end
  if has('combat') or has('rate') or has('crit') or has('splash') or has('finisher') or has('range') then return 'combat',Color3.fromRGB(178,30,80),Color3.fromRGB(255,161,198) end
@@ -222,6 +230,13 @@ local function mechanicVisual(parent,choice,compact)
    crystal(1.65,pos,accent,CFrame.Angles(0,side*.42,side*.22))
    crystal(.7,pos+Vector3.new(side*.54,-.47,.5),accent,CFrame.Angles(0,side*.5,-side*.3))
   end
+ elseif identity=='press' then
+  drone('Compactor',2.5,Vector3.new(0,.45,0),CFrame.Angles(0,-.2,0))
+  local inputs=choice.effects.batchPress and 2 or 3
+  for i=1,inputs do
+   crystal(.66,Vector3.new(-1.55,-1.6+(i-1)*.57,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
+  end
+  crystal(1.58,Vector3.new(1.25,-1.18,.48),Color3.fromRGB(250,91,143),CFrame.Angles(0,-.3,-.22))
  elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
@@ -234,6 +249,14 @@ local function mechanicVisual(parent,choice,compact)
    ray(Vector3.new(x,y-.4,0),Vector3.new(x*.6,-1.1,0),.065,accent)
   end
   crystal(1.7,Vector3.new(0,-1.6,0),Color3.fromRGB(185,122,255),CFrame.Angles(0,.4,-.15));chips(Vector3.new(0,-1.5,0),accent)
+ elseif identity=='aftershock' then
+  drone('Striker',1.85,Vector3.new(-.8,1.25,0))
+  crystal(1.7,Vector3.new(-.8,-1.25,0),Color3.fromRGB(255,116,129),CFrame.Angles(.16,.6,-.12))
+  crystal(1.4,Vector3.new(1.18,-1.1,.15),Color3.fromRGB(247,139,205),CFrame.Angles(.12,.4,.22))
+  ray(Vector3.new(-.8,.67,0),Vector3.new(-.8,-.65,0),.095,accent)
+  local bend=Vector3.new(.16,-.72,.3)
+  ray(Vector3.new(-.45,-1,.16),bend,.078,accent)
+  ray(bend,Vector3.new(.87,-1.05,.24),.078,accent)
  elseif identity=='prism' then
   drone('Striker',1.85,Vector3.new(0,1.25,0),CFrame.Angles(0,-.3,.08))
   local prism=visualPart(world,Vector3.new(.85,1.1,.85),Vector3.new(0,-.15,0),accent)

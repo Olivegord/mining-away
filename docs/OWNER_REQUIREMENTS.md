@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 8 latest — harder deep fields and an automation-first crew
+
+Make later Crystal Run rocks much harder with a nonlinear health curve. Start with backpack emptiers and fewer projectile drones. Add a Compactor that sucks up loose rock bits and compresses them into the next tier for a better sale. Use Risk of Rain 2 as a reference for card upgrades that introduce new behaviors and combine into builds. Preserve existing permanent drones and paid choices.
+
 ## November 8 latest — visible parts for a chosen drone
 
 Upgrade cards should offer self-evident visual changes the player can give to a specific drone. The owner’s example is Double Beam: two beams aimed at the same crystal, dealing twice that miner's laser damage. Cards should animate into visible offer slots. These slots present the three choices; they are not limits on equipped upgrades. Preserve the existing paid offer and run reset rules.
