@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `afdb3ccd890fc6ec95e1248568eb6127c15d096f24aca59b9d2535203977ad6c` | Includes the taller ore arcs and geometric launch and landing effects. |
+| Native-file SHA-256 | `64a2e292526f9096bc81b788cd5829a975dc61acf862ff6c32843ef348cff5c2` | Includes ore bob and bloom and the restored laser buildup. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the taller ore launches and new effects** | All seven Sources and three roots verified in Edit. Team Create save returned version 180. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the ore bloom and laser buildup fixes** | All seven Sources and three roots verified in Edit. Team Create save returned version 181. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — ore bloom and a readable laser charge
+
+Dropped ore keeps the tall arc and softer ribbon, then eases into a slow vertical bob with a fixed resting rotation. The solid crystal finish replaces Glass, and a two-layer bloom fades in behind the ore. Its depth offset stays above the floor. The geometric launch and contact flashes were removed after the owner reported flickering. Reduced motion stops the bob and reduced effects removes the bloom. Collection still uses the server's ground trajectory and receipt.
+
+In the existing Studio Play session, a depleted miner traveled to the depot, recharged, and returned to mining. The starter laser buildup on clustered Crystal Run ore lasted 0.12 seconds. The new base is 0.8 seconds, with ignition upgrades still reducing it to a minimum of 0.24 seconds. Battery recharge and mining contact audio retain their previous behavior.
+
+Pickup, Crystal Run, mining flight, and beam checks passed. The detached Studio Edit fixture exercised the new bob, material and bloom using native parts and GUI instances. The final look and multiplayer remain unverified in Play. All seven Sources matched shared Edit at place **124078027733625**, universe **10774898335**, and Team Create save **181** succeeded. This revision is unpublished. To reproduce from `20beaa2`, apply the changes, run `python3 tools/script_sync.py`, and run `python3 tools/build.py --previous-commit 20beaa2`.
 
 ## November 11 — higher ore arcs and geometric effects
 

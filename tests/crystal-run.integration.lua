@@ -192,7 +192,11 @@ d.pos=committedStation(d,replacement);d.velocity=Vector3.zero
 assert(math.abs(d.pos.Y-replacement.cluster.Position.Y-10)<.001)
 local before=replacement.hp
 step(1);assert(d.state=='Warmup' and replacement.hp==before)
-step(12);assert(d.mining and replacement.hp<before,'close cut still has the old pause')
+snapshotDrone(d)
+local warmup=d.model:GetAttribute('WarmupDuration')
+assert(warmup==.8 and d.model:GetAttribute('WarmupStart')==d.warmAt)
+step(math.floor(.5/C.Tick));assert(d.state=='Warmup' and replacement.hp==before)
+step(math.ceil(.4/C.Tick));assert(d.mining and replacement.hp<before,'the charged laser did not start cutting')
 release(d)
 p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)

@@ -9801,7 +9801,6 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
-local BURST_LIMIT,BURST_DISTANCE=8,80
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -9810,69 +9809,10 @@ local function launchTrail(view,tint,halfWidth)
  trail.Lifetime=TRAIL_LIFETIME;trail.MinLength=.045;trail.MaxLength=7.5
  trail.LightEmission=.78;trail.LightInfluence=0
  trail.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.85),tint:Lerp(PICKUP_HIGHLIGHT,.22))
- trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.11),NumberSequenceKeypoint.new(.32,.27),NumberSequenceKeypoint.new(1,1)})
+ trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(.32,.46),NumberSequenceKeypoint.new(1,1)})
  trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.90),NumberSequenceKeypoint.new(.32,.52),NumberSequenceKeypoint.new(1,0)})
  trail.Parent=view
  return {trail=trail,a=a,b=b}
-end
-local function makeBurst()
- local folder=Instance.new('Folder');folder.Name='OreBurst'
- local marks={}
- for i=1,5 do
-  local part=Instance.new('Part');part.Name='OreLightMark';part.Material=Enum.Material.Neon
-  part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
-  part.Parent=folder;marks[i]=part
- end
- return {folder=folder,marks=marks}
-end
-local function startBurst(self,r,origin,at,direction)
- if #self.bursts>=BURST_LIMIT then return end
- local burst=table.remove(self.burstPool) or makeBurst()
- burst.origin=origin;burst.at=at;burst.direction=direction
- burst.scale=r.physical and 1 or .64
- if direction then burst.side=Vector3.yAxis:Cross(direction).Unit end
- for i,part in ipairs(burst.marks) do
-  part.Color=r.color:Lerp(PICKUP_HIGHLIGHT,(i==3 or not direction) and .72 or .36)
-  part.Transparency=1
- end
- table.insert(self.bursts,burst)
-end
-local function drawBursts(self,now,reduced)
- for i=#self.bursts,1,-1 do
-  local burst=self.bursts[i]
-  local age=math.max(0,now-burst.at)
-  local t=age/(burst.direction and .24 or .34)
-  if reduced or t>=1 then
-   burst.folder.Parent=nil;table.insert(self.burstPool,burst);table.remove(self.bursts,i)
-  else
-   local spread=1-math.exp(-t*5.8)
-   local scale=burst.scale
-   if burst.direction then
-    for j,part in ipairs(burst.marks) do
-     local fan=j-3
-     local direction=(burst.direction+burst.side*(fan*.28)-Vector3.yAxis*(math.abs(fan)*.14)).Unit
-     local center=burst.origin+direction*((.18+(1.35-math.abs(fan)*.24)*spread)*scale)
-     local width=(.04+.075*(1-t))*scale
-     part.Size=Vector3.new(width,width,(.08+.57*(1-t))*scale)
-     part.CFrame=CFrame.lookAt(center,center+direction)
-     part.Transparency=.08+.92*t^1.35
-    end
-   else
-    local radius=(.45+1.45*spread+.28*t)*scale
-    local floor=burst.origin-Vector3.yAxis*.18
-    for j=1,4 do
-     local angle=(j-1)*math.pi*.5
-     local first=floor+Vector3.new(math.cos(angle),0,math.sin(angle))*radius
-     local last=floor+Vector3.new(-math.sin(angle),0,math.cos(angle))*radius
-     local part=burst.marks[j]
-     part.Size=Vector3.new((.036+.10*(1-t))*scale,.035,(first-last).Magnitude)
-     part.CFrame=CFrame.lookAt((first+last)*.5,last)
-     part.Transparency=.12+.88*t^1.5
-    end
-   end
-   if not burst.folder.Parent then burst.folder.Parent=self.parent end
-  end
- end
 end
 local function removeTrail(self,r)
  if not r.ribbon then return end
@@ -9880,24 +9820,23 @@ local function removeTrail(self,r)
  r.ribbon=nil;self.trailCount-=1
 end
 local function idleGlow(view,tint)
- local halo=Instance.new('BillboardGui');halo.Name='OreGlow';halo.Adornee=view
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=52
- halo.Size=UDim2.fromScale(2.15,2.15);halo.StudsOffset=Vector3.new(0,-.15,-.72);halo.Parent=view
- local light=Instance.new('ImageLabel');light.Name='Halo';light.Size=UDim2.fromScale(1,1);light.BackgroundTransparency=1
- light.Image='rbxasset://textures/glow.png';light.ImageColor3=tint:Lerp(PICKUP_HIGHLIGHT,.18);light.Parent=halo
- local flecks=Instance.new('ParticleEmitter');flecks.Name='OreMotes'
- flecks.Texture='rbxasset://textures/particles/sparkles_main.dds';flecks.Rate=3
- flecks.Lifetime=NumberRange.new(.40,.68);flecks.Speed=NumberRange.new(.5,1.1)
- flecks.SpreadAngle=Vector2.new(40,40);flecks.LightEmission=.76;flecks.LightInfluence=0
- flecks.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.58),tint)
- flecks.Size=NumberSequence.new(.13,0);flecks.Transparency=NumberSequence.new(.20,1)
- flecks.Parent=view
- return {halo=halo,light=light,flecks=flecks}
+ local halo=Instance.new('BillboardGui');halo.Name='OreBloom';halo.Adornee=view
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=62
+ local function glow(name,scale,color)
+  local image=Instance.new('ImageLabel');image.Name=name;image.Size=UDim2.fromScale(scale,scale)
+  image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5)
+  image.BackgroundTransparency=1;image.Image='rbxasset://textures/glow.png'
+  image.ImageColor3=color;image.ImageTransparency=1;image.Parent=halo
+  return image
+ end
+ local outer=glow('OuterBloom',1,tint:Lerp(PICKUP_HIGHLIGHT,.23))
+ local inner=glow('InnerBloom',.68,tint:Lerp(PICKUP_HIGHLIGHT,.62))
+ halo.Parent=view
+ return {halo=halo,outer=outer,inner=inner}
 end
 local function removeIdle(self,r)
- local effect=r.idle
- if not effect then return end
- effect.halo:Destroy();effect.flecks:Destroy();r.idle=nil
+ if not r.idle then return end
+ r.idle.halo:Destroy();r.idle=nil
  self.idleCount-=1
 end
 local function backpack(owner,fallback)
@@ -9936,9 +9875,9 @@ local function sample(r,source,now)
   floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
 end
-function V.new(root,parent,audio)
+function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
- local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,bursts={},burstPool={},
+ local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
@@ -9946,8 +9885,9 @@ function V.new(root,parent,audio)
   if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
-  view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
-  source.LocalTransparencyModifier=1
+  view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
+  if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
+  source.LocalTransparencyModifier=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
@@ -9955,7 +9895,7 @@ function V.new(root,parent,audio)
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
   if typeof(origin)=='Vector3' and typeof(velocity)=='Vector3' and math.abs(velocity.X)+math.abs(velocity.Z)>.01 then
-   r.launchOrigin=origin;r.launchDirection=velocity.Unit
+   r.hasArc=true
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
    r.arcTimeout=(velocity.Y+math.sqrt(velocity.Y^2+2*PickupMotion.GRAVITY*height))/PickupMotion.GRAVITY+.18
   end
@@ -10022,6 +9962,7 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
+ local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
  for source,r in pairs(self.records) do
@@ -10081,16 +10022,28 @@ function V:update(dt,now)
    local socketScale=seated and .48 or 1
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
-   local close=resting and not seated and r.physical and cameraPosition and (r.pos-cameraPosition).Magnitude<48 and opacity>.035
-   if close and not reducedEffects and not r.idle and self.idleCount<16 then
+   local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
+   local distanceFade=math.clamp((58-idleDistance)/10,0,1)
+   local atRest=resting and not seated and (r.physical or r.hasArc)
+   local settle=atRest and math.clamp((age-r.landAge-PickupMotion.SETTLE_TIME)/.46,0,1) or 0
+   local idleStrength=settle*settle*(3-2*settle)*distanceFade
+   local bloomTarget=idleStrength*opacity
+   if bloomTarget>.01 and not reducedEffects and not r.idle and self.idleCount<16 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
-   elseif (not close or reducedEffects) and r.idle then removeIdle(self,r) end
-   if r.idle and r.idle.opacity~=opacity then
-    r.idle.opacity=opacity
-    r.idle.light.ImageTransparency=.47+.53*(1-opacity)
-    r.idle.flecks.Rate=3*opacity
    end
-   if not (resting and r.restSample==latest and r.restUnits==r.units) then
+   if r.idle then
+    local previous=r.idle.strength or 0
+    local strength=previous+(bloomTarget-previous)*(1-math.exp(-math.min(dt,.1)*13))
+    if reducedEffects or (bloomTarget<=.01 and strength<=.01) then
+     removeIdle(self,r)
+    elseif math.abs(strength-previous)>.0001 then
+     r.idle.strength=strength
+     r.idle.outer.ImageTransparency=1-.64*strength
+     r.idle.inner.ImageTransparency=1-.54*strength
+    end
+   end
+   local newPose=not (resting and r.restSample==latest and r.restUnits==r.units)
+   if newPose then
     if live then
      local x,y,z=PickupMotion.position(r.samples,now)
      if x then r.pos=Vector3.new(x,y,z) end
@@ -10112,32 +10065,44 @@ function V:update(dt,now)
      -- resting pose stay above the contact plane.
      position=Vector3.new(position.X,math.max(latest.floor+support-.22,position.Y),position.Z)
     end
-    r.drawPosition=position
-    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.launchOrigin and live then
-    if not r.launchSeen and displayAt>=r.born then
-     r.launchSeen=true
-     if not reducedEffects and cameraPosition and age<.16 and (r.launchOrigin-cameraPosition).Magnitude<BURST_DISTANCE then
-      startBurst(self,r,r.launchOrigin,r.born,r.launchDirection)
-     end
+   local lift=0
+   if not reducedMotion and not r.collectAt and live then
+    local height=r.physical and .27 or .14
+    local target=idleStrength*height*(1+.48*math.sin(age*2.25+r.seed*1.51))
+    local previous=r.lift or 0
+    lift=previous+(target-previous)*(1-math.exp(-math.min(dt,.1)*11))
+    if lift<.001 then lift=0 end
+   end
+   if newPose or lift~=r.lift then
+    r.lift=lift
+    local pose=CFrame.new(Vector3.yAxis*lift)*r.motionPose
+    r.drawPosition=pose.Position;r.view.CFrame=pose
+   end
+   if r.idle and cameraPosition then
+    local size=r.view.Size.Magnitude
+    if size~=r.idle.size then
+     local width=math.max(1.8,size*1.45)
+     r.idle.halo.Size=UDim2.fromScale(width,width);r.idle.size=size
     end
-    if not r.contactSeen and r.landAge and age>=r.landAge then
-     local impact=source:GetAttribute('GroundImpactPosition')
-     if typeof(impact)=='Vector3' then
-      r.contactSeen=true
-      if not reducedEffects and cameraPosition and age-r.landAge<.18 and (impact-cameraPosition).Magnitude<BURST_DISTANCE then
-       startBurst(self,r,impact,r.born+r.landAge)
-      end
+    local away=r.drawPosition-cameraPosition
+    if away.Magnitude>.001 then
+     local behind=away.Unit*(size*.5+.28)
+     -- Preserve occlusion by the ore without burying the glow in the floor.
+     local floor=(latest.floor or r.pos.Y)-.14
+     behind=Vector3.new(behind.X,math.max(behind.Y,floor-r.drawPosition.Y),behind.Z)
+     if not r.idle.offset or (r.idle.offset-behind).Magnitude>.004 then
+      r.idle.offset=behind;r.idle.halo.StudsOffsetWorldSpace=behind
      end
     end
    end
-   if (r.physical or r.launchOrigin) and cameraPosition then
+   if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
@@ -10159,7 +10124,6 @@ function V:update(dt,now)
    end
   end
  end
- drawBursts(self,displayAt,reducedEffects)
  if closest~=self.valueTarget then
   self.valueTarget=closest
   if closest then
@@ -10172,10 +10136,6 @@ function V:destroy()
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
- for _,list in ipairs({self.bursts,self.burstPool}) do
-  for _,burst in ipairs(list) do burst.folder:Destroy() end
-  table.clear(list)
- end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
@@ -10924,7 +10884,7 @@ soundscape.chargeFromRenderer=true
 BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
-local pickupView=PickupView.new(world,localFX,soundscape)
+local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil

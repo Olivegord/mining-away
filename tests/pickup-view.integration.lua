@@ -76,6 +76,7 @@ end)
 check('physical launch trail fades on the displayed landing and never reappears during collection',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
+ cargo.Material=Enum.Material.Glass
  for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,SpawnAt=realTime,SnapshotAt=realTime,
   FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,
   OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
@@ -83,25 +84,22 @@ check('physical launch trail fades on the displayed landing and never reappears 
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
  assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not renderer.valueGui)
- local burst=assert(renderer.bursts[1]);assert(burst.direction and #burst.marks==5 and burst.folder.Parent==fx)
- renderer:update(1/60,realTime+.40);assert(not burst.folder.Parent and #renderer.bursts==0)
+ assert(record.view.Material==Enum.Material.SmoothPlastic)
+ assert(cargo.LocalTransparencyModifier==1 and not record.idle)
  cargo:SetAttribute('GroundImpactAt',realTime+.98)
  cargo:SetAttribute('GroundImpactPosition',Vector3.new(4,.22,0))
  renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
- assert(#renderer.bursts==0,'diamond arrived before the rock touched down')
  renderer:update(1/60,realTime+1.10)
  assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
- assert(renderer.bursts[1]==burst and not burst.direction and burst.marks[5].Transparency==1,'contact did not reuse the launch geometry')
+ assert(not record.idle,'bloom appeared before the ore settled')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
  renderer:update(1/60,realTime+1.37)
- assert(renderer.records[cargo]==nil and burst.folder.Parent==fx,'collection cut off the landing diamond')
+ assert(renderer.records[cargo]==nil)
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
- renderer:update(1/60,realTime+1.43)
- assert(not burst.folder.Parent and #renderer.bursts==0)
  renderer:destroy();workspace.CurrentCamera=camera
 end)
-check('80 grounded pieces cap halo effects and share one owner price label',function()
+check('nearby ore bobs without spinning, caps bloom effects and shares one price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -113,7 +111,8 @@ check('80 grounded pieces cap halo effects and share one owner price label',func
    FloorY=.22,Position=drop.Position,Velocity=Vector3.zero}) do drop:SetAttribute(k,v) end
   sources[i]=drop
  end
- local renderer=PickupView.new(pile,visuals,audio)
+ local reducedMotion=false
+ local renderer=PickupView.new(pile,visuals,audio,function() return reducedMotion end)
  renderer:update(1/60,realTime+.2)
  local poses,sizes={},{}
  for i,source in ipairs(sources) do
@@ -124,9 +123,18 @@ check('80 grounded pieces cap halo effects and share one owner price label',func
  for i,source in ipairs(sources) do
   local record=renderer.records[source]
   if record.idle then
-   lit+=1;assert(record.idle.halo.Parent==record.view and record.idle.flecks.Rate>0)
+   lit+=1
+   assert(record.idle.halo.Parent==record.view and record.idle.outer.ImageTransparency<1)
+   local offset=record.idle.halo.StudsOffsetWorldSpace
+   assert(offset:Dot(record.drawPosition-workspace.CurrentCamera.CFrame.Position)>0)
+   assert(record.drawPosition.Y+offset.Y>=.22-.14-1e-6,'the glow sank below the floor')
   end
-  assert(record.view.CFrame==poses[i] and record.view.Size==sizes[i],'resting cargo still wrote its pose')
+  assert(record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],'idle ore rotated or changed size')
+  if i<60 then
+   assert(record.view.Position.Y>poses[i].Position.Y and record.lift<.41,'nearby ore failed to bob gently')
+  elseif i>79 then
+   assert(record.view.CFrame==poses[i],'distant ore wrote a redundant pose')
+  end
  end
  assert(lit==16 and renderer.idleCount==16)
  local gui=renderer.valueGui
@@ -139,6 +147,9 @@ check('80 grounded pieces cap halo effects and share one owner price label',func
  sources[2]:SetAttribute('Units',4)
  renderer:update(1/60,realTime+6)
  assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
+ reducedMotion=true
+ renderer:update(1/60,realTime+6.1)
+ assert(first.lift==0,'reduced motion still lifts the ore')
  local pose=first.view.CFrame
  renderer:update(1/60,realTime+13)
  assert(first.view.CFrame==pose and first.view.Transparency>0,'expiry did not fade a static pile in place')

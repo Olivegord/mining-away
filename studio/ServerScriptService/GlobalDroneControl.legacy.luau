@@ -7893,7 +7893,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.48,1.70,1.42)) or Vector3.new(.64,.74,.56)
  chip.Position=position;chip.Color=color
  if drop.raw then
-  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.Glass
+  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
   chip.MaterialVariant='';chip.Reflectance=0;chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end
@@ -9089,9 +9089,9 @@ local function committedStation(d,r)
  return d.workStation
 end
 function scene.miningWarmup(d,r)
- -- The reference starts cutting on arrival. Keep a short settling beat
- -- for the replicated cut, and keep ignition upgrades proportional.
- if r and r.cluster and d.role=='Striker' then return math.min(.16,d.stats.warmup*.3) end
+ -- Leave enough time for the emitter buildup to show across several snapshots.
+ -- Ignition upgrades still shorten it, with a small floor for readability.
+ if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
