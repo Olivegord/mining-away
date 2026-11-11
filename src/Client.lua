@@ -1394,6 +1394,10 @@ local function requestField(id)
 end
 local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
  profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
+ touchPoint=function()
+  local touch=selectorView.touch
+  return touch and touch.active and touch.input.Position or nil
+ end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()

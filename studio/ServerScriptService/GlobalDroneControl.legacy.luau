@@ -8261,10 +8261,11 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- Prefer this worker's interrupted cut, then any unfinished cut from
-    -- its crew. Both go through the same live eligibility checks above.
+    -- An explicit lead gets one assignment. Autonomous selection prefers
+    -- this worker's interrupted cut, then other unfinished cuts in the pin.
     local priority=0
-    if square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
+    if square and square.leadId==r.id then priority=3
+    elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
     if priority>bestPriority or (priority==bestPriority and value<score) then
@@ -8277,6 +8278,7 @@ local function chooseResource(d: any,field: any,square: any?)
   local occupied={};for _,slot in pairs(best.slots) do occupied[slot]=true end
   local slot=1;while occupied[slot] do slot=slot+1 end
   best.slots[d.id]=slot;updateSlots(best);d.target=best;d.targetSlot=slot;d.warmAt=nil;d.mineCharge=0;d.mining=false
+  if square and square.leadId==best.id then square.leadId=nil end
  end
  return best
 end
@@ -9799,10 +9801,19 @@ function scene.placeSquare(p,payload)
  local hr=characterRoot(p)
  local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5}
  if not hr or not scene.squareInRange(hr.Position,square) then return end
- if p.miningSquare and p.miningSquare.field==field and p.miningSquare.half==square.half and (p.miningSquare.center-center).Magnitude==0 then return end
+ local leadId=payload.leadId
+ local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
+ if lead and lead.field==field and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
+  and not next(lead.slots) and Mining.selectorTouches(center,square.half,lead.part.CFrame,lead.part.Size) then
+  square.leadId=leadId
+ end
+ local current=p.miningSquare
+ local samePin=current and current.field==field and current.half==square.half and (current.center-center).Magnitude==0
+ if samePin and not square.leadId then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
+ if samePin then current.leadId=square.leadId;return end
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_Selector',center)

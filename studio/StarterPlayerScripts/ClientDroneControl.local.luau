@@ -9096,9 +9096,13 @@ function V:update(dt,now)
  if visible and camera and not UIS:GetFocusedTextBox() then
   local pointer=UIS:GetMouseLocation()
   local ray
-  if UIS.GamepadEnabled and UIS:GetLastInputType()==Enum.UserInputType.Gamepad1 then
+  local input=UIS:GetLastInputType()
+  local touch=ctx.touchPoint()
+  if touch then
+   ray=camera:ViewportPointToRay(touch.X,touch.Y)
+  elseif input.Name:match('^Gamepad') then
    ray=camera:ViewportPointToRay(camera.ViewportSize.X*.5,camera.ViewportSize.Y*.5)
-  elseif UIS.MouseEnabled and not ctx.blocks(pointer) then ray=camera:ScreenPointToRay(pointer.X,pointer.Y) end
+  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch and not ctx.blocks(pointer) then ray=camera:ScreenPointToRay(pointer.X,pointer.Y) end
   if ray then
    local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={ctx.parent,player.Character}
    local hit=workspace:Raycast(ray.Origin,ray.Direction*240,params)
@@ -9162,7 +9166,9 @@ function V:update(dt,now)
    local round=Instance.new('UICorner');round.CornerRadius=UDim.new(0,4);round.Parent=track
    local fill=Instance.new('Frame');fill.Name='Remaining';fill.BorderSizePixel=0;fill.BackgroundColor3=GREEN;fill.Parent=track
    round:Clone().Parent=fill
-   self.meter=gui;self.title=title;self.health=fill
+   local work=title:Clone();work.Name='Work';work.Text='';work.TextSize=12
+   work.TextXAlignment=Enum.TextXAlignment.Right;work.Position=UDim2.new(1,-57,0,20);work.Size=UDim2.fromOffset(52,15);work.Parent=gui
+   self.meter=gui;self.title=title;self.track=track;self.health=fill;self.work=work
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
@@ -9176,7 +9182,16 @@ function V:update(dt,now)
    elseif capacity>1 then ' · '..usedSlots..'/'..capacity
    else ''
   self.title.Text=tostring(name)..label
-  self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
+  local hp=s:GetAttribute('HP') or 0
+  local maxHP=s:GetAttribute('MaxHP') or 1
+  self.work.Visible=value~=nil
+  self.track.Size=UDim2.new(1,value and -65 or -10,0,7)
+  if value then
+   -- Crystal snapshots include the reference game's 10 HP break floor.
+   hp=math.max(0,hp-10);maxHP-=10
+   self.work.Text=math.ceil(hp)..' HP'
+  end
+  self.health.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maxHP),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
 function V:destroy()
@@ -9564,19 +9579,28 @@ function V:aim(ray)
  if not hr then return nil end
  local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
  filter.FilterDescendantsInstances={character,o.parent}
- -- Crystal proxies remain queryable for laser contact, but don't intercept aim.
- filter.RespectCanCollide=true
- local hit=workspace:Raycast(ray.Origin,ray.Direction*500,filter)
+ local direction=ray.Direction*500
+ local hit=workspace:Raycast(ray.Origin,direction,filter)
  if not hit then return nil end
- local zone=hit.Instance.Parent
- if not zone or zone.Parent~=run then return nil end
- local bed=zone:FindFirstChild('Field')
- if hit.Instance~=bed then return nil end
- local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
+ local part=hit.Instance
+ local zone=part.Parent
+ local bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+ local leadId=bed and part:GetAttribute('ResourceId')
+ if not bed or (part~=bed and not leadId) then
+  if part.CanCollide then return nil end
+  filter.RespectCanCollide=true
+  hit=workspace:Raycast(ray.Origin,direction,filter)
+  part=hit and hit.Instance
+  zone=part and part.Parent
+  bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+  if not bed or part~=bed then return nil end
+ end
+ local position=leadId and part:GetAttribute('FullPosition') or hit.Position
+ local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
  if not point then return nil end
  local field=bed:GetAttribute('FieldId')
  if not Mining.selectorInRange(hr.Position,point) then return nil end
- return point,field
+ return point,field,leadId
 end
 function V:canReachStarterPlot()
  local o=self.options
@@ -9598,10 +9622,10 @@ function V:canReachStarterPlot()
  return false
 end
 function V:commit(ray)
- local point,id=self:aim(ray)
+ local point,id,leadId=self:aim(ray)
  local profile=self.options.profile()
  if not point or not id or not profile then return false end
- self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id})
+ self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId})
  return true
 end
 function V:showAim(dt,ray)
@@ -11126,6 +11150,10 @@ local function requestField(id)
 end
 local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones=drones,command=command,
  profile=function() return profile end,hidden=function() return menusVisible() or logisticsView.selected~=nil or (toolView and toolView:selected()~=nil) end,
+ touchPoint=function()
+  local touch=selectorView.touch
+  return touch and touch.active and touch.input.Position or nil
+ end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
 connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()

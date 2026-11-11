@@ -42,9 +42,13 @@ function V:update(dt,now)
  if visible and camera and not UIS:GetFocusedTextBox() then
   local pointer=UIS:GetMouseLocation()
   local ray
-  if UIS.GamepadEnabled and UIS:GetLastInputType()==Enum.UserInputType.Gamepad1 then
+  local input=UIS:GetLastInputType()
+  local touch=ctx.touchPoint()
+  if touch then
+   ray=camera:ViewportPointToRay(touch.X,touch.Y)
+  elseif input.Name:match('^Gamepad') then
    ray=camera:ViewportPointToRay(camera.ViewportSize.X*.5,camera.ViewportSize.Y*.5)
-  elseif UIS.MouseEnabled and not ctx.blocks(pointer) then ray=camera:ScreenPointToRay(pointer.X,pointer.Y) end
+  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch and not ctx.blocks(pointer) then ray=camera:ScreenPointToRay(pointer.X,pointer.Y) end
   if ray then
    local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={ctx.parent,player.Character}
    local hit=workspace:Raycast(ray.Origin,ray.Direction*240,params)
@@ -108,7 +112,9 @@ function V:update(dt,now)
    local round=Instance.new('UICorner');round.CornerRadius=UDim.new(0,4);round.Parent=track
    local fill=Instance.new('Frame');fill.Name='Remaining';fill.BorderSizePixel=0;fill.BackgroundColor3=GREEN;fill.Parent=track
    round:Clone().Parent=fill
-   self.meter=gui;self.title=title;self.health=fill
+   local work=title:Clone();work.Name='Work';work.Text='';work.TextSize=12
+   work.TextXAlignment=Enum.TextXAlignment.Right;work.Position=UDim2.new(1,-57,0,20);work.Size=UDim2.fromOffset(52,15);work.Parent=gui
+   self.meter=gui;self.title=title;self.track=track;self.health=fill;self.work=work
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
@@ -122,7 +128,16 @@ function V:update(dt,now)
    elseif capacity>1 then ' · '..usedSlots..'/'..capacity
    else ''
   self.title.Text=tostring(name)..label
-  self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
+  local hp=s:GetAttribute('HP') or 0
+  local maxHP=s:GetAttribute('MaxHP') or 1
+  self.work.Visible=value~=nil
+  self.track.Size=UDim2.new(1,value and -65 or -10,0,7)
+  if value then
+   -- Crystal snapshots include the reference game's 10 HP break floor.
+   hp=math.max(0,hp-10);maxHP-=10
+   self.work.Text=math.ceil(hp)..' HP'
+  end
+  self.health.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maxHP),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
 function V:destroy()

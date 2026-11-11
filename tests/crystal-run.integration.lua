@@ -125,6 +125,7 @@ assert(pl:GetAttribute('MA_Selector')==nil and pl:GetAttribute('MA_SelectorWorki
 status(nil)
 print('PASS Crystal Run pin, status transitions, reservations, recall, edge overlap, committed work, regrowth, charging, full-bag mining and Star Shop effects')
 
+
 -- Exercise the larger route's population budget and station geometry with
 -- the production spawner. A busy patch must not shift its rocks into a lane.
 f.cfg.Count,f.cfg.Ore=48,10
@@ -566,3 +567,49 @@ assert(live.hp==975,'Live Wire did not amplify a high-battery hit')
 miner.battery=miner.stats.batteryCapacity*.5
 assert(hitResource(miner,live,10) and live.hp==965,'Live Wire activated below its battery threshold')
 print('PASS Aftershock, Live Wire, Compactor conversion, durable Emptier sales, Shift Relay timing and deep-cut recharge')
+
+do
+ local tester=player(98692);players.PlayerAdded:Fire(tester)
+ local other=player(98693);players.PlayerAdded:Fire(other)
+ local crew,rival=profiles[tester.UserId],profiles[other.UserId]
+ local worker=crew.drones[1]
+ local center=bed.Position+Vector3.new(0,.5,12)
+ local quick=makeResource(f,center+Vector3.new(0,0,-2),'Crystal',75,7,2.2,3)
+ local rich=makeResource(f,center+Vector3.new(0,0,9),'Crystal',200,15,3.7,3)
+ local third=makeResource(f,center+Vector3.new(8,0,9),'Crystal',145,12,3,3)
+ quick.readyAt=now;rich.readyAt=now;third.readyAt=now
+ tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ worker.pos=quick.position+Vector3.yAxis*4
+ local function request(leadId,position)
+  scene.placeSquare(crew,{runId=data(crew).run.id,fieldId=f.id,position=position or center,leadId=leadId})
+ end
+ local outside=makeResource(f,center+Vector3.new(25,0,0),'Crystal',100,10,3,3)
+ request(outside.id)
+ assert(crew.miningSquare and not crew.miningSquare.leadId,'an out-of-square target became the lead')
+ request(rich.id,center+Vector3.new(0,0,66))
+ assert(not crew.miningSquare.leadId,'remote focus bypassed pin range')
+ rich.slots[rival.drones[1].id]=1
+ request(rich.id)
+ assert(not crew.miningSquare.leadId,'a claimed target became the lead')
+ rich.slots[rival.drones[1].id]=nil
+ local current=crew.miningSquare
+ request(rich.id)
+ assert(crew.miningSquare==current and current.leadId==rich.id,'same-cell focus did not update the pin')
+ scene.squareStep(crew,worker)
+ assert(worker.target==rich and not current.leadId and rich.slots[worker.id],'the selected valuable crystal did not get one real assignment')
+ worker.warmAt=now
+ request(third.id)
+ scene.squareStep(crew,worker)
+ assert(worker.target==rich and worker.warmAt and current.leadId==third.id,'a same-cell lead interrupted an active cut')
+ release(worker)
+ now+=.25
+ scene.squareStep(crew,worker)
+ assert(worker.target==third and not current.leadId,'the next free worker did not take the new lead')
+ release(worker)
+ now+=.25
+ scene.squareStep(crew,worker)
+ assert(worker.target==quick,'the consumed lead changed ordinary square dispatch')
+ players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
+ for _,r in ipairs({quick,rich,third,outside}) do resources[r.id]=nil;r.part:Destroy() end
+end
+print('PASS direct crystal focus assigns one available worker without stealing or interrupting cuts')

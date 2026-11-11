@@ -67,19 +67,28 @@ function V:aim(ray)
  if not hr then return nil end
  local filter=RaycastParams.new();filter.FilterType=Enum.RaycastFilterType.Exclude
  filter.FilterDescendantsInstances={character,o.parent}
- -- Crystal proxies remain queryable for laser contact, but don't intercept aim.
- filter.RespectCanCollide=true
- local hit=workspace:Raycast(ray.Origin,ray.Direction*500,filter)
+ local direction=ray.Direction*500
+ local hit=workspace:Raycast(ray.Origin,direction,filter)
  if not hit then return nil end
- local zone=hit.Instance.Parent
- if not zone or zone.Parent~=run then return nil end
- local bed=zone:FindFirstChild('Field')
- if hit.Instance~=bed then return nil end
- local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
+ local part=hit.Instance
+ local zone=part.Parent
+ local bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+ local leadId=bed and part:GetAttribute('ResourceId')
+ if not bed or (part~=bed and not leadId) then
+  if part.CanCollide then return nil end
+  filter.RespectCanCollide=true
+  hit=workspace:Raycast(ray.Origin,direction,filter)
+  part=hit and hit.Instance
+  zone=part and part.Parent
+  bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
+  if not bed or part~=bed then return nil end
+ end
+ local position=leadId and part:GetAttribute('FullPosition') or hit.Position
+ local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
  if not point then return nil end
  local field=bed:GetAttribute('FieldId')
  if not Mining.selectorInRange(hr.Position,point) then return nil end
- return point,field
+ return point,field,leadId
 end
 function V:canReachStarterPlot()
  local o=self.options
@@ -101,10 +110,10 @@ function V:canReachStarterPlot()
  return false
 end
 function V:commit(ray)
- local point,id=self:aim(ray)
+ local point,id,leadId=self:aim(ray)
  local profile=self.options.profile()
  if not point or not id or not profile then return false end
- self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id})
+ self.options.command:FireServer('PlaceSelector',{fieldId=id,position=point,runId=profile.run.id,leadId=leadId})
  return true
 end
 function V:showAim(dt,ray)
