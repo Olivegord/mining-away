@@ -14,6 +14,8 @@ for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
+W.VACUUM_ENABLED=false
+W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
 W.EMPTIER_WAIT=6

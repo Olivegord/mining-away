@@ -17,6 +17,8 @@ for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
+W.VACUUM_ENABLED=false
+W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
 W.EMPTIER_WAIT=6
@@ -2255,7 +2257,7 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
  AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
@@ -2289,7 +2291,7 @@ function O.fade(spawnAt,now,returnUntil)
 end
 function O.sellTripDeadline(spawnAt,now,walkingDistance,returnUntil)
  -- Default walking is 16 studs/s. Leave time for turns, unloading and the counter.
- local trip=math.min(O.LIFETIME,walkingDistance/14+20)
+ local trip=math.min(O.CARGO_MAX_AGE-10,walkingDistance/14+20)
  if now+trip<=O.deadline(spawnAt,returnUntil) then return nil end
  local extended=math.min(spawnAt+O.CARGO_MAX_AGE,now+trip+10)
  if extended>O.deadline(spawnAt,returnUntil) then return extended end
@@ -2660,7 +2662,7 @@ function P.validate(p,uid)
     local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
     if c.packTier~=offer.packTier or before+c.level>c.maxLevel then return false,'Invalid upgrade stack' end
     if (offer.contentVersion or 0)>=13 then
-     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 or c.upgradeTier>offer.packTier then return false,'Invalid guaranteed upgrade' end
+     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 then return false,'Invalid guaranteed upgrade' end
      guaranteed=guaranteed or c.upgradeTier==offer.packTier
     elseif (offer.contentVersion or 0)>=12 then
      if c.stackBefore~=before then return false,'Invalid saved stack count' end
@@ -3150,9 +3152,13 @@ function Packs.sample(tier, elapsed)
  return 1,tier
 end
 
+function Packs.reelFinish(index)
+ return 1.22+(index-1)*.09
+end
+
 function Packs.reel(elapsed,index,speed)
- local delay=(index-1)*.15
- local duration=1.16+(index-1)*.25
+ local delay=(index-1)*.035
+ local duration=Packs.reelFinish(index)-delay
  local t=math.clamp((elapsed*speed-delay)/duration,0,1)
  local travel=8+index
  return travel*(1-(1-t)^3), travel, t>=1, t>0, t
@@ -3376,7 +3382,7 @@ local function preview(p,c)
  if c.effects.cargoRack then table.insert(lines,{label='Cargo mounts per Emptier',before=Workshop.emptierBatch(p),after=Workshop.emptierBatch(p,c),unit='slots'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
- if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end
+ if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p)*Workshop.ORE_REACH_SCALE,after=C.magnetBonus(p,c)*Workshop.ORE_REACH_SCALE,unit='studs'}) end
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
@@ -3399,6 +3405,7 @@ local function preview(p,c)
  end
  return lines,target and target.name
 end
+local mixedRarityWeights={8,4,2,1}
 local function receipt(p,operation,tx)
  for i=#p.receipts,1,-1 do local r=p.receipts[i];if r.operation==operation and r.id==tx then return clone(r.result) end end
  return nil
@@ -3413,7 +3420,7 @@ function C.workshopOffer(p,tier,seed,crystalRun)
  local pool={}
  for _,entry in ipairs(Workshop.CATALOG) do
   local owned=Workshop.find(p,entry.id);local count=owned and owned.level or 0
-  if count<entry.max and entry.tier<=tier and (if crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun) then
+  if count<entry.max and (if crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun) then
    local c=Workshop.card(entry,tier,count)
    if beneficial(p,c) then
     c.preview,c.previewTargetName=preview(p,c)
@@ -3442,7 +3449,11 @@ function C.workshopOffer(p,tier,seed,crystalRun)
     for k=j+1,#pool do
      local guaranteed=pool[i].upgradeTier==tier or pool[j].upgradeTier==tier or pool[k].upgradeTier==tier
      if compatible[i][k] and compatible[j][k] and guaranteed then
-      local weight=pool[i].upgradeTier+pool[j].upgradeTier+pool[k].upgradeTier
+      -- Higher cards can appear in any pack. Their own rarity still
+      -- determines how often they fill the two non-guaranteed slots.
+      local weight=mixedRarityWeights[math.max(0,pool[i].upgradeTier-tier)+1]
+        *mixedRarityWeights[math.max(0,pool[j].upgradeTier-tier)+1]
+        *mixedRarityWeights[math.max(0,pool[k].upgradeTier-tier)+1]
       local triple={i,j,k,weight}
       total+=weight;table.insert(triples,triple)
       if crystalRun and (Workshop.TRIGGER_CARDS[pool[i].cardId] or Workshop.TRIGGER_CARDS[pool[j].cardId] or Workshop.TRIGGER_CARDS[pool[k].cardId]) then
@@ -3491,11 +3502,15 @@ function C.buy(p,tx,expectedRun,context)
  context=context or {}
  if context.expectedPackIndex~=p.run.packIndex then return false,'Stale pack index' end
  if context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
- local price=Workshop.price(p)
+ local price=context.legendaryPreview and 0 or Workshop.price(p)
  if Shops.balance(p,'Quartz')<price then return false,'Need '..price..' Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
  local tier=2
- local choices=context.crystalRun and p.run.packIndex==0 and firstCrystalPack(p) or nil
+ local choices
+ if context.legendaryPreview then
+  tier=4;choices=C.workshopOffer(p,tier,seed,context.crystalRun)
+  if not choices then return false,'No useful Legendary choices remain in this preview run.' end
+ elseif context.crystalRun and p.run.packIndex==0 then choices=firstCrystalPack(p) end
  if not choices then
   local candidates,weights,total={},{66,24,8,2},0
   for packTier=1,4 do
@@ -6951,9 +6966,9 @@ function Delivery.new(options)
  return setmetatable({options=options, folder=folder}, Delivery)
 end
 
-function Delivery:landing(buyerPosition)
+function Delivery:landing(buyerPosition,previewCounter)
  local o=self.options
- local counter=o.station
+ local counter=previewCounter or o.station
  local station=counter.Position
  local direction=flat(buyerPosition-station)
  if direction.Magnitude<.1 then direction=flat(o.home-station) end
@@ -6999,10 +7014,10 @@ function Delivery:landing(buyerPosition)
  return position,sideways
 end
 
-function Delivery:spawn(p, offer, buyerPosition, now)
+function Delivery:spawn(p, offer, buyerPosition, now, previewCounter)
  if not offer or offer.opened~=false or p.leaving or p.packDelivery then return end
  local o=self.options
- local position,sideways=self:landing(buyerPosition)
+ local position,sideways=self:landing(buyerPosition,previewCounter)
  if not position then return end
  local part=World.part(nil,'CompanyPack',position,Vector3.new(1.9,1.4,1.6),Color3.new())
  part.Transparency=1
@@ -7184,7 +7199,8 @@ local function publish(p)
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.workshop=Ca.workshopRows(copy)
- p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy);p.cargoReach=13+Ca.magnetBonus(copy)
+ local magnetBonus=Ca.magnetBonus(copy)*Workshop.ORE_REACH_SCALE
+ p.magnetRange=OreDrops.MAGNET_RANGE+magnetBonus;p.cargoReach=OreDrops.CARGO_REACH+magnetBonus
  p.fieldCharge=Workshop.effect(copy,'fieldCharge')
  p.compactorBatch=Workshop.compactorBatch(copy)
  p.shiftSeconds=Workshop.effect(copy,'shiftRelay')
@@ -8155,7 +8171,7 @@ local function pickupStep(dt)
    local hr=active.playerRoot
    if hr and not drop.homing then
     local from=Vector3.new(drop.x,drop.y,drop.z)
-    local reach=p.cargoReach+(drop.reachBonus or 0)
+    local reach=p.cargoReach+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
     if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
    end
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
@@ -8206,7 +8222,7 @@ local function pickupStep(dt)
    end
    local from=Vector3.new(drop.x,drop.y,drop.z)
    local hr=characterRoot(p);local target=hr and hr.Position or from
-   local naturalReach=(drop.raw and (p.cargoReach or 13) or p.magnetRange)+(drop.reachBonus or 0)
+   local naturalReach=(drop.raw and (p.cargoReach or OreDrops.CARGO_REACH) or p.magnetRange)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
    if drop.raw and drop.landed and hr and not hasSpace and now>=(drop.returnCheckAt or 0) then
     drop.returnCheckAt=now+1
@@ -8219,13 +8235,13 @@ local function pickupStep(dt)
      drop.part:SetAttribute('ExpiresAt',deadline)
     end
    end
-   local vacuum=p.vacuum
+   local vacuum=Workshop.VACUUM_ENABLED and p.vacuum or nil
    local press=p.compactor
    local assignedToPress=p.compactorTarget and p.compactorTarget.id==id
    local pressing=assignedToPress
     and (press.pressDock or (press.pos-p.compactorTarget.position).Magnitude<1.1)
    local socket=pressing and #(press.pressInputs or {})+1
-   local relay=now<(drop.relayUntil or 0)
+   local relay=Workshop.VACUUM_ENABLED and now<(drop.relayUntil or 0)
    local vacuuming=false
    local vacuumApproaching=false
    local relayReach=p.vacuumReach+12
@@ -10069,7 +10085,7 @@ local packDelivery=PackDelivery.new({
  end,
 })
 local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
-local function economyAction(p: any,pl: any,action: string,payload: any): boolean
+local function economyAction(p: any,pl: any,action: string,payload: any,previewCounter: BasePart?): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
@@ -10081,9 +10097,10 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  if action=='BuyPack' then
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
-  if not atStation(p,scene.packStation,12) then return false end
+  local station=previewCounter or scene.packStation
+  if not atStation(p,station,previewCounter and 8 or 12) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil,legendaryPreview=previewCounter~=nil and inStudio}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -10091,8 +10108,8 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   local origin=characterRoot(p).Position
   transact(p,'buy:'..payload.txId,buyCard,function()
    local buyer=characterRoot(p)
-   local position=buyer and (buyer.Position-scene.packStation.Position).Magnitude<12 and buyer.Position or origin
-   packDelivery:spawn(p,data(p).run.pendingOffer,position,now)
+   local position=buyer and (buyer.Position-station.Position).Magnitude<12 and buyer.Position or origin
+   packDelivery:spawn(p,data(p).run.pendingOffer,position,now,previewCounter)
   end)
  elseif action=='ChooseCard' then
   chooseCard(p,pl,payload)
@@ -10114,6 +10131,29 @@ if packPrompt then packPrompt.Triggered:Connect(function(pl)
  end
  economyAction(p,pl,'BuyPack',{txId=Http:GenerateGUID(false),runId=run.id,packIndex=run.packIndex})
 end) end
+do
+ local stand=scene.map:FindFirstChild('LegendaryPreviewStand')
+ local counter=stand and stand:FindFirstChild('Counter')
+ if stand and not inStudio then stand:Destroy()
+ elseif counter and counter:IsA('BasePart') then
+  local prompt=Instance.new('ProximityPrompt')
+  prompt.Name='LegendaryPreviewPrompt';prompt.ActionText='Get free pack';prompt.ObjectText='Legendary Preview'
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
+  prompt.MaxActivationDistance=8;prompt.RequiresLineOfSight=false;prompt.Parent=counter
+  prompt.Triggered:Connect(function(pl)
+   local p=profiles[pl.UserId]
+   if not healthy(p) or p.player~=pl or not atStation(p,counter,8) or activeAssault(p) or now<(p.nextPackPress or 0) then return end
+   p.nextPackPress=now+.45
+   local run=data(p).run
+   if run.pendingOffer then
+    if run.pendingOffer.opened~=false then pl:SetAttribute('MA_ShowOffer',Http:GenerateGUID(false))
+    else notice(p,'Open your waiting crate first.') end
+    return
+   end
+   economyAction(p,pl,'BuyPack',{txId=Http:GenerateGUID(false),runId=run.id,packIndex=run.packIndex},counter)
+  end)
+ end
+end
 local function abilityContext(p,fieldId,operator,deployment)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)

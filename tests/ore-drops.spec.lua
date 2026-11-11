@@ -46,7 +46,8 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
 end)
 check('magnet catches a player moving at walking speed at 30 60 and 144 FPS',function()
  for _,fps in ipairs({30,60,144}) do
-  local s=drop(-16);local picked=false
+  local s=drop(-2);s.landed=true;s.y=s.floor;s.age=1
+  local picked=false
   for n=1,6*fps do if O.step(s,{x=n/fps*16,y=3,z=0},1/fps,true) then picked=true;break end end
   assert(picked,'magnet never catches walker at '..fps)
  end
@@ -90,7 +91,7 @@ end)
 check('fade is monotonic and expiry never depends on attraction or bag space',function()
  local born=40;local before=0
  for age=0,O.LIFETIME do local fade=O.fade(born,born+age);assert(fade>=before and fade>=0 and fade<=1);before=fade end
- assert(O.fade(born,born+O.LIFETIME-O.FADE_SECONDS)==0 and O.fade(born,born+O.LIFETIME)==1)
+ assert(O.fade(born,born+O.LIFETIME-O.FADE_SECONDS)<.00001 and O.fade(born,born+O.LIFETIME)==1)
  assert(not O.expired(born,born+O.LIFETIME-.001) and O.expired(born,born+O.LIFETIME))
 end)
 print(checks..' production ore trajectory checks; not engine physics')

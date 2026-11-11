@@ -215,7 +215,7 @@ local function preview(p,c)
  if c.effects.cargoRack then table.insert(lines,{label='Cargo mounts per Emptier',before=Workshop.emptierBatch(p),after=Workshop.emptierBatch(p,c),unit='slots'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
- if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end
+ if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p)*Workshop.ORE_REACH_SCALE,after=C.magnetBonus(p,c)*Workshop.ORE_REACH_SCALE,unit='studs'}) end
  local target
  -- A fleet card can benefit Red while an already capped first Blue gains
  -- nothing. Show a drone that actually changes, rather than an empty example.
@@ -238,6 +238,7 @@ local function preview(p,c)
  end
  return lines,target and target.name
 end
+local mixedRarityWeights={8,4,2,1}
 local function receipt(p,operation,tx)
  for i=#p.receipts,1,-1 do local r=p.receipts[i];if r.operation==operation and r.id==tx then return clone(r.result) end end
  return nil
@@ -252,7 +253,7 @@ function C.workshopOffer(p,tier,seed,crystalRun)
  local pool={}
  for _,entry in ipairs(Workshop.CATALOG) do
   local owned=Workshop.find(p,entry.id);local count=owned and owned.level or 0
-  if count<entry.max and entry.tier<=tier and (if crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun) then
+  if count<entry.max and (if crystalRun then Workshop.CRYSTAL_DRAFT[entry.id] else not entry.crystalRun) then
    local c=Workshop.card(entry,tier,count)
    if beneficial(p,c) then
     c.preview,c.previewTargetName=preview(p,c)
@@ -281,7 +282,11 @@ function C.workshopOffer(p,tier,seed,crystalRun)
     for k=j+1,#pool do
      local guaranteed=pool[i].upgradeTier==tier or pool[j].upgradeTier==tier or pool[k].upgradeTier==tier
      if compatible[i][k] and compatible[j][k] and guaranteed then
-      local weight=pool[i].upgradeTier+pool[j].upgradeTier+pool[k].upgradeTier
+      -- Higher cards can appear in any pack. Their own rarity still
+      -- determines how often they fill the two non-guaranteed slots.
+      local weight=mixedRarityWeights[math.max(0,pool[i].upgradeTier-tier)+1]
+        *mixedRarityWeights[math.max(0,pool[j].upgradeTier-tier)+1]
+        *mixedRarityWeights[math.max(0,pool[k].upgradeTier-tier)+1]
       local triple={i,j,k,weight}
       total+=weight;table.insert(triples,triple)
       if crystalRun and (Workshop.TRIGGER_CARDS[pool[i].cardId] or Workshop.TRIGGER_CARDS[pool[j].cardId] or Workshop.TRIGGER_CARDS[pool[k].cardId]) then
@@ -330,11 +335,15 @@ function C.buy(p,tx,expectedRun,context)
  context=context or {}
  if context.expectedPackIndex~=p.run.packIndex then return false,'Stale pack index' end
  if context.atDepot~=true or context.activeEncounter then return false,'Visit the Quartz Workshop outside combat' end
- local price=Workshop.price(p)
+ local price=context.legendaryPreview and 0 or Workshop.price(p)
  if Shops.balance(p,'Quartz')<price then return false,'Need '..price..' Quartz' end
  local seed=hash(table.concat({p.seed,p.userId,p.run.index,p.run.packIndex+1,C.CONTENT_VERSION},':'))
  local tier=2
- local choices=context.crystalRun and p.run.packIndex==0 and firstCrystalPack(p) or nil
+ local choices
+ if context.legendaryPreview then
+  tier=4;choices=C.workshopOffer(p,tier,seed,context.crystalRun)
+  if not choices then return false,'No useful Legendary choices remain in this preview run.' end
+ elseif context.crystalRun and p.run.packIndex==0 then choices=firstCrystalPack(p) end
  if not choices then
   local candidates,weights,total={},{66,24,8,2},0
   for packTier=1,4 do

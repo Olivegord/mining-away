@@ -1,6 +1,6 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
  AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
@@ -34,7 +34,7 @@ function O.fade(spawnAt,now,returnUntil)
 end
 function O.sellTripDeadline(spawnAt,now,walkingDistance,returnUntil)
  -- Default walking is 16 studs/s. Leave time for turns, unloading and the counter.
- local trip=math.min(O.LIFETIME,walkingDistance/14+20)
+ local trip=math.min(O.CARGO_MAX_AGE-10,walkingDistance/14+20)
  if now+trip<=O.deadline(spawnAt,returnUntil) then return nil end
  local extended=math.min(spawnAt+O.CARGO_MAX_AGE,now+trip+10)
  if extended>O.deadline(spawnAt,returnUntil) then return extended end

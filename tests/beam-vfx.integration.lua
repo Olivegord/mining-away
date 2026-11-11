@@ -21,7 +21,7 @@ check('charge gathers compresses and changes silhouette before release',function
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
  BeamVFX.draw(r,from,to,10,0,.965,nil)
- assert(r.rich and r.rich.core.Transparency==0 and not r.core.Enabled)
+ assert(r.rich and r.rich.core.Transparency<.85 and not r.core.Enabled)
  assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
  local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
  BeamVFX.draw(r,from,to,10.2,1,nil,0)

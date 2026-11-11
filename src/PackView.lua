@@ -283,10 +283,13 @@ function PackView:update(now)
   local station=map:FindFirstChild('PackStation',true)
   self.counter=station and station:FindFirstChildOfClass('ProximityPrompt')
  end
- if self.counter then
-  local enabled=not crateInReach and not o.hidden() and not o.busy()
-  if self.counter.Enabled~=enabled then self.counter.Enabled=enabled end
+ if map and not self.previewCounter then
+  local stand=map:FindFirstChild('LegendaryPreviewStand')
+  self.previewCounter=stand and stand:FindFirstChild('LegendaryPreviewPrompt',true)
  end
+ local enabled=not crateInReach and not o.hidden() and not o.busy()
+ if self.counter and self.counter.Enabled~=enabled then self.counter.Enabled=enabled end
+ if self.previewCounter and self.previewCounter.Enabled~=enabled then self.previewCounter.Enabled=enabled end
  for source,record in pairs(self.records) do
   if not record.visible then
    disposeRecord(record)

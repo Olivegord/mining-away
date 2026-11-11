@@ -25,9 +25,9 @@ function Delivery.new(options)
  return setmetatable({options=options, folder=folder}, Delivery)
 end
 
-function Delivery:landing(buyerPosition)
+function Delivery:landing(buyerPosition,previewCounter)
  local o=self.options
- local counter=o.station
+ local counter=previewCounter or o.station
  local station=counter.Position
  local direction=flat(buyerPosition-station)
  if direction.Magnitude<.1 then direction=flat(o.home-station) end
@@ -73,10 +73,10 @@ function Delivery:landing(buyerPosition)
  return position,sideways
 end
 
-function Delivery:spawn(p, offer, buyerPosition, now)
+function Delivery:spawn(p, offer, buyerPosition, now, previewCounter)
  if not offer or offer.opened~=false or p.leaving or p.packDelivery then return end
  local o=self.options
- local position,sideways=self:landing(buyerPosition)
+ local position,sideways=self:landing(buyerPosition,previewCounter)
  if not position then return end
  local part=World.part(nil,'CompanyPack',position,Vector3.new(1.9,1.4,1.6),Color3.new())
  part.Transparency=1

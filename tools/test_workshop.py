@@ -14,8 +14,14 @@ with tempfile.TemporaryDirectory(prefix='quartz-workshop-') as directory:
   subprocess.run([str(luau/'luau-compile'),str(path)],check=True,stdout=subprocess.DEVNULL)
  if (ROOT/'tests/workshop.integration.lua').exists():
   for studio in (False,True):
+   server=bundle().replace('World.placeStart(scene)\n', '''World.placeStart(scene)
+do
+ local stand=Instance.new('Model');stand.Name='LegendaryPreviewStand';stand.Parent=scene.map
+ World.part(stand,'Counter',scene.packStation.Position+Vector3.new(0,0,-12.5),Vector3.new(5,3,3),Color3.new(1,.7,.3))
+end
+''',1)
    source='\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
-    'function runService:IsStudio() return true end' if studio else '',bundle(),
+    'function runService:IsStudio() return true end' if studio else '',server,
     ';(function()\n'+(ROOT/'tests/workshop.integration.lua').read_text()+'\nend)()'])
    path=Path(directory)/('studio.lua' if studio else 'production.lua');path.write_text(source)
    subprocess.run([str(luau/'luau'),str(path)],check=True)

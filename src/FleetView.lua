@@ -10,6 +10,7 @@ local GuiService=game:GetService('GuiService')
 local Context=game:GetService('ContextActionService')
 local Storage=game:GetService('ReplicatedStorage')
 local STAGE=Vector3.new(0,12000,0)
+local ZOOM_TIME=.72
 local FOG=Color3.fromRGB(43,51,80)
 local WHITE=Color3.fromRGB(248,251,255)
 local CAMERA_BIND='MiningAwayFleetCamera'
@@ -84,7 +85,7 @@ local function applies(card,drone)
 end
 
 function FleetView.new(options)
- local self=setmetatable({options=options,rigs={},poses={},rest={},muted={}},FleetView)
+ local self=setmetatable({options=options,rigs={},poses={},rest={},muted={},nameplates={}},FleetView)
  local U=options.U
  local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
  root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
@@ -96,19 +97,19 @@ function FleetView.new(options)
  self.description=U.text(header,UDim2.fromOffset(12,26),UDim2.new(1,-24,0,30),'',15,WHITE)
  self.back=options.button(root,UDim2.new(1,-54,0,12),UDim2.fromOffset(44,44),'×',options.onBack,U.palette.paper)
  self.back.Name='CloseFleetInspection';self.back.TextSize=29
- self.prev=options.button(root,UDim2.new(0,12,.42,0),UDim2.fromOffset(52,54),'‹',function() self:cycle(-1) end,U.palette.paper)
- self.next=options.button(root,UDim2.new(1,-64,.42,0),UDim2.fromOffset(52,54),'›',function() self:cycle(1) end,U.palette.paper)
+ self.prev=options.button(root,UDim2.new(.5,-151,1,-59),UDim2.fromOffset(52,54),'‹',function() self:cycle(-1) end,U.palette.paper)
+ self.next=options.button(root,UDim2.new(.5,98,1,-59),UDim2.fromOffset(52,54),'›',function() self:cycle(1) end,U.palette.paper)
  self.prev.Name='PreviousDrone';self.next.Name='NextDrone';self.prev.TextSize=43;self.next.TextSize=43
- self.target=U.text(root,UDim2.new(.5,0,.56,0),UDim2.new(1,-125,0,30),'',19,WHITE,true)
+ self.target=U.text(root,UDim2.new(.5,0,1,-107),UDim2.new(1,-125,0,30),'',19,WHITE,true)
  self.target.AnchorPoint=Vector2.new(.5,0);self.target.TextXAlignment=Enum.TextXAlignment.Center
  self.target.TextStrokeColor3=U.palette.ink;self.target.TextStrokeTransparency=.25;self.target.TextScaled=true
  local targetSize=Instance.new('UITextSizeConstraint');targetSize.MinTextSize=13;targetSize.MaxTextSize=19;targetSize.Parent=self.target
  local stack=Instance.new('ScrollingFrame')
- stack.Name='InstalledCards';stack.AnchorPoint=Vector2.new(.5,1);stack.Position=UDim2.new(.5,0,1,-68)
- stack.Size=UDim2.new(.83,0,.22,0);stack.BackgroundTransparency=1;stack.BorderSizePixel=0
+ stack.Name='InstalledCards';stack.AnchorPoint=Vector2.new(1,.5);stack.Position=UDim2.new(1,-12,.49,0)
+ stack.Size=UDim2.new(.29,0,.43,0);stack.BackgroundTransparency=1;stack.BorderSizePixel=0
  stack.CanvasSize=UDim2.fromOffset(0,0);stack.AutomaticCanvasSize=Enum.AutomaticSize.Y;stack.ScrollBarThickness=4
  stack.ZIndex=root.ZIndex+1;stack.Parent=root
- local bound=Instance.new('UISizeConstraint');bound.MaxSize=Vector2.new(380,168);bound.Parent=stack
+ local bound=Instance.new('UISizeConstraint');bound.MinSize=Vector2.new(106,56);bound.MaxSize=Vector2.new(232,242);bound.Parent=stack
  local list=Instance.new('UIListLayout');list.Padding=UDim.new(0,2);list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=stack
  self.stack=stack
  self.install=options.button(root,UDim2.new(.5,0,1,-12),UDim2.fromOffset(230,44),'Install upgrade',function()
@@ -147,11 +148,13 @@ function FleetView:buildStage(character,profile)
  if avatar then
   local root=avatar:FindFirstChild('HumanoidRootPart')
   if root then avatar.PrimaryPart=root end
-  local pose=CFrame.new(STAGE)*CFrame.Angles(0,math.pi,0)
+  local original=character:FindFirstChild('HumanoidRootPart')
+  local pose=CFrame.new(STAGE)*(original and original.CFrame.Rotation or CFrame.new())
   avatar:PivotTo(pose)
   local bounds,size=avatar:GetBoundingBox()
   avatar:PivotTo(pose+Vector3.yAxis*(STAGE.Y-bounds.Position.Y+size.Y*.5+.02))
   avatar.Name='CrewOwner';avatar.Parent=scene;self.avatar=avatar
+  self.stageOffset=(root and root.Position or avatar:GetPivot().Position)-(original and original.Position or character:GetPivot().Position)
  end
  self.crew=crewFor(profile)
  local template=Storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
@@ -161,6 +164,14 @@ function FleetView:buildStage(character,profile)
   if rig then
    if not original then self.options.droneConfig.decorate(rig,drone.role or drone.type,nil,true) end
    rig.Name=drone.name or 'Drone';rig.Parent=scene;self.rigs[drone.id]=rig
+   local label=Instance.new('BillboardGui');label.Name='CrewName';label.Size=UDim2.fromOffset(154,25)
+   label.AlwaysOnTop=true;label.LightInfluence=0;label.MaxDistance=120;label.StudsOffsetWorldSpace=Vector3.yAxis*1.75
+   label.Adornee=rig.PrimaryPart or rig:FindFirstChildWhichIsA('BasePart',true);label.Parent=rig
+   local name=self.options.U.text(label,UDim2.fromScale(0,0),UDim2.new(1,0,0,19),rig.Name,13,WHITE,true)
+   name.TextXAlignment=Enum.TextXAlignment.Center;name.TextStrokeTransparency=.28;name.TextStrokeColor3=Color3.new()
+   local badges=self.options.U.frame(label,UDim2.new(1,-49,0,5),UDim2.fromOffset(49,11))
+   badges.BackgroundTransparency=1
+   self.nameplates[drone.id]={row=badges,name=name}
   end
  end
 end
@@ -216,6 +227,37 @@ local function highlight(model,active)
  end
 end
 
+local function updateNameplate(U,plate,profile,drone,muted,selected)
+ if not plate then return end
+ plate.name.TextTransparency=muted and .43 or 0
+ local entries,key={},{}
+ for _,card in ipairs(profile.run.cards or {}) do
+  if applies(card,drone) then
+   table.insert(entries,card)
+   table.insert(key,(card.cardId or '')..':'..tostring(card.rarity)..':'..tostring(card.level or 1))
+  end
+ end
+ local fingerprint=table.concat(key,'|')..':'..tostring(muted)..':'..tostring(selected)
+ if plate.key==fingerprint then return end
+ plate.key=fingerprint
+ plate.row:ClearAllChildren()
+ local count=math.min(#entries,4)
+ plate.name.Size=UDim2.new(1,count>0 and -(12*count+5+(#entries>count and 18 or 0)) or 0,0,19)
+ plate.name.TextTruncate=Enum.TextTruncate.AtEnd;plate.name.TextWrapped=false
+ plate.row.Position=UDim2.new(1,-(12*count+1+(#entries>count and 18 or 0)),0,5)
+ plate.row.Visible=count>0
+ for i=1,count do
+  local tint=CardView.rarityColor(entries[i])
+  local marker=U.frame(plate.row,UDim2.fromOffset((i-1)*12+2,1),UDim2.fromOffset(8,8),tint)
+  marker.Name='UpgradeMark';marker.Rotation=45;marker.BackgroundTransparency=muted and .50 or 0
+  U.corner(marker,2);U.stroke(marker,Color3.new(),selected and 2 or 1)
+ end
+ if #entries>count then
+  local more=U.text(plate.row,UDim2.fromOffset(count*12+1,-2),UDim2.fromOffset(29,14),'+'..(#entries-count),11,WHITE,true)
+  more.TextTransparency=muted and .50 or 0
+ end
+end
+
 function FleetView:refresh(profile,available,reason,busy,notice)
  if not self:isOpen() then return end
  local U=self.options.U
@@ -253,7 +295,9 @@ function FleetView:refresh(profile,available,reason,busy,notice)
   local affected=focusChoice and applies(choice,drone)
   if rig then
    highlight(rig,active or not picked and affected)
-   muteRig(self,rig,choice~=nil and not (eligible[drone.id] or affected))
+   local muted=choice~=nil and not (eligible[drone.id] or affected)
+   muteRig(self,rig,muted)
+   updateNameplate(U,self.nameplates[drone.id],profile,drone,muted,active)
    self.poses[rig]=self.rest[rig]+Vector3.yAxis*(active and 4 or 0)
   end
  end
@@ -309,11 +353,23 @@ function FleetView:open(profile,choice,targets)
  self:buildStage(character,profile)
  self.targets=targets or self.crew;self.index=1
  self.stackKey=nil;self:arrange()
- local quiet=CardView.reducedMotion();self.elapsed=quiet and .65 or 0
+ local quiet=CardView.reducedMotion();self.elapsed=quiet and ZOOM_TIME or 0
+ local shift=self.stageOffset or STAGE-character:GetPivot().Position
+ local startFrame=self.cameraState[3]+shift
+ local startFocus=self.cameraState[4]+shift
+ local forward=startFrame.LookVector
+ local distance=math.max(.5,(startFocus.Position-startFrame.Position):Dot(forward))
+ local fieldOfView=self.cameraState[5]
+ local aspect=camera.ViewportSize.X/math.max(1,camera.ViewportSize.Y)
+ local halfHeight=math.tan(math.rad(fieldOfView*.5))
+ local fitDistance=(self.span+3)/math.max(.17,halfHeight*math.min(1,aspect)*.8)
+ local finishDistance=math.max(distance*.77,fitDistance)
+ local finishFov=finishDistance>distance*.77 and fieldOfView*.94 or fieldOfView
+ camera.CFrame=startFrame;camera.Focus=startFocus
  self.root.Visible=true;self.tint.BackgroundTransparency=quiet and 1 or 0
  self.originalSelection=GuiService.SelectedObject
  if UIS.GamepadEnabled and UIS:GetLastInputType().Name:match('^Gamepad') then GuiService.SelectedObject=self.back end
- camera.CameraType=Enum.CameraType.Scriptable;camera.FieldOfView=42
+ camera.CameraType=Enum.CameraType.Scriptable
  Context:BindActionAtPriority(INPUT_BIND,function() return Enum.ContextActionResult.Sink end,false,
   Enum.ContextActionPriority.High.Value,Enum.PlayerActions.CharacterForward,Enum.PlayerActions.CharacterBackward,
   Enum.PlayerActions.CharacterLeft,Enum.PlayerActions.CharacterRight,Enum.PlayerActions.CharacterJump)
@@ -322,21 +378,21 @@ function FleetView:open(profile,choice,targets)
    self.options.onAbort();return
   end
   self.elapsed+=math.min(dt,.1)
-  local motion=quiet and 1 or 1-math.exp(-13*math.min(dt,.1))
-  for rig,pose in pairs(self.poses) do
-   local current=rig:GetPivot()
-   if (current.Position-pose.Position).Magnitude>.005 then rig:PivotTo(current:Lerp(pose,motion)) end
+  if self.elapsed>=ZOOM_TIME then
+   local motion=quiet and 1 or 1-math.exp(-13*math.min(dt,.1))
+   for rig,pose in pairs(self.poses) do
+    local current=rig:GetPivot()
+    if (current.Position-pose.Position).Magnitude>.005 then rig:PivotTo(current:Lerp(pose,motion)) end
+   end
   end
-  local t=math.clamp(self.elapsed/.56,0,1)
-  local ease=1-(1-t)^3
-  local aspect=camera.ViewportSize.X/math.max(1,camera.ViewportSize.Y)
-  local distance=math.max(15+self.span, (self.span+2)/math.max(.26,math.min(1,aspect)*.36))
-  self.cameraAim=(self.cameraAim or self.aim):Lerp(self.aim,quiet and 1 or 1-math.exp(-8*dt))
-  local point=self.cameraAim
-  local from=point+Vector3.new(0,distance*.87,distance*.52)*(.70+.30*ease)
-  camera.CFrame=CFrame.lookAt(from,point);camera.Focus=CFrame.new(point)
-  self.focus.FocusDistance=(from-point).Magnitude
-  self.tint.BackgroundTransparency=math.clamp(self.elapsed/.34,0,1)
+  local t=math.clamp((self.elapsed-.14)/(ZOOM_TIME-.14),0,1)
+  local ease=t*t*(3-2*t)
+  local aim=startFocus:Lerp(CFrame.new(self.aim)*startFocus.Rotation,ease)
+  local from=startFrame.Position:Lerp(self.aim-forward*finishDistance,ease)
+  camera.CFrame=CFrame.new(from)*startFrame.Rotation;camera.Focus=aim
+  camera.FieldOfView=fieldOfView+(finishFov-fieldOfView)*ease
+  self.focus.FocusDistance=math.max(.5,(aim.Position-from):Dot(forward))
+  self.tint.BackgroundTransparency=math.clamp(self.elapsed/.20,0,1)
   self.tint.Visible=self.tint.BackgroundTransparency<1
  end)
  return true
@@ -355,8 +411,8 @@ function FleetView:close()
   GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
  end
  self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
- table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted)
- self.cameraAim=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+ table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted);table.clear(self.nameplates)
+ self.stageOffset=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
 end
 
 function FleetView:destroy()

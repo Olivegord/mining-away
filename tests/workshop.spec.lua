@@ -97,7 +97,7 @@ test('shared pool allows more than three owned upgrades and stable repeated draf
    for i,c in ipairs(o.choices) do
     assert(c.workshop and W.validate(c));assert(not seen[c.cardId]);seen[c.cardId]=true
     local owned=W.find(p,c.cardId);eq(c.stackBefore,owned and owned.level or 0)
-    eq(c.level,1);assert(c.upgradeTier<=o.packTier);assert(#c.preview>0)
+    eq(c.level,1);assert(#c.preview>0)
     if c.stackBefore<smallest then smallest=c.stackBefore;index=i end
    end
    local saved=P.clone(o);p=assert(P.migrate(p,44));assert(same(p.run.pendingOffer,saved))
@@ -117,7 +117,7 @@ test('every rarity grants one duplicate copy and guarantees a matching-tier opti
    local offered=C.workshopOffer(p,tier,C.hash('duplicate:'..seed..':'..tier));assert(offered)
    local guaranteed=false
    for i,c in ipairs(offered) do
-    eq(c.level,1);assert(c.upgradeTier<=tier);guaranteed=guaranteed or c.upgradeTier==tier
+    eq(c.level,1);guaranteed=guaranteed or c.upgradeTier==tier
     if c.cardId==entry.id then choices,index=offered,i end
    end
    assert(guaranteed)
@@ -133,6 +133,27 @@ test('every rarity grants one duplicate copy and guarantees a matching-tier opti
  end
  local p=funded();local prices={20,27,36,49,66,90}
  for i,price in ipairs(prices) do p.run.packIndex=i-1;eq(W.price(p),price) end
+end)
+test('Rare can offer both higher and lower cards, while the preview always guarantees Legendary',function()
+ local p=funded()
+ local mixed=false
+ for seed=1,200 do
+  local cards=assert(C.workshopOffer(p,2,C.hash('mixed-rarity:'..seed),true))
+  local lower,higher,guaranteed=false,false,false
+  for _,card in ipairs(cards) do
+   lower=lower or card.upgradeTier<2;higher=higher or card.upgradeTier>2
+   guaranteed=guaranteed or card.upgradeTier==2
+  end
+  assert(guaranteed)
+  mixed=mixed or lower and higher
+ end
+ assert(mixed,'Rare never presented a Common and a higher-rarity choice together')
+ p.run.wallet.Quartz=0;p.run.credits=0
+ local ok,offer=C.buy(p,'legendary-preview',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true,legendaryPreview=true})
+ assert(ok and offer.packTier==4 and offer.price==0 and #offer.choices==3 and p.run.wallet.Quartz==0)
+ local guaranteed=false
+ for _,card in ipairs(offer.choices) do guaranteed=guaranteed or card.upgradeTier==4 end
+ assert(guaranteed and P.validate(p,44))
 end)
 test('hardware fits chosen permanent miners once each and clears on prestige',function()
  local p=funded()

@@ -45,7 +45,7 @@ function CardView.summary(choice)
  add('reclaim',Workshop.reclaimDescription(reclaim))
  add('earlyDrop',Workshop.LOOSE_SEAMS_TEXT)
  add('fieldCharge','Depleted drones recharge at your pin')
- add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
+ add('magnetRange',string.format('Pull ore from %.1f studs farther away',(e.magnetRange or 0)*Workshop.ORE_REACH_SCALE))
  add('battery','+'..(e.battery or 0)..' battery capacity')
  add('splash','Hit a nearby sentry for '..percent(e.splash or 0)..' damage')
  add('shield','Start fights with '..percent(e.shield or 0)..' shield')
@@ -113,8 +113,8 @@ function CardView.fitText(choice,target,stats,canCycle)
 end
 
 -- ViewportFrame cannot render nested GuiObjects. The supported hierarchy is a
--- real camera-local card > SurfaceGui face > small ViewportFrame illustration.
--- Screen-space hitboxes retain ordinary touch, keyboard and controller input.
+-- Rounded card stock and mechanic models render in ViewportFrames.
+-- Screen-space text and hitboxes stay sharp across device layouts.
 local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local GuiService=game:GetService('GuiService')
@@ -373,34 +373,113 @@ end
 
 local function cardStock(world,color,stamped)
  local model=Instance.new('Model');model.Name='CardStock';model.WorldPivot=CFrame.new()
- local layers={
-  visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.fromRGB(18,23,30),.50)),
-  visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.new(1,1,1),.22)),
-  visualPart(model,Vector3.one,Vector3.zero,color),
- }
- if stamped then
-  for _=1,2 do
-   table.insert(layers,visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.new(1,1,1),.25)))
+ local layers={}
+ for index,tint in ipairs({Color3.fromRGB(13,16,31),color:Lerp(Color3.new(1,1,1),.26),color}) do
+  local layer={}
+  for partIndex=1,6 do
+   local shape=partIndex>2 and Enum.PartType.Cylinder or nil
+   layer[partIndex]=visualPart(model,Vector3.one,Vector3.zero,tint,shape)
   end
+  layers[index]=layer
+ end
+ local stamps={}
+ if stamped then
+  for i=1,2 do stamps[i]=visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.new(1,1,1),.4)) end
  end
  model.Parent=world
- return {model=model,layers=layers}
+ return {model=model,layers=layers,stamps=stamps}
 end
 
 local function drawStock(stock,width,height,pose)
- local depth=math.min(width,height)*.078
- for i,part in ipairs(stock.layers) do
-  local size,z
-  if i==1 then size=Vector3.new(width,height,depth);z=0
-  elseif i==2 then size=Vector3.new(width*.985,height*.986,depth*.20);z=depth*.55
-  elseif i==3 then size=Vector3.new(width*.949,height*.96,depth*.17);z=depth*.69
-  else
-   size=Vector3.new(width*.23,height*.034,depth*.14)
-   z=depth*.85
+ local depth=math.min(width,height)*.083
+ for i,layer in ipairs(stock.layers) do
+  local inset=i==1 and 0 or width*(i==2 and .052 or .070)
+  local w,h=width-inset*2,height-inset*2
+  local radius=math.min(width,height)*.142-inset*.6
+  local z=depth*(i==1 and 0 or i==2 and .54 or .71)
+  local thick=depth*(i==1 and 1 or .19)
+  layer[1].Size=Vector3.new(w-2*radius,h,thick)
+  layer[1].CFrame=pose*CFrame.new(0,0,z)
+  layer[2].Size=Vector3.new(w,h-2*radius,thick*.98)
+  layer[2].CFrame=pose*CFrame.new(0,0,z)
+  for corner=1,4 do
+   local x=corner%2==0 and 1 or -1
+   local y=corner<=2 and 1 or -1
+   local part=layer[corner+2]
+   part.Size=Vector3.new(thick*.96,radius*2,radius*2)
+   part.CFrame=pose*CFrame.new(x*(w/2-radius),y*(h/2-radius),z)*CFrame.Angles(0,math.pi/2,0)
   end
-  part.Size=size
-  part.CFrame=pose*CFrame.new(0,i>3 and (i-4.5)*height*.062 or 0,z)
  end
+ for i,part in ipairs(stock.stamps) do
+  part.Size=Vector3.new(width*.24,height*.035,depth*.21)
+  part.CFrame=pose*CFrame.new(0,(i-1.5)*height*.073,depth*.88)
+ end
+end
+
+local enamelColors={
+ {Color3.fromRGB(194,233,252),Color3.fromRGB(81,147,192),Color3.fromRGB(25,57,96)},
+ {Color3.fromRGB(105,246,255),Color3.fromRGB(22,163,246),Color3.fromRGB(18,57,135)},
+ {Color3.fromRGB(255,169,255),Color3.fromRGB(188,69,247),Color3.fromRGB(75,27,145)},
+ {Color3.fromRGB(255,245,157),Color3.fromRGB(255,177,41),Color3.fromRGB(137,52,11)},
+}
+local function gradientFor(frame,angle,keys)
+ local gradient=Instance.new('UIGradient');gradient.Rotation=angle
+ gradient.Color=ColorSequence.new(keys);gradient.Parent=frame;return gradient
+end
+local function enamelFace(U,parent,tier,accent)
+ local white=Color3.new(1,1,1)
+ local top,mid,deep=table.unpack(enamelColors[tier])
+ local outline=U.frame(parent,UDim2.fromOffset(2,1),UDim2.new(1,-4,1,-7),deep:Lerp(Color3.fromRGB(9,10,23),.82))
+ outline.Name='HeavyInkOutline';outline.ZIndex=parent.ZIndex+2;U.corner(outline,21)
+ local rim=U.frame(outline,UDim2.fromOffset(6,6),UDim2.new(1,-12,1,-12),white)
+ rim.Name='EnamelBevel';U.corner(rim,15)
+ local metal=gradientFor(rim,123,{
+  ColorSequenceKeypoint.new(0,white),ColorSequenceKeypoint.new(.25,top),ColorSequenceKeypoint.new(.56,mid),
+  ColorSequenceKeypoint.new(.81,deep),ColorSequenceKeypoint.new(.96,top),ColorSequenceKeypoint.new(1,mid),
+ })
+ local face=U.frame(rim,UDim2.fromOffset(4,4),UDim2.new(1,-8,1,-8),white)
+ face.Name='GlossyEnamel';U.corner(face,11)
+ gradientFor(face,90,{
+  ColorSequenceKeypoint.new(0,top),ColorSequenceKeypoint.new(.30,mid),ColorSequenceKeypoint.new(.51,mid:Lerp(deep,.28)),
+  ColorSequenceKeypoint.new(.80,deep),ColorSequenceKeypoint.new(1,deep:Lerp(Color3.fromRGB(13,15,32),.35)),
+ })
+ local lights=Instance.new('CanvasGroup');lights.Name='FaceLight';lights.Size=UDim2.fromScale(1,1)
+ lights.BackgroundTransparency=1;lights.ZIndex=face.ZIndex+1;lights.Parent=face;U.corner(lights,11)
+ local glow=Instance.new('ImageLabel');glow.Name='EnamelGlow';glow.Image='rbxasset://textures/glow.png'
+ glow.AnchorPoint=Vector2.new(.5,.5);glow.Position=UDim2.fromScale(.5,.30);glow.Size=UDim2.fromScale(1.35,.81)
+ glow.BackgroundTransparency=1;glow.ImageColor3=accent:Lerp(white,.46);glow.ImageTransparency=.35;glow.Parent=lights
+ local rays=U.frame(lights,UDim2.fromScale(.5,.29),UDim2.fromScale(.93,.55),mid)
+ rays.Name='RarityRays';rays.AnchorPoint=Vector2.new(.5,.5);rays.BackgroundTransparency=1
+ for i=1,6 do
+  local ray=U.frame(rays,UDim2.fromScale(.5,.5),UDim2.fromScale(1,.15),top:Lerp(white,.62))
+  ray.AnchorPoint=Vector2.new(.5,.5);ray.Rotation=i*30;ray.BackgroundTransparency=.63
+  local falloff=Instance.new('UIGradient');falloff.Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.33,.15),NumberSequenceKeypoint.new(.50,.82),
+   NumberSequenceKeypoint.new(.67,.15),NumberSequenceKeypoint.new(1,1),
+  });falloff.Parent=ray
+ end
+ -- A static specular shoulder reads as polished even when motion is reduced.
+ local gloss=U.frame(lights,UDim2.fromScale(.03,.015),UDim2.fromScale(.94,.16),white)
+ U.corner(gloss,10);gloss.BackgroundTransparency=.46
+ local shoulder=Instance.new('UIGradient');shoulder.Rotation=94
+ shoulder.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),NumberSequenceKeypoint.new(.40,.60),NumberSequenceKeypoint.new(1,1)})
+ shoulder.Parent=gloss
+ local sweep=U.frame(lights,UDim2.fromScale(-.75,-.25),UDim2.fromScale(.58,1.5),white)
+ sweep.Name='GlossSweep';sweep.Rotation=23;sweep.Visible=false
+ local gradient=Instance.new('UIGradient')
+ gradient.Transparency=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.29,1),NumberSequenceKeypoint.new(.47,.82),
+  NumberSequenceKeypoint.new(.54,.36),NumberSequenceKeypoint.new(.58,.57),NumberSequenceKeypoint.new(.78,1),NumberSequenceKeypoint.new(1,1),
+ });gradient.Parent=sweep
+ local glints={}
+ for i,position in ipairs({Vector2.new(.13,.09),Vector2.new(.86,.22),Vector2.new(.80,.87)}) do
+  local glint=Instance.new('ImageLabel');glint.Name='CornerGlint';glint.Image='rbxasset://textures/particles/sparkles_main.dds'
+  glint.BackgroundTransparency=1;glint.ImageColor3=top:Lerp(white,.8);glint.ImageTransparency=1
+  glint.AnchorPoint=Vector2.new(.5,.5);glint.Position=UDim2.fromScale(position.X,position.Y)
+  glint.Size=UDim2.fromOffset(39-i*5,39-i*5);glint.ZIndex=outline.ZIndex+2;glint.Parent=outline
+  glints[i]=glint
+ end
+ return {glow=glow,rays=rays,sweep=sweep,glints=glints,metal=metal}
 end
 
 local function ancestorsVisible(root)
@@ -418,8 +497,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local compact=height<300
  local p=U.palette
  local tier=Packs.rarityTier(choice.rarity)
- local tierColor=rarityColor(tier)
- local bodyColor=tierColor:Lerp(Color3.fromRGB(14,20,31),.50)
+ local _,_,accent=CardView.identity(choice)
+ local bodyColor=enamelColors[tier][2]
  local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
  slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
  local card=U.frame(slot,UDim2.fromOffset(4,3),UDim2.new(1,-8,1,-6),p.paper)
@@ -427,10 +506,12 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local scale=Instance.new('UIScale');scale.Parent=card
  local shell,shellWorld=cardViewport(card,'CardShell',card.ZIndex+1)
  local stock=cardStock(shellWorld,bodyColor,false)
+ local finish=enamelFace(U,card,tier,accent)
  local art=mechanicVisual(card,choice,compact)
  art.Position=UDim2.fromScale(.12,compact and .13 or .10);art.Size=UDim2.fromScale(.76,compact and .24 or .35)
- local badge=U.text(card,UDim2.fromOffset(13,10),UDim2.new(1,-62,0,22),string.upper(choice.rarity or Packs.Tiers[tier]),12,tierColor,true)
+ local badge=U.text(card,UDim2.fromOffset(13,10),UDim2.new(1,-62,0,22),string.upper(choice.rarity or Packs.Tiers[tier]),12,p.white,true)
  badge.Name='RarityBadge';badge.ZIndex=card.ZIndex+6
+ badge.TextStrokeColor3=p.ink;badge.TextStrokeTransparency=.18
  local scopeIcon=Instance.new('ImageLabel')
  scopeIcon.Name='CardScope';scopeIcon.Image=CardView.scopeIcon(choice)
  scopeIcon.BackgroundTransparency=1;scopeIcon.Position=UDim2.new(1,-41,0,9);scopeIcon.Size=UDim2.fromOffset(28,28)
@@ -438,9 +519,9 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local function escape(v) return (tostring(v):gsub('&','&amp;'):gsub('<','&lt;'):gsub('>','&gt;')) end
  local display='<b>'..escape(choice.title or 'Run upgrade')..'</b>\n'..escape(CardView.summary(choice))
  local effect=U.text(card,UDim2.new(0,12,compact and .37 or .45,0),UDim2.new(1,-24,compact and .35 or .32,0),display,compact and 16 or 18,p.white,true)
- effect.RichText=true;effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center;effect.ZIndex=card.ZIndex+5
+ effect.RichText=true;effect.Name='CardEffect';effect.TextStrokeColor3=p.ink;effect.TextStrokeTransparency=.35;effect.TextXAlignment=Enum.TextXAlignment.Center;effect.ZIndex=card.ZIndex+5
  local terms=U.text(card,UDim2.new(0,12,compact and .72 or .77,0),UDim2.new(1,-24,compact and .24 or .19,0),CardView.terms(choice,options.target,true),15,p.white,false)
- terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center;terms.ZIndex=card.ZIndex+5
+ terms.Name='CardTerms';terms.TextStrokeColor3=p.ink;terms.TextStrokeTransparency=.48;terms.TextXAlignment=Enum.TextXAlignment.Center;terms.ZIndex=card.ZIndex+5
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';choose.ZIndex=card.ZIndex+8;U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
  local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
@@ -455,8 +536,9 @@ function CardView.create(U,parent,choice,index,width,height,options)
  local revealStart=options.revealStart or os.clock()
  local landed,focused,pressed=false,false,false
  local blend,lastCell=0,-1
- local shellAspect,shellBlend,shellSettle
- local settleAt=1.16+(index-1)*.40
+ local shellAspect
+ local settleAt=Packs.reelFinish(index)
+ local focusAt=-10
  local function destroyReel()
   if reel then reel:Destroy();reel=nil;table.clear(tiles) end
  end
@@ -490,14 +572,12 @@ function CardView.create(U,parent,choice,index,width,height,options)
    if centerY+h*.55<0 or centerY-h*.55>size.Y then continue end
    local tile=tiles[cell]
    if not tile then
-    local tint=final and bodyColor or rarityColor((cell+index)%#Packs.Tiers+1):Lerp(p.ink,.45)
+    local tint=final and bodyColor or enamelColors[(cell+index)%#Packs.Tiers+1][2]
     tile=cardStock(reelWorld,tint,true);tiles[cell]=tile
    end
    shown[cell]=true
    local x=laneX+(targetX-laneX)*approach
-   local pitch=math.rad(34)*math.clamp((centerY-laneY)/spacing,-1,1)*(1-approach)
-   local yaw=math.rad((index-2)*12+8)*(1-approach)
-   local pose=CFrame.new((x-size.X*.5)*units,(size.Y*.5-centerY)*units,0)*CFrame.Angles(pitch,yaw,0)
+   local pose=CFrame.new((x-size.X*.5)*units,(size.Y*.5-centerY)*units,0)
    drawStock(tile,w*units,h*units,pose)
   end
   for cell,tile in pairs(tiles) do
@@ -505,9 +585,9 @@ function CardView.create(U,parent,choice,index,width,height,options)
   end
  end
 
- choose.MouseEnter:Connect(function() focused=true end)
+ choose.MouseEnter:Connect(function() focused=true;focusAt=os.clock() end)
  choose.MouseLeave:Connect(function() focused=false;pressed=false end)
- choose.SelectionGained:Connect(function() focused=true end)
+ choose.SelectionGained:Connect(function() focused=true;focusAt=os.clock() end)
  choose.SelectionLost:Connect(function() focused=false;pressed=false end)
  choose.MouseButton1Down:Connect(function() pressed=true end)
  choose.MouseButton1Up:Connect(function() pressed=false end)
@@ -520,7 +600,8 @@ function CardView.create(U,parent,choice,index,width,height,options)
    if reel then reel.Visible=false end
    return
   end
-  local age=os.clock()-revealStart
+  local clock=os.clock()
+  local age=clock-revealStart
   local quiet=options.reducedMotion==true or CardView.reducedMotion()
   local instant=quiet or options.skipReveal
   local offset,stop,settled,started=Packs.reel(age,index,revealSpeed)
@@ -543,12 +624,25 @@ function CardView.create(U,parent,choice,index,width,height,options)
   local target=choose.Active and focused and 1 or 0
   blend=quiet and 0 or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
   local settle=instant and 0 or math.clamp(1-(age*revealSpeed-settleAt)/.22,0,1)^2
-  scale.Scale=1+blend*.024-settle*.023-(pressed and .028 or 0)
+  local landing=math.max(0,age*revealSpeed-settleAt)
+  scale.Scale=1+blend*.038-(pressed and .045 or 0)
+   +(instant and 0 or .060*math.sin(landing*23)*math.exp(-landing*12))
+  local idleShine=(clock+index*1.73)%7.8
+  local shine=math.min(instant and math.huge or landing,clock-focusAt,idleShine)
+  finish.rays.Rotation=quiet and 0 or (clock*15+index*32)%360
+  finish.glow.ImageTransparency=.33-.17*blend-.13*settle
+  finish.metal.Offset=Vector2.new(quiet and 0 or math.sin(clock*1.7+index)*(.05+blend*.14),0)
+  finish.sweep.Visible=not quiet and shine>=0 and shine<.73
+  if finish.sweep.Visible then finish.sweep.Position=UDim2.fromScale(-.75+shine*2.5,-.25) end
+  for i,glint in ipairs(finish.glints) do
+   local phase=math.clamp((shine-.067*i)/.48,0,1)
+   glint.ImageTransparency=quiet and 1 or 1-math.sin(phase*math.pi)^2*.95
+  end
   local aspect=shell.AbsoluteSize.X/math.max(1,shell.AbsoluteSize.Y)
-  if shellAspect~=aspect or math.abs(blend-(shellBlend or 0))>.002 or shellSettle~=settle then
+  if shellAspect~=aspect then
    local span=2*10*math.tan(math.rad(18))
-   drawStock(stock,span*math.max(.01,aspect)*.978,span*.981,CFrame.Angles(-blend*.032,blend*.085,-settle*.025))
-   shellAspect,shellBlend,shellSettle=aspect,blend,settle
+   drawStock(stock,span*math.max(.01,aspect)*.978,span*.981,CFrame.new())
+   shellAspect=aspect
   end
  end)
  return {root=slot,button=choose}

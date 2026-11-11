@@ -86,7 +86,14 @@ local function mine()
  local resource=Mining.resource(75,'Crystal',field.cfg.Hardness)
  local r=makeResource(field,field.center,'Crystal',resource.work,10,3);r.readyAt=now
  local before=Pro.cargoUnits(data(p));input('MineOre',r.id);local started=now
- for _=1,2400 do tick();if r.paid and pendingOre(p)==0 then break end end
+ for _=1,2400 do
+  if r.paid then
+   for _,drop in pairs(pickups) do
+    if drop.owner==pl.UserId and drop.landed then move(Vector3.new(drop.x,drop.floor,drop.z));break end
+   end
+  end
+  tick();if r.paid and pendingOre(p)==0 then break end
+ end
  assert(r.paid and Pro.cargoUnits(data(p))>before,'real mining/collection produced no reward')
  return now-started
 end
@@ -232,5 +239,23 @@ check('reconnect preserves reward and the second earned run can buy another upgr
  mine();mine();sell();assert(data(p).run.wallet.Quartz>=20)
  move(scene.packStation.Position);input('BuyPack',quote({packIndex=0}));assert(data(p).run.pendingOffer.price==20)
  assert(Pro.validate(data(p),pl.UserId))
+end)
+check('the Legendary stand is Studio only and delivers a free crate through the normal hold',function()
+ local stand=scene.map:FindFirstChild('LegendaryPreviewStand')
+ if not runService:IsStudio() then assert(not stand);return end
+ local counter=assert(stand and stand:FindFirstChild('Counter'))
+ local prompt=assert(counter:FindFirstChild('LegendaryPreviewPrompt'))
+ local tester=player(310015);players.PlayerAdded:Fire(tester)
+ local crew=assert(profiles[tester.UserId]);local run=data(crew).run
+ tester.Character:PivotTo(CFrame.new(counter.Position+Vector3.new(0,3,40)))
+ prompt.Triggered:Fire(tester);assert(not data(crew).run.pendingOffer)
+ tester.Character:PivotTo(CFrame.new(counter.Position+Vector3.yAxis*3))
+ prompt.Triggered:Fire(tester)
+ local offer=assert(data(crew).run.pendingOffer)
+ assert(offer.price==0 and offer.packTier==4 and data(crew).run.wallet.Quartz==run.wallet.Quartz)
+ local delivery=assert(crew.packDelivery)
+ assert(delivery.prompt.HoldDuration==Packs.duration(4) and not offer.opened)
+ prompt.Triggered:Fire(tester);assert(data(crew).run.pendingOffer.id==offer.id)
+ players.PlayerRemoving:Fire(tester)
 end)
 print(checks..' Quartz production-server checks passed ('..(preview and 'Studio' or 'production')..' configuration; API doubles)')

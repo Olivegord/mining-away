@@ -12,18 +12,10 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local rockDamage=RockDamage.new()
--- Renderer cues follow the same observed charge/release as the visual. Reuse
--- the bounded spatial audio mixer and existing reduced-motion camera path.
+-- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
-BeamVFX.onCharge=function(r,position,now,q)
- soundscape:setLoop(r,'charge',position,.45+.5*q,.88+.12*q)
-end
-BeamVFX.onChargeEnd=function(r) soundscape:stopLoop(r) end
 BeamVFX.onCue=function(kind,position,now)
- if kind=='launch' then
-  soundscape:play('laser_start',position)
-  presentation:kick(position,.028,now)
- end
+ if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new(soundscape)

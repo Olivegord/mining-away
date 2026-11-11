@@ -631,6 +631,8 @@ do
  pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
  assert(tester:GetAttribute('MA_SelectorStatus')=='LooseOre' and not testCrew.vacuumTarget)
  tester.Character:PivotTo(CFrame.new(position+Vector3.new(11,2,0)))
+ pickupStep(C.Tick);assert(not pickups[-2].homing and not testCrew.vacuumTarget)
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(3,2,0)))
  pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
  assert(pickups[-2].homing and not testCrew.vacuumTarget,'Vacuum intercepted ore already on its way to the bag')
  assert(tester:GetAttribute('MA_SelectorStatus')~='LooseOre','pickup hint survived after the player reached the ore')
@@ -639,6 +641,7 @@ do
  tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
  print('PASS settled cargo beyond the Vacuum prompts a walk; reachable ore goes straight to the backpack')
 end
+Workshop.VACUUM_ENABLED=true -- Exercise the retained relay separately from the disabled runtime default.
 local dropPosition=characterRoot(testCrew).Position+Vector3.new(40,-2,0)
 local dropPart=World.part(pickupFolder,'VacuumTest',dropPosition,Vector3.one,Color3.new(1,1,1))
 pickups[-1]={part=dropPart,owner=tester.UserId,runId=data(testCrew).run.id,material='Quartz',units=2,spawnAt=now,age=1,
@@ -718,6 +721,7 @@ do
  data(testCrew).run.cargo=previousCargo
  print('PASS Vacuum finishes its first pickup as the owner walks past its search range')
 end
+Workshop.VACUUM_ENABLED=false
 
 do
  buyer.session.data=Pro.clone(opened);refreshStats(buyer)

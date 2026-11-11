@@ -224,8 +224,17 @@ do
  end
  scene.publishSquareStatus(crew)
  assert(runner:GetAttribute('MA_SelectorStatus')=='Growing')
+ local function approachLandedCargo()
+  local square=crew.miningSquare
+  for _,drop in pairs(pickups) do
+   if square and drop.fieldPart==square.field.part and drop.owner==runner.UserId and drop.landed and not drop.pressSocket then
+    runner.Character:PivotTo(CFrame.new(drop.x,drop.floor+3,drop.z));break
+   end
+  end
+ end
  local sent,bagStarted
  for _=1,math.ceil(15/C.Tick) do
+  approachLandedCargo()
   advance(C.Tick)
   bagStarted=bagStarted or crew.emptierBagSince
   sent=next(data(crew).run.deliveries)
@@ -260,6 +269,9 @@ do
  assert(drop.part:GetAttribute('SnapshotAt')==snapshot,'stationary cargo still published movement')
  runner.Character:PivotTo(CFrame.new(Vector3.new(drop.x+9,drop.y+2,drop.z)))
  advance(.2)
+ assert(drop.part:GetAttribute('SnapshotAt')==snapshot,'distant ore still started homing')
+ runner.Character:PivotTo(CFrame.new(Vector3.new(drop.x+3,drop.y+2,drop.z)))
+ advance(C.Tick)
  assert(drop.part:GetAttribute('SnapshotAt')>snapshot and drop.part:GetAttribute('Homing'),'pickup failed to resume movement')
  pickups[dropId]=nil;drop.part:Destroy()
  local crate=assert(crew.packDelivery)
@@ -286,6 +298,7 @@ do
  local function saleFromOneSlot(value,label)
   local filled,saleStarted
   for _=1,math.ceil(45/C.Tick) do
+   approachLandedCargo()
    advance(C.Tick)
    filled=filled or crew.emptierBagSince
    local _,parcel=next(data(crew).run.deliveries)
@@ -381,9 +394,11 @@ do
  assert(released.units==1 and released.value==math.floor(14*4*DroneCatalog.Types[picked.kind].Yield))
  print(string.format('MODEL prestige %s began its gesture after %.2fs and released %d Quartz cargo %.2fs after pinning',picked.kind,gestureAt-began,released.value,now-began))
  scene.clearSquare(crew)
- runner.Character:PivotTo(CFrame.new(Vector3.new(released.x,released.y+3,released.z)))
  for _=1,math.ceil(35/C.Tick) do
   if data(crew).run.wallet.Quartz>=released.value then break end
+  if pickups[released.part:GetAttribute('PickupId')]==released and released.landed then
+   runner.Character:PivotTo(CFrame.new(released.x,released.floor+3,released.z))
+  end
   advance(C.Tick)
  end
  assert(data(crew).run.wallet.Quartz==released.value)

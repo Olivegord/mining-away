@@ -92,7 +92,7 @@ check('physical launch trail fades on the displayed landing and never reappears 
  renderer:update(1/60,realTime+1.20);assert(not record.ribbon)
  renderer:destroy();workspace.CurrentCamera=camera
 end)
-check('80 resting pieces reuse their poses and share one owner price label',function()
+check('80 grounded pieces cap halo effects and share one owner price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -111,10 +111,15 @@ check('80 resting pieces reuse their poses and share one owner price label',func
   local record=renderer.records[source];poses[i]=record.view.CFrame;sizes[i]=record.view.Size
  end
  for i=1,240 do renderer:update(1/60,realTime+.2+i/60) end
+ local lit=0
  for i,source in ipairs(sources) do
   local record=renderer.records[source]
+  if record.idle then
+   lit+=1;assert(record.idle.halo.Parent==record.view and record.idle.flecks.Rate>0)
+  end
   assert(record.view.CFrame==poses[i] and record.view.Size==sizes[i],'resting cargo still wrote its pose')
  end
+ assert(lit==16 and renderer.idleCount==16)
  local gui=renderer.valueGui
  assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
  assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')

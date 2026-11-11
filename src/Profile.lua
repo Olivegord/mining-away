@@ -218,7 +218,7 @@ function P.validate(p,uid)
     local owned=Workshop.find(p,c.cardId);local before=owned and owned.level or 0
     if c.packTier~=offer.packTier or before+c.level>c.maxLevel then return false,'Invalid upgrade stack' end
     if (offer.contentVersion or 0)>=13 then
-     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 or c.upgradeTier>offer.packTier then return false,'Invalid guaranteed upgrade' end
+     if c.stackVersion~=2 or c.stackBefore~=before or c.level~=1 then return false,'Invalid guaranteed upgrade' end
      guaranteed=guaranteed or c.upgradeTier==offer.packTier
     elseif (offer.contentVersion or 0)>=12 then
      if c.stackBefore~=before then return false,'Invalid saved stack count' end

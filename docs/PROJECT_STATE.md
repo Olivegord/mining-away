@@ -11,18 +11,30 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b69efe8d0099f3c9b86e33341f0a70a72520fae03f643bb65336f8e14a1eb701` | Includes full-height card reels, fixed crew inspection and restored mining effects. |
+| Native-file SHA-256 | `0c413593248c7df6104c0c7939c70dbf09d0196b15a39cbf38d742c3d1e3d109` | Includes the authored Legendary stand, glossy cards, crew camera and pickup revisions. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the pack, crew and mining effects refinements** | All seven Sources and three roots verified in Edit. Team Create save returned version 176. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the Legendary stand and latest card, crew, and ore changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 179. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — glossy cards, Legendary preview and close pickup
+
+The straight, full-height 3D reels start 35 milliseconds apart and land 90 milliseconds apart at normal speed. Settled cards have saturated rarity enamel, a six-pixel dark outline, a rounded metallic rim, animated light rays, a gloss sweep and corner glints. Real 3D stock and mechanic models remain. A pack guarantees at least one card of exactly its tier. Its remaining slots can hold lower or higher cards when the pool permits; higher cards are less common. The first Crystal Run pack retains its curated draft. The gold **Legendary Preview** stand is beside the Pack Counter. In Studio, its prompt gives a free Legendary crate through the same hold and reveal flow, using isolated Studio profiles. A public server removes the stand before gameplay.
+
+Crew inspection enters the hazy stage at the same camera angle, field of view and avatar-relative position, then centers and zooms toward the crew before lifting the selected drone four studs. If the player enters very close, the final distance fits the whole crew and the lens zooms slightly. A few rarity diamonds sit alongside each drone name; installed upgrade names are listed at the right. The starter laser still gathers light and particles before its color pop, without the charge or ignition sound. Cutting and crystal contact retain their audio.
+
+Cargo keeps its physical launch and stays on the ground after landing. Nearby ore has a soft halo and sparse rising motes. Raw cargo pulls from 5 studs by default, other drops from 6, and pickup bonuses are scaled to the shorter range. Vacuum collection is off for now; the owned drone remains in the fleet. Unclaimed ore normally expires after 24 seconds with a 0.9-second fade. Full-backpack return grace still protects a trip to sell and come back.
+
+Pack timing, workshop, Crystal Run, beam and ore pickup checks passed with API or storage doubles. The native Edit checks confirmed the stand's approach and positions and constructed the new card bevel, enamel and effects at all four rarities. Shared Edit has all seven matching Sources, three connected Script Sync roots and Team Create save **179** at place **124078027733625**, universe **10774898335**. The player release was not published. Live animation, audio, touch/controller and multiplayer were not verified on this pass.
+
+To reproduce from `1866d4e`, run [the stand staging script](../tools/studio_legendary_pack_stand.lua) in shared Edit. Extract `shared.LegendaryPreviewStand.scenery` to `scenery.b64`, and dry-run [the scoped mirror](../tools/refresh_legendary_pack_stand.py) with its directory and `--baseline-sha256 b69efe8d0099f3c9b86e33341f0a70a72520fae03f643bb65336f8e14a1eb701`. Save the receipt of `shared.LegendaryPreviewStand.apply()` to `verified.json`, then repeat the mirror with `--write`. Run `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 1866d4e` after applying the Source changes. The stand mirror appends ten objects and preserves all preexisting instances and scripts; the Source refresh only replaces the two changed managed Sources.
 
 ## November 11 — refine pack timing, crew selection and work effects
 

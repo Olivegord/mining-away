@@ -65,9 +65,13 @@ function Packs.sample(tier, elapsed)
  return 1,tier
 end
 
+function Packs.reelFinish(index)
+ return 1.22+(index-1)*.09
+end
+
 function Packs.reel(elapsed,index,speed)
- local delay=(index-1)*.15
- local duration=1.16+(index-1)*.25
+ local delay=(index-1)*.035
+ local duration=Packs.reelFinish(index)-delay
  local t=math.clamp((elapsed*speed-delay)/duration,0,1)
  local travel=8+index
  return travel*(1-(1-t)^3), travel, t>=1, t>0, t

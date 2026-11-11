@@ -75,7 +75,8 @@ local function publish(p)
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.workshop=Ca.workshopRows(copy)
- p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy);p.cargoReach=13+Ca.magnetBonus(copy)
+ local magnetBonus=Ca.magnetBonus(copy)*Workshop.ORE_REACH_SCALE
+ p.magnetRange=OreDrops.MAGNET_RANGE+magnetBonus;p.cargoReach=OreDrops.CARGO_REACH+magnetBonus
  p.fieldCharge=Workshop.effect(copy,'fieldCharge')
  p.compactorBatch=Workshop.compactorBatch(copy)
  p.shiftSeconds=Workshop.effect(copy,'shiftRelay')
@@ -1046,7 +1047,7 @@ local function pickupStep(dt)
    local hr=active.playerRoot
    if hr and not drop.homing then
     local from=Vector3.new(drop.x,drop.y,drop.z)
-    local reach=p.cargoReach+(drop.reachBonus or 0)
+    local reach=p.cargoReach+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
     if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
    end
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
@@ -1097,7 +1098,7 @@ local function pickupStep(dt)
    end
    local from=Vector3.new(drop.x,drop.y,drop.z)
    local hr=characterRoot(p);local target=hr and hr.Position or from
-   local naturalReach=(drop.raw and (p.cargoReach or 13) or p.magnetRange)+(drop.reachBonus or 0)
+   local naturalReach=(drop.raw and (p.cargoReach or OreDrops.CARGO_REACH) or p.magnetRange)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
    if drop.raw and drop.landed and hr and not hasSpace and now>=(drop.returnCheckAt or 0) then
     drop.returnCheckAt=now+1
@@ -1110,13 +1111,13 @@ local function pickupStep(dt)
      drop.part:SetAttribute('ExpiresAt',deadline)
     end
    end
-   local vacuum=p.vacuum
+   local vacuum=Workshop.VACUUM_ENABLED and p.vacuum or nil
    local press=p.compactor
    local assignedToPress=p.compactorTarget and p.compactorTarget.id==id
    local pressing=assignedToPress
     and (press.pressDock or (press.pos-p.compactorTarget.position).Magnitude<1.1)
    local socket=pressing and #(press.pressInputs or {})+1
-   local relay=now<(drop.relayUntil or 0)
+   local relay=Workshop.VACUUM_ENABLED and now<(drop.relayUntil or 0)
    local vacuuming=false
    local vacuumApproaching=false
    local relayReach=p.vacuumReach+12
@@ -2960,7 +2961,7 @@ local packDelivery=PackDelivery.new({
  end,
 })
 local packPrompt=scene.packStation:FindFirstChildWhichIsA('ProximityPrompt')
-local function economyAction(p: any,pl: any,action: string,payload: any): boolean
+local function economyAction(p: any,pl: any,action: string,payload: any,previewCounter: BasePart?): boolean
  if not validPayload(payload) or payload.runId~=data(p).run.id or activeAssault(p) then
   if action=='ChooseCard' then offerReply(pl,payload,'rejected','Run changed or assault active') end
   return false
@@ -2972,9 +2973,10 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
  end
  if action=='BuyPack' then
   if not R.finite(payload.packIndex) or payload.packIndex%1~=0 then return false end
-  if not atStation(p,scene.packStation,12) then return false end
+  local station=previewCounter or scene.packStation
+  if not atStation(p,station,previewCounter and 8 or 12) then return false end
   local function buyCard(copy: any): (any, any)
-   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil}
+   local options: any={expectedPackIndex=payload.packIndex,atDepot=true,activeEncounter=false,crystalRun=scene.runStart~=nil,legendaryPreview=previewCounter~=nil and inStudio}
    local ok: boolean,result: any=Ca.buy(copy,payload.txId,payload.runId,options)
    if ok then return result end
    return nil,result
@@ -2982,8 +2984,8 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   local origin=characterRoot(p).Position
   transact(p,'buy:'..payload.txId,buyCard,function()
    local buyer=characterRoot(p)
-   local position=buyer and (buyer.Position-scene.packStation.Position).Magnitude<12 and buyer.Position or origin
-   packDelivery:spawn(p,data(p).run.pendingOffer,position,now)
+   local position=buyer and (buyer.Position-station.Position).Magnitude<12 and buyer.Position or origin
+   packDelivery:spawn(p,data(p).run.pendingOffer,position,now,previewCounter)
   end)
  elseif action=='ChooseCard' then
   chooseCard(p,pl,payload)
@@ -3005,6 +3007,29 @@ if packPrompt then packPrompt.Triggered:Connect(function(pl)
  end
  economyAction(p,pl,'BuyPack',{txId=Http:GenerateGUID(false),runId=run.id,packIndex=run.packIndex})
 end) end
+do
+ local stand=scene.map:FindFirstChild('LegendaryPreviewStand')
+ local counter=stand and stand:FindFirstChild('Counter')
+ if stand and not inStudio then stand:Destroy()
+ elseif counter and counter:IsA('BasePart') then
+  local prompt=Instance.new('ProximityPrompt')
+  prompt.Name='LegendaryPreviewPrompt';prompt.ActionText='Get free pack';prompt.ObjectText='Legendary Preview'
+  prompt.KeyboardKeyCode=Enum.KeyCode.E;prompt.GamepadKeyCode=Enum.KeyCode.ButtonX
+  prompt.MaxActivationDistance=8;prompt.RequiresLineOfSight=false;prompt.Parent=counter
+  prompt.Triggered:Connect(function(pl)
+   local p=profiles[pl.UserId]
+   if not healthy(p) or p.player~=pl or not atStation(p,counter,8) or activeAssault(p) or now<(p.nextPackPress or 0) then return end
+   p.nextPackPress=now+.45
+   local run=data(p).run
+   if run.pendingOffer then
+    if run.pendingOffer.opened~=false then pl:SetAttribute('MA_ShowOffer',Http:GenerateGUID(false))
+    else notice(p,'Open your waiting crate first.') end
+    return
+   end
+   economyAction(p,pl,'BuyPack',{txId=Http:GenerateGUID(false),runId=run.id,packIndex=run.packIndex},counter)
+  end)
+ end
+end
 local function abilityContext(p,fieldId,operator,deployment)
  local function valid(id)
   local field=patches[id];local hr=characterRoot(p)

@@ -23,6 +23,27 @@ local function removeTrail(self,r)
  r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
  r.ribbon=nil;self.trailCount-=1
 end
+local function idleGlow(view,tint)
+ local halo=Instance.new('BillboardGui');halo.Name='OreGlow';halo.Adornee=view
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=52
+ halo.Size=UDim2.fromScale(2.15,2.15);halo.StudsOffset=Vector3.new(0,-.15,-.72);halo.Parent=view
+ local light=Instance.new('ImageLabel');light.Name='Halo';light.Size=UDim2.fromScale(1,1);light.BackgroundTransparency=1
+ light.Image='rbxasset://textures/glow.png';light.ImageColor3=tint:Lerp(PICKUP_HIGHLIGHT,.18);light.Parent=halo
+ local flecks=Instance.new('ParticleEmitter');flecks.Name='OreMotes'
+ flecks.Texture='rbxasset://textures/particles/sparkles_main.dds';flecks.Rate=3
+ flecks.Lifetime=NumberRange.new(.40,.68);flecks.Speed=NumberRange.new(.5,1.1)
+ flecks.SpreadAngle=Vector2.new(40,40);flecks.LightEmission=.76;flecks.LightInfluence=0
+ flecks.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.58),tint)
+ flecks.Size=NumberSequence.new(.13,0);flecks.Transparency=NumberSequence.new(.20,1)
+ flecks.Parent=view
+ return {halo=halo,light=light,flecks=flecks}
+end
+local function removeIdle(self,r)
+ local effect=r.idle
+ if not effect then return end
+ effect.halo:Destroy();effect.flecks:Destroy();r.idle=nil
+ self.idleCount-=1
+end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -62,7 +83,7 @@ end
 function V.new(root,parent,audio)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,
-  player=player,trailCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -137,7 +158,7 @@ function V:update(dt,now)
  end
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
- local reducedEffects=self.player:GetAttribute('ReducedEffects')==true
+ local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
  local closest,bestDistance=nil,math.huge
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
@@ -185,7 +206,7 @@ function V:update(dt,now)
    opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
   end
   if done then
-   removeTrail(self,r);r.view:Destroy()
+   removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
@@ -196,6 +217,15 @@ function V:update(dt,now)
    local socketScale=seated and .48 or 1
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
+   local close=resting and not seated and r.physical and cameraPosition and (r.pos-cameraPosition).Magnitude<48 and opacity>.035
+   if close and not reducedEffects and not r.idle and self.idleCount<16 then
+    r.idle=idleGlow(r.view,r.color);self.idleCount+=1
+   elseif (not close or reducedEffects) and r.idle then removeIdle(self,r) end
+   if r.idle and r.idle.opacity~=opacity then
+    r.idle.opacity=opacity
+    r.idle.light.ImageTransparency=.47+.53*(1-opacity)
+    r.idle.flecks.Rate=3*opacity
+   end
    if not (resting and r.restSample==latest and r.restUnits==r.units) then
     if live then
      local x,y,z=PickupMotion.position(r.samples,now)
@@ -219,7 +249,8 @@ function V:update(dt,now)
      position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
     end
     r.drawPosition=position
-    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz);r.view.Size=r.size*scale
+    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
