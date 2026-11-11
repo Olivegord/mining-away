@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `42686b64422447fc95c7a56f32385f31dec93431b736dd3d2f879c4db3427d1d` | Includes the Compactor and Emptier cargo changes. |
+| Native-file SHA-256 | `c088481735bbdbb481b9301c5e0d41edf2ee9c00c74e2716e5ea9ddb45ee99a2` | Includes Shift Relay's next-cut activation. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the Compactor and Emptier cargo changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 155. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit primes Shift Relay on an Emptier sale** | All seven Sources and three roots verified in Edit. Team Create save returned version 156. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — Shift Relay starts on the next cut
+
+An Emptier sale readies one Shift Relay surge. The timer starts with the next accepted mining hit at the current pin, and that hit gets the bonus. The ready surge survives time at the charger and a new pin during the same server session. Extra sales while a surge is ready still leave one ready surge. The active effect stays at its pin for the existing 12 seconds per stack. Prestige clears it. The existing HUD row shows `Surge ready`, then `Crew surge · +50%` during mining. The card and Workshop describe the new timing.
+
+The same server fixture made its first cut 30 seconds after an Emptier sale. On `d60332f`, the cut removed 10 work and the surge had expired. This revision removed 15 work and started the full 12 seconds on that hit. The fixture also tested rejected contact, a sale with no active pin, exact expiry and prestige cleanup. Workshop, Crystal Run, committed flight, pickup, audio and persistence checks passed with Roblox API or storage doubles. Native font metrics fit all three stack levels in the compact card, Workshop and HUD. Live pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **156**. No player release was published. To reproduce from `d60332f`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit d60332f`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — keep loaded cargo moving
 

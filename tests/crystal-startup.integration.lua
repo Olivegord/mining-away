@@ -284,6 +284,7 @@ do
  end
  assert(picked)
  runner.Character:PivotTo(CFrame.new(scene.prestigeStation.Position+Vector3.yAxis*3))
+ crew.shiftReadyRun=run.id
  command.OnServerEvent:Fire(runner,'Prestige',{runId=run.id,txId='first-prestige',confirm=true,droneType=picked.kind})
  local after=data(crew)
  local receipt=Http:JSONDecode(runner:GetAttribute('MA_DroneReward'))
@@ -291,6 +292,7 @@ do
  assert(after.prestiges==1 and after.run.id~=run.id and #after.fleet==#before.fleet+1 and worker.role==picked.kind)
  assert(after.fleet[1].id==before.fleet[1].id and worker.stats.miningDPS==worker.owned.base.miningDPS*1.25)
  assert(#after.run.cards==0 and after.run.wallet.Quartz==0 and after.run.stars==0)
+ assert(not crew.shiftReadyRun,'prestige carried a ready surge into the new run')
  assert(crew.drones[1].stats.doubleBeam==0 and crew.drones[1].stats.miningDPS==37.5)
 
  local small=makeResource(ruby,rubyBed.Position-Vector3.xAxis*7,'Crystal',108,8,2.15,3)

@@ -93,7 +93,7 @@ local selectorText={
  Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
  PairCut='Two lasers cutting',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
- BagFull='Backpack full', LooseOre='Move closer to ore', Pressing='Compactor pressing', Surge='Crew surge · +50%',
+ BagFull='Backpack full', LooseOre='Move closer to ore', Pressing='Compactor pressing', Surge='Crew surge · +50%', SurgeReady='Surge ready',
  Refilling='Plot refilling', Growing='Crystals growing', Claimed='Other crew mining', NoCrystals='Move pin to crystals',
  Hauling='Hauling to Workshop', Gathering='Vacuum gathering',
 }
@@ -248,7 +248,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
  self.selectorStatus.Visible=statusText~=nil
  self.selectorStatus.Text=statusText or ''
- self.selectorStatus.TextColor3=(guidance or status=='Working' or status=='PairCut' or status=='BagFull' or status=='Surge') and C.gold or C.text
+ self.selectorStatus.TextColor3=(guidance or status=='Working' or status=='PairCut' or status=='BagFull' or status=='Surge' or status=='SurgeReady') and C.gold or C.text
  local statusX=showRecall and recallWidth+4 or 0
  self.selectorStatus.Position=UDim2.fromOffset(statusX,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-statusX),buttonHeight)

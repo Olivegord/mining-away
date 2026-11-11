@@ -785,7 +785,9 @@ local prior=data(buyer).run.quartzEarnings
 serviceDeliveries(buyer);serviceDeliveries(buyer)
 assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+440)
 assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==440 and Pro.prestigePreview(data(buyer)).eligible)
-assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare)
+assert(scene.shiftReady(buyer) and not buyer.shiftUntil,'sale spent the surge before the crew cut')
+scene.publishSquareStatus(buyer)
+assert(shopper:GetAttribute('MA_SelectorStatus')=='SurgeReady')
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
 -- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
 data(buyer).run.cargo={[Workshop.cargoKey('RunRuby',5,true)]=1}
@@ -797,11 +799,33 @@ now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
 assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==0)
 snapshotDrone(emptier)
 assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
+local saleDelay=now
+now+=20
+scene.clearSquare(buyer)
+assert(scene.shiftReady(buyer),'a paid surge expired while the crew was between pins')
+input('PlaceSelector','surge-cut',{fieldId=f.id,position=f.center})
 isolate()
 local boosted=rock(0,1000)
-assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)
+assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare
+miner.pos=boosted.position+Vector3.yAxis*25
+assert(not hitResource(miner,boosted,10) and scene.shiftReady(buyer) and not buyer.shiftUntil,'rejected contact consumed the surge')
+miner.pos=committedStation(miner,boosted);miner.mining=true
 assert(hitResource(miner,boosted,10) and boosted.hp==975)
+assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare and not scene.shiftReady(buyer) and now-saleDelay>=20)
+scene.publishSquareStatus(buyer)
+assert(shopper:GetAttribute('MA_SelectorStatus')=='Surge')
 now=buyer.shiftUntil;assert(hitResource(miner,boosted,10) and boosted.hp==965)
+
+-- A delivery can prime the crew while it is between assignments.
+release(miner);scene.clearSquare(buyer)
+emptier.pos=scene.packStation.Position
+droneStep(emptier,C.Tick);emptier.pos=emptier.goal
+droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
+assert(not data(buyer).run.deliveries[emptier.id] and scene.shiftReady(buyer) and not buyer.shiftUntil)
+input('PlaceSelector','next-surge-cut',{fieldId=f.id,position=f.center})
+assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)
+assert(hitResource(miner,boosted,10) and boosted.hp==950 and not scene.shiftReady(buyer))
+now=buyer.shiftUntil
 
 isolate()
 local deep=rock(0,Mining.resource(75,'Crystal',81).maxHP)

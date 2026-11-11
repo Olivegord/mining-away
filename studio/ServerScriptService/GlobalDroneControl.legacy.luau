@@ -75,6 +75,9 @@ W.CATALOG={
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_AFTERSHOCK'}
 W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
+function W.shiftDescription(seconds)
+ return 'Emptier sale primes your next cut.\n+50% damage for '..seconds..'s.'
+end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -8200,6 +8203,9 @@ function scene.recordToolScar(r,point,width,depth,heat)
   r.part:SetAttribute('ToolScars',Http:JSONEncode(r.toolScars))
  end
 end
+function scene.shiftReady(p)
+ return (p.shiftSeconds or 0)>0 and p.shiftReadyRun==data(p).run.id
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
@@ -8246,7 +8252,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
   if d.battery>d.stats.batteryCapacity*.5 then amount*=1+(d.stats.liveWire or 0) end
  end
- if (not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.shiftSquare and p.miningSquare==p.shiftSquare and now<(p.shiftUntil or 0) then amount*=1.5 end
+ local pinnedWork=(not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.miningSquare
+ local startShift=pinnedWork and not secondary and scene.shiftReady(p)
+ if pinnedWork and (startShift or (d.squareJob==p.shiftSquare and now<(p.shiftUntil or 0))) then amount*=1.5 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
  if special then
@@ -8263,7 +8271,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local cutStart=not secondary and not abilityOrigin and not special and d.mining and d.beamSince and d.lastCutFX~=d.beamSince
  local shapeChanged=false
  local revealed=nil
+ local before=r.hp
  local broken=R.damage(r,amount)
+ if startShift and r.hp<before then
+  p.shiftReadyRun=nil;p.shiftSquare=d.squareJob;p.shiftUntil=now+p.shiftSeconds
+ end
  local finalSurface
  if broken and r.field.cfg.SelectionOnly then
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
@@ -8588,6 +8600,7 @@ function scene.publishSquareStatus(p)
  local status=if not healthy(p) or not characterRoot(p) then 'Paused'
   elseif Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) and Workshop.starLevel(data(p),'autosell')==0 then 'BagFull'
   elseif working and p.shiftSquare==square and now<(p.shiftUntil or 0) then 'Surge'
+  elseif scene.shiftReady(p) then 'SurgeReady'
   elseif p.compactor and now<(p.compactor.pressUntil or 0) then 'Pressing'
   elseif p.pinOreOutOfReach==square then 'LooseOre'
   elseif cuttingPair>=2 then 'PairCut'
@@ -9660,9 +9673,9 @@ local function serviceDeliveries(p: any)
     end
     if scene.runStart then
      local proceeds=result.quartz>0 and (' · +'..result.quartz..' Quartz') or ''
-     if p.miningSquare and (p.shiftSeconds or 0)>0 then
-      p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
-      proceeds..=' · Crew surge'
+     if (p.shiftSeconds or 0)>0 then
+      p.shiftReadyRun=result.runId
+      proceeds..=' · Surge ready'
      end
      notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Emptier sold '..result.units..' cargo'..proceeds)
     end
@@ -9795,7 +9808,7 @@ local function executePrestige(p: any,pl: any,payload: any)
  end
  transact(p,'prestige:'..payload.txId,applyPrestige,function(result)
   for _,field in ipairs(patches) do local u=field.e.users[pl.UserId];if u then R.removeUser(field.e,pl.UserId,u.runId) end end
-  p.oreQueue={};p.workField=nil;scene.clearSquare(p)
+  p.oreQueue={};p.workField=nil;p.shiftReadyRun=nil;scene.clearSquare(p)
   p.testFleet=nil
   RoleEffects.ClearAbility(pl.UserId);rebuildFleet(p);logistics:refresh(p);scene.applyWalkSpeed(p)
   p.player:SetAttribute('MA_DroneReward',Http:JSONEncode(result))

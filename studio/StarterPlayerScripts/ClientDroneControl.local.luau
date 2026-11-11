@@ -75,6 +75,9 @@ W.CATALOG={
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_AFTERSHOCK'}
 W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
+function W.shiftDescription(seconds)
+ return 'Emptier sale primes your next cut.\n+50% damage for '..seconds..'s.'
+end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -7266,7 +7269,8 @@ function CardView.summary(choice)
  add('denserPacking','Pack '..(e.denserPacking or 0)..' more rocks in each full block.')
  add('cargoRack','+'..(e.cargoRack or 0)..' cargo mount on each Emptier.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
- add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
+ local shift=(e.shiftRelay or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.shiftRelay or 0)
+ add('shiftRelay',Workshop.shiftDescription(shift))
  add('orbitalLaser','Call an orbital strike on the biggest rock')
  add('scrapSwarm','Deploy tiny miners for 10 seconds')
  add('plotAuto','Drones choose stones for you')
@@ -8145,7 +8149,7 @@ function V.effect(c)
  if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
- if e.shiftRelay then table.insert(parts,'Emptier sales boost pin damage 50% for '..e.shiftRelay..'s') end
+ if e.shiftRelay then table.insert(parts,Workshop.shiftDescription(e.shiftRelay)) end
  if e.earlyDrop then table.insert(parts,(Workshop.LOOSE_SEAMS_TEXT:gsub('\n',' '))) end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
@@ -8199,7 +8203,8 @@ function V.render(U,parent,options)
   local copyWidth=width-(narrow and 76 or 228)
   local hardware=Workshop.isHardware(c)
   label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
-  label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),15,false)
+  local effectSize=narrow and c.effects.shiftRelay and 13 or 15
+  label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),effectSize,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
    UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)
   local cost=row.next and ('Add stack · '..row.cost..' Quartz') or (hardware and 'Installed' or 'Maxed')
