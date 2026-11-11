@@ -82,6 +82,7 @@ function IM:GetAttribute(k) return self._attrs[k] end
 function IM:GetAttributeChangedSignal(k) self._signals[k]=self._signals[k] or signal();return self._signals[k] end
 function IM:IsDescendantOf(other) local p=self.Parent;while p do if p==other then return true end;p=p.Parent end;return false end
 function IM:Destroy() self.Destroying:Fire();for _,c in ipairs(self:GetChildren()) do c:Destroy() end;self.Parent=nil;self._destroyed=true end
+function IM:GetScale() return self._scale or 1 end
 function IM:GetPivot() return self.PrimaryPart and self.PrimaryPart.CFrame or self.CFrame end
 function IM:PivotTo(cf)
  local delta=cf*self:GetPivot():Inverse()

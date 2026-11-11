@@ -4,7 +4,6 @@ local View={}
 local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
 local PRISM_RED=Color3.fromRGB(249,22,60)
-local PRISM_HOT=Color3.fromRGB(255,105,101)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
@@ -38,10 +37,11 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Color=ColorSequence.new(WHITE,color);sparks.LightInfluence=0;sparks.LightEmission=.8
- sparks.Lifetime=NumberRange.new(.07,ball and .27 or .16)
- sparks.Speed=NumberRange.new(impact and 8 or 6,(ball and 16 or 24)*grade);sparks.Drag=ball and 7 or 10
- sparks.Size=NumberSequence.new((ball and .21 or .13)*grade,0);sparks.Transparency=NumberSequence.new(.08,1)
- sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 9 or 5)*grade) or (impact and 5 or 3))
+ sparks.Lifetime=NumberRange.new(.12,ball and .56 or .34)
+ sparks.Speed=NumberRange.new(impact and 9 or 6,(ball and 19 or 24)*grade);sparks.Drag=ball and 3.8 or 5.6
+ sparks.Acceleration=Vector3.new(0,-5,0)
+ sparks.Size=NumberSequence.new((ball and .28 or .16)*grade,0);sparks.Transparency=NumberSequence.new(.04,1)
+ sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 14 or 7)*grade) or (impact and 8 or 4))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
  local ring=ball and PlaneBurst.create(node,color) or nil
@@ -50,7 +50,7 @@ end
 local function stepBursts(self,now)
  for i=#self.bursts,1,-1 do
   local b=self.bursts[i];local age=math.max(0,now-b.at)
-  if age>=.30 or not b.node.Parent or BeamVFX.reduced() then
+  if age>=.61 or not b.node.Parent or BeamVFX.reduced() then
    b.node:Destroy();table.remove(self.bursts,i)
   else
    local flash=math.clamp(1-age/(b.ball and .095 or .062),0,1)
@@ -133,7 +133,6 @@ function View.new(audio)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
        if not reduced then
-        RoleVisuals.Beam(origin,point,PRISM_HOT,.92,.23,'Prism')
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
          node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
        end

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — review the recorded gameplay
+
+Keep the camera level and reduce the break shake. Make final rock particles visible during ordinary gameplay and strengthen the effects on charge, contact and reward. Give Orbital visible fallout after the beam ends. Bring the regular and specialist drone bodies to roughly the same size. Compare Ramiel's main attack against timestamped frames of the moving reference and reproduce the changes in speed and direction through the full windup.
+
 ## November 11 follow-up — rock impact and Ramiel’s main shot
 
 Give the final rock break a brief pause, screen shake, and a distinctive sound with shiny twinkles. Use moving footage to match Ramiel’s main red beam attack. This supersedes the earlier opening panels and silent split.

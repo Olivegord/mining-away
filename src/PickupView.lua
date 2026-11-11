@@ -266,7 +266,7 @@ function V:update(dt,now)
    local settledAge=age-(r.landAge or 0)
    local gleam=settledAge<.38 and twinkle(settledAge,0,.38)
     or twinkle((settledAge+.42+r.seed*.61)%3.8,0,.28)*.65
-   local launched=live and r.finishing and displayAt>=r.born and age<.46
+   local launched=live and r.finishing and displayAt>=r.born and age<.60
    local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
     and gleam*distanceFade*opacity or 0
    if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
@@ -279,11 +279,11 @@ function V:update(dt,now)
      r.idle.inner.BackgroundTransparency=1-.81*shine
      local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
      local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
-     local width=launched and 2.2 or 1.45
+     local width=launched and 2.65 or 1.65
      r.idle.halo.Size=UDim2.fromScale(width,width)
      for i,star in ipairs(r.idle.stars) do
-      local pulse=launched and twinkle(age,.035+(i-1)*.078,.19)
-       or twinkle(settledAge,.03+(i-1)*.087,.21)*.75
+      local pulse=launched and twinkle(age,.035+(i-1)*.098,.24)
+       or twinkle(settledAge,.03+(i-1)*.087,.24)*.82
       local size=(i==1 and .77 or .46)*(.48+pulse*.52)
       star.Size=UDim2.fromScale(size,size)
       star.ImageTransparency=1-pulse*sparkleStrength

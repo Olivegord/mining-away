@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e2be9561bd7a55f4ade9cfd7b60ed24bfbfaaf092900b60fc9ed6e2f5f653658` | Includes the hit stop, break audio, gem twinkles and Ramiel main attack. |
+| Native-file SHA-256 | `3d20946bb8496143f681c02cafdb2d911b0e415ea55cdb142b2cff8690980725` | Includes the recording follow-up for mining effects, the camera, Ramiel, Orbital and drone sizes. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the hit stop and Ramiel main attack** | All seven Sources and three roots verified in Edit. Team Create save returned version 187. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the recording follow-up** | All seven Sources and three roots verified in Edit. Team Create save returned version 189. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — revise the effects after the gameplay recording
+
+The nearby owner's break shake is a short translation with no rotation. Eight bright shards and a separate sparks-and-dust emitter rise clear of the breaking crystal. Cutter, projectile, gem and compactor cues are easier to see. Orbital has descending rings, a brighter ground impact and separate airborne fallout. Ramiel's outer glass opens, folds and opens again on sampled reference timing. The front aperture turns independently and the core brightens late, before one red beam. Its usual 1.60-second windup fits inside the existing 2.80-second cycle. Client idle hulls use a common 2.65-stud span and the Compactor retains the authoritative intake dock. [Gameplay and frame review](review/CRYSTAL_RUN_PAYOFF.md#gameplay-recording-follow-up)
+
+The one short Studio Play run exercised mining and confirmed Ramiel and Orbital hits. The desktop was locked and did not render the animation or return a review video. Detached native components verified the Ramiel reversals and recovery, 19 fitted roles, a maximum 0.137-stud camera offset with zero rotation, eight airborne shards, and separate orbital ground and column fallout with a four-second maximum particle lifetime. The pickup, rock damage, beam and workshop suites passed. The gadget suite still stops at the existing client-inertia fixture after passing the crystal contact clock. The final rendered look, sound mix and multiplayer remain unverified.
+
+Script Sync matched all seven Sources in the three connected roots in shared Edit, place **124078027733625**, universe **10774898335**. Team Create save **189** succeeded. Studio is in Edit and no player release was published. Reproduce from `b700519` by applying the Source changes, running `python3 tools/script_sync.py`, then running `python3 tools/build.py --previous-commit b700519` against the baseline native file. The refresh preserved the authored map and all unrelated and backup Sources.
 
 ## November 11 — give the split a hit stop and match Ramiel’s main beam
 

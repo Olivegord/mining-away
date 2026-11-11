@@ -152,10 +152,10 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
   fx.impact.Texture=SPARK;fx.impact.Squash=NumberSequence.new(.55)
   fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
-  fx.impact.Lifetime=NumberRange.new(.85,1.35);fx.impact.Speed=NumberRange.new(7,12)
-  fx.impact.Drag=10;fx.impact.Acceleration=Vector3.new(0,-.6,0);fx.impact.SpreadAngle=Vector2.new(80,80)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.12,.02),NumberSequenceKeypoint.new(.06,.16,.02),NumberSequenceKeypoint.new(1,0)})
-  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.2),NumberSequenceKeypoint.new(.7,.45),NumberSequenceKeypoint.new(1,1)})
+  fx.impact.Lifetime=NumberRange.new(.45,.85);fx.impact.Speed=NumberRange.new(8,15)
+  fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.25,.04),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.58,.35),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -201,17 +201,17 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
- fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-.6,0)
- fx.impact.Drag=resonance and 9 or 10
- fx.impact.Rate=continuous and (resonance and 7 or 9) or 0;fx.impact.Enabled=working and continuous
+ fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
+ fx.impact.Drag=resonance and 5 or 4
+ fx.impact.Rate=continuous and (resonance and 9 or 12) or 0;fx.impact.Enabled=working and continuous
+ if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.impact:Emit(12);fx.sparks:Emit(5)
+   fx.impact:Emit(15);fx.sparks:Emit(5)
   end
  end
  if point and normal then
-  beam.marker.CFrame=facing(point+normal*.2,normal)
   if fx.contact then
    fx.contact.CFrame=CFrame.new(point+normal*.05)
    fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse)
@@ -370,7 +370,8 @@ function W:courier(drone,record,now)
  if busy then fx.lastAt=now end
  local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
  local reduced=BeamVFX.reduced()
- local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
+ local mountScale=drone.view:GetScale()/.94
+ local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local backpack=(state=='Pickup' or state=='Launch') and backpackPosition(source)
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
@@ -396,7 +397,7 @@ function W:courier(drone,record,now)
   local t=progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
  end
- pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
+ pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and slots==0 and .7 or 0,q,0,GOLD)
  if pickup then
@@ -444,7 +445,7 @@ function W:courier(drone,record,now)
     slot={tray=tray};fx.mounts[i]=slot
    end
    local side=i%2==1 and -1 or 1
-   local frame=pivot*CFrame.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)
+   local frame=pivot*CFrame.new(Vector3.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)*mountScale)
    slot.tray.CFrame=frame;slot.tray.Transparency=0
    if i<=parcelUnits then
     local material=fx.load[i] or ''

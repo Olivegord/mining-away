@@ -1031,11 +1031,12 @@ function P:kick(position,strength,now)
 end
 function P:crystalKick(position,strength,now)
  local camera=workspace.CurrentCamera
- if not camera or now-(self.crystalShakeAt or -math.huge)<.21 then return end
+ if not camera or now-(self.crystalShakeAt or -math.huge)<.24 then return end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
- local amount=math.clamp((50-distance)/40,0,1)^1.3*math.clamp(strength,1,1.3)
+ local distance=math.max(((root and root.Position or camera.CFrame.Position)-position).Magnitude,
+  (camera.CFrame.Position-position).Magnitude)
+ local amount=math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
@@ -1045,11 +1046,11 @@ function P:cameraOffset(now)
  local strength=(self.shakeStrength or 0)*envelope
  local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
  local impactAge=now-(self.crystalShakeAt or -100)
- if impactAge<0 or impactAge>=.31 then return ordinary end
- local recoil=self.crystalShakeAmount*math.cos(impactAge*31)*(1-impactAge/.31)^2
+ if impactAge<0 or impactAge>=.22 then return ordinary end
+ local t=impactAge/.22
+ local recoil=self.crystalShakeAmount*math.min(t*10,1)*(1-t)^2*math.cos(t*4.8)
  local side=self.crystalShakeSide
- return ordinary*CFrame.new(side*.37*recoil,-.29*recoil,.16*recoil)
-  *CFrame.Angles(-.045*recoil,side*.011*recoil,side*.026*recoil)
+ return ordinary*CFrame.new(side*.17*recoil,-.075*recoil,.075*recoil)
 end
 function P:update(_dt,now)
  if self.closed then return end

@@ -20,7 +20,9 @@ resource_render = client[client.index('local function renderResource(r,now)'):cl
 crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  local dirty=r.dirty'):client.index(' selectorView:updateHealing(now)')]
 crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
-local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end}
+local splitParticles=0
+local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end,
+ ImpactParticles=function(_,_,_,kind) if kind=='CrystalBreak' then splitParticles+=1 end end}
 local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
 local NumberSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
 function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end

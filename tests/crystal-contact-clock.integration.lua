@@ -56,16 +56,16 @@ local held=r.view.Size
 crystalFrame(resources,103.205)
 assert(r.view.Transparency==0 and held.Y<height*.8 and (r.view.Size-held).Magnitude<1e-6 and not r.visual.broken,
  'the compressed rock moved during the hold')
-assert(#audio==8 and #cameraKicks==0,'release cues ran during the hold')
+assert(#audio==8 and #cameraKicks==0 and splitParticles==0,'release cues ran during the hold')
 crystalFrame(resources,103.23)
 assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==10 and #cues==1,
  'split failed to play its two layers once')
-assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and #cameraKicks==1 and cameraKicks[1]==103.23)
+assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and #cameraKicks==1 and cameraKicks[1]==103.23 and splitParticles==1)
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}
 late.view.Parent=fx
 crystalFrame({late},103.08)
-assert(late.view.Transparency==1 and #audio==10 and #cues==1 and #cameraKicks==1,'a late observer replayed a prior hit')
+assert(late.view.Transparency==1 and #audio==10 and #cues==1 and #cameraKicks==1 and splitParticles==1,'a late observer replayed a prior hit')
 
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()
@@ -99,7 +99,7 @@ local fresh=receipt('late',110.33,'Dart');fresh:SetAttribute('ContactAt',110.59)
 roleFolder.ChildAdded:Fire(fresh)
 observer:step(110.60,drones,targets)
 assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
-observer:step(110.94,drones,targets)
+observer:step(111.22,drones,targets)
 assert(#shotAudio==4 and not observer.records[node].after and observer.trails==0 and observer.heads==0 and #observer.bursts==0,'contact replayed or shot visuals leaked')
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

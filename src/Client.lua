@@ -23,7 +23,7 @@ rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,s
  presentation:crystalKick(position,strength,now)
 end)
 local previousShake=CFrame.new();local shakeCamera=nil
-local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
+local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
@@ -53,12 +53,8 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
      elseif part:IsA('ParticleEmitter') then part.Enabled=active end
     end
    end
-   if active and now>=burnShakeAt then
-    presentation:kick(source:GetAttribute('Position') or Vector3.zero,.13,now)
-   end
   end
  end
- if now>=burnShakeAt then burnShakeAt=now+.075 end
  if camera and not CrystalImpactView.reducedMotion() then
   previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
@@ -80,7 +76,12 @@ local function roleImpact(source)
   for _,part in ipairs(source:GetDescendants()) do track(part) end
   record.connection=source.DescendantAdded:Connect(track)
   orbitalBurns[source]=record
-  if AudioFeedback.fresh(source:GetAttribute('StartedAt'),workspace:GetServerTimeNow(),.35) then soundscape:play('orbital',source:GetAttribute('Position')) end
+  local now=workspace:GetServerTimeNow()
+  local position=source:GetAttribute('Position')
+  if position and AudioFeedback.fresh(source:GetAttribute('StartedAt'),now,.35) then
+   soundscape:play('orbital',position)
+   if not CrystalImpactView.reducedMotion() then presentation:crystalKick(position,.85,now) end
+  end
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
@@ -866,11 +867,8 @@ local function registerDrone(source)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
- local fieldRole=role=='Needler' or role=='Ballcaster' or role=='Vacuum' or role=='Dart' or role=='Compactor'
- local swarm=DroneConfig.Swarm
- local scale=if referenceMiner then swarm.MinerViewScale elseif fieldRole then swarm.FieldViewScale else swarm.FleetViewScale
- clone:ScaleTo(clone:GetScale()*scale)
  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
+ DroneConfig.fitBody(clone)
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
@@ -1196,28 +1194,47 @@ local function renderDrone(d,dt,now)
   local near=BeamVFX.near(d.pos,120)
   d.ramielNeutral=not near
   local shot=near and d.shotReceipt
-  local charge,release,aim=0,0,nil
+  local charge,recovery,aim=0,nil,nil
   local reduced=CrystalImpactView.reducedMotion()
   if shot and shot.Parent and not motionPaused and (s:GetAttribute('HP') or 0)>0 then
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
    local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=shot:GetAttribute('Windup') or .9
-   if age>=0 and age<windup+.52 then
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.6)
+   local contactAt=shot:GetAttribute('ContactAt')
+   local fireAge=contactAt and now-contactAt or age-windup-(shot:GetAttribute('Duration') or .06)
+   if age>=0 and fireAge<DroneConfig.RamielRecovery then
     aim=shot:GetAttribute('Position')
-    charge=age<windup and math.clamp(age/windup,0,1) or 0
-    release=age>=windup and 1-math.clamp((age-windup)/.52,0,1) or 0
+    charge=math.clamp(age/windup,0,1)
+    recovery=fireAge>=0 and fireAge or nil
    end
   end
-  DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,release,reduced and 0 or now*.38%6.283)
+  local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,reduced and 0 or now*.38%6.283,reduced)
+  if aim and energy>.10 and not reduced and not BeamVFX.reduced() then
+   local ring=d.ramiel.rings
+   if not ring then
+    ring={PlaneBurst.create(d.ramiel.core,Color3.fromRGB(106,129,255)),
+     PlaneBurst.create(d.ramiel.core,Color3.fromRGB(206,142,255))}
+    d.ramiel.rings=ring
+   end
+   local pulse=(now*2.1)%1
+   local alpha=math.clamp(energy*1.7,0,.82)
+   PlaneBurst.pose(ring[1],Vector3.zAxis,(1.05+.74*pulse)*d.ramiel.scale,alpha*(1-pulse),.095)
+   PlaneBurst.pose(ring[2],Vector3.zAxis,(1.30+.35*pulse)*d.ramiel.scale,alpha*.65,.055)
+  elseif d.ramiel.rings then
+   for _,ring in ipairs(d.ramiel.rings) do PlaneBurst.destroy(ring) end
+   d.ramiel.rings=nil
+  end
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
   if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
    d.pressSoundAt=at;soundscape:play('metal_land',d.emitter.Position,{pitch=.84,level=.68})
+   presentation.work:burst(d.emitter.Position-Vector3.yAxis*.48,Vector3.yAxis,Color3.fromRGB(255,198,118),12,now)
   end
   if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then
    d.pressEjectAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
+   presentation.work:burst(d.emitter.Position,Vector3.yAxis,Color3.fromRGB(255,228,164),7,now)
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0

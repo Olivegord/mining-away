@@ -66,7 +66,7 @@ function V.new(parent,audio,onSplit)
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
   local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)
-  local point=Vector3.new(frame.Position.X,ground+math.max(.52,v.Size.Y*.34),frame.Position.Z)
+  local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
   local player=Players.LocalPlayer
@@ -79,19 +79,31 @@ function V.new(parent,audio,onSplit)
   if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
    if #self.pieces>=46 then break end
-   local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .32 or .09))
+   local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .58 or .27))
    wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(6.4+strength)+Vector3.yAxis*(3.9+strength),.47,ground,Vector3.new(side*.7,side*.5,side*.2))
+   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.57,ground,Vector3.new(side*.7,side*.5,side*.2))
   end
   if not reduced then
    if RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.55,strength*5.6,.43)
+    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.68),strength*.55,strength*6.6,.58)
+    RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(WARM,.59),strength*.83,'CrystalBreak')
    end
-   self:chips(now,point,frame.LookVector,r.baseColor:Lerp(WARM,.30),4,false,nil,ground)
-   self:chips(now,point,-frame.LookVector,r.baseColor:Lerp(WARM,.12),3,false,nil,ground)
+   for i=1,8 do
+    if #self.pieces>=48 then break end
+    local theta=i*2.399963+now%3
+    local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
+    local chip=part(parent,'WedgePart','CrystalBreakPiece',r.baseColor:Lerp(HOT,.60+.055*(i%4)))
+    local size=strength*(.11+.052*(i%4))
+    chip.Size=Vector3.new(size*.55,size*2.1,size)
+    chip.Material=i%3==0 and Enum.Material.Neon or Enum.Material.Glass
+    local origin=point+direction*.22
+    chip.Position=origin
+    track(chip,now,origin,direction*(7+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
+     .53+.057*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49))
+   end
    if #self.pieces<48 then
     local spark=part(parent,'Part','CrystalSplitSpark',r.baseColor:Lerp(WARM,.77))
     spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
@@ -192,7 +204,7 @@ function V.new(parent,audio,onSplit)
    else
     r.lastBreakAt=breakAt
     if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
-    if now-release<.18 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now) end
+    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now) end
     v.Transparency=1;self:forget(r)
    end
    return
