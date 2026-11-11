@@ -81,13 +81,19 @@ do
  field.e.phase='Safe';patches[field.id]=field
  runner.Character:PivotTo(CFrame.new(pin+Vector3.yAxis*3))
  advance(10)
- for _,x in ipairs({-4,4}) do
-  local crystal=makeResource(field,bed.Position+Vector3.new(x,0,0),'Crystal',75,10,3,3)
-  crystal.readyAt=now
- end
  local run=data(crew).run
  command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=run.id,fieldId=field.id,position=pin})
  assert(crew.miningSquare and crew.compactor)
+ assert(runner:GetAttribute('MA_SelectorStatus')=='NoCrystals')
+ local emptier=crew.drones[8]
+ droneStep(emptier,C.Tick)
+ assert(emptier.state=='Follow' and (emptier.intentGoal-Feel.followGoal(characterRoot(crew).Position,8,#crew.drones,now,emptier.owned.base.maxStep60)).Magnitude<.001)
+ for _,x in ipairs({-4,4}) do
+  local crystal=makeResource(field,bed.Position+Vector3.new(x,0,0),'Crystal',75,10,3,3)
+  crystal.readyAt=now+1
+ end
+ scene.publishSquareStatus(crew)
+ assert(runner:GetAttribute('MA_SelectorStatus')=='Growing')
  local sent,bagStarted
  for _=1,math.ceil(15/C.Tick) do
   advance(C.Tick)
@@ -99,6 +105,8 @@ do
  local cargo=Workshop.cargoKey('Quartz',10)
  assert(manifest.cargo[cargo]==2 and not crew.compactor.pressInputs,'the press took reachable starter ore')
  assert(bagStarted and now-bagStarted<Workshop.EMPTIER_WAIT,'shipment used the normal partial-load timeout')
+ scene.publishSquareStatus(crew)
+ assert(runner:GetAttribute('MA_SelectorStatus')=='Hauling')
  advance(18)
  assert(data(crew).run.wallet.Quartz==Workshop.PACK_BASE and not next(data(crew).run.deliveries))
  assert(runner:GetAttribute('MA_Notice')=='+20 Quartz · Pack Counter ready')

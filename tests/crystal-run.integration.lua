@@ -54,7 +54,7 @@ other.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
 command.OnServerEvent:Fire(other,'PlaceSelector',{runId=data(rival).run.id,fieldId=f.id,position=Vector3.new(-10,5.5,-68)})
 droneStep(rival.drones[1],C.Tick)
 assert(rival.miningSquare and not rival.drones[1].target,'overlapping selector stole another crew’s reservation')
-scene.publishSquareStatus(rival);assert(other:GetAttribute('MA_SelectorStatus')=='Waiting')
+scene.publishSquareStatus(rival);assert(other:GetAttribute('MA_SelectorStatus')=='Claimed')
 players.PlayerRemoving:Fire(other)
 pin(13.3);assert(p.miningSquare.center.X==14)
 assert(pl:GetAttribute('MA_SelectorStatus')=='FinishingCut' and pl:GetAttribute('MA_SelectorWorking')==false)
@@ -409,6 +409,26 @@ do
 end
 for id,drop in pairs(pickups) do
  if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end
+end
+do
+ local square={field=f,center=f.center,half=15}
+ testCrew.miningSquare=square
+ local position=f.center+Vector3.new(0,.7,0)
+ local part=World.part(pickupFolder,'PackedOreForPickup',position,Vector3.one,Color3.new(1,1,1))
+ pickups[-2]={part=part,owner=tester.UserId,runId=data(testCrew).run.id,material=Workshop.cargoKey('Quartz',20,true),
+  units=1,raw=true,compacted=true,fieldPart=bed,spawnAt=now,age=1,x=position.X,y=position.Y,z=position.Z,
+  vx=0,vy=0,vz=0,floor=position.Y,landed=true,firstLandedAge=.65}
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(68,2,0)))
+ pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
+ assert(tester:GetAttribute('MA_SelectorStatus')=='LooseOre' and not testCrew.vacuumTarget)
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(11,2,0)))
+ pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
+ assert(pickups[-2].homing and not testCrew.vacuumTarget,'Vacuum intercepted ore already on its way to the bag')
+ assert(tester:GetAttribute('MA_SelectorStatus')~='LooseOre','pickup hint survived after the player reached the ore')
+ part:Destroy();pickups[-2]=nil
+ scene.clearSquare(testCrew)
+ tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
+ print('PASS settled cargo beyond the Vacuum prompts a walk; reachable ore goes straight to the backpack')
 end
 local dropPosition=characterRoot(testCrew).Position+Vector3.new(40,-2,0)
 local dropPart=World.part(pickupFolder,'VacuumTest',dropPosition,Vector3.one,Color3.new(1,1,1))

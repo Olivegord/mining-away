@@ -19,3 +19,15 @@ a=HUD.activity(folder,1);assert(a.assigned==9,'short recovery/regrowth must reta
 first:SetAttribute('AutoFieldId',0);a=HUD.activity(folder,1);assert(a.assigned==8,'a recalled worker must leave assigned count')
 dead:SetAttribute('HP',80);a=HUD.activity(folder,1);assert(a.miners==10 and a.assigned==8,'reprinting must not invent an order')
 print('PASS HUD classifies nine miners independently of six support, other owners, windup, specials, recovery and reprints')
+
+local profile={nextPackPrice=20,run={packIndex=0,wallet={Quartz=19}}}
+assert(HUD.packHint(profile)==nil)
+profile.run.wallet.Quartz=20
+assert(HUD.packHint(profile)=='Visit the Pack Counter')
+profile.run.packIndex=1;profile.run.pendingOffer={opened=false}
+assert(HUD.packHint(profile)=='Open pack at counter')
+profile.run.pendingOffer.opened=true
+assert(HUD.packHint(profile)=='Pick a card at counter')
+profile.run.pendingOffer=nil
+assert(HUD.packHint(profile)==nil)
+print('PASS Pack Counter hint follows affordability and the saved crate state')

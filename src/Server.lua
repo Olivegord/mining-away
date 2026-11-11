@@ -858,7 +858,7 @@ local function pickupStep(dt)
  end
  local activePresses={}
  for _,p in pairs(profiles) do
-  p.uncollectedOre=0
+  p.pinOreOutOfReach=nil
   if p.vacuum then p.vacuumTarget=nil;p.vacuumDistance=math.huge end
   local press=p.compactor
   if not press then continue end
@@ -934,27 +934,29 @@ local function pickupStep(dt)
    local from=Vector3.new(drop.x,drop.y,drop.z)
    local hr=characterRoot(p);local target=hr and hr.Position or from
    local naturalReach=(drop.raw and (p.cargoReach or 13) or p.magnetRange)+(drop.reachBonus or 0)
-   if (target-from).Magnitude>naturalReach then p.uncollectedOre+=drop.units end
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
    local vacuum=p.vacuum
    local press=p.compactor
-   local pressing=p.compactorTarget and p.compactorTarget.id==id
+   local assignedToPress=p.compactorTarget and p.compactorTarget.id==id
+   local pressing=assignedToPress
     and (press.pressDock or (press.pos-p.compactorTarget.position).Magnitude<1.1)
    local socket=pressing and #(press.pressInputs or {})+1
    local relay=now<(drop.relayUntil or 0)
    local vacuuming=false
+   local vacuumApproaching=false
    local reach=relay and math.max(p.vacuumReach+12,naturalReach) or naturalReach
    if pressing then
     target=scene.pressSocket(press,socket);reach=13
    elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
-    if distance>naturalReach-4 and distance<=p.vacuumReach then
+    if distance<=p.vacuumReach and (distance>naturalReach or not scene.orePullClear(drop,from,target,hr.Parent)) then
      local intake=vacuum.pos-Vector3.new(0,.7,0)
      local gap=(intake-from).Magnitude
      if gap<p.vacuumDistance or (gap==p.vacuumDistance and id<p.vacuumTarget.id) then
       p.vacuumDistance=gap;p.vacuumTarget={position=Vector3.new(from.X,drop.floor+3.2,from.Z),id=id}
      end
-     if gap<=13 then target=intake;reach=13;vacuuming=true end
+     if gap<=13 then target=intake;reach=13;vacuuming=true
+     else vacuumApproaching=true end
     end
    end
    local canCollect=(pressing or hasSpace) and (target-from).Magnitude<=reach
@@ -962,6 +964,12 @@ local function pickupStep(dt)
    if canCollect then
     canCollect=scene.orePullClear(drop,from,target,targetModel)
     if pressing and not canCollect then drop.pressBlockedUntil=now+2 end
+   end
+   local square=p.miningSquare
+   if not p.pinOreOutOfReach and square and drop.raw and drop.fieldPart==square.field.part
+    and drop.landed and drop.age>=OreDrops.SCATTER_TIME and hasSpace and not canCollect and not assignedToPress and not vacuumApproaching
+    and math.abs(from.X-square.center.X)<=square.half+8 and math.abs(from.Z-square.center.Z)<=square.half+8 then
+    p.pinOreOutOfReach=square
    end
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
    if groundSpeed and groundSpeed>1 then
@@ -1340,6 +1348,26 @@ function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
 end
+function scene.idleSquareStatus(p,square)
+ local growing,claimed=false,false
+ for _,r in ipairs(square.field.resources) do
+  if r.paid or r.hp<=0 or not r.part.Parent or not Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then continue end
+  if now<r.readyAt then
+   growing=true
+  else
+   local foreign=false
+   for id in pairs(r.slots) do
+    local worker=drones[id]
+    if worker and worker.owner~=p.player.UserId then foreign=true;break end
+   end
+   if not foreign then return 'Waiting' end
+   claimed=true
+  end
+ end
+ if growing then return 'Growing' end
+ if claimed then return 'Claimed' end
+ return 'NoCrystals'
+end
 -- Project the current jobs onto one player-facing status. This never grants
 -- work or takes a reservation, and bag capacity is only a pickup concern.
 function scene.publishSquareStatus(p)
@@ -1360,13 +1388,15 @@ function scene.publishSquareStatus(p)
   elseif Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) and Workshop.starLevel(data(p),'autosell')==0 then 'BagFull'
   elseif working and p.shiftSquare==square and now<(p.shiftUntil or 0) then 'Surge'
   elseif p.compactor and now<(p.compactor.pressUntil or 0) then 'Pressing'
-  elseif (p.uncollectedOre or 0)>=20 and not p.vacuum then 'LooseOre'
+  elseif p.pinOreOutOfReach==square then 'LooseOre'
   elseif working then 'Working'
   elseif finishing then 'FinishingCut'
   elseif moving then 'Moving'
   elseif available==0 then 'NoMiners'
   elseif recharging==available then 'Recharging'
-  else 'Waiting'
+  elseif next(data(p).run.deliveries) then 'Hauling'
+  elseif p.vacuumTarget then 'Gathering'
+  else scene.idleSquareStatus(p,square)
  if p.player:GetAttribute('MA_SelectorStatus')~=status then p.player:SetAttribute('MA_SelectorStatus',status) end
  if p.player:GetAttribute('MA_SelectorWorking')~=working then p.player:SetAttribute('MA_SelectorWorking',working) end
 end
@@ -2047,7 +2077,7 @@ local function droneStep(d: any,dt: number)
   else
    d.pickupAt=nil;d.deliveryRequested=false
    d.state='Follow'
-   if scene.holdSquare(d,p,dt) then return end
+   if not scene.runStart and scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
   end
   return

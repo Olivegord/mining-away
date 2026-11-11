@@ -11,18 +11,28 @@ Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f218552b304d2c619006c5ef8b57d1ec8882759754f0d6f9d531be58d07b1be9` | Deep-field projectile roles, first draft and depot route sign. |
+| Native-file SHA-256 | `59d43f8f1941105fab5fb3191aad16f6e6727f78397c4dbeeeac4ed713612151` | Pin, pickup and hauling status pass. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the projectile roles, first draft and depot route sign** | All seven Sources and three roots verified in Edit. Team Create save returned version 128. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the pin, pickup and hauling pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 129. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 10 — pin, pickup and hauling feedback
+
+The existing command row distinguishes empty pins, growing deposits and rocks held by another crew. It also shows when an Emptier is taking ore to the Workshop, when Vacuum is gathering, and when settled ore at the active pin needs the player to move closer. The first pack and any pending paid pack use that same row when no pin is active.
+
+Empty Emptiers stay with the backpack during Crystal Run. Settled ore in pickup range with a clear path goes straight into the backpack. Vacuum still relays cargo beyond direct reach, and a full bag still leaves cargo on the ground while mining continues.
+
+Workshop, Crystal Run, pickup and committed-flight checks passed with API or storage doubles. The tests covered a rival's reserved crystal, empty and growing pins, an empty Emptier following the owner, out-of-reach ore, direct pickup, the first hauling trip and the saved crate states. A detached native check ran the current HUD layout in Studio Edit. The longest mining status measured 121 px in its 144 px slot at a 360 px phone width. Live viewport interaction, multiplayer and enjoyment remain unverified.
+
+Studio was already open in the normal shared entry point at place **124078027733625**, universe **10774898335**. All seven Source fingerprints and three roots matched in Edit, with five zones, fifteen plots and the depot sign present. Team Create returned save version **129**. Studio stayed in Edit and no player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit df3f12e`. The native refresh preserved the map and all unrelated or backup Sources.
 
 ## November 10 — projectile jobs, first draft and depot sign
 

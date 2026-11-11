@@ -92,7 +92,9 @@ local mineralColors={Color3.fromRGB(180,225,213),Color3.fromRGB(246,112,143),Col
 local selectorText={
  Working='Mining at pin', FinishingCut='Finishing prior cut', Moving='Miners on the way',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
- BagFull='Backpack full', LooseOre='Gather loose ore', Pressing='Compactor pressing', Surge='Crew surge · +50%',
+ BagFull='Backpack full', LooseOre='Move closer to ore', Pressing='Compactor pressing', Surge='Crew surge · +50%',
+ Growing='Crystals growing', Claimed='Other crew mining', NoCrystals='Move pin to crystals',
+ Hauling='Hauling to Workshop', Gathering='Vacuum gathering',
 }
 local function compact(value)
  if value>=1e9 then return string.format('%.1fB',value/1e9) elseif value>=1e6 then return string.format('%.1fM',value/1e6) elseif value>=10000 then return string.format('%.1fk',value/1000) end
@@ -165,8 +167,20 @@ function HUD.activity(folder,ownerId)
  return a
 end
 
+function HUD.packHint(profile: any): string?
+ local run=profile and profile.run
+ if not run then return nil end
+ local offer=run.pendingOffer
+ if offer then
+  return offer.opened==false and 'Open pack at counter' or 'Pick a card at counter'
+ end
+ if run.packIndex==0 and profile.nextPackPrice and (run.wallet.Quartz or 0)>=profile.nextPackPrice then
+  return 'Visit the Pack Counter'
+ end
+ return nil
+end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
- local r=self.refs;local w,h=view.X,view.Y
+ local r=self.refs;local w=view.X
  local hidden=r.hidden()
  local p=r.profile();local wallet=p and p.run and p.run.wallet or {}
  local width=160;local rowHeight=24;local shown=0
@@ -196,27 +210,27 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local full=backpack>=capacity
  r.cargoText.TextColor3=full and C.gold or C.text
  local working=activity.assigned;local delivering=activity.delivering
- if working>0 or delivering>0 then self.hasWorked=true end
  local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
  local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
- local pinText=pinned and type(status)=='string' and selectorText[status] or nil
+ local packText=not pinned and not fighting and world:GetAttribute('FieldToolsEnabled')==false and HUD.packHint(p) or nil
+ local statusText=pinned and type(status)=='string' and selectorText[status] or packText
  local showRecall=working>0 or delivering>0 or pinned
- self.dock.Visible=not hidden and (showRecall or fighting)
+ local showStatusRow=showRecall or statusText~=nil
+ self.dock.Visible=not hidden and (showStatusRow or fighting)
  local touch=self.input==Enum.UserInputType.Touch or UIS.TouchEnabled
- local actions=(showRecall and 1 or 0)+(fighting and 1 or 0);local buttonHeight=touch and 44 or 24
- local recallWidth=pinText and 84 or width
- local dockWidth=pinText and math.min(w,224) or width
+ local actions=(showStatusRow and 1 or 0)+(fighting and 1 or 0);local buttonHeight=touch and 44 or 24
+ local recallWidth=showRecall and (statusText and 84 or width) or 0
+ local dockWidth=statusText and math.min(w,232) or width
  self.dock.Size=UDim2.fromOffset(dockWidth,actions*buttonHeight)
  self.dock.Position=UDim2.fromOffset(0,sideY+height+24)
- local y=0
- for _,entry in ipairs({{r.recall,showRecall},{r.evade,fighting}}) do
-  entry[1].Visible=entry[2];if entry[2] then entry[1].Position=UDim2.fromOffset(0,y);entry[1].Size=UDim2.fromOffset(entry[1]==r.recall and recallWidth or width,buttonHeight);y+=buttonHeight end
- end
- self.selectorStatus.Visible=pinText~=nil
- self.selectorStatus.Text=pinText or ''
- self.selectorStatus.TextColor3=(status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
- self.selectorStatus.Position=UDim2.fromOffset(recallWidth+4,0)
- self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-recallWidth-4),buttonHeight)
+ r.recall.Visible=showRecall;r.recall.Position=UDim2.fromOffset(0,0);r.recall.Size=UDim2.fromOffset(recallWidth,buttonHeight)
+ r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
+ self.selectorStatus.Visible=statusText~=nil
+ self.selectorStatus.Text=statusText or ''
+ self.selectorStatus.TextColor3=(packText or status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
+ local statusX=showRecall and recallWidth+4 or 0
+ self.selectorStatus.Position=UDim2.fromOffset(statusX,0)
+ self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-statusX),buttonHeight)
  r.recall.Text=touch and 'Recall' or 'Recall [R]';r.evade.Text=touch and 'Evade' or 'Evade [Q]'
  r.unload.Visible=false;r.test.Visible=false;r.context.Visible=false
  r.enemy.Position=UDim2.fromOffset((w-math.min(280,w-24))/2,8);r.enemy.Size=UDim2.fromOffset(math.min(280,w-24),36)
