@@ -21,13 +21,17 @@ dead:SetAttribute('HP',80);a=HUD.activity(folder,1);assert(a.miners==10 and a.as
 print('PASS HUD classifies nine miners independently of six support, other owners, windup, specials, recovery and reprints')
 
 local profile={nextPackPrice=20,run={packIndex=0,wallet={Quartz=19}}}
-assert(HUD.packHint(profile)==nil)
+assert(HUD.nextStationHint(profile)==nil)
 profile.run.wallet.Quartz=20
-assert(HUD.packHint(profile)=='Visit the Pack Counter')
+assert(HUD.nextStationHint(profile)=='Visit the Pack Counter')
 profile.run.packIndex=1;profile.run.pendingOffer={opened=false}
-assert(HUD.packHint(profile)=='Open pack at counter')
+assert(HUD.nextStationHint(profile)=='Open pack at counter')
 profile.run.pendingOffer.opened=true
-assert(HUD.packHint(profile)=='Pick a card at counter')
+assert(HUD.nextStationHint(profile)=='Pick a card at counter')
 profile.run.pendingOffer=nil
-assert(HUD.packHint(profile)==nil)
-print('PASS Pack Counter hint follows affordability and the saved crate state')
+assert(HUD.nextStationHint(profile)==nil)
+profile.prestigePreview={eligible=true}
+assert(HUD.nextStationHint(profile)=='Visit the Prestige beacon')
+profile.run.pendingOffer={opened=false}
+assert(HUD.nextStationHint(profile)=='Open pack at counter')
+print('PASS station hint follows affordability, paid crate state and prestige eligibility')

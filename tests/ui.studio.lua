@@ -72,7 +72,10 @@ return function(_Interface,_CardView,options)
   end
  end
  check(controls>0,'production text controls present')
- local expected=({fleet={'FleetTab','RunTab','NextDrone'},run={'FleetTab','RunTab'},pack={'BuyPack'},prestige={'PrestigeKeep','PrestigeReset','ConfirmPrestige'},offer={'ConfirmCard','CloseOffer'},hud={'Resources','Cargo','SaveStatus'}})[mode]
+ local expected=({fleet={'FleetTab','RunTab','NextDrone'},run={'FleetTab','RunTab'},pack={'BuyPack'},prestige={'PrestigeKeep','PrestigeReset'},offer={'ConfirmCard','CloseOffer'},hud={'Resources','Cargo','SaveStatus'}})[mode]
+ if mode=='prestige' and options.expectPrestigeChoices then
+  for _,name in ipairs({'PrestigeDrone1','PrestigeDrone2','PrestigeDrone3','ConfirmPrestige'}) do table.insert(expected,name) end
+ end
  local searchRoot=(mode=='hud' and root) or (mode=='offer' and sheet) or body
  for _,name in ipairs(expected) do
   local control=searchRoot:FindFirstChild(name,true)

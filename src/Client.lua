@@ -236,6 +236,13 @@ local function layoutModal()
   l.bodyWidth=l.panelWidth-2*l.panelPadding;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
+ if modalMode=='prestige' then
+  l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(490,l.panelHeight)
+  l.headerHeight=l.short and 58 or 64
+  l.bodyWidth=math.max(1,l.panelWidth-2*l.panelPadding)
+  l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
+  l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
+ end
  if modalMode=='offer' then
   l.cardColumns=v.X>=650 and 3 or 1;l.cardGap=l.cardColumns==3 and 10 or 12
   l.panelWidth=math.min(l.cardColumns==3 and 770 or 432,l.panelWidth);l.panelPadding=8;l.bodyWidth=l.panelWidth-16
@@ -269,14 +276,17 @@ local normalSubtitle=''
 local function menu(mode,title,subtitle,icon)
  local entering=not modal.Visible or modalMode~=mode
  modalMode=mode;sheet:SetAttribute('MenuMode',mode);clearBody();local l=layoutModal();modalTitle.Text=title;modalSubtitle.Text=subtitle;normalSubtitle=subtitle
- if mode~='shop' then U.skin(sheet,palette.panel,20);U.skin(close,palette.danger,11) end
+ local prestige=mode=='prestige'
+ if mode~='shop' and not prestige then U.skin(sheet,palette.panel,20);U.skin(close,palette.danger,11) end
  local inOffer=mode=='offer';modal.BackgroundTransparency=inOffer and 1 or .22;sheet.BackgroundTransparency=inOffer and 1 or 0
  local colorful=true
  local texture=sheet:FindFirstChild('StudSurface');if texture then texture.Visible=not inOffer end
  body.ScrollBarThickness=inOffer and 0 or 4
  modalTitle.Visible=not inOffer
+ modalSubtitle.Visible=not prestige
  modalSubtitle.TextXAlignment=inOffer and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
  close.BackgroundTransparency=inOffer and 1 or 0
+ local closeTexture=close:FindFirstChild('StudSurface');if closeTexture then closeTexture.Visible=not prestige end
  local closeEdge=close:FindFirstChildOfClass('UIStroke');if closeEdge then closeEdge.Enabled=not inOffer end
  close.TextStrokeTransparency=inOffer and .4 or 1
  modalTitle.TextColor3=colorful and palette.white or palette.text;modalTitle.TextStrokeColor3=Color3.fromRGB(13,23,48);modalTitle.TextStrokeTransparency=colorful and .4 or 1
@@ -301,6 +311,17 @@ local function menu(mode,title,subtitle,icon)
   ShopView.decorate(U,sheet,modalTitle,modalSubtitle,close);body.ScrollBarImageColor3=Color3.fromRGB(29,132,211)
   if mode=='stars' then modalTitle.Text='Star upgrades';modalTitle.TextColor3=Color3.fromRGB(139,91,17) end
   if mode=='shop' and l.panelWidth<400 then modalTitle.Text='Workshop' end
+ end
+ if prestige then
+  for _,control in ipairs({sheet,close}) do
+   local surface=control:FindFirstChild('StudSurface');if surface then surface.Visible=false end
+   local shading=control:FindFirstChildOfClass('UIGradient');if shading then shading.Enabled=false end
+  end
+  corner(sheet,9);corner(close,5);U.stroke(sheet,palette.line,2)
+  modalEmblem.Visible=false
+  modalTitle.Text='Prestige';modalTitle.Font=Enum.Font.SourceSansBold;modalTitle.TextSize=l.short and 25 or 30
+  modalTitle.Position=UDim2.fromOffset(l.panelPadding,10);modalTitle.Size=UDim2.new(1,-90,0,36)
+  modalTitle.TextStrokeTransparency=1
  end
  modal.Visible=true
  packView:setFocus(inOffer)
@@ -548,50 +569,84 @@ openRunCards=function()
 end
 openPrestige=function()
  if not profile then return end
- local l=menu('prestige','Prestige: a stronger new run','Keep every drone. Gain permanent mining power. Restart your upgrades.','prestige');local width=l.bodyWidth-6
- local narrow=width<400
- local pre=profile.prestigePreview or {};local before=pre.fleetBefore or #profile.fleet;local after=pre.fleetAfter or before+1
- local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
- U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),palette.mineral)
- label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 chosen drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
- local pair=width>=560;local half=pair and (width-18)/2 or width
- local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
- label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
- label(keep,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Permanent drones, traits and stored tools\nCarriers, flying backpack and loadouts\nGuard clearances and prestige mining power',12,palette.text)
- local resetY=pair and 141 or 274
- local reset=U.panel(body,UDim2.fromOffset(pair and half+21 or 3,resetY),UDim2.fromOffset(half,119),palette.danger:Lerp(palette.panel,.34),12)
- label(reset,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU RESET',17,palette.text,true)
- label(reset,UDim2.fromOffset(14,43),UDim2.new(1,-28,0,61),'Run cards, stacks, Stars and Star Shop upgrades\nMineral balances and all cargo\nPack prices, field access and run sales',12,palette.text)
- local y=pair and 284 or 417
- local required=pre.saleRequired or 2000;local earnings=pre.earnings or profile.run.saleEarnings or 0
- local guardRequirement=(pre.winsRequired or 1)>0 and (' · '..(pre.field or 'Cobalt')..((pre.wins or 0)>0 and ' unlocked' or ' locked')) or ''
- progress(body,y,width,'Quartz sold toward prestige',comma(earnings)..' / '..comma(required)..' Quartz sold this run'..guardRequirement,earnings/math.max(1,required),palette.accent)
+ local l=menu('prestige','Prestige','','prestige')
+ local pre=profile.prestigePreview or {}
+ local width=l.bodyWidth-8
+ local required=pre.saleRequired or Workshop.PRESTIGE_BASE
+ local earnings=pre.earnings or profile.run.quartzEarnings or 0
  local allowed,blocked=availability('Prestige')
- local can=pre.eligible==true and not pending() and allowed
+ local paid=pending()
+ local can=pre.eligible==true and not paid and allowed
  local choices=pre.droneChoices or {}
  local selected=offerUI.prestigeRun==pre.runId and offerUI.prestigeChoice or nil
- local confirm
- if #choices>0 then
-  label(body,UDim2.fromOffset(8,y+90),UDim2.fromOffset(width-12,27),'CHOOSE ONE PERMANENT DRONE',15,palette.text,true)
-  for i,entry in ipairs(choices) do
-   local pick=button(body,UDim2.fromOffset(3,y+122+(i-1)*51),UDim2.fromOffset(width,46),
-    (entry.kind==selected and '✓  ' or '')..entry.name..'  ·  '..entry.job,function()
-     if not can or actionPending then return end
-     offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
-     local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
-    end,entry.kind==selected and palette.mineral or palette.paper)
-   pick.Name='PrestigeDrone'..i;enableAction(pick,can)
-  end
-  y+=188
+ local textService=game:GetService('TextService')
+ local function heightFor(text,size,bold,availableWidth)
+  local font=bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
+  return math.ceil(textService:GetTextSize(text,size,font,Vector2.new(math.max(1,availableWidth),1000)).Y)+4
  end
- local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or
-  (can and (selected and 'Confirm prestige · Start a new run' or 'Select one drone above') or 'Complete the prestige requirements'))
- confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
+ local y=4
+ if #choices>0 then
+  local heading='Choose one permanent drone'
+  local headingHeight=math.max(28,heightFor(heading,20,true,width))
+  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,headingHeight),heading,20,palette.text,true)
+  y+=headingHeight+6
+  for i,entry in ipairs(choices) do
+   local chosen=entry.kind==selected
+   local jobHeight=heightFor(entry.job,16,false,width-24)
+   local rowHeight=math.max(46,jobHeight+26)
+   local pick=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,rowHeight),'',function()
+    if not can or actionPending then return end
+    offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
+    local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
+   end,chosen and Color3.fromRGB(32,87,71) or palette.paper)
+   U.unskin(pick);corner(pick,4)
+   label(pick,UDim2.fromOffset(12,3),UDim2.new(1,chosen and -88 or -24,0,21),entry.name,18,palette.text,true)
+   label(pick,UDim2.fromOffset(12,24),UDim2.new(1,-24,0,jobHeight),entry.job,16,palette.muted)
+   if chosen then
+    local mark=label(pick,UDim2.new(1,-76,0,3),UDim2.fromOffset(64,21),'Selected',16,Color3.fromRGB(161,237,185),true)
+    mark.TextXAlignment=Enum.TextXAlignment.Right
+   end
+   pick.Name='PrestigeDrone'..i;enableAction(pick,can)
+   y+=rowHeight+6
+  end
+ else
+  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,28),'Quartz sold this run',20,palette.text,true)
+  label(body,UDim2.fromOffset(4,y+30),UDim2.fromOffset(width,25),comma(earnings)..' / '..comma(required),18,palette.muted,true)
+  local track=frame(body,UDim2.fromOffset(4,y+58),UDim2.fromOffset(width,6),palette.paper)
+  frame(track,UDim2.fromOffset(0,0),UDim2.fromScale(math.clamp(earnings/math.max(1,required),0,1),1),palette.mineral)
+  y+=76
+ end
+ local bonusBefore=math.floor((pre.miningBonusBefore or 0)*100)
+ local bonusAfter=math.floor((pre.miningBonusAfter or .25)*100)
+ local bonus=('+%d%% → +%d%% base mining'):format(bonusBefore,bonusAfter)
+ if #choices==0 then bonus='+1 drone · '..bonus end
+ local bonusHeight=math.max(25,heightFor(bonus,17,true,width))
+ label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,bonusHeight),bonus,17,Color3.fromRGB(161,237,185),true)
+ y+=bonusHeight+7
+ frame(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,1),palette.paper)
+ y+=7
+ local function terms(name,copy,tint)
+  local height=heightFor(copy,16,false,width)
+  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,height),copy,16,tint).Name=name
+  y+=height+5
+ end
+ terms('PrestigeKeep','Keep your fleet, base traits, stored tools, transport and cleared plots.',palette.text)
+ terms('PrestigeReset','Reset balances, all cargo, cards, Stars, run upgrades, field access, pack prices and sale progress.',palette.muted)
+ y+=7
+ if #choices==0 then
+  local reason=paid and 'Choose your paid pack card first.' or ('Sell '..comma(math.max(0,required-earnings))..' more Quartz.')
+  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,40),reason,17,palette.text,true)
+  return
+ end
+ local waiting=actionPending and actionPending.kind=='Prestige'
+ local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selected and 'Start a new run' or 'Select a drone'))
+ local confirm
+ confirm=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,46),reason,function()
   if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
    confirm.Text='Starting new run…';enableAction(confirm,false)
   end
- end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil)
+ end,palette.mineral)
+ U.unskin(confirm);corner(confirm,5);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil and not waiting)
 end
 local refreshSerial=0
 local function refreshModal()

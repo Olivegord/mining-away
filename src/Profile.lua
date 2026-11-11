@@ -589,7 +589,7 @@ end
 function P.prestigePreview(p)
  local m=P.milestone(p);local earned=p.run.quartzEarnings
  local eligible=earned>=m.earnings and p.run.pendingOffer==nil
- local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the workshop')
+ local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the Prestige beacon')
  return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
   cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and DroneCatalog.prestigeChoices(p.seed,p.run.index) or nil}

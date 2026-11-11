@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler prefers quick finishes, while Ballcaster prefers intact deep shells and hits them harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when a sale will fund the first pack. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `68b8b5088ce2701fe8a596afee63b9f5a88478439ca22decee316e0fd5c19945` | Resting cargo and focused ore value. |
+| Native-file SHA-256 | `fe1147aab3d1ea597a2e8e58694eecc9cfb6aaaba67fd09317e6f4b26d375f15` | Compact prestige screen and sale milestone notice. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the resting cargo update** | All seven Sources and three roots verified in Edit. Team Create save returned version 130. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the prestige update** | All seven Sources and three roots verified in Edit. Team Create save returned version 131. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — prestige choices and progress
+
+The Prestige beacon uses a compact screen. While locked it shows Quartz sold and the remaining amount. When eligible it shows the three permanent drones first, then the permanent mining bonus, reset terms and confirmation. The sale crossing the milestone announces it once, and the existing command row points to the beacon when idle. The 360 Quartz first-run milestone, saved choices and reset rules stay in place.
+
+A single-seed API-double route model used the authored station and plot coordinates, simulated a direct 16-stud/s walk, and exercised actual server cuts, courier trips and first-pack purchase. The first pack installed at about 32 seconds. With Double Beam, first eligibility arrived at 79 seconds from Quartz or Ruby, and at 90 seconds from Cobalt. The three initial card picks in Ruby reached eligibility around 79 seconds with different sale totals. These are controller timings with scripted movement and a collision double, not player or device measurements.
+
+Workshop, Crystal Run and the HUD station classifier passed. A detached Studio Edit check ran the current layout, native fonts and choice callbacks at widths 240, 360, 430, 844 and 1,280 px. All three choices were visible without scrolling. On the 360 px portrait layout the confirmation also fit after the reset terms. The 240 px layout and short landscape layout scroll to confirmation. Live play, viewport interaction and multiplayer remain unverified.
+
+Studio was already open in the normal shared entry point at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched in Edit. Team Create returned version **131**. Studio stayed in Edit and no player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit d46954c`. The native refresh preserved the map and unrelated or backup Sources.
 
 ## November 10 — resting cargo and focused ore value
 

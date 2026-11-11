@@ -2371,11 +2371,18 @@ function scene.dispatchJunk(field)
   return false
  end)
 end
-function scene.firstPackFunded(p,saleQuartz)
- local run=data(p).run
+function scene.saleMilestoneNotice(p,saleQuartz)
+ if not scene.runStart or saleQuartz<=0 then return nil end
+ local profile=data(p)
+ local run=profile.run
  local balance=run.wallet.Quartz
- return scene.runStart~=nil and run.packIndex==0
-  and balance>=Workshop.PACK_BASE and balance-saleQuartz<Workshop.PACK_BASE
+ if run.packIndex==0 and balance>=Workshop.PACK_BASE and balance-saleQuartz<Workshop.PACK_BASE then
+  return '+'..saleQuartz..' Quartz · Pack Counter ready'
+ end
+ local goal=Pro.milestone(profile).earnings
+ if not run.pendingOffer and run.quartzEarnings>=goal and run.quartzEarnings-saleQuartz<goal then
+  return '+'..saleQuartz..' Quartz · Prestige ready'
+ end
 end
 local function serviceDeliveries(p: any)
  if not healthy(p) or not characterRoot(p) or now<(p.nextDeliveryAction or 0) then return end
@@ -2414,9 +2421,7 @@ local function serviceDeliveries(p: any)
       p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
       proceeds..=' · Crew surge'
      end
-     if scene.firstPackFunded(p,result.quartz) then
-      notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
-     else notice(p,'Emptier sold '..result.units..' cargo'..proceeds) end
+     notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Emptier sold '..result.units..' cargo'..proceeds)
     end
     p.publishDirty=true
    end)
@@ -2465,8 +2470,7 @@ local function sellBackpack(p: any,automatic: boolean?)
    local n=key=='Quartz' and result.quartz or result.cargo[key]
    if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
   end
-  if scene.firstPackFunded(p,result.quartz) then notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
-  else notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', ')) end
+  notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Sold '..result.units..' ore · +'..table.concat(amounts,', '))
   p.publishDirty=true
  end)
 end

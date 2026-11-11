@@ -167,7 +167,7 @@ function HUD.activity(folder,ownerId)
  return a
 end
 
-function HUD.packHint(profile: any): string?
+function HUD.nextStationHint(profile: any): string?
  local run=profile and profile.run
  if not run then return nil end
  local offer=run.pendingOffer
@@ -177,6 +177,7 @@ function HUD.packHint(profile: any): string?
  if run.packIndex==0 and profile.nextPackPrice and (run.wallet.Quartz or 0)>=profile.nextPackPrice then
   return 'Visit the Pack Counter'
  end
+ if profile.prestigePreview and profile.prestigePreview.eligible then return 'Visit the Prestige beacon' end
  return nil
 end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
@@ -212,8 +213,8 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local working=activity.assigned;local delivering=activity.delivering
  local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
  local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
- local packText=not pinned and not fighting and world:GetAttribute('FieldToolsEnabled')==false and HUD.packHint(p) or nil
- local statusText=pinned and type(status)=='string' and selectorText[status] or packText
+ local stationText=not pinned and not fighting and world:GetAttribute('FieldToolsEnabled')==false and HUD.nextStationHint(p) or nil
+ local statusText=pinned and type(status)=='string' and selectorText[status] or stationText
  local showRecall=working>0 or delivering>0 or pinned
  local showStatusRow=showRecall or statusText~=nil
  self.dock.Visible=not hidden and (showStatusRow or fighting)
@@ -227,7 +228,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
  self.selectorStatus.Visible=statusText~=nil
  self.selectorStatus.Text=statusText or ''
- self.selectorStatus.TextColor3=(packText or status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
+ self.selectorStatus.TextColor3=(stationText or status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
  local statusX=showRecall and recallWidth+4 or 0
  self.selectorStatus.Position=UDim2.fromOffset(statusX,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-statusX),buttonHeight)
