@@ -65,6 +65,7 @@ local CUES = {
  parcel_latch={id='9126066421',volume=.18,duration=.5,pitch=.8,cooldown=.1,fallback='action_get_up.mp3'},
  unload={id='9118941971',volume=.15,duration=.55,pitch=.9,cooldown=.15,fallback='action_jump_land.mp3'},
  courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
+ counter_settle={id='9125869495',volume=.14,duration=.38,pitch=.88,cooldown=.2,range=34,maxVoices=2,fallback='action_jump_land.mp3'},
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
@@ -284,14 +285,19 @@ function Soundscape:updateDrone(source,position,now)
  if not record then record={workKey={},flightKey={}};self.droneStates[source]=record end
  local function a(name) return source:GetAttribute(name) end
  local state=a('State');local hp=a('HP') or 0
+ local player=Players.LocalPlayer
  local sample={state=state,life=a('Life'),dead=hp<=0 or state=='Destroyed' or state=='Reprinting',
-  paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt')}
+  paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt'),
+  physical=(a('DeliverySlots') or 0)>0,ownCourier=player and a('Owner')==player.UserId}
  local cues,mode=AudioFeedback.drone(record,sample,now)
  -- The production beam renderer owns this rising tone for both real drones
  -- and preview displays. Avoid a second charge loop from the state observer.
  if mode=='charge' and self.chargeFromRenderer then mode=nil end
  for _,name in ipairs(cues) do
-  if name~='laser_start' or not self.chargeFromRenderer then self:play(name,position) end
+  if name=='counter_settle' then
+   local counter=a('SellPosition')
+   if typeof(counter)=='Vector3' then self:play(name,counter) end
+  elseif name~='laser_start' or not self.chargeFromRenderer then self:play(name,position) end
  end
  if mode then
   local start,duration

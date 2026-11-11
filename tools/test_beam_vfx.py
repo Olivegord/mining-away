@@ -8,7 +8,7 @@ import tempfile
 from build import ROOT, bundle, client_bundle, module_bundle
 
 luau = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/tmp/mining-away-luau')
-modules = ('BeamVFX', 'Mining', 'Feedback', 'SentryMotion', 'WorkEffects',
+modules = ('Shops', 'BeamVFX', 'Mining', 'Feedback', 'SentryMotion', 'WorkEffects',
            'Presentation', 'MotionBuffer', 'DroneRoleEffects', 'RoleVisuals', 'RoleEffectView')
 source = '\n'.join([
     (ROOT / 'tests/mock-roblox.lua').read_text(),

@@ -460,5 +460,38 @@ check('courier transfer ticks follow rendered mounts and release on pause and re
  work:destroyDrone(r);work:destroy();model:Destroy();source:Destroy();owner.Character:Destroy();owner:Destroy()
  players.GetPlayerByUserId=oldLookup;local a,b=BeamVFX.counts();assert(a==0 and b==0)
 end)
+check('physical courier cargo settles above the table and waits for its receipt',function()
+ local original=Instance.new('Model');original.Name='Crystal';original.Parent=workspace
+ local template=Instance.new('UnionOperation');template.Name='Mesh';template.Parent=original
+ local oldLabel=Instance.new('BillboardGui');oldLabel.Parent=template
+ local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Unload')
+ source:SetAttribute('DeliveryUnits',6);source:SetAttribute('DeliverySlots',6);source:SetAttribute('SnapshotAt',700)
+ source:SetAttribute('DeliveryMaterials','Rock:Quartz:10;Block:RunRuby:80;Rock:RunRuby:40;Rock:RunRuby:44;Rock:RunCobalt:160;Rock:RunViolet:640')
+ source:SetAttribute('CourierUnloadAt',700);source:SetAttribute('CourierUnloadHold',.65)
+ local counter=Vector3.new(0,7,2.2);source:SetAttribute('SellPosition',counter)
+ local model=Instance.new('Model');model.Parent=root
+ local emitter=Instance.new('Part');emitter.Position=Vector3.new(0,9,-5);emitter.Parent=model;model.PrimaryPart=emitter
+ local drone={source=source,view=model,emitter=emitter,pos=emitter.Position}
+ local record={events={dead=false}};local work=WorkEffects.new(root)
+ work:courier(drone,record,700.25)
+ local mounts=record.courier.mounts
+ assert(mounts[1].cargo:IsA('UnionOperation') and #mounts[1].cargo:GetChildren()==0)
+ assert(mounts[2].cargo:IsA('Part') and mounts[2].cargo.Material==Enum.Material.Metal)
+ assert(mounts[1].cargo.Position.Z>mounts[5].cargo.Position.Z,'the shipment unloaded all at once')
+ work:courier(drone,record,700.65)
+ for i,slot in ipairs(mounts) do
+  near(slot.cargo.Position.Y-slot.cargo.Size.Y*.5,7.015)
+  assert(slot.cargo.Position.Z>1 and slot.cargo.Transparency==0)
+ end
+ source:SetAttribute('WorkPaused',true);source:SetAttribute('CourierUnloadAt',701)
+ work:courier(drone,record,701.1)
+ assert(mounts[1].cargo.Transparency==0 and #work.bursts==0,'unconfirmed sale consumed cargo')
+ source:SetAttribute('WorkPaused',false);source:SetAttribute('State','Collect');source:SetAttribute('DeliveryUnits',0)
+ source:SetAttribute('CourierSaleSerial',1);source:SetAttribute('CourierSaleAt',701.2)
+ work:courier(drone,record,701.2);work:courier(drone,record,701.25)
+ assert(mounts[1].cargo.Transparency==1 and #work.bursts==1,'confirmed sale did not retire cargo exactly once')
+ near(work.bursts[1].part.Position.Y,7.18)
+ work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy();original:Destroy()
+end)
 root:Destroy()
 print(checks..' production VFX behavior checks; API doubles, Studio visuals UNVERIFIED')

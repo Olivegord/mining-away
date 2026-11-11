@@ -38,6 +38,19 @@ check('courier sale requires an increasing fresh server receipt',function()
  s.sale=2;s.saleAt=98;cues=A.drone(r,s,100.3);assert(#cues==0)
  s.saleAt=100.4;cues=A.drone(r,s,100.4);assert(#cues==0,'consumed stale serial must not replay')
 end)
+check('a physical unload is silent until confirmation and plays its world cue only for observers',function()
+ for _,own in ipairs({true,false}) do
+  local r={};local s=sample('Deliver');s.physical=true;s.ownCourier=own
+  A.drone(r,s,100)
+  s.state='Unload'
+  local cues,mode=A.drone(r,s,100.1);assert(#cues==0 and mode==nil)
+  s.state='Follow';s.sale=1;s.saleAt=100.2
+  cues=A.drone(r,s,100.2)
+  if own then assert(#cues==0) else assert(#cues==1 and cues[1]=='counter_settle') end
+  assert(#A.drone(r,s,100.3)==0)
+  assert(#A.drone({},s,100.3)==0,'late join replayed a sale')
+ end
+end)
 check('ground receipts ignore initial state duplicates old timestamps and invalid numbers',function()
  local r={};assert(not A.serial(r,'ground',1,100,100))
  assert(not A.serial(r,'ground',1,100,100.1))

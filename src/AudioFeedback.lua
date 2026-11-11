@@ -19,12 +19,18 @@ function A.drone(record,s,now)
  local previous=record.sample;record.sample=table.clone(s)
  local audible=not s.dead and not s.paused and A.fresh(s.at,now)
  local mode=audible and work[s.state] or nil
+ if s.physical and s.state=='Unload' then mode=nil end
  if audible and s.state=='Attack' and finite(s.chargeAt) and s.chargeAt>now then mode='combat_charge' end
  local cues={}
  if audible and previous and previous.life==s.life and not previous.dead and not previous.paused
   and A.fresh(previous.at,now,.7) then
-  if previous.state~=s.state and transition[s.state] then table.insert(cues,transition[s.state]) end
-  if A.serial(record,'sale',s.sale,s.saleAt,now) then table.insert(cues,'courier_sale') end
+  if previous.state~=s.state and transition[s.state] and not (s.physical and s.state=='Unload') then
+   table.insert(cues,transition[s.state])
+  end
+  if A.serial(record,'sale',s.sale,s.saleAt,now) then
+   if not s.physical then table.insert(cues,'courier_sale')
+   elseif not s.ownCourier then table.insert(cues,'counter_settle') end
+  end
  else record.sale=s.sale end
  return cues,mode
 end

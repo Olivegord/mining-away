@@ -394,6 +394,13 @@ end
 scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=home,now=function() return now end,
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
+if scene.runStart and scene.classicCrystal then
+ -- Courier loads use the same original mesh as field ore, even while the
+ -- source map model is outside a streaming client's view.
+ local cargoShape=scene.classicCrystal:Clone()
+ for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
+ cargoShape.Name='CargoCrystal';cargoShape.Parent=net
+end
 scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
 local function nodeUsage(field)
@@ -2272,6 +2279,13 @@ local function snapshotDrone(d)
  local profile=data(profiles[d.owner])
  local delivery=profile.run.deliveries[d.id]
  local slots=scene.runStart and d.role=='Courier' and Workshop.emptierBatch(profile) or 0
+ local counter=scene.runStart and scene.packStation or scene.converter or scene.packStation
+ local salePosition=counter.Position
+ if slots>0 then
+  -- Alternate the two Emptiers across the field-facing side of the nameplate.
+  local lane=(d.slot%2==0 and -1 or 1)*counter.Size.X*.22
+  salePosition=counter.CFrame:PointToWorldSpace(Vector3.new(lane,counter.Size.Y*.5,counter.Size.Z*.22))
+ end
  local deliveryId=delivery and delivery.id or ''
  if slots>0 and d.displayedDelivery~=deliveryId then
   d.displayedDelivery=deliveryId
@@ -2305,7 +2319,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
-  CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.runStart and scene.packStation or scene.converter or scene.packStation).Position,
+  CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=salePosition,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
   RepairChargeAt=d.repairChargeAt or 0,RepairChargeDuration=RoleConfig.Types.Medic.ChargeWindup,
   CanMine=DroneRoles.isWorker(d.role),AutomationMineEnabled=DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=DroneRoles.job(d.role),ImpactSerial=d.impactSerial or 0,

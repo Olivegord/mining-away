@@ -1092,12 +1092,18 @@ function A.drone(record,s,now)
  local previous=record.sample;record.sample=table.clone(s)
  local audible=not s.dead and not s.paused and A.fresh(s.at,now)
  local mode=audible and work[s.state] or nil
+ if s.physical and s.state=='Unload' then mode=nil end
  if audible and s.state=='Attack' and finite(s.chargeAt) and s.chargeAt>now then mode='combat_charge' end
  local cues={}
  if audible and previous and previous.life==s.life and not previous.dead and not previous.paused
   and A.fresh(previous.at,now,.7) then
-  if previous.state~=s.state and transition[s.state] then table.insert(cues,transition[s.state]) end
-  if A.serial(record,'sale',s.sale,s.saleAt,now) then table.insert(cues,'courier_sale') end
+  if previous.state~=s.state and transition[s.state] and not (s.physical and s.state=='Unload') then
+   table.insert(cues,transition[s.state])
+  end
+  if A.serial(record,'sale',s.sale,s.saleAt,now) then
+   if not s.physical then table.insert(cues,'courier_sale')
+   elseif not s.ownCourier then table.insert(cues,'counter_settle') end
+  end
  else record.sale=s.sale end
  return cues,mode
 end
@@ -1258,6 +1264,7 @@ local CUES = {
  parcel_latch={id='9126066421',volume=.18,duration=.5,pitch=.8,cooldown=.1,fallback='action_get_up.mp3'},
  unload={id='9118941971',volume=.15,duration=.55,pitch=.9,cooldown=.15,fallback='action_jump_land.mp3'},
  courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
+ counter_settle={id='9125869495',volume=.14,duration=.38,pitch=.88,cooldown=.2,range=34,maxVoices=2,fallback='action_jump_land.mp3'},
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
@@ -1477,14 +1484,19 @@ function Soundscape:updateDrone(source,position,now)
  if not record then record={workKey={},flightKey={}};self.droneStates[source]=record end
  local function a(name) return source:GetAttribute(name) end
  local state=a('State');local hp=a('HP') or 0
+ local player=Players.LocalPlayer
  local sample={state=state,life=a('Life'),dead=hp<=0 or state=='Destroyed' or state=='Reprinting',
-  paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt')}
+  paused=a('WorkPaused')==true or a('MotionPaused')==true,at=a('SnapshotAt'),chargeAt=a('ChargeAt'),sale=a('CourierSaleSerial') or 0,saleAt=a('CourierSaleAt'),
+  physical=(a('DeliverySlots') or 0)>0,ownCourier=player and a('Owner')==player.UserId}
  local cues,mode=AudioFeedback.drone(record,sample,now)
  -- The production beam renderer owns this rising tone for both real drones
  -- and preview displays. Avoid a second charge loop from the state observer.
  if mode=='charge' and self.chargeFromRenderer then mode=nil end
  for _,name in ipairs(cues) do
-  if name~='laser_start' or not self.chargeFromRenderer then self:play(name,position) end
+  if name=='counter_settle' then
+   local counter=a('SellPosition')
+   if typeof(counter)=='Vector3' then self:play(name,counter) end
+  elseif name~='laser_start' or not self.chargeFromRenderer then self:play(name,position) end
  end
  if mode then
   local start,duration
@@ -2437,14 +2449,20 @@ local WorkEffects = (function()
 -- these visuals never remove ore, credit a sale, heal, or advance mining.
 local W={};W.__index=W
 local Players=game:GetService('Players')
+local RS=game:GetService('ReplicatedStorage')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
 local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
 local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local YELLOW=Color3.fromRGB(255,208,69)
 local ENERGY_TAIL=1.8
-local function part(parent,name)
- local p=Instance.new('Part');p.Name=name;p.Size=Vector3.one*.05;p.Transparency=1
+local function part(parent,name,template)
+ local p=(template and template:Clone()) or Instance.new('Part')
+ if template then
+  for _,child in ipairs(p:GetChildren()) do child:Destroy() end
+  p.LocalTransparencyModifier=0
+ end
+ p.Name=name;p.Size=Vector3.one*.05;p.Transparency=1
  p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false;p.Parent=parent
  return p
 end
@@ -2798,14 +2816,22 @@ function W:courier(drone,record,now)
  end
  if busy then fx.lastAt=now end
  local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
+ local reduced=BeamVFX.reduced()
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
- for _,trail in ipairs(fx.trails) do trail.Enabled=not BeamVFX.reduced() and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
- local backpack=backpackPosition(source)
+ for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
+ local backpack=(state=='Pickup' or state=='Launch') and backpackPosition(source)
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
- if sale>fx.sale and typeof(sell)=='Vector3' and now-(source:GetAttribute('CourierSaleAt') or 0)<.7 then self:burst(sell+Vector3.new(0,1,0),Vector3.yAxis,GOLD,18,now) end
+ local saleAge=now-(source:GetAttribute('CourierSaleAt') or 0)
+ if sale>fx.sale and typeof(sell)=='Vector3' and saleAge>=-.1 and saleAge<.7 then
+  self:burst(sell+Vector3.yAxis*(slots>0 and .18 or 1),Vector3.yAxis,GOLD,slots>0 and 7 or 18,now)
+ end
  fx.sale=sale
  local pickup=state=='Pickup' and backpack~=nil and (backpack-mount).Magnitude<=6 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5
  local unload=state=='Unload' and typeof(sell)=='Vector3'
+ if unload then
+  local sampleAt=paused and (source:GetAttribute('SnapshotAt') or now) or now
+  fx.unloadProgress=paused and fx.unloadProgress or progress(sampleAt,source:GetAttribute('CourierUnloadAt') or now,source:GetAttribute('CourierUnloadHold') or .65)
+ else fx.unloadProgress=nil end
  local launch=source:GetAttribute('CourierLaunchAt') or 0
  local pickupAt=source:GetAttribute('CourierPickupAt') or 0
  local q=pickup and progress(now,pickupAt,source:GetAttribute('CourierPickupHold') or .55) or 1
@@ -2819,7 +2845,7 @@ function W:courier(drone,record,now)
  end
  pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
- drawSpheres(fx,now,pickup and .3+.7*q or unload and .7 or 0,q,0,GOLD)
+ drawSpheres(fx,now,pickup and .3+.7*q or unload and slots==0 and .7 or 0,q,0,GOLD)
  if pickup then
   fx.tetherVFX=fx.tetherVFX or BeamVFX.new(fx.root,'Courier',GOLD)
   if fx.tetherVFX then
@@ -2829,7 +2855,8 @@ function W:courier(drone,record,now)
   fx.tether.Transparency=1;BeamVFX.destroy(fx.tetherVFX);fx.tetherVFX=nil
  end
  if fx.sparks then
-  fx.sparks.Rate=pickup and 4+q*5 or unload and 6 or 0;fx.sparks.Enabled=not paused and not BeamVFX.reduced() and (pickup or unload)
+  fx.sparks.Rate=pickup and 4+q*5 or unload and slots==0 and 6 or 0
+  fx.sparks.Enabled=not paused and not reduced and (pickup or unload and slots==0)
   if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
@@ -2843,8 +2870,7 @@ function W:courier(drone,record,now)
    local t=transfer*transfer*(3-2*transfer)
    position=backpack:Lerp(mount,t)+Vector3.new(0,math.sin(t*math.pi)*.35,0)
   elseif unload then
-   local t=paused and (fx.unloadProgress or 0) or progress(now,source:GetAttribute('CourierUnloadAt') or now,source:GetAttribute('CourierUnloadHold') or .65)
-   fx.unloadProgress=t
+   local t=fx.unloadProgress
    -- Hold the parcel just above the converter until the server confirms sale.
    local finish=sell+Vector3.new(0,1.25,0)
    position=mount:Lerp(finish,t*.9)+Vector3.new(math.sin(t*math.pi)*.18,math.sin(t*math.pi)*.3,0)
@@ -2862,37 +2888,61 @@ function W:courier(drone,record,now)
    if not slot then
     local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.52,.13,.62)
     tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
-    local cargo=part(fx.root,'MountedCargo');cargo.Material=Enum.Material.SmoothPlastic
-    slot={tray=tray,cargo=cargo};fx.mounts[i]=slot
+    slot={tray=tray};fx.mounts[i]=slot
    end
    local side=i%2==1 and -1 or 1
    local frame=pivot*CFrame.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)
    slot.tray.CFrame=frame;slot.tray.Transparency=0
-   slot.cargo.Transparency=i<=parcelUnits and 0 or 1
    if i<=parcelUnits then
     local material=fx.load[i] or ''
     if slot.material~=material then
      slot.material=material
      local key,_,packed=Workshop.crystalCargo(material)
      local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
+     packed=packed==true
+     if not slot.cargo or slot.packed~=packed then
+      if slot.cargo then slot.cargo:Destroy() end
+      local mesh
+      if not packed then
+       local net=RS:FindFirstChild('MiningAway')
+       local original=workspace:FindFirstChild('Crystal')
+       mesh=(net and net:FindFirstChild('CargoCrystal')) or (original and original:FindFirstChild('Mesh'))
+      end
+      slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
+      if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
+      slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.Glass
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=0
+     end
      local rgb=Shops.COLORS[tier and tier.name or material]
      slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
      slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)
      slot.packed=packed
     end
+    local cargo=slot.cargo
+    cargo.Transparency=0
     local position=frame.Position-Vector3.yAxis*.28
+    local yaw=slot.packed and 0 or .7+i*.28
+    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or .26)
     if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
      local t=math.clamp(transfer*1.3-(i-1)*.06,0,1)
      position=backpack:Lerp(position,t*t*(3-2*t))+Vector3.yAxis*(math.sin(t*math.pi)*.35)
     elseif unload then
-     local t=fx.unloadProgress or 0
-     local finish=sell+Vector3.new(side*.28,1.25+math.floor((i-1)/2)*.14,0)
-     position=position:Lerp(finish,t*.9)+Vector3.yAxis*(math.sin(t*math.pi)*.3)
+     local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
+     local ease=t*t*(3-2*t)
+     local finish=sell+Vector3.new(side*.38,cargo.Size.Y*.5+.015,(math.floor((i-1)/2)-1)*.60)
+     position=position:Lerp(finish,ease)
+     if not reduced then position+=Vector3.yAxis*(math.sin(t*math.pi)*.32) end
+     rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
     end
-    slot.cargo.CFrame=CFrame.new(position)*pivot.Rotation*CFrame.Angles(0,slot.packed and 0 or .7+i*.28,slot.packed and 0 or .26)
+    cargo.CFrame=CFrame.new(position)*rotation
+   elseif slot.cargo then
+    slot.cargo.Transparency=1
    end
   end
-  for i=count+1,#fx.mounts do fx.mounts[i].tray.Transparency=1;fx.mounts[i].cargo.Transparency=1 end
+  for i=count+1,#fx.mounts do
+   local slot=fx.mounts[i];slot.tray.Transparency=1
+   if slot.cargo then slot.cargo.Transparency=1 end
+  end
  end
 end
 -- A monochrome beam with alternating opaque/clear bands. Shift the sequence

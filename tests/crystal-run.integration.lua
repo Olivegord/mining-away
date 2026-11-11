@@ -547,6 +547,15 @@ local hr=characterRoot(buyer);emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
 droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
 assert(manifest.cargo.RunRuby==Workshop.EMPTIER_BATCH and Pro.cargoUnits(data(buyer))==0)
+snapshotDrone(emptier)
+local counter=scene.packStation
+local landing=counter.CFrame:PointToObjectSpace(emptier.model:GetAttribute('SellPosition'))
+assert(math.abs(landing.Y-counter.Size.Y*.5)<.001 and math.abs(landing.Z-counter.Size.Z*.22)<.001)
+local secondEmptier=buyer.drones[5]
+assert(secondEmptier.role=='Courier')
+snapshotDrone(secondEmptier)
+local otherLanding=counter.CFrame:PointToObjectSpace(secondEmptier.model:GetAttribute('SellPosition'))
+assert(math.abs(landing.X+otherLanding.X)<.001 and math.abs(landing.X)>1,'both couriers unloaded into the same lane')
 assert(Pro.validate(assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId)),shopper.UserId))
 now+=1;emptier.pos=scene.packStation.Position
 droneStep(emptier,C.Tick);emptier.pos=emptier.goal

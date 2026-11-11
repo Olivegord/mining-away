@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a600c5ad25cddb8c0a5039bf21e309d103c96760b3f663d3bcc521667e537e4a` | Paired laser cuts on selected Violet and Emerald crystals. |
+| Native-file SHA-256 | `c2d6a445d438d3edff5d4ca6f38558a93f615c18e4ba45f7b6e51864e4d04c0e` | Physical courier unloading on the Pack Counter. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains paired deep cuts** | All seven Sources and three roots verified in Edit. Team Create save returned version 137. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the courier unloading update** | All seven Sources and three roots verified in Edit. Team Create save returned version 138. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — physical courier unloading
+
+The Emptiers unload on opposite sides of the Pack Counter's field-facing tabletop. Raw cargo uses the original crystal union, and packed cargo keeps its metal block shape. The pieces land in sequence, lie flat clear of the nameplate, and wait there while the sale commits. The owner hears the balance cue. Nearby observers hear a short spatial clack using an existing sound. The sale and its proceeds still come from the server.
+
+Workshop, Crystal Run, beam and audio checks passed. The tests covered separate courier lanes, six spaced cargo mounts, a paused unload, one confirmation cue and silence on late join. A detached Studio Edit fixture used the actual crystal union, tabletop and nameplate positions to check the six landing poses and receipt timing. Live motion, listening, streaming and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched, and Team Create returned version **138**. Studio stayed in Edit and no player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit e9d51af`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — paired laser cuts in Violet and Emerald
 
