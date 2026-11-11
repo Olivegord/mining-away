@@ -635,3 +635,48 @@ do
  for _,r in ipairs({quick,rich,third,outside}) do resources[r.id]=nil;r.part:Destroy() end
 end
 print('PASS direct crystal focus assigns one available worker without stealing or interrupting cuts')
+
+do
+ local tester=player(98694);players.PlayerAdded:Fire(tester)
+ local other=player(98695);players.PlayerAdded:Fire(other)
+ local crew,rival=profiles[tester.UserId],profiles[other.UserId]
+ local first,second,third=table.unpack(crew.drones,1,3)
+ local folder=Instance.new('Folder');folder.Name='DeepPair';folder.Parent=run
+ local surface=World.part(folder,'Field',Vector3.new(80,5,-68),Vector3.new(48,1,48),Color3.new(0,1,0))
+ local field={id=#patches+1,cfg={Key='Emerald',Material='RunEmerald',Value=256,Hardness=81,SelectionOnly=true,
+  AlwaysUnlocked=true,ReferenceCrystals=true,Turrets=0,Respawn=8},part=surface,model=folder,center=surface.Position,
+  color=surface.Color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ local center=surface.Position+Vector3.yAxis*.5
+ local primary=makeResource(field,center,'Crystal',3900,9,2.8,7)
+ local neighbor=makeResource(field,center+Vector3.new(9,0,0),'Crystal',4500,10,3,7)
+ primary.readyAt=now;neighbor.readyAt=now
+ tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ other.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ local function pin(p,leadId)
+  scene.placeSquare(p,{runId=data(p).run.id,fieldId=field.id,position=center,leadId=leadId})
+ end
+ first.pos=primary.position
+ pin(crew);local square=crew.miningSquare
+ scene.squareStep(crew,first)
+ assert(first.target==primary and not square.pairId)
+ first.warmAt=now
+ pin(rival,primary.id)
+ assert(rival.miningSquare and not rival.miningSquare.pairId,'a second crew paired with a foreign cut')
+ pin(crew,primary.id)
+ assert(crew.miningSquare==square and square.pairId==primary.id and first.warmAt==now)
+ scene.squareStep(crew,second);scene.squareStep(crew,third)
+ assert(second.target==primary and second.targetSlot==2 and third.target==neighbor,'pair did not use exactly two slots')
+ first.pos=committedStation(first,primary);second.pos=committedStation(second,primary)
+ assert(math.abs((first.pos-second.pos).Magnitude-3.2)<.001,'two laser stations overlapped')
+ first.mining=true;second.mining=true
+ scene.publishSquareStatus(crew)
+ assert(tester:GetAttribute('MA_SelectorStatus')=='PairCut')
+ pin(crew)
+ assert(crew.miningSquare==square and not square.pairId and first.target==primary and second.target==primary,'ground pin cut off committed lasers')
+ assert(hitResource(first,primary,50) and hitResource(second,primary,50) and primary.hp==3790)
+ assert(hitResource(second,primary,10000) and primary.paid and not next(primary.slots))
+ assert(not hitResource(first,primary,10000) and pendingOre(crew)==1,'paired finish granted cargo twice')
+ players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
+end
+print('PASS two lasers can share a selected deep cut with separate stations, one reward and no foreign slot')

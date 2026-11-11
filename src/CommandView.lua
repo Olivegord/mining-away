@@ -33,9 +33,11 @@ function V:update(dt,now)
   if ok and type(list)=='table' then for index,id in ipairs(list) do self.queued[id]=index end end
  end
  local working={}
+ local lasers=0
  for source in pairs(ctx.drones) do
   if source:GetAttribute('Owner')==player.UserId and (source:GetAttribute('HP') or 0)>0 then
    local id=source:GetAttribute('TargetId');if id and id~='' then working[id]=true end
+   if source:GetAttribute('Role')=='Striker' and not source:GetAttribute('CarrierId') then lasers+=1 end
   end
  end
  local hover;local camera=workspace.CurrentCamera
@@ -114,24 +116,31 @@ function V:update(dt,now)
    round:Clone().Parent=fill
    local work=title:Clone();work.Name='Work';work.Text='';work.TextSize=12
    work.TextXAlignment=Enum.TextXAlignment.Right;work.Position=UDim2.new(1,-57,0,20);work.Size=UDim2.fromOffset(52,15);work.Parent=gui
-   self.meter=gui;self.title=title;self.track=track;self.health=fill;self.work=work
+   local pair=work:Clone();pair.Name='Pair';pair.Text='2 lasers';pair.TextColor3=GOLD
+   pair.TextXAlignment=Enum.TextXAlignment.Left;pair.Position=UDim2.fromOffset(5,20);pair.Parent=gui
+   self.meter=gui;self.title=title;self.track=track;self.health=fill;self.work=work;self.pair=pair
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
+  local extracted=(s:GetAttribute('ExtractedOre') or 0)>0
   self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,34)
   self.title.TextSize=value and 16 or 13
-  local label=if value then ((s:GetAttribute('ExtractedOre') or 0)>0 and ' · Ore released' or ' · '..value..' Quartz')
+  local label=if value then (extracted and ' · Ore released' or ' · '..value..' Quartz')
    elseif ore then ' · '..ore..' base ore'
    elseif capacity>1 then ' · '..usedSlots..'/'..capacity
    else ''
   self.title.Text=tostring(name)..label
   local hp=s:GetAttribute('HP') or 0
   local maxHP=s:GetAttribute('MaxHP') or 1
+  local pair=value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
+   and (s:GetAttribute('Hardness') or 0)>=Workshop.PAIRED_CUT_HARDNESS
   self.work.Visible=value~=nil
-  self.track.Size=UDim2.new(1,value and -65 or -10,0,7)
+  self.pair.Visible=pair
+  self.track.Position=UDim2.fromOffset(pair and 56 or 5,24)
+  self.track.Size=UDim2.new(1,pair and -116 or value and -65 or -10,0,7)
   if value then
    -- Crystal snapshots include the reference game's 10 HP break floor.
    hp=math.max(0,hp-10);maxHP-=10

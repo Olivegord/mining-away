@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8c8041222be1c82dd79aa9e0ef8913a054117f1dc360c2e010285f2353d83c84` | Paired Compactor intake and faster partial batches. |
+| Native-file SHA-256 | `a600c5ad25cddb8c0a5039bf21e309d103c96760b3f663d3bcc521667e537e4a` | Paired laser cuts on selected Violet and Emerald crystals. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the Compactor update** | All seven Sources and three roots verified in Edit. Team Create save returned version 136. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains paired deep cuts** | All seven Sources and three roots verified in Edit. Team Create save returned version 137. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — paired laser cuts in Violet and Emerald
+
+A direct crystal pin in Violet or Emerald gives up to two available laser miners the same cut, with separate stations and a single cargo reward. A ground pin still spreads out the crew. Replacing an order leaves committed cuts running. Needler and Ballcaster keep their separate jobs. The focused readout shows pair availability and the existing command row identifies two lasers cutting. Crystal hardness, base payout, and battery drain stay the same.
+
+Workshop, Crystal Run and committed flight passed with API doubles. The paired-cut fixture checked separate stations 3.2 studs apart, continued work on a changed order, a rejected foreign reservation and one cargo reward. Three Emerald route seeds with Double Beam and Loose Seams used the same targets, authored coordinates and scripted walking for each comparison. Median first ore from the field moved from about 115 seconds to 40 seconds after pinning. Loose Seams released ore sooner than Double Beam in all three paired Emerald runs. The model uses collision and storage doubles. A detached Studio Edit fixture verified the native readout layout, with a 40 px pair label and a 72 px health bar. Live motion, normal-zoom visibility and multiplayer feel remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched, and Team Create returned version **137**. Studio stayed in Edit and no player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 2a5adeb`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — Compactor intake and partial batches
 

@@ -1152,7 +1152,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local primary=d.target
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
-  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal)).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  elseif d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
@@ -1373,7 +1373,9 @@ local function chooseResource(d: any,field: any,square: any?)
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
-   if used<r.limit and not foreign and sameRockType(d,r) then
+   local paired=square and square.pairId==r.id and not r.cargoProduced
+   local capacity=paired and (DroneRoles.isMiner(d.role) and 2 or 0) or r.limit
+   if used<capacity and not foreign and sameRockType(d,r) then
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
@@ -1388,10 +1390,10 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- An explicit lead gets one assignment. Autonomous selection prefers
-    -- this worker's interrupted cut, then other unfinished cuts in the pin.
+    -- A paired cut takes two lasers. An ordinary lead gets one assignment.
+    -- Otherwise resume this worker's interrupted cut before other unfinished cuts.
     local priority=0
-    if square and square.leadId==r.id then priority=3
+    if paired or square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end
@@ -1451,6 +1453,14 @@ function scene.publishSquareStatus(p)
  if not square then return end
  local working,finishing,moving=false,false,false
  local available,recharging=0,0
+ local pair=resources[square.pairId]
+ local cuttingPair=0
+ if pair and not pair.paid then
+  for id in pairs(pair.slots) do
+   local worker=drones[id]
+   if worker and worker.owner==p.player.UserId and worker.mining then cuttingPair+=1 end
+  end
+ end
  for _,d in ipairs(p.drones) do
   if d.hp<=0 or d.carrierId or not DroneRoles.isWorker(d.role) then continue end
   available+=1
@@ -1465,6 +1475,7 @@ function scene.publishSquareStatus(p)
   elseif working and p.shiftSquare==square and now<(p.shiftUntil or 0) then 'Surge'
   elseif p.compactor and now<(p.compactor.pressUntil or 0) then 'Pressing'
   elseif p.pinOreOutOfReach==square then 'LooseOre'
+  elseif cuttingPair>=2 then 'PairCut'
   elseif working then 'Working'
   elseif finishing then 'FinishingCut'
   elseif moving then 'Moving'
@@ -1730,7 +1741,15 @@ local function committedStation(d,r)
   d.workTargetId=r.id
   d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
   local definition=DroneCatalog.Types[d.role]
-  if definition and definition.Projectile then
+  if r.field.cfg.SelectionOnly and d.targetSlot==2 then
+   local base=d.workStation
+   for turn=0,3 do
+    local angle=d.slot*2.4+turn*math.pi/2
+    local side=base+Vector3.new(math.cos(angle)*3.2,0,math.sin(angle)*3.2)
+    if turn==0 then d.workStation=side end
+    if los(side,r.position,r.part,{droneFolder}) then d.workStation=side;break end
+   end
+  elseif definition and definition.Projectile then
    local direction=d.slot*2.4
    local approach=d.pos-r.position
    if r.field.cfg.SelectionOnly and approach.X^2+approach.Z^2>1 then
@@ -2916,6 +2935,21 @@ function scene.buyStarUpgrade(p,payload)
   scene.applyWalkSpeed(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true
  end)
 end
+function scene.canPairCut(p,r)
+ if r.hardness<Workshop.PAIRED_CUT_HARDNESS then return false end
+ for id in pairs(r.slots) do
+  local worker=drones[id]
+  if not worker or worker.owner~=p.player.UserId or not DroneRoles.isMiner(worker.role) then return false end
+ end
+ local miners=0
+ for _,d in ipairs(p.drones) do
+  if d.hp>0 and not d.carrierId and DroneRoles.isMiner(d.role) then
+   miners+=1
+   if miners==2 then return true end
+  end
+ end
+ return false
+end
 function scene.placeSquare(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then return end
  local field=patches[payload.fieldId]
@@ -2931,16 +2965,20 @@ function scene.placeSquare(p,payload)
  local leadId=payload.leadId
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and lead.field==field and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
-  and not next(lead.slots) and Mining.selectorTouches(center,square.half,lead.part.CFrame,lead.part.Size) then
-  square.leadId=leadId
+  and Mining.selectorTouches(center,square.half,lead.part.CFrame,lead.part.Size) then
+  if scene.canPairCut(p,lead) then square.pairId=leadId
+  elseif not next(lead.slots) then square.leadId=leadId end
  end
  local current=p.miningSquare
  local samePin=current and current.field==field and current.half==square.half and (current.center-center).Magnitude==0
- if samePin and not square.leadId then return end
+ if samePin and not square.leadId and not square.pairId then
+  if leadId==nil then current.leadId=nil;current.pairId=nil end
+  return
+ end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
- if samePin then current.leadId=square.leadId;return end
+ if samePin then current.leadId=square.leadId;current.pairId=square.pairId;return end
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_Selector',center)

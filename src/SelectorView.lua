@@ -82,6 +82,7 @@ function V:aim(ray)
   zone=part and part.Parent
   bed=zone and zone.Parent==run and zone:FindFirstChild('Field')
   if not bed or part~=bed then return nil end
+  leadId=nil
  end
  local position=leadId and part:GetAttribute('FullPosition') or hit.Position
  local point=Mining.selectorCenter(position,bed.CFrame,bed.Size)
