@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ec1918885ba2dc08d7e99012b12a093afbafde0149c81fdaaa725b6051da23a9` | Includes Quick Charge depot flight speed. |
+| Native-file SHA-256 | `4bd7cf97c6ddfcefc6e3ebc835f94ed5fea6b4c8b4039c861825522a5ad72e98` | Includes five native trail trees. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the faster Quick Charge trip** | All seven Sources and three roots verified in Edit. Team Create save returned version 152. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the Crystal Run trail grove** | All seven Sources and three roots verified in Edit. Team Create save returned version 153. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — frame Crystal Run with the original grove trees
+
+Five copies of Mining Away's original two-part block tree frame the Quartz approach, the lead-in to Cobalt and the edge of Emerald. The taller tree and sapling at Quartz sit beyond the existing sign. The copies use the existing bark and leaf finishes in muted green and warm wood. The original grove remains in place.
+
+The same player-height Studio Edit view showed the trees behind the signs and along the route. Native checks confirmed that the trunks meet the ground, all 129 walking samples hit the same surface at the same height, and all 150 tree-to-plot clearance checks and 720 sign sightlines passed. The canonical mirror added one folder, five models and ten decorative parts. It preserved all 50 Sources and existing native properties. Gameplay and phone presentation remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **153**. No player release was published. To reproduce from `2d1e0a6`, stage [the grove](../tools/studio_crystal_run_grove.lua) in shared Edit and write `shared.CrystalRunGrove.scenery` to `scenery.b64`. Run [the scoped mirror](../tools/refresh_crystal_run_grove.py) with the export directory and baseline hash `ec1918885ba2dc08d7e99012b12a093afbafde0149c81fdaaa725b6051da23a9`. Apply `shared.CrystalRunGrove.apply()` and save its receipt as `verified.json`. Run the mirror again with `--write` and verify with `python3 tools/build.py`.
 
 ## November 11 — make Quick Charge useful in deep fields
 
