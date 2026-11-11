@@ -24,6 +24,9 @@ W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
 W.COMPACTOR_PARTIAL_WAIT=1.5
 W.COMPACTOR_REACH=12
+W.PRESS_CONTACT=.43
+W.PRESS_EJECT=.82
+W.PRESS_RESET=1.20
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
@@ -4950,8 +4953,10 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
    local age=now-(source:GetAttribute('PressAt') or 0)
-   local stroke=state=='Press' and smooth(age/.15)*(1-smooth((age-.48)/.22)) or 0
-   offset=Vector3.new(-item.side*.57*stroke,-.12*stroke,0)
+   local close=smooth((age-.065)/(Workshop.PRESS_CONTACT-.065))
+   local reopen=smooth((age-Workshop.PRESS_EJECT)/(Workshop.PRESS_RESET-Workshop.PRESS_EJECT))
+   local stroke=state=='Press' and close*(1-reopen) or 0
+   offset=Vector3.new(-item.side*.69*stroke,-.22*stroke,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
@@ -5450,8 +5455,59 @@ local RoleEffectView = (function()
 -- Observe server-authored receipts. Every client renders locally, regardless
 -- of ownership. State records also cover late joins and canceled abilities.
 local View={}
-function View.new()
- local self={records={},connections={},root=nil}
+local Debris=game:GetService('Debris')
+local WHITE=Color3.fromRGB(255,248,231)
+local TRAIL_LIMIT=12
+
+local function shotPart(parent,name,size,color,ball,transparency)
+ local part=Instance.new('Part')
+ part.Name=name;part.Size=size;part.Color=color;part.Material=Enum.Material.Neon
+ part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
+ if ball then part.Shape=Enum.PartType.Ball end
+ part.Transparency=transparency or 0;part.Parent=parent
+ return part
+end
+
+local function addRibbon(part,color,ball)
+ local a=Instance.new('Attachment');a.Position=Vector3.new(0,ball and -.26 or -.085,.08);a.Parent=part
+ local b=Instance.new('Attachment');b.Position=Vector3.new(0,ball and .26 or .085,.08);b.Parent=part
+ local trail=Instance.new('Trail');trail.Name=ball and 'EnergyWake' or 'NeedleTrace'
+ trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true;trail.LightInfluence=0;trail.LightEmission=.88
+ trail.Lifetime=ball and .17 or .10;trail.MinLength=.055;trail.MaxLength=ball and 5 or 4
+ trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
+ trail.WidthScale=NumberSequence.new(1,0)
+ trail.Transparency=NumberSequence.new(.16,1);trail.Parent=part
+ return trail
+end
+
+local function sparks(from,direction,color,ball,impact)
+ if BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
+ local node=shotPart(workspace.CurrentCamera,'ShotSparks',Vector3.one*.025,color,false,1)
+ node.CFrame=CFrame.lookAt(from,from+direction)
+ local burst=Instance.new('ParticleEmitter')
+ burst.Texture='rbxasset://textures/particles/sparkles_main.dds';burst.Enabled=false
+ burst.EmissionDirection=Enum.NormalId.Front;burst.SpreadAngle=Vector2.new(impact and 46 or 28,impact and 46 or 28)
+ burst.Color=ColorSequence.new(WHITE,color);burst.LightInfluence=0;burst.LightEmission=.72
+ burst.Lifetime=NumberRange.new(.08,ball and .24 or .16);burst.Speed=NumberRange.new(4,ball and 13 or 18);burst.Drag=8
+ burst.Size=NumberSequence.new(ball and .21 or .13,0);burst.Transparency=NumberSequence.new(.11,1)
+ burst.Parent=node;burst:Emit(ball and 8 or 5);Debris:AddItem(node,.29)
+end
+
+local function clearProjectile(self,r,now,carryTail)
+ local part=r.projectile or r.after
+ if r.trail and carryTail and r.projectile then
+  part.Transparency=1;if r.shell then r.shell.Transparency=1 end
+  r.trail.Enabled=false;r.after=part;r.afterUntil=now+r.trail.Lifetime
+ else
+  if part then part:Destroy() end
+  if r.trail then self.trails-=1;r.trail=nil end
+  r.after=nil
+ end
+ r.projectile=nil
+end
+
+function View.new(audio)
+ local self={records={},connections={},root=nil,trails=0}
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -5467,11 +5523,12 @@ function View.new()
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
-    if r.projectile then r.projectile:Destroy() end
+    clearProjectile(self,r,now,false)
     if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
     if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     self.records[node]=nil
    elseif kind=='MiningShot' then
+    if r.after and now>=r.afterUntil then clearProjectile(self,r,now,false) end
     local from=node:GetAttribute('From');local to=node:GetAttribute('Position')
     local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
     if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
@@ -5489,30 +5546,52 @@ function View.new()
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    if landed and r.bound and drone and not r.impacted and now-contactAt<.20 then
-     r.impacted=true;drone.shotImpactAt=now
+    local ball=node:GetAttribute('Shape')=='Ball'
+    local color=node:GetAttribute('Color')
+    if not color then continue end
+    if landed and r.projectile and not r.impacted and now-contactAt<.20 then
+     r.impacted=true
+     if r.bound and drone then drone.shotImpactAt=now end
+     local point=node:GetAttribute('ContactPoint') or to
+     local travel=point-(r.launchFrom or from)
+     if travel.Magnitude>.01 then
+      sparks(point-travel.Unit*.04,-travel.Unit,color,ball,true)
+      if ball then
+       RoleVisuals.setTime(contactAt)
+       RoleVisuals.Pulse(point,color,.23,1.85,.19)
+      end
+     end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
     if resolved then
-     if r.projectile then r.projectile:Destroy();r.projectile=nil end
+     if r.projectile then clearProjectile(self,r,now,true) end
      r.started=true
     elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
      local value=r.projectile
      if not value then
-      local ball=node:GetAttribute('Shape')=='Ball'
-      value=Instance.new('Part');value.Name='MiningProjectile';value.Anchored=true
-      value.CanCollide=false;value.CanTouch=false;value.CanQuery=false;value.CastShadow=false
-      value.Material=Enum.Material.Neon;value.Color=node:GetAttribute('Color')
-      value.Size=ball and Vector3.one*1.1 or Vector3.new(.20,.20,1.4)
-      if ball then value.Shape=Enum.PartType.Ball end
+      local camera=workspace.CurrentCamera
+      if not camera then continue end
+      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.73 or Vector3.new(.14,.14,1.07),color:Lerp(WHITE,.58),ball)
+      r.projectile=value
+      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.06,color,true,.58) end
       local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
       if muzzle and (muzzle-from).Magnitude<2.5 and (to-muzzle).Magnitude>1 then r.launchFrom=muzzle end
-      value.Parent=workspace.CurrentCamera;r.projectile=value
+      from=r.launchFrom or from
+      if self.trails<TRAIL_LIMIT and not BeamVFX.reduced() then
+       r.trail=addRibbon(value,color,ball);self.trails+=1
+      end
+      if now-at<.13 and (to-from).Magnitude>.01 then
+       sparks(from,(to-from).Unit,color,ball,false)
+       if audio then audio:play('shot',from,{pitch=ball and .61 or 1.13,level=ball and .76 or .66}) end
+      end
      end
      from=r.launchFrom or from
-     local direction=(to-from).Unit
+     local delta=to-from
+     if delta.Magnitude<.01 then continue end
+     local direction=delta.Unit
      local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
+     if r.shell then r.shell.CFrame=value.CFrame end
     end
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
@@ -5567,7 +5646,7 @@ function View.new()
  end
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
-  for _,r in pairs(self.records) do if r.projectile then r.projectile:Destroy() end end
+  for _,r in pairs(self.records) do clearProjectile(self,r,0,false) end
   table.clear(self.records);RoleVisuals.destroy()
  end
  return self
@@ -6038,14 +6117,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
- local charging=sample.alive and sample.charging and not sample.paused
- if not reference and (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
+ local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster'
+ local charging=sample.alive and sample.charging and not sample.paused and not projectile
+ local ignition=predicted and deadline or sample.since or now
+ local launchTail=visible and beam.vfx and not sample.paused and now-ignition<.18
+ local wantsVFX=charging or (reference and launchTail) or (not reference and visible)
+ if wantsVFX and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint)
+ elseif reference and not wantsVFX and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
   BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneRole or sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
- if reference and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if visible then
   local origin=beam.origin.WorldPosition
   local vertical=beam.vertical and not beam.followCrystal
@@ -6064,12 +6147,16 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if beam.vfx then
    beam.halo.Transparency=1
    local releaseAt=predicted and deadline or (style=='Percussion' and (sample.pulseAt or sample.since) or sample.since)
-   BeamVFX.draw(beam.vfx,origin,tip,now,width*alpha,nil,now-(releaseAt or now),BeamVFX.MiningScale+pulse*.15)
+   -- Keep Mining Away's original beam and endpoint. This rig restores the
+   -- inward charge, color pop, and planar aftermath around that beam.
+   local effectWidth=reference and 0 or width*alpha
+   BeamVFX.draw(beam.vfx,origin,tip,now,effectWidth,nil,now-(releaseAt or now),BeamVFX.MiningScale+pulse*.15)
   end
  elseif charging and beam.vfx then
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
-  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale,sample.warmupDuration)
+  local aim=valid and point or origin-Vector3.yAxis
+  BeamVFX.draw(beam.vfx,origin,aim,now,0,math.min(q,.999),nil,BeamVFX.MiningScale,sample.warmupDuration)
  elseif beam.vfx and sample.specialReleaseAt and now-sample.specialReleaseAt<.16 then
   local origin=beam.origin.WorldPosition
   BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,nil,now-sample.specialReleaseAt,BeamVFX.MiningScale)
@@ -6081,12 +6168,16 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
-  halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
+  halo.Size=Vector3.one*.55;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and (.85-.16*beat) or 1
-  if glow then beam.referenceGlow.Position=point end
+  local strength=BeamVFX.reduced() and .35 or 1
+  beam.referenceGlow.Transparency=glow and (.91-.19*beat*strength) or 1
+  if glow then
+   beam.referenceGlow.Position=point+normal*.08
+   beam.referenceGlow.Size=Vector3.one*(.40+.20*beat*strength)
+  end
  end
  if reference then
   beam.marker.Size=Vector3.one*(.145+.040*beat)
@@ -7232,7 +7323,19 @@ local Packs = {
 -- The original event used progressively longer holds. These are the four
 -- Crystal Run timings, with most of the visible movement at the beginning.
 local ends = {.62, 1.32, 3.25, 6.85}
-local work = {.57, .18, .17, .08}
+-- Sample points on the visible sweep. Keep the first fast push, the
+-- shoulder just past half-full, and the long crawl through the last arc.
+local times={0,.20,ends[1],.90,ends[2],2.08,ends[3],4.76,ends[4]}
+local fill={0,.16,.57,.67,.75,.84,.92,.969,1}
+local stops={3,5,7,9}
+local slope={.48}
+for i=2,#times-1 do
+ local before,after=times[i]-times[i-1],times[i+1]-times[i]
+ local left,right=(fill[i]-fill[i-1])/before,(fill[i+1]-fill[i])/after
+ local a,b=2*after+before,after+2*before
+ slope[i]=(a+b)/(a/left+b/right)
+end
+slope[#times]=.006
 
 function Packs.roll(ticket)
  if ticket <= 66 then return 1 end
@@ -7257,26 +7360,30 @@ function Packs.rarityTier(rarity)
 end
 
 function Packs.sample(tier, elapsed)
- local start, filled, total = 0, 0, 0
- for i = 1, tier do total += work[i] end
- for i = 1, tier do
-  local finish = ends[i]
-  if elapsed < finish or i == tier then
-   local fraction = math.clamp((elapsed-start)/(finish-start), 0, 1)
-   local eased=fraction*(1.24-.24*fraction)
-   return (filled+work[i]*eased)/total, i
+ if elapsed<=0 then return 0,1 end
+ if elapsed>=ends[tier] then return 1,tier end
+ local stage=1
+ while stage<tier and elapsed>=ends[stage] do stage+=1 end
+ local last=stops[tier]
+ for i=2,last do
+  if elapsed<times[i] then
+   local span=times[i]-times[i-1]
+   local t=(elapsed-times[i-1])/span
+   local t2,t3=t*t,t*t*t
+   local value=(2*t3-3*t2+1)*fill[i-1]+(t3-2*t2+t)*span*slope[i-1]
+     +(-2*t3+3*t2)*fill[i]+(t3-t2)*span*slope[i]
+   return value/fill[last],stage
   end
-  start, filled = finish, filled+work[i]
  end
- return 1, tier
+ return 1,tier
 end
 
 function Packs.reel(elapsed,index,speed)
  local delay=(index-1)*.15
- local duration=.98+(index-1)*.24
+ local duration=1.16+(index-1)*.25
  local t=math.clamp((elapsed*speed-delay)/duration,0,1)
  local travel=8+index
- return travel*(1-(1-t)^3), travel, t>=1, t>0
+ return travel*(1-(1-t)^3), travel, t>=1, t>0, t
 end
 
 return Packs
@@ -7403,10 +7510,8 @@ end
 local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local GuiService=game:GetService('GuiService')
-local UserInputService=game:GetService('UserInputService')
 local serial=0
 local bindPrefix='UpgradeCards'..game:GetService('HttpService'):GenerateGUID(false)
-local FACE_PIXELS=3 -- Supersample the curved physical face; screen text stays native.
 local function rarityColor(tier) return Color3.fromRGB(table.unpack(Packs.Palette[tier] or Packs.Palette[1])) end
 function CardView.rarityColor(choice) return rarityColor(Packs.rarityTier(choice.rarity)) end
 
@@ -7458,34 +7563,6 @@ function CardView.identity(choice)
  if has('combat') or has('rate') or has('crit') or has('splash') or has('finisher') or has('range') then return 'combat',Color3.fromRGB(178,30,80),Color3.fromRGB(255,161,198) end
  if has('speed') or has('startup') or has('reclaim') or has('fieldCharge') then return 'thrust',Color3.fromRGB(0,104,179),Color3.fromRGB(121,237,255) end
  return 'mineral',Color3.fromRGB(104,49,170),Color3.fromRGB(245,177,255)
-end
-
--- One textured surface and one rounded border, shared by cards and packs.
--- Use Roblox's shipped stud atlas; no uploaded art or per-stud GUI objects.
-function CardView.housing(U,root,color,_accent)
- local pixels=root.Parent:IsA('SurfaceGui') and FACE_PIXELS or 1
- root.BackgroundColor3=color
- local finish=Instance.new('UIGradient');finish.Name='GlossColor';finish.Rotation=90
- finish.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(.42,Color3.fromRGB(220,228,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(85,87,130))});finish.Parent=root
- local corner=root:FindFirstChildOfClass('UICorner') or U.corner(root,20*pixels)
- corner.CornerRadius=UDim.new(0,20*pixels)
- local edge=U.stroke(root,Color3.fromRGB(16,28,55),3*pixels)
- edge.BorderStrokePosition=Enum.BorderStrokePosition.Inner;edge.ZIndex=root.ZIndex+5
- local texture=Instance.new('CanvasGroup');texture.Name='StudTexture';texture.BackgroundTransparency=1
- texture.Size=UDim2.fromScale(1,1);texture.ZIndex=root.ZIndex+1;texture.Parent=root;U.corner(texture,20*pixels)
- -- The shipped image is an atlas. Tile its first 512-pixel stud region in
- -- short bands; cropped ImageRects do not honor TileSize in the native UI.
- local band=96*pixels
- local bands=math.max(1,math.ceil(math.max(root.Size.Y.Offset,band)/band))
- for i=0,bands-1 do
-  local tile=Instance.new('ImageLabel');tile.Name='StudBand';tile.BackgroundTransparency=1
-  tile.Position=UDim2.fromOffset(0,i*band);tile.Size=UDim2.new(1,0,0,band)
-  tile.Image='rbxasset://textures/studs.dds';tile.ScaleType=Enum.ScaleType.Tile
-  tile.TileSize=UDim2.fromOffset(24*pixels,384*pixels)
-  tile.ImageColor3=color:Lerp(Color3.new(1,1,1),.2);tile.ImageTransparency=.83
-  tile.ZIndex=texture.ZIndex+1;tile.Parent=texture
- end
- return edge
 end
 
 local function safePreview(model)
@@ -7671,301 +7748,202 @@ local function mechanicVisual(parent,choice,compact)
   crystal(2.7,Vector3.new(.45,-.7,0),accent,CFrame.Angles(0,.35,-.17))
   ray(Vector3.new(-.8,.6,0),Vector3.new(.1,.05,0),.11,accent);chips(Vector3.new(0,-1.5,0),body:Lerp(accent,.65))
  end
- -- A single offset silhouette keeps the mechanism readable on enamel.
- local outline=viewport:Clone();outline.Name='ArtworkSilhouette';outline.CurrentCamera=camera
- local copiedCamera=outline:FindFirstChildOfClass('Camera');if copiedCamera then copiedCamera:Destroy() end
- outline.ImageColor3=Color3.fromRGB(16,24,36);outline.Position=viewport.Position+UDim2.fromOffset(2*FACE_PIXELS,3*FACE_PIXELS)
- outline.ZIndex=viewport.ZIndex-1;outline.Parent=parent
- return viewport,camera
+ return viewport
 end
 
--- Shipped radial light has transparent, feathered spokes and ends.
-local function sunburst(_U,canvas,compact,color)
- local rays=Instance.new('ImageLabel');rays.Name='SpinningRays';rays.BackgroundTransparency=1
- rays.AnchorPoint=Vector2.new(.5,.5);rays.Position=UDim2.fromScale(.5,compact and .182 or .252)
- rays.Size=UDim2.fromScale(1,compact and .54 or .76);rays.Image='rbxasset://textures/glow.png'
- rays.ImageColor3=color:Lerp(Color3.new(1,1,1),.65);rays.ImageTransparency=.35;rays.ZIndex=canvas.ZIndex+2;rays.Parent=canvas
- local aspect=Instance.new('UIAspectRatioConstraint');aspect.AspectRatio=1;aspect.DominantAxis=Enum.DominantAxis.Height;aspect.Parent=rays
- return rays
+local function cardViewport(parent,name,zIndex)
+ local view=Instance.new('ViewportFrame')
+ view.Name=name;view.Size=UDim2.fromScale(1,1);view.BackgroundTransparency=1;view.ZIndex=zIndex
+ view.Ambient=Color3.fromRGB(190,199,213);view.LightColor=Color3.fromRGB(252,246,231)
+ view.LightDirection=Vector3.new(-.8,-1,-2)
+ local camera=Instance.new('Camera');camera.FieldOfView=36
+ camera.CFrame=CFrame.new(0,0,10);camera.Parent=view;view.CurrentCamera=camera
+ local world=Instance.new('WorldModel');world.Parent=view
+ view.Parent=parent
+ return view,world
 end
 
--- Concentric alpha layers approximate a continuous Gaussian without a
--- particle texture's colored/opaque RGB contaminating the card enamel.
-local function softGlow(U,parent,name,color)
- local glow=Instance.new('CanvasGroup');glow.Name=name;glow.BackgroundTransparency=1;glow.AnchorPoint=Vector2.new(.5,.5)
- glow.Size=UDim2.fromScale(1.1,.8);glow.Position=UDim2.fromScale(.5,.25);glow.GroupTransparency=1;glow.ZIndex=parent.ZIndex+1;glow.Parent=parent
- local previous=0
- for i=1,12 do
-  local radius=1-(i-1)/12
-  local opacity=.6*(math.exp(-radius*radius*4)-math.exp(-4))/(1-math.exp(-4))
-  local alpha=(opacity-previous)/math.max(.001,1-previous);previous=opacity
-  local disc=U.frame(glow,UDim2.fromScale((1-radius)/2,(1-radius)/2),UDim2.fromScale(radius,radius),color)
-  disc.ZIndex=glow.ZIndex;disc.BackgroundTransparency=1-alpha;U.corner(disc,999)
+local function cardStock(world,color,stamped)
+ local model=Instance.new('Model');model.Name='CardStock';model.WorldPivot=CFrame.new()
+ local layers={
+  visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.fromRGB(18,23,30),.50)),
+  visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.new(1,1,1),.22)),
+  visualPart(model,Vector3.one,Vector3.zero,color),
+ }
+ if stamped then
+  for _=1,2 do
+   table.insert(layers,visualPart(model,Vector3.one,Vector3.zero,color:Lerp(Color3.new(1,1,1),.25)))
+  end
  end
- return glow
+ model.Parent=world
+ return {model=model,layers=layers}
 end
 
-local function shineLayer(U,canvas,rim)
- local shine=Instance.new('CanvasGroup');shine.Name='FaceLight';shine.BackgroundTransparency=1;shine.Size=UDim2.fromScale(1,1);shine.ZIndex=canvas.ZIndex+2;shine.Parent=canvas;U.corner(shine,20*FACE_PIXELS)
- local sweep=U.frame(shine,UDim2.fromScale(-.6,-.25),UDim2.fromScale(.7,1.5),Color3.new(1,1,1));sweep.Name='GlossSweep';sweep.Rotation=22;sweep.Visible=false
- local g=Instance.new('UIGradient');g.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.18,1),NumberSequenceKeypoint.new(.35,.95),NumberSequenceKeypoint.new(.5,.78),NumberSequenceKeypoint.new(.65,.95),NumberSequenceKeypoint.new(.82,1),NumberSequenceKeypoint.new(1,1)});g.Parent=sweep
- local spot=softGlow(U,shine,'MouseHighlight',Color3.new(1,1,1))
- local ambient=softGlow(U,shine,'EnamelLight',rim:Lerp(Color3.new(1,1,1),.65));ambient.GroupTransparency=.82;ambient.Size=UDim2.fromScale(1.3,.9);ambient.Position=UDim2.fromScale(.4,.17)
- local flash=Instance.new('ImageLabel');flash.Name='RimFlash';flash.BackgroundTransparency=1;flash.Image='rbxasset://textures/particles/sparkles_main.dds';flash.ImageColor3=rim:Lerp(Color3.new(1,1,1),.65);flash.Size=UDim2.fromOffset(32*FACE_PIXELS,32*FACE_PIXELS);flash.AnchorPoint=Vector2.new(.5,.5);flash.ImageTransparency=1;flash.ZIndex=canvas.ZIndex+7;flash.Parent=canvas
- return sweep,spot,flash
+local function drawStock(stock,width,height,pose)
+ local depth=math.min(width,height)*.078
+ for i,part in ipairs(stock.layers) do
+  local size,z
+  if i==1 then size=Vector3.new(width,height,depth);z=0
+  elseif i==2 then size=Vector3.new(width*.985,height*.986,depth*.20);z=depth*.55
+  elseif i==3 then size=Vector3.new(width*.949,height*.96,depth*.17);z=depth*.69
+  else
+   size=Vector3.new(width*.23,height*.034,depth*.14)
+   z=depth*.85
+  end
+  part.Size=size
+  part.CFrame=pose*CFrame.new(0,i>3 and (i-4.5)*height*.062 or 0,z)
+ end
 end
-local function visibleRect(root)
- local position,size=root.AbsolutePosition,root.AbsoluteSize
- local left,top,right,bottom=position.X,position.Y,position.X+size.X,position.Y+size.Y
+
+local function ancestorsVisible(root)
  local ancestor=root
  while ancestor do
-  if ancestor:IsA('GuiObject') then
-   if not ancestor.Visible then return nil end
-   if ancestor~=root and (ancestor.ClipsDescendants or ancestor:IsA('ScrollingFrame')) then
-    local p,s=ancestor.AbsolutePosition,ancestor.AbsoluteSize
-    left=math.max(left,p.X);top=math.max(top,p.Y);right=math.min(right,p.X+s.X);bottom=math.min(bottom,p.Y+s.Y)
-   end
-  elseif ancestor:IsA('ScreenGui') and not ancestor.Enabled then return nil end
+  if ancestor:IsA('GuiObject') and not ancestor.Visible then return false end
+  if ancestor:IsA('ScreenGui') and not ancestor.Enabled then return false end
   ancestor=ancestor.Parent
  end
- if right-left<2 or bottom-top<2 or size.X<2 or size.Y<2 then return nil end
- return left,top,right,bottom
-end
-local function onPlane(camera,x,y,depth)
- -- AbsolutePosition and ScreenPointToRay both use CoreUISafeInsets coordinates.
- local ray=camera:ScreenPointToRay(x,y)
- local direction=camera.CFrame:VectorToObjectSpace(ray.Direction)
- return ray.Origin+ray.Direction*(depth/math.max(.001,-direction.Z))
+ return true
 end
 
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
- local p=U.palette;local _,_,accentColor=CardView.identity(choice)
+ local p=U.palette
  local tier=Packs.rarityTier(choice.rarity)
  local tierColor=rarityColor(tier)
- local bodyColor=tierColor:Lerp(Color3.fromRGB(7,13,27),.55)
- local rim=Color3.fromRGB(33,46,62)
+ local bodyColor=tierColor:Lerp(Color3.fromRGB(14,20,31),.50)
  local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
  slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
- local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
- socket.Name='UpgradeSlot';socket.BackgroundTransparency=.64;U.corner(socket,14)
- local rail=U.stroke(socket,Color3.fromRGB(119,147,168),2);rail.Transparency=.32
- local latch=U.frame(slot,UDim2.new(.5,-22,1,-12),UDim2.fromOffset(44,7),Color3.fromRGB(62,89,108))
- latch.Name='SlotLatch';U.corner(latch,3)
- for _,side in ipairs({0,1}) do
-  local handle=U.frame(slot,UDim2.new(side,side==0 and 0 or -6,.38,0),UDim2.new(0,6,.24,0),Color3.fromRGB(69,94,112))
-  U.corner(handle,3)
- end
- width-=16;height-=16
- local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
- card.Name='MountedCard';card.BackgroundTransparency=1
- local badge=U.frame(card,UDim2.fromOffset(9,9),UDim2.fromOffset(math.min(105,width-52),23),tierColor)
- badge.Name='RarityBadge';U.corner(badge,8);U.stroke(badge,p.ink,1.5)
- local rarity=U.text(badge,UDim2.fromScale(0,0),UDim2.fromScale(1,1),string.upper(choice.rarity or Packs.Tiers[tier]),12,p.ink,true)
- rarity.TextXAlignment=Enum.TextXAlignment.Center
- local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
- choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
- local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
- local scale=choose:FindFirstChild('ButtonScale');if scale then scale:Destroy() end
- local selection=Instance.new('Frame');selection.Name='SelectionMask';selection.BackgroundTransparency=1;selection.Size=UDim2.fromScale(1,1);selection.Parent=choose
- choose.SelectionImageObject=selection -- The physical card border supplies focus, not a second square outline.
- local model=Instance.new('Folder');model.Name='LocalUpgradeCard';model.Parent=workspace
- local part=visualPart(model,Vector3.new(2,3,.05),Vector3.zero,Color3.fromRGB(74,83,88));part.Name='CardBody';part.Transparency=1
- local surface=Instance.new('SurfaceGui');surface.Name='UpgradeCardFace';surface.Adornee=part;surface.Face=Enum.NormalId.Front
- surface.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;surface.CanvasSize=Vector2.new(width*FACE_PIXELS,height*FACE_PIXELS)
- -- The current native renderer drops AlwaysOnTop faces, even on a minimal
- -- diagnostic part. Render these camera-local faces near the camera instead.
- surface.AlwaysOnTop=false;surface.LightInfluence=0;surface.Brightness=1;surface.MaxDistance=8;surface.Active=false;surface.Enabled=false;surface.ResetOnSpawn=false
- surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
- local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*FACE_PIXELS,height*FACE_PIXELS),p.paper);canvas.Name='CardCanvas'
- local border=CardView.housing(U,canvas,bodyColor,accentColor)
- border.Color=rim; border.Thickness=1.5*FACE_PIXELS
- local rimFace=U.frame(canvas,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1));rimFace.Name='RimBevel';rimFace.ZIndex=canvas.ZIndex;U.corner(rimFace,20*FACE_PIXELS)
- local inner=U.frame(rimFace,UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS),UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS),Color3.new(1,1,1));inner.Name='Enamel';inner.ZIndex=canvas.ZIndex;U.corner(inner,15*FACE_PIXELS)
- local enamel=Instance.new('UIGradient');enamel.Rotation=90;enamel.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.28,bodyColor:Lerp(Color3.new(1,1,1),.025)),ColorSequenceKeypoint.new(.62,bodyColor),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.33))});enamel.Parent=inner
- local rimLight=Instance.new('UIGradient');rimLight.Name='RimLight';rimLight.Rotation=118
- rimLight.Color=ColorSequence.new(Color3.fromRGB(120,140,158),rim);rimLight.Parent=rimFace
- local edge=U.stroke(inner,bodyColor:Lerp(Color3.new(1,1,1),.5),FACE_PIXELS);edge.Transparency=.5
- local texture=canvas:FindFirstChild('StudTexture');texture.Position=UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS);texture.Size=UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS);texture:FindFirstChildOfClass('UICorner').CornerRadius=UDim.new(0,15*FACE_PIXELS)
- local rays=sunburst(U,canvas,compact,accentColor)
- local sweep,spot,flash=shineLayer(U,canvas,rim)
- rays.Parent=canvas.FaceLight
- local _,artCamera=mechanicVisual(canvas,choice,compact)
- local iconWell=U.frame(canvas,UDim2.new(1,-8*FACE_PIXELS,0,8*FACE_PIXELS),UDim2.fromOffset(34*FACE_PIXELS,34*FACE_PIXELS),p.ink)
- iconWell.AnchorPoint=Vector2.new(1,0);iconWell.BackgroundTransparency=.26;iconWell.ZIndex=canvas.ZIndex+9
- U.corner(iconWell,7*FACE_PIXELS)
+ local card=U.frame(slot,UDim2.fromOffset(4,3),UDim2.new(1,-8,1,-6),p.paper)
+ card.Name='MountedCard';card.BackgroundTransparency=1;card.Visible=false
+ local scale=Instance.new('UIScale');scale.Parent=card
+ local shell,shellWorld=cardViewport(card,'CardShell',card.ZIndex+1)
+ local stock=cardStock(shellWorld,bodyColor,false)
+ local art=mechanicVisual(card,choice,compact)
+ art.Position=UDim2.fromScale(.12,compact and .13 or .10);art.Size=UDim2.fromScale(.76,compact and .24 or .35)
+ local badge=U.text(card,UDim2.fromOffset(13,10),UDim2.new(1,-62,0,22),string.upper(choice.rarity or Packs.Tiers[tier]),12,tierColor,true)
+ badge.Name='RarityBadge';badge.ZIndex=card.ZIndex+6
  local scopeIcon=Instance.new('ImageLabel')
  scopeIcon.Name='CardScope';scopeIcon.Image=CardView.scopeIcon(choice)
- scopeIcon.BackgroundTransparency=1;scopeIcon.Size=UDim2.fromScale(.76,.76);scopeIcon.Position=UDim2.fromScale(.12,.12)
- scopeIcon.ScaleType=Enum.ScaleType.Fit;scopeIcon.ZIndex=iconWell.ZIndex+1;scopeIcon.Parent=iconWell
- local summary=CardView.summary(choice)
+ scopeIcon.BackgroundTransparency=1;scopeIcon.Position=UDim2.new(1,-41,0,9);scopeIcon.Size=UDim2.fromOffset(28,28)
+ scopeIcon.ScaleType=Enum.ScaleType.Fit;scopeIcon.ZIndex=card.ZIndex+6;scopeIcon.Parent=card
  local function escape(v) return (tostring(v):gsub('&','&amp;'):gsub('<','&lt;'):gsub('>','&gt;')) end
- local heading=escape(choice.title or 'Run upgrade')
- local bodyText=escape(summary)
- local display='<b>'..heading..'</b>\n'..bodyText
- -- Keep font rasterization and scrolling in the native screen layer. The
- -- body/art retain real perspective; near-camera SurfaceGui glyphs otherwise
- -- lose rows of pixels in the depth pass on the verified phone renderer.
- local effectY=compact and .37 or .48
- local termsY=compact and .72 or .80
- local effect=U.text(card,UDim2.new(0,12,effectY,0),UDim2.new(1,-24,compact and .33 or .30,0),display,compact and 16 or 18,p.white,true)
- effect.RichText=true;effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center
- effect.TextStrokeColor3=Color3.fromRGB(13,23,48);effect.TextStrokeTransparency=.5
- local terms=U.text(card,UDim2.new(0,12,termsY,0),UDim2.new(1,-24,compact and .24 or .16,0),CardView.terms(choice,options.target,true),16,p.white,false)
- terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center
- terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
- local focused,pressed,blend,selected=false,false,0,false
- local finishedAt,installed
+ local display='<b>'..escape(choice.title or 'Run upgrade')..'</b>\n'..escape(CardView.summary(choice))
+ local effect=U.text(card,UDim2.new(0,12,compact and .37 or .45,0),UDim2.new(1,-24,compact and .35 or .32,0),display,compact and 16 or 18,p.white,true)
+ effect.RichText=true;effect.Name='CardEffect';effect.TextXAlignment=Enum.TextXAlignment.Center;effect.ZIndex=card.ZIndex+5
+ local terms=U.text(card,UDim2.new(0,12,compact and .72 or .77,0),UDim2.new(1,-24,compact and .24 or .19,0),CardView.terms(choice,options.target,true),15,p.white,false)
+ terms.Name='CardTerms';terms.TextXAlignment=Enum.TextXAlignment.Center;terms.ZIndex=card.ZIndex+5
+ local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
+ choose.Name='ChooseCard';choose.ZIndex=card.ZIndex+8;U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
+ local outline=choose:FindFirstChildOfClass('UIStroke');if outline then outline.Enabled=false end
+ local buttonScale=choose:FindFirstChild('ButtonScale');if buttonScale then buttonScale:Destroy() end
+ local selection=Instance.new('Frame');selection.Name='SelectionMask';selection.BackgroundTransparency=1;selection.Size=UDim2.fromScale(1,1);selection.Parent=choose
+ choose.SelectionImageObject=selection
+
+ local reelParent=options.reelParent or parent:FindFirstAncestorWhichIsA('ScreenGui')
+ local reel,reelWorld
+ local tiles={}
  local revealSpeed=math.clamp(options.revealSpeed or 1,1,4)
  local revealStart=options.revealStart or os.clock()
- local reel={}
- local function hideReel()
-  for _,entry in ipairs(reel) do entry.part.Transparency=1;entry.face.Enabled=false end
+ local landed,focused,pressed=false,false,false
+ local blend,lastCell=0,-1
+ local shellAspect,shellBlend,shellSettle
+ local settleAt=1.16+(index-1)*.40
+ local function destroyReel()
+  if reel then reel:Destroy();reel=nil;table.clear(tiles) end
  end
- local function disposeReel()
-  for _,entry in ipairs(reel) do entry.face:Destroy();entry.part:Destroy() end
-  table.clear(reel)
- end
- local function spin(camera,left,top,right,bottom,position,size,offset,stop)
-  for i=1,3 do
-   local cell=math.floor(offset)+i-1
-   local entry=reel[i]
-   if not entry then
-    local blank=visualPart(model,Vector3.one,Vector3.zero,rim);blank.Name='SpinningCard'
-    local face=Instance.new('SurfaceGui');face.Name='CardBack';face.Adornee=blank
-    face.LightInfluence=0;face.Brightness=1;face.MaxDistance=8;face.Active=false
-    face.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;face.CanvasSize=Vector2.new(128,192);face.Parent=surface.Parent
-    local field=U.frame(face,UDim2.fromScale(0,0),UDim2.fromScale(1,1),rim)
-    field.ClipsDescendants=true
-    local mark=Instance.new('ImageLabel');mark.BackgroundTransparency=1;mark.Image=icons.fleet
-    mark.ImageTransparency=.45;mark.Size=UDim2.fromScale(.29,.29);mark.AnchorPoint=Vector2.new(.5,.5)
-    mark.Position=UDim2.fromScale(.5,.5);mark.ScaleType=Enum.ScaleType.Fit;mark.Parent=field
-    entry={part=blank,face=face,field=field,mark=mark};reel[i]=entry
+ local function spin(offset,stop)
+  if not reel then
+   local z=reelParent:IsA('GuiObject') and reelParent.ZIndex+4 or 20
+   reel,reelWorld=cardViewport(reelParent,'FullHeightCardReel',z)
+  end
+  local size,origin=reel.AbsoluteSize,reel.AbsolutePosition
+  if size.Y<2 or size.X<2 then return end
+  reel.Visible=true
+  local tall=options.portrait==true
+  local position,cardSize=slot.AbsolutePosition-origin,slot.AbsoluteSize
+  local targetX,targetY=position.X+cardSize.X*.5,position.Y+cardSize.Y*.5
+  local laneX=tall and size.X*(index-.5)/3 or targetX
+  local laneY=tall and size.Y*.52 or targetY
+  local laneWidth=tall and math.min(cardSize.X-12,size.X*.29) or cardSize.X-12
+  local laneHeight=tall and laneWidth*1.38 or cardSize.Y-10
+  local spacing=laneHeight*.89+16
+  local units=2*10*math.tan(math.rad(18))/size.Y
+  local shown={}
+  local first=math.max(0,math.floor(offset+(laneY-size.Y-laneHeight)/spacing))
+  local last=math.min(stop,math.ceil(offset+(laneY+laneHeight)/spacing))
+  for cell=first,last do
+   local final=cell==stop
+   local approach=final and math.clamp(1-(stop-offset)/1.3,0,1) or 0
+   approach=approach*approach*(3-2*approach)
+   local centerY=laneY+(offset-cell)*spacing+(targetY-laneY)*approach
+   local w=laneWidth+(cardSize.X-12-laneWidth)*approach
+   local h=laneHeight+(cardSize.Y-10-laneHeight)*approach
+   if centerY+h*.55<0 or centerY-h*.55>size.Y then continue end
+   local tile=tiles[cell]
+   if not tile then
+    local tint=final and bodyColor or rarityColor((cell+index)%#Packs.Tiers+1):Lerp(p.ink,.45)
+    tile=cardStock(reelWorld,tint,true);tiles[cell]=tile
    end
-   local centerY=position.Y+size.Y/2+(offset-cell)*size.Y*.94
-   local fullTop=centerY-size.Y*.42
-   local a,b=math.max(top,fullTop),math.min(bottom,centerY+size.Y*.42)
-   if b-a<2 or cell>=stop then entry.part.Transparency=1;entry.face.Enabled=false;continue end
-   local x,y=(left+right)/2,(a+b)/2
-   local depth=1.025
-   local center=onPlane(camera,x,y,depth)
-   local w=(onPlane(camera,right,y,depth)-onPlane(camera,left,y,depth)).Magnitude*.92
-   local h=(onPlane(camera,x,a,depth)-onPlane(camera,x,b,depth)).Magnitude
-   entry.part.Size=Vector3.new(w,h,.035);entry.part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(0,math.pi,0)
-   local shade=rarityColor((cell+index)%#Packs.Tiers+1):Lerp(rim,.63)
-   entry.part.Color=shade;entry.field.BackgroundColor3=shade
-   entry.mark.Position=UDim2.fromScale(.5,(centerY-a)/(b-a));entry.mark.Visible=centerY>a and centerY<b
-   entry.part.Transparency=0;entry.face.Enabled=true
+   shown[cell]=true
+   local x=laneX+(targetX-laneX)*approach
+   local pitch=math.rad(34)*math.clamp((centerY-laneY)/spacing,-1,1)*(1-approach)
+   local yaw=math.rad((index-2)*12+8)*(1-approach)
+   local pose=CFrame.new((x-size.X*.5)*units,(size.Y*.5-centerY)*units,0)*CFrame.Angles(pitch,yaw,0)
+   drawStock(tile,w*units,h*units,pose)
+  end
+  for cell,tile in pairs(tiles) do
+   if not shown[cell] then tile.model:Destroy();tiles[cell]=nil end
   end
  end
 
- local signals={}
- local function connect(signal,fn) table.insert(signals,signal:Connect(fn)) end
- connect(choose.MouseEnter,function() focused=true end);connect(choose.MouseLeave,function() focused=false;pressed=false end)
- connect(choose.SelectionGained,function() focused=true end);connect(choose.SelectionLost,function() focused=false;pressed=false end)
- connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
- serial=serial+1;local stepName=bindPrefix..'Card'..serial
- local dead=false;local landed=false;local reelCell=-1;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
- local function dispose()
-  if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
-  for _,connection in ipairs(signals) do connection:Disconnect() end
-  disposeReel();surface:Destroy();model:Destroy()
- end
- connect(slot.Destroying,dispose)
- RunService:BindToRenderStep(stepName,Enum.RenderPriority.Camera.Value+8,function(dt)
-  if dead then return end
-  local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
-  if not camera or not left then surface.Enabled=false;part.Transparency=1;hideReel();return end
-  local clock=os.clock();local age=clock-revealStart;local quiet=options.reducedMotion==true or CardView.reducedMotion()
-  local instant=quiet or options.skipReveal
-  local position,size=card.AbsolutePosition,card.AbsoluteSize
-  local offset,stop,settled,started=Packs.reel(age,index,revealSpeed)
-  if instant then settled=true;offset=stop end
-  local progress=settled and 1 or math.clamp(1-(stop-offset),0,1)
-  local reveal=1-(1-progress)^3
-  if settled then
-   if not landed and not instant and age*revealSpeed<1.18+(index-1)*.39 and options.onLand then options.onLand(tier) end
-   landed=true
-   if #reel>0 then disposeReel() end
-  elseif started then
-   local cell=math.floor(offset)
-   if cell~=reelCell then
-    reelCell=cell
-    if options.onTick then options.onTick() end
-   end
-   spin(camera,left,top,right,bottom,position,size,offset,stop)
-  end
-  local _,_,allSettled=Packs.reel(age,3,revealSpeed)
-  choose.Visible=settled and finishedAt==nil and (instant or allSettled)
-  if progress<=0 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;part.Transparency=1;return end
-  local resultAge=finishedAt and clock-finishedAt or 0
-  local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
-  if leaving>=1 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;part.Transparency=1;return end
-  local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
-  local target=(selected or focused and choose.Active) and 1 or 0
-  if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
-  local nx,ny=0,0
-  if target==1 and UserInputService.MouseEnabled then local mouse=UserInputService:GetMouseLocation();nx=math.clamp((mouse.X-position.X)/math.max(1,size.X)*2-1,-1,1);ny=math.clamp((mouse.Y-position.Y)/math.max(1,size.Y)*2-1,-1,1) end
-  local response=1-math.exp(-14*math.min(dt,.1));pointerX+=(nx-pointerX)*response;pointerY+=(ny-pointerY)*response
-  blend=quiet and target or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
-  local latchPulse=instant and 0 or math.clamp(1-math.abs(progress-.91)/.09,0,1)
-  local confirmPulse=installed and math.max(0,1-resultAge/.30) or 0
-  socket.BackgroundTransparency=.55+.43*reveal
-  latch.BackgroundColor3=tierColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
-  latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
-  rail.Color=selected and Color3.fromRGB(224,235,244) or rim
-  rail.Transparency=selected and .02 or .66
-  local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
-  effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=settled and leaving<.14;terms.Visible=effect.Visible
-  badge.Visible=effect.Visible
-  badge.Position=UDim2.fromOffset(9,9-lift)
-  local x,y=(left+right)/2,(top+bottom)/2
-  local travel=1-progress
-  local depth=1.02
-  local shiftedTop=top-travel*size.Y*.94
-  local shiftedBottom=bottom-travel*size.Y*.94
-  local shownTop=math.max(top,shiftedTop)
-  if shiftedBottom-shownTop<2 then surface.Enabled=false;part.Transparency=1;return end
-  local centerY=(shownTop+shiftedBottom)/2
-  local bounce=settled and not instant and math.sin(math.clamp((age*revealSpeed-(.98+(index-1)*.39))/.18,0,1)*math.pi)*4 or 0
-  local center=onPlane(camera,x,centerY-lift+bounce+leaving*52,depth)
-  local scale=1-leaving*.34
-  local w=(onPlane(camera,right,y,depth)-onPlane(camera,left,y,depth)).Magnitude*scale
-  local h=(onPlane(camera,x,shownTop,depth)-onPlane(camera,x,shiftedBottom,depth)).Magnitude*scale
-  local tilt=full and not quiet and math.rad(pointerX*blend*9) or 0
-  local pitch=full and not quiet and math.rad(-pointerY*blend*7) or 0
-  part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.038)
-  part.Color=rim;part.Transparency=0
-  part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,0)
-  surface.Enabled=true
-  local canvasSize=Vector2.new(math.floor((right-left)*FACE_PIXELS+.5),math.floor((shiftedBottom-shownTop)*FACE_PIXELS+.5))
-  if surface.CanvasSize~=canvasSize then surface.CanvasSize=canvasSize end
-  canvas.Size=UDim2.fromOffset(size.X*FACE_PIXELS,size.Y*FACE_PIXELS);canvas.Position=UDim2.fromOffset((position.X-left)*FACE_PIXELS,(position.Y-top+shiftedTop-shownTop)*FACE_PIXELS)
-  canvas.BackgroundColor3=pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
-  rimFace.BackgroundColor3=Color3.new(1,1,1)
-  inner.BackgroundColor3=pressed and Color3.fromRGB(190,190,190) or Color3.new(1,1,1)
-  rimLight.Offset=Vector2.new(quiet and 0 or pointerX*.15,quiet and 0 or pointerY*.2)
-  rays.Rotation=quiet and 0 or (clock*9+index*27)%360
-  rays.ImageTransparency=quiet and .4 or .4-blend*.1
-  local pulse=clock-focusAt;local opening=age*revealSpeed-(.98+(index-1)*.39)
-  local shine=opening>=0 and opening<.9 and opening/.9 or (pulse<.7 and pulse/.7 or 2)
-  sweep.Visible=not quiet and full and shine>=0 and shine<=1
-  if sweep.Visible then sweep.Position=UDim2.fromScale(-.65+shine*2.1,-.25) end
-  spot.GroupTransparency=quiet and 1 or 1-blend*.7
-  spot.Position=UDim2.fromScale(.5+pointerX*.32,.3+pointerY*.22)
-  local arrival=math.clamp(1-math.abs(progress-.94)/.14,0,1)
-  if settled then arrival=math.clamp(1-opening/.28,0,1)*.55 end
-  local wink=not quiet and full and pulse>=0 and pulse<.65
-  local intensity=wink and (1-math.abs(pulse/.65-.5)*2)*.75 or 0
-  flash.ImageTransparency=not quiet and 1-math.max(intensity,options.skipReveal and 0 or arrival*(tier-1)/3) or 1
-  flash.Position=UDim2.fromScale(pointerX<0 and .08 or .92,pointerY<0 and .08 or .92)
-  artCamera.CFrame=CFrame.lookAt(Vector3.new(4+(quiet and 0 or pointerX*blend*.7),3+(quiet and 0 or -pointerY*blend*.35),7),Vector3.zero)
-  effect.Text=choose.Text~='' and escape(choose.Text) or display
+ choose.MouseEnter:Connect(function() focused=true end)
+ choose.MouseLeave:Connect(function() focused=false;pressed=false end)
+ choose.SelectionGained:Connect(function() focused=true end)
+ choose.SelectionLost:Connect(function() focused=false;pressed=false end)
+ choose.MouseButton1Down:Connect(function() pressed=true end)
+ choose.MouseButton1Up:Connect(function() pressed=false end)
+ serial+=1;local stepName=bindPrefix..'Card'..serial
+ slot.Destroying:Connect(function()
+  RunService:UnbindFromRenderStep(stepName);destroyReel()
  end)
- return {root=slot,button=choose,select=function(value) selected=value end,
-  finish=function(value) installed=value;finishedAt=os.clock() end}
+ RunService:BindToRenderStep(stepName,Enum.RenderPriority.Camera.Value+8,function(dt)
+  if not ancestorsVisible(slot) then
+   if reel then reel.Visible=false end
+   return
+  end
+  local age=os.clock()-revealStart
+  local quiet=options.reducedMotion==true or CardView.reducedMotion()
+  local instant=quiet or options.skipReveal
+  local offset,stop,settled,started=Packs.reel(age,index,revealSpeed)
+  if instant then settled=true end
+  card.Visible=settled
+  if not settled then
+   if started and reelParent then
+    local cell=math.floor(offset)
+    if cell~=lastCell and options.onTick then options.onTick() end
+    lastCell=cell
+    spin(offset,stop)
+   end
+   return
+  end
+  destroyReel()
+  if not landed and not instant and age*revealSpeed<settleAt+.2 and options.onLand then options.onLand(tier) end
+  landed=true
+  local _,_,allSettled=Packs.reel(age,3,revealSpeed)
+  choose.Visible=instant or allSettled
+  local target=choose.Active and focused and 1 or 0
+  blend=quiet and 0 or blend+(target-blend)*(1-math.exp(-18*math.min(dt,.1)))
+  local settle=instant and 0 or math.clamp(1-(age*revealSpeed-settleAt)/.22,0,1)^2
+  scale.Scale=1+blend*.024-settle*.023-(pressed and .028 or 0)
+  local aspect=shell.AbsoluteSize.X/math.max(1,shell.AbsoluteSize.Y)
+  if shellAspect~=aspect or math.abs(blend-(shellBlend or 0))>.002 or shellSettle~=settle then
+   local span=2*10*math.tan(math.rad(18))
+   drawStock(stock,span*math.max(.01,aspect)*.978,span*.981,CFrame.Angles(-blend*.032,blend*.085,-settle*.025))
+   shellAspect,shellBlend,shellSettle=aspect,blend,settle
+  end
+ end)
+ return {root=slot,button=choose}
 end
 
 -- This acknowledges the chosen drone after the save commits.
@@ -8222,7 +8200,7 @@ local function applies(card,drone)
 end
 
 function FleetView.new(options)
- local self=setmetatable({options=options,rigs={},poses={}},FleetView)
+ local self=setmetatable({options=options,rigs={},poses={},rest={},muted={}},FleetView)
  local U=options.U
  local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
  root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
@@ -8305,25 +8283,42 @@ end
 
 function FleetView:arrange()
  local count=#self.crew
- local picked=self.targets[self.index]
- local selectedId=picked and picked.id
- local centerIndex=1
- for i,drone in ipairs(self.crew) do if drone.id==selectedId then centerIndex=i;break end end
  local span=math.min(11,math.max(4,count*.8))
  self.span=span
  for i,drone in ipairs(self.crew) do
   local rig=self.rigs[drone.id]
   if rig then
-   local slot=(i-centerIndex)%count
+   local slot=i-1
    local theta=slot*2*math.pi/count
    local lane=math.floor(slot/20)
-   local x,z=math.sin(theta)*(span+lane*1.5),math.cos(theta)*(span*.62+lane*1.5)
-   local pose=CFrame.new(STAGE+Vector3.new(x,3.5+lane*1.7+.8*(1-math.cos(theta)),z))*CFrame.Angles(0,math.pi,0)
-   if not self.poses[rig] then rig:PivotTo(pose) end
-   self.poses[rig]=pose
+   local x,z=math.sin(theta)*(span+lane*1.5),math.cos(theta)*(span*.79+lane*1.5)
+   local pose=CFrame.new(STAGE+Vector3.new(x,3.5+lane*1.7,z))*CFrame.Angles(0,math.pi,0)
+   self.rest[rig]=pose;self.poses[rig]=pose;rig:PivotTo(pose)
   end
  end
- self.aim=STAGE+Vector3.new(0,2.7,picked and span*.19 or 0)
+ self.aim=STAGE+Vector3.yAxis*3.2
+end
+
+local function muteRig(self,rig,muted)
+ if not rig or self.muted[rig]==muted then return end
+ self.muted[rig]=muted
+ for _,item in ipairs(rig:GetDescendants()) do
+  if item:IsA('BasePart') or item:IsA('Decal') or item:IsA('Texture') then
+   local part=item:IsA('BasePart')
+   local original=item:GetAttribute('InspectionColor')
+   if not original then
+    original=part and item.Color or item.Color3
+    item:SetAttribute('InspectionColor',original)
+   end
+   local value=original.R*.21+original.G*.72+original.B*.07
+   local color=muted and Color3.new(value,value,value) or original
+   if part then
+    item.Color=color;item.LocalTransparencyModifier=muted and .5 or 0
+   else
+    item.Color3=color;item.LocalTransparencyModifier=muted and .5 or 0
+   end
+  end
+ end
 end
 
 local function highlight(model,active)
@@ -8364,8 +8359,19 @@ function FleetView:refresh(profile,available,reason,busy,notice)
  end
  local focusChoice=choice and not Workshop.isHardware(choice)
  highlight(self.avatar,not picked and (not focusChoice or applies(choice,nil)))
+ local eligible={}
+ if choice then
+  for _,drone in ipairs(self.targets) do eligible[drone.id]=true end
+ end
  for _,drone in ipairs(self.crew) do
-  highlight(self.rigs[drone.id],picked and picked.id==drone.id or not picked and focusChoice and applies(choice,drone))
+  local rig=self.rigs[drone.id]
+  local active=picked and picked.id==drone.id
+  local affected=focusChoice and applies(choice,drone)
+  if rig then
+   highlight(rig,active or not picked and affected)
+   muteRig(self,rig,choice~=nil and not (eligible[drone.id] or affected))
+   self.poses[rig]=self.rest[rig]+Vector3.yAxis*(active and 4 or 0)
+  end
  end
  local cards={}
  local key={picked and picked.id or '',choice and choice.cardId or ''}
@@ -8403,7 +8409,6 @@ end
 function FleetView:cycle(delta)
  if not self:isOpen() or #self.targets<2 or not self.prev.Active then return end
  self.index=(self.index-1+delta)%#self.targets+1
- self:arrange()
  self.options.onTarget()
 end
 
@@ -8444,7 +8449,7 @@ function FleetView:open(profile,choice,targets)
   local distance=math.max(15+self.span, (self.span+2)/math.max(.26,math.min(1,aspect)*.36))
   self.cameraAim=(self.cameraAim or self.aim):Lerp(self.aim,quiet and 1 or 1-math.exp(-8*dt))
   local point=self.cameraAim
-  local from=point+Vector3.new(0,6+distance*.22,distance*(.63+.37*ease))
+  local from=point+Vector3.new(0,distance*.87,distance*.52)*(.70+.30*ease)
   camera.CFrame=CFrame.lookAt(from,point);camera.Focus=CFrame.new(point)
   self.focus.FocusDistance=(from-point).Magnitude
   self.tint.BackgroundTransparency=math.clamp(self.elapsed/.34,0,1)
@@ -8466,7 +8471,7 @@ function FleetView:close()
   GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
  end
  self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
- table.clear(self.rigs);table.clear(self.poses)
+ table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted)
  self.cameraAim=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
 end
 
@@ -8709,6 +8714,7 @@ function PackView:render(record,source,now,age,tier,progress,stage,holding)
 end
 
 function PackView:update(now)
+ local dt=math.clamp(now-(self.updatedAt or now),0,.1);self.updatedAt=now
  local o=self.options
  local folder=o.world:FindFirstChild('PackDeliveries')
  local player=o.player
@@ -8743,8 +8749,12 @@ function PackView:update(now)
    if holding then progress,stage=Packs.sample(holdTier,now-holdAt) end
    if record.indicator then
     record.indicator.Enabled=enabled and record.shown==true
-    record.fill.Size=UDim2.fromScale(record.completed and 1 or progress,1)
-    record.fill.BackgroundColor3=colors[stage] or idle
+    local last=record.displayProgress or 0
+    record.displayProgress=record.completed and 1 or holding and progress or last*math.exp(-19*dt)
+    record.fill.Size=UDim2.fromScale(record.displayProgress,1)
+    local tint=colors[stage] or idle
+    record.fillTint=(record.fillTint or idle):Lerp(tint,1-math.exp(-22*dt))
+    record.fill.BackgroundColor3=record.fillTint
     if holding and stage~=record.lastStage then o.audio:play('pack_step',source.Position,{pitch=.78+stage*.17}) end
     record.lastStage=stage
    end
@@ -9692,7 +9702,7 @@ function V.new(root,parent,audio)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
-  if (source:GetAttribute('CollectedAt') or 0)>0 then return end
+  if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
@@ -9771,13 +9781,23 @@ function V:update(dt,now)
    local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
-    r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    r.collectAt=r.processed and collectedAt or now
+    r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   local scale=1;local glow=0;local done=false
-  if r.collectAt then
+  if r.collectAt and r.processed and r.collectTarget then
+   local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
+   local close=math.clamp((t-.18)/.82,0,1)^2
+   local ease,shrink=PickupMotion.collection(close)
+   r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
+   scale=math.max(.045,(r.pressScale or .48)*shrink)
+   opacity=(r.collectOpacity or 1)*(1-math.clamp((close-.82)/.18,0,1))
+   glow=.48*close;done=t>=1
+  elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
@@ -10632,7 +10652,7 @@ BeamVFX.onCue=function(kind,position,now)
  end
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
-local roleEffectView=RoleEffectView.new()
+local roleEffectView=RoleEffectView.new(soundscape)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
@@ -11042,6 +11062,7 @@ openOffer=function()
  for index,choice in ipairs(offer.choices) do
   local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{
    revealStart=offerUI.revealAt,revealSpeed=profile.packSpeed or 1,target=targetText(choice),
+   reelParent=modal,portrait=l.cardColumns~=3,
    onTick=function() soundscape:play('pack_step',nil,{pitch=.85+index*.09,level=.66}) end,
    onLand=function(tier) soundscape:play('pack_land',nil,{pitch=.96+tier*.16}) end,
    onChoose=function()
@@ -11806,8 +11827,11 @@ local function renderDrone(d,dt,now)
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
-  if at>(d.pressSoundAt or 0) and now>=at+.15 and now-at<.5 then
-   d.pressSoundAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=.74})
+  if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
+   d.pressSoundAt=at;soundscape:play('metal_land',d.emitter.Position,{pitch=.84,level=.68})
+  end
+  if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then
+   d.pressEjectAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0

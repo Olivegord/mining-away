@@ -21,6 +21,9 @@ W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
 W.COMPACTOR_PARTIAL_WAIT=1.5
 W.COMPACTOR_REACH=12
+W.PRESS_CONTACT=.43
+W.PRESS_EJECT=.82
+W.PRESS_RESET=1.20
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.

@@ -316,14 +316,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
- local charging=sample.alive and sample.charging and not sample.paused
- if not reference and (visible or charging) and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint) end
+ local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster'
+ local charging=sample.alive and sample.charging and not sample.paused and not projectile
+ local ignition=predicted and deadline or sample.since or now
+ local launchTail=visible and beam.vfx and not sample.paused and now-ignition<.18
+ local wantsVFX=charging or (reference and launchTail) or (not reference and visible)
+ if wantsVFX and not beam.vfx then beam.vfx=BeamVFX.new(beam.holder,sample.isMining and style or 'Combat',tint)
+ elseif reference and not wantsVFX and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if beam.vfx then
   BeamVFX.style(beam.vfx,sample.isMining and style or 'Combat',tint)
   BeamVFX.startup(beam.vfx,BeamVFX.startupStyles[sample.droneRole or sample.droneType])
   -- draw writes every phase's visibility; avoid hide/show churn each frame.
  end
- if reference and beam.vfx then BeamVFX.destroy(beam.vfx);beam.vfx=nil end
  if visible then
   local origin=beam.origin.WorldPosition
   local vertical=beam.vertical and not beam.followCrystal
@@ -342,12 +346,16 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if beam.vfx then
    beam.halo.Transparency=1
    local releaseAt=predicted and deadline or (style=='Percussion' and (sample.pulseAt or sample.since) or sample.since)
-   BeamVFX.draw(beam.vfx,origin,tip,now,width*alpha,nil,now-(releaseAt or now),BeamVFX.MiningScale+pulse*.15)
+   -- Keep Mining Away's original beam and endpoint. This rig restores the
+   -- inward charge, color pop, and planar aftermath around that beam.
+   local effectWidth=reference and 0 or width*alpha
+   BeamVFX.draw(beam.vfx,origin,tip,now,effectWidth,nil,now-(releaseAt or now),BeamVFX.MiningScale+pulse*.15)
   end
  elseif charging and beam.vfx then
   local q=math.clamp((now-(sample.warmupStart or now))/math.max(.01,sample.warmupDuration or .8),0,1)
   local origin=beam.origin.WorldPosition
-  BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,q,nil,BeamVFX.MiningScale,sample.warmupDuration)
+  local aim=valid and point or origin-Vector3.yAxis
+  BeamVFX.draw(beam.vfx,origin,aim,now,0,math.min(q,.999),nil,BeamVFX.MiningScale,sample.warmupDuration)
  elseif beam.vfx and sample.specialReleaseAt and now-sample.specialReleaseAt<.16 then
   local origin=beam.origin.WorldPosition
   BeamVFX.draw(beam.vfx,origin,origin-Vector3.yAxis,now,0,nil,now-sample.specialReleaseAt,BeamVFX.MiningScale)
@@ -359,12 +367,16 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
-  halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
+  halo.Size=Vector3.one*.55;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and (.85-.16*beat) or 1
-  if glow then beam.referenceGlow.Position=point end
+  local strength=BeamVFX.reduced() and .35 or 1
+  beam.referenceGlow.Transparency=glow and (.91-.19*beat*strength) or 1
+  if glow then
+   beam.referenceGlow.Position=point+normal*.08
+   beam.referenceGlow.Size=Vector3.one*(.40+.20*beat*strength)
+  end
  end
  if reference then
   beam.marker.Size=Vector3.one*(.145+.040*beat)

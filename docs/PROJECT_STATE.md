@@ -11,18 +11,28 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a95062c380b13cce25bfd567855f63a7334d6aecc13906ec4abbb069fd4da3a7` | Includes restored pack holds, 3D reels and the crew inspection view. |
+| Native-file SHA-256 | `b69efe8d0099f3c9b86e33341f0a70a72520fae03f643bb65336f8e14a1eb701` | Includes full-height card reels, fixed crew inspection and restored mining effects. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the pack and crew inspection update** | All seven Sources and three roots verified in Edit. Team Create save returned version 175. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the pack, crew and mining effects refinements** | All seven Sources and three roots verified in Edit. Team Create save returned version 176. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — refine pack timing, crew selection and work effects
+
+The crate hold now follows a continuous curve with a quick push to 57% by 0.62 seconds, a slower shoulder to 75% by 1.32 seconds, and a long tail from 92% at 3.25 seconds to Legendary release at 6.85 seconds. Those progress values describe Legendary. Each earlier rarity normalizes the same curve to its own stop. The interpolation matches velocity across the sampled points, including when the bar changes color. The sample points approximate the visible sweep in the reference. [Devilish Mortis opening footage](https://www.youtube.com/watch?v=CsS2OfinXbg&t=3s)
+
+Three reels run in 3D across the full viewport. Thick card stock and a bevel make the passing cards read in profile. Settled cards keep a single art preview, rarity-colored stock, and stable screen text. The renderer uses viewport geometry for the reels and settled stock to remove the previous coplanar SurfaceGui and per-frame canvas cropping. The crew camera looks down from about 59 degrees. Cycling leaves the ring fixed and lifts the selected drone four studs. Ineligible drones are gray and 50% transparent.
+
+The starter laser again pulls particles into its emitter, fires the original color pop, and leaves its expanding planar ring and drifting dust. Its original beam width, contact position and damage cadence still govern the cut. Needler shoots a thin tracer with sharp sparks. Ballcaster fires a bright core with a broader wake and a compact pressure ring at confirmed contact. The Compactor pulls docked inputs into the closing jaws, holds briefly, and ejects the block 0.82 seconds after the press starts. This incorporates the pending Compactor changes that finish a loaded batch at its old dock on a distant repin and release a single input safely.
+
+The pack timing test checked continuous bar velocity at the curve knots. Beam, workshop, Crystal Run, pickup and isolated hardware checks passed with API or storage doubles. The projectile contact fixture confirmed that the head disappears on contact and its wake finishes independently. The broader gadget and logistics suites still hit the client-inertia fixture and schema-six migration failures reproduced on `bce4467`. Detached Studio Edit checks constructed the beveled card and verified fixed crew slots, a four-stud lift and 50% transparency. Live animation and multiplayer remain unverified. All seven Sources matched the shared Edit session at place **124078027733625**, universe **10774898335**. Team Create save **176** succeeded. This revision is unpublished. To reproduce from `bce4467`, run `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit bce4467` after applying the changes.
 
 ## November 11 — hold to open packs and inspect your crew
 

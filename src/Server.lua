@@ -901,7 +901,7 @@ end
 function scene.resetPress(press)
  for _,id in ipairs(press.pressInputs or {}) do
   local drop=pickups[id]
-  if drop then
+  if drop and drop.pressCarrier==press then
    drop.pressSocket=nil;drop.pressCarrier=nil;drop.pressBlockedUntil=now+8
    drop.part:SetAttribute('PressSocket',nil)
   end
@@ -912,6 +912,12 @@ function scene.resetPress(press)
 end
 function scene.finishPress(press)
  local inputs=press.pressInputs
+ for _,id in ipairs(inputs) do
+  local drop=pickups[id]
+  if not drop or drop.pressCarrier~=press or not drop.part.Parent or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
+   scene.resetPress(press);return
+  end
+ end
  local first=pickups[inputs[1]]
  local intake=press.pos-Vector3.yAxis*.85
  local outlet=CFrame.Angles(0,press.yaw or 0,0)
@@ -921,14 +927,14 @@ function scene.finishPress(press)
   material=Workshop.cargoKey(tier.material,value,true),value=value,units=1,raw=true,compacted=true,
   floor=first.floor,fieldPart=first.fieldPart}
  local tint=Color3.fromRGB(table.unpack(Shops.COLORS[tier.name]))
- table.insert(scene.pressOutputs,{at=now+.52,template=Instance.new('Part'),drop=output,
+ table.insert(scene.pressOutputs,{at=now+Workshop.PRESS_EJECT,template=Instance.new('Part'),drop=output,
   position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint})
- press.pressUntil=now+1.1
+ press.pressUntil=now+Workshop.PRESS_RESET
  press.model:SetAttribute('PressAt',now)
  for _,id in ipairs(inputs) do
   local drop=pickups[id]
   drop.part:SetAttribute('ProcessedPosition',intake);drop.part:SetAttribute('ProcessedAt',now)
-  drop.part.Transparency=1;Debris:AddItem(drop.part,.24);pickups[id]=nil
+  drop.part.Transparency=1;Debris:AddItem(drop.part,Workshop.PRESS_CONTACT+.22);pickups[id]=nil
  end
  scene.resetPress(press)
 end
@@ -3268,9 +3274,18 @@ function scene.moveSquareWork(p,current,square)
  for _,d in ipairs(p.drones) do
   if d.chargedPin==current then d.chargedPin=square end
  end
- if current.field~=square.field then return end
+ local sameField=current.field==square.field
  local press=p.compactor
- if press and press.pressSquare==current and press.pressDock and scene.cargoInSquare(square,press.pressDock) then press.pressSquare=square end
+ if press and press.pressSquare==current then
+  if sameField and press.pressDock and scene.cargoInSquare(square,press.pressDock) then
+   press.pressSquare=square
+  elseif press.hp>0 and press.pressInputs and #press.pressInputs>=2 then
+   scene.finishPress(press)
+  else
+   scene.resetPress(press)
+  end
+ end
+ if not sameField then return end
  local function staysInSquare(r)
   return r and not r.paid and r.part.Parent
    and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)

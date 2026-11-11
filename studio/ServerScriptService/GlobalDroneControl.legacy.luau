@@ -24,6 +24,9 @@ W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
 W.COMPACTOR_PARTIAL_WAIT=1.5
 W.COMPACTOR_REACH=12
+W.PRESS_CONTACT=.43
+W.PRESS_EJECT=.82
+W.PRESS_RESET=1.20
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
@@ -3092,7 +3095,19 @@ local Packs = {
 -- The original event used progressively longer holds. These are the four
 -- Crystal Run timings, with most of the visible movement at the beginning.
 local ends = {.62, 1.32, 3.25, 6.85}
-local work = {.57, .18, .17, .08}
+-- Sample points on the visible sweep. Keep the first fast push, the
+-- shoulder just past half-full, and the long crawl through the last arc.
+local times={0,.20,ends[1],.90,ends[2],2.08,ends[3],4.76,ends[4]}
+local fill={0,.16,.57,.67,.75,.84,.92,.969,1}
+local stops={3,5,7,9}
+local slope={.48}
+for i=2,#times-1 do
+ local before,after=times[i]-times[i-1],times[i+1]-times[i]
+ local left,right=(fill[i]-fill[i-1])/before,(fill[i+1]-fill[i])/after
+ local a,b=2*after+before,after+2*before
+ slope[i]=(a+b)/(a/left+b/right)
+end
+slope[#times]=.006
 
 function Packs.roll(ticket)
  if ticket <= 66 then return 1 end
@@ -3117,26 +3132,30 @@ function Packs.rarityTier(rarity)
 end
 
 function Packs.sample(tier, elapsed)
- local start, filled, total = 0, 0, 0
- for i = 1, tier do total += work[i] end
- for i = 1, tier do
-  local finish = ends[i]
-  if elapsed < finish or i == tier then
-   local fraction = math.clamp((elapsed-start)/(finish-start), 0, 1)
-   local eased=fraction*(1.24-.24*fraction)
-   return (filled+work[i]*eased)/total, i
+ if elapsed<=0 then return 0,1 end
+ if elapsed>=ends[tier] then return 1,tier end
+ local stage=1
+ while stage<tier and elapsed>=ends[stage] do stage+=1 end
+ local last=stops[tier]
+ for i=2,last do
+  if elapsed<times[i] then
+   local span=times[i]-times[i-1]
+   local t=(elapsed-times[i-1])/span
+   local t2,t3=t*t,t*t*t
+   local value=(2*t3-3*t2+1)*fill[i-1]+(t3-2*t2+t)*span*slope[i-1]
+     +(-2*t3+3*t2)*fill[i]+(t3-t2)*span*slope[i]
+   return value/fill[last],stage
   end
-  start, filled = finish, filled+work[i]
  end
- return 1, tier
+ return 1,tier
 end
 
 function Packs.reel(elapsed,index,speed)
  local delay=(index-1)*.15
- local duration=.98+(index-1)*.24
+ local duration=1.16+(index-1)*.25
  local t=math.clamp((elapsed*speed-delay)/duration,0,1)
  local travel=8+index
- return travel*(1-(1-t)^3), travel, t>=1, t>0
+ return travel*(1-(1-t)^3), travel, t>=1, t>0, t
 end
 
 return Packs
@@ -7991,7 +8010,7 @@ end
 function scene.resetPress(press)
  for _,id in ipairs(press.pressInputs or {}) do
   local drop=pickups[id]
-  if drop then
+  if drop and drop.pressCarrier==press then
    drop.pressSocket=nil;drop.pressCarrier=nil;drop.pressBlockedUntil=now+8
    drop.part:SetAttribute('PressSocket',nil)
   end
@@ -8002,6 +8021,12 @@ function scene.resetPress(press)
 end
 function scene.finishPress(press)
  local inputs=press.pressInputs
+ for _,id in ipairs(inputs) do
+  local drop=pickups[id]
+  if not drop or drop.pressCarrier~=press or not drop.part.Parent or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
+   scene.resetPress(press);return
+  end
+ end
  local first=pickups[inputs[1]]
  local intake=press.pos-Vector3.yAxis*.85
  local outlet=CFrame.Angles(0,press.yaw or 0,0)
@@ -8011,14 +8036,14 @@ function scene.finishPress(press)
   material=Workshop.cargoKey(tier.material,value,true),value=value,units=1,raw=true,compacted=true,
   floor=first.floor,fieldPart=first.fieldPart}
  local tint=Color3.fromRGB(table.unpack(Shops.COLORS[tier.name]))
- table.insert(scene.pressOutputs,{at=now+.52,template=Instance.new('Part'),drop=output,
+ table.insert(scene.pressOutputs,{at=now+Workshop.PRESS_EJECT,template=Instance.new('Part'),drop=output,
   position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint})
- press.pressUntil=now+1.1
+ press.pressUntil=now+Workshop.PRESS_RESET
  press.model:SetAttribute('PressAt',now)
  for _,id in ipairs(inputs) do
   local drop=pickups[id]
   drop.part:SetAttribute('ProcessedPosition',intake);drop.part:SetAttribute('ProcessedAt',now)
-  drop.part.Transparency=1;Debris:AddItem(drop.part,.24);pickups[id]=nil
+  drop.part.Transparency=1;Debris:AddItem(drop.part,Workshop.PRESS_CONTACT+.22);pickups[id]=nil
  end
  scene.resetPress(press)
 end
@@ -10358,9 +10383,18 @@ function scene.moveSquareWork(p,current,square)
  for _,d in ipairs(p.drones) do
   if d.chargedPin==current then d.chargedPin=square end
  end
- if current.field~=square.field then return end
+ local sameField=current.field==square.field
  local press=p.compactor
- if press and press.pressSquare==current and press.pressDock and scene.cargoInSquare(square,press.pressDock) then press.pressSquare=square end
+ if press and press.pressSquare==current then
+  if sameField and press.pressDock and scene.cargoInSquare(square,press.pressDock) then
+   press.pressSquare=square
+  elseif press.hp>0 and press.pressInputs and #press.pressInputs>=2 then
+   scene.finishPress(press)
+  else
+   scene.resetPress(press)
+  end
+ end
+ if not sameField then return end
  local function staysInSquare(r)
   return r and not r.paid and r.part.Parent
    and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)

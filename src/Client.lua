@@ -26,7 +26,7 @@ BeamVFX.onCue=function(kind,position,now)
  end
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
-local roleEffectView=RoleEffectView.new()
+local roleEffectView=RoleEffectView.new(soundscape)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
@@ -436,6 +436,7 @@ openOffer=function()
  for index,choice in ipairs(offer.choices) do
   local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{
    revealStart=offerUI.revealAt,revealSpeed=profile.packSpeed or 1,target=targetText(choice),
+   reelParent=modal,portrait=l.cardColumns~=3,
    onTick=function() soundscape:play('pack_step',nil,{pitch=.85+index*.09,level=.66}) end,
    onLand=function(tier) soundscape:play('pack_land',nil,{pitch=.96+tier*.16}) end,
    onChoose=function()
@@ -1200,8 +1201,11 @@ local function renderDrone(d,dt,now)
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
-  if at>(d.pressSoundAt or 0) and now>=at+.15 and now-at<.5 then
-   d.pressSoundAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=.74})
+  if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
+   d.pressSoundAt=at;soundscape:play('metal_land',d.emitter.Position,{pitch=.84,level=.68})
+  end
+  if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then
+   d.pressEjectAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=1.12,level=.75})
   end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0

@@ -66,7 +66,7 @@ function V.new(root,parent,audio)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
-  if (source:GetAttribute('CollectedAt') or 0)>0 then return end
+  if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
@@ -145,13 +145,23 @@ function V:update(dt,now)
    local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
-    r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    r.collectAt=r.processed and collectedAt or now
+    r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   local scale=1;local glow=0;local done=false
-  if r.collectAt then
+  if r.collectAt and r.processed and r.collectTarget then
+   local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
+   local close=math.clamp((t-.18)/.82,0,1)^2
+   local ease,shrink=PickupMotion.collection(close)
+   r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
+   scale=math.max(.045,(r.pressScale or .48)*shrink)
+   opacity=(r.collectOpacity or 1)*(1-math.clamp((close-.82)/.18,0,1))
+   glow=.48*close;done=t>=1
+  elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)

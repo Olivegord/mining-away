@@ -111,8 +111,10 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
    local age=now-(source:GetAttribute('PressAt') or 0)
-   local stroke=state=='Press' and smooth(age/.15)*(1-smooth((age-.48)/.22)) or 0
-   offset=Vector3.new(-item.side*.57*stroke,-.12*stroke,0)
+   local close=smooth((age-.065)/(Workshop.PRESS_CONTACT-.065))
+   local reopen=smooth((age-Workshop.PRESS_EJECT)/(Workshop.PRESS_RESET-Workshop.PRESS_EJECT))
+   local stroke=state=='Press' and close*(1-reopen) or 0
+   offset=Vector3.new(-item.side*.69*stroke,-.22*stroke,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base

@@ -363,11 +363,12 @@ check('actual mining envelope surface contact target life and paused work remain
  local s={alive=true,isMining=true,active=true,contact=true,key='ore',life=1,part=target,serverSource=target,since=300,style='Cutter',droneRole='Striker',warmupStart=299,warmupDuration=1}
  s.active=false;s.charging=true
  p:beginFrame();p:renderMiningBeam(b,s,299.93)
- assert(not b.reference and not b.vfx,'ordinary miner played the rich startup')
+ assert(not b.reference and b.vfx and b.vfx.rich and not b.vfx.body.Enabled,'ordinary miner charge lost its startup or showed a premature beam')
  p:beginFrame();p:renderMiningBeam(b,s,300)
  local inner,outer=unpack(b.reference)
  assert(outer.Enabled and not inner.Enabled and outer.Attachment0==b.origin and outer.Attachment1.Parent==b.endpoint)
  near(outer.Width0,.5)
+ assert(not b.vfx.body.Enabled,'charge rig drew a second beam on top of the original')
  assert(not b.envelope.active,'cosmetic bridge modified authoritative envelope')
  s.paused=true;p:beginFrame();p:renderMiningBeam(b,s,300.02)
  assert(not outer.Enabled,'paused prediction survived')

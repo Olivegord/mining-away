@@ -20,7 +20,9 @@ resource_render = client[client.index('local function renderResource(r,now)'):cl
 crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  local dirty=r.dirty'):client.index(' selectorView:updateHealing(now)')]
 crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
-local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end}
+local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end}
+local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
+function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end
 local nativeType=typeof
 local function typeof(value) return getmetatable(value)==VM and 'Vector3' or nativeType(value) end
 local getService=game.GetService

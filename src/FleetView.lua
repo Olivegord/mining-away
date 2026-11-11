@@ -84,7 +84,7 @@ local function applies(card,drone)
 end
 
 function FleetView.new(options)
- local self=setmetatable({options=options,rigs={},poses={}},FleetView)
+ local self=setmetatable({options=options,rigs={},poses={},rest={},muted={}},FleetView)
  local U=options.U
  local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
  root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
@@ -167,25 +167,42 @@ end
 
 function FleetView:arrange()
  local count=#self.crew
- local picked=self.targets[self.index]
- local selectedId=picked and picked.id
- local centerIndex=1
- for i,drone in ipairs(self.crew) do if drone.id==selectedId then centerIndex=i;break end end
  local span=math.min(11,math.max(4,count*.8))
  self.span=span
  for i,drone in ipairs(self.crew) do
   local rig=self.rigs[drone.id]
   if rig then
-   local slot=(i-centerIndex)%count
+   local slot=i-1
    local theta=slot*2*math.pi/count
    local lane=math.floor(slot/20)
-   local x,z=math.sin(theta)*(span+lane*1.5),math.cos(theta)*(span*.62+lane*1.5)
-   local pose=CFrame.new(STAGE+Vector3.new(x,3.5+lane*1.7+.8*(1-math.cos(theta)),z))*CFrame.Angles(0,math.pi,0)
-   if not self.poses[rig] then rig:PivotTo(pose) end
-   self.poses[rig]=pose
+   local x,z=math.sin(theta)*(span+lane*1.5),math.cos(theta)*(span*.79+lane*1.5)
+   local pose=CFrame.new(STAGE+Vector3.new(x,3.5+lane*1.7,z))*CFrame.Angles(0,math.pi,0)
+   self.rest[rig]=pose;self.poses[rig]=pose;rig:PivotTo(pose)
   end
  end
- self.aim=STAGE+Vector3.new(0,2.7,picked and span*.19 or 0)
+ self.aim=STAGE+Vector3.yAxis*3.2
+end
+
+local function muteRig(self,rig,muted)
+ if not rig or self.muted[rig]==muted then return end
+ self.muted[rig]=muted
+ for _,item in ipairs(rig:GetDescendants()) do
+  if item:IsA('BasePart') or item:IsA('Decal') or item:IsA('Texture') then
+   local part=item:IsA('BasePart')
+   local original=item:GetAttribute('InspectionColor')
+   if not original then
+    original=part and item.Color or item.Color3
+    item:SetAttribute('InspectionColor',original)
+   end
+   local value=original.R*.21+original.G*.72+original.B*.07
+   local color=muted and Color3.new(value,value,value) or original
+   if part then
+    item.Color=color;item.LocalTransparencyModifier=muted and .5 or 0
+   else
+    item.Color3=color;item.LocalTransparencyModifier=muted and .5 or 0
+   end
+  end
+ end
 end
 
 local function highlight(model,active)
@@ -226,8 +243,19 @@ function FleetView:refresh(profile,available,reason,busy,notice)
  end
  local focusChoice=choice and not Workshop.isHardware(choice)
  highlight(self.avatar,not picked and (not focusChoice or applies(choice,nil)))
+ local eligible={}
+ if choice then
+  for _,drone in ipairs(self.targets) do eligible[drone.id]=true end
+ end
  for _,drone in ipairs(self.crew) do
-  highlight(self.rigs[drone.id],picked and picked.id==drone.id or not picked and focusChoice and applies(choice,drone))
+  local rig=self.rigs[drone.id]
+  local active=picked and picked.id==drone.id
+  local affected=focusChoice and applies(choice,drone)
+  if rig then
+   highlight(rig,active or not picked and affected)
+   muteRig(self,rig,choice~=nil and not (eligible[drone.id] or affected))
+   self.poses[rig]=self.rest[rig]+Vector3.yAxis*(active and 4 or 0)
+  end
  end
  local cards={}
  local key={picked and picked.id or '',choice and choice.cardId or ''}
@@ -265,7 +293,6 @@ end
 function FleetView:cycle(delta)
  if not self:isOpen() or #self.targets<2 or not self.prev.Active then return end
  self.index=(self.index-1+delta)%#self.targets+1
- self:arrange()
  self.options.onTarget()
 end
 
@@ -306,7 +333,7 @@ function FleetView:open(profile,choice,targets)
   local distance=math.max(15+self.span, (self.span+2)/math.max(.26,math.min(1,aspect)*.36))
   self.cameraAim=(self.cameraAim or self.aim):Lerp(self.aim,quiet and 1 or 1-math.exp(-8*dt))
   local point=self.cameraAim
-  local from=point+Vector3.new(0,6+distance*.22,distance*(.63+.37*ease))
+  local from=point+Vector3.new(0,distance*.87,distance*.52)*(.70+.30*ease)
   camera.CFrame=CFrame.lookAt(from,point);camera.Focus=CFrame.new(point)
   self.focus.FocusDistance=(from-point).Magnitude
   self.tint.BackgroundTransparency=math.clamp(self.elapsed/.34,0,1)
@@ -328,7 +355,7 @@ function FleetView:close()
   GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
  end
  self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
- table.clear(self.rigs);table.clear(self.poses)
+ table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted)
  self.cameraAim=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
 end
 

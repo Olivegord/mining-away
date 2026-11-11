@@ -15,6 +15,15 @@ end
 local early=Packs.sample(4,1.32)
 local late=Packs.sample(4,3.25)
 assert(early>=.73 and early<=.77 and late>=.9 and late<=.94)
+-- The observer gets the same bar velocity just before and after a tier cue.
+for _,at in ipairs({.20,.62,.90,1.32,2.08,3.25,4.76}) do
+ local step=.0001
+ local previous=Packs.sample(4,at-step)
+ local here=Packs.sample(4,at)
+ local after=Packs.sample(4,at+step)
+ assert(math.abs((after-here)-(here-previous))/step<.002)
+end
+assert(Packs.sample(4,.1)<.09 and Packs.sample(4,4.76)>.96)
 for _,speed in ipairs({1,2,4}) do
  local earlierStop=0
  for index=1,3 do

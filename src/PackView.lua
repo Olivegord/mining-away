@@ -230,6 +230,7 @@ function PackView:render(record,source,now,age,tier,progress,stage,holding)
 end
 
 function PackView:update(now)
+ local dt=math.clamp(now-(self.updatedAt or now),0,.1);self.updatedAt=now
  local o=self.options
  local folder=o.world:FindFirstChild('PackDeliveries')
  local player=o.player
@@ -264,8 +265,12 @@ function PackView:update(now)
    if holding then progress,stage=Packs.sample(holdTier,now-holdAt) end
    if record.indicator then
     record.indicator.Enabled=enabled and record.shown==true
-    record.fill.Size=UDim2.fromScale(record.completed and 1 or progress,1)
-    record.fill.BackgroundColor3=colors[stage] or idle
+    local last=record.displayProgress or 0
+    record.displayProgress=record.completed and 1 or holding and progress or last*math.exp(-19*dt)
+    record.fill.Size=UDim2.fromScale(record.displayProgress,1)
+    local tint=colors[stage] or idle
+    record.fillTint=(record.fillTint or idle):Lerp(tint,1-math.exp(-22*dt))
+    record.fill.BackgroundColor3=record.fillTint
     if holding and stage~=record.lastStage then o.audio:play('pack_step',source.Position,{pitch=.78+stage*.17}) end
     record.lastStage=stage
    end

@@ -939,7 +939,7 @@ print('PASS Compactor leaves isolated rocks and Vacuum relays alone, and ejects 
 
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3));publish(buyer)
 pressOre('RunRuby',40);pressOre('RunRuby',41)
-pressTicks(90)
+pressTicks(90+math.ceil(Workshop.PRESS_EJECT/C.Tick))
 local upgraded=pickups[pickupSerial]
 assert(upgraded.tierMaterial=='RunRuby' and upgraded.units==1 and upgraded.value==81)
 
@@ -947,7 +947,7 @@ local legacyPress=table.remove(data(buyer).run.cards)
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_DENSER_PACK,3));publish(buyer)
 assert(buyer.compactorBatch==5)
 for value=50,54 do pressOre('RunCobalt',value) end
-pressTicks(150)
+pressTicks(150+math.ceil(Workshop.PRESS_EJECT/C.Tick))
 local dense=pickups[pickupSerial]
 assert(dense.tierMaterial=='RunCobalt' and dense.compacted and dense.units==1 and dense.value==260,
  'a partial timer fired before the five-rock batch finished')
@@ -957,13 +957,35 @@ do
  local first,second=pressOre('RunRuby',38),pressOre('RunRuby',42)
  for _=1,50 do pressTicks(1);if second.pressSocket then break end end
  assert(first.pressSocket and second.pressSocket)
+ local before=pickupSerial
+ local dock=press.pos
  input('PlaceSelector','move-past-press',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
  pressTicks(1)
- assert(not press.pressSquare and not first.pressSocket and not second.pressSocket and first.part.Parent and second.part.Parent,
-  'a press outside the new pin kept the old batch docked')
- for _,drop in ipairs({first,second}) do pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy() end
+ assert(not press.pressSquare and press.model:GetAttribute('PressAt') and not pickups[first.part:GetAttribute('PickupId')]
+  and not pickups[second.part:GetAttribute('PickupId')],'a loaded Compactor dropped its batch on a distant repin')
+ local startedAt=press.model:GetAttribute('PressAt')
+ while now+C.Tick<startedAt+Workshop.PRESS_EJECT do
+  pressTicks(1)
+  assert(pickupSerial==before,'pressed cargo appeared before the jaws reached the ejection beat')
+ end
+ for _=1,math.ceil(.2/C.Tick) do pressTicks(1);if pickupSerial>before then break end end
+ local output=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and output.compacted and output.units==1 and output.value==80)
+ assert((output.part.Position-dock).Magnitude<4,'the pressed block did not eject at the old dock')
+ pressTicks(math.ceil(.7/C.Tick))
+ assert(pickupSerial==before+1,'the old load ejected twice')
  input('PlaceSelector','return-to-press-field',{fieldId=f.id,position=f.center})
- print('PASS moving the pin keeps a nearby Compactor batch and releases an out-of-range one')
+ local lone,pair=pressOre('RunRuby',34),pressOre('RunRuby',39)
+ local beforeSingle=pickupSerial
+ for _=1,70 do pressTicks(1);if lone.pressSocket then break end end
+ assert(lone.pressSocket and not pair.pressSocket)
+ input('PlaceSelector','move-with-one-rock',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
+ pressTicks(1)
+ assert(not lone.pressSocket and not press.pressSquare and pickupSerial==beforeSingle and lone.part.Parent,
+  'a distant repin did not release the lone input without an output')
+ for _,drop in ipairs({lone,pair}) do pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy() end
+ input('PlaceSelector','return-after-single',{fieldId=f.id,position=f.center})
+ print('PASS a distant repin finishes one loaded Compactor batch at its old dock and releases a lone rock')
 end
 
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
