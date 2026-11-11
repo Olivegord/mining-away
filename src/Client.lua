@@ -1340,7 +1340,8 @@ local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color
 local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),palette.danger);enemyFill.Name='Fill';corner(enemyFill,3);U.gradient(enemyFill)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
- cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible})
+ cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
+ starterReachable=function() return selectorView:canReachStarterPlot() end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
@@ -1428,10 +1429,14 @@ connect(RunService.RenderStepped,function(dt)
  local ray
  if camera and not menusVisible() then
   local touch=selectorView.touch
+  local input=UIS:GetLastInputType()
   if touch and touch.active then
    local point=touch.input.Position
    ray=camera:ViewportPointToRay(point.X,point.Y)
-  elseif UIS.MouseEnabled and UIS:GetLastInputType()~=Enum.UserInputType.Touch then
+  elseif input.Name:match('^Gamepad') then
+   local size=camera.ViewportSize
+   ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)
+  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch then
    local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
    if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
   end

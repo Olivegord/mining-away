@@ -1957,6 +1957,10 @@ function M.selectorCenter(position,frame,size)
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
 end
+function M.selectorInRange(position,point)
+ local delta=point-position
+ return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2
+end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
 function M.selectorTouches(center,half,frame,size)
@@ -6984,7 +6988,13 @@ local function publish(p)
  p.vacuumReach=Workshop.starLevel(copy,'vacuum')>0 and 76 or 64
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
- copy.deliveryUnits=0;for _,manifest in pairs(copy.run.deliveries) do for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end end
+ copy.deliveryUnits=0;copy.deliveryQuartz=0
+ for _,manifest in pairs(copy.run.deliveries) do
+  for material,units in pairs(manifest.cargo) do
+   copy.deliveryUnits+=units
+   if scene.runStart then copy.deliveryQuartz+=units*(Shops.quartzValue(material) or 0) end
+  end
+ end
  -- The active preview crew is presentation data, never permanent ownership.
  if scene.runStart or p.testFleet or Workshop.starLevel(copy,'vacuum')>0 or Workshop.starLevel(copy,'cultivator')>0 then
   copy.activeFleet=Pro.clone(scene.runtimeFleet(p))
@@ -8279,8 +8289,7 @@ function scene.clearSquare(p)
  p.player:SetAttribute('MA_SelectorStatus',nil)
 end
 function scene.squareInRange(position,square)
- local delta=position-square.center
- return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=Mining.SELECTOR_RANGE^2
+ return Mining.selectorInRange(position,square.center)
 end
 function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil

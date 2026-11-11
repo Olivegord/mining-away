@@ -24,18 +24,33 @@ a=HUD.activity(folder,1);assert(a.docking==0 and a.charging==1)
 dead:SetAttribute('HP',80);a=HUD.activity(folder,1);assert(a.miners==10 and a.assigned==8,'reprinting must not invent an order')
 print('PASS HUD classifies nine miners independently of six support, other owners, windup, specials, recovery and reprints')
 
-local profile={nextPackPrice=20,run={packIndex=0,wallet={Quartz=19}}}
+local profile={nextPackPrice=20,run={index=1,packIndex=0,quartzEarnings=0,wallet={Quartz=19}}}
 assert(HUD.nextStationHint(profile)==nil)
+assert(HUD.needsFirstCutHint(profile,false) and not HUD.needsFirstCutHint(profile,true))
+assert(HUD.firstCutHint({Name='MouseMovement'},false)=='Follow the Crystal Run signs')
+assert(HUD.firstCutHint({Name='MouseMovement'},true)=='Click crystals to pin')
+assert(HUD.firstCutHint(Enum.UserInputType.Touch,true)=='Tap crystals to pin')
+assert(HUD.firstCutHint({Name='Gamepad1'},true)=='Pin crystals [RB]')
+profile.run.wallet.Quartz=9;profile.deliveryQuartz=10
+assert(HUD.nextStationHint(profile,true)==nil,'an insufficient shipment sent the player to the counter')
+profile.deliveryQuartz=11
+assert(HUD.nextStationHint(profile,true)=='Pack Counter next')
+profile.deliveryQuartz=0
+assert(HUD.nextStationHint(profile,true)==nil,'a vanished manifest left an obsolete hint')
 profile.run.wallet.Quartz=20
-assert(HUD.nextStationHint(profile)=='Visit the Pack Counter')
+assert(HUD.nextStationHint(profile,true)=='Pack Counter ready')
 profile.run.packIndex=1;profile.run.pendingOffer={opened=false}
-assert(HUD.nextStationHint(profile)=='Open pack at counter')
+assert(HUD.nextStationHint(profile,true)=='Open pack at counter')
 profile.run.pendingOffer.opened=true
 assert(HUD.nextStationHint(profile)=='Pick a card at counter')
+profile.run.packIndex=2
+assert(HUD.nextStationHint(profile,true)==nil,'later pack displaced active mining feedback')
 profile.run.pendingOffer=nil
 assert(HUD.nextStationHint(profile)==nil)
 profile.prestigePreview={eligible=true}
-assert(HUD.nextStationHint(profile)=='Visit the Prestige beacon')
+assert(HUD.nextStationHint(profile)=='Visit the Prestige beacon' and HUD.nextStationHint(profile,true)==nil)
 profile.run.pendingOffer={opened=false}
 assert(HUD.nextStationHint(profile)=='Open pack at counter')
-print('PASS station hint follows affordability, paid crate state and prestige eligibility')
+profile.run.index=2;profile.run.packIndex=0
+assert(not HUD.needsFirstCutHint(profile,false))
+print('PASS first-cut controls and station hint follow input, committed cargo, affordability, crate state and prestige eligibility')

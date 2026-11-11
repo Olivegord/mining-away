@@ -77,10 +77,28 @@ function V:aim(ray)
  if hit.Instance~=bed then return nil end
  local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
  if not point then return nil end
- local delta=point-hr.Position
  local field=bed:GetAttribute('FieldId')
- if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2 then return nil end
+ if not Mining.selectorInRange(hr.Position,point) then return nil end
  return point,field
+end
+function V:canReachStarterPlot()
+ local o=self.options
+ local run=o.world.Map:FindFirstChild('CrystalRun')
+ local quartz=run and run:FindFirstChild('Quartz')
+ local bed=quartz and quartz:FindFirstChild('Field')
+ local character=o.player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ if not bed or not root then return false end
+ for _,plot in quartz:GetChildren() do
+  if not plot:IsA('BasePart') or not plot:GetAttribute('CrystalCluster') then continue end
+  local localPosition=plot.CFrame:PointToObjectSpace(root.Position)
+  local edge=plot.CFrame:PointToWorldSpace(Vector3.new(
+   math.clamp(localPosition.X,-plot.Size.X*.5,plot.Size.X*.5),0,
+   math.clamp(localPosition.Z,-plot.Size.Z*.5,plot.Size.Z*.5)))
+  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+  if point and Mining.selectorInRange(root.Position,point) then return true end
+ end
+ return false
 end
 function V:commit(ray)
  local point,id=self:aim(ray)

@@ -167,18 +167,31 @@ function HUD.activity(folder,ownerId)
  return a
 end
 
-function HUD.nextStationHint(profile: any): string?
+function HUD.nextStationHint(profile: any, pinned: boolean?): string?
  local run=profile and profile.run
  if not run then return nil end
  local offer=run.pendingOffer
- if offer then
+ if offer and (not pinned or run.packIndex==1) then
   return offer.opened==false and 'Open pack at counter' or 'Pick a card at counter'
  end
- if run.packIndex==0 and profile.nextPackPrice and (run.wallet.Quartz or 0)>=profile.nextPackPrice then
-  return 'Visit the Pack Counter'
+ if run.packIndex==0 and profile.nextPackPrice then
+  local balance=run.wallet.Quartz or 0
+  if balance>=profile.nextPackPrice then return 'Pack Counter ready' end
+  if balance+(profile.deliveryQuartz or 0)>=profile.nextPackPrice then return 'Pack Counter next' end
  end
- if profile.prestigePreview and profile.prestigePreview.eligible then return 'Visit the Prestige beacon' end
+ if not pinned and profile.prestigePreview and profile.prestigePreview.eligible then return 'Visit the Prestige beacon' end
  return nil
+end
+function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
+ if not reachable then return 'Follow the Crystal Run signs' end
+ if input==Enum.UserInputType.Touch then return 'Tap crystals to pin' end
+ if input.Name:match('^Gamepad') then return 'Pin crystals [RB]' end
+ return 'Click crystals to pin'
+end
+function HUD.needsFirstCutHint(profile: any, pinned: boolean): boolean
+ local run=profile and profile.run
+ if not run then return false end
+ return not pinned and run.index==1 and run.packIndex==0 and run.quartzEarnings==0
 end
 function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local r=self.refs;local w=view.X
@@ -213,8 +226,14 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local working=activity.assigned;local delivering=activity.delivering
  local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
  local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
- local stationText=not pinned and not fighting and world:GetAttribute('FieldToolsEnabled')==false and HUD.nextStationHint(p) or nil
- local statusText=pinned and type(status)=='string' and selectorText[status] or stationText
+ local guidance
+ if not fighting and status~='Paused' and world:GetAttribute('FieldToolsEnabled')==false then
+  guidance=HUD.nextStationHint(p,pinned)
+  if not guidance and HUD.needsFirstCutHint(p,pinned) then
+   guidance=HUD.firstCutHint(self.input,r.starterReachable())
+  end
+ end
+ local statusText=guidance or (pinned and type(status)=='string' and selectorText[status]) or nil
  local showRecall=working>0 or delivering>0 or pinned
  local showStatusRow=showRecall or statusText~=nil
  self.dock.Visible=not hidden and (showStatusRow or fighting)
@@ -228,7 +247,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  r.evade.Visible=fighting;r.evade.Position=UDim2.fromOffset(0,showStatusRow and buttonHeight or 0);r.evade.Size=UDim2.fromOffset(width,buttonHeight)
  self.selectorStatus.Visible=statusText~=nil
  self.selectorStatus.Text=statusText or ''
- self.selectorStatus.TextColor3=(stationText or status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
+ self.selectorStatus.TextColor3=(guidance or status=='Working' or status=='BagFull' or status=='Surge') and C.gold or C.text
  local statusX=showRecall and recallWidth+4 or 0
  self.selectorStatus.Position=UDim2.fromOffset(statusX,0)
  self.selectorStatus.Size=UDim2.fromOffset(math.max(0,dockWidth-statusX),buttonHeight)

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3750806641d7b803d25c3f4eb4b7b0b682e6a2cb1237db1678b91f75e43dd82e` | Charging progress, improved docking and return to interrupted cuts. |
+| Native-file SHA-256 | `0da68a2c9ce6c8135a9d159400d8136aec0faa088441ac30b657b6ecdb5bcb67` | Starter plot, device controls and first pack cues. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the recharge update** | All seven Sources and three roots verified in Edit. Team Create save returned version 132. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the first-trip update** | All seven Sources and three roots verified in Edit. Team Create save returned version 133. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — first mining trip and Pack Counter
+
+The command row points new players toward the existing Crystal Run signs. Within reach of a starter plot, it shows the click, tap or gamepad command. The gamepad previews the same center aim used to place a pin. A committed Emptier shipment that covers the first pack shortfall gives the player an early cue to head to the counter. The ready cue follows the actual sale. No shipment changes the balance before delivery.
+
+Workshop, Crystal Run, HUD classifier and committed flight checks passed. In five scripted route seeds using the same pin and movement, heading back once the published shipment covered the shortfall installed the first card 5.1–6.1 seconds sooner than waiting for the balance at the pin. These timings use Roblox API doubles and scripted movement. A detached Studio Edit check used the authored Quartz plots and actual raycast, confirmed that the center plot can be pinned from the approach, and measured all the new text at the production font size. The longest first-pack line fit in 124 of the 144 px beside Recall. Native input, live pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three sync roots matched. The five zones, fifteen plots and depot sign were present in Edit. Team Create returned version **133**. Studio stayed in Edit and no player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit d7e7a61`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — recharge and return to a cut
 

@@ -799,6 +799,10 @@ function M.selectorCenter(position,frame,size)
  local z=math.clamp(math.round(point.Z/SELECTOR_GRID),-maxZ,maxZ)*SELECTOR_GRID
  return frame:PointToWorldSpace(Vector3.new(x,size.Y*.5,z))
 end
+function M.selectorInRange(position,point)
+ local delta=point-position
+ return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2
+end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
 function M.selectorTouches(center,half,frame,size)
@@ -9570,10 +9574,28 @@ function V:aim(ray)
  if hit.Instance~=bed then return nil end
  local point=Mining.selectorCenter(hit.Position,bed.CFrame,bed.Size)
  if not point then return nil end
- local delta=point-hr.Position
  local field=bed:GetAttribute('FieldId')
- if math.abs(delta.Y)>=16 or delta.X*delta.X+delta.Z*delta.Z>Mining.SELECTOR_RANGE^2 then return nil end
+ if not Mining.selectorInRange(hr.Position,point) then return nil end
  return point,field
+end
+function V:canReachStarterPlot()
+ local o=self.options
+ local run=o.world.Map:FindFirstChild('CrystalRun')
+ local quartz=run and run:FindFirstChild('Quartz')
+ local bed=quartz and quartz:FindFirstChild('Field')
+ local character=o.player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ if not bed or not root then return false end
+ for _,plot in quartz:GetChildren() do
+  if not plot:IsA('BasePart') or not plot:GetAttribute('CrystalCluster') then continue end
+  local localPosition=plot.CFrame:PointToObjectSpace(root.Position)
+  local edge=plot.CFrame:PointToWorldSpace(Vector3.new(
+   math.clamp(localPosition.X,-plot.Size.X*.5,plot.Size.X*.5),0,
+   math.clamp(localPosition.Z,-plot.Size.Z*.5,plot.Size.Z*.5)))
+  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+  if point and Mining.selectorInRange(root.Position,point) then return true end
+ end
+ return false
 end
 function V:commit(ray)
  local point,id=self:aim(ray)
@@ -11050,7 +11072,8 @@ local enemyHealth=frame(enemyHUD,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color
 local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),palette.danger);enemyFill.Name='Fill';corner(enemyFill,3);U.gradient(enemyFill)
 enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
- cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible})
+ cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
+ starterReachable=function() return selectorView:canReachStarterPlot() end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
@@ -11138,10 +11161,14 @@ connect(RunService.RenderStepped,function(dt)
  local ray
  if camera and not menusVisible() then
   local touch=selectorView.touch
+  local input=UIS:GetLastInputType()
   if touch and touch.active then
    local point=touch.input.Position
    ray=camera:ViewportPointToRay(point.X,point.Y)
-  elseif UIS.MouseEnabled and UIS:GetLastInputType()~=Enum.UserInputType.Touch then
+  elseif input.Name:match('^Gamepad') then
+   local size=camera.ViewportSize
+   ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)
+  elseif UIS.MouseEnabled and input~=Enum.UserInputType.Touch then
    local point=UIS:GetMouseLocation()-game:GetService('GuiService'):GetGuiInset()
    if not tacticalHUD:blocksPoint(point) then ray=mouse.UnitRay end
   end
