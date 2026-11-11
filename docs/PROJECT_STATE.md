@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ce6b24d1f29395397f6fb58422cb2f1df101709cb5971521f0665c8ac8ab8583` | Includes the Vacuum's pickup commitment and clear handoff. |
+| Native-file SHA-256 | `2eeaa71597203ab30cd5cb5a5687f57a01c68ca7c3f752ba865fd72ea08cfcc7` | Includes Aftershock prioritizing the next nearby cargo drop. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the Vacuum pickup and handoff changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 170. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes Aftershock prioritizing payable ore** | All seven Sources and three roots verified in Edit. Team Create save returned version 171. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — aim Aftershock at the next cargo drop
+
+In Crystal Run, a fracture sends its Aftershock to the eligible neighboring crystal with the least work remaining before cargo. Loose Seams moves that threshold earlier. Empty shells are fallback targets, and equal work still favors the closer crystal. The existing range, claim checks and single accepted echo per fracture apply. The pack and Workshop explain the new priority in their existing card and row.
+
+In the same controller fixture, `c38cfdc` broke a 20-work empty shell and released no cargo. The revised hit finished a nearby 110-work ore-bearing crystal and released one piece. A second fixture verified that Aftershock chose the crystal closest to a Loose Seams drop even when another neighbor had less total work remaining. Existing coverage confirmed foreign claims, allied specialist yield and one-time rewards. Workshop, Crystal Run, persistence, committed flight and beam checks passed with API or storage doubles. Native font metrics fit all three stack levels across six viewport widths, with at least four pixels of vertical room in the card and Workshop copy. Live feedback, pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **171**. No player release was published. To reproduce from `c38cfdc`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit c38cfdc`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — finish the Vacuum pickup on the walk back
 

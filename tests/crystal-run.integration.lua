@@ -822,6 +822,32 @@ assert(hitResource(miner,source,1) and math.abs(neighbor.hp-(990-990*.12))<1e-8,
 
 do
  isolate()
+ local primary,shell,intact,weak=rock(0,1000),rock(2,1000),rock(4,1000),rock(7,1000)
+ shell.hp=20;shell.cargoProduced=true;weak.hp=110
+ local before=pickupSerial
+ hit(primary,270)
+ assert(weak.paid and shell.hp==20 and intact.hp==990,'Aftershock spent the fracture on a shell instead of finishing payable ore')
+ local cargo=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and cargo.nodeId==weak.id and cargo.units==1)
+ cargo.part:Destroy();pickups[before+1]=nil
+
+ isolate()
+ table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_EARLY_DROP,1));refreshStats(buyer)
+ primary=rock(0,1000)
+ local small,large=rock(4,240),rock(7,1000)
+ small.hp=155;large.hp=300
+ before=pickupSerial
+ hit(primary,270)
+ assert(large.cargoProduced and not large.paid and small.hp==155,'Aftershock missed the nearest Loose Seams payout')
+ cargo=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and cargo.nodeId==large.id and cargo.units==1)
+ cargo.part:Destroy();pickups[before+1]=nil
+ table.remove(data(buyer).run.cards);refreshStats(buyer)
+ print('PASS Aftershock favors payable ore and can trigger Loose Seams on a more advanced neighboring cut')
+end
+
+do
+ isolate()
  local laser,needler=testCrew.drones[1],starterActors.Needler
  table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2))
  table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_RECLAIM,1));refreshStats(testCrew)

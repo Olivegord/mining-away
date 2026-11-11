@@ -40,7 +40,7 @@ function CardView.summary(choice)
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
  local echo=(e.aftershock or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.aftershock or 0)
- add('aftershock','Cracks hit a neighbor.\n'..percent(echo).." of the cracked rock's HP.")
+ add('aftershock','Cracks hit one weak rock.\n'..percent(echo).." of the cracked rock's HP.")
  local reclaim=(e.reclaim or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.reclaim or 0)
  add('reclaim',Workshop.reclaimDescription(reclaim))
  add('earlyDrop',Workshop.LOOSE_SEAMS_TEXT)
@@ -72,7 +72,8 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif e.magnetRange then target='Cargo collection'
  elseif e.capacity then target='Your backpack'
  elseif choice.scope=='Player' then target='Your run'
- elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire or (e.earlyDrop or 0)>0 then target='Laser miners'
+ elseif (e.aftershock or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
+ elseif (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 then target='Mining drones'
  else target='All drones' end

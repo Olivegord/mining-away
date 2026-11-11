@@ -7307,7 +7307,7 @@ function CardView.summary(choice)
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
  local echo=(e.aftershock or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.aftershock or 0)
- add('aftershock','Cracks hit a neighbor.\n'..percent(echo).." of the cracked rock's HP.")
+ add('aftershock','Cracks hit one weak rock.\n'..percent(echo).." of the cracked rock's HP.")
  local reclaim=(e.reclaim or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.reclaim or 0)
  add('reclaim',Workshop.reclaimDescription(reclaim))
  add('earlyDrop',Workshop.LOOSE_SEAMS_TEXT)
@@ -7339,7 +7339,8 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif e.magnetRange then target='Cargo collection'
  elseif e.capacity then target='Your backpack'
  elseif choice.scope=='Player' then target='Your run'
- elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire or (e.earlyDrop or 0)>0 then target='Laser miners'
+ elseif (e.aftershock or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
+ elseif (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 then target='Mining drones'
  else target='All drones' end
@@ -8165,7 +8166,7 @@ function V.effect(c)
  if e.cargoRack then return '+'..e.cargoRack..' cargo mount per Emptier' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
- if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
+ if e.aftershock then table.insert(parts,'Cracks hit one weak rock.\n'..percent(e.aftershock)..' of source HP.') end
  if e.reclaim then table.insert(parts,Workshop.reclaimDescription(e.reclaim)) end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.shiftRelay then table.insert(parts,Workshop.shiftDescription(e.shiftRelay)) end
@@ -8222,7 +8223,7 @@ function V.render(U,parent,options)
   local copyWidth=width-(narrow and 76 or 228)
   local hardware=Workshop.isHardware(c)
   label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
-  local effectSize=narrow and (c.effects.shiftRelay or c.effects.reclaim) and 13 or 15
+  local effectSize=narrow and (c.effects.shiftRelay or c.effects.reclaim or c.effects.aftershock) and 13 or 15
   label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),effectSize,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
    UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)

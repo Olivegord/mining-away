@@ -1195,14 +1195,25 @@ local hitResource: any
 local function secondaryMining(d: any,primary: any,amount: number,radius: number,contactKind: string?)
  if primary.field.junk then return false end -- One claimed target per salvage job.
  local assist=contactKind=='Aftershock'
+ local preferOre=assist and primary.field.cfg.SelectionOnly
+ local looseSeams=d.stats.earlyDrop or 0
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
   if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
    local distance=(other.position-primary.position).Magnitude
-   if distance<=radius then table.insert(candidates,{resource=other,distance=distance}) end
+   if distance<=radius then
+    local workToOre=0
+    if preferOre then
+     workToOre=other.cargoProduced and math.huge or math.max(0,other.hp-(other.maxHP-10)*looseSeams)
+    end
+    table.insert(candidates,{resource=other,distance=distance,workToOre=workToOre})
+   end
   end
  end
- table.sort(candidates,function(a,b) return a.distance==b.distance and a.resource.id<b.resource.id or a.distance<b.distance end)
+ table.sort(candidates,function(a,b)
+  if a.workToOre~=b.workToOre then return a.workToOre<b.workToOre end
+  return a.distance==b.distance and a.resource.id<b.resource.id or a.distance<b.distance
+ end)
  for _,candidate in ipairs(candidates) do
   local other=candidate.resource
   if d.squareJob and not Mining.selectorTouches(d.squareJob.center,d.squareJob.half,other.part.CFrame,other.part.Size) then continue end
