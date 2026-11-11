@@ -9231,8 +9231,12 @@ local function breakerDrone(d,p,hr,field,dt)
   d.breaker=job
  elseif event=='missed' or event=='canceled' then release(d) end
 end
+function scene.autoSellReady(p,profile,units)
+ return Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
+end
 function scene.emptierReady(p,profile)
  local units=Pro.cargoUnits(profile)
+ if scene.autoSellReady(p,profile,units) then return false end
  if not scene.runStart then return units>0 end
  if profile.run.id~=p.emptierBagRun or units==0 then
   p.emptierBagRun=profile.run.id;p.emptierBagSince=nil
@@ -9836,7 +9840,8 @@ local function sellBackpack(p: any,automatic: boolean?)
    local n=key=='Quartz' and result.quartz or result.cargo[key]
    if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
   end
-  notice(p,scene.saleMilestoneNotice(p,result.quartz) or 'Sold '..result.units..' ore · +'..table.concat(amounts,', '))
+  local sale=automatic and 'Auto Sell' or 'Sold '..result.units..' ore'
+  notice(p,scene.saleMilestoneNotice(p,result.quartz) or sale..' · +'..table.concat(amounts,', '))
   p.publishDirty=true
  end)
 end
@@ -10746,7 +10751,8 @@ RunService.Heartbeat:Connect(function(dt: number)
    serviceDeliveries(p);p.player:SetAttribute('MA_InAssault',activeAssault(p))
    scene.publishSquareStatus(p)
    if not p.busy then settleRuntime(p) end
-   if healthy(p) and Workshop.starLevel(data(p),'autosell')>0 and characterRoot(p) and Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) then sellBackpack(p,true) end
+   local profile=data(p)
+   if healthy(p) and characterRoot(p) and scene.autoSellReady(p,profile,Pro.cargoUnits(profile)) then sellBackpack(p,true) end
    if p.publishDirty then p.publishDirty=false;publish(p) end
   end
  end

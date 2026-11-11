@@ -437,4 +437,44 @@ do
  scene.depotFloor,shopStations.Ruby.Position,scene.packStation.Position=originalFloor,originalStar,originalCounter
  print('PASS the saved Wider Selector upgrade expands the working pin during a depot visit and admits an outer crystal')
 end
+do
+ local runner=player(98907);players.PlayerAdded:Fire(runner)
+ local crew=profiles[runner.UserId]
+ local left,right=crew.drones[8],crew.drones[9]
+ runner.Character:PivotTo(CFrame.new(shopStations.Ruby.Position+Vector3.yAxis*3))
+ data(crew).run.stars=6
+ command.OnServerEvent:Fire(runner,'BuyStarUpgrade',{runId=data(crew).run.id,upgradeId='autosell',level=0,txId='fixture-auto-sell'})
+ assert(Workshop.starLevel(data(crew),'autosell')==1 and data(crew).run.stars==0)
+
+ local at=scene.packStation.Position+Vector3.new(0,3,90)
+ runner.Character:PivotTo(CFrame.new(at))
+ left.pos=at+scene.emptierOffset(1);left.velocity=Vector3.zero
+ right.pos=at+scene.emptierOffset(2);right.velocity=Vector3.zero
+ local full=Ca.capacity(data(crew))
+ assert(Pro.addCargo(data(crew),'Quartz',full-1,full)==full-1)
+ advance(.15)
+ assert(left.pickupAt and right.pickupAt,'Auto Sell blocked pickups from a partial bag')
+ -- A final ore drop can fill the bag after an Emptier has requested its load.
+ left.pickupAt=now-RoleConfig.Courier.PickupHold-.05;left.deliveryRequested=true
+ assert(Pro.addCargo(data(crew),'Quartz',1,full)==1)
+ serviceDeliveries(crew)
+ assert(Pro.cargoUnits(data(crew))==full and not next(data(crew).run.deliveries),'a queued Emptier took ore from a full Auto Sell bag')
+ advance(.4)
+ assert(Pro.cargoUnits(data(crew))==0 and data(crew).run.wallet.Quartz==full)
+ assert(runner:GetAttribute('MA_Notice')=='Auto Sell · +'..full..' Quartz')
+
+ local batch=Workshop.emptierBatch(data(crew))
+ assert(Pro.addCargo(data(crew),'Quartz',batch,full)==batch)
+ advance(2)
+ local loaded=data(crew).run.deliveries[left.id] or data(crew).run.deliveries[right.id]
+ assert(loaded and Pro.cargoUnits(data(crew))==0,'Auto Sell prevented a later partial pickup')
+ assert(Pro.addCargo(data(crew),'Quartz',full,full)==full)
+ advance(.4)
+ assert(Pro.cargoUnits(data(crew))==0 and data(crew).run.wallet.Quartz==2*full)
+ assert(runner:GetAttribute('MA_Notice')=='+'..full..' Quartz · Pack Counter ready')
+ advance(20)
+ assert(data(crew).run.wallet.Quartz==2*full+batch and not next(data(crew).run.deliveries),'the in-flight load failed to sell once')
+ players.PlayerRemoving:Fire(runner)
+ print('PASS Auto Sell takes a full bag while the Emptiers handle partial bags and finish existing loads')
+end
 CF.__index=cfIndex
