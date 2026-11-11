@@ -67,6 +67,63 @@ check('a full backpack leaves real fragments until selling makes space',function
  assert(pendingOre(p)==10,'ore vanished during a sell trip')
  data(p).run.cargo={};steps(100);assert(pendingOre(p)==0 and Pro.cargoUnits(data(p))==10)
 end)
+check('a delayed Emerald sell trip leaves physical cargo available on return',function()
+ local pl,p,_,r=fixture()
+ local counter=scene.packStation
+ local oldPosition=counter.Position
+ counter.Position=Vector3.new(-38,5.5,32)
+ local emerald=Vector3.new(0,7.2,420)
+ local savedRun=data(p).run.id
+ pl.Character:PivotTo(CFrame.new(emerald))
+ data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ local material=Workshop.cargoKey('RunEmerald',2560)
+ local born=now
+ scene.spawnOrePickup(r.part,{owner=pl.UserId,runId=savedRun,nodeId='emerald-return',material=material,
+  tierMaterial='RunEmerald',value=2560,units=1,raw=true,floor=4.26},emerald,Vector3.new(3,13,0),Color3.new(0,1,0))
+ local id=pickupSerial
+ steps(math.ceil(65/C.Tick))
+ local drop=assert(pickups[id])
+ local settled=drop.part.Position
+ local snapshot=drop.part:GetAttribute('SnapshotAt')
+ assert(drop.part:GetAttribute('ExpiresAt')>born+OreDrops.LIFETIME)
+ assert(drop.part:GetAttribute('FadeAt')==drop.part:GetAttribute('ExpiresAt')-OreDrops.FADE_SECONDS)
+ local function walk(to)
+  local from=characterRoot(p).Position
+  local stride=math.ceil((to-from).Magnitude/(16*C.Tick))
+  for i=1,stride do
+   pl.Character:PivotTo(CFrame.new(from:Lerp(to,i/stride)));steps(1)
+  end
+ end
+ walk(counter.Position+Vector3.yAxis*3)
+ command.OnServerEvent:Fire(pl,'Sell')
+ assert(Pro.cargoUnits(data(p))==0,'the depot sale did not make room')
+ steps(math.ceil(10/C.Tick))
+ -- The ore has already passed its original deadline before the return leg.
+ assert(now>born+OreDrops.LIFETIME and pickups[id]==drop and drop.part.Transparency==0)
+ assert(drop.part.Position==settled and drop.part:GetAttribute('SnapshotAt')==snapshot,'the deadline change relaunched the cargo')
+ walk(settled+Vector3.yAxis*2)
+ steps(100)
+ assert(not pickups[id] and data(p).run.cargo[material]==1 and Pro.cargoUnits(data(p))==1)
+ print(string.format('MODEL Emerald cargo still collected after %.1fs including a real depot sale',now-born))
+ counter.Position=oldPosition
+ players.PlayerRemoving:Fire(pl)
+end)
+check('the full-bag return grace clears abandoned cargo after three minutes',function()
+ local pl,p,_,r=fixture()
+ local point=scene.packStation.Position+Vector3.new(0,3,400)
+ local material=Workshop.cargoKey('RunEmerald',2560)
+ pl.Character:PivotTo(CFrame.new(point))
+ data(p).run.cargo={Quartz=Ca.capacity(data(p))}
+ local born=now
+ scene.spawnOrePickup(r.part,{owner=pl.UserId,runId=data(p).run.id,nodeId='abandoned',material=material,
+  tierMaterial='RunEmerald',value=2560,units=1,raw=true,floor=point.Y-2},point,Vector3.zero,Color3.new(0,1,0))
+ local id=pickupSerial
+ steps(math.ceil((OreDrops.CARGO_MAX_AGE-2)/C.Tick))
+ assert(pickups[id] and pickups[id].part:GetAttribute('ExpiresAt')==born+OreDrops.CARGO_MAX_AGE)
+ steps(math.ceil(3/C.Tick))
+ assert(not pickups[id] and not data(p).run.cargo[material])
+ players.PlayerRemoving:Fire(pl)
+end)
 check('overflow adds to a nearby pile and extends its expiry without relaunching it',function()
  local _,p,d,starter=fixture()
  data(p).run.cargo={Quartz=Ca.capacity(data(p))}

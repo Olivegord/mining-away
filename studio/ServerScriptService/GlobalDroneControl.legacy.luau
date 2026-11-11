@@ -2209,7 +2209,7 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,GRAVITY=70,
+local O={MAGNET_RANGE=30,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=90,FADE_SECONDS=5,CARGO_MAX_AGE=180,GRAVITY=70,
  AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
@@ -2236,8 +2236,19 @@ function O.cargoLaunch(serial,block)
  local speed=block and 5.3 or 6.0+(serial%3)*.35
  return math.cos(angle)*speed,block and 16 or 20+(serial%4)*.65,math.sin(angle)*speed
 end
-function O.expired(spawnAt,now) return now>=spawnAt+O.LIFETIME end
-function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_SECONDS))/O.FADE_SECONDS,0,1) end
+function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
+function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
+function O.fade(spawnAt,now,returnUntil)
+ return math.clamp((now-O.deadline(spawnAt,returnUntil)+O.FADE_SECONDS)/O.FADE_SECONDS,0,1)
+end
+function O.sellTripDeadline(spawnAt,now,walkingDistance,returnUntil)
+ -- Default walking is 16 studs/s. Leave time for turns, unloading and the counter.
+ local trip=math.min(O.LIFETIME,walkingDistance/14+20)
+ if now+trip<=O.deadline(spawnAt,returnUntil) then return nil end
+ local extended=math.min(spawnAt+O.CARGO_MAX_AGE,now+trip+10)
+ if extended>O.deadline(spawnAt,returnUntil) then return extended end
+ return nil
+end
 local function horizontal(s,dt,drag)
  local decay=math.exp(-drag*dt);local travel=(1-decay)/drag
  s.x+=s.vx*travel;s.z+=s.vz*travel;s.vx*=decay;s.vz*=decay
@@ -7707,7 +7718,7 @@ function scene.snapshotOrePickup(drop)
  local moved=not position or position.X~=drop.x or position.Y~=drop.y or position.Z~=drop.z
  local accelerated=not velocity or velocity.X~=drop.vx or velocity.Y~=drop.vy or velocity.Z~=drop.vz
  local homing=drop.homing==true
- local fade=OreDrops.fade(drop.refreshedAt or drop.spawnAt,now)
+ local fade=OreDrops.fade(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil)
  if fade~=drop.publishedFade then part.Transparency=fade;drop.publishedFade=fade end
  if not moved and not accelerated and homing==drop.publishedHoming
   and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
@@ -7923,7 +7934,7 @@ local function pickupStep(dt)
    local active=activePresses[drop.owner]
    local p=active and active.profile
    if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
-    or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1)
+    or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1,drop.returnUntil)
     or now<(drop.relayUntil or 0)
     or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
    local press=p.compactor
@@ -7967,7 +7978,7 @@ local function pickupStep(dt)
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
   if p and drop.pressCarrier and drop.pressCarrier~=p.compactor then scene.resetPress(drop.pressCarrier) end
-  if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then
+  if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
   elseif healthy(p) and not drop.pressSocket then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
@@ -7989,6 +8000,17 @@ local function pickupStep(dt)
    local hr=characterRoot(p);local target=hr and hr.Position or from
    local naturalReach=(drop.raw and (p.cargoReach or 13) or p.magnetRange)+(drop.reachBonus or 0)
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
+   if drop.raw and drop.landed and hr and not hasSpace and now>=(drop.returnCheckAt or 0) then
+    drop.returnCheckAt=now+1
+    local counter=scene.packStation.Position
+    local walkingDistance=(target-counter).Magnitude+(from-counter).Magnitude
+    local deadline=OreDrops.sellTripDeadline(drop.spawnAt,now,walkingDistance,drop.returnUntil)
+    if deadline then
+     drop.returnUntil=deadline
+     drop.part:SetAttribute('FadeAt',deadline-OreDrops.FADE_SECONDS)
+     drop.part:SetAttribute('ExpiresAt',deadline)
+    end
+   end
    local vacuum=p.vacuum
    local press=p.compactor
    local assignedToPress=p.compactorTarget and p.compactorTarget.id==id
