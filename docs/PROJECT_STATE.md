@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `9289987a33f40bcbd04645d4e94c66b6d3a30c089a65bed2d8116187404cfe65` | Includes client scheduling for confirmed crystal contacts. |
+| Native-file SHA-256 | `7d869068364a054a4d1cf50e54decc49b2b0a31ed56881fcbc6750f876dd539c` | Includes coordinated Emptier pickups. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit aligns the existing shot and crystal feedback at contact** | All seven Sources and three roots verified in Edit. Team Create save returned version 163. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit assigns one Emptier per available load** | All seven Sources and three roots verified in Edit. Team Create save returned version 164. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give each Emptier its own load
+
+One ready parcel now draws one Emptier to the backpack. The server estimates which worker will enter pickup reach first and lets it keep the assignment while it approaches and loads. A blocked pickup can pass to the other worker. Two full parcels still draw two workers, one to each side. Parcel contents and sale receipts use the existing transactions.
+
+In matched controller runs, the number of Emptiers docking for a single parcel fell from two to one. The 20-Quartz sale still took 6.77 seconds from that starting position. With eight cargo slots, both Emptiers loaded and sold 80 Quartz in 8.05 seconds on both revisions. The Ruby sale that paid for pack two took 11.27 seconds from backpack pickup, compared with 11.30 on `ad6a57d`. The controller fixture also verified a blocked handoff and distinct four-slot manifests. Workshop, Crystal Run, persistence, committed flight and audio checks passed with API or storage doubles. Live movement and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **164**. No player release was published. To reproduce from `ad6a57d`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit ad6a57d`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — line up the shot, flash and fracture
 

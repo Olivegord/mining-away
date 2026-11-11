@@ -346,4 +346,47 @@ do
  print('PASS a mined Ruby funds pack two and a single valuable block funds prestige through early courier sales')
  print('PASS the chosen permanent prestige drone cuts, sells and funds a pack on its first run-two pin')
 end
+do
+ local runner=player(98905);players.PlayerAdded:Fire(runner)
+ local crew=profiles[runner.UserId]
+ local left,right=crew.drones[8],crew.drones[9]
+ local at=scene.packStation.Position+Vector3.new(0,3,90)
+ runner.Character:PivotTo(CFrame.new(at))
+ left.pos=at+scene.emptierOffset(1);left.velocity=Vector3.zero
+ right.pos=at+Vector3.new(9,3,1);right.velocity=Vector3.zero
+ local parcel=Workshop.cargoKey('Quartz',20)
+ assert(Pro.addCargo(data(crew),parcel,1,10)==1)
+ advance(.15)
+ assert(left.state=='Pickup' and right.state=='Follow','one parcel drew two Emptiers')
+ right.pos=at+scene.emptierOffset(2);right.velocity=Vector3.zero
+ advance(.15)
+ assert(left.pickupAt and not right.pickupAt,'the assigned Emptier lost the pickup to a closer one')
+ local raycast=workspace.Raycast
+ workspace.Raycast=function(self,from,direction,params)
+  if from.X<at.X-.5 and (from+direction-at).Magnitude<.01 then return {Instance=scene.packStation} end
+  return raycast(self,from,direction,params)
+ end
+ advance(.55)
+ workspace.Raycast=raycast
+ assert(left.state=='Follow' and left.pickupRetryAt and (right.state=='Collect' or right.state=='Pickup'),'blocked pickup did not pass to the other Emptier')
+ advance(3.5)
+ assert(Pro.deliveryUnits(data(crew),right.id)==1 and not data(crew).run.deliveries[left.id] and Pro.cargoUnits(data(crew))==0)
+ advance(20)
+ assert(data(crew).run.wallet.Quartz==20 and not next(data(crew).run.deliveries),'the passed parcel did not sell once')
+
+ left.pos=at+scene.emptierOffset(1);left.velocity=Vector3.zero
+ right.pos=at+scene.emptierOffset(2);right.velocity=Vector3.zero
+ assert(Pro.addCargo(data(crew),Workshop.cargoKey('Quartz',10),8,10)==8)
+ advance(.15)
+ assert(left.state=='Pickup' and right.state=='Pickup','two full parcels did not stage both Emptiers')
+ assert(left.intentGoal.X<at.X and right.intentGoal.X>at.X,'two pickups shared the same side of the bag')
+ advance(2.5)
+ local deliveries=data(crew).run.deliveries
+ assert(deliveries[left.id] and deliveries[right.id] and deliveries[left.id].id~=deliveries[right.id].id)
+ assert(Pro.deliveryUnits(data(crew),left.id)==4 and Pro.deliveryUnits(data(crew),right.id)==4 and Pro.cargoUnits(data(crew))==0)
+ advance(20)
+ assert(data(crew).run.wallet.Quartz==100 and not next(data(crew).run.deliveries),'the two loads did not sell for their full value')
+ players.PlayerRemoving:Fire(runner)
+ print('PASS one Emptier holds a single pickup, passes a blocked job and shares the haul when both loads are full')
+end
 CF.__index=cfIndex

@@ -7381,6 +7381,7 @@ end
 local function rebuildFleet(p,origin)
  for _,d in ipairs(p.drones) do release(d);spend(d);drones[d.id]=nil;d.model:Destroy() end
  p.drones={};p.vacuum=nil;p.vacuumTarget=nil;p.compactor=nil;p.compactorTarget=nil
+ p.emptierPickups=nil;p.nextEmptierPlan=nil
  local fleet=scene.runtimeFleet(p)
  local ids={};for _,owned in ipairs(fleet) do if owned.role=='Courier' then table.insert(ids,owned.id) end end
  if Pro.reconcileCargo(data(p),ids) then p.dirty=true end
@@ -9224,6 +9225,57 @@ function scene.emptierReady(p,profile)
  local batch=Workshop.emptierBatch(profile)
  return Workshop.emptierReady(units,batch,p.emptierBagSince,now) or (units>0 and Pro.deliveryFundsMilestone(profile,batch))
 end
+function scene.emptierOffset(rank)
+ return Vector3.new(rank%2==0 and 2.2 or -2.2,2.4,1)
+end
+function scene.emptierApproachTime(d,position,offset)
+ local from=d.pos-position
+ local reach=RoleConfig.Courier.PickupDistance
+ if from.Magnitude<=reach then return 0 end
+ -- The worker can start loading at the reach boundary. An approach that
+ -- enters it late can be slower even when its final dock is closer.
+ local path=from-offset
+ local lengthSquared=path:Dot(path)
+ local projection=offset:Dot(path)
+ local margin=reach*reach-offset:Dot(offset)
+ local remainingFraction=(math.sqrt(projection*projection+lengthSquared*margin)-projection)/lengthSquared
+ return path.Magnitude*(1-remainingFraction)/(travelSpeed(d)*60)-math.log(remainingFraction)*.55
+end
+function scene.assignEmptierPickups(p)
+ if not healthy(p) or now<(p.nextEmptierPlan or 0) then return end
+ p.nextEmptierPlan=now+C.Snapshot
+ local hr=characterRoot(p)
+ local profile=data(p)
+ if not hr or not scene.emptierReady(p,profile) then p.emptierPickups=nil;return end
+ local batch=Workshop.emptierBatch(profile)
+ local loads=math.max(1,math.floor(Pro.cargoUnits(profile)/batch))
+ local previous=p.emptierPickups
+ local candidates,rank={},0
+ for _,d in ipairs(p.drones) do
+  if d.role~='Courier' then continue end
+  rank+=1
+  if d.hp<=0 or d.carrierId or profile.run.deliveries[d.id]
+   or now<math.max(d.collectAfter or 0,d.pickupRetryAt or 0) then continue end
+  local assigned=previous and previous[d.id]
+  local offset=assigned or scene.emptierOffset(rank)
+  table.insert(candidates,{id=d.id,offset=offset,slot=d.slot,holding=d.pickupAt or math.huge,
+   assigned=assigned~=nil,time=scene.emptierApproachTime(d,hr.Position,offset)})
+ end
+ table.sort(candidates,function(a,b)
+  if a.holding~=b.holding then return a.holding<b.holding end
+  if a.assigned~=b.assigned then return a.assigned end
+  if a.time~=b.time then return a.time<b.time end
+  return a.slot<b.slot
+ end)
+ local pickups={}
+ for i=1,math.min(loads,#candidates,2) do
+  local c=candidates[i]
+  local offset=c.offset
+  if i==2 and offset.X==candidates[1].offset.X then offset=Vector3.new(-offset.X,offset.Y,offset.Z) end
+  pickups[c.id]=offset
+ end
+ p.emptierPickups=pickups
+end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
  if d.specialRecovery and not d.specialPausedAt and (not d.specialRecovery.part.Parent or now>=d.specialRecovery.startedAt+d.specialRecovery.duration+1.15) then d.specialRecovery=nil end
@@ -9342,16 +9394,27 @@ local function droneStep(d: any,dt: number)
    if scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
   end
-  if scene.emptierReady(p,data(p)) and now>=(d.collectAfter or 0) then
+  local offset=scene.runStart and p.emptierPickups and p.emptierPickups[d.id]
+  if not scene.runStart and scene.emptierReady(p,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
-   local side=rank%2==0 and 1 or -1
-   d.state='Collect';move(d,hr.Position+Vector3.new(side*2.2,2.4,1),dt)
-   if (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
+   offset=scene.emptierOffset(rank)
+  end
+  if offset and now>=(d.pickupRetryAt or 0) then
+   d.state='Collect';move(d,hr.Position+offset,dt)
+   local inReach=(d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance
+   if inReach and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
+    d.pickupBlockedAt=nil
     d.pickupAt=d.pickupAt or now;d.state='Pickup'
     d.deliveryRequested=now-d.pickupAt>=RoleConfig.Courier.PickupHold
-   else d.pickupAt=nil;d.deliveryRequested=false end
+   else
+    d.pickupAt=nil;d.deliveryRequested=false
+    if scene.runStart and inReach then
+     d.pickupBlockedAt=d.pickupBlockedAt or now
+     if now-d.pickupBlockedAt>=.35 then d.pickupRetryAt=now+1.25;p.nextEmptierPlan=nil end
+    else d.pickupBlockedAt=nil end
+   end
   else
-   d.pickupAt=nil;d.deliveryRequested=false
+   d.pickupAt=nil;d.deliveryRequested=false;d.pickupBlockedAt=nil
    d.state='Follow'
    if not scene.runStart and scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
@@ -9723,6 +9786,7 @@ local function serviceDeliveries(p: any)
      local batch=scene.runStart and Workshop.emptierBatch(copy) or d.stats.courierCapacity or RoleConfig.Courier.BatchUnits
      local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch,scene.runStart~=nil);if ok then return result end;return nil,result
     end,function(result)
+    p.nextEmptierPlan=nil
      if Pro.cargoUnits(data(p))==0 then p.emptierBagSince=nil end
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
@@ -9750,7 +9814,7 @@ local function sellBackpack(p: any,automatic: boolean?)
   local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
-  p.emptierBagSince=nil
+  p.emptierBagSince=nil;p.nextEmptierPlan=nil
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]
@@ -10586,6 +10650,7 @@ RunService.Heartbeat:Connect(function(dt: number)
    end
   end
   pickupStep(C.Tick)
+  if scene.runStart then for _,p in pairs(profiles) do scene.assignEmptierPickups(p) end end
   for _,field in ipairs(patches) do if field.junk then scene.dispatchJunk(field) end end
   swarmGrid=Feel.swarmGrid(drones)
   for _,d in pairs(drones) do droneStep(d,C.Tick) end

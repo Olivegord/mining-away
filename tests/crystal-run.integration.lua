@@ -855,8 +855,11 @@ local emeraldCargo=Workshop.cargoKey('RunEmerald',300)
 local pressedCargo=Workshop.cargoKey('RunCobalt',90,true)
 local quartzCargo=Workshop.cargoKey('Quartz',10)
 data(buyer).run.cargo={[rubyCargo]=1,[emeraldCargo]=1,[pressedCargo]=1,[quartzCargo]=6}
-local hr=characterRoot(buyer);emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
-droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
+local hr=characterRoot(buyer);emptier.pos=hr.Position+scene.emptierOffset(1)
+local function stepEmptier()
+ scene.assignEmptierPickups(buyer);droneStep(emptier,C.Tick)
+end
+stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
 assert(manifest.cargo[rubyCargo]==1 and manifest.cargo[emeraldCargo]==1 and manifest.cargo[pressedCargo]==1 and manifest.cargo[quartzCargo]==1)
 assert(Pro.cargoUnits(data(buyer))==5 and data(buyer).run.cargo[quartzCargo]==5)
@@ -871,8 +874,8 @@ local otherLanding=counter.CFrame:PointToObjectSpace(secondEmptier.model:GetAttr
 assert(math.abs(landing.X+otherLanding.X)<.001 and math.abs(landing.X)>1,'both couriers unloaded into the same lane')
 assert(Pro.validate(assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId)),shopper.UserId))
 now+=1;emptier.pos=scene.packStation.Position
-droneStep(emptier,C.Tick);emptier.pos=emptier.goal
-droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick)
+stepEmptier();emptier.pos=emptier.goal
+stepEmptier();now+=1;stepEmptier()
 local prior=data(buyer).run.quartzEarnings
 serviceDeliveries(buyer);serviceDeliveries(buyer)
 assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+440)
@@ -884,10 +887,10 @@ table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2))
 -- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
 data(buyer).run.cargo={[Workshop.cargoKey('RunRuby',5,true)]=1}
 buyer.emptierBagSince=nil
-now+=3;emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
-droneStep(emptier,C.Tick);assert(not emptier.pickupAt)
-now+=Workshop.EMPTIER_WAIT;droneStep(emptier,C.Tick)
-now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
+now+=3;emptier.pos=hr.Position+scene.emptierOffset(1)
+stepEmptier();assert(not emptier.pickupAt)
+now+=Workshop.EMPTIER_WAIT;stepEmptier()
+now+=1;stepEmptier();serviceDeliveries(buyer)
 assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==0)
 snapshotDrone(emptier)
 assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
@@ -911,8 +914,8 @@ now=buyer.shiftUntil;assert(hitResource(miner,boosted,10) and boosted.hp==965)
 -- A delivery can prime the crew while it is between assignments.
 release(miner);scene.clearSquare(buyer)
 emptier.pos=scene.packStation.Position
-droneStep(emptier,C.Tick);emptier.pos=emptier.goal
-droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
+stepEmptier();emptier.pos=emptier.goal
+stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
 assert(not data(buyer).run.deliveries[emptier.id] and scene.shiftReady(buyer) and not buyer.shiftUntil)
 input('PlaceSelector','next-surge-cut',{fieldId=f.id,position=f.center})
 assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)
