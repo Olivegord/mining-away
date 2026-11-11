@@ -151,14 +151,14 @@ function PackView:update(now)
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
  local camera=workspace.CurrentCamera
- self.target=nil
+ local crateInReach=false
  if folder then for _,source in ipairs(folder:GetChildren()) do
   local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier') or 1
   local owner=source:GetAttribute('Owner')==player.UserId
   local openedAt=source:GetAttribute('OpenedAt')
-  local eligible=owner and source:GetAttribute('Ready')==true and hr and hum and hum.Health>0 and not openedAt
-   and (hr.Position-source.Position).Magnitude<=Packs.Range and not o.hidden()
-  if eligible then self.target=source end
+  local inReach=owner and hr and hum and hum.Health>0 and not openedAt and (hr.Position-source.Position).Magnitude<=Packs.Range
+  if inReach then crateInReach=true end
+  local eligible=inReach and source:GetAttribute('Ready')==true and not o.hidden()
   local prompt=source:FindFirstChild('OpenPack')
   if prompt then
    local enabled=eligible==true and not o.busy()
@@ -177,7 +177,7 @@ function PackView:update(now)
   self.counter=station and station:FindFirstChildOfClass('ProximityPrompt')
  end
  if self.counter then
-  local enabled=not self.target and not o.hidden() and not o.busy()
+  local enabled=not crateInReach and not o.hidden() and not o.busy()
   if self.counter.Enabled~=enabled then self.counter.Enabled=enabled end
  end
  for source,record in pairs(self.records) do

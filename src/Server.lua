@@ -2683,6 +2683,7 @@ end
 local packDelivery=PackDelivery.new({
  root=root, players=Players, getClock=function() return now end, home=home, station=scene.packStation, healthy=healthy,
  inAssault=activeAssault, characterRoot=characterRoot,
+ requireGround=scene.runStart~=nil and root:GetAttribute('EditableMap')==true,
  groundHeight=function(x,z) return logisticsTerrain:surface(x,z) end,
  offer=function(p) return data(p).run.pendingOffer end,
  open=function(p,id,outcome)
@@ -2715,7 +2716,9 @@ local function economyAction(p: any,pl: any,action: string,payload: any): boolea
   end
   local origin=characterRoot(p).Position
   transact(p,'buy:'..payload.txId,buyCard,function()
-   packDelivery:spawn(p,data(p).run.pendingOffer,origin,now)
+   local buyer=characterRoot(p)
+   local position=buyer and (buyer.Position-scene.packStation.Position).Magnitude<12 and buyer.Position or origin
+   packDelivery:spawn(p,data(p).run.pendingOffer,position,now)
   end)
  elseif action=='ChooseCard' then
   chooseCard(p,pl,payload)
