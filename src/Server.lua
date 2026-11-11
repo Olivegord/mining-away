@@ -1518,6 +1518,15 @@ function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
 end
+function scene.finishingDiscreteCut(d)
+ local field=d.field and patches[d.field]
+ if not field or not field.cfg.SelectionOnly then return false end
+ if d.specialJob then return true end
+ local recovery=d.specialRecovery
+ if recovery and now<recovery.startedAt+recovery.duration then return true end
+ local phase=d.breaker and d.breaker.phase
+ return phase=='Dive' or phase=='Impact' or phase=='Recover'
+end
 function scene.publishSquareFocus(p,square)
  local focus=resources[square.focusId]
  local receipt
@@ -1984,7 +1993,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.state='SpecialMine'
  job=d.specialJob
  if not job.impacted and now>=job.startedAt+job.duration*job.impact then
-  if hitResource(d,r,job.damage,false,nil,nil,'Special') and projectile and not r.field.cfg.SelectionOnly then
+  if not hitResource(d,r,job.damage,false,nil,nil,'Special') then
+   r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+3;release(d);return
+  end
+  if projectile and not r.field.cfg.SelectionOnly then
    RoleEffects.Pulse(job.contact,RoleConfig.Types[d.role].Color,.35,projectile=='Dart' and 1.9 or 4.2,.18)
   end
  end
@@ -2242,7 +2254,9 @@ local function droneStep(d: any,dt: number)
   if committed and not d.recharging then
    d.battery=math.max(0,d.battery-2*dt)
   end
-  if d.battery<=0 and not d.recharging then
+  -- Power can run out during a shot or dive that the player already saw start.
+  -- Resolve that single gesture before charging. Warmup alone still needs power.
+  if d.battery<=0 and not d.recharging and not scene.finishingDiscreteCut(d) then
    local pin,target=d.squareJob,d.target
    release(d);d.recharging=true
    if pin and pin==p.miningSquare and target and target.hardness>=Workshop.DEEP_CUT_HARDNESS then

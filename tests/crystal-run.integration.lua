@@ -458,25 +458,97 @@ assert(Pro.prestige(saved,'mixed-starter-prestige',saved.run.id,{confirmed=true,
 assert(#saved.fleet==8 and Pro.validate(saved,tester.UserId))
 for i,role in ipairs({'Needler','Ballcaster'}) do
  local actor=starterActors[role];local target=rock(i*4,150)
+ if i==1 then target.hp=10;target.stage=3;target.part:SetAttribute('HP',20);target.part:SetAttribute('Stage',3) end
  assert(assignOre(testCrew,actor,target))
  local station=committedStation(actor,target)
  local offset=station-target.position
  assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-9)<.001,'projectile was not aimed from the side')
  actor.pos=station
- local before=target.hp
+ local before,serial=target.hp,pickupSerial
  for _=1,50 do
   realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
   if actor.specialJob then break end
  end
  assert(actor.specialJob and actor.specialJob.projectile and target.hp==before,'shot damaged before it traveled')
+ local job=actor.specialJob
+ local receipt=job.projectile
+ actor.battery=.01
  for _=1,60 do
   realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  assert(not actor.recharging,'battery cutoff cancelled a launched shot')
   if target.hp<before then break end
  end
- assert(target.hp<before,'projectile failed to apply authoritative work')
+ assert(target.hp<before and actor.battery==0,'projectile failed to apply authoritative work on its last charge')
  assert(target.part:GetAttribute('CutIsShot') and target.part:GetAttribute('CutContactAt')==now)
- assert(actor.specialJob.projectile:GetAttribute('ContactAt')==now)
- release(actor)
+ assert(receipt.Parent and receipt:GetAttribute('ContactAt')==now)
+ if i==1 then assert(target.paid and pickupSerial==serial+1 and pickups[pickupSerial].nodeId==target.id) end
+ local hp=target.hp
+ for _=1,120 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  if actor.recharging then break end
+ end
+ assert(actor.recharging and target.hp==hp and not actor.specialJob and target.specialSerial==job.serial,'the depleted worker must charge before a second shot')
+ release(actor);actor.recharging=nil;actor.battery=actor.stats.batteryCapacity
+end
+do
+ local shooter=starterActors.Needler
+ local target=rock(-5,1000)
+ local function aim()
+  assert(assignOre(testCrew,shooter,target))
+  shooter.pos=committedStation(shooter,target);shooter.velocity=Vector3.zero
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+ end
+ aim()
+ assert(shooter.warmAt and not shooter.specialJob)
+ shooter.battery=.01
+ realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+ assert(shooter.recharging and not shooter.specialJob and target.hp==990,'empty warmup launched a free shot')
+ release(shooter);shooter.recharging=nil;shooter.battery=shooter.stats.batteryCapacity
+ aim()
+ for _=1,80 do
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+  if shooter.specialJob then break end
+ end
+ local receipt=assert(shooter.specialJob).projectile
+ shooter.battery=.01
+ local raycast=workspace.Raycast
+ workspace.Raycast=function() return {Instance=bed} end
+ for _=1,80 do
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+  if shooter.recharging then break end
+ end
+ workspace.Raycast=raycast
+ assert(shooter.recharging and not receipt.Parent and not receipt:GetAttribute('ContactAt') and target.hp==990,'an obstructed final shot paid work')
+ release(shooter);shooter.recharging=nil;shooter.battery=shooter.stats.batteryCapacity
+ print('PASS final Needler and Ballcaster shots resolve once before charging, while a blocked shot and depleted warmup pay nothing')
+end
+do
+ local breaker=spawnDrone(testCrew,{id=tester.UserId..':fixture:breaker',name='Breaker',role='Charger',type='Red',
+  base=Pro.clone(RoleConfig.StudioRoles.Charger.base)},#testCrew.drones+1)
+ local target=rock(-7,1100)
+ assert(assignOre(testCrew,breaker,target))
+ breaker.pos=committedStation(breaker,target)+Vector3.yAxis*2;breaker.velocity=Vector3.zero
+ for _=1,math.ceil((breaker.stats.warmup+2)/C.Tick) do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if breaker.breaker and breaker.breaker.phase=='Dive' then break end
+ end
+ assert(breaker.breaker and breaker.breaker.phase=='Dive')
+ breaker.battery=.01
+ local hp=target.hp
+ for _=1,140 do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if (breaker.impactSerial or 0)>0 then break end
+ end
+ assert(breaker.battery==0 and not breaker.recharging and breaker.breaker.phase=='Recover' and target.hp<hp)
+ assert(breaker.impactSerial==1 and now-breaker.contactAt>=DroneRoles.BREAKER.impactHold)
+ hp=target.hp
+ for _=1,140 do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if breaker.recharging then break end
+ end
+ assert(breaker.recharging and not breaker.breaker and target.hp==hp and breaker.impactSerial==1)
+ release(breaker);breaker.model:Destroy();drones[breaker.id]=nil;table.remove(testCrew.drones)
+ print('PASS a depleted Breaker finishes its dive, contact hold and recovery before charging')
 end
 do
  local deep=table.clone(f)
@@ -568,6 +640,23 @@ do
  local function removeRock(r)
   resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,table.find(field.resources,r))
  end
+ local committed=makeResource(field,field.center,'Crystal',1100,10,3,3)
+ committed.readyAt=now
+ assert(assignOre(testCrew,halver,committed))
+ halver.pos=committedStation(halver,committed);halver.velocity=Vector3.zero
+ for _=1,100 do
+  realTime+=C.Tick;now=realTime;droneStep(halver,C.Tick)
+  if halver.specialJob then break end
+ end
+ local gesture=assert(halver.specialJob)
+ halver.battery=.01
+ for _=1,300 do
+  realTime+=C.Tick;now=realTime;droneStep(halver,C.Tick)
+  if halver.recharging then break end
+ end
+ assert(halver.recharging and gesture.impacted and committed.hp<1090 and committed.specialSerial==gesture.serial)
+ assert(now>=gesture.startedAt+gesture.duration,'depletion interrupted the grinder recovery')
+ release(halver);halver.recharging=nil;halver.battery=halver.stats.batteryCapacity;removeRock(committed)
  local function runCut(actor)
   local r=makeResource(field,field.center,'Crystal',270,10,3,3);r.readyAt=now
   assert(assignOre(testCrew,actor,r))

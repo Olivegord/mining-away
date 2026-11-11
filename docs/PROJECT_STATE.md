@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e594e2c7497fcf7fd241408529c2f86ea6fb4913fc6d9abe908988088d745730` | Includes the pack and prestige cues on the depot approach. |
+| Native-file SHA-256 | `0294de548c04cbd63d687f1d7cce081cee8a316321cdcbe1fa9062dd820122c5` | Includes committed attacks finishing before the battery return. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has pack and prestige cues on the depot approach** | All seven Sources and three roots verified in Edit. Team Create save returned version 161. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit lets committed attacks finish before charging** | All seven Sources and three roots verified in Edit. Team Create save returned version 162. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — finish the attack before charging
+
+In Crystal Run, battery depletion lets a launched shot, a started specialist cut or a Breaker already diving finish its current action. The server still validates the target and contact. The worker completes its recovery and heads for a charge before starting another cut. Depleted warmups and blocked shots still yield no work. The existing projectile, impact and recovery cues follow the accepted hit.
+
+In matched controller runs, both starter projectiles disappeared on `c09d8c5` when their batteries emptied just after launch. The dart now removes 25.83 work at 0.27 seconds and the ball removes 58.32 at 0.48 seconds. Regressions also cover a finishing dart granting one cargo object, blocked contact, the Halver gesture and the Breaker dive, hold and recovery. Workshop, Crystal Run, persistence, audio and committed-flight suites passed with API or storage doubles. The broad gadget runner still stops at the same contact-render assertion on both revisions. Live motion, sound and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **162**. No player release was published. To reproduce from `c09d8c5`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit c09d8c5`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — show the next depot stop on the walk back
 
