@@ -25,18 +25,18 @@ function V.effect(c)
  local e=c.effects;local parts={}
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
- if e.oreDuplicator then return 'This miner produces 2× ore' end
+ if e.oreDuplicator then return '2× cargo value from this miner' end
  if e.compactor then return 'Presses loose ore into one equal-value block' end
  if e.batchPress then return 'Press a full batch with one fewer rock' end
  if e.denserPacking then return '+'..e.denserPacking..' rocks per full block' end
  if e.cargoRack then return '+'..e.cargoRack..' cargo mount per Emptier' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
- if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
+ if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.shiftRelay then table.insert(parts,'Emptier sales boost pin damage 50% for '..e.shiftRelay..'s') end
- if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
+ if e.earlyDrop then table.insert(parts,(Workshop.LOOSE_SEAMS_TEXT:gsub('\n',' '))) end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
  if e.magnetRange then table.insert(parts,'+'..e.magnetRange..' studs of ore pickup reach') end

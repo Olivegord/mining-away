@@ -383,7 +383,7 @@ local function updateOfferControls()
   view.select(offerUI.index==index)
  end
  offerUI.target.Visible=hardware==true
- offerUI.target.Text=target and ('Fit to '..target.name..(#targets>1 and '  ›' or '')) or 'No eligible miners'
+ offerUI.target.Text=CardView.fitText(choice,target,target and profile.droneStats and profile.droneStats[target.id],#targets>1)
  enableAction(offerUI.target,#targets>1 and not choosing)
  offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
  offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
@@ -420,6 +420,7 @@ openOffer=function()
   updateOfferControls()
  end,Color3.fromRGB(46,70,92))
  offerUI.target.Name='ChooseMiner'
+ offerUI.target.TextSize=14
  offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
   if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
   local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
@@ -559,11 +560,12 @@ openRunCards=function()
   label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Quartz Workshop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
-   local y=63+(index-1)*145
+   local y=63+(index-1)*166
    local _,tint=CardView.identity(c)
-   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,130),tint:Lerp(palette.panel,.42),12)
-   label(row,UDim2.fromOffset(16,12),UDim2.new(1,-32,0,55),CardView.summary(c),22,palette.text,true)
-   label(row,UDim2.fromOffset(16,72),UDim2.new(1,-32,0,46),CardView.terms(c,targetText(c)),16,palette.muted)
+   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,152),tint:Lerp(palette.panel,.42),12)
+   label(row,UDim2.fromOffset(16,10),UDim2.new(1,-32,0,26),c.title or 'Run upgrade',20,palette.text,true)
+   label(row,UDim2.fromOffset(16,37),UDim2.new(1,-32,0,55),CardView.summary(c),17,palette.text,true)
+   label(row,UDim2.fromOffset(16,94),UDim2.new(1,-32,0,46),CardView.terms(c,targetText(c)),16,palette.muted)
   end
  end
 end

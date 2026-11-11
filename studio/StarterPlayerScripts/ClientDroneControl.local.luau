@@ -74,6 +74,7 @@ W.CATALOG={
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_AFTERSHOCK'}
+W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -7235,7 +7236,7 @@ end
 function CardView.summary(choice)
  local e=choice.effects or {};local lines={}
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
- add('doubleBeam','Two lasers.\n2× damage to one crystal.')
+ add('doubleBeam','Two beams on one rock.\n2× laser damage.')
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
  add('oreDuplicator','Gold ore chamber.\n2× cargo value from this miner.')
  add('compactor','Legacy unlock: presses 3 matching rocks into 1 block of equal total value.')
@@ -7261,9 +7262,10 @@ function CardView.summary(choice)
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
- add('aftershock','Each laser crack or break sends a shock into one nearby crystal.')
+ local echo=(e.aftershock or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.aftershock or 0)
+ add('aftershock','Cracks hit a neighbor.\n'..percent(echo)..' of starting HP.')
  add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
- add('earlyDrop','The rock drops at a late crack and can be collected from farther away.')
+ add('earlyDrop',Workshop.LOOSE_SEAMS_TEXT)
  add('fieldCharge','Depleted drones recharge at your pin')
  add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
  add('battery','+'..(e.battery or 0)..' battery capacity')
@@ -7292,9 +7294,9 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif e.magnetRange then target='Cargo collection'
  elseif e.capacity then target='Your backpack'
  elseif choice.scope=='Player' then target='Your run'
- elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
+ elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire or (e.earlyDrop or 0)>0 then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
- elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
+ elseif work and not allRoles or (e.reclaim or 0)>0 then target='Mining drones'
  else target='All drones' end
  if choice.workshop then
   if e.doubleBeam or e.twinThrusters or e.oreDuplicator then
@@ -7314,6 +7316,21 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  if (e.fork or 0)>0 then table.insert(details,string.format('One crystal within %g studs',reach(choice,'Split reach',6+math.clamp(e.forkRange or 0,0,6)))) end
  if (e.splash or 0)>0 then table.insert(details,string.format('One sentry within %g studs',reach(choice,'Arc reach',6+math.clamp(e.chain or 0,0,16)))) end
  return table.concat(details,'\n')
+end
+
+function CardView.fitText(choice,target,stats,canCycle)
+ if not target then return 'No eligible miners' end
+ local name=target.name..(canCycle and '  ›' or '')
+ if not stats then return name end
+ local e=choice.effects
+ if (e.doubleBeam or 0)>0 and stats.miningDPS then
+  return name..string.format('\n%.0f → %.0f HP/s',stats.miningDPS,stats.miningDPS*2)
+ elseif (e.twinThrusters or 0)>0 and stats.maxStep60 then
+  return name..string.format('\n%.0f → %.0f studs/s',stats.maxStep60*60,stats.maxStep60*120)
+ elseif (e.oreDuplicator or 0)>0 and stats.yieldMultiplier then
+  return name..string.format('\n%.3g× → %.3g× value',stats.yieldMultiplier,stats.yieldMultiplier*2)
+ end
+ return name
 end
 
 -- ViewportFrame cannot render nested GuiObjects. The supported hierarchy is a
@@ -7348,6 +7365,7 @@ function CardView.identity(choice)
  if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
  if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
+ if has('earlyDrop') then return 'seams',Color3.fromRGB(124,66,26),Color3.fromRGB(255,204,112) end
  if has('compactor') or has('batchPress') or has('denserPacking') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
  if has('cargoRack') then return 'rack',Color3.fromRGB(129,83,23),Color3.fromRGB(255,207,113) end
  if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
@@ -7355,7 +7373,7 @@ function CardView.identity(choice)
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
  if has('scrapSwarm') then return 'swarm',Color3.fromRGB(103,49,209),Color3.fromRGB(191,255,98) end
  if has('plotAuto') then return 'scanner',Color3.fromRGB(0,119,114),Color3.fromRGB(142,255,153) end
- if has('aftershock') then return 'aftershock',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
+ if has('aftershock') then return 'aftershock',Color3.fromRGB(73,47,145),Color3.fromRGB(188,178,255) end
  if has('fork') then return 'prism',Color3.fromRGB(42,75,203),Color3.fromRGB(88,244,255) end
  if has('capacity') or has('fullAuto') or has('magnetRange') then return 'cargo',Color3.fromRGB(200,93,10),Color3.fromRGB(255,224,101) end
  if has('health') or has('reduction') or has('salvage') or has('shield') then return 'repair',Color3.fromRGB(12,125,65),Color3.fromRGB(164,255,180) end
@@ -7424,13 +7442,16 @@ local function mechanicVisual(parent,choice,compact)
   local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())
   model.Parent=world;return model
  end
- local function crystal(size,position,color,rotation)
+ local function crystal(size,position,color,rotation,material)
+  local net=storage:FindFirstChild('MiningAway')
   local original=storage:FindFirstChild('Crystal') or workspace:FindFirstChild('Crystal')
-  local template=original and original:FindFirstChild('Mesh',true)
+  local template=(net and net:FindFirstChild('CargoCrystal')) or (original and original:FindFirstChild('Mesh',true))
   if not template or not template:IsA('BasePart') then return end
   local part=template:Clone();safe(part)
   part.Size=template.Size*(size/math.max(template.Size.Y,.01));part.CFrame=CFrame.new(position)*(rotation or CFrame.new())
-  part.Color=color;part.Material=Enum.Material.SmoothPlastic;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Reflectance=0;part.Parent=world
+  if part:IsA('PartOperation') then part.UsePartColor=true end
+  part.Color=color;part.Material=material or Enum.Material.SmoothPlastic;part.MaterialVariant=''
+  part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Reflectance=0;part.Parent=world
   return part
  end
  local function ray(a,b,width,color)
@@ -7452,9 +7473,18 @@ local function mechanicVisual(parent,choice,compact)
   crystal(1.8,Vector3.new(0,-1.45,.3),Color3.fromRGB(255,116,129),CFrame.Angles(.16,.6,-.12))
   for _,side in ipairs({-1,1}) do
    local muzzle=Vector3.new(side*.75,.71,.25)
-   visualPart(world,Vector3.new(.43,.26,.55),muzzle,accent)
+   visualPart(world,Vector3.new(.50,.31,.61),muzzle+Vector3.yAxis*.13,Color3.fromRGB(29,48,60))
+   visualPart(world,Vector3.new(.31,.09,.44),muzzle,accent)
    ray(muzzle,tip,.105,accent)
   end
+ elseif identity=='seams' then
+  local cut=Color3.fromRGB(226,83,92)
+  drone('Striker',2.12,Vector3.new(-.80,1.18,0))
+  local remaining=crystal(1.56,Vector3.new(-.65,-1.24,.12),cut,CFrame.Angles(.14,.5,-.13))
+  local cargo=crystal(.94,Vector3.new(1.05,-.62,.76),cut:Lerp(accent,.23),CFrame.Angles(.27,-.55,.43),Enum.Material.Glass)
+  if remaining then remaining.Name='CrystalInCut' end
+  if cargo then cargo.Name='ReleasedOre' end
+  ray(Vector3.new(-.80,.64,.1),Vector3.new(-.65,-.59,.12),.085,Color3.fromRGB(231,250,255))
  elseif identity=='boost' then
   drone('Striker',2.7,Vector3.new(.3,.25,0),CFrame.Angles(0,-.4,.10))
   for _,side in ipairs({-1,1}) do
@@ -8028,18 +8058,18 @@ function V.effect(c)
  local e=c.effects;local parts={}
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
- if e.oreDuplicator then return 'This miner produces 2× ore' end
+ if e.oreDuplicator then return '2× cargo value from this miner' end
  if e.compactor then return 'Presses loose ore into one equal-value block' end
  if e.batchPress then return 'Press a full batch with one fewer rock' end
  if e.denserPacking then return '+'..e.denserPacking..' rocks per full block' end
  if e.cargoRack then return '+'..e.cargoRack..' cargo mount per Emptier' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
- if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
+ if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
  if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.shiftRelay then table.insert(parts,'Emptier sales boost pin damage 50% for '..e.shiftRelay..'s') end
- if e.earlyDrop then table.insert(parts,'Cracks release +'..percent(e.earlyDrop)..' ore early with longer pickup reach') end
+ if e.earlyDrop then table.insert(parts,(Workshop.LOOSE_SEAMS_TEXT:gsub('\n',' '))) end
  if e.fieldCharge then table.insert(parts,'Recharge at the pin · '..e.fieldCharge..' battery/s') end
  if e.deepCut then table.insert(parts,'+'..percent(e.deepCut)..' laser damage in Ruby through Emerald') end
  if e.magnetRange then table.insert(parts,'+'..e.magnetRange..' studs of ore pickup reach') end
@@ -10202,7 +10232,7 @@ local function updateOfferControls()
   view.select(offerUI.index==index)
  end
  offerUI.target.Visible=hardware==true
- offerUI.target.Text=target and ('Fit to '..target.name..(#targets>1 and '  ›' or '')) or 'No eligible miners'
+ offerUI.target.Text=CardView.fitText(choice,target,target and profile.droneStats and profile.droneStats[target.id],#targets>1)
  enableAction(offerUI.target,#targets>1 and not choosing)
  offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
  offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
@@ -10239,6 +10269,7 @@ openOffer=function()
   updateOfferControls()
  end,Color3.fromRGB(46,70,92))
  offerUI.target.Name='ChooseMiner'
+ offerUI.target.TextSize=14
  offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
   if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
   local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
@@ -10378,11 +10409,12 @@ openRunCards=function()
   label(body,UDim2.fromOffset(6,334),UDim2.fromOffset(width-12,30),'Visit the Quartz Workshop',16,palette.muted)
  else
   for index,c in ipairs(profile.run.cards) do
-   local y=63+(index-1)*145
+   local y=63+(index-1)*166
    local _,tint=CardView.identity(c)
-   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,130),tint:Lerp(palette.panel,.42),12)
-   label(row,UDim2.fromOffset(16,12),UDim2.new(1,-32,0,55),CardView.summary(c),22,palette.text,true)
-   label(row,UDim2.fromOffset(16,72),UDim2.new(1,-32,0,46),CardView.terms(c,targetText(c)),16,palette.muted)
+   local row=U.panel(body,UDim2.fromOffset(3,y),UDim2.fromOffset(width,152),tint:Lerp(palette.panel,.42),12)
+   label(row,UDim2.fromOffset(16,10),UDim2.new(1,-32,0,26),c.title or 'Run upgrade',20,palette.text,true)
+   label(row,UDim2.fromOffset(16,37),UDim2.new(1,-32,0,55),CardView.summary(c),17,palette.text,true)
+   label(row,UDim2.fromOffset(16,94),UDim2.new(1,-32,0,46),CardView.terms(c,targetText(c)),16,palette.muted)
   end
  end
 end
