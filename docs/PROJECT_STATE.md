@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0c906e4af96d6287161bdc776c6df4bdb7480ff8b9f1eee2fd94d609f5e77aeb` | Includes base Quartz payouts on the five Crystal Run boards. |
+| Native-file SHA-256 | `a562c36e277f216a6df815fcfaeb4b75bde63b5c5db3348a416816efc4c8dc54` | Includes charged return flights that can redirect to a new field. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit shows base payouts on the Crystal Run field boards** | All seven Sources and three roots verified in Edit. Team Create save returned version 172. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes charged return flights that can redirect to a new field** | All seven Sources and three roots verified in Edit. Team Create save returned version 173. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — keep Quick Charge through a pin change
+
+A miner returning from the depot can redirect to a new pin at its charged flight speed, including when the pin is in another field. The miner releases its old reservation, and the return boost ends at the new cut. Recall continues to clear the order. The change uses the original flight and charge presentation.
+
+The same controller run redirected a freshly charged miner from Violet to Emerald using the authored field and charger coordinates. Warmup started 17.73 seconds after the redirect on `ce68b56` and 9.88 seconds after it with the fix. The test checked the old reservation was released and the server snapshot published the correct speed during travel and after arrival. Workshop, Crystal Run, persistence and committed flight passed with API or storage doubles. Native Edit confirmed the two fields are 64 studs apart and the test pin has a clear line from its approach position. Live flight and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **173**. No player release was published. To reproduce from `ce68b56`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit ce68b56`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — put the next field’s payout on its board
 

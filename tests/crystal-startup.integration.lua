@@ -92,12 +92,14 @@ do
  local function step()
   realTime+=C.Tick;now=realTime;droneStep(worker,C.Tick)
  end
- local function startTrip()
+ local function startTrip(site,rock)
+  site=site or field;rock=rock or r
   release(worker);worker.field=nil;worker.recharging=nil;worker.chargeSite=nil;worker.squareSearchAt=nil
-  tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
-  crew.miningSquare={field=field,center=center,half=15}
-  assert(assignOre(crew,worker,r));worker.squareJob=crew.miningSquare
-  worker.pos=committedStation(worker,r);worker.velocity=Vector3.zero;worker.battery=0;worker.warmAt=now
+  local pin=Vector3.new(rock.position.X,site.part.Position.Y+site.part.Size.Y*.5,rock.position.Z)
+  tester.Character:PivotTo(CFrame.new(pin+Vector3.yAxis*3))
+  crew.miningSquare={field=site,center=pin,half=15}
+  assert(assignOre(crew,worker,rock));worker.squareJob=crew.miningSquare
+  worker.pos=committedStation(worker,rock);worker.velocity=Vector3.zero;worker.battery=0;worker.warmAt=now
  end
  local function roundTrip()
   startTrip()
@@ -121,6 +123,33 @@ do
  assert(fasterOut<outbound*.85 and fasterIn<inbound*.85 and fasterDock<dock*.85,'Quick Charge still only shortened one part of the trip')
  print(string.format('MODEL Emerald recharge round trip %.2fs -> %.2fs (out %.2f -> %.2f, pad %.2f -> %.2f, back %.2f -> %.2f)',
   outbound+dock+inbound,fasterOut+fasterDock+fasterIn,outbound,fasterOut,dock,fasterDock,inbound,fasterIn))
+
+ local violetBed=World.part(zone,'VioletField',bed.Position-Vector3.zAxis*64,bed.Size,Color3.fromRGB(155,106,197))
+ local violet=table.clone(field)
+ violet.id=#patches+1;violet.part=violetBed;violet.center=violetBed.Position;violet.resources={};violet.respawnQueue={}
+ violet.cfg=table.clone(field.cfg);violet.cfg.Key='Violet';violet.cfg.Material='RunViolet';violet.cfg.Hardness=27;violet.cfg.Value=64
+ patches[violet.id]=violet
+ local oldRock=makeResource(violet,center-Vector3.zAxis*64,'Crystal',1800,10,3,5);oldRock.readyAt=now
+ startTrip(violet,oldRock)
+ for _=1,math.ceil(60/C.Tick) do
+  step();if worker.target==oldRock and not worker.recharging then break end
+ end
+ local oldPin=crew.miningSquare
+ assert(worker.target==oldRock and worker.chargedPin==oldPin and worker.state=='Travel')
+ tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(tester,'PlaceSelector',{runId=data(crew).run.id,fieldId=field.id,position=center})
+ local switchedAt=now
+ step()
+ assert(crew.miningSquare~=oldPin and worker.target==r and not oldRock.slots[worker.id] and worker.state=='Travel')
+ snapshotDrone(worker)
+ assert(math.abs(worker.model:GetAttribute('MaxStep60')-worker.stats.maxStep60*1.95)<1e-8,'switching fields ended the charged return flight')
+ for _=1,math.ceil(60/C.Tick) do step();if worker.warmAt then break end end
+ assert(worker.warmAt and worker.target==r)
+ print(string.format('MODEL charged Violet to Emerald redirect reached warmup in %.2fs',now-switchedAt))
+ step();snapshotDrone(worker)
+ assert(not worker.chargedPin and worker.model:GetAttribute('MaxStep60')==worker.stats.maxStep60,'the return boost survived the start of the cut')
+ resources[oldRock.id]=nil;patches[violet.id]=nil;oldRock.part:Destroy();violetBed:Destroy()
+
  release(worker);worker.state='Follow'
  assert(travelSpeed(worker)==worker.stats.maxStep60,'Quick Charge sped up ordinary flight')
  table.insert(data(crew).run.cards,Workshop.card(Workshop.BY_ID.Q_FIELD_CHARGE,3));publish(crew)

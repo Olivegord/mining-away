@@ -8706,11 +8706,16 @@ function scene.publishSquareStatus(p)
  if p.player:GetAttribute('MA_SelectorStatus')~=status then p.player:SetAttribute('MA_SelectorStatus',status) end
  if p.player:GetAttribute('MA_SelectorWorking')~=working then p.player:SetAttribute('MA_SelectorWorking',working) end
 end
+function scene.releaseSquareApproach(d)
+ local chargedPin=d.chargedPin
+ release(d)
+ d.chargedPin=chargedPin;d.squareSearchAt=nil
+end
 function scene.squareStep(p,d)
  if not DroneRoles.isWorker(d.role) or d.carrierId then return end
  local square=p.miningSquare
  if d.resumePin~=square then d.resumePin=nil;d.resumeResourceId=nil end
- if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then release(d);d.field=nil end
+ if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then scene.releaseSquareApproach(d);d.field=nil end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
  if now<(d.squareSearchAt or 0) and d.squareSearched==square then return end
@@ -10298,13 +10303,16 @@ function scene.prioritizeSquareApproach(p,square)
  if needed<=0 then return end
  table.sort(approaches,function(a,b) return a.time==b.time and a.drone.slot<b.drone.slot or a.time<b.time end)
  for i=1,math.min(needed,#approaches) do
-  local d=approaches[i].drone
-  local chargedPin=d.chargedPin
-  release(d);d.chargedPin=chargedPin;d.squareSearchAt=nil
+  scene.releaseSquareApproach(approaches[i].drone)
  end
 end
 function scene.moveSquareWork(p,current,square)
- if not current or current.field~=square.field then return end
+ if not current then return end
+ -- A new destination can redirect an unfinished flight from the depot.
+ for _,d in ipairs(p.drones) do
+  if d.chargedPin==current then d.chargedPin=square end
+ end
+ if current.field~=square.field then return end
  local press=p.compactor
  if press and press.pressSquare==current and press.pressDock and scene.cargoInSquare(square,press.pressDock) then press.pressSquare=square end
  local function staysInSquare(r)
@@ -10318,10 +10326,7 @@ function scene.moveSquareWork(p,current,square)
   local target=d.target
   if d.squareJob==current and staysInSquare(target) then
    local changingPair=current.pairId==target.id and square.pairId~=target.id
-   if scene.committedWork(d) or not changingPair then
-    d.squareJob=square
-    if d.chargedPin==current then d.chargedPin=square end
-   end
+   if scene.committedWork(d) or not changingPair then d.squareJob=square end
   end
   if d.resumePin==current and staysInSquare(resources[d.resumeResourceId]) then d.resumePin=square end
  end
