@@ -75,16 +75,22 @@ for _=1,15 do now+=.23;scene.regrow(b,.23) end
 assert(b.hp==b.maxHP-10 and b.stage==0 and b.stage<stage and b.extractedOre==paid)
 step(15);assert(d.target==b)
 d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
+b.hardness=3
 assert(hitResource(d,b,65,false));assert(b.extractedOre==paid,'regrowth duplicated layer payout')
 
 -- A depleted worker drops the reservation, physically approaches the pad,
 -- charges there and resumes against the latest pin.
 d.battery=0
 step(1);assert(d.state=='ToCharge' and d.recharging and not d.target)
+assert(d.resumeResourceId==b.id and not next(b.slots),'the interrupted cut must remain available to other crews')
 status('Recharging')
+local nearer=rock(1,100)
+nearer.lastPin=p.miningSquare;nearer.lastPinOwner=d.owner;nearer.hp=nearer.maxHP-15
 for _=1,1200 do step(1);if not d.recharging then break end end
 assert(not d.recharging and d.battery==d.stats.batteryCapacity,'failed to recharge at the pad')
-step(15);assert(d.target and d.squareJob==p.miningSquare,'charged worker failed to resume')
+step(1);assert(d.target==b and d.squareJob==p.miningSquare,'charged worker picked a different unfinished cut')
+assert(d.state=='Travel' and travelSpeed(d)==d.stats.maxStep60*1.5,'return to the field lost the charger travel speed')
+resources[nearer.id]=nil;nearer.part:Destroy()
 release(d);d.field=nil
 local profile=data(p)
 local full=Ca.capacity(profile)
@@ -311,7 +317,7 @@ miner.battery=0
 droneStep(miner,C.Tick)
 assert(miner.recharging and (miner.intentGoal-buyer.miningSquare.center).Magnitude<10,'Field Charger still sent the drone to the depot')
 miner.pos=miner.intentGoal;droneStep(miner,C.Tick)
-assert(miner.battery>0 and miner.state=='Charging')
+assert(miner.battery>0 and miner.state=='Charging' and miner.chargeSite=='Field')
 print('PASS paid hardware draft, durable miner target, exact double primary damage/flight limit/ore, field charging and distance recall')
 
 moveBuyer(shopStations.Ruby.Position)

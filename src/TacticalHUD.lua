@@ -144,7 +144,7 @@ end
 -- Count authoritative capabilities and orders, not cosmetic beam state. Special
 -- jobs and breaker windup keep their assignment; support never inflates miners.
 function HUD.activity(folder,ownerId)
- local a={total=0,living=0,miners=0,support=0,assigned=0,delivering=0,hp=0,maximum=0,battery=0,maxBattery=0,charging=0}
+ local a={total=0,living=0,miners=0,support=0,assigned=0,delivering=0,hp=0,maximum=0,battery=0,maxBattery=0,charging=0,docking=0}
  if folder then for _,drone in folder:GetChildren() do
   if drone:GetAttribute('Owner')==ownerId then
    a.total+=1
@@ -159,7 +159,7 @@ function HUD.activity(folder,ownerId)
     else a.support+=1 end
     local state=drone:GetAttribute('State')
     a.battery+=drone:GetAttribute('Battery') or 0;a.maxBattery+=drone:GetAttribute('MaxBattery') or 0
-    if state=='ToCharge' or state=='Charging' then a.charging+=1 end
+    if state=='Charging' then a.charging+=1 elseif state=='ToCharge' then a.docking+=1 end
     if state=='Collect' or state=='Deliver' or state=='Pickup' or state=='Launch' or state=='Unload' then a.delivering+=1 end
    end
   end
@@ -202,7 +202,7 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.battery.Visible=batteryVisible
  self.battery.Position=UDim2.fromOffset(0,(shown+1)*rowHeight);self.battery.Size=UDim2.fromOffset(width,rowHeight)
  local charge=math.floor(100*activity.battery/math.max(1,activity.maxBattery)+.5)
- self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or charge..'%'
+ self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or activity.docking>0 and 'Docking' or charge..'%'
  self.batteryValue.TextColor3=activity.charging>0 and C.green or charge<25 and C.gold or C.text
  r.cargoText.Position=UDim2.fromOffset(78,0);r.cargoText.Size=UDim2.fromOffset(width-78,rowHeight);r.cargoText.TextSize=18
  r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ',''):gsub(' / ','/')

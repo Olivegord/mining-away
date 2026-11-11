@@ -162,6 +162,8 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
  end
  d.specialJob=nil;d.specialRecovery=nil;d.specialPausedAt=nil;d.obstructedAt=nil;d.manualTarget=nil
  d.specialClear=nil;d.specialQueryAt=nil
+ d.resumeResourceId=nil;d.resumePin=nil;d.chargedPin=nil
+ d.chargeSite=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.squareJob=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
  d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil
@@ -386,6 +388,7 @@ end
 scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=home,now=function() return now end,
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
+scene.chargeIndicator=scene.chargingStation and scene.chargingStation.Parent:FindFirstChild('ChargeIndicator')
 local resourceSerial=0
 local function nodeUsage(field)
  local count=0;for _,r in ipairs(field.resources) do if not r.paid then count=count+(r.kind=='Geode' and 5 or 1) end end;return count
@@ -1315,7 +1318,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)
- local best,score,bestIsResume=nil,math.huge,false
+ local best,score,bestPriority=nil,math.huge,-1
  local definition=DroneCatalog.Types[d.role]
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
@@ -1337,10 +1340,14 @@ local function chooseResource(d: any,field: any,square: any?)
      elseif d.role=='Striker' and not field.junk then
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
-    -- A long cut resumes ahead of fresh rocks after a charging trip.
-    local resume=square~=nil and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10
-    if (resume and not bestIsResume) or (resume==bestIsResume and value<score) then
-     best=r;score=value;bestIsResume=resume
+    -- Prefer this worker's interrupted cut, then any unfinished cut from
+    -- its crew. Both go through the same live eligibility checks above.
+    local priority=0
+    if square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
+     priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
+    end
+    if priority>bestPriority or (priority==bestPriority and value<score) then
+     best=r;score=value;bestPriority=priority
     end
    end
   end
@@ -1423,6 +1430,7 @@ end
 function scene.squareStep(p,d)
  if not DroneRoles.isWorker(d.role) or d.carrierId then return end
  local square=p.miningSquare
+ if d.resumePin~=square then d.resumePin=nil;d.resumeResourceId=nil end
  if d.squareJob and d.squareJob~=square and not scene.committedWork(d) then release(d);d.field=nil end
  if not square or d.target or d.breaker or d.specialRecovery then return end
  d.field=nil;d.autoField=nil
@@ -1430,6 +1438,7 @@ function scene.squareStep(p,d)
  d.squareSearchAt=now+.22;d.squareSearched=square
  if chooseResource(d,square.field,square) then
   d.field=square.field.id;d.squareJob=square;d.state='Travel'
+  d.resumePin=nil;d.resumeResourceId=nil
  end
 end
 function scene.regrow(r,dt)
@@ -1566,17 +1575,18 @@ local function combatHit(d,field,target,stats)
  publishTurretHealth(target)
 end
 local function travelSpeed(d)
+ if d.state=='Travel' and d.chargedPin and d.chargedPin==d.squareJob then return d.stats.maxStep60*1.5 end
  return d.stats.maxStep60*(d.state=='ToCharge' and 1.5 or d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
- local settling=d.target~=nil or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
+ local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
  local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
  d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)
  goal=goal+d.swarmOffset
  d.goal=goal
- local work=d.target~=nil or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
+ local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
  local yaw
  if d.role=='Striker' then
@@ -2034,11 +2044,17 @@ local function droneStep(d: any,dt: number)
   return
  end
  if scene.chargingStation and not d.carrierId and d.stats.batteryCapacity>0 then
-  if scene.committedWork(d) and not d.recharging then
+  local committed=scene.committedWork(d)
+  if d.chargedPin and (d.chargedPin~=p.miningSquare or committed) then d.chargedPin=nil end
+  if committed and not d.recharging then
    d.battery=math.max(0,d.battery-2*dt)
   end
   if d.battery<=0 and not d.recharging then
+   local pin,target=d.squareJob,d.target
    release(d);d.recharging=true
+   if pin and pin==p.miningSquare and target and target.hardness>=Workshop.DEEP_CUT_HARDNESS then
+    d.resumePin=pin;d.resumeResourceId=target.id
+   end
   end
   if d.recharging then
    local localCharge=p.miningSquare and (p.fieldCharge or 0)>0
@@ -2046,11 +2062,15 @@ local function droneStep(d: any,dt: number)
    local limit=localCharge and 7 or 3
    local offset=Feel.formation(d.slot,#p.drones);if offset.Magnitude>limit then offset=offset.Unit*limit end
    local goal=pad+offset+Vector3.new(0,2.6,0)
-   d.state='ToCharge';move(d,goal,dt)
+   d.state='ToCharge';d.chargeSite=nil;move(d,goal,dt)
    if (d.pos-goal).Magnitude<1.4 then
     local rate=localCharge and p.fieldCharge or 35
-    d.state='Charging';d.battery=math.min(d.stats.batteryCapacity,d.battery+rate*(1+.3*Workshop.starLevel(data(p),'charge'))*dt)
-    if d.battery>=d.stats.batteryCapacity then d.recharging=nil end
+    d.state='Charging';d.chargeSite=localCharge and 'Field' or 'Depot'
+    d.battery=math.min(d.stats.batteryCapacity,d.battery+rate*(1+.3*Workshop.starLevel(data(p),'charge'))*dt)
+    if d.battery>=d.stats.batteryCapacity then
+     d.recharging=nil
+     if not localCharge then d.chargedPin=p.miningSquare end
+    end
    end
    return
   end
@@ -2157,6 +2177,26 @@ local function droneStep(d: any,dt: number)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
  end
+end
+function scene.publishCharger()
+ local indicator=scene.chargeIndicator
+ if not indicator then return end
+ local focus=scene.chargerFocus
+ if focus and (drones[focus.id]~=focus or focus.state~='Charging' or focus.chargeSite~='Depot' or focus.hp<=0) then
+  if drones[focus.id]==focus and focus.hp>0 and focus.battery>=focus.stats.batteryCapacity then
+   scene.chargerFullUntil=now+.28
+  end
+  focus=nil
+ end
+ local full=now<(scene.chargerFullUntil or 0)
+ if not focus and not full then
+  for id,d in pairs(drones) do
+   if d.state=='Charging' and d.chargeSite=='Depot' and d.hp>0 and (not focus or id<focus.id) then focus=d end
+  end
+ end
+ scene.chargerFocus=focus
+ local progress=if full then 1 elseif focus then math.clamp(focus.battery/focus.stats.batteryCapacity,0,1) else nil
+ if indicator:GetAttribute('ChargeProgress')~=progress then indicator:SetAttribute('ChargeProgress',progress) end
 end
 local function snapshotDrone(d)
  local pose=CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0)
@@ -3217,6 +3257,7 @@ RunService.Heartbeat:Connect(function(dt: number)
  if snapshotElapsed>=C.Snapshot then
   local snapshotDt=snapshotElapsed;snapshotElapsed=0
   for _,d in pairs(drones) do snapshotDrone(d) end
+  scene.publishCharger()
   for _,field in ipairs(patches) do
    for _,r in ipairs(field.resources) do
     scene.regrow(r,snapshotDt)

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `fe1147aab3d1ea597a2e8e58694eecc9cfb6aaaba67fd09317e6f4b26d375f15` | Compact prestige screen and sale milestone notice. |
+| Native-file SHA-256 | `3750806641d7b803d25c3f4eb4b7b0b682e6a2cb1237db1678b91f75e43dd82e` | Charging progress, improved docking and return to interrupted cuts. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the prestige update** | All seven Sources and three roots verified in Edit. Team Create save returned version 131. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the recharge update** | All seven Sources and three roots verified in Edit. Team Create save returned version 132. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — recharge and return to a cut
+
+Drones taper swarm spacing on final approach to the charger and use their charging-trip speed to return to the current pin. A drone first tries to finish the crystal it left behind if the same pin is still active and the cut is available. It releases its reservation while away. Field Chargers still charge at the pin. The existing depot plate shows actual progress from a charging drone, and the HUD distinguishes approaching the charger from charging.
+
+Workshop, Crystal Run, fleet activity and committed flight checks passed with Roblox API or storage doubles. In the same fixture with two crews of five drones, the last worker reached full charge at 5.0 seconds, compared with 9.4 seconds on `03f3f2d`. The return check confirmed that a worker resumed its interrupted cut with another eligible cut closer by. A detached check on a clone of the authored plate in Studio Edit verified fill size and anchoring, idle appearance and reduced motion. Live movement, normal-zoom legibility and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources matched, all three Script Sync roots reported `SyncedAsRoot`, and the five zones, fifteen plots and depot sign were present. Team Create returned save version **132**. Studio stayed in Edit. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 03f3f2d`. The native refresh preserved all non-Source chunks and unrelated or backup Sources.
 
 ## November 11 — prestige choices and progress
 

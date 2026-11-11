@@ -1088,7 +1088,7 @@ local function renderDrone(d,dt,now)
    d.pos=impact;d.velocity=Vector3.zero
   end
  elseif not motionPaused then
-  local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
+  local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
   if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
@@ -1276,6 +1276,7 @@ end
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
+local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)
 connect(RunService.RenderStepped,function(dt)
  local now=workspace:GetServerTimeNow()
  local map=world:FindFirstChild('Map')
@@ -1295,6 +1296,7 @@ connect(RunService.RenderStepped,function(dt)
   end
  end
  presentation:beginFrame()
+ chargerView:update(dt)
  pickupView:update(dt,now)
  for _,r in pairs(resources) do
   local dirty=r.dirty
@@ -1586,7 +1588,7 @@ connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
- specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
+ specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}

@@ -26,6 +26,39 @@ advance(3);verifyRing()
 center+=Vector3.new(20,0,-30);pl.Character:PivotTo(CFrame.new(center))
 advance(8);verifyRing()
 
+do
+ local previousStation,previousIndicator=scene.chargingStation,scene.chargeIndicator
+ local station=World.part(scene.map,'ChargingStation',center+Vector3.new(0,-2,-25),Vector3.new(9,.8,6),Color3.new(1,1,1))
+ local indicator=World.part(scene.map,'ChargeIndicator',station.Position+Vector3.yAxis*.45,Vector3.new(7,.12,4),Color3.new(1,1,1))
+ scene.chargingStation=station;scene.chargeIndicator=indicator
+ local other=player(98904);players.PlayerAdded:Fire(other)
+ other.Character:PivotTo(CFrame.new(center))
+ local recharging={}
+ for _,crew in ipairs({p,profiles[other.UserId]}) do
+  for _,d in ipairs(crew.drones) do
+   if d.stats.batteryCapacity>0 then
+    d.battery=0;d.pos=station.Position+Vector3.new(0,3,9);d.velocity=Vector3.zero
+    table.insert(recharging,d)
+   end
+  end
+ end
+ local charging,full=false,false
+ for _=1,170 do
+  advance(.1)
+  local progress=indicator:GetAttribute('ChargeProgress')
+  if progress then charging=charging or progress<1;full=full or progress==1 end
+ end
+ assert(#recharging==10 and charging and full and indicator:GetAttribute('ChargeProgress')==nil)
+ for _,d in ipairs(recharging) do
+  assert(not d.recharging and d.battery==d.stats.batteryCapacity,'swarm spacing stopped a drone from reaching the charger')
+ end
+ players.PlayerRemoving:Fire(other)
+ scene.chargingStation=previousStation;scene.chargeIndicator=previousIndicator
+ station:Destroy();indicator:Destroy()
+ advance(5);verifyRing()
+ print('PASS two crews reach a crowded charger, publish real pad progress and fly off with full batteries')
+end
+
 -- A legacy Orbiter and Scrapper can still exist in saved fleets or Studio previews.
 p.testFleet=Pro.clone(data(p).fleet)
 for i,role in ipairs({'Orbiter','Scrapper'}) do
