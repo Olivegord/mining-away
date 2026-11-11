@@ -372,6 +372,41 @@ for i,role in ipairs({'Needler','Ballcaster'}) do
  assert(actor.specialJob.projectile:GetAttribute('ContactAt')==now)
  release(actor)
 end
+do
+ local deep=table.clone(f)
+ deep.id=#patches+1;deep.cfg=table.clone(f.cfg);deep.cfg.Hardness=9
+ deep.resources={};deep.respawnQueue={};patches[deep.id]=deep
+ local small=makeResource(deep,f.center+Vector3.new(-6,0,0),'Crystal',400,8,2.3,3)
+ local large=makeResource(deep,f.center+Vector3.new(6,0,0),'Crystal',910,15,3.7,3)
+ small.readyAt=now;large.readyAt=now
+ small.hp=90;small.stage=3
+ local pin={field=deep,center=f.center,half=15}
+ local needler,ballcaster=starterActors.Needler,starterActors.Ballcaster
+ needler.pos=f.center;ballcaster.pos=f.center
+ assert(chooseResource(needler,deep,pin)==small,'Needler did not pick the quick finish')
+ release(needler)
+ assert(chooseResource(ballcaster,deep,pin)==large,'Ballcaster did not pick the thick shell')
+ ballcaster.field=deep.id
+ local station=committedStation(ballcaster,large)
+ assert(station.X<large.position.X,'Ballcaster flew past the rock for its opening shot')
+ ballcaster.pos=station;ballcaster.velocity=Vector3.zero
+ local base=DroneCatalog.cycle('Ballcaster',ballcaster.owned.base.miningDPS,ballcaster.stats.miningDPS).damage
+ local function shot()
+  local before=large.hp
+  for _=1,120 do
+   realTime+=C.Tick;now=realTime;droneStep(ballcaster,C.Tick)
+   if large.hp<before then return before-large.hp end
+  end
+  error('Ballcaster missed a committed deep shot')
+ end
+ assert(math.abs(shot()-base*1.5)<1e-6,'a landed ball did not gain its shell damage')
+ for _=1,12 do if large.stage<2 then shot() else break end end
+ assert(large.stage==2 and math.abs(shot()-base)<1e-6,'the shell bonus stayed on an exposed core')
+ release(ballcaster);ballcaster.field=nil
+ for _,r in ipairs(deep.resources) do resources[r.id]=nil;r.part:Destroy() end
+ patches[deep.id]=nil
+ print('PASS projectile miners choose different deep targets; Ballcaster lands stronger shell hits from its approach side')
+end
 for id,drop in pairs(pickups) do
  if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end
 end
@@ -393,9 +428,8 @@ assert(Pro.validate(data(testCrew),tester.UserId))
 print('PASS curated starter fleet, stable prestige ownership, projectile flight and vacuum relay')
 
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
-data(buyer).run.pendingOffer.choices[2]=Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2,0)
 moveBuyer(scene.packStation.Position)
-input('ChooseCard','aftershock',{offerId=first.id,index=2})
+input('ChooseCard','aftershock',{offerId=first.id,index=3})
 isolate()
 local source,neighbor,farther=rock(0,1000),rock(5,1000),rock(9,1000)
 hit(source,270)

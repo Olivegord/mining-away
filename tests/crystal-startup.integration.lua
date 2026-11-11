@@ -101,6 +101,7 @@ do
  assert(bagStarted and now-bagStarted<Workshop.EMPTIER_WAIT,'shipment used the normal partial-load timeout')
  advance(18)
  assert(data(crew).run.wallet.Quartz==Workshop.PACK_BASE and not next(data(crew).run.deliveries))
+ assert(runner:GetAttribute('MA_Notice')=='+20 Quartz · Pack Counter ready')
  runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
  command.OnServerEvent:Fire(runner,'BuyPack',{runId=run.id,packIndex=0,txId='earned-first-pack'})
  assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==0)

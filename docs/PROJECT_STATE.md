@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when a sale will fund the first pack. The Compactor packs matching rocks into one block worth their total value. Packs grant run upgrades and Stars. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler prefers quick finishes, while Ballcaster prefers intact deep shells and hits them harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when a sale will fund the first pack. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e1ad46156eda60d5a0e8f547755fb52b8ab36d55f47a15f7831afda06b862e1e` | Deep crystal sizes and first pack delivery. |
+| Native-file SHA-256 | `f218552b304d2c619006c5ef8b57d1ec8882759754f0d6f9d531be58d07b1be9` | Deep-field projectile roles, first draft and depot route sign. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the mining pacing pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 127. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the projectile roles, first draft and depot route sign** | All seven Sources and three roots verified in Edit. Team Create save returned version 128. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 10 — projectile jobs, first draft and depot sign
+
+Needler takes the shortest projected deep cut. Ballcaster weighs its travel against the work left in a deposit's first two layers and deals 50% more damage while either layer remains. Projectile drones try the side they are already approaching before moving around an obstruction. On recharge, a crew prioritizes an available unfinished deep cut under the same pin. Shot timing, contact checks, ownership, saved fleet traits and crystal payouts use the existing systems.
+
+Fresh first packs offer Double Beam for one miner, Loose Seams for earlier collection, or Aftershock for clustered deposits. Already-paid Deep Pockets and other legacy offers still install. The first qualifying sale shows when the Pack Counter is affordable. A low, two-post Crystal Run sign uses the existing route sign's native faces and colors. It sits beside the center lane on the service deck.
+
+Workshop, Crystal Run and committed-flight checks passed with API and storage doubles. The deep-field fixture put both projectile miners next to a chipped rock and a large intact deposit, verified their choices, and measured Ballcaster's landed damage before and after the second fracture. The first-sale fixture verified the Pack Counter notice. The Edit viewport showed the new sign from spawn. Edit raycasts also verified the service deck beneath it and the five zones' fifteen original plots. New native gameplay, multiplayer and enjoyment remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All three Script Sync roots and seven Source fingerprints matched the canonical snapshot. Team Create returned save version **128**. Studio stayed in Edit and no player release was published. To reproduce from `bd9a3ce`, run [the sign staging script](../tools/studio_crystal_wayfinder.lua) in the verified shared Edit place, extract `shared.CrystalWayfinder.scenery` into `scenery.b64`, and check it with `python3 tools/refresh_native_scenery.py <export-dir> --crystal-wayfinder --baseline-sha256 e1ad46156eda60d5a0e8f547755fb52b8ab36d55f47a15f7831afda06b862e1e`. After `shared.CrystalWayfinder.apply()` verifies, rerun the scoped saver with `--write`, export Scripts with `python3 tools/script_sync.py`, and refresh with `python3 tools/build.py --previous-commit bd9a3ce`. The scenery saver added eight instances and preserved every prior instance and all 50 Sources.
 
 ## November 10 — readable deep cuts and first pack delivery
 

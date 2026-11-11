@@ -71,7 +71,7 @@ W.CATALOG={
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_AFTERSHOCK'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -2989,8 +2989,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts from beside a crystal.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Color={150,124,255},Description='Throws a heavy energy ball into the side of a crystal.'},
+  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts. Favors small and chipped crystals in deep fields.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',ShellPower=1.5,Color={150,124,255},Description='Favors large deep crystals. Deals 50% more damage through their first two layers.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -3053,6 +3053,23 @@ function Catalog.capDamage(kind,maxHP,damage)
  if not definition or not definition.Chunk or not finite(maxHP) or not finite(damage) then return 0 end
  -- Ten HP is the original visual cutoff, not mineable work.
  return math.max(0,math.min(damage,math.max(0,maxHP-10)*definition.Chunk))
+end
+local SHELL_LAYERS=2
+function Catalog.projectileTargetScore(kind,stats,node,distance)
+ local travel=distance/math.max(1,stats.maxStep60*60)
+ local rate=math.max(1,stats.miningDPS)
+ local shellPower=Catalog.Types[kind].ShellPower
+ if shellPower then
+  -- Compare the time the heavier shot saves on the remaining shell with
+  -- the time it takes to reach the deposit.
+  local shellEnd=math.max(0,node.maxHP*(1-SHELL_LAYERS/(node.stageCount+1))-10)
+  local shellWork=math.max(0,node.hp-shellEnd)
+  return travel-shellWork/rate*(1-1/shellPower)
+ end
+ return travel+node.hp/rate
+end
+function Catalog.projectileShellPower(kind,stage)
+ return stage<SHELL_LAYERS and Catalog.Types[kind].ShellPower or 1
 end
 return Catalog
 

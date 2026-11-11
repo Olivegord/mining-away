@@ -1083,7 +1083,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
  if not abilityOrigin and r.field.cfg.SelectionOnly then
-  if r.hardness>=Workshop.DEEP_CUT_HARDNESS then amount*=d.stats.deepCutMultiplier or 1 end
+  if r.hardness>=Workshop.DEEP_CUT_HARDNESS then
+   amount*=d.stats.deepCutMultiplier or 1
+   if special and job.projectile then amount*=DroneCatalog.projectileShellPower(d.role,r.stage) end
+  end
   if d.battery>d.stats.batteryCapacity*.5 then amount*=1+(d.stats.liveWire or 0) end
  end
  if (not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.shiftSquare and p.miningSquare==p.shiftSquare and now<(p.shiftUntil or 0) then amount*=1.5 end
@@ -1284,7 +1287,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)
- local best,score=nil,math.huge
+ local best,score,bestIsResume=nil,math.huge,false
+ local definition=DroneCatalog.Types[d.role]
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
@@ -1297,14 +1301,19 @@ local function chooseResource(d: any,field: any,square: any?)
       if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
      end
     end
-    local value=if square and d.role=='Charger' then
-     (r.position-d.pos).Magnitude*.7-math.min(r.hp,1000)*.08
+    local distance=(r.position-d.pos).Magnitude
+    local value=if square and field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS and definition and definition.Projectile then
+     DroneCatalog.projectileTargetScore(d.role,d.stats,r,distance)
+     elseif square and d.role=='Charger' then
+     distance*.7-math.min(r.hp,1000)*.08
      elseif d.role=='Striker' and not field.junk then
-     (r.position-d.pos).Magnitude+(used>0 and 10000 or 0)
-     else Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
+     distance+(used>0 and 10000 or 0)
+     else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
     -- A long cut resumes ahead of fresh rocks after a charging trip.
-    if square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then value-=100 end
-    if value<score then best=r;score=value end
+    local resume=square~=nil and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10
+    if (resume and not bestIsResume) or (resume==bestIsResume and value<score) then
+     best=r;score=value;bestIsResume=resume
+    end
    end
   end
  end
@@ -1614,6 +1623,10 @@ local function committedStation(d,r)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile then
    local direction=d.slot*2.4
+   local approach=d.pos-r.position
+   if r.field.cfg.SelectionOnly and approach.X^2+approach.Z^2>1 then
+    direction=math.atan2(approach.Z,approach.X)
+   end
    for turn=0,3 do
     local angle=direction+turn*math.pi/2
     local station=r.position+Vector3.new(math.cos(angle)*9,2.8,math.sin(angle)*9)
@@ -2308,6 +2321,12 @@ function scene.dispatchJunk(field)
   return false
  end)
 end
+function scene.firstPackFunded(p,saleQuartz)
+ local run=data(p).run
+ local balance=run.wallet.Quartz
+ return scene.runStart~=nil and run.packIndex==0
+  and balance>=Workshop.PACK_BASE and balance-saleQuartz<Workshop.PACK_BASE
+end
 local function serviceDeliveries(p: any)
  if not healthy(p) or not characterRoot(p) or now<(p.nextDeliveryAction or 0) then return end
  local run=data(p).run
@@ -2345,7 +2364,9 @@ local function serviceDeliveries(p: any)
       p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
       proceeds..=' · Crew surge'
      end
-     notice(p,'Emptier sold '..result.units..' cargo'..proceeds)
+     if scene.firstPackFunded(p,result.quartz) then
+      notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
+     else notice(p,'Emptier sold '..result.units..' cargo'..proceeds) end
     end
     p.publishDirty=true
    end)
@@ -2394,7 +2415,9 @@ local function sellBackpack(p: any,automatic: boolean?)
    local n=key=='Quartz' and result.quartz or result.cargo[key]
    if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
   end
-  notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', '));p.publishDirty=true
+  if scene.firstPackFunded(p,result.quartz) then notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
+  else notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', ')) end
+  p.publishDirty=true
  end)
 end
 local function validPayload(payload)

@@ -141,7 +141,11 @@ test('Crystal Run drafts trigger effects and offers Denser Packing only after Co
  end
  review(false)
  local ok,offer=C.buy(p,'first-press',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true})
- assert(ok);eq(offer.choices[3].cardId,'Q_CARGO');eq(offer.choices[2].rarity,'Common');eq(offer.choices[1].rarity,'Rare')
+ assert(ok);eq(offer.choices[3].cardId,'Q_AFTERSHOCK');eq(offer.choices[2].rarity,'Common');eq(offer.choices[1].rarity,'Rare')
+ local previous=assert(P.migrate(P.clone(p),44))
+ previous.run.pendingOffer.choices[3]=W.card(W.BY_ID.Q_CARGO,2,0)
+ previous=assert(P.migrate(previous,44))
+ assert(choose(previous,offer,3,'install-paid-cargo') and W.find(previous,'Q_CARGO'))
  -- Preserve a pack which was paid before Compactor left the catalog.
  p.run.pendingOffer.choices[3]=W.card(W.BY_ID.Q_COMPACTOR,2,0)
  p=assert(P.migrate(p,44));assert(choose(p,offer,3,'hire-press'))

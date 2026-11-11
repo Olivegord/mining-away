@@ -71,7 +71,7 @@ W.CATALOG={
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_AFTERSHOCK'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -712,8 +712,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts from beside a crystal.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Color={150,124,255},Description='Throws a heavy energy ball into the side of a crystal.'},
+  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts. Favors small and chipped crystals in deep fields.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',ShellPower=1.5,Color={150,124,255},Description='Favors large deep crystals. Deals 50% more damage through their first two layers.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -776,6 +776,23 @@ function Catalog.capDamage(kind,maxHP,damage)
  if not definition or not definition.Chunk or not finite(maxHP) or not finite(damage) then return 0 end
  -- Ten HP is the original visual cutoff, not mineable work.
  return math.max(0,math.min(damage,math.max(0,maxHP-10)*definition.Chunk))
+end
+local SHELL_LAYERS=2
+function Catalog.projectileTargetScore(kind,stats,node,distance)
+ local travel=distance/math.max(1,stats.maxStep60*60)
+ local rate=math.max(1,stats.miningDPS)
+ local shellPower=Catalog.Types[kind].ShellPower
+ if shellPower then
+  -- Compare the time the heavier shot saves on the remaining shell with
+  -- the time it takes to reach the deposit.
+  local shellEnd=math.max(0,node.maxHP*(1-SHELL_LAYERS/(node.stageCount+1))-10)
+  local shellWork=math.max(0,node.hp-shellEnd)
+  return travel-shellWork/rate*(1-1/shellPower)
+ end
+ return travel+node.hp/rate
+end
+function Catalog.projectileShellPower(kind,stage)
+ return stage<SHELL_LAYERS and Catalog.Types[kind].ShellPower or 1
 end
 return Catalog
 
@@ -3911,8 +3928,8 @@ for _,name in ipairs(specialOrder) do
  table.insert(DroneConfig.TypeOrder,name)
 end
 local fieldTestRoles={
- Needler={label='Dart thrower',color=Color3.fromRGB(255,195,94),detail='Throws quick darts into the side of a crystal.'},
- Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Launches a slower, heavier energy ball from the side.'},
+ Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Throws quick darts. Favors small and chipped crystals in deep fields.'},
+ Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
  Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Presses loose rocks into one block worth the sum of its inputs.'},
 }
@@ -7973,7 +7990,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  amount=amount*discoverySpeed
  if not abilityOrigin or contactKind=='Breaker' then amount*=Mining.contactMultiplier(d.role,r.kind,r.hardness,r.stage,r.stageCount) end
  if not abilityOrigin and r.field.cfg.SelectionOnly then
-  if r.hardness>=Workshop.DEEP_CUT_HARDNESS then amount*=d.stats.deepCutMultiplier or 1 end
+  if r.hardness>=Workshop.DEEP_CUT_HARDNESS then
+   amount*=d.stats.deepCutMultiplier or 1
+   if special and job.projectile then amount*=DroneCatalog.projectileShellPower(d.role,r.stage) end
+  end
   if d.battery>d.stats.batteryCapacity*.5 then amount*=1+(d.stats.liveWire or 0) end
  end
  if (not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.shiftSquare and p.miningSquare==p.shiftSquare and now<(p.shiftUntil or 0) then amount*=1.5 end
@@ -8174,7 +8194,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)
- local best,score=nil,math.huge
+ local best,score,bestIsResume=nil,math.huge,false
+ local definition=DroneCatalog.Types[d.role]
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
@@ -8187,14 +8208,19 @@ local function chooseResource(d: any,field: any,square: any?)
       if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
      end
     end
-    local value=if square and d.role=='Charger' then
-     (r.position-d.pos).Magnitude*.7-math.min(r.hp,1000)*.08
+    local distance=(r.position-d.pos).Magnitude
+    local value=if square and field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS and definition and definition.Projectile then
+     DroneCatalog.projectileTargetScore(d.role,d.stats,r,distance)
+     elseif square and d.role=='Charger' then
+     distance*.7-math.min(r.hp,1000)*.08
      elseif d.role=='Striker' and not field.junk then
-     (r.position-d.pos).Magnitude+(used>0 and 10000 or 0)
-     else Mining.targetScore(d.owned.type,d.stats,r,(r.position-d.pos).Magnitude,neighbors)
+     distance+(used>0 and 10000 or 0)
+     else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
     -- A long cut resumes ahead of fresh rocks after a charging trip.
-    if square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then value-=100 end
-    if value<score then best=r;score=value end
+    local resume=square~=nil and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10
+    if (resume and not bestIsResume) or (resume==bestIsResume and value<score) then
+     best=r;score=value;bestIsResume=resume
+    end
    end
   end
  end
@@ -8504,6 +8530,10 @@ local function committedStation(d,r)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile then
    local direction=d.slot*2.4
+   local approach=d.pos-r.position
+   if r.field.cfg.SelectionOnly and approach.X^2+approach.Z^2>1 then
+    direction=math.atan2(approach.Z,approach.X)
+   end
    for turn=0,3 do
     local angle=direction+turn*math.pi/2
     local station=r.position+Vector3.new(math.cos(angle)*9,2.8,math.sin(angle)*9)
@@ -9198,6 +9228,12 @@ function scene.dispatchJunk(field)
   return false
  end)
 end
+function scene.firstPackFunded(p,saleQuartz)
+ local run=data(p).run
+ local balance=run.wallet.Quartz
+ return scene.runStart~=nil and run.packIndex==0
+  and balance>=Workshop.PACK_BASE and balance-saleQuartz<Workshop.PACK_BASE
+end
 local function serviceDeliveries(p: any)
  if not healthy(p) or not characterRoot(p) or now<(p.nextDeliveryAction or 0) then return end
  local run=data(p).run
@@ -9235,7 +9271,9 @@ local function serviceDeliveries(p: any)
       p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
       proceeds..=' · Crew surge'
      end
-     notice(p,'Emptier sold '..result.units..' cargo'..proceeds)
+     if scene.firstPackFunded(p,result.quartz) then
+      notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
+     else notice(p,'Emptier sold '..result.units..' cargo'..proceeds) end
     end
     p.publishDirty=true
    end)
@@ -9284,7 +9322,9 @@ local function sellBackpack(p: any,automatic: boolean?)
    local n=key=='Quartz' and result.quartz or result.cargo[key]
    if n and n>0 then table.insert(amounts,tostring(n)..' '..key) end
   end
-  notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', '));p.publishDirty=true
+  if scene.firstPackFunded(p,result.quartz) then notice(p,'+'..result.quartz..' Quartz · Pack Counter ready')
+  else notice(p,'Sold '..result.units..' ore · +'..table.concat(amounts,', ')) end
+  p.publishDirty=true
  end)
 end
 local function validPayload(payload)
