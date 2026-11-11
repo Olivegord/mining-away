@@ -2644,6 +2644,8 @@ if not scene.runStart then
     owned={type='Blue'},stats={yieldMultiplier=1,geodeMultiplier=1,miningDPS=0}}
    return hitResource(actor,r,amount,false,nil,origin,'FieldTool',{consumable=true,toolKind=kind,point=point})
   end})
+end
+do
  local function finishAbility(p,token,context)
   local charge=p.ability.charge
   local ok,reason=DroneAbilities.confirm(p.ability,token,now,context)

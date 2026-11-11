@@ -312,16 +312,16 @@ function runService:IsStudio() return true end
 local tester=player(98704);players.PlayerAdded:Fire(tester)
 local testCrew=profiles[tester.UserId]
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
-assert(#testCrew.drones==19 and #data(testCrew).fleet==17 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
+assert(#testCrew.drones==9 and #data(testCrew).fleet==7 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
 local starterActors={}
 for _,actor in ipairs(testCrew.drones) do starterActors[actor.role]=actor end
-for role in pairs(RoleConfig.StudioRoles) do assert(starterActors[role],'missing starter role '..role) end
+for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do assert(starterActors[role],'missing starter role '..role) end
 local saved=assert(Pro.migrate(Pro.clone(data(testCrew)),tester.UserId))
-assert(#saved.fleet==17 and Workshop.hasCompactor(saved) and not testCrew.testFleet)
+assert(#saved.fleet==7 and Workshop.hasCompactor(saved) and not testCrew.testFleet)
 saved.run.quartzEarnings=360
 local choice=Pro.prestigePreview(saved).droneChoices[1]
 assert(Pro.prestige(saved,'mixed-starter-prestige',saved.run.id,{confirmed=true,atDepot=true,droneType=choice.kind}))
-assert(#saved.fleet==18 and Pro.validate(saved,tester.UserId))
+assert(#saved.fleet==8 and Pro.validate(saved,tester.UserId))
 for i,role in ipairs({'Needler','Ballcaster'}) do
  local actor=starterActors[role];local target=rock(i*4,150)
  assert(assignOre(testCrew,actor,target))
@@ -362,7 +362,7 @@ for _=1,200 do
 end
 assert(relayed and not pickups[-1] and Pro.cargoUnits(data(testCrew))==2,string.format('vacuum relay=%s, drop=%s, backpack=%d',tostring(relayed),tostring(pickups[-1]),Pro.cargoUnits(data(testCrew))))
 assert(Pro.validate(data(testCrew),tester.UserId))
-print('PASS all-role starter fleet, stable prestige ownership, projectile flight and vacuum relay')
+print('PASS curated starter fleet, stable prestige ownership, projectile flight and vacuum relay')
 
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
 data(buyer).run.pendingOffer.choices[2]=Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2,0)

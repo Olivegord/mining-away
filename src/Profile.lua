@@ -5,7 +5,10 @@ local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
 local P={SCHEMA=12,CONTENT=1}
 local STARTER_COUNT=3
-local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[1+#Workshop.STARTER_SPECIALISTS]=true}
+local crystalStarterCount=STARTER_COUNT+#Workshop.STARTER_SPECIALISTS
+local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'}
+local oversizedStarterCount=1+#excessStarters+#Workshop.STARTER_SPECIALISTS
+local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[crystalStarterCount]=true,[oversizedStarterCount]=true}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
@@ -112,22 +115,22 @@ local function specialDrone(uid,serial,kind,seed)
  base.maxHealth=kind=='Halver' and 110 or (kind=='Singularity' and 100 or 80)
  return {id=tostring(uid)..':drone:'..serial,name=DroneCatalog.Types[kind].Name..' '..serial,type=kind,role=kind,base=base,flightHeight=3.4}
 end
+local function starterMiner(uid,serial,seed)
+ local miner=drone(uid,serial,'Blue',seed,1)
+ -- The reference's 12–30 studs/second flight roll for each starter miner.
+ miner.base.maxStep60=(20+((seed+serial*17)%31))/100
+ return miner
+end
 function P.new(uid,seed,roleConfig)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
- for serial=1,(roleConfig and 1 or STARTER_COUNT) do
-  local miner=drone(uid,serial,'Blue',seed,1)
-  -- Use the reference's 12–30 studs/second flight roll for each basic miner.
-  miner.base.maxStep60=(20+((seed+serial*17)%31))/100
-  fleet[serial]=miner
- end
+ for serial=1,STARTER_COUNT do fleet[serial]=starterMiner(uid,serial,seed) end
  if roleConfig then
   for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
    local serial=#fleet+1
    local stats=roleConfig.StudioRoles[role]
-   local kind=role=='Charger' and 'Red' or role=='Medic' and 'Green' or role
-   fleet[serial]={id=tostring(uid)..':drone:'..serial,name=roleConfig.Types[role].DisplayName,role=role,type=kind,
+   fleet[serial]={id=tostring(uid)..':drone:'..serial,name=roleConfig.Types[role].DisplayName,role=role,type=role,
     base=clone(stats.base),flightHeight=stats.height}
   end
  end
@@ -139,9 +142,14 @@ function P.validate(p,uid)
  if not integer(p.prestiges) or not integer(p.purchasedDrones) or not integer(p.revision) or not integer(p.seed) or not integer(p.nextDroneSerial) then return false,'Invalid permanent counters' end
  if not denseArray(p.fleet) or not supportedStarterCounts[p.starterDrones] or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
+ local prefix=tostring(uid)..':drone:'
+ local lastSerial=0
  for serial,d in ipairs(p.fleet) do
   if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type] and not starterTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
-  if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
+  local idSerial=tonumber(string.sub(d.id,#prefix+1))
+  if not integer(idSerial) or idSerial<=lastSerial or d.id~=prefix..idSerial
+   or (p.starterDrones~=crystalStarterCount and idSerial~=serial) then return false,'Permanent drone ID does not match owner/serial' end
+  lastSerial=idSerial
   ids[d.id]=d
   if not roles[d.role] or ((specialTypes[d.type] or starterTypes[d.type]) and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
@@ -225,9 +233,45 @@ function P.validate(p,uid)
   end
   if (offer.contentVersion or 0)>=13 and not guaranteed then return false,'Pack rarity reward missing' end
  end
- if p.nextDroneSerial~=#p.fleet+1 then return false,'Invalid permanent serial' end
+ if p.nextDroneSerial~=lastSerial+1 then return false,'Invalid permanent serial' end
  if type(p.receipts)~='table' or #p.receipts>64 then return false,'Invalid receipt ledger' end
  for _,savedReceipt in ipairs(p.receipts) do if type(savedReceipt)~='table' or type(savedReceipt.operation)~='string' or type(savedReceipt.id)~='string' or #savedReceipt.id>128 or type(savedReceipt.result)~='table' then return false,'Invalid saved receipt' end end
+ return true
+end
+-- Repair only the short-lived 17-starter grant. Keep original IDs for the
+-- intended drones and any drones earned since, and never recycle retired IDs.
+local function correctStarterGrant(p)
+ if p.fleet[1].role~='Striker' then return false end
+ for i,role in ipairs(excessStarters) do if p.fleet[i+1].role~=role then return false end end
+ for i,role in ipairs(Workshop.STARTER_SPECIALISTS) do if p.fleet[1+#excessStarters+i].role~=role then return false end end
+ local fleet,removed={p.fleet[1]},{}
+ for i=2,#p.fleet do
+  local d=p.fleet[i]
+  if i<=1+#excessStarters then removed[d.id]=true else table.insert(fleet,d) end
+ end
+ for _=2,STARTER_COUNT do
+  table.insert(fleet,starterMiner(p.userId,p.nextDroneSerial,p.seed))
+  p.nextDroneSerial+=1
+ end
+ p.fleet=fleet;p.starterDrones=crystalStarterCount
+ for _,carrier in ipairs(p.logistics.carriers) do
+  for i=#carrier.droneIds,1,-1 do if removed[carrier.droneIds[i]] then table.remove(carrier.droneIds,i) end end
+ end
+ local run=p.run
+ for id in pairs(removed) do
+  local manifest=run.deliveries[id]
+  for _,cargo in ipairs({run.droneCargo[id] or {},manifest and manifest.cargo or {}}) do
+   for material,units in pairs(cargo) do run.cargo[material]=(run.cargo[material] or 0)+units end
+  end
+  run.droneCargo[id]=nil;run.deliveries[id]=nil
+ end
+ for _,cards in ipairs({run.cards,run.pendingOffer and run.pendingOffer.choices or {}}) do
+  for _,card in ipairs(cards) do
+   if removed[card.targetDroneId] then
+    card.targetDroneId=fleet[1].id;card.targetName=fleet[1].name;card.preview=nil;card.previewTargetName=nil
+   end
+  end
+ end
  return true
 end
 function P.migrate(raw,uid,seed)
@@ -369,6 +413,10 @@ function P.migrate(raw,uid,seed)
   p.run.stars=0;p.run.starUpgrades={};p.schemaVersion=12
  end
  local ok,err=P.validate(p,uid);if not ok then return nil,err end
+ if p.starterDrones==oversizedStarterCount then
+  if not correctStarterGrant(p) then return nil,'Unexpected oversized starter fleet' end
+  ok,err=P.validate(p,uid);if not ok then return nil,err end
+ end
  -- An acknowledged save reserves the charge before any world damage. If the
  -- server went away before its first accepted contact, return the unused tool.
  Consumables.refund(p.consumables)

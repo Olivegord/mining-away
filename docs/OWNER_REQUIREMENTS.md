@@ -2,9 +2,9 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
-## November 10 follow-up — start with every drone role
+## November 10 follow-up — curated starter fleet and follow ring
 
-New Crystal Run players start with at least one of each implemented drone role. One permanent drone of each non-courier role and the two run Emptiers meet that request. Existing players keep their saved fleets. The packing and hauling follow-up makes input sockets and cargo mounts visible, preserves each rock's value through compaction, and lets both systems handle partial loads.
+Start Crystal Run with the three basic laser miners, the simple dart and energy-ball gunners, Vacuum, Compactor and both Emptiers. The earlier all-role grant was too broad. Restore the idle follow ring and preserve earned drones and progress when correcting the oversized grant. The packing and hauling changes use visible input sockets and cargo mounts, preserve cargo value and handle partial loads.
 
 ## November 10 follow-up — ore arcs and beam pulses
 

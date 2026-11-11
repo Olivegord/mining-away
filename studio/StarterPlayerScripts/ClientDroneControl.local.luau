@@ -17,7 +17,7 @@ for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
-W.STARTER_SPECIALISTS={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Needler','Ballcaster','Vacuum','Compactor'}
+W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
 W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3

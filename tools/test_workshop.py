@@ -20,10 +20,14 @@ with tempfile.TemporaryDirectory(prefix='quartz-workshop-') as directory:
    path=Path(directory)/('studio.lua' if studio else 'production.lua');path.write_text(source)
    subprocess.run([str(luau/'luau'),str(path)],check=True)
 
- for fixture in ['workshop-effects','crystal-run']:
+ for fixture in ['workshop-effects','crystal-run','crystal-startup']:
+  server=bundle()
+  if fixture=='crystal-startup':
+   # Select Crystal Run before the controller initializes its mode-specific services.
+   server=server.replace('World.placeStart(scene)\n','World.placeStart(scene)\nscene.runStart=scene.fields[1].center\n',1)
   source='\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
-   "local nativeType=typeof; local function typeof(x) return getmetatable(x)==VM and 'Vector3' or nativeType(x) end" if fixture=='crystal-run' else '',
-   bundle(),';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
+   "local nativeType=typeof; local function typeof(x) return getmetatable(x)==VM and 'Vector3' or nativeType(x) end" if fixture.startswith('crystal-') else '',
+   server,';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
   path=Path(directory)/(fixture+'.lua');path.write_text(source)
   subprocess.run([str(luau/'luau'),str(path)],check=True)
 
