@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler prefers quick finishes, while Ballcaster prefers intact deep shells and hits them harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when a sale will fund the first pack. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler prefers quick finishes, while Ballcaster prefers intact deep shells and hits them harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
 ## Identity and delivery state
 
@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `719b831ddcd58798bc244ed88179e05ed93cf6fca80d9d1335c6fccf316dc1e3` | Pack delivery and prompt handoff. |
+| Native-file SHA-256 | `350c5ba55575ca1578bd2fb64e52818c52718682f18f31bf2e56c34fe1452b4f` | Early courier trips for upgrade and prestige sales. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the pack delivery update** | All seven Sources and three roots verified in Edit. Team Create save returned version 140. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the courier milestone update** | All seven Sources and three roots verified in Edit. Team Create save returned version 141. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — send a milestone load as soon as it is ready
+
+An Emptier can skip the six-second partial-load timer when its actual parcel, together with Quartz already on the way, will pay for the next pack or cross the prestige threshold. A parcel that funds neither still batches. The existing sale toast announces the milestone after the sale commits. For a sale that funds both, it points to the first pack before the player has bought one, and to prestige on later sales.
+
+Workshop, Crystal Run, persistence and flight tests passed with API doubles. In matched controller fixtures, a single mined Ruby funded pack two 11.30 seconds after entering the backpack, down from 17.25. A single block unlocked prestige in 12.23 seconds, down from 17.60. The fixtures also covered in-flight proceeds, exact parcel value, and a paid offer awaiting selection. Live timing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **141**. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f094877`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — pack delivery at the counter
 

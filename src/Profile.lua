@@ -512,15 +512,26 @@ local function deliveryCargo(cargo,batchSize)
  end
  return manifest
 end
-function P.firstPackDeliveryReady(p,batchSize)
+local function cargoQuartz(cargo)
+ local value=0
+ for material,units in pairs(cargo) do value+=units*(Shops.quartzValue(material) or 0) end
+ return value
+end
+function P.deliveryQuartz(p)
+ local value=0
+ for _,manifest in pairs(p.run.deliveries) do value+=cargoQuartz(manifest.cargo) end
+ return value
+end
+function P.deliveryFundsMilestone(p,batchSize)
  local run=p.run
- local shortfall=Workshop.PACK_BASE-run.wallet.Quartz
- if run.packIndex~=0 or shortfall<=0 or next(run.deliveries) then return false end
- local quartz=0
- for material,units in pairs(deliveryCargo(run.cargo,batchSize)) do
-  quartz+=units*(Shops.quartzValue(material) or 0)
- end
- return quartz>=shortfall
+ if run.pendingOffer then return false end
+ local incoming=P.deliveryQuartz(p)
+ local packGap=Workshop.price(p)-run.wallet.Quartz-incoming
+ local prestigeGap=P.milestone(p).earnings-run.quartzEarnings-incoming
+ local shortfall=math.min(packGap>0 and packGap or math.huge,prestigeGap>0 and prestigeGap or math.huge)
+ if shortfall==math.huge then return false end
+ local parcel=P.cargoUnits(p)<=batchSize and run.cargo or deliveryCargo(run.cargo,batchSize)
+ return cargoQuartz(parcel)>=shortfall
 end
 function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end

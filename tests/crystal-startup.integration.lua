@@ -154,7 +154,8 @@ do
  scene.spawnOrePickup(bed,{owner=runner.UserId,runId=run.id,nodeId='settled-test',
   material=cargo,tierMaterial='Quartz',units=1,raw=true,value=10,floor=origin.Y-.75},
   origin,Vector3.new(5,14,0),Color3.new(1,0,0))
- local drop=pickups[pickupSerial]
+ local dropId=pickupSerial
+ local drop=pickups[dropId]
  advance(3)
  local snapshot=drop.part:GetAttribute('SnapshotAt')
  assert(drop.landed and snapshot>drop.spawnAt and drop.vx==0 and drop.vz==0)
@@ -163,6 +164,7 @@ do
  runner.Character:PivotTo(CFrame.new(Vector3.new(drop.x+9,drop.y+2,drop.z)))
  advance(.2)
  assert(drop.part:GetAttribute('SnapshotAt')>snapshot and drop.part:GetAttribute('Homing'),'pickup failed to resume movement')
+ pickups[dropId]=nil;drop.part:Destroy()
  local crate=assert(crew.packDelivery)
  runner.Character:PivotTo(CFrame.new(crate.part.Position+Vector3.yAxis))
  crate.prompt.Triggered:Fire(runner)
@@ -170,17 +172,54 @@ do
  assert(offered.opened)
  command.OnServerEvent:Fire(runner,'ChooseCard',{runId=run.id,txId='first-part',offerId=offered.id,index=1,targetDroneId=crew.drones[1].id})
  assert(#data(crew).run.cards==1)
- runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
+ local rubyCenter=pin+Vector3.new(0,0,40)
+ local rubyZone=Instance.new('Folder');rubyZone.Name='SecondPackPlot';rubyZone.Parent=scene.map
+ local rubyBed=World.part(rubyZone,'Field',rubyCenter-Vector3.yAxis*.5,Vector3.new(30,1,30),Color3.new(1,.3,.5))
+ local ruby={id=#patches+1,cfg={Name='Ruby',Key='Ruby',Material='RunRuby',Value=4,SelectionOnly=true,AlwaysUnlocked=true,
+  ReferenceCrystals=true,Hardness=3,Count=1,Ore=10,Turrets=0,Respawn=120},part=rubyBed,model=rubyZone,center=rubyBed.Position,color=rubyBed.Color,
+  resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ ruby.e.phase='Safe';patches[ruby.id]=ruby
+ local stone=makeResource(ruby,rubyBed.Position,'Crystal',160,10,3,3)
+ runner.Character:PivotTo(CFrame.new(rubyCenter+Vector3.yAxis*3))
+ advance(12)
+ command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=run.id,fieldId=ruby.id,position=rubyCenter,leadId=stone.id})
+ assert(crew.miningSquare and crew.miningSquare.field==ruby)
+ local function saleFromOneSlot(value,label)
+  local filled,saleStarted
+  for _=1,math.ceil(45/C.Tick) do
+   advance(C.Tick)
+   filled=filled or crew.emptierBagSince
+   local _,parcel=next(data(crew).run.deliveries)
+   if parcel then
+    saleStarted=now
+    local material,count=next(parcel.cargo)
+    assert(count==1 and next(parcel.cargo,material)==nil and Shops.quartzValue(material)==value)
+    assert(not label:find('Prestige') or not Pro.prestigePreview(data(crew)).eligible,'prestige granted while cargo was in transit')
+    break
+   end
+  end
+  assert(filled and saleStarted and saleStarted-filled<Workshop.EMPTIER_WAIT,'milestone cargo waited for the normal timeout')
+  for _=1,math.ceil(35/C.Tick) do
+   if not next(data(crew).run.deliveries) then break end
+   advance(C.Tick)
+  end
+  assert(not next(data(crew).run.deliveries) and runner:GetAttribute('MA_Notice')==('+'..value..' Quartz · '..label))
+  print(string.format('MODEL %s single-slot pickup %.2fs, sale %.2fs after cargo entered backpack',label,saleStarted-filled,now-filled))
+ end
+ saleFromOneSlot(40,'Pack Counter ready')
+ assert(stone.paid and data(crew).run.wallet.Quartz==40 and data(crew).run.quartzEarnings==60)
+ scene.clearSquare(crew)
  local shortfall=Pro.milestone(data(crew)).earnings-data(crew).run.quartzEarnings
  local shipment=Workshop.cargoKey('RunCobalt',shortfall,true)
  assert(Pro.addCargo(data(crew),shipment,1,10)==1)
- command.OnServerEvent:Fire(runner,'Sell')
- assert(Pro.prestigePreview(data(crew)).eligible and runner:GetAttribute('MA_Notice')==('+'..shortfall..' Quartz · Prestige ready'))
+ saleFromOneSlot(shortfall,'Prestige ready')
+ assert(Pro.prestigePreview(data(crew)).eligible)
+ runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
  assert(Pro.addCargo(data(crew),cargo,1,10)==1)
  command.OnServerEvent:Fire(runner,'Sell')
  assert(not string.find(runner:GetAttribute('MA_Notice'),'Prestige ready',1,true))
  players.PlayerRemoving:Fire(runner)
  CF.__index=cfIndex
  print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
- print('PASS committed sales announce the first prestige threshold once after a real upgrade install')
+ print('PASS a mined Ruby funds pack two and a single valuable block funds prestige through early courier sales')
 end

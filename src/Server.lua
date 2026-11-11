@@ -73,12 +73,9 @@ local function publish(p)
  p.vacuumReach=Workshop.starLevel(copy,'vacuum')>0 and 76 or 64
  copy.storageCapacity=Logistics.CAPACITY
  if logistics and logistics.view then copy.logisticsStates=logistics:view(p) end
- copy.deliveryUnits=0;copy.deliveryQuartz=0
+ copy.deliveryUnits=0;copy.deliveryQuartz=scene.runStart and Pro.deliveryQuartz(copy) or 0
  for _,manifest in pairs(copy.run.deliveries) do
-  for material,units in pairs(manifest.cargo) do
-   copy.deliveryUnits+=units
-   if scene.runStart then copy.deliveryQuartz+=units*(Shops.quartzValue(material) or 0) end
-  end
+  for _,units in pairs(manifest.cargo) do copy.deliveryUnits+=units end
  end
  -- The active preview crew is presentation data, never permanent ownership.
  if scene.runStart or p.testFleet or Workshop.starLevel(copy,'vacuum')>0 or Workshop.starLevel(copy,'cultivator')>0 then
@@ -2063,7 +2060,7 @@ function scene.emptierReady(p,profile)
  end
  if units>0 then p.emptierBagSince=p.emptierBagSince or now end
  local batch=Workshop.emptierBatch(profile)
- return Workshop.emptierReady(units,batch,p.emptierBagSince,now) or (units>0 and Pro.firstPackDeliveryReady(profile,batch))
+ return Workshop.emptierReady(units,batch,p.emptierBagSince,now) or (units>0 and Pro.deliveryFundsMilestone(profile,batch))
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
@@ -2497,13 +2494,16 @@ function scene.saleMilestoneNotice(p,saleQuartz)
  if not scene.runStart or saleQuartz<=0 then return nil end
  local profile=data(p)
  local run=profile.run
+ if run.pendingOffer then return nil end
  local balance=run.wallet.Quartz
- if run.packIndex==0 and balance>=Workshop.PACK_BASE and balance-saleQuartz<Workshop.PACK_BASE then
-  return '+'..saleQuartz..' Quartz · Pack Counter ready'
- end
+ local price=Workshop.price(profile)
+ local fundsPack=balance>=price and balance-saleQuartz<price
  local goal=Pro.milestone(profile).earnings
- if not run.pendingOffer and run.quartzEarnings>=goal and run.quartzEarnings-saleQuartz<goal then
+ local earnsPrestige=run.quartzEarnings>=goal and run.quartzEarnings-saleQuartz<goal
+ if earnsPrestige and (run.packIndex>0 or not fundsPack) then
   return '+'..saleQuartz..' Quartz · Prestige ready'
+ elseif fundsPack then
+  return '+'..saleQuartz..' Quartz · Pack Counter ready'
  end
 end
 local function serviceDeliveries(p: any)

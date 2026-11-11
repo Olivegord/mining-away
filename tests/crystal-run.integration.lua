@@ -566,14 +566,15 @@ assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarn
 assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==4*Workshop.EMPTIER_BATCH)
 assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare)
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
-data(buyer).run.cargo={[Workshop.cargoKey('RunEmerald',5260,true)]=1}
+-- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
+data(buyer).run.cargo={[Workshop.cargoKey('RunRuby',5,true)]=1}
 now+=3;emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
 droneStep(emptier,C.Tick);assert(not emptier.pickupAt)
 now+=Workshop.EMPTIER_WAIT;droneStep(emptier,C.Tick)
 now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
 assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==0)
 snapshotDrone(emptier)
-assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunEmerald:5260')
+assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
 isolate()
 local boosted=rock(0,1000)
 assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)

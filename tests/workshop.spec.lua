@@ -33,25 +33,41 @@ test('three basic starter miners, no free packs or money',function()
  eq(p.run.wallet.Quartz,0);eq(C.price(p),20);eq(buy(p,'empty'),false);eq(p.run.packIndex,0)
  assert(P.validate(p,44))
 end)
-test('first pack dispatch uses the actual manifest and counts only Quartz proceeds',function()
+test('milestone dispatch uses the actual manifest and counts only Quartz proceeds',function()
  local p=P.new(44)
  local rock=W.cargoKey('Quartz',10)
  local block=W.cargoKey('RunRuby',55,true)
  p.run.cargo={Cobalt=1,[rock]=2}
- assert(not P.firstPackDeliveryReady(p,2) and P.firstPackDeliveryReady(p,3))
+ assert(not P.deliveryFundsMilestone(p,2) and P.deliveryFundsMilestone(p,3))
  p.run.cargo={[block]=1}
- assert(P.firstPackDeliveryReady(p,4))
+ assert(P.deliveryFundsMilestone(p,4))
  local id=W.emptierId(p.run.id,1)
  assert(P.beginDelivery(p,id,'first-trip',p.run.id,4))
  p.run.cargo={[rock]=2}
- assert(not P.firstPackDeliveryReady(p,4),'an outstanding sale started a second rush trip')
+ eq(P.deliveryQuartz(p),55)
+ assert(not P.deliveryFundsMilestone(p,4),'the incoming sale already pays for this pack')
  assert(P.finishDelivery(p,id,{},'first-trip',p.run.id))
  eq(p.run.wallet.Quartz,55)
- assert(not P.firstPackDeliveryReady(p,4))
+ assert(not P.deliveryFundsMilestone(p,4))
  p.run.wallet.Quartz=10;p.run.credits=10;p.run.cargo={[rock]=1}
- assert(P.firstPackDeliveryReady(p,4),'a top-up failed to fund the pack')
+ assert(P.deliveryFundsMilestone(p,4),'a top-up failed to fund the pack')
  p.run.packIndex=1
- assert(not P.firstPackDeliveryReady(p,4))
+ assert(not P.deliveryFundsMilestone(p,4))
+ assert(P.beginDelivery(p,id,'next-trip',p.run.id,4))
+ p.run.cargo={[rock]=1}
+ assert(P.deliveryFundsMilestone(p,4),'two parcels together should pay for the next pack')
+ assert(P.beginDelivery(p,W.emptierId(p.run.id,2),'top-up',p.run.id,4))
+ p.run.cargo={[rock]=1}
+ assert(not P.deliveryFundsMilestone(p,4),'two incoming parcels already pay for the next pack')
+ local prestige=P.new(45)
+ prestige.prestiges=1;prestige.run.packIndex=4
+ prestige.run.wallet.Quartz=100;prestige.run.quartzEarnings=P.milestone(prestige).earnings-55
+ prestige.run.cargo={[rock]=1}
+ assert(not P.deliveryFundsMilestone(prestige,4),'a small load that funds neither milestone should batch')
+ prestige.run.cargo={[block]=1}
+ assert(P.deliveryFundsMilestone(prestige,4))
+ prestige.run.pendingOffer={}
+ assert(not P.deliveryFundsMilestone(prestige,4),'a paid choice still needs to be picked')
 end)
 test('shared pool allows more than three owned upgrades and stable repeated drafts across 150 seeds',function()
  for seed=1,150 do
