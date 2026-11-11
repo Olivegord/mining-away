@@ -131,7 +131,8 @@ function V:showAim(dt,ray)
  elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
  local point=self.aimPoint
  if point and pin and (point-pin).Magnitude<.8 then point=nil end
- show(self.pinned,pin,width,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
+ local pinnedWidth=o.player:GetAttribute('MA_SelectorWidth') or width
+ show(self.pinned,pin,pinnedWidth,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
  show(self.preview,point,width,preview)
 end
 

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `2af7861e371f4106e02320619e86d847c5700ef19fd8a99b1bea42236bc19deb` | Includes the two physical shop counters. |
+| Native-file SHA-256 | `6d80ff588a3290b408add8fcf91ceac60a2ce5b3b6fe6b883346abdc413bebb9` | Includes live selector expansion and depot pin continuity. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has physical Quartz Workshop and Star Shop counters** | All seven Sources and three roots verified in Edit. Team Create save returned version 165. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit keeps the pin through depot visits and expands it after a Wider Selector purchase** | All seven Sources and three roots verified in Edit. Team Create save returned version 166. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — widen the working pin from the Star Shop
+
+The authored depot floor and its approach keep a Crystal Run pin active during visits to the Workshop, Star Shop and Prestige beacon. A saved Wider Selector purchase adds four studs to the current square and sends that width to its existing outline. It keeps the same order and work reservations. Walking away from the mining and depot route still recalls the crew.
+
+The production-controller fixture kept an active cut through the east approach and a Star Shop visit. It checked that a remote purchase failed, a saved purchase widened the pin from 30 to 34 studs, a retry charged no extra Stars, and a spare miner claimed a crystal that was previously outside. A detached check in Studio Edit used the actual depot coordinates and measured native marker spans at 34 and 38 studs. Workshop, Crystal Run, persistence and committed flight tests passed with API or storage doubles. Live purchase and multiplayer transitions remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **166**. No player release was published. To reproduce from `e750371`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit e750371`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — give both depot shops physical counters
 

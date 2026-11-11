@@ -1389,7 +1389,8 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
   local character=player.Character
   local hr=character and character:FindFirstChild('HumanoidRootPart')
   local counter=world:GetAttribute('PackCounterPosition')
-  return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter)
+  return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter,
+   world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible end,

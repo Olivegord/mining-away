@@ -815,7 +815,12 @@ function M.selectorInRange(position,point)
  local delta=point-position
  return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2
 end
-function M.onSelectorDepotRoute(position,center,depot)
+function M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
+ if depotFrame and depotSize then
+  local point=depotFrame:PointToObjectSpace(position)
+  if math.abs(point.X)<=depotSize.X*.5 and math.abs(point.Z)<=depotSize.Z*.5 and math.abs(point.Y)<16 then return true end
+  depot=depotFrame.Position
+ end
  local route=depot-center
  local lengthSquared=route.X*route.X+route.Z*route.Z
  if lengthSquared==0 then return false end
@@ -824,10 +829,11 @@ function M.onSelectorDepotRoute(position,center,depot)
  local offset=delta-route*along
  return math.abs(offset.Y)<16 and offset.X*offset.X+offset.Z*offset.Z<=DEPOT_ROUTE_RADIUS^2
 end
-function M.onDepotApproach(position,center,depot)
+function M.onDepotApproach(position,center,depot,depotFrame,depotSize)
+ local destination=depotFrame and depotSize and depotFrame.Position or depot
  return not M.selectorInRange(position,center)
-  and (position-depot).Magnitude<(center-depot).Magnitude
-  and M.onSelectorDepotRoute(position,center,depot)
+  and (position-destination).Magnitude<(center-destination).Magnitude
+  and M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
 end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
@@ -9838,7 +9844,8 @@ function V:showAim(dt,ray)
  elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
  local point=self.aimPoint
  if point and pin and (point-pin).Magnitude<.8 then point=nil end
- show(self.pinned,pin,width,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
+ local pinnedWidth=o.player:GetAttribute('MA_SelectorWidth') or width
+ show(self.pinned,pin,pinnedWidth,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
  show(self.preview,point,width,preview)
 end
 
@@ -11341,7 +11348,8 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
   local character=player.Character
   local hr=character and character:FindFirstChild('HumanoidRootPart')
   local counter=world:GetAttribute('PackCounterPosition')
-  return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter)
+  return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter,
+   world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible end,

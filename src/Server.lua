@@ -13,7 +13,15 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
-if scene.runStart then root:SetAttribute('PackCounterPosition',scene.packStation.Position) end
+if scene.runStart then
+ root:SetAttribute('PackCounterPosition',scene.packStation.Position)
+ local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
+ local floor=depot and depot:FindFirstChild('HubPad')
+ if floor and floor:IsA('BasePart') then
+  scene.depotFloor=floor
+  root:SetAttribute('DepotFloorFrame',floor.CFrame);root:SetAttribute('DepotFloorSize',floor.Size)
+ end
+end
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
 end
@@ -228,9 +236,10 @@ local function recallFromField(p)
  if square then
   local delta=hr.Position-square.center
   if delta.X*delta.X+delta.Z*delta.Z<=Mining.SELECTOR_LEASH^2 and math.abs(delta.Y)<=32 then return end
-  -- A depot trip should leave the crew working at the current Crystal Run pin.
+  -- Depot visits leave the crew working, including the shops beyond the Pack Counter.
+  local floor=scene.depotFloor
   if scene.runStart and square.field.clusters and scene.packStation
-   and Mining.onSelectorDepotRoute(hr.Position,square.center,scene.packStation.Position) then return end
+   and Mining.onSelectorDepotRoute(hr.Position,square.center,scene.packStation.Position,floor and floor.CFrame,floor and floor.Size) then return end
  end
  local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
  local field=p.workField and patches[p.workField]
@@ -1508,6 +1517,7 @@ function scene.clearSquare(p)
  p.miningSquare=nil
  p.shiftSquare=nil;p.shiftUntil=nil
  p.player:SetAttribute('MA_Selector',nil)
+ p.player:SetAttribute('MA_SelectorWidth',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
  p.player:SetAttribute('MA_SelectorStatus',nil)
  p.player:SetAttribute('MA_SelectorFocus',nil)
@@ -3148,6 +3158,12 @@ function scene.buyStarUpgrade(p,payload)
   if ok then return result end;return nil,result
  end,function(result)
   scene.syncRuntimeFleet(p)
+  if result.id=='selector' and p.miningSquare then
+   local width=Workshop.selectorWidth(data(p))
+   -- Keep the pin object so active cuts, deliveries and press jobs stay attached.
+   p.miningSquare.half=width*.5
+   p.player:SetAttribute('MA_SelectorWidth',width)
+  end
   scene.applyWalkSpeed(p);notice(p,result.title..' · '..result.level..'×');p.publishDirty=true
  end)
 end
@@ -3262,6 +3278,7 @@ function scene.placeSquare(p,payload)
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.prioritizeSquareApproach(p,square)
  scene.publishSquareStatus(p)
+ p.player:SetAttribute('MA_SelectorWidth',square.half*2)
  p.player:SetAttribute('MA_Selector',center)
 end
 local function commandPlayer(pl: any,action: any,payload: any)

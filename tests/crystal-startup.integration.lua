@@ -389,4 +389,52 @@ do
  players.PlayerRemoving:Fire(runner)
  print('PASS one Emptier holds a single pickup, passes a blocked job and shares the haul when both loads are full')
 end
+do
+ local runner=player(98906);players.PlayerAdded:Fire(runner)
+ local crew=profiles[runner.UserId]
+ local miner,spare=crew.drones[1],crew.drones[2]
+ local originalFloor,originalStar,originalCounter=scene.depotFloor,shopStations.Ruby.Position,scene.packStation.Position
+ local zone=Instance.new('Folder');zone.Name='WidePinFixture';zone.Parent=scene.map
+ scene.depotFloor=World.part(zone,'HubPad',Vector3.new(0,3.5,0),Vector3.new(100,1,96),Color3.new(1,1,1))
+ shopStations.Ruby.Position=Vector3.new(-18,5.5,-30);scene.packStation.Position=Vector3.new(-38,5.5,32)
+ local center=Vector3.new(0,4.04,148)
+ local bed=World.part(zone,'Field',center-Vector3.yAxis*.3,Vector3.new(108,.6,64),Color3.new(1,0,0))
+ local field={id=#patches+1,cfg={Name='Quartz',Key='Quartz',Material='Quartz',Value=1,SelectionOnly=true,AlwaysUnlocked=true,
+  ReferenceCrystals=true,Hardness=1,Count=2,Ore=10,Turrets=0,Respawn=30},part=bed,model=zone,center=bed.Position,
+  color=bed.Color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C),clusters={bed}}
+ field.e.phase='Safe';patches[field.id]=field
+ local active=makeResource(field,center-Vector3.xAxis*4,'Crystal',1010,10,3,3)
+ local rim=makeResource(field,center+Vector3.xAxis*17,'Crystal',110,10,2,3)
+ active.readyAt=now;rim.readyAt=now
+ local profile=data(crew);profile.run.stars=2
+ local function widen()
+  command.OnServerEvent:Fire(runner,'BuyStarUpgrade',{runId=profile.run.id,upgradeId='selector',level=0,txId='fixture-wide'})
+ end
+ runner.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=profile.run.id,fieldId=field.id,position=center,leadId=active.id})
+ local square=assert(crew.miningSquare)
+ assert(square.half==15 and runner:GetAttribute('MA_SelectorWidth')==30)
+ scene.squareStep(crew,miner);miner.pos=committedStation(miner,active);miner.mining=true;miner.warmAt=now
+ assert(hitResource(miner,active,25) and miner.target==active and active.lastHitAt==now)
+ scene.squareStep(crew,spare);assert(not spare.target,'the outer rock was inside the old pin')
+ widen();assert(Workshop.starLevel(data(crew),'selector')==0 and square.half==15,'a remote purchase widened the pin')
+ for _,point in ipairs({Vector3.new(0,7,62),Vector3.new(40,7,57),Vector3.new(38,7,32),Vector3.new(-18,7,-30)}) do
+  runner.Character:PivotTo(CFrame.new(point));recallFromField(crew)
+  assert(crew.miningSquare==square and miner.target==active and miner.squareJob==square,'a depot visit recalled the crew')
+ end
+ widen()
+ assert(Workshop.starLevel(data(crew),'selector')==1 and data(crew).run.stars==0)
+ assert(crew.miningSquare==square and square.half==17 and runner:GetAttribute('MA_SelectorWidth')==34)
+ assert(miner.target==active and active.slots[miner.id] and miner.warmAt and miner.squareJob==square)
+ widen();assert(square.half==17 and runner:GetAttribute('MA_SelectorWidth')==34 and data(crew).run.stars==0)
+ now+=.25
+ scene.squareStep(crew,spare)
+ assert(spare.target==rim and spare.squareJob==square,'the wider order did not claim the newly covered crystal')
+ runner.Character:PivotTo(CFrame.new(Vector3.new(115,7,30)));recallFromField(crew)
+ assert(not crew.miningSquare and not miner.target and not spare.target and not runner:GetAttribute('MA_SelectorWidth'))
+ players.PlayerRemoving:Fire(runner)
+ resources[active.id]=nil;resources[rim.id]=nil;zone:Destroy();patches[field.id]=nil
+ scene.depotFloor,shopStations.Ruby.Position,scene.packStation.Position=originalFloor,originalStar,originalCounter
+ print('PASS the saved Wider Selector upgrade expands the working pin during a depot visit and admits an outer crystal')
+end
 CF.__index=cfIndex
