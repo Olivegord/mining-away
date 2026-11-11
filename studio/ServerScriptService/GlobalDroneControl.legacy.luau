@@ -781,6 +781,13 @@ function Catalog.capDamage(kind,maxHP,damage)
  -- Ten HP is the original visual cutoff, not mineable work.
  return math.max(0,math.min(damage,math.max(0,maxHP-10)*definition.Chunk))
 end
+function Catalog.chunkTargetScore(kind,cycle,warmup,speed,node,distance)
+ local damage=Catalog.capDamage(kind,node.maxHP,cycle.damage)
+ if damage<=0 then return math.huge end
+ local hits=math.max(1,math.ceil(node.hp/damage-1e-10))
+ local travel=distance/math.max(1,speed*60)+math.log(1+distance)*.35
+ return (travel+warmup+(hits-1+cycle.impact)*cycle.duration)/math.max(1,node.ore)
+end
 local SHELL_LAYERS=2
 function Catalog.projectileTargetScore(kind,stats,node,distance)
  local travel=distance/math.max(1,stats.maxStep60*60)
@@ -8338,6 +8345,8 @@ end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-1
  local definition=DroneCatalog.Types[d.role]
+ local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
+  and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
@@ -8353,7 +8362,9 @@ local function chooseResource(d: any,field: any,square: any?)
      end
     end
     local distance=(r.position-d.pos).Magnitude
-    local value=if square and field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS and definition and definition.Projectile then
+    local value=if chunkCycle and r.kind=='Crystal' then
+     DroneCatalog.chunkTargetScore(d.role,chunkCycle,scene.miningWarmup(d,r),d.stats.maxStep60,r,distance)
+     elseif square and field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS and definition and definition.Projectile then
      DroneCatalog.projectileTargetScore(d.role,d.stats,r,distance)
      elseif square and d.role=='Charger' then
      distance*.7-math.min(r.hp,1000)*.08
@@ -8739,6 +8750,10 @@ function scene.miningWarmup(d,r)
  -- The reference starts cutting on arrival. Keep a short settling beat
  -- for the replicated cut, and keep ignition upgrades proportional.
  if r and r.cluster and d.role=='Striker' then return math.min(.16,d.stats.warmup*.3) end
+ local definition=DroneCatalog.Types[d.role]
+ if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
+  return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
+ end
  return r and math.max(.08,d.stats.warmup) or d.stats.warmup
 end
 local function mineDrone(d: any,p: any,field: any,dt: number)
@@ -8790,7 +8805,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
   d.yaw=Feel.approachYaw(yaw,Feel.levelYaw(d.pos,r.position,yaw),dt)
  end
  local job=d.specialJob
- local warmup=math.max(.08,d.stats.warmup)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
+ local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
  local starting=not job and d.warmAt and now-d.warmAt>=warmup
  local contacting=job and not job.impacted and now>=job.startedAt+job.duration*job.impact
  if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or contacting) then

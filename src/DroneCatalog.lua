@@ -76,6 +76,13 @@ function Catalog.capDamage(kind,maxHP,damage)
  -- Ten HP is the original visual cutoff, not mineable work.
  return math.max(0,math.min(damage,math.max(0,maxHP-10)*definition.Chunk))
 end
+function Catalog.chunkTargetScore(kind,cycle,warmup,speed,node,distance)
+ local damage=Catalog.capDamage(kind,node.maxHP,cycle.damage)
+ if damage<=0 then return math.huge end
+ local hits=math.max(1,math.ceil(node.hp/damage-1e-10))
+ local travel=distance/math.max(1,speed*60)+math.log(1+distance)*.35
+ return (travel+warmup+(hits-1+cycle.impact)*cycle.duration)/math.max(1,node.ore)
+end
 local SHELL_LAYERS=2
 function Catalog.projectileTargetScore(kind,stats,node,distance)
  local travel=distance/math.max(1,stats.maxStep60*60)

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f90f01ac6809e1deb7a492281f1315ce5ac5f355c62f0beffaf90e4b13dc1ef7` | Native drone portraits and fleet count on prestige. |
+| Native-file SHA-256 | `7b3448568d840690d6e1a26c7a4f1200acc3d1138d21545de77bc85727bfd6a3` | Crystal Run specialist setup and target choice. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the prestige presentation update** | All seven Sources and three roots verified in Edit. Team Create save returned version 143. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the specialist mining update** | All seven Sources and three roots verified in Edit. Team Create save returned version 144. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — put the earned specialist to work
+
+Crystal Run specialists with physical cut cycles use their own 0.8-second base setup at an ordinary crystal. Their existing gesture includes the windup, impact and recovery. When choosing an unclaimed crystal under a pin, they estimate the number of cuts from the actual cycle cap, then weigh travel and ore value. Direct target orders, projectile miners and the regular laser retain their existing timing and priorities.
+
+A matched controller fixture earned and selected the same Gridcutter at prestige, then pinned two Ruby rocks. The earlier controller chose the nearby 38-Quartz rock and paid out 11.15 seconds after pinning. The new controller chose the farther 67-Quartz rock and paid out in 10.65 seconds. Both needed four cuts. With the same target on both revisions, setup after arrival dropped from 3.2 to 0.8 seconds and payout moved from 12.13 to 9.73 seconds. The run-two fixture exercised the saved award, removed fitted run hardware, collected and sold the new drone's rock, and bought a pack with its proceeds. Workshop and committed flight passed with API doubles. The legacy special/logistics suite stops at the same schema-six fixture assertion on `6e201d0` and this revision. Live animation, pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **144**. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 6e201d0`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — see the drone before choosing
 

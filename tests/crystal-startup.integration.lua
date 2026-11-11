@@ -218,8 +218,62 @@ do
  assert(Pro.addCargo(data(crew),cargo,1,10)==1)
  command.OnServerEvent:Fire(runner,'Sell')
  assert(not string.find(runner:GetAttribute('MA_Notice'),'Prestige ready',1,true))
+
+ local before=data(crew)
+ local preview=Pro.prestigePreview(before)
+ local picked
+ for _,entry in ipairs(preview.droneChoices) do
+  if DroneCatalog.Types[entry.kind] then picked=entry;break end
+ end
+ assert(picked)
+ runner.Character:PivotTo(CFrame.new(scene.prestigeStation.Position+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(runner,'Prestige',{runId=run.id,txId='first-prestige',confirm=true,droneType=picked.kind})
+ local after=data(crew)
+ local receipt=Http:JSONDecode(runner:GetAttribute('MA_DroneReward'))
+ local worker=assert(drones[receipt.droneId])
+ assert(after.prestiges==1 and after.run.id~=run.id and #after.fleet==#before.fleet+1 and worker.role==picked.kind)
+ assert(after.fleet[1].id==before.fleet[1].id and worker.stats.miningDPS==worker.owned.base.miningDPS*1.25)
+ assert(#after.run.cards==0 and after.run.wallet.Quartz==0 and after.run.stars==0)
+ assert(crew.drones[1].stats.doubleBeam==0 and crew.drones[1].stats.miningDPS==37.5)
+
+ local small=makeResource(ruby,rubyBed.Position-Vector3.xAxis*7,'Crystal',108,8,2.15,3)
+ local rich=makeResource(ruby,rubyBed.Position+Vector3.xAxis*13,'Crystal',270,14,3.8,3)
+ small.readyAt=now;rich.readyAt=now
+ runner.Character:PivotTo(CFrame.new(rubyCenter+Vector3.yAxis*3))
+ worker.pos=rubyCenter-Vector3.xAxis*8+Vector3.yAxis*8
+ command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=after.run.id,fieldId=ruby.id,position=rubyCenter})
+ local began=now
+ local gestureAt
+ for _=1,math.ceil(45/C.Tick) do
+  realTime+=C.Tick;now=realTime;droneStep(worker,C.Tick)
+  if worker.specialJob and not gestureAt then
+   gestureAt=worker.specialJob.startedAt
+   assert(worker.target==rich and math.abs(gestureAt-worker.warmAt-.8)<=C.Tick+.001,'earned miner ignored the richer same-cycle cut or stalled before its gesture')
+   snapshotDrone(worker)
+   assert(worker.model:GetAttribute('WarmupDuration')==.8)
+  end
+  if rich.paid then break end
+ end
+ local released=nil
+ for _,drop in pairs(pickups) do if drop.owner==runner.UserId and drop.runId==after.run.id then
+  assert(released==nil);released=drop
+ end end
+ assert(gestureAt and rich.paid and small.hp==small.maxHP-10 and released and released.nodeId==rich.id)
+ assert(released.units==1 and released.value==math.floor(14*4*DroneCatalog.Types[picked.kind].Yield))
+ print(string.format('MODEL prestige %s began its gesture after %.2fs and released %d Quartz cargo %.2fs after pinning',picked.kind,gestureAt-began,released.value,now-began))
+ scene.clearSquare(crew)
+ runner.Character:PivotTo(CFrame.new(Vector3.new(released.x,released.y+3,released.z)))
+ for _=1,math.ceil(35/C.Tick) do
+  if data(crew).run.wallet.Quartz>=released.value then break end
+  advance(C.Tick)
+ end
+ assert(data(crew).run.wallet.Quartz==released.value)
+ runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(runner,'BuyPack',{runId=after.run.id,packIndex=0,txId='run-two-pack'})
+ assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==released.value-Workshop.PACK_BASE)
  players.PlayerRemoving:Fire(runner)
  CF.__index=cfIndex
  print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
  print('PASS a mined Ruby funds pack two and a single valuable block funds prestige through early courier sales')
+ print('PASS the chosen permanent prestige drone cuts, sells and funds a pack on its first run-two pin')
 end
