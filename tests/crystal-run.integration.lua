@@ -369,6 +369,8 @@ assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choice
 assert(not resumed.run.pendingOffer.choices[1].targetDroneId,'paid offer preassigned the part')
 local delivery=assert(buyer.packDelivery)
 realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(buyer,now);moveBuyer(delivery.part.Position)
+delivery.prompt.PromptButtonHoldBegan:Fire(shopper)
+realTime+=delivery.prompt.HoldDuration;now=realTime;packDelivery:step(buyer,now)
 delivery.prompt.Triggered:Fire(shopper)
 local opened=Pro.clone(data(buyer));assert(opened.run.pendingOffer.opened)
 local otherMiner=buyer.drones[2]

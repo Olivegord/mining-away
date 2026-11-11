@@ -142,7 +142,7 @@ check('rarity adds slower hold segments and never advances past its own color',f
   end
   previousDuration=duration
  end
- local starts={0,.42,1.32,2.65}
+ local starts={0,Packs.duration(1),Packs.duration(2),Packs.duration(3)}
  local lastSpeed=math.huge
  for stage,at in ipairs(starts) do
   local before,color=Packs.sample(4,at)
@@ -188,7 +188,7 @@ check('free delivery stays sealed until the owner finishes a nearby uninterrupte
  assert(not part:GetAttribute('HoldAt'))
  players.PlayerRemoving:Fire(intruder)
  hold('Begin');assert(part:GetAttribute('HoldAt'))
- advance(.18);hold('End');advance(.1);assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
+ advance(.18);hold('End');advance(.13);assert(not part:GetAttribute('HoldAt') and not data(p).run.pendingOffer.opened)
  advance(.2);hold('Begin');hold('Complete')
  assert(not data(p).run.pendingOffer.opened,'early native completion accepted')
  hold('End')

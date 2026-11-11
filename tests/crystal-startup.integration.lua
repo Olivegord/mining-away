@@ -264,6 +264,8 @@ do
  pickups[dropId]=nil;drop.part:Destroy()
  local crate=assert(crew.packDelivery)
  runner.Character:PivotTo(CFrame.new(crate.part.Position+Vector3.yAxis))
+ crate.prompt.PromptButtonHoldBegan:Fire(runner)
+ advance(crate.prompt.HoldDuration+.05)
  crate.prompt.Triggered:Fire(runner)
  local offered=assert(data(crew).run.pendingOffer)
  assert(offered.opened)
@@ -315,6 +317,8 @@ do
  local secondCrate=assert(crew.packDelivery)
  advance(2)
  runner.Character:PivotTo(CFrame.new(secondCrate.part.Position+Vector3.yAxis))
+ secondCrate.prompt.PromptButtonHoldBegan:Fire(runner)
+ advance(secondCrate.prompt.HoldDuration+.05)
  secondCrate.prompt.Triggered:Fire(runner)
  assert(data(crew).run.pendingOffer.opened)
  local flight=second.choices[paths.flight]

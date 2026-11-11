@@ -7229,8 +7229,10 @@ local Packs = {
  Tiers = {'Common', 'Rare', 'Epic', 'Legendary'},
  Palette = {{195,213,225},{89,208,255},{201,134,255},{255,205,78}},
 }
-local ends = {.42, 1.32, 2.65, 4.8}
-local work = {.60, .22, .12, .06}
+-- The original event used progressively longer holds. These are the four
+-- Crystal Run timings, with most of the visible movement at the beginning.
+local ends = {.62, 1.32, 3.25, 6.85}
+local work = {.57, .18, .17, .08}
 
 function Packs.roll(ticket)
  if ticket <= 66 then return 1 end
@@ -7243,8 +7245,15 @@ function Packs.duration(tier)
  return ends[tier]
 end
 
-function Packs.stageDuration(stage)
- return ends[stage]-(ends[stage-1] or 0)
+function Packs.holdTier(duration)
+ for tier, seconds in ipairs(ends) do
+  if math.abs(seconds-duration)<.01 then return tier end
+ end
+ return 1
+end
+
+function Packs.rarityTier(rarity)
+ return table.find(Packs.Tiers,rarity) or (rarity=='Uncommon' and 2 or 1)
 end
 
 function Packs.sample(tier, elapsed)
@@ -7254,11 +7263,20 @@ function Packs.sample(tier, elapsed)
   local finish = ends[i]
   if elapsed < finish or i == tier then
    local fraction = math.clamp((elapsed-start)/(finish-start), 0, 1)
-   return (filled+work[i]*fraction)/total, i
+   local eased=fraction*(1.24-.24*fraction)
+   return (filled+work[i]*eased)/total, i
   end
   start, filled = finish, filled+work[i]
  end
  return 1, tier
+end
+
+function Packs.reel(elapsed,index,speed)
+ local delay=(index-1)*.15
+ local duration=.98+(index-1)*.24
+ local t=math.clamp((elapsed*speed-delay)/duration,0,1)
+ local travel=8+index
+ return travel*(1-(1-t)^3), travel, t>=1, t>0
 end
 
 return Packs
@@ -7390,7 +7408,21 @@ local serial=0
 local bindPrefix='UpgradeCards'..game:GetService('HttpService'):GenerateGUID(false)
 local FACE_PIXELS=3 -- Supersample the curved physical face; screen text stays native.
 local function rarityColor(tier) return Color3.fromRGB(table.unpack(Packs.Palette[tier] or Packs.Palette[1])) end
-local function reducedMotion()
+function CardView.rarityColor(choice) return rarityColor(Packs.rarityTier(choice.rarity)) end
+
+-- Creator Store icons. The public thumbnails load in this experience.
+local icons={
+ drone='rbxthumb://type=Asset&id=15332132841&w=150&h=150',
+ player='rbxthumb://type=Asset&id=15728996325&w=150&h=150',
+ fleet='rbxthumb://type=Asset&id=114339465861147&w=150&h=150',
+}
+function CardView.scopeIcon(choice)
+ if choice.scope=='Player' then return icons.player end
+ if choice.scope=='Individual' or choice.scope=='Color' then return icons.drone end
+ return icons.fleet
+end
+
+function CardView.reducedMotion()
  local reduced=false
  pcall(function() reduced=GuiService.ReducedMotionEnabled end)
  local player=Players.LocalPlayer
@@ -7709,9 +7741,11 @@ end
 function CardView.create(U,parent,choice,index,width,height,options)
  options=options or {};height=math.max(height or CardView.HEIGHT,CardView.MIN_HEIGHT)
  local compact=height<300
- local p=U.palette;local _,bodyColor,accentColor=CardView.identity(choice)
- local tier=table.find(Packs.Tiers,choice.rarity) or (choice.rarity=='Uncommon' and 2 or 1)
+ local p=U.palette;local _,_,accentColor=CardView.identity(choice)
+ local tier=Packs.rarityTier(choice.rarity)
  local tierColor=rarityColor(tier)
+ local bodyColor=tierColor:Lerp(Color3.fromRGB(7,13,27),.55)
+ local rim=Color3.fromRGB(33,46,62)
  local slot=U.frame(parent,UDim2.fromOffset(0,0),UDim2.fromOffset(width,height),p.ink)
  slot.Name='CardChoice'..tostring(index);slot.LayoutOrder=index;slot.BackgroundTransparency=1
  local socket=U.frame(slot,UDim2.fromOffset(2,2),UDim2.new(1,-4,1,-4),Color3.fromRGB(13,24,36))
@@ -7726,9 +7760,9 @@ function CardView.create(U,parent,choice,index,width,height,options)
  width-=16;height-=16
  local card=U.frame(slot,UDim2.fromOffset(8,3),UDim2.fromOffset(width,height),p.paper)
  card.Name='MountedCard';card.BackgroundTransparency=1
- local badge=U.frame(card,UDim2.new(.5,-62,0,8),UDim2.fromOffset(124,25),tierColor)
+ local badge=U.frame(card,UDim2.fromOffset(9,9),UDim2.fromOffset(math.min(105,width-52),23),tierColor)
  badge.Name='RarityBadge';U.corner(badge,8);U.stroke(badge,p.ink,1.5)
- local rarity=U.text(badge,UDim2.fromScale(0,0),UDim2.fromScale(1,1),string.upper(choice.rarity or Packs.Tiers[tier])..' '..string.rep('◆',tier),12,p.ink,true)
+ local rarity=U.text(badge,UDim2.fromScale(0,0),UDim2.fromScale(1,1),string.upper(choice.rarity or Packs.Tiers[tier]),12,p.ink,true)
  rarity.TextXAlignment=Enum.TextXAlignment.Center
  local choose=U.button(card,UDim2.fromScale(0,0),UDim2.fromScale(1,1),'',options.onChoose,p.paper)
  choose.Name='ChooseCard';U.unskin(choose);choose.TextTransparency=1;choose.BackgroundTransparency=1
@@ -7746,27 +7780,25 @@ function CardView.create(U,parent,choice,index,width,height,options)
  surface.ClipsDescendants=true;surface.ZIndexBehavior=Enum.ZIndexBehavior.Sibling;surface.Parent=Players.LocalPlayer:WaitForChild('PlayerGui')
  local canvas=U.frame(surface,UDim2.fromOffset(0,0),UDim2.fromOffset(width*FACE_PIXELS,height*FACE_PIXELS),p.paper);canvas.Name='CardCanvas'
  local border=CardView.housing(U,canvas,bodyColor,accentColor)
- local rim=tierColor
- border.Color=bodyColor:Lerp(Color3.fromRGB(3,5,14),.75);border.Thickness=1.5*FACE_PIXELS
- -- Soft colored spill outside the bevel is drawn on a padded physical face.
- -- The enamel covers the overlapping centers, leaving only the feathered rim.
- local spill=Instance.new('Frame');spill.Name='RimGlow';spill.BackgroundTransparency=1;spill.Size=UDim2.fromScale(1,1);spill.ZIndex=canvas.ZIndex;spill.Parent=canvas
- for i=12,1,-1 do
-  local spread=i*FACE_PIXELS
-  local halo=U.frame(spill,UDim2.fromOffset(-spread,-spread),UDim2.new(1,spread*2,1,spread*2),tierColor)
-  halo.BackgroundTransparency=.985-tier*.009;halo.ZIndex=spill.ZIndex;U.corner(halo,20*FACE_PIXELS+spread)
- end
+ border.Color=rim; border.Thickness=1.5*FACE_PIXELS
  local rimFace=U.frame(canvas,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.new(1,1,1));rimFace.Name='RimBevel';rimFace.ZIndex=canvas.ZIndex;U.corner(rimFace,20*FACE_PIXELS)
  local inner=U.frame(rimFace,UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS),UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS),Color3.new(1,1,1));inner.Name='Enamel';inner.ZIndex=canvas.ZIndex;U.corner(inner,15*FACE_PIXELS)
  local enamel=Instance.new('UIGradient');enamel.Rotation=90;enamel.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,bodyColor:Lerp(Color3.new(1,1,1),.12)),ColorSequenceKeypoint.new(.28,bodyColor:Lerp(Color3.new(1,1,1),.025)),ColorSequenceKeypoint.new(.62,bodyColor),ColorSequenceKeypoint.new(1,bodyColor:Lerp(Color3.new(0,0,0),.33))});enamel.Parent=inner
  local rimLight=Instance.new('UIGradient');rimLight.Name='RimLight';rimLight.Rotation=118
- rimLight.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,tierColor:Lerp(Color3.new(1,1,1),.66)),ColorSequenceKeypoint.new(.34,tierColor),ColorSequenceKeypoint.new(.60,tierColor:Lerp(p.ink,.36)),ColorSequenceKeypoint.new(.84,tierColor),ColorSequenceKeypoint.new(1,tierColor:Lerp(p.ink,.24))});rimLight.Parent=rimFace
+ rimLight.Color=ColorSequence.new(Color3.fromRGB(120,140,158),rim);rimLight.Parent=rimFace
  local edge=U.stroke(inner,bodyColor:Lerp(Color3.new(1,1,1),.5),FACE_PIXELS);edge.Transparency=.5
  local texture=canvas:FindFirstChild('StudTexture');texture.Position=UDim2.fromOffset(5*FACE_PIXELS,5*FACE_PIXELS);texture.Size=UDim2.new(1,-10*FACE_PIXELS,1,-10*FACE_PIXELS);texture:FindFirstChildOfClass('UICorner').CornerRadius=UDim.new(0,15*FACE_PIXELS)
  local rays=sunburst(U,canvas,compact,accentColor)
  local sweep,spot,flash=shineLayer(U,canvas,rim)
  rays.Parent=canvas.FaceLight
  local _,artCamera=mechanicVisual(canvas,choice,compact)
+ local iconWell=U.frame(canvas,UDim2.new(1,-8*FACE_PIXELS,0,8*FACE_PIXELS),UDim2.fromOffset(34*FACE_PIXELS,34*FACE_PIXELS),p.ink)
+ iconWell.AnchorPoint=Vector2.new(1,0);iconWell.BackgroundTransparency=.26;iconWell.ZIndex=canvas.ZIndex+9
+ U.corner(iconWell,7*FACE_PIXELS)
+ local scopeIcon=Instance.new('ImageLabel')
+ scopeIcon.Name='CardScope';scopeIcon.Image=CardView.scopeIcon(choice)
+ scopeIcon.BackgroundTransparency=1;scopeIcon.Size=UDim2.fromScale(.76,.76);scopeIcon.Position=UDim2.fromScale(.12,.12)
+ scopeIcon.ScaleType=Enum.ScaleType.Fit;scopeIcon.ZIndex=iconWell.ZIndex+1;scopeIcon.Parent=iconWell
  local summary=CardView.summary(choice)
  local function escape(v) return (tostring(v):gsub('&','&amp;'):gsub('<','&lt;'):gsub('>','&gt;')) end
  local heading=escape(choice.title or 'Run upgrade')
@@ -7785,44 +7817,91 @@ function CardView.create(U,parent,choice,index,width,height,options)
  terms.TextStrokeColor3=Color3.fromRGB(13,23,48);terms.TextStrokeTransparency=.6
  local focused,pressed,blend,selected=false,false,0,false
  local finishedAt,installed
- local revealSpeed=math.clamp(options.revealSpeed or 1,1,4);local revealStart=os.clock()+(options.skipReveal and 0 or ((index-1)*.13)/revealSpeed)
- local reducedMotion=options.reducedMotion==true
- pcall(function() reducedMotion=GuiService.ReducedMotionEnabled end)
- local function motionReduced()
-  return reducedMotion or options.reducedMotion==true or Players.LocalPlayer:GetAttribute('ReducedMotion')==true or Players.LocalPlayer:GetAttribute('MA_ReducedMotion')==true
+ local revealSpeed=math.clamp(options.revealSpeed or 1,1,4)
+ local revealStart=options.revealStart or os.clock()
+ local reel={}
+ local function hideReel()
+  for _,entry in ipairs(reel) do entry.part.Transparency=1;entry.face.Enabled=false end
  end
+ local function disposeReel()
+  for _,entry in ipairs(reel) do entry.face:Destroy();entry.part:Destroy() end
+  table.clear(reel)
+ end
+ local function spin(camera,left,top,right,bottom,position,size,offset,stop)
+  for i=1,3 do
+   local cell=math.floor(offset)+i-1
+   local entry=reel[i]
+   if not entry then
+    local blank=visualPart(model,Vector3.one,Vector3.zero,rim);blank.Name='SpinningCard'
+    local face=Instance.new('SurfaceGui');face.Name='CardBack';face.Adornee=blank
+    face.LightInfluence=0;face.Brightness=1;face.MaxDistance=8;face.Active=false
+    face.SizingMode=Enum.SurfaceGuiSizingMode.FixedSize;face.CanvasSize=Vector2.new(128,192);face.Parent=surface.Parent
+    local field=U.frame(face,UDim2.fromScale(0,0),UDim2.fromScale(1,1),rim)
+    field.ClipsDescendants=true
+    local mark=Instance.new('ImageLabel');mark.BackgroundTransparency=1;mark.Image=icons.fleet
+    mark.ImageTransparency=.45;mark.Size=UDim2.fromScale(.29,.29);mark.AnchorPoint=Vector2.new(.5,.5)
+    mark.Position=UDim2.fromScale(.5,.5);mark.ScaleType=Enum.ScaleType.Fit;mark.Parent=field
+    entry={part=blank,face=face,field=field,mark=mark};reel[i]=entry
+   end
+   local centerY=position.Y+size.Y/2+(offset-cell)*size.Y*.94
+   local fullTop=centerY-size.Y*.42
+   local a,b=math.max(top,fullTop),math.min(bottom,centerY+size.Y*.42)
+   if b-a<2 or cell>=stop then entry.part.Transparency=1;entry.face.Enabled=false;continue end
+   local x,y=(left+right)/2,(a+b)/2
+   local depth=1.025
+   local center=onPlane(camera,x,y,depth)
+   local w=(onPlane(camera,right,y,depth)-onPlane(camera,left,y,depth)).Magnitude*.92
+   local h=(onPlane(camera,x,a,depth)-onPlane(camera,x,b,depth)).Magnitude
+   entry.part.Size=Vector3.new(w,h,.035);entry.part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(0,math.pi,0)
+   local shade=rarityColor((cell+index)%#Packs.Tiers+1):Lerp(rim,.63)
+   entry.part.Color=shade;entry.field.BackgroundColor3=shade
+   entry.mark.Position=UDim2.fromScale(.5,(centerY-a)/(b-a));entry.mark.Visible=centerY>a and centerY<b
+   entry.part.Transparency=0;entry.face.Enabled=true
+  end
+ end
+
  local signals={}
  local function connect(signal,fn) table.insert(signals,signal:Connect(fn)) end
  connect(choose.MouseEnter,function() focused=true end);connect(choose.MouseLeave,function() focused=false;pressed=false end)
  connect(choose.SelectionGained,function() focused=true end);connect(choose.SelectionLost,function() focused=false;pressed=false end)
  connect(choose.MouseButton1Down,function() pressed=true end);connect(choose.MouseButton1Up,function() pressed=false end)
- pcall(function() connect(GuiService:GetPropertyChangedSignal('ReducedMotionEnabled'),function() reducedMotion=GuiService.ReducedMotionEnabled end) end)
  serial=serial+1;local stepName=bindPrefix..'Card'..serial
- local dead=false;local landed=false;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
+ local dead=false;local landed=false;local reelCell=-1;local wasFocused=false;local focusAt=-10;local pointerX,pointerY=0,0
  local function dispose()
   if dead then return end;dead=true;RunService:UnbindFromRenderStep(stepName)
   for _,connection in ipairs(signals) do connection:Disconnect() end
-  surface:Destroy();model:Destroy()
+  disposeReel();surface:Destroy();model:Destroy()
  end
  connect(slot.Destroying,dispose)
  RunService:BindToRenderStep(stepName,Enum.RenderPriority.Camera.Value+8,function(dt)
   if dead then return end
   local camera=workspace.CurrentCamera;local left,top,right,bottom=visibleRect(card)
-  if not camera or not left then surface.Enabled=false;part.Transparency=1;return end
-  local clock=os.clock();local age=clock-revealStart;local quiet=motionReduced()
+  if not camera or not left then surface.Enabled=false;part.Transparency=1;hideReel();return end
+  local clock=os.clock();local age=clock-revealStart;local quiet=options.reducedMotion==true or CardView.reducedMotion()
   local instant=quiet or options.skipReveal
-  if not instant and age<0 then choose.Visible=false;effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
-  local progress=instant and 1 or math.clamp(age/(.55/revealSpeed),0,1)
+  local position,size=card.AbsolutePosition,card.AbsoluteSize
+  local offset,stop,settled,started=Packs.reel(age,index,revealSpeed)
+  if instant then settled=true;offset=stop end
+  local progress=settled and 1 or math.clamp(1-(stop-offset),0,1)
   local reveal=1-(1-progress)^3
-  if progress>=.91 and not landed then
+  if settled then
+   if not landed and not instant and age*revealSpeed<1.18+(index-1)*.39 and options.onLand then options.onLand(tier) end
    landed=true
-   if not options.skipReveal and options.onLand then options.onLand(tier) end
+   if #reel>0 then disposeReel() end
+  elseif started then
+   local cell=math.floor(offset)
+   if cell~=reelCell then
+    reelCell=cell
+    if options.onTick then options.onTick() end
+   end
+   spin(camera,left,top,right,bottom,position,size,offset,stop)
   end
-  choose.Visible=progress>=1 and finishedAt==nil
+  local _,_,allSettled=Packs.reel(age,3,revealSpeed)
+  choose.Visible=settled and finishedAt==nil and (instant or allSettled)
+  if progress<=0 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;part.Transparency=1;return end
   local resultAge=finishedAt and clock-finishedAt or 0
   local leaving=finishedAt and not installed and (quiet and 1 or math.clamp(resultAge/.24,0,1)^2) or 0
-  if leaving>=1 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;return end
-  local position,size=card.AbsolutePosition,card.AbsoluteSize
+  if leaving>=1 then effect.Visible=false;terms.Visible=false;badge.Visible=false;surface.Enabled=false;part.Transparency=1;return end
   local full=right-left>=size.X-.5 and bottom-top>=size.Y-.5
   local target=(selected or focused and choose.Active) and 1 or 0
   if target==1 and not wasFocused then focusAt=clock end;wasFocused=target==1
@@ -7835,45 +7914,49 @@ function CardView.create(U,parent,choice,index,width,height,options)
   socket.BackgroundTransparency=.55+.43*reveal
   latch.BackgroundColor3=tierColor:Lerp(Color3.new(1,1,1),math.max(latchPulse,confirmPulse)*.75)
   latch.BackgroundTransparency=selected and 0 or (1-reveal)*.76+.18
-  rail.Color=tierColor
-  rail.Transparency=selected and .02 or .58-tier*.07
+  rail.Color=selected and Color3.fromRGB(224,235,244) or rim
+  rail.Transparency=selected and .02 or .66
   local lift=(full and not quiet and blend*6 or 0)-(pressed and 3 or 0)
   effect.Position=UDim2.new(0,12,effectY,-lift);terms.Position=UDim2.new(0,12,termsY,-lift)
-  effect.Visible=progress>=.92 and leaving<.14;terms.Visible=effect.Visible
+  effect.Visible=settled and leaving<.14;terms.Visible=effect.Visible
   badge.Visible=effect.Visible
-  badge.Position=UDim2.new(.5,-62,0,8-lift)
-  local bleed=0
+  badge.Position=UDim2.fromOffset(9,9-lift)
   local x,y=(left+right)/2,(top+bottom)/2
-  local origin=options.origin or Vector2.new(x+(2-index)*size.X*.22,y+size.Y*.43)
-  local travel=1-reveal
-  -- Approach the open dock, overshoot a few pixels, then drop into the latch.
-  local arc=math.sin(progress*math.pi)*math.min(27,size.Y*.11)+math.sin(math.clamp((progress-.76)/.24,0,1)*math.pi)*7
-  local depth=1
-  local center=onPlane(camera,x+(origin.X-x)*travel,y+(origin.Y-y)*travel-arc-lift+leaving*52,depth+.015)
-  local scale=(.44+.56*reveal)*(1-leaving*.34)
-  local w=(onPlane(camera,right+bleed,y,depth)-onPlane(camera,left-bleed,y,depth)).Magnitude*scale
-  local h=(onPlane(camera,x,top-bleed,depth)-onPlane(camera,x,bottom+bleed,depth)).Magnitude*scale
-  local tilt=full and not quiet and math.rad(pointerX*blend*5+(index==1 and -1 or 1)*68*travel) or 0
-  local pitch=full and not quiet and math.rad(-pointerY*blend*5-23*travel) or 0
-  local roll=not quiet and math.rad((index-2)*20*travel) or 0
-  part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.02)
-  part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,roll)
-  part.Transparency=1;surface.Enabled=true;local canvasSize=Vector2.new(math.floor((right-left+bleed*2)*FACE_PIXELS+.5),math.floor((bottom-top+bleed*2)*FACE_PIXELS+.5));if surface.CanvasSize~=canvasSize then surface.CanvasSize=canvasSize end
-  canvas.Size=UDim2.fromOffset(size.X*FACE_PIXELS,size.Y*FACE_PIXELS);canvas.Position=UDim2.fromOffset((position.X-left+bleed)*FACE_PIXELS,(position.Y-top+bleed)*FACE_PIXELS)
+  local travel=1-progress
+  local depth=1.02
+  local shiftedTop=top-travel*size.Y*.94
+  local shiftedBottom=bottom-travel*size.Y*.94
+  local shownTop=math.max(top,shiftedTop)
+  if shiftedBottom-shownTop<2 then surface.Enabled=false;part.Transparency=1;return end
+  local centerY=(shownTop+shiftedBottom)/2
+  local bounce=settled and not instant and math.sin(math.clamp((age*revealSpeed-(.98+(index-1)*.39))/.18,0,1)*math.pi)*4 or 0
+  local center=onPlane(camera,x,centerY-lift+bounce+leaving*52,depth)
+  local scale=1-leaving*.34
+  local w=(onPlane(camera,right,y,depth)-onPlane(camera,left,y,depth)).Magnitude*scale
+  local h=(onPlane(camera,x,shownTop,depth)-onPlane(camera,x,shiftedBottom,depth)).Magnitude*scale
+  local tilt=full and not quiet and math.rad(pointerX*blend*9) or 0
+  local pitch=full and not quiet and math.rad(-pointerY*blend*7) or 0
+  part.Size=Vector3.new(math.max(.01,w),math.max(.01,h),.038)
+  part.Color=rim;part.Transparency=0
+  part.CFrame=CFrame.new(center)*camera.CFrame.Rotation*CFrame.Angles(pitch,math.pi+tilt,0)
+  surface.Enabled=true
+  local canvasSize=Vector2.new(math.floor((right-left)*FACE_PIXELS+.5),math.floor((shiftedBottom-shownTop)*FACE_PIXELS+.5))
+  if surface.CanvasSize~=canvasSize then surface.CanvasSize=canvasSize end
+  canvas.Size=UDim2.fromOffset(size.X*FACE_PIXELS,size.Y*FACE_PIXELS);canvas.Position=UDim2.fromOffset((position.X-left)*FACE_PIXELS,(position.Y-top+shiftedTop-shownTop)*FACE_PIXELS)
   canvas.BackgroundColor3=pressed and bodyColor:Lerp(p.ink,.18) or bodyColor:Lerp(accentColor,blend*.12)
   rimFace.BackgroundColor3=Color3.new(1,1,1)
   inner.BackgroundColor3=pressed and Color3.fromRGB(190,190,190) or Color3.new(1,1,1)
   rimLight.Offset=Vector2.new(quiet and 0 or pointerX*.15,quiet and 0 or pointerY*.2)
   rays.Rotation=quiet and 0 or (clock*9+index*27)%360
   rays.ImageTransparency=quiet and .4 or .4-blend*.1
-  local pulse=clock-focusAt;local opening=age*revealSpeed
-  local shine=opening<.9 and opening/.9 or (pulse<.7 and pulse/.7 or 2)
+  local pulse=clock-focusAt;local opening=age*revealSpeed-(.98+(index-1)*.39)
+  local shine=opening>=0 and opening<.9 and opening/.9 or (pulse<.7 and pulse/.7 or 2)
   sweep.Visible=not quiet and full and shine>=0 and shine<=1
   if sweep.Visible then sweep.Position=UDim2.fromScale(-.65+shine*2.1,-.25) end
   spot.GroupTransparency=quiet and 1 or 1-blend*.7
   spot.Position=UDim2.fromScale(.5+pointerX*.32,.3+pointerY*.22)
   local arrival=math.clamp(1-math.abs(progress-.94)/.14,0,1)
-  if progress>=1 then arrival=math.clamp(1-(opening-.55)/.28,0,1)*.55 end
+  if settled then arrival=math.clamp(1-opening/.28,0,1)*.55 end
   local wink=not quiet and full and pulse>=0 and pulse<.65
   local intensity=wink and (1-math.abs(pulse/.65-.5)*2)*.75 or 0
   flash.ImageTransparency=not quiet and 1-math.max(intensity,options.skipReveal and 0 or arrival*(tier-1)/3) or 1
@@ -7932,10 +8015,472 @@ end
 return CardView
 
 end)()
+local DroneRoles = (function()
+-- Pure capabilities and work phases. Color/ownership never grants an implicit
+-- mining beam: a drone must have the actual mechanical job that performs it.
+local R={}
+R.BREAKER={windup=.8,impactHold=1,recovery=.65,diveLimit=1.25,diveDuration=.28}
+R.GROWER={plantSeconds=1.1,cooldown=5}
+local legacy={Blue='Striker',Red='Charger',Green='Medic'}
+local definitions={
+ Striker={job='Miner',worker=true,miner=true,combat=true},
+ Charger={job='Breaker',worker=true,combat=true},
+ Dart={job='Rock grower',grower=true},
+ Courier={job='Backpack emptier',courier=true},
+ Medic={job='Healer',healer=true},
+ Orbiter={job='Orbital controller',ability='Orbital'},
+ Scrapper={job='Swarm fabricator',ability='Scrap'},
+ Bubbler={job='Bubble extractor',worker=true,combat=true,special='Bubbler'},
+ Halver={job='Ring grinder',worker=true,combat=true,special='Halver'},
+ Gridcutter={job='Grid cutter',worker=true,combat=true,special='Gridcutter'},
+ Singularity={job='Gravity extractor',worker=true,combat=true,special='Singularity'},
+ Starforge={job='Solar refiner',worker=true,combat=true,special='Starforge'},
+ Frostbite={job='Cryogenic shatterer',worker=true,combat=true,special='Frostbite'},
+ Resonator={job='Resonance extractor',worker=true,combat=true,special='Resonator'},
+ Needler={job='Dart thrower',worker=true,special='Needler'},
+ Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
+ Vacuum={job='Collects loose ore'},
+ Compactor={job='Compresses loose ore into equal-value blocks'},
+}
+local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
+function R.canonical(role) return legacy[role] or role end
+local function capability(role,key)
+ local definition=definitions[R.canonical(role)]
+ return definition and definition[key]==true or false
+end
+function R.isWorker(role) return capability(role,'worker') end
+function R.special(role)
+ local definition=definitions[R.canonical(role)];return definition and definition.special or nil
+end
+function R.isSpecial(role) return R.special(role)~=nil end
+function R.isMiner(role) return capability(role,'miner') end
+function R.combat(role) return capability(role,'combat') end
+function R.isGrower(role) return capability(role,'grower') end
+function R.isCourier(role) return capability(role,'courier') end
+function R.isHealer(role) return capability(role,'healer') end
+function R.ability(role)
+ local definition=definitions[R.canonical(role)];return definition and definition.ability or nil
+end
+function R.job(role)
+ local definition=definitions[R.canonical(role)];return definition and definition.job or 'Unknown'
+end
+local function xyz(value)
+ if type(value)~='table' then return nil end
+ local p=value.position or value
+ local x,y,z=p.x or p.X,p.y or p.Y,p.z or p.Z
+ if finite(x) and finite(y) and finite(z) then return x,y,z end
+ return nil
+end
+function R.chooseTarget(role,nodes,origin,now)
+ role=R.canonical(role)
+ if role~='Charger' then return nil end
+ local x,y,z=xyz(origin);if not x or not finite(now) then return nil end
+ local chosen,best=nil,-math.huge
+ for _,node in ipairs(nodes or {}) do
+  local nx,ny,nz=xyz(node)
+  local ready=node.readyAt==nil or (finite(node.readyAt) and node.readyAt<=now)
+  if nx and type(node.id)=='string' and finite(node.hp) and node.hp>0 and finite(node.maxHP) and node.maxHP>0
+   and ready and node.paid~=true and node.eligible~=false then
+   local distance=math.sqrt((nx-x)^2+(ny-y)^2+(nz-z)^2)
+   local score
+   do
+    -- The impact specialist takes shells first, then substantial remaining work.
+    local shell=node.kind=='Geode' and 120 or (node.kind=='Core' and 80 or 0)
+    score=shell+math.min(node.hp,1000)*.08-distance*.7
+   end
+   if score and (score>best or (score==best and (not chosen or node.id<chosen.id))) then chosen=node;best=score end
+  end
+ end
+ return chosen
+end
+local function breakerWindup(state)
+ return finite(state.windup) and state.windup>0 and math.clamp(state.windup,.08,10) or R.BREAKER.windup
+end
+function R.newBreaker(targetId,now,windup)
+ assert(type(targetId)=='string' and finite(now),'A breaker requires a server target and clock')
+ return {targetId=targetId,phase='Approach',phaseAt=now,impactSerial=0,windup=windup}
+end
+function R.stepBreaker(state,now,context)
+ if not finite(now) or now<state.phaseAt then return state.phase,nil end
+ context=context or {}
+ if state.phase=='Complete' or state.phase=='Canceled' then return state.phase,nil end
+ if context.valid~=true or (context.targetId and context.targetId~=state.targetId) then
+  state.phase='Canceled';state.phaseAt=now;return state.phase,'canceled'
+ end
+ local phase,event=state.phase,nil
+ if phase=='Approach' and context.arrived==true then phase,event='Windup','windup'
+ elseif phase=='Windup' and now-state.phaseAt>=breakerWindup(state) then phase,event='Dive','dive'
+ elseif phase=='Dive' then
+  if context.impactReached==true then
+   phase,event='Impact','contact'
+  elseif now-state.phaseAt>=R.BREAKER.diveLimit then phase,event='Recover','missed' end
+ elseif phase=='Impact' and now-state.phaseAt>=R.BREAKER.impactHold then
+  phase,event='Recover','impact';state.impactSerial+=1
+ elseif phase=='Recover' and context.recovered~=false and now-state.phaseAt>=R.BREAKER.recovery then phase,event='Complete','complete' end
+ if phase~=state.phase then state.phase=phase;state.phaseAt=now end
+ return phase,event
+end
+function R.breakerPose(state,now)
+ local t=finite(now) and math.max(0,now-state.phaseAt) or 0
+ if state.phase=='Windup' then
+  local p=math.clamp(t/breakerWindup(state),0,1);return {lift=(1-(1-p)^2)*1.2,dive=0,progress=p}
+ elseif state.phase=='Dive' then
+  local p=math.clamp(t/R.BREAKER.diveDuration,0,1);return {lift=1.2*(1-p),dive=p,progress=p}
+ elseif state.phase=='Impact' then return {lift=0,dive=1,progress=1}
+ elseif state.phase=='Recover' then
+  local p=math.clamp(t/R.BREAKER.recovery,0,1);return {lift=0,dive=1-(1-(1-p)^2),progress=p}
+ end
+ return {lift=0,dive=0,progress=0}
+end
+return R
+
+end)()
+local FleetView = (function()
+-- Client-only display stage. The avatar and crew in the mining field keep their
+-- original positions, work orders and ownership while the camera is here.
+local FleetView={}
+FleetView.__index=FleetView
+
+local RunService=game:GetService('RunService')
+local Lighting=game:GetService('Lighting')
+local UIS=game:GetService('UserInputService')
+local GuiService=game:GetService('GuiService')
+local Context=game:GetService('ContextActionService')
+local Storage=game:GetService('ReplicatedStorage')
+local STAGE=Vector3.new(0,12000,0)
+local FOG=Color3.fromRGB(43,51,80)
+local WHITE=Color3.fromRGB(248,251,255)
+local CAMERA_BIND='MiningAwayFleetCamera'
+local INPUT_BIND='MiningAwayFleetMovement'
+
+local function block(parent,name,size,cf,color,material)
+ local part=Instance.new('Part')
+ part.Name=name;part.Size=size;part.CFrame=cf;part.Color=color;part.Material=material
+ part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+ part.CastShadow=false;part.Parent=parent
+ return part
+end
+
+local function cloneRig(source,originalParts)
+ if not source then return end
+ local archivable=source.Archivable
+ source.Archivable=true;local copy=source:Clone();source.Archivable=archivable
+ if not copy then return end
+ local originals=source:GetDescendants()
+ local descendants=copy:GetDescendants()
+ local sameOrder=#originals==#descendants
+ for i,item in ipairs(descendants) do
+  if item:IsA('LuaSourceContainer') or item:IsA('Sound') or item:IsA('Tool')
+   or item:IsA('BillboardGui') or item:IsA('SurfaceGui') or item:IsA('Highlight') then item:Destroy()
+  elseif item:IsA('BasePart') and sameOrder and originalParts and originalParts[originals[i]]==nil then item:Destroy()
+  elseif item:IsA('BasePart') then
+   item.Anchored=true;item.CanCollide=false;item.CanTouch=false;item.CanQuery=false;item.LocalTransparencyModifier=0
+   if sameOrder and originalParts then
+    local opacity=originalParts[originals[i]]
+    if opacity~=nil then item.Transparency=opacity end
+   end
+  elseif item:IsA('ParticleEmitter') or item:IsA('Beam') or item:IsA('Trail') or item:IsA('Light') then item.Enabled=false
+  elseif item:IsA('Humanoid') then item.DisplayDistanceType=Enum.HumanoidDisplayDistanceType.None end
+ end
+ return copy
+end
+
+local function crewFor(profile)
+ local crew,seen={},{}
+ for _,group in ipairs({profile.activeFleet or profile.fleet,profile.fleet}) do
+  for _,drone in ipairs(group) do
+   if not seen[drone.id] then
+    seen[drone.id]=true
+    table.insert(crew,drone)
+   end
+  end
+ end
+ return crew
+end
+
+local function applies(card,drone)
+ local effect=card.effects or {}
+ if not drone then return card.scope=='Player' or (effect.capacity or 0)>0 end
+ if card.scope=='Individual' then return card.targetDroneId==drone.id end
+ local role=DroneRoles.canonical(drone.role or drone.type)
+ local worker=DroneRoles.isWorker(role)
+ if card.scope=='Color' and card.type~=drone.type then return false end
+ if card.scope=='Player' then
+  if effect.batchPress or effect.denserPacking or effect.compactor then return role=='Compactor' end
+  if effect.cargoRack or effect.fullAuto then return role=='Courier' end
+  if effect.orbitalLaser then return role=='Orbiter' end
+  if effect.scrapSwarm then return role=='Scrapper' end
+  if effect.fieldCharge or effect.shiftRelay then return worker end
+  return false
+ end
+ if effect.speed or effect.health or effect.reduction or effect.shield then return true end
+ if effect.mining or effect.startup or effect.yield or effect.reclaim or effect.earlyDrop
+  or effect.geode or effect.plotAuto or effect.battery or effect.combat or effect.rate or effect.range
+  or effect.crit or effect.splash or effect.finisher or effect.salvage then return worker end
+ if effect.deepCut or effect.liveWire or effect.fork or effect.aftershock then return DroneRoles.isMiner(role) end
+ return card.scope=='Fleet' or card.scope=='Tradeoff' or card.scope=='Color'
+end
+
+function FleetView.new(options)
+ local self=setmetatable({options=options,rigs={},poses={}},FleetView)
+ local U=options.U
+ local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
+ root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
+ local tint=U.frame(root,UDim2.fromScale(0,0),UDim2.fromScale(1,1),FOG);tint.BackgroundTransparency=1;tint.ZIndex=90
+ self.root=root;self.tint=tint
+ local header=U.frame(root,UDim2.fromOffset(12,12),UDim2.new(1,-72,0,58),U.palette.ink)
+ header.BackgroundTransparency=.21;U.corner(header,8)
+ self.title=U.text(header,UDim2.fromOffset(12,0),UDim2.new(1,-24,0,27),'Crew',23,WHITE,true)
+ self.description=U.text(header,UDim2.fromOffset(12,26),UDim2.new(1,-24,0,30),'',15,WHITE)
+ self.back=options.button(root,UDim2.new(1,-54,0,12),UDim2.fromOffset(44,44),'×',options.onBack,U.palette.paper)
+ self.back.Name='CloseFleetInspection';self.back.TextSize=29
+ self.prev=options.button(root,UDim2.new(0,12,.42,0),UDim2.fromOffset(52,54),'‹',function() self:cycle(-1) end,U.palette.paper)
+ self.next=options.button(root,UDim2.new(1,-64,.42,0),UDim2.fromOffset(52,54),'›',function() self:cycle(1) end,U.palette.paper)
+ self.prev.Name='PreviousDrone';self.next.Name='NextDrone';self.prev.TextSize=43;self.next.TextSize=43
+ self.target=U.text(root,UDim2.new(.5,0,.56,0),UDim2.new(1,-125,0,30),'',19,WHITE,true)
+ self.target.AnchorPoint=Vector2.new(.5,0);self.target.TextXAlignment=Enum.TextXAlignment.Center
+ self.target.TextStrokeColor3=U.palette.ink;self.target.TextStrokeTransparency=.25;self.target.TextScaled=true
+ local targetSize=Instance.new('UITextSizeConstraint');targetSize.MinTextSize=13;targetSize.MaxTextSize=19;targetSize.Parent=self.target
+ local stack=Instance.new('ScrollingFrame')
+ stack.Name='InstalledCards';stack.AnchorPoint=Vector2.new(.5,1);stack.Position=UDim2.new(.5,0,1,-68)
+ stack.Size=UDim2.new(.83,0,.22,0);stack.BackgroundTransparency=1;stack.BorderSizePixel=0
+ stack.CanvasSize=UDim2.fromOffset(0,0);stack.AutomaticCanvasSize=Enum.AutomaticSize.Y;stack.ScrollBarThickness=4
+ stack.ZIndex=root.ZIndex+1;stack.Parent=root
+ local bound=Instance.new('UISizeConstraint');bound.MaxSize=Vector2.new(380,168);bound.Parent=stack
+ local list=Instance.new('UIListLayout');list.Padding=UDim.new(0,2);list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=stack
+ self.stack=stack
+ self.install=options.button(root,UDim2.new(.5,0,1,-12),UDim2.fromOffset(230,44),'Install upgrade',function()
+  local target=self.targets and self.targets[self.index]
+  self.options.onInstall(target)
+ end,U.palette.mineral)
+ self.install.Name='InstallOnTarget';self.install.AnchorPoint=Vector2.new(.5,1)
+ self.status=U.text(root,UDim2.new(.5,0,1,-12),UDim2.new(1,-26,0,42),'',16,WHITE,true)
+ self.status.AnchorPoint=Vector2.new(.5,1);self.status.TextXAlignment=Enum.TextXAlignment.Center
+ return self
+end
+
+function FleetView:isOpen() return self.root.Visible end
+
+function FleetView:buildStage(character,profile)
+ local scene=Instance.new('Folder');scene.Name='LocalFleetStage';scene.Parent=self.options.world
+ self.scene=scene
+ block(scene,'Baseplate',Vector3.new(440,1,440),CFrame.new(STAGE-Vector3.yAxis*.5),Color3.fromRGB(82,87,113),Enum.Material.SmoothPlastic)
+ for i=-12,12 do
+  local line=Color3.fromRGB(86,93,118)
+  block(scene,'Grid',Vector3.new(.07,.01,120),CFrame.new(STAGE+Vector3.new(i*5,0,0)),line,Enum.Material.SmoothPlastic)
+  block(scene,'Grid',Vector3.new(120,.01,.07),CFrame.new(STAGE+Vector3.new(0,0,i*5)),line,Enum.Material.SmoothPlastic)
+ end
+ for _,side in ipairs({-1,1}) do
+  block(scene,'Horizon',Vector3.new(440,220,1),CFrame.new(STAGE+Vector3.new(0,70,side*128)),FOG,Enum.Material.SmoothPlastic)
+  block(scene,'Horizon',Vector3.new(1,220,440),CFrame.new(STAGE+Vector3.new(side*128,70,0)),FOG,Enum.Material.SmoothPlastic)
+  local lamp=block(scene,'StageLight',Vector3.one,CFrame.new(STAGE+Vector3.new(side*9,8,side*5)),WHITE,Enum.Material.SmoothPlastic)
+  lamp.Transparency=1
+  local light=Instance.new('PointLight');light.Range=46;light.Brightness=1.9
+  light.Color=side==1 and Color3.fromRGB(136,203,255) or Color3.fromRGB(216,161,255);light.Parent=lamp
+ end
+ local focus=Instance.new('DepthOfFieldEffect')
+ focus.Name='FleetDepthOfField';focus.InFocusRadius=16;focus.FarIntensity=.76;focus.NearIntensity=.16;focus.Parent=Lighting
+ self.focus=focus
+ local avatar=cloneRig(character)
+ if avatar then
+  local root=avatar:FindFirstChild('HumanoidRootPart')
+  if root then avatar.PrimaryPart=root end
+  local pose=CFrame.new(STAGE)*CFrame.Angles(0,math.pi,0)
+  avatar:PivotTo(pose)
+  local bounds,size=avatar:GetBoundingBox()
+  avatar:PivotTo(pose+Vector3.yAxis*(STAGE.Y-bounds.Position.Y+size.Y*.5+.02))
+  avatar.Name='CrewOwner';avatar.Parent=scene;self.avatar=avatar
+ end
+ self.crew=crewFor(profile)
+ local template=Storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+ for _,drone in ipairs(self.crew) do
+  local original=self.options.resolve(drone.id)
+  local rig=original and cloneRig(original.view,original.parts) or cloneRig(template)
+  if rig then
+   if not original then self.options.droneConfig.decorate(rig,drone.role or drone.type,nil,true) end
+   rig.Name=drone.name or 'Drone';rig.Parent=scene;self.rigs[drone.id]=rig
+  end
+ end
+end
+
+function FleetView:arrange()
+ local count=#self.crew
+ local picked=self.targets[self.index]
+ local selectedId=picked and picked.id
+ local centerIndex=1
+ for i,drone in ipairs(self.crew) do if drone.id==selectedId then centerIndex=i;break end end
+ local span=math.min(11,math.max(4,count*.8))
+ self.span=span
+ for i,drone in ipairs(self.crew) do
+  local rig=self.rigs[drone.id]
+  if rig then
+   local slot=(i-centerIndex)%count
+   local theta=slot*2*math.pi/count
+   local lane=math.floor(slot/20)
+   local x,z=math.sin(theta)*(span+lane*1.5),math.cos(theta)*(span*.62+lane*1.5)
+   local pose=CFrame.new(STAGE+Vector3.new(x,3.5+lane*1.7+.8*(1-math.cos(theta)),z))*CFrame.Angles(0,math.pi,0)
+   if not self.poses[rig] then rig:PivotTo(pose) end
+   self.poses[rig]=pose
+  end
+ end
+ self.aim=STAGE+Vector3.new(0,2.7,picked and span*.19 or 0)
+end
+
+local function highlight(model,active)
+ if not model then return end
+ local effect=model:FindFirstChild('SelectedTarget')
+ if not active then if effect then effect:Destroy() end;return end
+ if not effect then
+  effect=Instance.new('Highlight');effect.Name='SelectedTarget';effect.Adornee=model
+  effect.DepthMode=Enum.HighlightDepthMode.Occluded;effect.OutlineColor=Color3.new()
+  effect.FillColor=WHITE;effect.OutlineTransparency=0;effect.FillTransparency=.6;effect.Parent=model
+ end
+end
+
+function FleetView:refresh(profile,available,reason,busy,notice)
+ if not self:isOpen() then return end
+ local U=self.options.U
+ local picked=self.targets[self.index]
+ local choice=self.choice
+ self.title.Text=choice and choice.title or 'Your crew'
+ self.title.TextColor3=choice and CardView.rarityColor(choice) or WHITE
+ self.description.Text=choice and CardView.summary(choice):gsub('\n',' ') or 'Browse your drones and installed upgrades'
+ local targetName=picked and (picked.name or picked.role or picked.type)
+ if picked and choice and Workshop.isHardware(choice) then
+  targetName=CardView.fitText(choice,picked,profile.droneStats and profile.droneStats[picked.id],false):gsub('\n','  ·  ')
+ end
+ self.target.Text=targetName or (choice and CardView.terms(choice):match('^[^·\n]+') or 'Your upgrades')
+ self.prev.Visible=#self.targets>1;self.next.Visible=self.prev.Visible
+ U.setEnabled(self.prev,not busy);U.setEnabled(self.next,not busy)
+ local validTarget=not Workshop.isHardware(choice or {}) or picked~=nil
+ self.install.Visible=choice~=nil and validTarget and (available or busy)
+ self.install.Text=busy and 'Installing…' or 'Install upgrade'
+ U.setEnabled(self.install,available and not busy and validTarget)
+ self.status.Visible=choice~=nil and (notice~=nil or not self.install.Visible)
+ self.status.Position=UDim2.new(.5,0,1,self.install.Visible and -59 or -12)
+ self.status.Text=notice or (choice and reason) or ''
+ if self.status.Text=='' and self.status.Visible and choice and Workshop.isHardware(choice) and not picked then
+  self.status.Text='No compatible miner available'
+ end
+ local focusChoice=choice and not Workshop.isHardware(choice)
+ highlight(self.avatar,not picked and (not focusChoice or applies(choice,nil)))
+ for _,drone in ipairs(self.crew) do
+  highlight(self.rigs[drone.id],picked and picked.id==drone.id or not picked and focusChoice and applies(choice,drone))
+ end
+ local cards={}
+ local key={picked and picked.id or '',choice and choice.cardId or ''}
+ for _,card in ipairs(profile.run.cards or {}) do
+  local shown=applies(card,picked)
+  if not picked and focusChoice and not applies(choice,nil) then
+   for _,drone in ipairs(self.crew) do
+    if applies(choice,drone) and applies(card,drone) then shown=true;break end
+   end
+  end
+  if shown then
+   table.insert(cards,card)
+   table.insert(key,(card.cardId or card.title or '')..':'..tostring(card.level or 1)..':'..(card.targetDroneId or ''))
+  end
+ end
+ key=table.concat(key,'|')
+ if self.stackKey==key then return end
+ self.stackKey=key;self.stack.CanvasPosition=Vector2.zero
+ for _,row in ipairs(self.stack:GetChildren()) do if row:IsA('Frame') then row:Destroy() end end
+ if #cards==0 then
+  local row=U.frame(self.stack,UDim2.fromOffset(0,0),UDim2.new(1,-6,0,29),U.palette.ink)
+  row.BackgroundTransparency=.24;U.corner(row,4)
+  U.text(row,UDim2.fromOffset(9,0),UDim2.new(1,-18,1,0),'No installed cards',15,WHITE)
+ end
+ for i,card in ipairs(cards) do
+  local rarity=CardView.rarityColor(card)
+  local row=U.frame(self.stack,UDim2.fromOffset(0,0),UDim2.new(1,-6,0,28),rarity)
+  row.Name='InstalledCard';row.LayoutOrder=i;U.corner(row,4)
+  local count=(card.level or 1)>1 and '  ×'..card.level or ''
+  local title=U.text(row,UDim2.fromOffset(9,0),UDim2.new(1,-18,1,0),(card.title or 'Upgrade')..count,16,U.palette.ink,true)
+  title.TextTruncate=Enum.TextTruncate.AtEnd;title.TextWrapped=false
+ end
+end
+
+function FleetView:cycle(delta)
+ if not self:isOpen() or #self.targets<2 or not self.prev.Active then return end
+ self.index=(self.index-1+delta)%#self.targets+1
+ self:arrange()
+ self.options.onTarget()
+end
+
+function FleetView:open(profile,choice,targets)
+ local player=self.options.player
+ local character=player.Character
+ local camera=workspace.CurrentCamera
+ if not character or not camera then return false end
+ local humanoid=character:FindFirstChildOfClass('Humanoid')
+ if not humanoid or humanoid.Health<=0 then return false end
+ self:close()
+ self.choice=choice;self.camera=camera
+ self.cameraState={camera.CameraType,camera.CameraSubject,camera.CFrame,camera.Focus,camera.FieldOfView}
+ self:buildStage(character,profile)
+ self.targets=targets or self.crew;self.index=1
+ self.stackKey=nil;self:arrange()
+ local quiet=CardView.reducedMotion();self.elapsed=quiet and .65 or 0
+ self.root.Visible=true;self.tint.BackgroundTransparency=quiet and 1 or 0
+ self.originalSelection=GuiService.SelectedObject
+ if UIS.GamepadEnabled and UIS:GetLastInputType().Name:match('^Gamepad') then GuiService.SelectedObject=self.back end
+ camera.CameraType=Enum.CameraType.Scriptable;camera.FieldOfView=42
+ Context:BindActionAtPriority(INPUT_BIND,function() return Enum.ContextActionResult.Sink end,false,
+  Enum.ContextActionPriority.High.Value,Enum.PlayerActions.CharacterForward,Enum.PlayerActions.CharacterBackward,
+  Enum.PlayerActions.CharacterLeft,Enum.PlayerActions.CharacterRight,Enum.PlayerActions.CharacterJump)
+ RunService:BindToRenderStep(CAMERA_BIND,Enum.RenderPriority.Camera.Value+5,function(dt)
+  if workspace.CurrentCamera~=camera or player.Character~=character or humanoid.Health<=0 then
+   self.options.onAbort();return
+  end
+  self.elapsed+=math.min(dt,.1)
+  local motion=quiet and 1 or 1-math.exp(-13*math.min(dt,.1))
+  for rig,pose in pairs(self.poses) do
+   local current=rig:GetPivot()
+   if (current.Position-pose.Position).Magnitude>.005 then rig:PivotTo(current:Lerp(pose,motion)) end
+  end
+  local t=math.clamp(self.elapsed/.56,0,1)
+  local ease=1-(1-t)^3
+  local aspect=camera.ViewportSize.X/math.max(1,camera.ViewportSize.Y)
+  local distance=math.max(15+self.span, (self.span+2)/math.max(.26,math.min(1,aspect)*.36))
+  self.cameraAim=(self.cameraAim or self.aim):Lerp(self.aim,quiet and 1 or 1-math.exp(-8*dt))
+  local point=self.cameraAim
+  local from=point+Vector3.new(0,6+distance*.22,distance*(.63+.37*ease))
+  camera.CFrame=CFrame.lookAt(from,point);camera.Focus=CFrame.new(point)
+  self.focus.FocusDistance=(from-point).Magnitude
+  self.tint.BackgroundTransparency=math.clamp(self.elapsed/.34,0,1)
+  self.tint.Visible=self.tint.BackgroundTransparency<1
+ end)
+ return true
+end
+
+function FleetView:close()
+ if not self:isOpen() then return end
+ RunService:UnbindFromRenderStep(CAMERA_BIND);Context:UnbindAction(INPUT_BIND)
+ local camera,state=self.camera,self.cameraState
+ if camera==workspace.CurrentCamera then
+  if state[2] and state[2].Parent then camera.CameraSubject=state[2] end
+  camera.CFrame=state[3];camera.Focus=state[4];camera.FieldOfView=state[5];camera.CameraType=state[1]
+ end
+ local selected=GuiService.SelectedObject
+ if selected and selected:IsDescendantOf(self.root) then
+  GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
+ end
+ self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
+ table.clear(self.rigs);table.clear(self.poses)
+ self.cameraAim=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+end
+
+function FleetView:destroy()
+ self:close();self.root:Destroy()
+end
+return FleetView
+
+end)()
 local PackView = (function()
 -- Each observer animates the same delivery from server timestamps.
 local RS=game:GetService('ReplicatedStorage')
 local TweenService=game:GetService('TweenService')
+local UIS=game:GetService('UserInputService')
 local PackView={}
 PackView.__index=PackView
 local colors={}
@@ -8007,18 +8552,92 @@ function PackView:setFocus(active)
  self.focusTween:Play()
 end
 
+-- Keep Roblox's input/hold events; only the progress presentation is custom.
+function PackView:bindPrompt(record,source)
+ local prompt=source:FindFirstChild('OpenPack')
+ if not prompt then return end
+ record.prompt=prompt
+ if source:GetAttribute('Owner')~=self.options.player.UserId then return end
+ local gui=Instance.new('BillboardGui')
+ gui.Name='PackOpeningPrompt';gui.Adornee=source;gui.Size=UDim2.fromOffset(196,58)
+ gui.StudsOffsetWorldSpace=Vector3.new(0,2.05,0);gui.AlwaysOnTop=true;gui.Active=true;gui.Enabled=false
+ local button=Instance.new('TextButton')
+ button.Name='Hold';button.Size=UDim2.fromScale(1,1);button.BackgroundColor3=Color3.fromRGB(27,32,41)
+ button.BackgroundTransparency=.12;button.BorderSizePixel=0;button.Text='';button.AutoButtonColor=false;button.Parent=gui
+ local corner=Instance.new('UICorner');corner.CornerRadius=UDim.new(0,8);corner.Parent=button
+ local label=Instance.new('TextLabel')
+ label.Name='Action';label.BackgroundTransparency=1;label.Position=UDim2.fromOffset(12,8)
+ label.Size=UDim2.new(1,-24,0,28);label.Font=Enum.Font.GothamMedium;label.TextSize=17
+ label.TextColor3=Color3.fromRGB(239,243,249);label.Text='Hold E  ·  Open pack';label.Parent=button
+ local track=Instance.new('Frame');track.Name='Track';track.BorderSizePixel=0
+ track.BackgroundColor3=Color3.fromRGB(69,77,90);track.Position=UDim2.fromOffset(12,42)
+ track.Size=UDim2.new(1,-24,0,7);track.ClipsDescendants=true;track.Parent=button
+ local fill=Instance.new('Frame');fill.Name='Progress';fill.BorderSizePixel=0
+ fill.BackgroundColor3=idle;fill.Size=UDim2.fromScale(0,1);fill.Parent=track
+ gui.Parent=self.options.player:WaitForChild('PlayerGui')
+ record.indicator=gui;record.fill=fill
+ local function finishPointer(input)
+  if record.pointer~=input then return end
+  record.pointer=nil;prompt:InputHoldEnd()
+ end
+ record.connections={
+  prompt.PromptShown:Connect(function(inputType)
+   record.shown=true
+   label.Text=inputType==Enum.ProximityPromptInputType.Touch and 'Hold to open pack'
+    or inputType==Enum.ProximityPromptInputType.Gamepad and 'Hold X  ·  Open pack' or 'Hold E  ·  Open pack'
+  end),
+  prompt.PromptHidden:Connect(function()
+   record.shown=false;gui.Enabled=false
+   if record.pointer then finishPointer(record.pointer) end
+  end),
+  prompt.PromptButtonHoldBegan:Connect(function()
+   record.holdAt=workspace:GetServerTimeNow();record.releaseAt=nil;record.completed=false
+  end),
+  prompt.PromptButtonHoldEnded:Connect(function() record.releaseAt=workspace:GetServerTimeNow()+.08 end),
+  prompt:GetPropertyChangedSignal('Enabled'):Connect(function()
+   if prompt.Enabled and source:GetAttribute('HoldAt')==nil then record.completed=false end
+  end),
+  prompt.Triggered:Connect(function() record.completed=true end),
+  button.InputBegan:Connect(function(input)
+   if record.shown and not record.pointer and (input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1) then
+    record.pointer=input;prompt:InputHoldBegin()
+   end
+  end),
+   UIS.InputEnded:Connect(finishPointer),
+ }
+ -- Register visibility handlers before allowing the first PromptShown event.
+ prompt.Enabled=false
+end
+
+local function chargeRing(record,pose,progress,stage,holding,openedAt,now)
+ if not record.ring and not holding then return end
+ if not record.ring then
+  record.ring={}
+  for i=1,32 do
+   local part=block(record.model,'SealRing',Vector3.new(.245,.028,.055),idle,Enum.Material.Neon)
+   part.CastShadow=false;table.insert(record.ring,part)
+  end
+ end
+ local ageOpen=openedAt and math.max(0,now-openedAt)
+ local visible=holding or ageOpen and ageOpen<.28
+ local radius=1.32+(ageOpen and ageOpen*4 or .12*progress)
+ for i,part in ipairs(record.ring) do
+  local angle=(i-1)/#record.ring*math.pi*2
+  part.CFrame=pose*CFrame.Angles(0,-angle,0)*CFrame.new(0,-.48,-radius)
+  local fill=math.clamp(progress*#record.ring-i+1,0,1)
+  part.Color=colors[stage] or idle
+  part.Transparency=visible and (ageOpen and math.clamp(.15+ageOpen*3,0,1) or .85-.76*fill) or 1
+ end
+end
+
 local function disposeRecord(record)
+ if record.connections then for _,connection in ipairs(record.connections) do connection:Disconnect() end end
+ if record.indicator then record.indicator:Destroy() end
  record.model:Destroy()
  if record.courier then record.courier:Destroy() end
 end
 
-function PackView:origin(offerId)
- for part in pairs(self.records) do
-  if part:GetAttribute('OfferId')==offerId then return part.Position+Vector3.new(0,.55,0) end
- end
-end
-
-function PackView:render(record,source,now,age,tier)
+function PackView:render(record,source,now,age,tier,progress,stage,holding)
  local o=self.options
  local position=source.Position
  local side=source:GetAttribute('Approach') or Vector3.new(1,0,0)
@@ -8052,10 +8671,12 @@ function PackView:render(record,source,now,age,tier)
   if age<Packs.DeliveryTime+.22 then o.audio:play('pack_land',position);record.sparks:Emit(12) end
  end
  local openedAt=source:GetAttribute('OpenedAt')
- local color=openedAt and colors[tier] or idle
+ local color=openedAt and colors[tier] or colors[stage] or idle
+ local heat=holding and progress or 0
+ local moving=(holding or openedAt) and not CardView.reducedMotion()
+ local tremor=holding and moving and math.sin(now*(22+heat*28))*heat or 0
  record.seam.Color=color;record.light.Color=color
- local lift=0
- local fade=0
+ local lift,fade,recoil=0,0,0
  if openedAt then
   local ageOpen=math.max(0,now-openedAt)
   if not record.opened then
@@ -8066,15 +8687,23 @@ function PackView:render(record,source,now,age,tier)
     record.sparks.Speed=NumberRange.new(4,8);record.sparks:Emit(10+tier*7)
    end
   end
-  lift=math.clamp(ageOpen/.29,0,1)
+  recoil=moving and math.sin(math.clamp(ageOpen/.12,0,1)*math.pi)*.08 or 0
+  lift=1-(1-math.clamp((ageOpen-.06)/.32,0,1))^3
   fade=math.clamp((ageOpen-.28)/.72,0,1)
  end
- local pose=CFrame.lookAt(boxPosition,boxPosition+side)
+ local swell=moving and (.12*heat-recoil) or 0
+ local pose=CFrame.lookAt(boxPosition,boxPosition+side)*CFrame.new(.035*tremor,.52*swell,0)*CFrame.Angles(0,0,.027*tremor)
+ record.body.Size=Vector3.new(1.88,1.12,1.58)*(1+swell)
+ record.lid.Size=Vector3.new(1.94,.24,1.65)*(1+swell)
+ record.seam.Size=Vector3.new(1.92,.055,1.62)*(1+swell)
+ chargeRing(record,CFrame.lookAt(position,position+side),openedAt and 1 or progress,openedAt and tier or stage,holding,openedAt,now)
+
  record.body.CFrame=pose
- record.lid.CFrame=pose*CFrame.new(0,.66+.4*lift,0)*CFrame.Angles(-lift*1.28,0,0)
- record.seam.CFrame=pose*CFrame.new(0,.54,0)
- record.light.Brightness=(openedAt and (.6+tier*.6) or .4)*(1-fade)
- record.sparks.Rate=openedAt and 0 or 3
+ record.lid.CFrame=pose*CFrame.new(0,.66*(1+swell)+.4*lift+.055*heat,0)*CFrame.Angles(-lift*1.28,0,0)
+ record.seam.CFrame=pose*CFrame.new(0,.54*(1+swell),0)
+ record.light.Brightness=(openedAt and (.6+tier*.6) or (.4+2.1*heat))*(1-fade)
+ record.sparks.Rate=openedAt and 0 or 3+14*heat
+ if not openedAt then record.sparks.Color=ColorSequence.new(color) end
  record.body.Transparency=fade;record.lid.Transparency=fade;record.seam.Transparency=fade
  return openedAt
 end
@@ -8095,16 +8724,33 @@ function PackView:update(now)
   if inReach then crateInReach=true end
   local eligible=inReach and source:GetAttribute('Ready')==true and not o.hidden()
   local prompt=source:FindFirstChild('OpenPack')
-  if prompt then
-   local enabled=eligible==true and not o.busy()
-   if prompt.Enabled~=enabled then prompt.Enabled=enabled end
-  end
-  if camera and stamp and colors[tier] and (camera.CFrame.Position-source.Position).Magnitude<100 then
+  if camera and stamp and (camera.CFrame.Position-source.Position).Magnitude<100 then
    local record=self.records[source]
    if not record then record=createCrate(o.parent);self.records[source]=record end
+   if prompt and not record.prompt then self:bindPrompt(record,source) end
+   local enabled=eligible==true and not o.busy()
+   if prompt and prompt.Enabled~=enabled then prompt.Enabled=enabled end
+   if enabled and source:GetAttribute('HoldAt')==nil and record.completed and record.releaseAt and now-record.releaseAt>.3 then
+    record.holdAt=nil;record.completed=false
+   end
+   if record.releaseAt and now>=record.releaseAt and not record.completed then record.holdAt=nil;record.releaseAt=nil end
+   if not enabled and not record.completed then record.holdAt=nil end
+   local holdAt=source:GetAttribute('HoldAt')
+   if owner then holdAt=record.holdAt end
+   local holding=not openedAt and holdAt~=nil
+   local holdTier=prompt and Packs.holdTier(prompt.HoldDuration) or tier
+   local progress,stage=0,0
+   if holding then progress,stage=Packs.sample(holdTier,now-holdAt) end
+   if record.indicator then
+    record.indicator.Enabled=enabled and record.shown==true
+    record.fill.Size=UDim2.fromScale(record.completed and 1 or progress,1)
+    record.fill.BackgroundColor3=colors[stage] or idle
+    if holding and stage~=record.lastStage then o.audio:play('pack_step',source.Position,{pitch=.78+stage*.17}) end
+    record.lastStage=stage
+   end
    record.visible=true
-   self:render(record,source,now,now-stamp,tier)
-  end
+   self:render(record,source,now,now-stamp,tier,progress,stage,holding)
+  elseif prompt and prompt.Enabled then prompt.Enabled=false end
  end end
  local map=o.world:FindFirstChild('Map')
  if map and not self.counter then
@@ -10119,7 +10765,9 @@ local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,pal
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
-local function menusVisible() return modal.Visible or (logisticsView and logisticsView:isOpen()) end
+local fleetView
+local function inspectingFleet() return fleetView and fleetView:isOpen() end
+local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
@@ -10140,11 +10788,10 @@ connect(modal:GetPropertyChangedSignal('Visible'),syncModalTouch)
 connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' then syncModalTouch() end end)
 local modalMode,modalSize=nil,nil
 local actionPending=nil
-local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
+local offerViews={};local offerIdentity=nil;local offerRenderSize=nil
 local offerUI={}
 local function clearBody()
  table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil
- if offerUI.footer then offerUI.footer:Destroy();offerUI.footer=nil end
  for _,x in ipairs(body:GetChildren()) do x:Destroy() end
  body.CanvasPosition=Vector2.zero
 end
@@ -10169,7 +10816,7 @@ local packView=PackView.new({
  player=player,world=world,parent=localFX,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
-connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
+connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer' and not inspectingFleet()) end)
 connect(RunService.RenderStepped,function() packView:update(workspace:GetServerTimeNow()) end)
 local function sealedPack()
  local offer=pending()
@@ -10207,7 +10854,7 @@ local function layoutModal()
  if modalMode=='offer' then
   l.cardColumns=v.X>=650 and 3 or 1;l.cardGap=l.cardColumns==3 and 10 or 12
   l.panelWidth=math.min(l.cardColumns==3 and 770 or 432,l.panelWidth);l.panelPadding=8;l.bodyWidth=l.panelWidth-16
-  l.headerHeight=49;l.offerFooter=58
+  l.headerHeight=49;l.offerFooter=10
   l.cardWidth=math.floor((l.bodyWidth-l.cardGap*(l.cardColumns-1))/l.cardColumns)
   l.cardHeight=l.cardColumns==3 and math.clamp(l.panelHeight-l.headerHeight-l.offerFooter-6,212,314) or 234
   l.panelX=(v.X-l.panelWidth)/2
@@ -10334,83 +10981,99 @@ local function progress(parent,y,width,title,detail,fraction,color,dark)
  local track=frame(parent,UDim2.fromOffset(0,y+62),UDim2.fromOffset(width,10),palette.paper);track.ClipsDescendants=true;corner(track,3)
  local fill=frame(track,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(fraction,0,1),1),color);corner(fill,3)
 end
-local function updateOfferControls()
- local usable,reason=availability('ChooseCard')
- local choosing=actionPending and actionPending.kind=='ChooseCard'
+local function refreshFleetInspection()
+ if not inspectingFleet() or not profile or fleetView.installed then return end
  local offer=pending()
- if offerUI.completed or not offer or not offerUI.footer then return end
- local choice=offer.choices[offerUI.index or 0]
- local hardware=choice and Workshop.isHardware(choice)
- local targets=hardware and offerUI.targets or {}
- local target=targets[offerUI.targetIndex or 0]
- local stars=offer.packTier or 1
- normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ((Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
- for index,view in ipairs(offerViews) do
-  enableAction(view.button,not choosing)
-  view.select(offerUI.index==index)
+ local busy=actionPending and actionPending.kind=='ChooseCard' or profile.pendingTransaction
+ local available,reason=availability('ChooseCard')
+ if fleetView.choice and not offer then available=false;reason='Upgrade installed' end
+ local message=fleetView.choice and noticeUntil>os.clock() and notice.Text~='' and notice.Text or nil
+ fleetView:refresh(profile,available,reason,busy,message)
+end
+local function closeFleetInspection(returnToOffer)
+ if not inspectingFleet() then return end
+ local wasChoice=fleetView.choice~=nil
+ fleetView:close();fleetView.installed=nil
+ if wasChoice and returnToOffer and pending() and pending().opened~=false then openOffer() end
+ syncModalTouch()
+end
+fleetView=FleetView.new({
+ U=U,parent=safeRoot,world=localFX,player=player,button=button,droneConfig=DroneConfig,
+ resolve=function(id) return droneIndex[tostring(id)] end,
+ onTarget=refreshFleetInspection,
+ onBack=function() closeFleetInspection(true) end,
+ onAbort=function() closeFleetInspection(false) end,
+ onInstall=function(target)
+  local offer=pending()
+  if not fleetView.choice or not offer or offer.id~=offerUI.selectionId or not canAct() or not offerUI.index then return end
+  local choice=offer.choices[offerUI.index]
+  local hardware=Workshop.isHardware(choice)
+  if hardware and not target then return end
+  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=hardware and target.id or nil}) then
+   noticeUntil=0;refreshFleetInspection()
+  end
+ end,
+})
+local function updateOfferControls()
+ local offer=pending()
+ if offer and offer.opened~=false then
+  local stars=offer.packTier or 1
+  normalSubtitle=(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')
+  for _,view in ipairs(offerViews) do enableAction(view.button,not actionPending and not profile.pendingTransaction) end
  end
- offerUI.target.Visible=hardware==true
- offerUI.target.Text=CardView.fitText(choice,target,target and profile.droneStats and profile.droneStats[target.id],#targets>1)
- enableAction(offerUI.target,#targets>1 and not choosing)
- offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
- offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
- offerUI.install.Size=hardware and UDim2.new(.48,-6,0,44) or UDim2.fromOffset(math.min(280,offerUI.footer.Size.X.Offset-8),44)
- offerUI.install.Text=choosing and 'Installing…' or (choice and ('Install '..choice.title) or 'Select a card')
- enableAction(offerUI.install,usable and choice~=nil and (not hardware or target~=nil))
+ refreshFleetInspection()
 end
 openOffer=function()
- local offer=pending();if not offer then return end
+ local offer=pending();if not offer or inspectingFleet() then return end
  if offer.opened==false then
   modal.Visible=false;modalMode=nil
   return
  end
  local size=viewport()
  if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
- local skipReveal=presentedOfferId==offer.id
- if not skipReveal then
-  offerUI.index=nil;offerUI.targets=nil;offerUI.targetIndex=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
- end
- local origin
- local camera=workspace.CurrentCamera
- local worldOrigin=not skipReveal and packView:origin(offer.id)
- if camera and worldOrigin then
-  local screen,visible=camera:WorldToScreenPoint(worldOrigin)
-  if visible then origin=Vector2.new(screen.X,screen.Y) end
+ if offerUI.revealId~=offer.id then
+  offerUI.revealId=offer.id;offerUI.revealAt=os.clock()+.23
+  offerUI.index=nil;offerUI.selectionId=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
  end
  local stars=offer.packTier or 1
  local l=menu('offer','PICK AN UPGRADE',(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
- offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
- offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
- offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
- offerUI.target=button(offerUI.footer,UDim2.fromOffset(4,4),UDim2.new(.52,-6,0,44),'',function()
-  offerUI.targetIndex=offerUI.targetIndex%#offerUI.targets+1
-  updateOfferControls()
- end,Color3.fromRGB(46,70,92))
- offerUI.target.Name='ChooseMiner'
- offerUI.target.TextSize=14
- offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
-  if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
-  local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
-  local choice=offer.choices[offerUI.index]
-  if Workshop.isHardware(choice) and not target then return end
-  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=target and target.id}) then noticeUntil=0;updateOfferControls() end
- end,palette.mineral)
- offerUI.install.Name='InstallUpgrade'
+ offerIdentity=offer.id;offerRenderSize=size
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onLand=function(tier) soundscape:play('pack_step',nil,{pitch=.9+tier*.15}) end,onChoose=function()
-   if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
-   if offerUI.index~=index then
-    offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
-    -- Start with a miner the player can immediately see in the Studio crew.
-    for i,d in ipairs(offerUI.targets) do if profile.droneStats and profile.droneStats[d.id] then offerUI.targetIndex=i;break end end
-   end
-   updateOfferControls()
-  end})
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{
+   revealStart=offerUI.revealAt,revealSpeed=profile.packSpeed or 1,target=targetText(choice),
+   onTick=function() soundscape:play('pack_step',nil,{pitch=.85+index*.09,level=.66}) end,
+   onLand=function(tier) soundscape:play('pack_land',nil,{pitch=.96+tier*.16}) end,
+   onChoose=function()
+    if not pending() or pending().id~=offer.id or actionPending or profile.pendingTransaction then return end
+    local targets=Workshop.targets(profile,choice)
+    if choice.scope=='Individual' and not Workshop.isHardware(choice) then
+     for _,drone in ipairs(profile.fleet) do if drone.id==choice.targetDroneId then table.insert(targets,drone);break end end
+    end
+    if fleetView:open(profile,choice,targets) then
+     offerUI.index=index;offerUI.selectionId=offer.id
+     modal.Visible=false
+     syncModalTouch();refreshFleetInspection()
+    end
+   end,
+  })
   offerViews[index]=view
  end
  updateOfferControls()
 end
+local fleetButton=button(safeRoot,UDim2.new(1,-72,0,12),UDim2.fromOffset(58,58),'',function()
+ if not profile or menusVisible() then return end
+ if fleetView:open(profile) then syncModalTouch();refreshFleetInspection() end
+end,palette.paper)
+fleetButton.Name='InspectCrew'
+fleetButton.Visible=false
+corner(fleetButton,8)
+local fleetIcon=Instance.new('ImageLabel')
+fleetIcon.Name='CrewIcon';fleetIcon.BackgroundTransparency=1;fleetIcon.Image=CardView.scopeIcon({scope='Individual'})
+fleetIcon.Size=UDim2.fromOffset(28,28);fleetIcon.Position=UDim2.new(.5,-14,0,3);fleetIcon.ZIndex=fleetButton.ZIndex+3
+fleetIcon.Parent=fleetButton
+local fleetLabel=label(fleetButton,UDim2.fromOffset(0,30),UDim2.new(1,0,0,23),'Crew',15,palette.white,true)
+fleetLabel.TextXAlignment=Enum.TextXAlignment.Center
 openShop=function()
  if not profile or not profile.run.wallet then return end
  local allowed,reason=availability('BuyUpgrade')
@@ -10686,6 +11349,7 @@ do
   local changedRun=profile and profile.run.id~=p.run.id
   soundscape:observeProfile(oldProfile,p)
   profile=p
+  if changedRun then closeFleetInspection(false) end
   local access={p.run.id}
   for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
   local accessKey=table.concat(access,':')
@@ -10703,23 +11367,27 @@ do
   if offer and offer.opened~=false and offer.id~=lastOffer then
    lastOffer=offer.id
    if oldProfile then
+    closeFleetInspection(false)
     if logisticsView then logisticsView:close() end
     menuStation=nil;openOffer()
    end
   elseif not offer and modalMode=='offer' then
    if not offerUI.completed then
     local claim=offerUI.claim
-    if claim and not changedRun and modal.Visible and offerIdentity==claim.offerId then
+    if claim and not changedRun and inspectingFleet() and fleetView.choice and offerUI.selectionId==claim.offerId then
      offerUI.completed=claim.offerId;offerUI.claim=nil
-     normalSubtitle='Upgrade installed'
-     enableAction(offerUI.install,false);enableAction(offerUI.target,false)
-     for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
-     task.delay(.32,function()
-      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then modal.Visible=false;modalMode=nil end
+     notice.Text='Upgrade installed';noticeUntil=os.clock()+1.8
+     refreshFleetInspection()
+     fleetView.installed=true;fleetView.title.Text='Upgrade installed'
+     task.delay(.70,function()
+      if inspectingFleet() and fleetView.installed and offerUI.completed==claim.offerId then closeFleetInspection(false) end
+      if modalMode=='offer' and not pending() then modalMode=nil end
      end)
-    else modal.Visible=false;modalMode=nil end
+    else
+     closeFleetInspection(false);modal.Visible=false;modalMode=nil
+    end
    end
-  elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
+  elseif modalMode=='offer' then -- A paid offer is immutable.
    updateOfferControls()
   elseif modalMode=='fleet' or modalMode=='run' then
    local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
@@ -10729,6 +11397,7 @@ do
    local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
    if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
   elseif menuContentKey(oldProfile)~=menuContentKey(p) then refreshModal() end
+  if inspectingFleet() and not fleetView.installed then refreshFleetInspection() end
  end
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
@@ -10739,6 +11408,7 @@ connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
  local ok,reward=pcall(Http.JSONDecode,Http,player:GetAttribute('MA_DroneReward') or '')
  if not ok or type(reward)~='table' or not reward.rewardName then return end
  menuStation=nil
+ closeFleetInspection(false)
  if logisticsView then logisticsView:close() end
  offerUI.droneReward=reward
  openDroneReward(reward)
@@ -11353,7 +12023,7 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
- profile=function() return profile end,hidden=function() return modal.Visible end,
+ profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  openFleet=openFleet,openCards=openRunCards,
@@ -11468,6 +12138,13 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if inspectingFleet() then
+  local key=input.KeyCode
+  if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)
+  elseif key==Enum.KeyCode.Left then fleetView:cycle(-1)
+  elseif key==Enum.KeyCode.Right then fleetView:cycle(1) end
+  return
+ end
  if toolView and toolView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
@@ -11494,7 +12171,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
- elseif key==Enum.KeyCode.ButtonR1 and not modal.Visible then
+ elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
   if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
@@ -11514,6 +12191,9 @@ local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
+ fleetButton.Visible=profile~=nil and not menusVisible()
+ fleetButton.Position=UDim2.new(1,-74,0,view.X<680 and 84 or 12)
+ if inspectingFleet() and not fleetView.installed then refreshFleetInspection() end
  if packView.counter and profile then
   local offer=pending()
   packView.counter.ActionText=offer and (offer.opened==false and 'Find your crate' or 'Choose card') or 'Buy pack'
@@ -11528,11 +12208,11 @@ connect(RunService.Heartbeat,function(dt)
  end
  recall.Position=UDim2.fromOffset(l.recallX,l.recallY);evade.Position=UDim2.fromOffset(l.evadeX,l.evadeY)
  recall.Size=UDim2.fromOffset(l.recallWidth,44);evade.Size=recall.Size
- recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not modal.Visible
- local testWidth=math.min(236,view.X-24)
- testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-16,(view.X<680 or l.short) and 72 or 80)
+ recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not menusVisible()
+ local testWidth=math.min(236,view.X-86)
+ testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-(view.X<680 and 80 or 16),(view.X<680 or l.short) and 72 or 80)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
- testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
+ testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not menusVisible()
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
  if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
   local action=modalMode=='offer' and 'ChooseCard' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
@@ -11551,7 +12231,7 @@ connect(RunService.Heartbeat,function(dt)
  elseif status:find('saved') then saveLabel.Text='CREDITS · AUTOSAVED'
  else saveLabel.Text='SAVE PAUSED' end
  saveLabel.TextSize=12;saveLabel.Position=UDim2.new(1,-180,1,-24);saveLabel.Size=UDim2.fromOffset(168,20);saveLabel.TextXAlignment=Enum.TextXAlignment.Right
- saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
+ saveLabel.Visible=not menusVisible() and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 10
@@ -11568,9 +12248,9 @@ connect(RunService.Heartbeat,function(dt)
    if at>now then table.insert(reprints,string.format('%s reprinting: %ds',source:GetAttribute('DroneName') or source:GetAttribute('Name') or 'Drone',math.ceil(at-now))) end
   end
  end
- evade.Visible=ownActive and not modal.Visible;evade.Text=touch and 'Evade shot' or 'Evade [Q]'
- soundscape:setContext(ownActive,modal.Visible)
- hud.Visible=not modal.Visible and not (l.short and ownActive)
+ evade.Visible=ownActive and not menusVisible();evade.Text=touch and 'Evade shot' or 'Evade [Q]'
+ soundscape:setContext(ownActive,menusVisible())
+ hud.Visible=not menusVisible() and not (l.short and ownActive)
  if not ownActive and (l.mobile or touch) and not l.actionAtTop then recall.Position=UDim2.fromOffset((view.X-l.recallWidth)/2,l.recallY) end
  if #reprints>0 and os.clock()>noticeUntil then notice.Text=#reprints>2 and tostring(#reprints)..' drones reprinting for free' or table.concat(reprints,' · ') end
  local hr=ownerRoot();local nearestEnemy,dist=nil,65
@@ -11579,7 +12259,7 @@ connect(RunService.Heartbeat,function(dt)
   local n=rootPart and (rootPart.Position-hr.Position).Magnitude or math.huge
   if not fieldUnlocked(turret.Parent) and hp>0 and n<dist then nearestEnemy=turret;dist=n end
  end end end
- enemyHUD.Visible=nearestEnemy~=nil and ownActive and not modal.Visible
+ enemyHUD.Visible=nearestEnemy~=nil and ownActive and not menusVisible()
  local enemyWidth=math.min(300,view.X-24)
  enemyHUD.Size=UDim2.fromOffset(enemyWidth,58)
  enemyHUD.Position=(l.short or view.X<680) and UDim2.fromOffset(l.hudX,l.short and l.hudY or l.objectiveY) or UDim2.fromOffset(view.X-enemyWidth-16,12)
@@ -11594,7 +12274,7 @@ connect(RunService.Heartbeat,function(dt)
  if l.short then toastWidth=l.hudWidth end
  toast.Size=UDim2.fromOffset(toastWidth,50)
  toast.Position=UDim2.fromOffset((view.X-toastWidth)/2,view.X>=1100 and 12 or (l.objectiveY+(enemyHUD.Visible and 66 or 0)))
- toast.Visible=notice.Text~='' and not modal.Visible and not (l.short and ownActive)
+ toast.Visible=notice.Text~='' and not menusVisible() and not (l.short and ownActive)
  if l.short then toast.Position=UDim2.fromOffset(l.hudX,l.hudY);if toast.Visible then hud.Visible=false end end
  if modal.Visible and notice.Text~='' and noticeUntil>os.clock() then
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
@@ -11606,7 +12286,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

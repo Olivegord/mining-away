@@ -159,7 +159,9 @@ local notice=label(toast,UDim2.fromOffset(14,6),UDim2.new(1,-28,1,-12),'',13,pal
 local recall=button(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(118,44),'Recall [R]',function() if not (logisticsView and logisticsView:recall()) then command:FireServer('Recall') end end,Color3.fromRGB(66,177,91));recall.Name='Recall'
 local context=U.panel(safeRoot,UDim2.fromOffset(0,0),UDim2.fromOffset(420,72),palette.panel,14);context.Name='ContextAction';context.Active=true;context.Visible=false
 local modal=frame(safeRoot,UDim2.fromScale(0,0),UDim2.fromScale(1,1),Color3.fromRGB(3,9,18));modal.Name='MenuLayer';modal.BackgroundTransparency=.22;modal.Visible=false;modal.ZIndex=20;modal.Active=true
-local function menusVisible() return modal.Visible or (logisticsView and logisticsView:isOpen()) end
+local fleetView
+local function inspectingFleet() return fleetView and fleetView:isOpen() end
+local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
@@ -180,11 +182,10 @@ connect(modal:GetPropertyChangedSignal('Visible'),syncModalTouch)
 connect(player.PlayerGui.ChildAdded,function(child) if child.Name=='TouchGui' then syncModalTouch() end end)
 local modalMode,modalSize=nil,nil
 local actionPending=nil
-local offerViews={};local offerIdentity=nil;local offerRenderSize=nil;local presentedOfferId=nil
+local offerViews={};local offerIdentity=nil;local offerRenderSize=nil
 local offerUI={}
 local function clearBody()
  table.clear(offerViews);offerIdentity=nil;offerRenderSize=nil
- if offerUI.footer then offerUI.footer:Destroy();offerUI.footer=nil end
  for _,x in ipairs(body:GetChildren()) do x:Destroy() end
  body.CanvasPosition=Vector2.zero
 end
@@ -209,7 +210,7 @@ local packView=PackView.new({
  player=player,world=world,parent=localFX,audio=soundscape,droneConfig=DroneConfig,
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
-connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer') end)
+connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer' and not inspectingFleet()) end)
 connect(RunService.RenderStepped,function() packView:update(workspace:GetServerTimeNow()) end)
 local function sealedPack()
  local offer=pending()
@@ -247,7 +248,7 @@ local function layoutModal()
  if modalMode=='offer' then
   l.cardColumns=v.X>=650 and 3 or 1;l.cardGap=l.cardColumns==3 and 10 or 12
   l.panelWidth=math.min(l.cardColumns==3 and 770 or 432,l.panelWidth);l.panelPadding=8;l.bodyWidth=l.panelWidth-16
-  l.headerHeight=49;l.offerFooter=58
+  l.headerHeight=49;l.offerFooter=10
   l.cardWidth=math.floor((l.bodyWidth-l.cardGap*(l.cardColumns-1))/l.cardColumns)
   l.cardHeight=l.cardColumns==3 and math.clamp(l.panelHeight-l.headerHeight-l.offerFooter-6,212,314) or 234
   l.panelX=(v.X-l.panelWidth)/2
@@ -374,83 +375,99 @@ local function progress(parent,y,width,title,detail,fraction,color,dark)
  local track=frame(parent,UDim2.fromOffset(0,y+62),UDim2.fromOffset(width,10),palette.paper);track.ClipsDescendants=true;corner(track,3)
  local fill=frame(track,UDim2.fromScale(0,0),UDim2.fromScale(math.clamp(fraction,0,1),1),color);corner(fill,3)
 end
-local function updateOfferControls()
- local usable,reason=availability('ChooseCard')
- local choosing=actionPending and actionPending.kind=='ChooseCard'
+local function refreshFleetInspection()
+ if not inspectingFleet() or not profile or fleetView.installed then return end
  local offer=pending()
- if offerUI.completed or not offer or not offerUI.footer then return end
- local choice=offer.choices[offerUI.index or 0]
- local hardware=choice and Workshop.isHardware(choice)
- local targets=hardware and offerUI.targets or {}
- local target=targets[offerUI.targetIndex or 0]
- local stars=offer.packTier or 1
- normalSubtitle=choosing and 'Installing upgrade…' or (not usable and reason or ((Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')))
- for index,view in ipairs(offerViews) do
-  enableAction(view.button,not choosing)
-  view.select(offerUI.index==index)
+ local busy=actionPending and actionPending.kind=='ChooseCard' or profile.pendingTransaction
+ local available,reason=availability('ChooseCard')
+ if fleetView.choice and not offer then available=false;reason='Upgrade installed' end
+ local message=fleetView.choice and noticeUntil>os.clock() and notice.Text~='' and notice.Text or nil
+ fleetView:refresh(profile,available,reason,busy,message)
+end
+local function closeFleetInspection(returnToOffer)
+ if not inspectingFleet() then return end
+ local wasChoice=fleetView.choice~=nil
+ fleetView:close();fleetView.installed=nil
+ if wasChoice and returnToOffer and pending() and pending().opened~=false then openOffer() end
+ syncModalTouch()
+end
+fleetView=FleetView.new({
+ U=U,parent=safeRoot,world=localFX,player=player,button=button,droneConfig=DroneConfig,
+ resolve=function(id) return droneIndex[tostring(id)] end,
+ onTarget=refreshFleetInspection,
+ onBack=function() closeFleetInspection(true) end,
+ onAbort=function() closeFleetInspection(false) end,
+ onInstall=function(target)
+  local offer=pending()
+  if not fleetView.choice or not offer or offer.id~=offerUI.selectionId or not canAct() or not offerUI.index then return end
+  local choice=offer.choices[offerUI.index]
+  local hardware=Workshop.isHardware(choice)
+  if hardware and not target then return end
+  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=hardware and target.id or nil}) then
+   noticeUntil=0;refreshFleetInspection()
+  end
+ end,
+})
+local function updateOfferControls()
+ local offer=pending()
+ if offer and offer.opened~=false then
+  local stars=offer.packTier or 1
+  normalSubtitle=(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars')
+  for _,view in ipairs(offerViews) do enableAction(view.button,not actionPending and not profile.pendingTransaction) end
  end
- offerUI.target.Visible=hardware==true
- offerUI.target.Text=CardView.fitText(choice,target,target and profile.droneStats and profile.droneStats[target.id],#targets>1)
- enableAction(offerUI.target,#targets>1 and not choosing)
- offerUI.install.AnchorPoint=Vector2.new(hardware and 1 or .5,0)
- offerUI.install.Position=hardware and UDim2.new(1,-4,0,4) or UDim2.new(.5,0,0,4)
- offerUI.install.Size=hardware and UDim2.new(.48,-6,0,44) or UDim2.fromOffset(math.min(280,offerUI.footer.Size.X.Offset-8),44)
- offerUI.install.Text=choosing and 'Installing…' or (choice and ('Install '..choice.title) or 'Select a card')
- enableAction(offerUI.install,usable and choice~=nil and (not hardware or target~=nil))
+ refreshFleetInspection()
 end
 openOffer=function()
- local offer=pending();if not offer then return end
+ local offer=pending();if not offer or inspectingFleet() then return end
  if offer.opened==false then
   modal.Visible=false;modalMode=nil
   return
  end
  local size=viewport()
  if modal.Visible and modalMode=='offer' and offerIdentity==offer.id and offerRenderSize and (offerRenderSize-size).Magnitude<1 then updateOfferControls();return end
- local skipReveal=presentedOfferId==offer.id
- if not skipReveal then
-  offerUI.index=nil;offerUI.targets=nil;offerUI.targetIndex=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
- end
- local origin
- local camera=workspace.CurrentCamera
- local worldOrigin=not skipReveal and packView:origin(offer.id)
- if camera and worldOrigin then
-  local screen,visible=camera:WorldToScreenPoint(worldOrigin)
-  if visible then origin=Vector2.new(screen.X,screen.Y) end
+ if offerUI.revealId~=offer.id then
+  offerUI.revealId=offer.id;offerUI.revealAt=os.clock()+.23
+  offerUI.index=nil;offerUI.selectionId=nil;offerUI.claim=nil;offerUI.completed=nil;noticeUntil=0
  end
  local stars=offer.packTier or 1
  local l=menu('offer','PICK AN UPGRADE',(Packs.Tiers[stars] or 'Upgrade')..' pack · Pick one · +'..stars..(stars==1 and ' Star' or ' Stars'),'cards')
- offerIdentity=offer.id;offerRenderSize=size;presentedOfferId=offer.id
- offerUI.footer=frame(sheet,UDim2.fromOffset(l.panelPadding,l.panelHeight-l.offerFooter),UDim2.fromOffset(l.bodyWidth,l.offerFooter),palette.ink)
- offerUI.footer.Name='InstallTray';offerUI.footer.BackgroundTransparency=1
- offerUI.target=button(offerUI.footer,UDim2.fromOffset(4,4),UDim2.new(.52,-6,0,44),'',function()
-  offerUI.targetIndex=offerUI.targetIndex%#offerUI.targets+1
-  updateOfferControls()
- end,Color3.fromRGB(46,70,92))
- offerUI.target.Name='ChooseMiner'
- offerUI.target.TextSize=14
- offerUI.install=button(offerUI.footer,UDim2.fromOffset(0,4),UDim2.fromOffset(200,44),'Select a card',function()
-  if not pending() or pending().id~=offer.id or not canAct() or not offerUI.index then return end
-  local target=offerUI.targets and offerUI.targets[offerUI.targetIndex]
-  local choice=offer.choices[offerUI.index]
-  if Workshop.isHardware(choice) and not target then return end
-  if send('ChooseCard',{offerId=offer.id,index=offerUI.index,targetDroneId=target and target.id}) then noticeUntil=0;updateOfferControls() end
- end,palette.mineral)
- offerUI.install.Name='InstallUpgrade'
+ offerIdentity=offer.id;offerRenderSize=size
  local list=Instance.new('UIListLayout');list.FillDirection=l.cardColumns==3 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical;list.Padding=UDim.new(0,l.cardGap);list.HorizontalAlignment=Enum.HorizontalAlignment.Center;list.SortOrder=Enum.SortOrder.LayoutOrder;list.Parent=body
  for index,choice in ipairs(offer.choices) do
-  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{skipReveal=skipReveal,revealSpeed=profile.packSpeed or 1,origin=origin,target=targetText(choice),onLand=function(tier) soundscape:play('pack_step',nil,{pitch=.9+tier*.15}) end,onChoose=function()
-   if not pending() or pending().id~=offer.id or actionPending or offerUI.completed then return end
-   if offerUI.index~=index then
-    offerUI.index=index;offerUI.targets=Workshop.targets(profile,choice);offerUI.targetIndex=1
-    -- Start with a miner the player can immediately see in the Studio crew.
-    for i,d in ipairs(offerUI.targets) do if profile.droneStats and profile.droneStats[d.id] then offerUI.targetIndex=i;break end end
-   end
-   updateOfferControls()
-  end})
+  local view=CardView.create(U,body,choice,index,l.cardWidth-4,l.cardHeight,{
+   revealStart=offerUI.revealAt,revealSpeed=profile.packSpeed or 1,target=targetText(choice),
+   onTick=function() soundscape:play('pack_step',nil,{pitch=.85+index*.09,level=.66}) end,
+   onLand=function(tier) soundscape:play('pack_land',nil,{pitch=.96+tier*.16}) end,
+   onChoose=function()
+    if not pending() or pending().id~=offer.id or actionPending or profile.pendingTransaction then return end
+    local targets=Workshop.targets(profile,choice)
+    if choice.scope=='Individual' and not Workshop.isHardware(choice) then
+     for _,drone in ipairs(profile.fleet) do if drone.id==choice.targetDroneId then table.insert(targets,drone);break end end
+    end
+    if fleetView:open(profile,choice,targets) then
+     offerUI.index=index;offerUI.selectionId=offer.id
+     modal.Visible=false
+     syncModalTouch();refreshFleetInspection()
+    end
+   end,
+  })
   offerViews[index]=view
  end
  updateOfferControls()
 end
+local fleetButton=button(safeRoot,UDim2.new(1,-72,0,12),UDim2.fromOffset(58,58),'',function()
+ if not profile or menusVisible() then return end
+ if fleetView:open(profile) then syncModalTouch();refreshFleetInspection() end
+end,palette.paper)
+fleetButton.Name='InspectCrew'
+fleetButton.Visible=false
+corner(fleetButton,8)
+local fleetIcon=Instance.new('ImageLabel')
+fleetIcon.Name='CrewIcon';fleetIcon.BackgroundTransparency=1;fleetIcon.Image=CardView.scopeIcon({scope='Individual'})
+fleetIcon.Size=UDim2.fromOffset(28,28);fleetIcon.Position=UDim2.new(.5,-14,0,3);fleetIcon.ZIndex=fleetButton.ZIndex+3
+fleetIcon.Parent=fleetButton
+local fleetLabel=label(fleetButton,UDim2.fromOffset(0,30),UDim2.new(1,0,0,23),'Crew',15,palette.white,true)
+fleetLabel.TextXAlignment=Enum.TextXAlignment.Center
 openShop=function()
  if not profile or not profile.run.wallet then return end
  local allowed,reason=availability('BuyUpgrade')
@@ -726,6 +743,7 @@ do
   local changedRun=profile and profile.run.id~=p.run.id
   soundscape:observeProfile(oldProfile,p)
   profile=p
+  if changedRun then closeFleetInspection(false) end
   local access={p.run.id}
   for _,key in ipairs(Shops.ORDER) do table.insert(access,tostring(Shops.unlocked(p,key))) end
   local accessKey=table.concat(access,':')
@@ -743,23 +761,27 @@ do
   if offer and offer.opened~=false and offer.id~=lastOffer then
    lastOffer=offer.id
    if oldProfile then
+    closeFleetInspection(false)
     if logisticsView then logisticsView:close() end
     menuStation=nil;openOffer()
    end
   elseif not offer and modalMode=='offer' then
    if not offerUI.completed then
     local claim=offerUI.claim
-    if claim and not changedRun and modal.Visible and offerIdentity==claim.offerId then
+    if claim and not changedRun and inspectingFleet() and fleetView.choice and offerUI.selectionId==claim.offerId then
      offerUI.completed=claim.offerId;offerUI.claim=nil
-     normalSubtitle='Upgrade installed'
-     enableAction(offerUI.install,false);enableAction(offerUI.target,false)
-     for index,view in ipairs(offerViews) do enableAction(view.button,false);view.finish(index==claim.index) end
-     task.delay(.32,function()
-      if modalMode=='offer' and modal.Visible and offerUI.completed==claim.offerId and not pending() then modal.Visible=false;modalMode=nil end
+     notice.Text='Upgrade installed';noticeUntil=os.clock()+1.8
+     refreshFleetInspection()
+     fleetView.installed=true;fleetView.title.Text='Upgrade installed'
+     task.delay(.70,function()
+      if inspectingFleet() and fleetView.installed and offerUI.completed==claim.offerId then closeFleetInspection(false) end
+      if modalMode=='offer' and not pending() then modalMode=nil end
      end)
-    else modal.Visible=false;modalMode=nil end
+    else
+     closeFleetInspection(false);modal.Visible=false;modalMode=nil
+    end
    end
-  elseif modalMode=='offer' then -- A paid offer is immutable; cargo changes must not interrupt comparisons.
+  elseif modalMode=='offer' then -- A paid offer is immutable.
    updateOfferControls()
   elseif modalMode=='fleet' or modalMode=='run' then
    local oldMilestone=oldProfile and oldProfile.prestigePreview or {}
@@ -769,6 +791,7 @@ do
    local crewChanged=#oldCrew~=#crew or (crew[1] and oldCrew[1] and crew[1].id~=oldCrew[1].id)
    if not oldProfile or changedRun or crewChanged or #oldProfile.fleet~=#p.fleet or #oldProfile.run.cards~=#p.run.cards or milestoneChanged then refreshModal() end
   elseif menuContentKey(oldProfile)~=menuContentKey(p) then refreshModal() end
+  if inspectingFleet() and not fleetView.installed then refreshFleetInspection() end
  end
  connect(player:GetAttributeChangedSignal('MA_Profile'),readProfile);readProfile()
 end
@@ -779,6 +802,7 @@ connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
  local ok,reward=pcall(Http.JSONDecode,Http,player:GetAttribute('MA_DroneReward') or '')
  if not ok or type(reward)~='table' or not reward.rewardName then return end
  menuStation=nil
+ closeFleetInspection(false)
  if logisticsView then logisticsView:close() end
  offerUI.droneReward=reward
  openDroneReward(reward)
@@ -1393,7 +1417,7 @@ local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal
    world:GetAttribute('DepotFloorFrame'),world:GetAttribute('DepotFloorSize'))
  end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
- profile=function() return profile end,hidden=function() return modal.Visible end,
+ profile=function() return profile end,hidden=function() return modal.Visible or inspectingFleet() end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,
  onOpen=function() modal.Visible=false end,onVisibility=syncModalTouch,
  openFleet=openFleet,openCards=openRunCards,
@@ -1508,6 +1532,13 @@ connect(UIS.TouchTapInWorld,function(position,processed)
  if hit then assignField(hit.Instance) end
 end)
 connect(UIS.InputBegan,function(input,processed)
+ if inspectingFleet() then
+  local key=input.KeyCode
+  if key==Enum.KeyCode.Escape or key==Enum.KeyCode.ButtonB then closeFleetInspection(true)
+  elseif key==Enum.KeyCode.Left then fleetView:cycle(-1)
+  elseif key==Enum.KeyCode.Right then fleetView:cycle(1) end
+  return
+ end
  if toolView and toolView:input(input,processed) then return end
  if input.KeyCode==Enum.KeyCode.Escape and logisticsView:isOpen() then logisticsView:close();return end
  if input.KeyCode==Enum.KeyCode.Escape and modal.Visible then modal.Visible=false;return end
@@ -1534,7 +1565,7 @@ connect(UIS.InputBegan,function(input,processed)
  elseif not modal.Visible and key==Enum.KeyCode.C then logisticsView:cycle()
  elseif not modal.Visible and (key==Enum.KeyCode.Q or key==Enum.KeyCode.ButtonX) then command:FireServer('Evade')
  elseif not modal.Visible and (key==Enum.KeyCode.T or key==Enum.KeyCode.ButtonY) and player:GetAttribute('MA_TestingEnabled')==true then command:FireServer('TestLoadout')
- elseif key==Enum.KeyCode.ButtonR1 and not modal.Visible then
+ elseif key==Enum.KeyCode.ButtonR1 and not menusVisible() then
   local camera=workspace.CurrentCamera
   if camera then local ray=camera:ViewportPointToRay(camera.ViewportSize.X/2,camera.ViewportSize.Y/2);if selectorView:commit(ray) then return end;local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={localFX,player.Character};local hit=workspace:Raycast(ray.Origin,ray.Direction*500,params);if hit then assignField(hit.Instance) end end
  elseif not modal.Visible then
@@ -1554,6 +1585,9 @@ local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
+ fleetButton.Visible=profile~=nil and not menusVisible()
+ fleetButton.Position=UDim2.new(1,-74,0,view.X<680 and 84 or 12)
+ if inspectingFleet() and not fleetView.installed then refreshFleetInspection() end
  if packView.counter and profile then
   local offer=pending()
   packView.counter.ActionText=offer and (offer.opened==false and 'Find your crate' or 'Choose card') or 'Buy pack'
@@ -1568,11 +1602,11 @@ connect(RunService.Heartbeat,function(dt)
  end
  recall.Position=UDim2.fromOffset(l.recallX,l.recallY);evade.Position=UDim2.fromOffset(l.evadeX,l.evadeY)
  recall.Size=UDim2.fromOffset(l.recallWidth,44);evade.Size=recall.Size
- recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not modal.Visible
- local testWidth=math.min(236,view.X-24)
- testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-16,(view.X<680 or l.short) and 72 or 80)
+ recall.Text=touch and 'Recall' or 'Recall [R]';recall.Visible=not menusVisible()
+ local testWidth=math.min(236,view.X-86)
+ testLoadout.Size=UDim2.fromOffset(testWidth,44);testLoadout.Position=UDim2.fromOffset(view.X-testWidth-(view.X<680 and 80 or 16),(view.X<680 or l.short) and 72 or 80)
  testLoadout.Text=touch and 'Random loadout · 2–5' or 'Random loadout · 2–5 [T]'
- testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not modal.Visible
+ testLoadout.Visible=player:GetAttribute('MA_TestingEnabled')==true and not menusVisible()
  if modal.Visible and (not modalSize or (modalSize-view).Magnitude>1) then refreshModal() end
  if modal.Visible and (modalMode=='offer' or modalMode=='prestige' or modalMode=='shop' or modalMode=='stars') then
   local action=modalMode=='offer' and 'ChooseCard' or modalMode=='shop' and 'BuyUpgrade' or modalMode=='stars' and 'BuyStarUpgrade' or 'Prestige'
@@ -1591,7 +1625,7 @@ connect(RunService.Heartbeat,function(dt)
  elseif status:find('saved') then saveLabel.Text='CREDITS · AUTOSAVED'
  else saveLabel.Text='SAVE PAUSED' end
  saveLabel.TextSize=12;saveLabel.Position=UDim2.new(1,-180,1,-24);saveLabel.Size=UDim2.fromOffset(168,20);saveLabel.TextXAlignment=Enum.TextXAlignment.Right
- saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
+ saveLabel.Visible=not menusVisible() and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 10
@@ -1608,9 +1642,9 @@ connect(RunService.Heartbeat,function(dt)
    if at>now then table.insert(reprints,string.format('%s reprinting: %ds',source:GetAttribute('DroneName') or source:GetAttribute('Name') or 'Drone',math.ceil(at-now))) end
   end
  end
- evade.Visible=ownActive and not modal.Visible;evade.Text=touch and 'Evade shot' or 'Evade [Q]'
- soundscape:setContext(ownActive,modal.Visible)
- hud.Visible=not modal.Visible and not (l.short and ownActive)
+ evade.Visible=ownActive and not menusVisible();evade.Text=touch and 'Evade shot' or 'Evade [Q]'
+ soundscape:setContext(ownActive,menusVisible())
+ hud.Visible=not menusVisible() and not (l.short and ownActive)
  if not ownActive and (l.mobile or touch) and not l.actionAtTop then recall.Position=UDim2.fromOffset((view.X-l.recallWidth)/2,l.recallY) end
  if #reprints>0 and os.clock()>noticeUntil then notice.Text=#reprints>2 and tostring(#reprints)..' drones reprinting for free' or table.concat(reprints,' · ') end
  local hr=ownerRoot();local nearestEnemy,dist=nil,65
@@ -1619,7 +1653,7 @@ connect(RunService.Heartbeat,function(dt)
   local n=rootPart and (rootPart.Position-hr.Position).Magnitude or math.huge
   if not fieldUnlocked(turret.Parent) and hp>0 and n<dist then nearestEnemy=turret;dist=n end
  end end end
- enemyHUD.Visible=nearestEnemy~=nil and ownActive and not modal.Visible
+ enemyHUD.Visible=nearestEnemy~=nil and ownActive and not menusVisible()
  local enemyWidth=math.min(300,view.X-24)
  enemyHUD.Size=UDim2.fromOffset(enemyWidth,58)
  enemyHUD.Position=(l.short or view.X<680) and UDim2.fromOffset(l.hudX,l.short and l.hudY or l.objectiveY) or UDim2.fromOffset(view.X-enemyWidth-16,12)
@@ -1634,7 +1668,7 @@ connect(RunService.Heartbeat,function(dt)
  if l.short then toastWidth=l.hudWidth end
  toast.Size=UDim2.fromOffset(toastWidth,50)
  toast.Position=UDim2.fromOffset((view.X-toastWidth)/2,view.X>=1100 and 12 or (l.objectiveY+(enemyHUD.Visible and 66 or 0)))
- toast.Visible=notice.Text~='' and not modal.Visible and not (l.short and ownActive)
+ toast.Visible=notice.Text~='' and not menusVisible() and not (l.short and ownActive)
  if l.short then toast.Position=UDim2.fromOffset(l.hudX,l.hudY);if toast.Visible then hud.Visible=false end end
  if modal.Visible and notice.Text~='' and noticeUntil>os.clock() then
   modalSubtitle.Text=notice.Text;modalSubtitle.TextColor3=(modalMode=='offer' or modalMode=='pack') and palette.white or palette.text
@@ -1646,7 +1680,7 @@ end)
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),refreshModal)
 connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
- packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
+ fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

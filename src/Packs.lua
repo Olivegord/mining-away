@@ -7,8 +7,10 @@ local Packs = {
  Tiers = {'Common', 'Rare', 'Epic', 'Legendary'},
  Palette = {{195,213,225},{89,208,255},{201,134,255},{255,205,78}},
 }
-local ends = {.42, 1.32, 2.65, 4.8}
-local work = {.60, .22, .12, .06}
+-- The original event used progressively longer holds. These are the four
+-- Crystal Run timings, with most of the visible movement at the beginning.
+local ends = {.62, 1.32, 3.25, 6.85}
+local work = {.57, .18, .17, .08}
 
 function Packs.roll(ticket)
  if ticket <= 66 then return 1 end
@@ -21,8 +23,15 @@ function Packs.duration(tier)
  return ends[tier]
 end
 
-function Packs.stageDuration(stage)
- return ends[stage]-(ends[stage-1] or 0)
+function Packs.holdTier(duration)
+ for tier, seconds in ipairs(ends) do
+  if math.abs(seconds-duration)<.01 then return tier end
+ end
+ return 1
+end
+
+function Packs.rarityTier(rarity)
+ return table.find(Packs.Tiers,rarity) or (rarity=='Uncommon' and 2 or 1)
 end
 
 function Packs.sample(tier, elapsed)
@@ -32,11 +41,20 @@ function Packs.sample(tier, elapsed)
   local finish = ends[i]
   if elapsed < finish or i == tier then
    local fraction = math.clamp((elapsed-start)/(finish-start), 0, 1)
-   return (filled+work[i]*fraction)/total, i
+   local eased=fraction*(1.24-.24*fraction)
+   return (filled+work[i]*eased)/total, i
   end
   start, filled = finish, filled+work[i]
  end
  return 1, tier
+end
+
+function Packs.reel(elapsed,index,speed)
+ local delay=(index-1)*.15
+ local duration=.98+(index-1)*.24
+ local t=math.clamp((elapsed*speed-delay)/duration,0,1)
+ local travel=8+index
+ return travel*(1-(1-t)^3), travel, t>=1, t>0
 end
 
 return Packs

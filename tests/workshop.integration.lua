@@ -158,13 +158,34 @@ check('E at the Pack Counter pays once; E on the grounded owned crate reveals sa
  local delivery=assert(p.packDelivery)
  assert(counter.CFrame:PointToObjectSpace(delivery.part.Position).X < -counter.Size.X*.5)
  assert((delivery.part.Position-buyer).Magnitude<=Packs.Range,'crate should be reachable from the buying spot')
- assert(delivery.prompt.HoldDuration==0 and not delivery.part:GetAttribute('Tier'))
+ assert(delivery.prompt.HoldDuration==Packs.duration(offer.packTier) and not delivery.part:GetAttribute('Tier'))
  input('ChooseCard',quote({offerId=offer.id,index=1}));assert(#data(p).run.cards==0)
  move(delivery.part.Position);delivery.prompt.Triggered:Fire(pl);assert(not data(p).run.pendingOffer.opened)
  realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(p,now);move(delivery.part.Position)
  local intruder=player(310002);delivery.prompt.Triggered:Fire(intruder);assert(not data(p).run.pendingOffer.opened)
  move(field.center);delivery.prompt.Triggered:Fire(pl);assert(not data(p).run.pendingOffer.opened)
- move(delivery.part.Position);delivery.prompt.Triggered:Fire(pl);delivery.prompt.Triggered:Fire(pl)
+ move(delivery.part.Position)
+ local prompt=delivery.prompt
+ prompt.PromptButtonHoldBegan:Fire(intruder)
+ assert(not delivery.part:GetAttribute('HoldAt'))
+ prompt.PromptButtonHoldBegan:Fire(pl)
+ prompt.Triggered:Fire(pl)
+ assert(not data(p).run.pendingOffer.opened,'accepted an early trigger')
+ prompt.PromptButtonHoldBegan:Fire(pl)
+ realTime+=prompt.HoldDuration-.09;now=realTime
+ prompt.PromptButtonHoldEnded:Fire(pl)
+ realTime+=.10;now=realTime
+ prompt.Triggered:Fire(pl)
+ assert(not data(p).run.pendingOffer.opened,'waiting after an early release completed the hold')
+ prompt.PromptButtonHoldBegan:Fire(pl)
+ move(field.center)
+ realTime+=.15;now=realTime;packDelivery:step(p,now)
+ assert(not delivery.part:GetAttribute('HoldAt'),'out-of-range hold persisted')
+ move(delivery.part.Position)
+ prompt.PromptButtonHoldBegan:Fire(pl)
+ realTime+=prompt.HoldDuration;now=realTime
+ prompt.PromptButtonHoldEnded:Fire(pl)
+ prompt.Triggered:Fire(pl);prompt.Triggered:Fire(pl)
  assert(data(p).run.pendingOffer.opened and delivery.part:GetAttribute('Tier')==offer.packTier)
  local index=1
  for i,c in ipairs(offer.choices) do if c.cardId=='Q_POWER' or c.cardId=='Q_IGNITION' then index=i;break end end

@@ -11,18 +11,30 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a562c36e277f216a6df815fcfaeb4b75bde63b5c5db3348a416816efc4c8dc54` | Includes charged return flights that can redirect to a new field. |
+| Native-file SHA-256 | `a95062c380b13cce25bfd567855f63a7334d6aecc13906ec4abbb069fd4da3a7` | Includes restored pack holds, 3D reels and the crew inspection view. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes charged return flights that can redirect to a new field** | All seven Sources and three roots verified in Edit. Team Create save returned version 173. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the pack and crew inspection update** | All seven Sources and three roots verified in Edit. Team Create save returned version 175. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — hold to open packs and inspect your crew
+
+The grounded crate opens after one uninterrupted hold. Common, Rare, Epic and Legendary take **0.62, 1.32, 3.25 and 6.85 seconds**. A progress ring fills quickly at first, then slows as the crate swells and its seam brightens. The lid recoils and releases into three staggered physical card reels. The reels stop on the three saved server choices. Rarity fills the card face. The corner shows a public Creator Store icon for a drone, player or shared upgrade. The server still validates crate ownership, reach, elapsed hold and the one-card install.
+
+Selecting a card opens a local baseplate scene with your avatar, active crew and permanent drones. The camera pulls back under colored lights and shallow depth of field. A white wash and black outline mark the affected targets. Arrows cycle compatible miners for hardware and browse the crew from the square **Crew** button. Thin rarity-colored rows show the selected drone's installed run cards and stack counts. Closing the view restores the gameplay camera.
+
+The Devilish Mortis clip shows the charge beginning around 0:03, the release around 0:10, and the skin title by 0:13. The visible ring advances quickly during the first part of the hold and slows into a short recoil and flash. Coin drops in the same clip resolve much faster. The four Roblox hold durations and easing values are a fit to these visible beats and an adaptation to the game's four rarities. Supercell does not publish the internal timing table in its event notes. [Devilish Mortis opening footage](https://www.youtube.com/watch?v=CsS2OfinXbg&t=3s) · [Supercell event notes](https://supercell.com/en/games/brawlstars/blog/game-updates/how-to-get-all-the-angelic-and-demonic-drops/)
+
+The three public Roblox thumbnails loaded in the shared Studio document and were checked for legibility. [Drone icon](https://create.roblox.com/store/asset/15332132841) · [Player icon](https://create.roblox.com/store/asset/15728996325) · [Shared upgrade icon](https://create.roblox.com/store/asset/114339465861147)
+
+The hold and reel timing checks passed at all four rarity endpoints and three reveal speeds. Workshop, Crystal Run, persistence, and the deterministic capture build passed with API or storage doubles. A detached Studio Edit check exercised the crew stage with an avatar, three rigs including a standby drone, a named installed card, and a single highlighted miner. Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources matched in shared Edit, all three Script Sync roots were connected, and the Team Create save returned version **175**. No player release was published. Live animation, touch, controller and multiplayer remain unverified. To reproduce from `db808c0`, apply this change and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit db808c0`. The canonical refresh preserved every non-Source chunk and unrelated Source.
 
 ## November 11 — keep Quick Charge through a pin change
 
