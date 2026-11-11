@@ -21,6 +21,12 @@ function O.launch(index,serial,sx,sy,sz)
  local radius=math.sqrt(sx*sx+sz*sz)*.5+.4
  return vx/speed*radius,sy*.5+.35,vz/speed*radius,vx,vy,vz
 end
+-- A clear rise, apex and fall before the item can be collected.
+function O.cargoLaunch(serial,block)
+ local angle=block and .20 or serial*2.399963
+ local speed=block and 5.3 or 6.0+(serial%3)*.35
+ return math.cos(angle)*speed,block and 16 or 20+(serial%4)*.65,math.sin(angle)*speed
+end
 function O.expired(spawnAt,now) return now>=spawnAt+O.LIFETIME end
 function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_SECONDS))/O.FADE_SECONDS,0,1) end
 local function horizontal(s,dt,drag)
@@ -36,7 +42,7 @@ local function fall(s,dt)
   if dt<=1e-6 then break end
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
-   s.landed=true;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
+   s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
   end
   local contact=(s.vy+math.sqrt(s.vy*s.vy+2*O.GRAVITY*height))/O.GRAVITY
   local span=math.min(dt,contact)
@@ -45,7 +51,7 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.landed=true;s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
+  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -55,7 +61,8 @@ function O.step(s,target,dt,attract,magnetRange)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.landed==true and s.age>=(s.raw and .40 or O.SCATTER_TIME) and distance<=(magnetRange or O.MAGNET_RANGE)
+ local collectAt=s.raw and math.max(.40,(s.firstLandedAge or 0)+.075) or O.SCATTER_TIME
+ local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then

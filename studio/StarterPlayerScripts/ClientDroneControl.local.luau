@@ -893,6 +893,17 @@ end)()
 local Feedback = (function()
 -- Pure cosmetic event detection and time envelopes. These never advance gameplay.
 local F={}
+-- One beat shared by the beam contact and the rock it is visibly cutting.
+function F.cutBeat(now,since)
+ local age=now-(since or now)
+ if age<0 then return 0 end
+ local crest=.5+.5*math.cos(2*math.pi*(age%.34)/.34)
+ return crest^2
+end
+function F.impactWhite(age,duration)
+ if age<0 or age>=duration then return 0 end
+ return .96*(1-age/duration)^1.65
+end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 local function dead(s)
  return s.dead==true or s.state=='Destroyed' or s.state=='Reprinting' or (finite(s.hp) and s.hp<=0)
@@ -5394,7 +5405,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio)
- local self={pieces={},parent=parent,audio=audio,seamBudget=1}
+ local self={pieces={},tints={},parent=parent,audio=audio}
  function self:chips(at,point,normal,tint,count,large,scale,ground)
   if not BeamVFX.near(point,large and 92 or 60) then return end
   if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
@@ -5426,45 +5437,29 @@ function V.new(parent,audio)
    end
   end
  end
- function self:clearMarks(r)
-  if r.seams then r.seams:Destroy();r.seams=nil end
+ function self:cut(r,now,beat)
+  r.cutUntil=now+.09
+  r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
+  r.cutPulseAt=now;self.tints[r]=true
  end
- function self:marks(r,stage,count)
-  self:clearMarks(r)
-  local view,source=r.view,r.source
-  if stage==0 or not source.CanQuery or not BeamVFX.near(view.Position,125) then return false end
-  local folder=Instance.new('Folder');folder.Name='CrystalSeams';folder.Parent=parent;r.seams=folder
-  local depth=stage/math.max(1,count)
-  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={source}
-  -- Trace seams onto the current collision surface. Every point is projected;
-  -- narrow discontinuities in the faceted mesh are left as gaps.
-  local function trace(out,across,points,tint,width)
-   local previous=nil
-   for _,xy in ipairs(points) do
-    local base=source.CFrame:PointToWorldSpace((across*xy[1]+Vector3.yAxis*xy[2])*source.Size)
-    local ray=source.CFrame:VectorToWorldSpace(out)*source.Size.Magnitude
-    local hit=workspace:Raycast(base+ray,-ray*1.25,params)
-    local point=hit and hit.Position+hit.Normal*.028
-    if point and previous then
-     local span=(point-previous).Magnitude
-     if span>.015 and span<source.Size.Magnitude*.25 then
-      local line=part(folder,'Part','Seam',tint)
-      line.Size=Vector3.new(width,width,span+.02);line.CFrame=CFrame.lookAt((point+previous)*.5,point)
-     end
-    end
-    previous=point
+ function self:forget(r) self.tints[r]=nil end
+ function self:applyTints(now)
+  local reduced=BeamVFX.reduced()
+  for r in pairs(self.tints) do
+   local view=r.view
+   if not view.Parent or view.Transparency>=1 or not r.restColor then
+    self:forget(r)
+   else
+    local age=r.flashAt and now-r.flashAt or math.huge
+    local initial=Feedback.impactWhite(age,r.flashDuration or .28)
+    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
+    local pulse=(r.cutPulse or 0)*afterglow
+    local white=math.max(initial*(reduced and .57 or 1),pulse*(reduced and .055 or .17))
+    view.Color=r.restColor:Lerp(Color3.new(1,1,1),white)
+    if initial<=0 then r.flashAt=nil end
+    if initial<=0 and afterglow<=0 then self:forget(r) end
    end
   end
-  local dark=r.baseColor:Lerp(Color3.fromRGB(25,17,30),.82)
-  local interior=r.baseColor:Lerp(Color3.fromRGB(255,238,210),.62)
-  local main={{-.19,-.35},{-.10,-.21},{-.16,-.11},{-.03,.02},{-.06,.13}}
-  if depth>=.60 then table.insert(main,{.07,.27});table.insert(main,{.05,.37}) end
-  for _,out in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.zAxis,-Vector3.zAxis}) do
-   local across=Vector3.yAxis:Cross(out)
-   trace(out,across,main,dark,.055+depth*.052)
-   if depth>=.55 then trace(out,across,{{-.16,-.11},{-.035,-.12},{.10,-.024},{.22,-.052}},interior,.064+depth*.045) end
-  end
-  return true
  end
  function self:react(r,now)
   local s,v=r.source,r.view
@@ -5475,12 +5470,14 @@ function V.new(parent,audio)
    r.lastContactAt=impact
    local at=now-impact
    if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and now>=(r.flashGate or 0) then
-    r.flashAt=now;r.flashGate=now+.105
+    local shot=s:GetAttribute('CutIsShot')
+    r.flashAt=now;r.flashDuration=shot and .20 or .30;r.flashGate=now+.12
+    r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
     self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if s:GetAttribute('CutIsShot') and not broken then
+    if shot and not broken then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -5495,7 +5492,7 @@ function V.new(parent,audio)
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
    if breakAt>now then return end
    if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
-    r.splitDue=now+.05;r.flashAt=now
+    r.splitDue=now+.05;r.flashAt=now;r.flashDuration=.20;self.tints[r]=true
    end
    if r.splitDue and now<r.splitDue then
     v.Transparency=0
@@ -5511,15 +5508,13 @@ function V.new(parent,audio)
      end
      audio:play('crystal_split',point)
     end
-    r.splitDue=nil;v.Transparency=1;self:clearMarks(r)
+    r.splitDue=nil;v.Transparency=1;self:forget(r)
    end
   end
-  if r.restPose and (r.flashAt or r.vibrating or (r.cutUntil or 0)>now) then
-   local t=r.flashAt and now-r.flashAt or math.huge
-   if t<.06 then v.Color=r.restColor:Lerp(Color3.new(1,1,1),.95*(1-.35*t/.06))
-   else v.Color=r.restColor end
+  if r.restPose and (r.kick or r.vibrating or (r.cutUntil or 0)>now) then
+   local t=r.impactAt and now-r.impactAt or math.huge
    local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
-   if t>=.14 then r.flashAt=nil;r.kick=nil end
+   if t>=.14 then r.kick=nil end
    r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
    local vibration=r.vibrating and math.sin(now*77)*.004 or 0
    local kick=not BeamVFX.reduced() and r.kick or Vector3.zero
@@ -5528,7 +5523,7 @@ function V.new(parent,audio)
   end
  end
  function self:destroy()
-  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints)
  end
  return self
 end
@@ -5894,17 +5889,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
  local glow=reference and visible and sample.active and not sample.paused
+ local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
   halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and (.78+.09*math.sin(now*47)) or 1
+  beam.referenceGlow.Transparency=glow and (.85-.16*beat) or 1
   if glow then beam.referenceGlow.Position=point end
  end
  if reference then
-  beam.marker.Size=Vector3.one*(.15+.018*math.sin(now*43))
+  beam.marker.Size=Vector3.one*(.145+.040*beat)
   beam.marker.Color=Color3.fromRGB(255,250,232);beam.marker.Material=Enum.Material.Neon
   if glow then beam.marker.Position=point+normal*.06 end
   beam.marker.Transparency=glow and 0 or 1
@@ -5916,7 +5912,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
  elseif glow and sample.resource and sample.resource.cutFeedback then
-  sample.resource.cutUntil=now+.09
+  sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
    sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
@@ -8690,6 +8686,25 @@ local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
+local TRAIL_LIFETIME,TRAIL_LIMIT=.24,12
+local function launchTrail(view,tint)
+ local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-.23,0,.04);a.Parent=view
+ local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(.23,0,.04);b.Parent=view
+ local trail=Instance.new('Trail');trail.Name='CargoLaunchTrail'
+ trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true
+ trail.Lifetime=TRAIL_LIFETIME;trail.MinLength=.035;trail.MaxLength=5.2
+ trail.LightEmission=.78;trail.LightInfluence=0
+ trail.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.80),tint:Lerp(PICKUP_HIGHLIGHT,.34))
+ trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(.46,.36),NumberSequenceKeypoint.new(1,1)})
+ trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.86),NumberSequenceKeypoint.new(.46,.51),NumberSequenceKeypoint.new(1,0)})
+ trail.Parent=view
+ return {trail=trail,a=a,b=b}
+end
+local function removeTrail(self,r)
+ if not r.ribbon then return end
+ r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
+ r.ribbon=nil;self.trailCount-=1
+end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -8721,7 +8736,7 @@ end
 function V.new(root,parent,audio)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,
-  player=player,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -8838,7 +8853,7 @@ function V:update(dt,now)
    opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
   end
   if done then
-   r.view:Destroy()
+   removeTrail(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
@@ -8859,10 +8874,23 @@ function V:update(dt,now)
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
    end
-   if r.valueLabel then
+   if r.physical then
     local camera=workspace.CurrentCamera
-    r.valueLabel.Enabled=r.owner==self.player.UserId and not pulling and not r.collectAt and not r.removedAt
-     and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and age>.42 and opacity>.35
+    local air=r.landAge and age<r.landAge or not r.landAge and age<1.2
+    local inFlight=air and not r.collectAt and not r.removedAt and not pulling
+    local inView=camera and (position-camera.CFrame.Position).Magnitude<100
+    if r.ribbon then
+     if not inFlight or self.player:GetAttribute('ReducedEffects')==true then
+      if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
+     end
+     if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+    elseif inFlight and not r.trailUsed and inView and self.trailCount<TRAIL_LIMIT and self.player:GetAttribute('ReducedEffects')~=true then
+     r.ribbon=launchTrail(r.view,r.color);r.trailUsed=true;self.trailCount+=1
+    end
+    if r.valueLabel then
+     r.valueLabel.Enabled=r.owner==self.player.UserId and r.landAge~=nil and not inFlight and not pulling and not r.collectAt and not r.removedAt
+      and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and opacity>.35
+    end
    end
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -10360,7 +10388,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage.feedback:clearMarks(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -10440,7 +10468,6 @@ local function renderResource(r,now)
  end
  if not r.visual.broken then
   r.restPose=view.CFrame;r.restColor=view.Color
-  if r.seams and r.seamStage~=stage then rockDamage.feedback:clearMarks(r) end
  elseif r.splitDue then view.Transparency=0 end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
@@ -10707,21 +10734,10 @@ connect(RunService.RenderStepped,function(dt)
  end
  presentation:beginFrame()
  pickupView:update(dt,now)
- rockDamage.feedback.seamBudget=1
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or r.flashAt or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
-  if r.seams and now>=(r.seamCullAt or 0) then
-   r.seamCullAt=now+.65
-   if not BeamVFX.near(r.view.Position,126) then rockDamage.feedback:clearMarks(r);r.seamStage=nil end
-  end
-  if rockDamage.feedback.seamBudget>0 and not r.visual.broken and r.settled and r.seamStage~=r.visual.stage
-   and r.cutFeedback and r.visual.stage>0 and BeamVFX.near(r.view.Position,100) then
-   if rockDamage.feedback:marks(r,r.visual.stage,r.source:GetAttribute('StageCount') or 3) then
-    r.seamStage=r.visual.stage;rockDamage.feedback.seamBudget-=1
-   end
-  end
+  if dirty or r.kick or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
@@ -10739,6 +10755,7 @@ connect(RunService.RenderStepped,function(dt)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
+ rockDamage.feedback:applyTints(now)
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
@@ -11009,7 +11026,6 @@ connect(gui.Destroying,function()
  packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  rockDamage.feedback:destroy()
- for _,r in pairs(resources) do rockDamage.feedback:clearMarks(r) end
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

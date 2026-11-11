@@ -888,7 +888,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage.feedback:clearMarks(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback:forget(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -968,7 +968,6 @@ local function renderResource(r,now)
  end
  if not r.visual.broken then
   r.restPose=view.CFrame;r.restColor=view.Color
-  if r.seams and r.seamStage~=stage then rockDamage.feedback:clearMarks(r) end
  elseif r.splitDue then view.Transparency=0 end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
@@ -1235,21 +1234,10 @@ connect(RunService.RenderStepped,function(dt)
  end
  presentation:beginFrame()
  pickupView:update(dt,now)
- rockDamage.feedback.seamBudget=1
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or r.flashAt or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
-  if r.seams and now>=(r.seamCullAt or 0) then
-   r.seamCullAt=now+.65
-   if not BeamVFX.near(r.view.Position,126) then rockDamage.feedback:clearMarks(r);r.seamStage=nil end
-  end
-  if rockDamage.feedback.seamBudget>0 and not r.visual.broken and r.settled and r.seamStage~=r.visual.stage
-   and r.cutFeedback and r.visual.stage>0 and BeamVFX.near(r.view.Position,100) then
-   if rockDamage.feedback:marks(r,r.visual.stage,r.source:GetAttribute('StageCount') or 3) then
-    r.seamStage=r.visual.stage;rockDamage.feedback.seamBudget-=1
-   end
-  end
+  if dirty or r.kick or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
@@ -1267,6 +1255,7 @@ connect(RunService.RenderStepped,function(dt)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
+ rockDamage.feedback:applyTints(now)
  presentation:update(dt,now)
  laserShowcase:step(now,dt)
  if logisticsView then logisticsView:step(now,dt) end
@@ -1537,7 +1526,6 @@ connect(gui.Destroying,function()
  packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
  rockDamage.feedback:destroy()
- for _,r in pairs(resources) do rockDamage.feedback:clearMarks(r) end
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

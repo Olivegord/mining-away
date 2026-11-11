@@ -2177,6 +2177,12 @@ function O.launch(index,serial,sx,sy,sz)
  local radius=math.sqrt(sx*sx+sz*sz)*.5+.4
  return vx/speed*radius,sy*.5+.35,vz/speed*radius,vx,vy,vz
 end
+-- A clear rise, apex and fall before the item can be collected.
+function O.cargoLaunch(serial,block)
+ local angle=block and .20 or serial*2.399963
+ local speed=block and 5.3 or 6.0+(serial%3)*.35
+ return math.cos(angle)*speed,block and 16 or 20+(serial%4)*.65,math.sin(angle)*speed
+end
 function O.expired(spawnAt,now) return now>=spawnAt+O.LIFETIME end
 function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_SECONDS))/O.FADE_SECONDS,0,1) end
 local function horizontal(s,dt,drag)
@@ -2192,7 +2198,7 @@ local function fall(s,dt)
   if dt<=1e-6 then break end
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
-   s.landed=true;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
+   s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
   end
   local contact=(s.vy+math.sqrt(s.vy*s.vy+2*O.GRAVITY*height))/O.GRAVITY
   local span=math.min(dt,contact)
@@ -2201,7 +2207,7 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.landed=true;s.y=s.floor;s.vy=speed>2 and speed*O.RESTITUTION or 0
+  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -2211,7 +2217,8 @@ function O.step(s,target,dt,attract,magnetRange)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.landed==true and s.age>=(s.raw and .40 or O.SCATTER_TIME) and distance<=(magnetRange or O.MAGNET_RANGE)
+ local collectAt=s.raw and math.max(.40,(s.firstLandedAge or 0)+.075) or O.SCATTER_TIME
+ local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
@@ -7500,12 +7507,12 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   profile.run.yieldRemainders[material]=math.max(0,amount-value)
   r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('ExtractedOre',r.ore)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
-  local angle=pickupSerial*2.399
-  local out=Vector3.new(math.cos(angle),0,math.sin(angle))
-  local center=r.part.Position
-  local position=center+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.65)+Vector3.yAxis*.24
+  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
+  local out=Vector3.new(vx,0,vz).Unit
+  local position=r.part.Position+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42)
+   +Vector3.yAxis*(r.part.Size.Y*.28+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,out*3+Vector3.yAxis*4.5,r.field.color)
+   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -7575,7 +7582,8 @@ local function pickupStep(dt)
   if now>=item.at then
    local p=profiles[item.drop.owner]
    if p and not p.leaving and item.drop.runId==data(p).run.id then
-    scene.spawnOrePickup(item.template,item.drop,item.position,Vector3.new(3,3,0),item.color)
+    local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,true)
+    scene.spawnOrePickup(item.template,item.drop,item.position,item.outlet:PointToWorldSpace(Vector3.new(vx,vy,vz)),item.color)
    end
    item.template:Destroy();table.remove(scene.pressOutputs,i)
   end
@@ -7728,7 +7736,8 @@ local function pickupStep(dt)
    local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
    local template=Instance.new('Part')
    local at=now+.52
-   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+Vector3.xAxis*1.1,color=tint}
+   local outlet=CFrame.Angles(0,press.yaw or 0,0)
+   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint}
    press.pressUntil=now+1.1
    press.model:SetAttribute('PressAt',now)
    for id in pairs(batch) do

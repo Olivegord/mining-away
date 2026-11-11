@@ -4,6 +4,25 @@ local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
+local TRAIL_LIFETIME,TRAIL_LIMIT=.24,12
+local function launchTrail(view,tint)
+ local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-.23,0,.04);a.Parent=view
+ local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(.23,0,.04);b.Parent=view
+ local trail=Instance.new('Trail');trail.Name='CargoLaunchTrail'
+ trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true
+ trail.Lifetime=TRAIL_LIFETIME;trail.MinLength=.035;trail.MaxLength=5.2
+ trail.LightEmission=.78;trail.LightInfluence=0
+ trail.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.80),tint:Lerp(PICKUP_HIGHLIGHT,.34))
+ trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(.46,.36),NumberSequenceKeypoint.new(1,1)})
+ trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.86),NumberSequenceKeypoint.new(.46,.51),NumberSequenceKeypoint.new(1,0)})
+ trail.Parent=view
+ return {trail=trail,a=a,b=b}
+end
+local function removeTrail(self,r)
+ if not r.ribbon then return end
+ r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
+ r.ribbon=nil;self.trailCount-=1
+end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -35,7 +54,7 @@ end
 function V.new(root,parent,audio)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,
-  player=player,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -152,7 +171,7 @@ function V:update(dt,now)
    opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
   end
   if done then
-   r.view:Destroy()
+   removeTrail(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
@@ -173,10 +192,23 @@ function V:update(dt,now)
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
    end
-   if r.valueLabel then
+   if r.physical then
     local camera=workspace.CurrentCamera
-    r.valueLabel.Enabled=r.owner==self.player.UserId and not pulling and not r.collectAt and not r.removedAt
-     and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and age>.42 and opacity>.35
+    local air=r.landAge and age<r.landAge or not r.landAge and age<1.2
+    local inFlight=air and not r.collectAt and not r.removedAt and not pulling
+    local inView=camera and (position-camera.CFrame.Position).Magnitude<100
+    if r.ribbon then
+     if not inFlight or self.player:GetAttribute('ReducedEffects')==true then
+      if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
+     end
+     if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+    elseif inFlight and not r.trailUsed and inView and self.trailCount<TRAIL_LIMIT and self.player:GetAttribute('ReducedEffects')~=true then
+     r.ribbon=launchTrail(r.view,r.color);r.trailUsed=true;self.trailCount+=1
+    end
+    if r.valueLabel then
+     r.valueLabel.Enabled=r.owner==self.player.UserId and r.landAge~=nil and not inFlight and not pulling and not r.collectAt and not r.removedAt
+      and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and opacity>.35
+    end
    end
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)

@@ -25,6 +25,25 @@ check('a high launch must land even after the scatter timer elapses',function()
  assert(impact and s.landed)
  O.step(s,target,.01,true);assert(s.homing)
 end)
+check('physical cargo rises, falls and settles briefly even with an owner close by',function()
+ for _,block in ipairs({false,true}) do
+  for _,fps in ipairs({30,60,144}) do
+   local s=drop();s.y=3;s.raw=true
+   s.vx,s.vy,s.vz=O.cargoLaunch(8,block)
+   local peak=s.y
+   local landing=nil
+   for _=1,math.ceil(1.2*fps) do
+    local reached=O.step(s,{x=s.x,y=2,z=s.z},1/fps,true)
+    peak=math.max(peak,s.y)
+    if s.landed then landing=landing or s.firstLandedAge end
+    if not landing or s.age-landing<.075 then assert(not s.homing and not reached) end
+    if reached then break end
+   end
+   assert(peak>=3+(block and 1.7 or 2.8),'cargo did not visibly rise')
+   assert(landing and landing>.50 and s.homing,'cargo never returned to collection')
+  end
+ end
+end)
 check('magnet catches a player moving at walking speed at 30 60 and 144 FPS',function()
  for _,fps in ipairs({30,60,144}) do
   local s=drop(-16);local picked=false

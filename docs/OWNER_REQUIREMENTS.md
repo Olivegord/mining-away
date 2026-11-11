@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 10 follow-up — ore arcs and beam pulses
+
+Give the new physical ore a readable upward arc, a tapering trail and a visible fall before it can be collected. Remove the added drawn crack lines. Let the first white contact flash fade gradually, then pulse the rock faintly with the continuous beam's rhythm. This is a visual follow-up to the mining pass; rewards and choices are unchanged.
+
 ## November 10 — readable mining, cargo slots and chosen prestige drones
 
 Preserve the existing Crystal Run, shops and pack crate. Prioritize physical, readable feedback for each accepted discrete shot and distinct sustained laser contact; show persistent fracture stages, bounded cosmetic breakup, and a separate collectible reward. Keep damage, rewards, choices and ownership authoritative. Make roles legible through their equipment and work; use the neutral Roblox Smile on the existing drone body.

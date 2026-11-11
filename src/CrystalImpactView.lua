@@ -6,7 +6,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio)
- local self={pieces={},parent=parent,audio=audio,seamBudget=1}
+ local self={pieces={},tints={},parent=parent,audio=audio}
  function self:chips(at,point,normal,tint,count,large,scale,ground)
   if not BeamVFX.near(point,large and 92 or 60) then return end
   if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
@@ -38,45 +38,29 @@ function V.new(parent,audio)
    end
   end
  end
- function self:clearMarks(r)
-  if r.seams then r.seams:Destroy();r.seams=nil end
+ function self:cut(r,now,beat)
+  r.cutUntil=now+.09
+  r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
+  r.cutPulseAt=now;self.tints[r]=true
  end
- function self:marks(r,stage,count)
-  self:clearMarks(r)
-  local view,source=r.view,r.source
-  if stage==0 or not source.CanQuery or not BeamVFX.near(view.Position,125) then return false end
-  local folder=Instance.new('Folder');folder.Name='CrystalSeams';folder.Parent=parent;r.seams=folder
-  local depth=stage/math.max(1,count)
-  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={source}
-  -- Trace seams onto the current collision surface. Every point is projected;
-  -- narrow discontinuities in the faceted mesh are left as gaps.
-  local function trace(out,across,points,tint,width)
-   local previous=nil
-   for _,xy in ipairs(points) do
-    local base=source.CFrame:PointToWorldSpace((across*xy[1]+Vector3.yAxis*xy[2])*source.Size)
-    local ray=source.CFrame:VectorToWorldSpace(out)*source.Size.Magnitude
-    local hit=workspace:Raycast(base+ray,-ray*1.25,params)
-    local point=hit and hit.Position+hit.Normal*.028
-    if point and previous then
-     local span=(point-previous).Magnitude
-     if span>.015 and span<source.Size.Magnitude*.25 then
-      local line=part(folder,'Part','Seam',tint)
-      line.Size=Vector3.new(width,width,span+.02);line.CFrame=CFrame.lookAt((point+previous)*.5,point)
-     end
-    end
-    previous=point
+ function self:forget(r) self.tints[r]=nil end
+ function self:applyTints(now)
+  local reduced=BeamVFX.reduced()
+  for r in pairs(self.tints) do
+   local view=r.view
+   if not view.Parent or view.Transparency>=1 or not r.restColor then
+    self:forget(r)
+   else
+    local age=r.flashAt and now-r.flashAt or math.huge
+    local initial=Feedback.impactWhite(age,r.flashDuration or .28)
+    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
+    local pulse=(r.cutPulse or 0)*afterglow
+    local white=math.max(initial*(reduced and .57 or 1),pulse*(reduced and .055 or .17))
+    view.Color=r.restColor:Lerp(Color3.new(1,1,1),white)
+    if initial<=0 then r.flashAt=nil end
+    if initial<=0 and afterglow<=0 then self:forget(r) end
    end
   end
-  local dark=r.baseColor:Lerp(Color3.fromRGB(25,17,30),.82)
-  local interior=r.baseColor:Lerp(Color3.fromRGB(255,238,210),.62)
-  local main={{-.19,-.35},{-.10,-.21},{-.16,-.11},{-.03,.02},{-.06,.13}}
-  if depth>=.60 then table.insert(main,{.07,.27});table.insert(main,{.05,.37}) end
-  for _,out in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.zAxis,-Vector3.zAxis}) do
-   local across=Vector3.yAxis:Cross(out)
-   trace(out,across,main,dark,.055+depth*.052)
-   if depth>=.55 then trace(out,across,{{-.16,-.11},{-.035,-.12},{.10,-.024},{.22,-.052}},interior,.064+depth*.045) end
-  end
-  return true
  end
  function self:react(r,now)
   local s,v=r.source,r.view
@@ -87,12 +71,14 @@ function V.new(parent,audio)
    r.lastContactAt=impact
    local at=now-impact
    if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and now>=(r.flashGate or 0) then
-    r.flashAt=now;r.flashGate=now+.105
+    local shot=s:GetAttribute('CutIsShot')
+    r.flashAt=now;r.flashDuration=shot and .20 or .30;r.flashGate=now+.12
+    r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
     self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if s:GetAttribute('CutIsShot') and not broken then
+    if shot and not broken then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -107,7 +93,7 @@ function V.new(parent,audio)
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
    if breakAt>now then return end
    if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
-    r.splitDue=now+.05;r.flashAt=now
+    r.splitDue=now+.05;r.flashAt=now;r.flashDuration=.20;self.tints[r]=true
    end
    if r.splitDue and now<r.splitDue then
     v.Transparency=0
@@ -123,15 +109,13 @@ function V.new(parent,audio)
      end
      audio:play('crystal_split',point)
     end
-    r.splitDue=nil;v.Transparency=1;self:clearMarks(r)
+    r.splitDue=nil;v.Transparency=1;self:forget(r)
    end
   end
-  if r.restPose and (r.flashAt or r.vibrating or (r.cutUntil or 0)>now) then
-   local t=r.flashAt and now-r.flashAt or math.huge
-   if t<.06 then v.Color=r.restColor:Lerp(Color3.new(1,1,1),.95*(1-.35*t/.06))
-   else v.Color=r.restColor end
+  if r.restPose and (r.kick or r.vibrating or (r.cutUntil or 0)>now) then
+   local t=r.impactAt and now-r.impactAt or math.huge
    local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
-   if t>=.14 then r.flashAt=nil;r.kick=nil end
+   if t>=.14 then r.kick=nil end
    r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
    local vibration=r.vibrating and math.sin(now*77)*.004 or 0
    local kick=not BeamVFX.reduced() and r.kick or Vector3.zero
@@ -140,7 +124,7 @@ function V.new(parent,audio)
   end
  end
  function self:destroy()
-  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints)
  end
  return self
 end

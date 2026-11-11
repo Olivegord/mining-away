@@ -73,4 +73,23 @@ check('stale landing state received after registration settles without replaying
  assert(#audio.calls==sounds,'late observer replayed old contact audio')
  renderer:destroy()
 end)
+check('physical launch trail fades on the displayed landing and never reappears during collection',function()
+ local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
+ local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
+ for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,SpawnAt=realTime,SnapshotAt=realTime,
+  FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(3,20,0)}) do cargo:SetAttribute(k,v) end
+ local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
+ renderer:update(1/60,realTime+.2)
+ local ribbon=assert(record.ribbon)
+ assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not record.valueLabel.Enabled)
+ cargo:SetAttribute('GroundImpactAt',realTime+.68)
+ renderer:update(1/60,realTime+.73);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
+ renderer:update(1/60,realTime+.80)
+ assert(not ribbon.trail.Enabled and record.valueLabel.Enabled)
+ renderer:update(1/60,realTime+1.10)
+ assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
+ cargo:SetAttribute('CollectedAt',realTime+1.2)
+ renderer:update(1/60,realTime+1.20);assert(not record.ribbon)
+ renderer:destroy();workspace.CurrentCamera=camera
+end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

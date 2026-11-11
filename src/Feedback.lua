@@ -1,5 +1,16 @@
 -- Pure cosmetic event detection and time envelopes. These never advance gameplay.
 local F={}
+-- One beat shared by the beam contact and the rock it is visibly cutting.
+function F.cutBeat(now,since)
+ local age=now-(since or now)
+ if age<0 then return 0 end
+ local crest=.5+.5*math.cos(2*math.pi*(age%.34)/.34)
+ return crest^2
+end
+function F.impactWhite(age,duration)
+ if age<0 or age>=duration then return 0 end
+ return .96*(1-age/duration)^1.65
+end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 local function dead(s)
  return s.dead==true or s.state=='Destroyed' or s.state=='Reprinting' or (finite(s.hp) and s.hp<=0)

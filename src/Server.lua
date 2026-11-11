@@ -723,12 +723,12 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
   profile.run.yieldRemainders[material]=math.max(0,amount-value)
   r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('ExtractedOre',r.ore)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
-  local angle=pickupSerial*2.399
-  local out=Vector3.new(math.cos(angle),0,math.sin(angle))
-  local center=r.part.Position
-  local position=center+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.65)+Vector3.yAxis*.24
+  local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
+  local out=Vector3.new(vx,0,vz).Unit
+  local position=r.part.Position+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42)
+   +Vector3.yAxis*(r.part.Size.Y*.28+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,out*3+Vector3.yAxis*4.5,r.field.color)
+   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -798,7 +798,8 @@ local function pickupStep(dt)
   if now>=item.at then
    local p=profiles[item.drop.owner]
    if p and not p.leaving and item.drop.runId==data(p).run.id then
-    scene.spawnOrePickup(item.template,item.drop,item.position,Vector3.new(3,3,0),item.color)
+    local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,true)
+    scene.spawnOrePickup(item.template,item.drop,item.position,item.outlet:PointToWorldSpace(Vector3.new(vx,vy,vz)),item.color)
    end
    item.template:Destroy();table.remove(scene.pressOutputs,i)
   end
@@ -951,7 +952,8 @@ local function pickupStep(dt)
    local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
    local template=Instance.new('Part')
    local at=now+.52
-   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+Vector3.xAxis*1.1,color=tint}
+   local outlet=CFrame.Angles(0,press.yaw or 0,0)
+   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint}
    press.pressUntil=now+1.1
    press.model:SetAttribute('PressAt',now)
    for id in pairs(batch) do

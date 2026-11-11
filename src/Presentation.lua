@@ -356,17 +356,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
  local glow=reference and visible and sample.active and not sample.paused
+ local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
   halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and (.78+.09*math.sin(now*47)) or 1
+  beam.referenceGlow.Transparency=glow and (.85-.16*beat) or 1
   if glow then beam.referenceGlow.Position=point end
  end
  if reference then
-  beam.marker.Size=Vector3.one*(.15+.018*math.sin(now*43))
+  beam.marker.Size=Vector3.one*(.145+.040*beat)
   beam.marker.Color=Color3.fromRGB(255,250,232);beam.marker.Material=Enum.Material.Neon
   if glow then beam.marker.Position=point+normal*.06 end
   beam.marker.Transparency=glow and 0 or 1
@@ -378,7 +379,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  end
  if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
  elseif glow and sample.resource and sample.resource.cutFeedback then
-  sample.resource.cutUntil=now+.09
+  sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
    sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
