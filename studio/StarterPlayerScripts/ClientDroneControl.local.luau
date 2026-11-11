@@ -8718,7 +8718,7 @@ local PickupMotion = (function()
 -- buffer preserves acceleration, gravity and floor contacts without chasing a
 -- succession of network targets. It never decides collection or grants ore.
 -- Match the authoritative OreDrops trajectory when predicting between packets.
-local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18}
+local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18,SETTLE_TIME=.6}
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function axis(a,b,va,vb,t,span)
  local slope=(b-a)/span
@@ -8732,6 +8732,10 @@ local function axis(a,b,va,vb,t,span)
  local t2,t3=t*t,t*t*t
  return (2*t3-3*t2+1)*a+(t3-2*t2+t)*span*va+(-2*t3+3*t2)*b+(t3-t2)*span*vb
 end
+function M.isResting(sample)
+ return sample and not sample.homing and sample.vx==0 and sample.vy==0 and sample.vz==0
+  and (sample.seated or (sample.floor and sample.y<=sample.floor+.001))
+end
 function M.position(samples,now)
  local at=now-M.DELAY
  local first=samples[1];if not first then return nil end
@@ -8739,11 +8743,15 @@ function M.position(samples,now)
  for i=2,#samples do
   local b=samples[i];local a=samples[i-1]
   if at<=b.at then
-   local span=math.max(.001,b.at-a.at);local t=clamp((at-a.at)/span,0,1)
+   -- A resting object may go seconds without a packet. Start the next move
+   -- from its resting pose at the usual interpolation interval.
+   local start=M.isResting(a) and math.max(a.at,b.at-M.DELAY) or a.at
+   local span=math.max(.001,b.at-start);local t=clamp((at-start)/span,0,1)
    return axis(a.x,b.x,a.vx,b.vx,t,span),math.max(b.floor or -math.huge,axis(a.y,b.y,a.vy,b.vy,t,span)),axis(a.z,b.z,a.vz,b.vz,t,span)
   end
  end
  local s=samples[#samples];local dt=clamp(at-s.at,0,M.MAX_PREDICTION)
+ if s.seated then return s.x,s.y,s.z end
  local x,y,z
  if s.homing then x=s.x+s.vx*dt;y=s.y+s.vy*dt;z=s.z+s.vz*dt
  else
@@ -8763,7 +8771,7 @@ function M.tumble(age,landAge)
  -- Angular momentum carries across contact, then friction arrests the spin.
  -- Sampling absolute age keeps landing poses equal at all render rates.
  if type(landAge)~='number' or age<=landAge then return age*5.4 end
- return math.max(0,landAge)*5.4+(1-math.exp(-(age-landAge)*16))*.22
+ return math.max(0,landAge)*5.4+(1-math.exp(-math.min(age-landAge,M.SETTLE_TIME)*16))*.22
 end
 function M.supportHeight(sx,sy,sz,rx,ry,rz)
  -- Vertical extent of a box rotated Rx * Ry * Rz. Keep the collectible's
@@ -8821,18 +8829,26 @@ local function pickupNumber(parent)
  text.TextStrokeColor3=Color3.fromRGB(38,27,12);text.TextStrokeTransparency=.14;text.Parent=gui;gui.Parent=parent
  return gui,text
 end
+local function cargoWorth(parent)
+ local gui=Instance.new('BillboardGui');gui.Name='CargoWorth';gui.Size=UDim2.fromOffset(66,18)
+ gui.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);gui.MaxDistance=18;gui.Enabled=false;gui.Parent=parent
+ local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
+ text.TextSize=13;text.Font=Enum.Font.GothamBold;text.TextColor3=PICKUP_HIGHLIGHT
+ text.TextStrokeTransparency=.18;text.Parent=gui
+ return gui,text
+end
 local function sample(r,source,now)
+ -- A stationary pile can be combined or renewed without changing pose.
+ r.units=source:GetAttribute('Units') or 1
+ r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
  local position=source:GetAttribute('Position') or source.Position
  local velocity=source:GetAttribute('Velocity') or Vector3.zero
  r.sampleAt=at
  table.insert(r.samples,{at=at,x=position.X,y=position.Y,z=position.Z,vx=velocity.X,vy=velocity.Y,vz=velocity.Z,
-  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true})
+  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
- r.velocity=velocity
- r.units=source:GetAttribute('Units') or 1
- r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
 end
 function V.new(root,parent,audio)
  local player=Players.LocalPlayer
@@ -8848,16 +8864,10 @@ function V.new(root,parent,audio)
   source.LocalTransparencyModifier=1
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
+   samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
+   born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
-  if r.physical then
-   local value=Instance.new('BillboardGui');value.Name='CargoWorth';value.Size=UDim2.fromOffset(66,18)
-   value.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);value.MaxDistance=18;value.Enabled=false;value.Parent=view
-   local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
-   text.Text=tostring(source:GetAttribute('CargoValue') or 0)..' Q';text.TextSize=13;text.Font=Enum.Font.GothamBold
-   text.TextColor3=PICKUP_HIGHLIGHT;text.TextStrokeTransparency=.18;text.Parent=value;r.valueLabel=value
-  end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -8916,6 +8926,10 @@ function V:update(dt,now)
    self.amountText.TextTransparency=fade;self.amountText.TextStrokeTransparency=.14+.86*fade
   end
  end
+ local camera=workspace.CurrentCamera
+ local cameraPosition=camera and camera.CFrame.Position
+ local reducedEffects=self.player:GetAttribute('ReducedEffects')==true
+ local closest,bestDistance=nil,math.huge
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
    local processed=source:GetAttribute('ProcessedAt')
@@ -8944,8 +8958,6 @@ function V:update(dt,now)
     r.landAge=math.max(0,contactAt-r.born)
    end
    sample(r,source,now)
-   local x,y,z=PickupMotion.position(r.samples,now)
-   if x then r.pos=Vector3.new(x,y,z) end
    opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   else
    r.removedAt=r.removedAt or now
@@ -8958,49 +8970,70 @@ function V:update(dt,now)
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
-   local socket=source.Parent and source:GetAttribute('PressSocket')
-   local seated=socket and not r.collectAt
-   r.socketScale=(r.socketScale or 1)+((seated and .48 or 1)-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
-   local pulling=latest and latest.homing and not r.collectAt and not r.removedAt
-   local targetPull=pulling and 1 or 0
-   r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
-   if r.pull<.001 then r.pull=0 end
-   local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
-   scale*=pile*(1+.14*r.pull)*r.socketScale
-   glow=math.max(glow,.34*r.pull)
+   local live=source.Parent~=nil and not r.collectAt and not r.removedAt
+   local seated=live and source:GetAttribute('PressSocket')~=nil
+   local pulling=live and latest and latest.homing
    local age=math.max(0,now-PickupMotion.DELAY-r.born)
-   local tumble=PickupMotion.tumble(age,r.landAge)
-   local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
-   local position=r.pos
-   if not seated and not r.collectAt and latest and latest.floor then
-    local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-    -- Lift the entire trajectory by the rotated support extent, preserving
-    -- the small rebound instead of clamping it away under the visible mesh.
-    position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+   local socketScale=seated and .48 or 1
+   local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
+    and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
+   if not (resting and r.restSample==latest and r.restUnits==r.units) then
+    if live then
+     local x,y,z=PickupMotion.position(r.samples,now)
+     if x then r.pos=Vector3.new(x,y,z) end
+    end
+    r.socketScale=(r.socketScale or 1)+(socketScale-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
+    if math.abs(r.socketScale-socketScale)<.001 then r.socketScale=socketScale end
+    local targetPull=pulling and 1 or 0
+    r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
+    if r.pull<.001 then r.pull=0 end
+    local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
+    scale*=pile*(1+.14*r.pull)*r.socketScale
+    glow=math.max(glow,.34*r.pull)
+    local tumble=PickupMotion.tumble(age,r.landAge)
+    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
+    local position=r.pos
+    if not seated and not r.collectAt and latest and latest.floor then
+     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
+     -- Lift the trajectory by the rotated support extent so the rebound and
+     -- resting pose stay above the contact plane.
+     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+    end
+    r.drawPosition=position
+    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz);r.view.Size=r.size*scale
+    if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
+    r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
+    r.restUnits=r.units
    end
-   if r.physical then
-    local camera=workspace.CurrentCamera
+   if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if r.physical and cameraPosition then
+    local offset=r.drawPosition-cameraPosition
+    local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<1.2
-    local inFlight=air and not r.collectAt and not r.removedAt and not pulling
-    local inView=camera and (position-camera.CFrame.Position).Magnitude<100
+    local inFlight=air and live and not pulling
     if r.ribbon then
-     if not inFlight or self.player:GetAttribute('ReducedEffects')==true then
+     if not inFlight or reducedEffects then
       if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
      end
      if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
-    elseif inFlight and not r.trailUsed and inView and self.trailCount<TRAIL_LIMIT and self.player:GetAttribute('ReducedEffects')~=true then
+    elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color);r.trailUsed=true;self.trailCount+=1
     end
-    if r.valueLabel then
-     r.valueLabel.Enabled=r.owner==self.player.UserId and r.landAge~=nil and not seated and not inFlight and not pulling and not r.collectAt and not r.removedAt
-      and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and opacity>.35
+    if r.owner==self.player.UserId and live and r.landAge and not seated and not inFlight and not pulling and distance<18^2 and opacity>.35 then
+     local rank=distance-(self.valueTarget==r and 8 or 0)
+     if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
     end
+   elseif r.ribbon then
+    removeTrail(self,r)
    end
-   r.drawPosition=position
-   r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
-   r.view.Size=r.size*scale;r.view.Transparency=1-opacity
-   if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
   end
+ end
+ if closest~=self.valueTarget then
+  self.valueTarget=closest
+  if closest then
+   if not self.valueGui then self.valueGui,self.valueText=cargoWorth(self.parent) end
+   self.valueGui.Adornee=closest.view;self.valueText.Text=tostring(closest.cargoValue)..' Q';self.valueGui.Enabled=true
+  elseif self.valueGui then self.valueGui.Enabled=false;self.valueGui.Adornee=nil end
  end
 end
 function V:destroy()
@@ -9008,6 +9041,7 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
+ if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
 end
 return V

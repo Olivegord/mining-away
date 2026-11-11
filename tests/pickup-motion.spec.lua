@@ -18,6 +18,18 @@ check('network stalls bound extrapolation and never tunnel through ground',funct
  local x,y=M.position(samples,10.22);local farX,farY=M.position(samples,40)
  assert(math.abs(x-farX)<1e-8 and math.abs(y-farY)<1e-8 and y==0 and x<4)
 end)
+check('old resting packets do not stretch a new move across idle time',function()
+ local samples={s(10,0,0,0,0),s(100.1,1,1,10,10)}
+ samples[2].homing=true
+ local x,y=M.position(samples,100.09);assert(x==0 and y==0)
+ x,y=M.position(samples,100.15);assert(x>0 and x<1 and y>0 and y<1)
+ x,y=M.position(samples,100.2);assert(math.abs(x-1)<1e-8 and math.abs(y-1)<1e-8)
+end)
+check('a socketed rock holds its pose through a long packet gap',function()
+ local socket=s(10,1,5,0,0);socket.seated=true
+ local x,y=M.position({socket},100)
+ assert(M.isResting(socket) and x==1 and y==5)
+end)
 check('snapshot sampling is independent of render frame rate',function()
  local samples={s(10,0,1,12,4),s(10.1,1,1.28,8,1.6),s(10.2,1.7,1.32,6,-.8)}
  for _,fps in ipairs({30,60,144}) do

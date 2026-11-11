@@ -2,7 +2,7 @@
 -- buffer preserves acceleration, gravity and floor contacts without chasing a
 -- succession of network targets. It never decides collection or grants ore.
 -- Match the authoritative OreDrops trajectory when predicting between packets.
-local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18}
+local M={DELAY=.1,MAX_PREDICTION=.12,GRAVITY=70,AIR_DRAG=.9,GROUND_DRAG=18,SETTLE_TIME=.6}
 local function clamp(x,a,b) return math.max(a,math.min(b,x)) end
 local function axis(a,b,va,vb,t,span)
  local slope=(b-a)/span
@@ -16,6 +16,10 @@ local function axis(a,b,va,vb,t,span)
  local t2,t3=t*t,t*t*t
  return (2*t3-3*t2+1)*a+(t3-2*t2+t)*span*va+(-2*t3+3*t2)*b+(t3-t2)*span*vb
 end
+function M.isResting(sample)
+ return sample and not sample.homing and sample.vx==0 and sample.vy==0 and sample.vz==0
+  and (sample.seated or (sample.floor and sample.y<=sample.floor+.001))
+end
 function M.position(samples,now)
  local at=now-M.DELAY
  local first=samples[1];if not first then return nil end
@@ -23,11 +27,15 @@ function M.position(samples,now)
  for i=2,#samples do
   local b=samples[i];local a=samples[i-1]
   if at<=b.at then
-   local span=math.max(.001,b.at-a.at);local t=clamp((at-a.at)/span,0,1)
+   -- A resting object may go seconds without a packet. Start the next move
+   -- from its resting pose at the usual interpolation interval.
+   local start=M.isResting(a) and math.max(a.at,b.at-M.DELAY) or a.at
+   local span=math.max(.001,b.at-start);local t=clamp((at-start)/span,0,1)
    return axis(a.x,b.x,a.vx,b.vx,t,span),math.max(b.floor or -math.huge,axis(a.y,b.y,a.vy,b.vy,t,span)),axis(a.z,b.z,a.vz,b.vz,t,span)
   end
  end
  local s=samples[#samples];local dt=clamp(at-s.at,0,M.MAX_PREDICTION)
+ if s.seated then return s.x,s.y,s.z end
  local x,y,z
  if s.homing then x=s.x+s.vx*dt;y=s.y+s.vy*dt;z=s.z+s.vz*dt
  else
@@ -47,7 +55,7 @@ function M.tumble(age,landAge)
  -- Angular momentum carries across contact, then friction arrests the spin.
  -- Sampling absolute age keeps landing poses equal at all render rates.
  if type(landAge)~='number' or age<=landAge then return age*5.4 end
- return math.max(0,landAge)*5.4+(1-math.exp(-(age-landAge)*16))*.22
+ return math.max(0,landAge)*5.4+(1-math.exp(-math.min(age-landAge,M.SETTLE_TIME)*16))*.22
 end
 function M.supportHeight(sx,sy,sz,rx,ry,rz)
  -- Vertical extent of a box rotated Rx * Ry * Rz. Keep the collectible's

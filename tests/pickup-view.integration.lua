@@ -81,15 +81,56 @@ check('physical launch trail fades on the displayed landing and never reappears 
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
- assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not record.valueLabel.Enabled)
+ assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not renderer.valueGui)
  cargo:SetAttribute('GroundImpactAt',realTime+.68)
  renderer:update(1/60,realTime+.73);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
  renderer:update(1/60,realTime+.80)
- assert(not ribbon.trail.Enabled and record.valueLabel.Enabled)
+ assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
  renderer:update(1/60,realTime+1.10)
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
  cargo:SetAttribute('CollectedAt',realTime+1.2)
  renderer:update(1/60,realTime+1.20);assert(not record.ribbon)
  renderer:destroy();workspace.CurrentCamera=camera
+end)
+check('80 resting pieces reuse their poses and share one owner price label',function()
+ local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
+ local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
+ local visuals=Instance.new('Folder');visuals.Parent=workspace
+ local sources={}
+ for i=1,80 do
+  local drop=fixturePart(pile,'SettledCargo',Vector3.new(i*.75,.22,0),Vector3.new(1.48,1.70,1.42))
+  for k,v in pairs({PickupId=10+i,Owner=i==1 and pl.UserId+1 or pl.UserId,PhysicalCargo=true,CargoValue=i,
+   SpawnAt=realTime-4,SnapshotAt=realTime,GroundImpactAt=realTime-3,FadeAt=realTime+10,ExpiresAt=realTime+15,
+   FloorY=.22,Position=drop.Position,Velocity=Vector3.zero}) do drop:SetAttribute(k,v) end
+  sources[i]=drop
+ end
+ local renderer=PickupView.new(pile,visuals,audio)
+ renderer:update(1/60,realTime+.2)
+ local poses,sizes={},{}
+ for i,source in ipairs(sources) do
+  local record=renderer.records[source];poses[i]=record.view.CFrame;sizes[i]=record.view.Size
+ end
+ for i=1,240 do renderer:update(1/60,realTime+.2+i/60) end
+ for i,source in ipairs(sources) do
+  local record=renderer.records[source]
+  assert(record.view.CFrame==poses[i] and record.view.Size==sizes[i],'resting cargo still wrote its pose')
+ end
+ local gui=renderer.valueGui
+ assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
+ assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')
+ workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
+ renderer:update(1/60,realTime+5)
+ assert(renderer.valueGui==gui and gui.Adornee==renderer.records[sources[20]].view)
+ local first=renderer.records[sources[2]]
+ sources[2]:SetAttribute('Units',4)
+ renderer:update(1/60,realTime+6)
+ assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
+ local pose=first.view.CFrame
+ renderer:update(1/60,realTime+13)
+ assert(first.view.CFrame==pose and first.view.Transparency>0,'expiry did not fade a static pile in place')
+ sources[2]:SetAttribute('FadeAt',realTime+20);sources[2]:SetAttribute('ExpiresAt',realTime+25)
+ renderer:update(1/60,realTime+13.1)
+ assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to reset the fade')
+ renderer:destroy();visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

@@ -32,6 +32,8 @@ function O.fade(spawnAt,now) return math.clamp((now-spawnAt-(O.LIFETIME-O.FADE_S
 local function horizontal(s,dt,drag)
  local decay=math.exp(-drag*dt);local travel=(1-decay)/drag
  s.x+=s.vx*travel;s.z+=s.vz*travel;s.vx*=decay;s.vz*=decay
+ -- Ground friction leaves less than .003 studs of travel at this speed.
+ if drag==O.GROUND_DRAG and s.vx*s.vx+s.vz*s.vz<.05^2 then s.vx=0;s.vz=0 end
 end
 local function fall(s,dt)
  -- Integrate the flight up to its actual contact time, then consume the rest
@@ -42,7 +44,9 @@ local function fall(s,dt)
   if dt<=1e-6 then break end
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
-   s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0;horizontal(s,dt,O.GROUND_DRAG);break
+   s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0
+   if s.vx~=0 or s.vz~=0 then horizontal(s,dt,O.GROUND_DRAG) end
+   break
   end
   local contact=(s.vy+math.sqrt(s.vy*s.vy+2*O.GRAVITY*height))/O.GRAVITY
   local span=math.min(dt,contact)

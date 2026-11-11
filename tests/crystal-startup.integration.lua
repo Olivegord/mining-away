@@ -113,6 +113,20 @@ do
  runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
  command.OnServerEvent:Fire(runner,'BuyPack',{runId=run.id,packIndex=0,txId='earned-first-pack'})
  assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==0)
+ scene.clearSquare(crew)
+ local origin=pin+Vector3.new(0,1,0)
+ scene.spawnOrePickup(bed,{owner=runner.UserId,runId=run.id,nodeId='settled-test',
+  material=cargo,tierMaterial='Quartz',units=1,raw=true,value=10,floor=origin.Y-.75},
+  origin,Vector3.new(5,14,0),Color3.new(1,0,0))
+ local drop=pickups[pickupSerial]
+ advance(3)
+ local snapshot=drop.part:GetAttribute('SnapshotAt')
+ assert(drop.landed and snapshot>drop.spawnAt and drop.vx==0 and drop.vz==0)
+ advance(3)
+ assert(drop.part:GetAttribute('SnapshotAt')==snapshot,'stationary cargo still published movement')
+ runner.Character:PivotTo(CFrame.new(Vector3.new(drop.x+9,drop.y+2,drop.z)))
+ advance(.2)
+ assert(drop.part:GetAttribute('SnapshotAt')>snapshot and drop.part:GetAttribute('Homing'),'pickup failed to resume movement')
  players.PlayerRemoving:Fire(runner)
  CF.__index=cfIndex
  print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
