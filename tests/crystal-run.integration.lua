@@ -655,6 +655,69 @@ assert(Pro.validate(data(testCrew),tester.UserId))
 print('PASS curated starter fleet, stable prestige ownership, projectile flight and vacuum relay')
 
 do
+ local previousPosition=characterRoot(testCrew).Position
+ local previousCargo=Pro.clone(data(testCrew).run.cargo)
+ local at=f.center+Vector3.new(0,.72,0)
+ local wall=World.part(zone,'OreBank',at+Vector3.new(5,2,0),Vector3.new(1,4,8),f.color)
+ local raycast=workspace.Raycast
+ local height=5
+ function workspace:Raycast(from,direction,params)
+  if math.abs(direction.X)>1e-6 then
+   local t=(at.X+5-from.X)/direction.X
+   if t>0 and t<1 and from.Y+direction.Y*t<at.Y+height then return {Instance=wall} end
+  end
+  return raycast(self,from,direction,params)
+ end
+ local function spawnCargo(id)
+  local part=World.part(pickupFolder,'OreByBank',at,Vector3.one,f.color)
+  local drop={part=part,owner=tester.UserId,runId=data(testCrew).run.id,material=Workshop.cargoKey('Quartz',10),
+   units=1,raw=true,tierMaterial='Quartz',value=10,fieldPart=bed,spawnAt=now,age=1,x=at.X,y=at.Y,z=at.Z,
+   vx=0,vy=0,vz=0,floor=at.Y,landed=true,firstLandedAge=.65}
+  pickups[id]=drop;return drop
+ end
+ local function tick()
+  realTime+=C.Tick;now=realTime;pickupStep(C.Tick);droneStep(testCrew.vacuum,C.Tick)
+ end
+ testCrew.miningSquare={field=f,center=f.center,half=15}
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(22,3,0)))
+ testCrew.vacuum.pos=at+Vector3.yAxis*3.2;testCrew.vacuum.velocity=Vector3.zero
+ local units=Pro.cargoUnits(data(testCrew))
+ local low=spawnCargo(-2)
+ for _=1,math.ceil(4/C.Tick) do tick();if not pickups[-2] then break end end
+ assert(low.relayUntil and not pickups[-2] and Pro.cargoUnits(data(testCrew))==units+1,'Vacuum failed to lift cargo over the low bank')
+ assert(low.y>at.Y+2,'the relay did not lift the ore')
+ height=20
+ local high=spawnCargo(-3)
+ tick();scene.publishSquareStatus(testCrew)
+ assert(not testCrew.vacuumTarget and not high.relayUntil and tester:GetAttribute('MA_SelectorStatus')=='LooseOre',
+  'the Vacuum started a relay with no clear path')
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(-2,3,0)))
+ for _=1,math.ceil(1/C.Tick) do tick();if not pickups[-3] then break end end
+ assert(not pickups[-3] and not high.relayUntil and Pro.cargoUnits(data(testCrew))==units+2)
+ workspace.Raycast=raycast;wall:Destroy()
+ print('PASS Vacuum lifts ore over a low bank, leaves a blocked path alone and allows direct pickup from the clear side')
+
+ local walking=spawnCargo(-4)
+ local spare=spawnCargo(-5)
+ spare.x=at.X+10;spare.part.Position=Vector3.new(spare.x,spare.y,spare.z)
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(62,3,0)))
+ testCrew.vacuum.pos=at+Vector3.new(-8,3.2,0);testCrew.vacuum.velocity=Vector3.zero
+ tick();assert(testCrew.vacuumTarget.id==-4)
+ for frame=1,math.ceil(4/C.Tick) do
+  tester.Character:PivotTo(CFrame.new(at+Vector3.new(math.min(68,62+16*frame*C.Tick),3,0)))
+  tick()
+  if not pickups[-4] then break end
+  if not walking.relayUntil then assert(testCrew.vacuumTarget and testCrew.vacuumTarget.id==-4,'walking away displaced a committed Vacuum pickup') end
+ end
+ assert(walking.relayUntil and not pickups[-4] and Pro.cargoUnits(data(testCrew))>=units+3)
+ if pickups[-5] then spare.part:Destroy();pickups[-5]=nil end
+ scene.clearSquare(testCrew)
+ tester.Character:PivotTo(CFrame.new(previousPosition))
+ data(testCrew).run.cargo=previousCargo
+ print('PASS Vacuum finishes its first pickup as the owner walks past its search range')
+end
+
+do
  buyer.session.data=Pro.clone(opened);refreshStats(buyer)
  moveBuyer(scene.packStation.Position)
  input('ChooseCard','loose-seams',{offerId=first.id,index=2})

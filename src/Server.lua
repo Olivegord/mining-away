@@ -939,6 +939,21 @@ function scene.orePullClear(drop,from,target,targetModel)
  end
  return drop.clearPath==true
 end
+function scene.vacuumApproach(drop,from,hr)
+ if drop.vacuumRouteRoot~=hr or now>=(drop.vacuumRouteAt or 0) then
+  drop.vacuumRouteAt=now+.2;drop.vacuumRouteRoot=hr;drop.vacuumGoal=nil
+  local ignore={pickupFolder,droneFolder}
+  -- The raised intake can clear a bank while staying inside the pull radius.
+  for _,height in ipairs({3.2,8}) do
+   local goal=Vector3.new(from.X,drop.floor+height,from.Z)
+   local intake=goal-Vector3.yAxis*.7
+   if (intake-from).Magnitude<=13 and los(intake,hr.Position,hr.Parent,ignore) and los(from,intake,nil,ignore) then
+    drop.vacuumGoal=goal;break
+   end
+  end
+ end
+ return drop.vacuumGoal
+end
 function scene.pressPair(candidates,previous)
  local best
  for _,candidate in ipairs(candidates) do
@@ -975,7 +990,10 @@ local function pickupStep(dt)
  local activePresses={}
  for _,p in pairs(profiles) do
   p.pinOreOutOfReach=nil
-  if p.vacuum then p.vacuumTarget=nil;p.vacuumDistance=math.huge end
+  if p.vacuum then
+   p.previousVacuumTargetId=p.vacuumTarget and p.vacuumTarget.id
+   p.vacuumTarget=nil;p.vacuumScore=math.huge
+  end
   local press=p.compactor
   if not press then continue end
   local previous=p.compactorTarget
@@ -1095,16 +1113,21 @@ local function pickupStep(dt)
    local relay=now<(drop.relayUntil or 0)
    local vacuuming=false
    local vacuumApproaching=false
-   local reach=relay and math.max(p.vacuumReach+12,naturalReach) or naturalReach
+   local relayReach=p.vacuumReach+12
+   local reach=relay and math.max(relayReach,naturalReach) or naturalReach
    if pressing then
     target=scene.pressSocket(press,socket);reach=13
    elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and not assignedToPress and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
-    if distance<=p.vacuumReach and (distance>naturalReach or not scene.orePullClear(drop,from,target,hr.Parent)) then
+    local committed=id==p.previousVacuumTargetId
+    local searchReach=committed and relayReach or p.vacuumReach
+    local goal=distance<=searchReach and (distance>naturalReach or not scene.orePullClear(drop,from,target,hr.Parent)) and scene.vacuumApproach(drop,from,hr)
+    if goal then
      local intake=vacuum.pos-Vector3.new(0,.7,0)
      local gap=(intake-from).Magnitude
-     if gap<p.vacuumDistance or (gap==p.vacuumDistance and id<p.vacuumTarget.id) then
-      p.vacuumDistance=gap;p.vacuumTarget={position=Vector3.new(from.X,drop.floor+3.2,from.Z),id=id}
+     local score=committed and -1 or gap
+     if score<p.vacuumScore or (score==p.vacuumScore and id<p.vacuumTarget.id) then
+      p.vacuumScore=score;p.vacuumTarget={position=goal,id=id}
      end
      if gap<=13 then target=intake;reach=13;vacuuming=true
      else vacuumApproaching=true end
@@ -1143,7 +1166,10 @@ local function pickupStep(dt)
      drop.vx=0;drop.vy=0;drop.vz=0;drop.homing=false;drop.snapshotAt=0
      drop.pressSocket=socket;drop.pressCarrier=press;drop.part:SetAttribute('PressSocket',socket)
     elseif vacuuming then
-     drop.relayUntil=now+3;drop.queryAt=0
+     local lifted=Vector3.new(drop.x,drop.y,drop.z)
+     if los(lifted,hr.Position,hr.Parent,{pickupFolder,droneFolder}) then
+      drop.relayUntil=now+3;drop.queryAt=0
+     end
     else
     local accepted=Pro.addCargo(data(p),drop.material,drop.units,Ca.capacity(data(p),previewPerks(p)))
     if accepted>0 then

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `30b914789fa81e99ba6ddcf4740d92ded0518cc9702c0fc84688717b7ec872ad` | Includes the varied second Crystal Run pack. |
+| Native-file SHA-256 | `ce6b24d1f29395397f6fb58422cb2f1df101709cb5971521f0665c8ac8ab8583` | Includes the Vacuum's pickup commitment and clear handoff. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the varied second Crystal Run pack** | All seven Sources and three roots verified in Edit. Team Create save returned version 169. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the Vacuum pickup and handoff changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 170. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — finish the Vacuum pickup on the walk back
+
+The Vacuum keeps its current pickup while the player is within relay reach. It searches for new ore within the original radius. When its usual intake position has a blocked path to the player, it tries a higher intake and checks the path again before sending the ore. If both approaches are blocked, nearby ore remains on the ground and the existing pin status can tell the player to move closer. The Vacuum uses the existing drone, ore and pickup effects.
+
+The controller fixture moved the player from 62 to 68 studs away at walking speed. The prior controller dropped the first target in favor of a nearer rock. The revised controller finished collecting the first rock within four seconds. A separate collision fixture covered a low bank, a fully blocked route, and direct pickup after moving to the clear side. Read-only Studio Edit rays found clear depot-facing lines from all 15 plot centers at 62, 68 and 75 studs. The raised intake was verified with the collision fixture. Workshop, Crystal Run, pickup, persistence and committed-flight checks passed with API or storage doubles. Live Vacuum motion, performance and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **170**. No player release was published. To reproduce from `cfdd9a6`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit cfdd9a6`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — give the second pack three different jobs
 
