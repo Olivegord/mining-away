@@ -99,12 +99,13 @@ W.STAR_CATALOG={
  {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
  {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
  {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
- {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
+ {id='charge',title='Quick Charge',description='+30% charge & depot flight',cost=3,max=3},
  {id='backpack',title='Backpack Lining',description='+2 cargo slots',cost=3,max=3},
 }
 W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
 W.BATTERY=100
 function W.starLevel(p,id) return (p.run.starUpgrades or {})[id] or 0 end
+function W.chargeSpeed(p) return 1+.3*W.starLevel(p,'charge') end
 function W.starPrice(entry,level) return entry.cost+level end
 -- A fresh selector is as wide as one authored Crystal Run plot.
 function W.selectorWidth(p) return 30+4*W.starLevel(p,'selector') end

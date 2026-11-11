@@ -1,5 +1,10 @@
 -- Start the real controller in Crystal Run mode, including its Heartbeat callback.
 assert(scene.runStart and not scene.fieldTools)
+local cfIndex=CF.__index
+CF.__index=function(frame,key)
+ if key=='RightVector' then return Vector3.new(math.cos(frame.yaw),0,-math.sin(frame.yaw)) end
+ return cfIndex(frame,key)
+end
 local pl=player(98901);players.PlayerAdded:Fire(pl)
 local p=profiles[pl.UserId]
 local expected={'Striker','Striker','Striker','Needler','Ballcaster','Vacuum','Compactor','Courier','Courier'}
@@ -33,6 +38,7 @@ do
  scene.chargingStation=station;scene.chargeIndicator=indicator
  local other=player(98904);players.PlayerAdded:Fire(other)
  other.Character:PivotTo(CFrame.new(center))
+ data(profiles[other.UserId]).run.starUpgrades.charge=1
  local recharging={}
  for _,crew in ipairs({p,profiles[other.UserId]}) do
   for _,d in ipairs(crew.drones) do
@@ -57,6 +63,62 @@ do
  station:Destroy();indicator:Destroy()
  advance(5);verifyRing()
  print('PASS two crews reach a crowded charger, publish real pad progress and fly off with full batteries')
+end
+
+do
+ local tester=player(98913);players.PlayerAdded:Fire(tester)
+ local crew=profiles[tester.UserId];local worker=crew.drones[1]
+ local oldPad=scene.chargingStation
+ local pad=World.part(scene.map,'QuickChargePad',Vector3.new(0,4.4,25),Vector3.new(9,.8,6),Color3.new(1,1,1))
+ scene.chargingStation=pad
+ local zone=Instance.new('Folder');zone.Name='QuickChargeTest';zone.Parent=scene.map
+ local bed=World.part(zone,'Field',Vector3.new(0,3.74,414),Vector3.new(108,.6,64),Color3.new(0,1,0))
+ local field={id=#patches+1,cfg={Key='Emerald',Material='RunEmerald',SelectionOnly=true,ReferenceCrystals=true,AlwaysUnlocked=true,Hardness=81,Value=256,Turrets=0},
+  part=bed,model=zone,center=bed.Position,color=bed.Color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ local center=Vector3.new(0,4.04,420)
+ local r=makeResource(field,center,'Crystal',5300,10,3,7);r.readyAt=now
+ local function step()
+  realTime+=C.Tick;now=realTime;droneStep(worker,C.Tick)
+ end
+ local function startTrip()
+  release(worker);worker.field=nil;worker.recharging=nil;worker.chargeSite=nil;worker.squareSearchAt=nil
+  tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+  crew.miningSquare={field=field,center=center,half=15}
+  assert(assignOre(crew,worker,r));worker.squareJob=crew.miningSquare
+  worker.pos=committedStation(worker,r);worker.velocity=Vector3.zero;worker.battery=0;worker.warmAt=now
+ end
+ local function roundTrip()
+  startTrip()
+  local start=now
+  local arrival,full,back
+  for _=1,math.ceil(100/C.Tick) do
+   step()
+   if worker.state=='Charging' and not arrival then arrival=now end
+   if arrival and not worker.recharging and not full then full=now end
+   if full and worker.target==r and worker.warmAt then back=now;break end
+  end
+  assert(arrival and full and back,'worker failed to resume the original Emerald cut')
+  return arrival-start,full-arrival,back-full
+ end
+ local outbound,dock,inbound=roundTrip()
+ data(crew).run.stars=3
+ tester.Character:PivotTo(CFrame.new(shopStations.Ruby.Position+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(tester,'BuyStarUpgrade',{runId=data(crew).run.id,upgradeId='charge',level=0,txId='emerald-quick-charge'})
+ assert(Workshop.starLevel(data(crew),'charge')==1 and data(crew).run.stars==0)
+ local fasterOut,fasterDock,fasterIn=roundTrip()
+ assert(fasterOut<outbound*.85 and fasterIn<inbound*.85 and fasterDock<dock*.85,'Quick Charge still only shortened one part of the trip')
+ print(string.format('MODEL Emerald recharge round trip %.2fs -> %.2fs (out %.2f -> %.2f, pad %.2f -> %.2f, back %.2f -> %.2f)',
+  outbound+dock+inbound,fasterOut+fasterDock+fasterIn,outbound,fasterOut,dock,fasterDock,inbound,fasterIn))
+ release(worker);worker.state='Follow'
+ assert(travelSpeed(worker)==worker.stats.maxStep60,'Quick Charge sped up ordinary flight')
+ table.insert(data(crew).run.cards,Workshop.card(Workshop.BY_ID.Q_FIELD_CHARGE,3));publish(crew)
+ startTrip();step()
+ assert(worker.state=='ToCharge' and travelSpeed(worker)==worker.stats.maxStep60*1.5,'Field Charger applied a depot-flight boost')
+ worker.pos=worker.intentGoal;worker.velocity=Vector3.zero;step()
+ assert(worker.chargeSite=='Field' and math.abs(worker.battery-28*1.3*C.Tick)<1e-8,'Quick Charge lost its rate at the portable charger')
+ players.PlayerRemoving:Fire(tester);resources[r.id]=nil;patches[field.id]=nil;zone:Destroy();pad:Destroy();scene.chargingStation=oldPad
+ print('PASS Quick Charge purchase shortens both depot legs and pad time while Field Charger stays local')
 end
 
 -- A legacy Orbiter and Scrapper can still exist in saved fleets or Studio previews.
@@ -98,11 +160,6 @@ assert(#assert(Pro.migrate(migrated,uid)).fleet==8 and #old.fleet==18)
 print('PASS oversized starter repair preserves earned drone IDs and traits, cargo, paid offers and replay receipts')
 
 do
- local cfIndex=CF.__index
- CF.__index=function(frame,key)
-  if key=='RightVector' then return Vector3.new(math.cos(frame.yaw),0,-math.sin(frame.yaw)) end
-  return cfIndex(frame,key)
- end
  local runner=player(98903);players.PlayerAdded:Fire(runner)
  local crew=profiles[runner.UserId]
  local pin=scene.packStation.Position+Vector3.new(0,0,125)
@@ -272,8 +329,8 @@ do
  command.OnServerEvent:Fire(runner,'BuyPack',{runId=after.run.id,packIndex=0,txId='run-two-pack'})
  assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==released.value-Workshop.PACK_BASE)
  players.PlayerRemoving:Fire(runner)
- CF.__index=cfIndex
  print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
  print('PASS a mined Ruby funds pack two and a single valuable block funds prestige through early courier sales')
  print('PASS the chosen permanent prestige drone cuts, sells and funds a pack on its first run-two pin')
 end
+CF.__index=cfIndex

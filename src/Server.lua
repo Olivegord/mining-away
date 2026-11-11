@@ -1708,8 +1708,14 @@ local function combatHit(d,field,target,stats)
  publishTurretHealth(target)
 end
 local function travelSpeed(d)
- if d.state=='Travel' and d.chargedPin and d.chargedPin==d.squareJob then return d.stats.maxStep60*1.5 end
- return d.stats.maxStep60*(d.state=='ToCharge' and 1.5 or d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ local returning=d.state=='Travel' and d.chargedPin and d.chargedPin==d.squareJob
+ if d.state=='ToCharge' or returning then
+  local p=profiles[d.owner]
+  local fieldCharge=p and p.miningSquare and (p.fieldCharge or 0)>0
+  local boost=p and (returning or not fieldCharge) and Workshop.chargeSpeed(data(p)) or 1
+  return d.stats.maxStep60*1.5*boost
+ end
+ return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
@@ -2211,7 +2217,7 @@ local function droneStep(d: any,dt: number)
    if (d.pos-goal).Magnitude<1.4 then
     local rate=localCharge and p.fieldCharge or 35
     d.state='Charging';d.chargeSite=localCharge and 'Field' or 'Depot'
-    d.battery=math.min(d.stats.batteryCapacity,d.battery+rate*(1+.3*Workshop.starLevel(data(p),'charge'))*dt)
+    d.battery=math.min(d.stats.batteryCapacity,d.battery+rate*Workshop.chargeSpeed(data(p))*dt)
     if d.battery>=d.stats.batteryCapacity then
      d.recharging=nil
      if not localCharge then d.chargedPin=p.miningSquare end
