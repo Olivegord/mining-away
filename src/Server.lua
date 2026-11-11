@@ -847,8 +847,9 @@ function scene.resetPress(press)
    drop.part:SetAttribute('PressSocket',nil)
   end
  end
- press.pressInputs=nil;press.pressInputValue=nil;press.pressDeadline=nil
+ press.pressInputs=nil;press.pressInputValue=nil;press.pressDeadline=nil;press.pressPartialAt=nil
  press.pressMaterial=nil;press.pressDock=nil;press.pressSquare=nil;press.pressNextInputAt=nil
+ press.pressSearchAt=nil
 end
 function scene.finishPress(press)
  local inputs=press.pressInputs
@@ -879,6 +880,22 @@ function scene.orePullClear(drop,from,target,targetModel)
  end
  return drop.clearPath==true
 end
+function scene.pressPair(candidates,previous)
+ local best
+ for _,candidate in ipairs(candidates) do
+  if best and (candidate.distance>best.distance or candidate.distance==best.distance and candidate.id>best.id)
+   and candidate.id~=previous then continue end
+  for _,other in ipairs(candidates) do
+   -- Leave clearance for the press to stop just short of its approach goal.
+   if candidate~=other and candidate.value+other.value<=1000000
+    and (candidate.position-other.position).Magnitude<=Workshop.COMPACTOR_REACH-1.1 then
+    if candidate.id==previous then return candidate end
+    best=candidate;break
+   end
+  end
+ end
+ return best
+end
 local function pickupStep(dt)
  scene.pressOutputs=scene.pressOutputs or {}
  for i=#scene.pressOutputs,1,-1 do
@@ -898,6 +915,7 @@ local function pickupStep(dt)
   if p.vacuum then p.vacuumTarget=nil;p.vacuumDistance=math.huge end
   local press=p.compactor
   if not press then continue end
+  local previous=p.compactorTarget
   p.compactorTarget=nil;p.compactorDistance=math.huge
   local hr=characterRoot(p)
   if press.pressSquare and (p.miningSquare~=press.pressSquare or press.hp<=0 or not hr) then
@@ -910,13 +928,17 @@ local function pickupStep(dt)
     if not pickups[id] then scene.resetPress(press);inputs=nil;break end
    end
   end
-  if inputs and (#inputs>=p.compactorBatch or now>=press.pressDeadline) then
+  if inputs and (#inputs>=p.compactorBatch or now>=press.pressDeadline or now>=(press.pressPartialAt or math.huge)) then
    if #inputs>=2 then scene.finishPress(press) else scene.resetPress(press) end
    continue
   end
   if now>=(press.pressNextInputAt or 0) then
+   local search=not inputs and now>=(press.pressSearchAt or 0)
+   if search then press.pressSearchAt=now+.15 end
+   if not inputs and not search and not previous then continue end
    local hasRoom=Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
-   activePresses[press.owner]={profile=p,playerRoot=hasRoom and not inputs and hr or nil}
+   activePresses[press.owner]={profile=p,playerRoot=hasRoom and not inputs and hr or nil,
+    groups=search and {},previous=previous and previous.id}
   end
  end
  if next(activePresses) then
@@ -925,14 +947,17 @@ local function pickupStep(dt)
    local p=active and active.profile
    if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
     or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1)
+    or now<(drop.relayUntil or 0)
     or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
    local press=p.compactor
+   if drop.homing and drop.pullTarget~=press.model then continue end
+   if not active.groups and not press.pressDock and id~=active.previous then continue end
    if press.pressMaterial and (press.pressMaterial~=drop.tierMaterial or press.pressInputValue+drop.value>1000000) then continue end
    local square=p.miningSquare
    -- Let the player's backpack take nearby ore before starting another
    -- batch. A press already loaded can finish with the next matching rock.
    local hr=active.playerRoot
-   if hr then
+   if hr and not drop.homing then
     local from=Vector3.new(drop.x,drop.y,drop.z)
     local reach=p.cargoReach+(drop.reachBonus or 0)
     if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
@@ -940,9 +965,25 @@ local function pickupStep(dt)
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
    if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
    local distance=((press.pressDock or press.pos)-position).Magnitude
-   if press.pressDock and distance>12 then continue end
-   if distance<p.compactorDistance or (distance==p.compactorDistance and id<p.compactorTarget.id) then
+   if active.groups then
+    local group=active.groups[drop.tierMaterial]
+    if not group then group={};active.groups[drop.tierMaterial]=group end
+    table.insert(group,{id=id,position=position,distance=distance,value=drop.value})
+   elseif (not press.pressDock or distance<=Workshop.COMPACTOR_REACH)
+    and (distance<p.compactorDistance or distance==p.compactorDistance and id<p.compactorTarget.id) then
     p.compactorDistance=distance;p.compactorTarget={id=id,position=press.pressDock or position}
+   end
+  end
+  for _,active in pairs(activePresses) do
+   if not active.groups then continue end
+   local p=active.profile
+   for _,group in pairs(active.groups) do
+    local candidate=scene.pressPair(group,active.previous)
+    if not candidate then continue end
+    if candidate.id==active.previous then p.compactorTarget=candidate;break end
+    if candidate.distance<p.compactorDistance or candidate.distance==p.compactorDistance and candidate.id<p.compactorTarget.id then
+     p.compactorDistance=candidate.distance;p.compactorTarget=candidate
+    end
    end
   end
  end
@@ -983,7 +1024,7 @@ local function pickupStep(dt)
    local reach=relay and math.max(p.vacuumReach+12,naturalReach) or naturalReach
    if pressing then
     target=scene.pressSocket(press,socket);reach=13
-   elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
+   elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and not assignedToPress and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
     if distance<=p.vacuumReach and (distance>naturalReach or not scene.orePullClear(drop,from,target,hr.Parent)) then
      local intake=vacuum.pos-Vector3.new(0,.7,0)
@@ -1023,6 +1064,7 @@ local function pickupStep(dt)
      end
      table.insert(press.pressInputs,id);press.pressInputValue+=drop.value
      press.pressNextInputAt=now+.22
+     if #press.pressInputs>=2 then press.pressPartialAt=now+Workshop.COMPACTOR_PARTIAL_WAIT end
      drop.x=target.X;drop.y=target.Y;drop.z=target.Z
      drop.vx=0;drop.vy=0;drop.vz=0;drop.homing=false;drop.snapshotAt=0
      drop.pressSocket=socket;drop.pressCarrier=press;drop.part:SetAttribute('PressSocket',socket)
@@ -1587,7 +1629,7 @@ local function travelSpeed(d)
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
- local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant'
+ local settling=d.target~=nil or d.state=='ToCharge' or d.state=='BreakerRecover' or d.state=='GrowRecover' or d.state=='Deliver' or d.state=='Collect' or d.state=='Pickup' or d.state=='GrowApproach' or d.state=='Plant' or d.state=='Intake'
  local weight=(d.state=='Recover' or d.state=='Follow') and 0 or (settling and math.clamp(((goal-d.pos).Magnitude-1)/5,0,1) or 1)
  local desired=Feel.swarmOffset(d.pos,d.id,swarmGrid,weight)
  d.swarmOffset=weight==0 and Vector3.zero or Feel.smoothSwarm(d.swarmOffset,desired,dt)

@@ -475,14 +475,13 @@ input('PlaceSelector','press-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)}
 assert(buyer.miningSquare)
 for id,drop in pairs(pickups) do if drop.owner==shopper.UserId then drop.part:Destroy();pickups[id]=nil end end
 local floor=f.center+Vector3.new(0,.75,0)
-local function pressOre(material,value,owner)
+local function pressOre(material,value,owner,position)
  scene.spawnOrePickup(bed,{owner=owner or shopper.UserId,runId=data(buyer).run.id,nodeId='press-test',
   material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,raw=true,units=1,
-  floor=floor.Y,fieldPart=bed},floor,Vector3.zero,Color3.new(1,0,0))
+  floor=floor.Y,fieldPart=bed},position or floor,Vector3.zero,Color3.new(1,0,0))
  local drop=pickups[pickupSerial];drop.age=1;drop.landed=true
  return drop
 end
-local raw={pressOre('Quartz',10),pressOre('Quartz',12),pressOre('Quartz',14),pressOre('Quartz',16)}
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(-130,3,0)))
 local foreign=pressOre('Quartz',70,tester.UserId);foreign.runId=data(testCrew).run.id
 Pro.addCargo(data(buyer),'Quartz',10,10)
@@ -490,6 +489,18 @@ press.pos=floor+Vector3.new(0,3.2,0)
 local function pressTicks(count)
  for _=1,count do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
 end
+local lone=pressOre('Quartz',5)
+local remote=pressOre('Quartz',6,nil,floor+Vector3.new(20,0,0))
+pressTicks(20)
+assert(not buyer.compactorTarget and not lone.pressSocket and not remote.pressSocket,'isolated rocks started a batch')
+local relaying=pressOre('Quartz',7)
+relaying.relayUntil=now+1
+pressTicks(20)
+assert(not buyer.compactorTarget and not relaying.pressSocket,'press interrupted an in-flight Vacuum relay')
+for _,drop in ipairs({lone,remote,relaying}) do
+ pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy()
+end
+local raw={pressOre('Quartz',10),pressOre('Quartz',12),pressOre('Quartz',14),pressOre('Quartz',16)}
 for _=1,50 do
  pressTicks(1)
  if raw[2].pressSocket then break end
@@ -500,21 +511,32 @@ pressTicks(70)
 local pressedOre=pickups[pickupSerial]
 assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
 assert(pressedOre.value==36,'press lost value or minted Quartz')
-pressTicks(math.ceil((Workshop.COMPACTOR_WAIT+1)/C.Tick))
-assert(not raw[4].pressSocket and raw[4].part.Parent,'a single rock was trapped')
+pressTicks(math.ceil(1.5/C.Tick))
+assert(not raw[4].pressSocket and raw[4].part.Parent and not buyer.compactorTarget,'a single rock was trapped')
 assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
 
 pressOre('RunEmerald',2560);pressOre('RunEmerald',2700)
-pressTicks(math.ceil((Workshop.COMPACTOR_WAIT+2)/C.Tick))
+pressTicks(math.ceil(2.75/C.Tick))
 local deepBlock=pickups[pickupSerial]
 assert(deepBlock.tierMaterial=='RunEmerald' and deepBlock.compacted and deepBlock.units==1 and deepBlock.value==5260)
 assert(pressedOre.part.Parent and pressedOre.units==1,'already compacted cargo entered the press again')
+print('PASS Compactor leaves isolated rocks and Vacuum relays alone, and ejects two-rock batches sooner')
 
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3));publish(buyer)
 pressOre('RunRuby',40);pressOre('RunRuby',41)
 pressTicks(90)
 local upgraded=pickups[pickupSerial]
 assert(upgraded.tierMaterial=='RunRuby' and upgraded.units==1 and upgraded.value==81)
+
+local legacyPress=table.remove(data(buyer).run.cards)
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_DENSER_PACK,3));publish(buyer)
+assert(buyer.compactorBatch==5)
+for value=50,54 do pressOre('RunCobalt',value) end
+pressTicks(150)
+local dense=pickups[pickupSerial]
+assert(dense.tierMaterial=='RunCobalt' and dense.compacted and dense.units==1 and dense.value==260,
+ 'a partial timer fired before the five-rock batch finished')
+table.remove(data(buyer).run.cards);table.insert(data(buyer).run.cards,legacyPress);publish(buyer)
 
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
 local emptier=buyer.drones[4]
