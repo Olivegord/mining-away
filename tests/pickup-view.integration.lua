@@ -106,7 +106,7 @@ end)
 check('a finishing gem stays hidden until its synchronized release',function()
  local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
  local born=realTime+.135
- for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
+ for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,FinishingCargo=true,SpawnAt=born,SnapshotAt=born,
   FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio)
  local r=assert(renderer.records[cargo])
@@ -114,6 +114,11 @@ check('a finishing gem stays hidden until its synchronized release',function()
  assert(r.view.Transparency==1 and not r.ribbon)
  renderer:update(1/60,born+.101)
  assert(r.view.Transparency==0)
+ local sounds=#audio.calls
+ renderer:update(1/60,born+.23)
+ assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='gem_twinkle')
+ renderer:update(1/60,born+.27)
+ assert(#audio.calls==sounds+1,'gem chimed more than once')
  renderer:destroy();cargo:Destroy()
 end)
 check('settled gems remain still as the camera moves and share one price label',function()

@@ -11,7 +11,12 @@ local function bevel(list,x,y,z,ny)
 end
 function C.planes(name)
  local p={}
- if name=='Needle' then
+ if name=='RamielPyramid' then
+  for _,side in ipairs({-1,1}) do
+   plane(p,0,1,0,side,.5,0)
+   plane(p,0,1,0,0,.5,side)
+  end
+ elseif name=='Needle' then
   bevel(p,.77,0,.77,.16)
   plane(p,.26,1.55,0,1,.43,0);plane(p,.26,1.55,0,-1,.85,0)
   plane(p,0,1.48,-.13,0,.44,1);plane(p,0,1.48,-.13,0,.62,-1)
@@ -37,7 +42,8 @@ function C.build(name)
   p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
   return p
  end
- local base=box(Vector3.new(2,4,2),CFrame.new());local tools={}
+ local size=name=='RamielPyramid' and Vector3.one*2 or Vector3.new(2,4,2)
+ local base=box(size,CFrame.new());local tools={}
  for _,cut in ipairs(C.planes(name)) do
   local point,normal=cut[1],cut[2]
   local center=point+normal*7

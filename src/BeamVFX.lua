@@ -21,6 +21,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
+ Prism={body=1.1,core=.08,taper=.84,orbit=.23,spin=1.8,star=.32,tail=.45},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},

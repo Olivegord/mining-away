@@ -3,6 +3,8 @@
 local View={}
 local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
+local PRISM_RED=Color3.fromRGB(249,22,60)
+local PRISM_HOT=Color3.fromRGB(255,105,101)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
@@ -124,16 +126,16 @@ function View.new(audio)
      if landed and not r.impacted then
       r.impacted=true
       local point=node:GetAttribute('ContactPoint') or to
-      local origin=drone and drone.view:GetPivot().Position or from
+      local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
       local travel=point-origin
       if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       RoleVisuals.Beam(origin+travel.Unit*.28,point,color,reduced and .85 or 2.30,.33,'Lance')
+       RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
        if not reduced then
-        RoleVisuals.Beam(origin+travel.Unit*.32,point,Color3.fromRGB(225,240,255),.63,.21,'Lance')
+        RoleVisuals.Beam(origin,point,PRISM_HOT,.92,.23,'Prism')
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
-         node:GetAttribute('ContactNormal') or -travel.Unit,color,true,true,1.35,now)
+         node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
        end
        if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.25,pitch=.77}) end
       end

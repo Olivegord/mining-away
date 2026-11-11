@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a0c6733f7b157a1dcf5e54f9aae529f0e9d365e57129ae968d5ffa56d8876d3c` | Includes the charge, rock break, gem motion and flagship pass. |
+| Native-file SHA-256 | `e2be9561bd7a55f4ade9cfd7b60ed24bfbfaaf092900b60fc9ed6e2f5f653658` | Includes the hit stop, break audio, gem twinkles and Ramiel main attack. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the charge, rock break, gem motion and flagship pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 184. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the hit stop and Ramiel main attack** | All seven Sources and three roots verified in Edit. Team Create save returned version 187. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give the split a hit stop and match Ramiel’s main beam
+
+The finishing hit compresses the rock and holds it for about 90 ms. The split triggers the original rock crack with a low impact underneath and one directional camera kick for the nearby owner. The gem launches into three staggered glints and a chime. Ramiel opens from a diamond into the five-pointed firing pose in the Operation Yashima footage, holds while its core brightens, then fires one red beam. The model closes after the shot. [Reference footage and audio notes](review/CRYSTAL_RUN_PAYOFF.md)
+
+Single-client Ruby Play verified the held rock, camera rotation, gem glints and loaded sound playback. The red beam fired. That run exposed the general drone renderer resetting the new star's transparency each frame. After the correction, a detached native Edit fixture ran the production pose and renderer together and verified all five points remained visible and still while the core brightened, stayed visible at release and hid on recovery. Pickup, beam, workshop and contact-clock checks passed. The existing broader client-inertia fixture still fails. The final correction has detached native verification. The sound mix and multiplayer remain unverified.
+
+All seven Source hashes and three Script Sync roots matched at place **124078027733625**, universe **10774898335**. Team Create save **187** succeeded and Studio was left open in Edit. The player release was not published. Reproduce from `8664954` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 8664954` after applying the Source changes. All non-Source chunks and unrelated Sources were preserved.
 
 ## November 11 — give rock breaks a visible payoff
 

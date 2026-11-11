@@ -6,7 +6,12 @@ CF.__index=function(frame,key)
 end
 local fx=Instance.new('Folder');fx.Parent=workspace
 local audio={}
-rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert(audio,name) end})
+local cameraKicks={}
+local owner=Instance.new('Player');owner.UserId=42
+game:GetService('Players').LocalPlayer=owner
+rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert(audio,name) end},function(_,_,at)
+ table.insert(cameraKicks,at)
+end)
 local source=Instance.new('UnionOperation');source.Parent=workspace
 for k,v in pairs({Kind='Crystal',ZoneName='Ruby',FullSize=Vector3.one*3,FullPosition=Vector3.new(0,1.5,0),
  ReferenceCrystal=true,SpawnAt=95,ReadyAt=97,MaxHP=300,HP=300,Stage=0,StageCount=3,GroundY=0}) do source:SetAttribute(k,v) end
@@ -40,21 +45,27 @@ crystalFrame(resources,102.06)
 assert(r.visual.stage==1 and #cues==1 and audio[6]=='crystal_chip','the retained contact did not crack once')
 
 shot(103.01,0,3)
-source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.12)
+source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.12);source:SetAttribute('CrystalBreakOwner',42)
 crystalFrame(resources,103)
 assert(r.view.Transparency==0 and not r.visual.broken and #audio==6,'break hid before the shot landed')
 crystalFrame(resources,103.01)
 assert(r.view.Transparency==0 and r.breakSize and #audio==8,'finishing hit did not show its brief hold')
 local height=r.view.Size.Y
-crystalFrame(resources,103.18)
-assert(r.view.Transparency==0 and r.view.Size.Y<height*.8 and not r.visual.broken,'final load must visibly compress before release')
+crystalFrame(resources,103.14)
+local held=r.view.Size
+crystalFrame(resources,103.205)
+assert(r.view.Transparency==0 and held.Y<height*.8 and (r.view.Size-held).Magnitude<1e-6 and not r.visual.broken,
+ 'the compressed rock moved during the hold')
+assert(#audio==8 and #cameraKicks==0,'release cues ran during the hold')
 crystalFrame(resources,103.23)
-assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==8 and #cues==1,'split repeated the final-hit sound')
+assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==10 and #cues==1,
+ 'split failed to play its two layers once')
+assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and #cameraKicks==1 and cameraKicks[1]==103.23)
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}
 late.view.Parent=fx
 crystalFrame({late},103.08)
-assert(late.view.Transparency==1 and #audio==8 and #cues==1,'a late observer replayed a prior hit')
+assert(late.view.Transparency==1 and #audio==10 and #cues==1 and #cameraKicks==1,'a late observer replayed a prior hit')
 
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()

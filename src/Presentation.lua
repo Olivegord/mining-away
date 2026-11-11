@@ -675,7 +675,8 @@ function P:renderDrone(drone,_dt,now)
  else
   self:_removeScan(record)
   for _,item in ipairs(record.parts) do
-   if item.part.Parent then
+   local parent=item.part.Parent
+   if parent and (not drone.ramiel or parent.Name~='RamielGlass' or record.events.dead) then
     item.part.Color=item.color:Lerp(WHITE,hit*.78)
     -- HP can replicate one frame before State. Never leave a dead body at the printer.
     item.part.Transparency=record.events.dead and 1 or item.transparency
@@ -1028,10 +1029,27 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
+function P:crystalKick(position,strength,now)
+ local camera=workspace.CurrentCamera
+ if not camera or now-(self.crystalShakeAt or -math.huge)<.21 then return end
+ local player=game:GetService('Players').LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
+ local amount=math.clamp((50-distance)/40,0,1)^1.3*math.clamp(strength,1,1.3)
+ if amount<=.02 then return end
+ self.crystalShakeAt=now;self.crystalShakeAmount=amount
+ self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
+end
 function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
- return CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local impactAge=now-(self.crystalShakeAt or -100)
+ if impactAge<0 or impactAge>=.31 then return ordinary end
+ local recoil=self.crystalShakeAmount*math.cos(impactAge*31)*(1-impactAge/.31)^2
+ local side=self.crystalShakeSide
+ return ordinary*CFrame.new(side*.37*recoil,-.29*recoil,.16*recoil)
+  *CFrame.Angles(-.045*recoil,side*.011*recoil,side*.026*recoil)
 end
 function P:update(_dt,now)
  if self.closed then return end

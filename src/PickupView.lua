@@ -36,8 +36,20 @@ local function idleGlow(view,tint)
  end
  local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
  local outer=ray(.13,.87,13,warm);local inner=ray(.63,.11,13,PICKUP_HIGHLIGHT)
+ local stars={}
+ for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
+  local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
+  star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
+  star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
+  star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
+  star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+ end
  halo.Parent=view
- return {halo=halo,outer=outer,inner=inner}
+ return {halo=halo,outer=outer,inner=inner,stars=stars}
+end
+local function twinkle(age,start,duration)
+ local t=math.clamp((age-start)/duration,0,1)
+ return math.sin(math.pi*t)^2
 end
 local function removeIdle(self,r)
  if not r.idle then return end
@@ -104,6 +116,7 @@ function V.new(root,parent,audio,reducedMotion)
    local floor=source:GetAttribute('FloorY')
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
+    r.finishing=source:GetAttribute('FinishingCargo')==true
     r.landAge=r.arc.contact
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
@@ -241,18 +254,22 @@ function V:update(dt,now)
      self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
     end
    end
+   if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then
+    r.twinkleCue=true
+    if self.audio and age<.25 then self.audio:play('gem_twinkle',r.drawPosition or r.pos) end
+   end
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
    local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
    local distanceFade=math.clamp((58-idleDistance)/10,0,1)
    local atRest=resting and not seated and (r.physical or r.hasArc)
-   -- A quiet gleam on the stone, with no bob or camera-facing depth offset.
    local settledAge=age-(r.landAge or 0)
-   local gleam=settledAge<.38 and math.sin(math.pi*math.clamp(settledAge/.38,0,1))^2
-    or math.sin(math.pi*math.clamp(((settledAge+.42+r.seed*.61)%3.8)/.28,0,1))^2*.65
+   local gleam=settledAge<.38 and twinkle(settledAge,0,.38)
+    or twinkle((settledAge+.42+r.seed*.61)%3.8,0,.28)*.65
+   local launched=live and r.finishing and displayAt>=r.born and age<.46
    local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
     and gleam*distanceFade*opacity or 0
-   if shine>.01 and not reducedEffects and not r.idle and self.idleCount<12 then
+   if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
    end
    if r.idle then
@@ -260,6 +277,17 @@ function V:update(dt,now)
     else
      r.idle.outer.BackgroundTransparency=1-.65*shine
      r.idle.inner.BackgroundTransparency=1-.81*shine
+     local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
+     local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
+     local width=launched and 2.2 or 1.45
+     r.idle.halo.Size=UDim2.fromScale(width,width)
+     for i,star in ipairs(r.idle.stars) do
+      local pulse=launched and twinkle(age,.035+(i-1)*.078,.19)
+       or twinkle(settledAge,.03+(i-1)*.087,.21)*.75
+      local size=(i==1 and .77 or .46)*(.48+pulse*.52)
+      star.Size=UDim2.fromScale(size,size)
+      star.ImageTransparency=1-pulse*sparkleStrength
+     end
     end
    end
    local arcMix=r.arc and (not r.arcExit and 1 or 1-math.clamp((displayAt-r.arcExit)/.12,0,1)) or 0

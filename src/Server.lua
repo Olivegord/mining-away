@@ -408,11 +408,14 @@ scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=ho
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 if scene.runStart and scene.classicCrystal then
  scene.crystalCuts={}
- -- Only three CSG operations per server; never perform one per node or hit.
+ -- Build the three ore cuts once per server.
  for _,name in ipairs({'Needle','Crown','Gem'}) do
   local shape=CrystalCuts.build(name)
   if shape then scene.crystalCuts[name]=shape end
  end
+ -- Ramiel reuses one solid across all glass forms and drone instances.
+ local pyramid=CrystalCuts.build('RamielPyramid')
+ if pyramid then pyramid.Parent=net end
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
@@ -794,6 +797,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
   if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
+  if drop.finishing then chip:SetAttribute('FinishingCargo',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
@@ -1433,7 +1437,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
-   r.part:SetAttribute('CrystalBreakAt',now);r.part:SetAttribute('CrystalSplitAt',now+OreDrops.BREAK_DELAY)
+   r.part:SetAttribute('CrystalBreakOwner',recipient.owner)
+   r.part:SetAttribute('CrystalSplitAt',now+OreDrops.BREAK_DELAY)
+   r.part:SetAttribute('CrystalBreakAt',now)
   end
  end
  if shotKind and hitSurface then

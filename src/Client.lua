@@ -19,7 +19,9 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
+ presentation:crystalKick(position,strength,now)
+end)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -57,7 +59,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   end
  end
  if now>=burnShakeAt then burnShakeAt=now+.075 end
- if camera and player:GetAttribute('ReducedMotion')~=true and player:GetAttribute('MA_ReducedMotion')~=true then
+ if camera and not CrystalImpactView.reducedMotion() then
   previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
@@ -1171,7 +1173,7 @@ local function renderDrone(d,dt,now)
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=d.ramiel and state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
@@ -1207,7 +1209,6 @@ local function renderDrone(d,dt,now)
     release=age>=windup and 1-math.clamp((age-windup)/.52,0,1) or 0
    end
   end
-  if reduced then charge*=.42;release*=.42 end
   DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,release,reduced and 0 or now*.38%6.283)
  end
  if s:GetAttribute('Role')=='Compactor' then
@@ -1225,7 +1226,7 @@ local function renderDrone(d,dt,now)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
-  elseif not d.ramiel or part~=d.ramiel.core then part.Transparency=original end
+  elseif not (d.ramiel and part.Parent and part.Parent.Name=='RamielGlass') then part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true

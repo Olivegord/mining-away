@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — rock impact and Ramiel’s main shot
+
+Give the final rock break a brief pause, screen shake, and a distinctive sound with shiny twinkles. Use moving footage to match Ramiel’s main red beam attack. This supersedes the earlier opening panels and silent split.
+
 ## November 11 — make the break feel earned
 
 The rock should show pressure before it gives way. Make the split much more satisfying and make the dropped rock look valuable and stay still after landing. Try distinct crystal silhouettes in the existing mineral style. Research the charge and effects. Add a glass Ramiel drone with unfolding geometric motion and bring back Orbital with a stronger warning and strike. Preserve the curated starter fleet and keep these two as earned permanent options.

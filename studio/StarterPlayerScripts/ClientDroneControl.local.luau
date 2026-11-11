@@ -1258,7 +1258,9 @@ local CUES = {
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
  prism_fire={id='9118612324',volume=.24,duration=.56,pitch=1.21,cooldown=.14,range=70,maxVoices=2,fallback='action_jump_land.mp3'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
- crystal_split={id='9125869495',volume=.27,duration=.55,pitch=.73,cooldown=.105,range=76,maxVoices=3,fallback='action_jump_land.mp3'},
+ crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
+ crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
+ gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
  pack_step={id='9126066421',volume=.16,duration=.38,pitch=1.1,cooldown=.09,range=30,fallback='volume_slider.ogg'},
@@ -1990,6 +1992,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
+ Prism={body=1.1,core=.08,taper=.84,orbit=.23,spin=1.8,star=.32,tail=.45},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -5522,6 +5525,8 @@ local RoleEffectView = (function()
 local View={}
 local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
+local PRISM_RED=Color3.fromRGB(249,22,60)
+local PRISM_HOT=Color3.fromRGB(255,105,101)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
@@ -5643,16 +5648,16 @@ function View.new(audio)
      if landed and not r.impacted then
       r.impacted=true
       local point=node:GetAttribute('ContactPoint') or to
-      local origin=drone and drone.view:GetPivot().Position or from
+      local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
       local travel=point-origin
       if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       RoleVisuals.Beam(origin+travel.Unit*.28,point,color,reduced and .85 or 2.30,.33,'Lance')
+       RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
        if not reduced then
-        RoleVisuals.Beam(origin+travel.Unit*.32,point,Color3.fromRGB(225,240,255),.63,.21,'Lance')
+        RoleVisuals.Beam(origin,point,PRISM_HOT,.92,.23,'Prism')
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
-         node:GetAttribute('ContactNormal') or -travel.Unit,color,true,true,1.35,now)
+         node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
        end
        if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.25,pitch=.77}) end
       end
@@ -5868,7 +5873,7 @@ local function part(parent,class,name,color)
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
  return p
 end
-function V.new(parent,audio)
+function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin}
@@ -5916,22 +5921,30 @@ function V.new(parent,audio)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.25,.96,2.10)
+  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)
   local point=Vector3.new(frame.Position.X,ground+math.max(.52,v.Size.Y*.34),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
+  local player=Players.LocalPlayer
+  local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
+  if audio then
+   local volume=owned and 1 or .62
+   audio:play('crystal_split',point,{level=volume})
+   audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+  end
+  if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
    if #self.pieces>=46 then break end
    local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .32 or .09))
-   wing.Size=Vector3.new(.72,1.43,1.04)*strength
+   wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(4.6+strength)+Vector3.yAxis*(4.8+strength),.51,ground,Vector3.new(side*.7,side*.5,side*.2))
+   track(wing,now,origin,axis*side*(6.4+strength)+Vector3.yAxis*(3.9+strength),.47,ground,Vector3.new(side*.7,side*.5,side*.2))
   end
   if not reduced then
    if RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.8,strength*4.4,.42)
+    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.55,strength*5.6,.43)
    end
    self:chips(now,point,frame.LookVector,r.baseColor:Lerp(WARM,.30),4,false,nil,ground)
    self:chips(now,point,-frame.LookVector,r.baseColor:Lerp(WARM,.12),3,false,nil,ground)
@@ -5970,6 +5983,7 @@ function V.new(parent,audio)
     local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
     local pressure=(r.pressure or 0)*afterglow
     local load=r.finalLoad or 0
+    if load>=1 then white=reduced and .07 or .22 end
     local warm=math.max(pressure*(.21+.15*pulse),load*.76)
     view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
     if initial<=0 then r.flashAt=nil end
@@ -6019,15 +6033,12 @@ function V.new(parent,audio)
    if not r.restPose then r.lastBreakAt=breakAt;return end
    if now<release then
     local nearby=BeamVFX.near(v.Position,92)
-    local load=math.clamp((now-breakAt)/math.max(.001,release-breakAt-.035),0,1)^2
+    -- Finish the compression first, then hold the complete pose for 90 ms.
+    -- The server can already dispatch the crew's next target during this beat.
+    local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
+    load=1-(1-load)^3
     if nearby and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
-     if not r.finalCue and release-breakAt>.15 then
-      r.finalCue=true
-      if not s:GetAttribute('CutIsShot') and audio then
-       audio:play('crystal_snap',s:GetAttribute('CutContactPoint') or v.Position,{pitch=.83,level=.74})
-      end
-     end
      if not BeamVFX.reduced() and not V.reducedMotion() then
       r.breakSize=r.breakSize or v.Size
       local squash=r.breakSize*Vector3.new(1+.10*load,1-.27*load,1+.10*load)
@@ -6739,7 +6750,8 @@ function P:renderDrone(drone,_dt,now)
  else
   self:_removeScan(record)
   for _,item in ipairs(record.parts) do
-   if item.part.Parent then
+   local parent=item.part.Parent
+   if parent and (not drone.ramiel or parent.Name~='RamielGlass' or record.events.dead) then
     item.part.Color=item.color:Lerp(WHITE,hit*.78)
     -- HP can replicate one frame before State. Never leave a dead body at the printer.
     item.part.Transparency=record.events.dead and 1 or item.transparency
@@ -7092,10 +7104,27 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
+function P:crystalKick(position,strength,now)
+ local camera=workspace.CurrentCamera
+ if not camera or now-(self.crystalShakeAt or -math.huge)<.21 then return end
+ local player=game:GetService('Players').LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
+ local amount=math.clamp((50-distance)/40,0,1)^1.3*math.clamp(strength,1,1.3)
+ if amount<=.02 then return end
+ self.crystalShakeAt=now;self.crystalShakeAmount=amount
+ self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
+end
 function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
- return CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local impactAge=now-(self.crystalShakeAt or -100)
+ if impactAge<0 or impactAge>=.31 then return ordinary end
+ local recoil=self.crystalShakeAmount*math.cos(impactAge*31)*(1-impactAge/.31)^2
+ local side=self.crystalShakeSide
+ return ordinary*CFrame.new(side*.37*recoil,-.29*recoil,.16*recoil)
+  *CFrame.Angles(-.045*recoil,side*.011*recoil,side*.026*recoil)
 end
 function P:update(_dt,now)
  if self.closed then return end
@@ -10152,8 +10181,20 @@ local function idleGlow(view,tint)
  end
  local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
  local outer=ray(.13,.87,13,warm);local inner=ray(.63,.11,13,PICKUP_HIGHLIGHT)
+ local stars={}
+ for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
+  local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
+  star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
+  star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
+  star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
+  star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+ end
  halo.Parent=view
- return {halo=halo,outer=outer,inner=inner}
+ return {halo=halo,outer=outer,inner=inner,stars=stars}
+end
+local function twinkle(age,start,duration)
+ local t=math.clamp((age-start)/duration,0,1)
+ return math.sin(math.pi*t)^2
 end
 local function removeIdle(self,r)
  if not r.idle then return end
@@ -10220,6 +10261,7 @@ function V.new(root,parent,audio,reducedMotion)
    local floor=source:GetAttribute('FloorY')
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
+    r.finishing=source:GetAttribute('FinishingCargo')==true
     r.landAge=r.arc.contact
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
@@ -10357,18 +10399,22 @@ function V:update(dt,now)
      self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
     end
    end
+   if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then
+    r.twinkleCue=true
+    if self.audio and age<.25 then self.audio:play('gem_twinkle',r.drawPosition or r.pos) end
+   end
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
    local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
    local distanceFade=math.clamp((58-idleDistance)/10,0,1)
    local atRest=resting and not seated and (r.physical or r.hasArc)
-   -- A quiet gleam on the stone, with no bob or camera-facing depth offset.
    local settledAge=age-(r.landAge or 0)
-   local gleam=settledAge<.38 and math.sin(math.pi*math.clamp(settledAge/.38,0,1))^2
-    or math.sin(math.pi*math.clamp(((settledAge+.42+r.seed*.61)%3.8)/.28,0,1))^2*.65
+   local gleam=settledAge<.38 and twinkle(settledAge,0,.38)
+    or twinkle((settledAge+.42+r.seed*.61)%3.8,0,.28)*.65
+   local launched=live and r.finishing and displayAt>=r.born and age<.46
    local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
     and gleam*distanceFade*opacity or 0
-   if shine>.01 and not reducedEffects and not r.idle and self.idleCount<12 then
+   if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
    end
    if r.idle then
@@ -10376,6 +10422,17 @@ function V:update(dt,now)
     else
      r.idle.outer.BackgroundTransparency=1-.65*shine
      r.idle.inner.BackgroundTransparency=1-.81*shine
+     local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
+     local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
+     local width=launched and 2.2 or 1.45
+     r.idle.halo.Size=UDim2.fromScale(width,width)
+     for i,star in ipairs(r.idle.stars) do
+      local pulse=launched and twinkle(age,.035+(i-1)*.078,.19)
+       or twinkle(settledAge,.03+(i-1)*.087,.21)*.75
+      local size=(i==1 and .77 or .46)*(.48+pulse*.52)
+      star.Size=UDim2.fromScale(size,size)
+      star.ImageTransparency=1-pulse*sparkleStrength
+     end
     end
    end
    local arcMix=r.arc and (not r.arcExit and 1 or 1-math.clamp((displayAt-r.arcExit)/.12,0,1)) or 0
@@ -11211,7 +11268,9 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
+ presentation:crystalKick(position,strength,now)
+end)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -11249,7 +11308,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   end
  end
  if now>=burnShakeAt then burnShakeAt=now+.075 end
- if camera and player:GetAttribute('ReducedMotion')~=true and player:GetAttribute('MA_ReducedMotion')~=true then
+ if camera and not CrystalImpactView.reducedMotion() then
   previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
@@ -12363,7 +12422,7 @@ local function renderDrone(d,dt,now)
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=d.ramiel and state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
@@ -12399,7 +12458,6 @@ local function renderDrone(d,dt,now)
     release=age>=windup and 1-math.clamp((age-windup)/.52,0,1) or 0
    end
   end
-  if reduced then charge*=.42;release*=.42 end
   DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,release,reduced and 0 or now*.38%6.283)
  end
  if s:GetAttribute('Role')=='Compactor' then
@@ -12417,7 +12475,7 @@ local function renderDrone(d,dt,now)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
-  elseif not d.ramiel or part~=d.ramiel.core then part.Transparency=original end
+  elseif not (d.ramiel and part.Parent and part.Parent.Name=='RamielGlass') then part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true

@@ -17,7 +17,7 @@ local function part(parent,class,name,color)
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
  return p
 end
-function V.new(parent,audio)
+function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin}
@@ -65,22 +65,30 @@ function V.new(parent,audio)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.25,.96,2.10)
+  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)
   local point=Vector3.new(frame.Position.X,ground+math.max(.52,v.Size.Y*.34),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
+  local player=Players.LocalPlayer
+  local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
+  if audio then
+   local volume=owned and 1 or .62
+   audio:play('crystal_split',point,{level=volume})
+   audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+  end
+  if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
    if #self.pieces>=46 then break end
    local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .32 or .09))
-   wing.Size=Vector3.new(.72,1.43,1.04)*strength
+   wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(4.6+strength)+Vector3.yAxis*(4.8+strength),.51,ground,Vector3.new(side*.7,side*.5,side*.2))
+   track(wing,now,origin,axis*side*(6.4+strength)+Vector3.yAxis*(3.9+strength),.47,ground,Vector3.new(side*.7,side*.5,side*.2))
   end
   if not reduced then
    if RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.8,strength*4.4,.42)
+    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.55,strength*5.6,.43)
    end
    self:chips(now,point,frame.LookVector,r.baseColor:Lerp(WARM,.30),4,false,nil,ground)
    self:chips(now,point,-frame.LookVector,r.baseColor:Lerp(WARM,.12),3,false,nil,ground)
@@ -119,6 +127,7 @@ function V.new(parent,audio)
     local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
     local pressure=(r.pressure or 0)*afterglow
     local load=r.finalLoad or 0
+    if load>=1 then white=reduced and .07 or .22 end
     local warm=math.max(pressure*(.21+.15*pulse),load*.76)
     view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
     if initial<=0 then r.flashAt=nil end
@@ -168,15 +177,12 @@ function V.new(parent,audio)
    if not r.restPose then r.lastBreakAt=breakAt;return end
    if now<release then
     local nearby=BeamVFX.near(v.Position,92)
-    local load=math.clamp((now-breakAt)/math.max(.001,release-breakAt-.035),0,1)^2
+    -- Finish the compression first, then hold the complete pose for 90 ms.
+    -- The server can already dispatch the crew's next target during this beat.
+    local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
+    load=1-(1-load)^3
     if nearby and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
-     if not r.finalCue and release-breakAt>.15 then
-      r.finalCue=true
-      if not s:GetAttribute('CutIsShot') and audio then
-       audio:play('crystal_snap',s:GetAttribute('CutContactPoint') or v.Position,{pitch=.83,level=.74})
-      end
-     end
      if not BeamVFX.reduced() and not V.reducedMotion() then
       r.breakSize=r.breakSize or v.Size
       local squash=r.breakSize*Vector3.new(1+.10*load,1-.27*load,1+.10*load)
