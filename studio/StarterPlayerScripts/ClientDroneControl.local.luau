@@ -7410,6 +7410,47 @@ function CardView.housing(U,root,color,_accent)
  return edge
 end
 
+local function safePreview(model)
+ for _,c in ipairs(model:GetDescendants()) do
+  if c:IsA('LuaSourceContainer') or c:IsA('Sound') or c:IsA('BillboardGui') or c:IsA('SurfaceGui') then c:Destroy()
+  elseif c:IsA('BasePart') then c.Anchored=true;c.CanCollide=false;c.CanTouch=false;c.CanQuery=false;c.CastShadow=false;c.Reflectance=0
+  elseif c:IsA('Trail') or c:IsA('Beam') or c:IsA('ParticleEmitter') then c.Enabled=false end
+ end
+end
+local function previewDrone(role,tint,readable)
+ local storage=game:GetService('ReplicatedStorage')
+ local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+ if not template or not template:IsA('Model') then return end
+ local config=storage:FindFirstChild('Shared')
+ config=config and config:FindFirstChild('DroneConfig')
+ local model=template:Clone();safePreview(model)
+ if config then
+  require(config).decorate(model,role,nil,readable)
+ else
+  local shell=model:FindFirstChild('Mesh')
+  if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(tint,.25) end
+ end
+ safePreview(model)
+ return model
+end
+
+function CardView.dronePortrait(parent,position,size,kind,tint)
+ local role=kind=='Blue' and 'Striker' or kind=='Red' and 'Charger' or kind
+ local model=previewDrone(role,tint,true)
+ if not model then return end
+ local viewport=Instance.new('ViewportFrame');viewport.Name='DronePortrait';viewport.BackgroundTransparency=1
+ viewport.Position=position;viewport.Size=size;viewport.ZIndex=parent.ZIndex+2
+ viewport.Ambient=Color3.fromRGB(182,187,198);viewport.LightColor=Color3.fromRGB(255,245,226)
+ viewport.LightDirection=Vector3.new(-1,-2,1);viewport.Parent=parent
+ local world=Instance.new('WorldModel');world.Parent=viewport
+ local box,bounds=model:GetBoundingBox()
+ model:PivotTo(box:Inverse()*model:GetPivot());model.Parent=world
+ local camera=Instance.new('Camera');camera.FieldOfView=36
+ local from=Vector3.new(1,.48,-1.35).Unit*bounds.Magnitude*1.65
+ camera.CFrame=CFrame.lookAt(from,Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
+ return viewport
+end
+
 local function mechanicVisual(parent,choice,compact)
  local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+4
  viewport.Position=UDim2.fromScale(.045,.022);viewport.Size=UDim2.fromScale(.91,compact and .32 or .46)
@@ -7418,26 +7459,9 @@ local function mechanicVisual(parent,choice,compact)
  local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.new(0,-.1,0));camera.Parent=viewport;viewport.CurrentCamera=camera
  local identity,body,accent=CardView.identity(choice)
  local storage=game:GetService('ReplicatedStorage')
- local config=storage:FindFirstChild('Shared');config=config and config:FindFirstChild('DroneConfig')
- local roles=config and require(config)
- local function safe(model)
-  for _,c in ipairs(model:GetDescendants()) do
-   if c:IsA('LuaSourceContainer') or c:IsA('Sound') or c:IsA('BillboardGui') or c:IsA('SurfaceGui') then c:Destroy()
-   elseif c:IsA('BasePart') then c.Anchored=true;c.CanCollide=false;c.CanTouch=false;c.CanQuery=false;c.CastShadow=false;c.Reflectance=0
-   elseif c:IsA('Trail') or c:IsA('Beam') or c:IsA('ParticleEmitter') then c.Enabled=false end
-  end
- end
  local function drone(role,size,position,rotation)
-  local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
-  if not template or not template:IsA('Model') then return end
-  local model=template:Clone();safe(model)
-  if roles then
-   roles.decorate(model,role)
-  else
-   local shell=model:FindFirstChild('Mesh')
-   if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25) end
-  end
-  safe(model)
+  local model=previewDrone(role,body)
+  if not model then return end
   local _,bounds=model:GetBoundingBox();model:ScaleTo(model:GetScale()*size/math.max(bounds.X,bounds.Y,bounds.Z,.01))
   local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())
   model.Parent=world;return model
@@ -7447,7 +7471,7 @@ local function mechanicVisual(parent,choice,compact)
   local original=storage:FindFirstChild('Crystal') or workspace:FindFirstChild('Crystal')
   local template=(net and net:FindFirstChild('CargoCrystal')) or (original and original:FindFirstChild('Mesh',true))
   if not template or not template:IsA('BasePart') then return end
-  local part=template:Clone();safe(part)
+  local part=template:Clone();safePreview(part)
   part.Size=template.Size*(size/math.max(template.Size.Y,.01));part.CFrame=CFrame.new(position)*(rotation or CFrame.new())
   if part:IsA('PartOperation') then part.UsePartColor=true end
   part.Color=color;part.Material=material or Enum.Material.SmoothPlastic;part.MaterialVariant=''
@@ -7816,17 +7840,48 @@ function CardView.create(U,parent,choice,index,width,height,options)
 end
 
 -- This acknowledges the chosen drone after the save commits.
-function CardView.revealDrone(U,parent,width,reward,audio,_isVisible,onClose)
+function CardView.revealDrone(U,parent,width,reward,audio,onClose,settled)
  local p=U.palette
  local tint=rarityColor(reward.rewardTier)
- local view=U.panel(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,124),p.ink:Lerp(tint,.22),14)
- view.Name='PrestigeReward';U.stroke(view,tint,2)
- U.icon(view,'drone',UDim2.fromOffset(16,28),UDim2.fromOffset(48,48),tint)
- local name=U.text(view,UDim2.fromOffset(79,19),UDim2.new(1,-90,0,32),reward.rewardName,23,p.white,true)
- local job=U.text(view,UDim2.fromOffset(79,58),UDim2.new(1,-90,0,51),reward.rewardJob,15,p.white,false)
- job.TextWrapped=true;name.TextWrapped=true
- U.button(parent,UDim2.new(.5,-74,0,153),UDim2.fromOffset(148,42),'Continue',onClose,tint)
- audio:play('prestige')
+ local art=width<270 and 60 or 88
+ local textX=art+19
+ local textWidth=width-6-textX-10
+ local measure=game:GetService('TextService')
+ local nameHeight=measure:GetTextSize(reward.rewardName,22,Enum.Font.SourceSansBold,Vector2.new(textWidth,1000)).Y+4
+ local jobHeight=measure:GetTextSize(reward.rewardJob,16,Enum.Font.SourceSans,Vector2.new(textWidth,1000)).Y+4
+ local count=tonumber(reward.fleetCount)
+ local height=math.max(art+16,18+nameHeight+jobHeight)+(count and 33 or 0)
+ local view=U.frame(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,height),p.ink:Lerp(tint,.12))
+ view.Name='PrestigeReward';U.corner(view,5);U.stroke(view,tint,1)
+ CardView.dronePortrait(view,UDim2.fromOffset(8,8),UDim2.fromOffset(art,art),reward.droneType,tint)
+ U.text(view,UDim2.fromOffset(textX,9),UDim2.fromOffset(textWidth,nameHeight),reward.rewardName,22,p.white,true)
+ U.text(view,UDim2.fromOffset(textX,9+nameHeight),UDim2.fromOffset(textWidth,jobHeight),reward.rewardJob,16,p.white,false)
+ if count then
+  local row=U.frame(view,UDim2.new(0,8,1,-32),UDim2.new(1,-16,0,24),p.ink)
+  row.BackgroundTransparency=1
+  U.text(row,UDim2.fromOffset(2,0),UDim2.new(1,-65,1,0),'Permanent drones',16,p.muted,false)
+  local ticker=U.frame(row,UDim2.new(1,-61,0,0),UDim2.fromOffset(60,24),p.ink)
+  ticker.ClipsDescendants=true;U.corner(ticker,3)
+  local function digit(value,y)
+   local text=U.text(ticker,UDim2.fromOffset(0,y),UDim2.fromScale(1,1),tostring(value),18,p.white,true)
+   text.TextXAlignment=Enum.TextXAlignment.Center
+   return text
+  end
+  local reduced=settled==true
+  pcall(function() reduced=reduced or GuiService.ReducedMotionEnabled end)
+  local player=Players.LocalPlayer
+  reduced=reduced or (player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true))
+  local current=digit(count,reduced and 0 or 24)
+  if not reduced then
+   local before=digit(count-1,0)
+   local tween=game:GetService('TweenService')
+   local duration=TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+   tween:Create(before,duration,{Position=UDim2.fromOffset(0,-24)}):Play()
+   tween:Create(current,duration,{Position=UDim2.fromOffset(0,0)}):Play()
+  end
+ end
+ U.button(parent,UDim2.new(.5,-74,0,height+24),UDim2.fromOffset(148,42),'Continue',onClose,tint)
+ if not settled then audio:play('prestige') end
 end
 return CardView
 
@@ -10082,11 +10137,12 @@ local function layoutModal()
  end
  if modalMode=='reward' then
   l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(360,l.panelHeight)
+  l.headerHeight=72
   l.bodyWidth=l.panelWidth-2*l.panelPadding;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='prestige' then
-  l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(490,l.panelHeight)
+  l.panelWidth=math.min(l.short and 720 or 520,l.panelWidth);l.panelHeight=math.min(520,l.panelHeight)
   l.headerHeight=l.short and 58 or 64
   l.bodyWidth=math.max(1,l.panelWidth-2*l.panelPadding)
   l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
@@ -10171,6 +10227,12 @@ local function menu(mode,title,subtitle,icon)
   modalTitle.Text='Prestige';modalTitle.Font=Enum.Font.SourceSansBold;modalTitle.TextSize=l.short and 25 or 30
   modalTitle.Position=UDim2.fromOffset(l.panelPadding,10);modalTitle.Size=UDim2.new(1,-90,0,36)
   modalTitle.TextStrokeTransparency=1
+ elseif mode=='reward' then
+  modalEmblem.Visible=false
+  modalTitle.Font=Enum.Font.SourceSansBold;modalTitle.TextSize=25
+  modalTitle.Position=UDim2.fromOffset(l.panelPadding,9);modalTitle.Size=UDim2.new(1,-l.panelPadding-56,0,31)
+  modalSubtitle.TextSize=16
+  modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,42);modalSubtitle.Size=UDim2.new(1,-2*l.panelPadding,0,24)
  end
  modal.Visible=true
  packView:setFocus(inOffer)
@@ -10430,6 +10492,8 @@ openPrestige=function()
  local can=pre.eligible==true and not paid and allowed
  local choices=pre.droneChoices or {}
  local selected=offerUI.prestigeRun==pre.runId and offerUI.prestigeChoice or nil
+ local selectedName,confirm
+ local marks={}
  local textService=game:GetService('TextService')
  local function heightFor(text,size,bold,availableWidth)
   local font=bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
@@ -10441,24 +10505,42 @@ openPrestige=function()
   local headingHeight=math.max(28,heightFor(heading,20,true,width))
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,headingHeight),heading,20,palette.text,true)
   y+=headingHeight+6
+  local sideBySide=l.short and width>=608
+  local rowWidth=sideBySide and math.floor((width-16)/3) or width
+  local artSize=sideBySide and 46 or (width<235 and 46 or 58)
+  local textX=sideBySide and 8 or artSize+16
+  local textWidth=rowWidth-textX-9
+  local nameY=sideBySide and artSize+4 or 5
+  local jobY=nameY+22
+  local tallest=0
   for i,entry in ipairs(choices) do
    local chosen=entry.kind==selected
-   local jobHeight=heightFor(entry.job,16,false,width-24)
-   local rowHeight=math.max(46,jobHeight+26)
-   local pick=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,rowHeight),'',function()
+   if chosen then selectedName=entry.name end
+   local jobHeight=heightFor(entry.job,16,false,textWidth)
+   local rowHeight=math.max(artSize+8,jobHeight+jobY+2)
+   local x=4+(sideBySide and (i-1)*(rowWidth+8) or 0)
+   local pick=button(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,rowHeight),'',function()
     if not can or actionPending then return end
+    selected=entry.kind;selectedName=entry.name
     offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
-    local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
-   end,chosen and Color3.fromRGB(32,87,71) or palette.paper)
+    for kind,edge in pairs(marks) do edge.Enabled=kind==selected end
+    confirm.Text='Prestige with '..selectedName;enableAction(confirm,true)
+   end,palette.paper)
    U.unskin(pick);corner(pick,4)
-   label(pick,UDim2.fromOffset(12,3),UDim2.new(1,chosen and -88 or -24,0,21),entry.name,18,palette.text,true)
-   label(pick,UDim2.fromOffset(12,24),UDim2.new(1,-24,0,jobHeight),entry.job,16,palette.muted)
-   if chosen then
-    local mark=label(pick,UDim2.new(1,-76,0,3),UDim2.fromOffset(64,21),'Selected',16,Color3.fromRGB(161,237,185),true)
-    mark.TextXAlignment=Enum.TextXAlignment.Right
-   end
+   local artPosition=sideBySide and UDim2.new(.5,-artSize/2,0,4) or UDim2.fromOffset(5,math.floor((rowHeight-artSize)/2))
+   CardView.dronePortrait(pick,artPosition,UDim2.fromOffset(artSize,artSize),entry.kind,palette.mineral)
+   local name=label(pick,UDim2.fromOffset(textX,nameY),UDim2.fromOffset(textWidth,22),entry.name,18,palette.text,true)
+   local job=label(pick,UDim2.fromOffset(textX,jobY),UDim2.fromOffset(textWidth,jobHeight),entry.job,16,palette.muted)
+   if sideBySide then name.TextXAlignment=Enum.TextXAlignment.Center;job.TextXAlignment=Enum.TextXAlignment.Center end
+   local edge=U.stroke(pick,Color3.fromRGB(161,237,185),2)
+   edge.Enabled=chosen;marks[entry.kind]=edge
    pick.Name='PrestigeDrone'..i;enableAction(pick,can)
-   y+=rowHeight+6
+   if not sideBySide then y+=rowHeight+6 end
+   tallest=math.max(tallest,rowHeight)
+  end
+  if sideBySide then
+   for _,edge in pairs(marks) do edge.Parent.Size=UDim2.fromOffset(rowWidth,tallest) end
+   y+=tallest+6
   end
  else
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,28),'Quartz sold this run',20,palette.text,true)
@@ -10469,35 +10551,40 @@ openPrestige=function()
  end
  local bonusBefore=math.floor((pre.miningBonusBefore or 0)*100)
  local bonusAfter=math.floor((pre.miningBonusAfter or .25)*100)
- local bonus=('+%d%% → +%d%% base mining'):format(bonusBefore,bonusAfter)
- if #choices==0 then bonus='+1 drone · '..bonus end
+ local bonus=('+%d%% → +%d%% base mining power'):format(bonusBefore,bonusAfter)
+ if #choices==0 then bonus='+1 permanent drone · '..bonus end
  local bonusHeight=math.max(25,heightFor(bonus,17,true,width))
  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,bonusHeight),bonus,17,Color3.fromRGB(161,237,185),true)
- y+=bonusHeight+7
+ y+=bonusHeight+5
  frame(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,1),palette.paper)
- y+=7
+ y+=5
  local function terms(name,copy,tint)
   local height=heightFor(copy,16,false,width)
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,height),copy,16,tint).Name=name
-  y+=height+5
+  y+=height+4
  end
- terms('PrestigeKeep','Keep your fleet, base traits, stored tools, transport and cleared plots.',palette.text)
+ terms('PrestigeKeep','Keep all '..tostring(pre.fleetBefore or #profile.fleet)..' permanent drones, their traits, stored tools, transport and cleared plots.',palette.text)
  terms('PrestigeReset','Reset balances, all cargo, cards, Stars, run upgrades, field access, pack prices and sale progress.',palette.muted)
- y+=7
+ y+=3
  if #choices==0 then
   local reason=paid and 'Choose your paid pack card first.' or ('Sell '..comma(math.max(0,required-earnings))..' more Quartz.')
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,40),reason,17,palette.text,true)
   return
  end
  local waiting=actionPending and actionPending.kind=='Prestige'
- local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selected and 'Start a new run' or 'Select a drone'))
- local confirm
+ local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selectedName and 'Prestige with '..selectedName or 'Select a drone'))
  confirm=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,46),reason,function()
   if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
    confirm.Text='Starting new run…';enableAction(confirm,false)
   end
  end,palette.mineral)
  U.unskin(confirm);corner(confirm,5);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil and not waiting)
+end
+local function openDroneReward(reward,settled)
+ local l=menu('reward','Drone unlocked','+25% base mining power','drone')
+ CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,function()
+  offerUI.droneReward=nil;modal.Visible=false;modalMode=nil
+ end,settled)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -10508,6 +10595,9 @@ local function refreshModal()
  elseif mode=='shop' then openShop()
  elseif mode=='stars' then openStars()
  elseif mode=='prestige' then openPrestige()
+ elseif mode=='reward' then
+  if not offerUI.droneReward or (modalSize and (viewport()-modalSize).Magnitude<=1) then return end
+  openDroneReward(offerUI.droneReward,true)
  elseif mode=='fleet' then openFleet()
  elseif mode=='run' then openRunCards() end
  task.defer(function()
@@ -10594,10 +10684,8 @@ connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
  if not ok or type(reward)~='table' or not reward.rewardName then return end
  menuStation=nil
  if logisticsView then logisticsView:close() end
- local l=menu('reward','DRONE UNLOCKED','Permanent crew · +25% base mining power','drone')
- CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,
-  function() return modal.Visible and modalMode=='reward' end,
-  function() modal.Visible=false;modalMode=nil end)
+ offerUI.droneReward=reward
+ openDroneReward(reward)
 end)
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5

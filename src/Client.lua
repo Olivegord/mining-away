@@ -233,11 +233,12 @@ local function layoutModal()
  end
  if modalMode=='reward' then
   l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(360,l.panelHeight)
+  l.headerHeight=72
   l.bodyWidth=l.panelWidth-2*l.panelPadding;l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-16)
   l.panelX=(v.X-l.panelWidth)/2;l.panelY=(v.Y-l.panelHeight)/2
  end
  if modalMode=='prestige' then
-  l.panelWidth=math.min(520,l.panelWidth);l.panelHeight=math.min(490,l.panelHeight)
+  l.panelWidth=math.min(l.short and 720 or 520,l.panelWidth);l.panelHeight=math.min(520,l.panelHeight)
   l.headerHeight=l.short and 58 or 64
   l.bodyWidth=math.max(1,l.panelWidth-2*l.panelPadding)
   l.bodyHeight=math.max(1,l.panelHeight-l.headerHeight-l.panelPadding)
@@ -322,6 +323,12 @@ local function menu(mode,title,subtitle,icon)
   modalTitle.Text='Prestige';modalTitle.Font=Enum.Font.SourceSansBold;modalTitle.TextSize=l.short and 25 or 30
   modalTitle.Position=UDim2.fromOffset(l.panelPadding,10);modalTitle.Size=UDim2.new(1,-90,0,36)
   modalTitle.TextStrokeTransparency=1
+ elseif mode=='reward' then
+  modalEmblem.Visible=false
+  modalTitle.Font=Enum.Font.SourceSansBold;modalTitle.TextSize=25
+  modalTitle.Position=UDim2.fromOffset(l.panelPadding,9);modalTitle.Size=UDim2.new(1,-l.panelPadding-56,0,31)
+  modalSubtitle.TextSize=16
+  modalSubtitle.Position=UDim2.fromOffset(l.panelPadding,42);modalSubtitle.Size=UDim2.new(1,-2*l.panelPadding,0,24)
  end
  modal.Visible=true
  packView:setFocus(inOffer)
@@ -581,6 +588,8 @@ openPrestige=function()
  local can=pre.eligible==true and not paid and allowed
  local choices=pre.droneChoices or {}
  local selected=offerUI.prestigeRun==pre.runId and offerUI.prestigeChoice or nil
+ local selectedName,confirm
+ local marks={}
  local textService=game:GetService('TextService')
  local function heightFor(text,size,bold,availableWidth)
   local font=bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
@@ -592,24 +601,42 @@ openPrestige=function()
   local headingHeight=math.max(28,heightFor(heading,20,true,width))
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,headingHeight),heading,20,palette.text,true)
   y+=headingHeight+6
+  local sideBySide=l.short and width>=608
+  local rowWidth=sideBySide and math.floor((width-16)/3) or width
+  local artSize=sideBySide and 46 or (width<235 and 46 or 58)
+  local textX=sideBySide and 8 or artSize+16
+  local textWidth=rowWidth-textX-9
+  local nameY=sideBySide and artSize+4 or 5
+  local jobY=nameY+22
+  local tallest=0
   for i,entry in ipairs(choices) do
    local chosen=entry.kind==selected
-   local jobHeight=heightFor(entry.job,16,false,width-24)
-   local rowHeight=math.max(46,jobHeight+26)
-   local pick=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,rowHeight),'',function()
+   if chosen then selectedName=entry.name end
+   local jobHeight=heightFor(entry.job,16,false,textWidth)
+   local rowHeight=math.max(artSize+8,jobHeight+jobY+2)
+   local x=4+(sideBySide and (i-1)*(rowWidth+8) or 0)
+   local pick=button(body,UDim2.fromOffset(x,y),UDim2.fromOffset(rowWidth,rowHeight),'',function()
     if not can or actionPending then return end
+    selected=entry.kind;selectedName=entry.name
     offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
-    local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
-   end,chosen and Color3.fromRGB(32,87,71) or palette.paper)
+    for kind,edge in pairs(marks) do edge.Enabled=kind==selected end
+    confirm.Text='Prestige with '..selectedName;enableAction(confirm,true)
+   end,palette.paper)
    U.unskin(pick);corner(pick,4)
-   label(pick,UDim2.fromOffset(12,3),UDim2.new(1,chosen and -88 or -24,0,21),entry.name,18,palette.text,true)
-   label(pick,UDim2.fromOffset(12,24),UDim2.new(1,-24,0,jobHeight),entry.job,16,palette.muted)
-   if chosen then
-    local mark=label(pick,UDim2.new(1,-76,0,3),UDim2.fromOffset(64,21),'Selected',16,Color3.fromRGB(161,237,185),true)
-    mark.TextXAlignment=Enum.TextXAlignment.Right
-   end
+   local artPosition=sideBySide and UDim2.new(.5,-artSize/2,0,4) or UDim2.fromOffset(5,math.floor((rowHeight-artSize)/2))
+   CardView.dronePortrait(pick,artPosition,UDim2.fromOffset(artSize,artSize),entry.kind,palette.mineral)
+   local name=label(pick,UDim2.fromOffset(textX,nameY),UDim2.fromOffset(textWidth,22),entry.name,18,palette.text,true)
+   local job=label(pick,UDim2.fromOffset(textX,jobY),UDim2.fromOffset(textWidth,jobHeight),entry.job,16,palette.muted)
+   if sideBySide then name.TextXAlignment=Enum.TextXAlignment.Center;job.TextXAlignment=Enum.TextXAlignment.Center end
+   local edge=U.stroke(pick,Color3.fromRGB(161,237,185),2)
+   edge.Enabled=chosen;marks[entry.kind]=edge
    pick.Name='PrestigeDrone'..i;enableAction(pick,can)
-   y+=rowHeight+6
+   if not sideBySide then y+=rowHeight+6 end
+   tallest=math.max(tallest,rowHeight)
+  end
+  if sideBySide then
+   for _,edge in pairs(marks) do edge.Parent.Size=UDim2.fromOffset(rowWidth,tallest) end
+   y+=tallest+6
   end
  else
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,28),'Quartz sold this run',20,palette.text,true)
@@ -620,35 +647,40 @@ openPrestige=function()
  end
  local bonusBefore=math.floor((pre.miningBonusBefore or 0)*100)
  local bonusAfter=math.floor((pre.miningBonusAfter or .25)*100)
- local bonus=('+%d%% → +%d%% base mining'):format(bonusBefore,bonusAfter)
- if #choices==0 then bonus='+1 drone · '..bonus end
+ local bonus=('+%d%% → +%d%% base mining power'):format(bonusBefore,bonusAfter)
+ if #choices==0 then bonus='+1 permanent drone · '..bonus end
  local bonusHeight=math.max(25,heightFor(bonus,17,true,width))
  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,bonusHeight),bonus,17,Color3.fromRGB(161,237,185),true)
- y+=bonusHeight+7
+ y+=bonusHeight+5
  frame(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,1),palette.paper)
- y+=7
+ y+=5
  local function terms(name,copy,tint)
   local height=heightFor(copy,16,false,width)
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,height),copy,16,tint).Name=name
-  y+=height+5
+  y+=height+4
  end
- terms('PrestigeKeep','Keep your fleet, base traits, stored tools, transport and cleared plots.',palette.text)
+ terms('PrestigeKeep','Keep all '..tostring(pre.fleetBefore or #profile.fleet)..' permanent drones, their traits, stored tools, transport and cleared plots.',palette.text)
  terms('PrestigeReset','Reset balances, all cargo, cards, Stars, run upgrades, field access, pack prices and sale progress.',palette.muted)
- y+=7
+ y+=3
  if #choices==0 then
   local reason=paid and 'Choose your paid pack card first.' or ('Sell '..comma(math.max(0,required-earnings))..' more Quartz.')
   label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,40),reason,17,palette.text,true)
   return
  end
  local waiting=actionPending and actionPending.kind=='Prestige'
- local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selected and 'Start a new run' or 'Select a drone'))
- local confirm
+ local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selectedName and 'Prestige with '..selectedName or 'Select a drone'))
  confirm=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,46),reason,function()
   if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
    confirm.Text='Starting new run…';enableAction(confirm,false)
   end
  end,palette.mineral)
  U.unskin(confirm);corner(confirm,5);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil and not waiting)
+end
+local function openDroneReward(reward,settled)
+ local l=menu('reward','Drone unlocked','+25% base mining power','drone')
+ CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,function()
+  offerUI.droneReward=nil;modal.Visible=false;modalMode=nil
+ end,settled)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -659,6 +691,9 @@ local function refreshModal()
  elseif mode=='shop' then openShop()
  elseif mode=='stars' then openStars()
  elseif mode=='prestige' then openPrestige()
+ elseif mode=='reward' then
+  if not offerUI.droneReward or (modalSize and (viewport()-modalSize).Magnitude<=1) then return end
+  openDroneReward(offerUI.droneReward,true)
  elseif mode=='fleet' then openFleet()
  elseif mode=='run' then openRunCards() end
  task.defer(function()
@@ -745,10 +780,8 @@ connect(player:GetAttributeChangedSignal('MA_DroneReward'),function()
  if not ok or type(reward)~='table' or not reward.rewardName then return end
  menuStation=nil
  if logisticsView then logisticsView:close() end
- local l=menu('reward','DRONE UNLOCKED','Permanent crew · +25% base mining power','drone')
- CardView.revealDrone(U,body,l.bodyWidth,reward,soundscape,
-  function() return modal.Visible and modalMode=='reward' end,
-  function() modal.Visible=false;modalMode=nil end)
+ offerUI.droneReward=reward
+ openDroneReward(reward)
 end)
 connect(player:GetAttributeChangedSignal('MA_Notice'),function()
  notice.Text=tostring(player:GetAttribute('MA_Notice') or '');noticeUntil=os.clock()+5

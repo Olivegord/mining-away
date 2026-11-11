@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `55bd95b2be92560e0cdf803615dddec4f772c32bc89b2b10769b31dcf7ee3c01` | Aftershock helps nearby cuts by the same crew. |
+| Native-file SHA-256 | `f90f01ac6809e1deb7a492281f1315ce5ac5f355c62f0beffaf90e4b13dc1ef7` | Native drone portraits and fleet count on prestige. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the Aftershock update** | All seven Sources and three roots verified in Edit. Team Create save returned version 142. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the prestige presentation update** | All seven Sources and three roots verified in Edit. Team Create save returned version 143. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — see the drone before choosing
+
+The Prestige beacon shows the actual drone models beside their jobs. Selecting a drone highlights that choice in place and puts its name on the confirmation button. The keep and reset terms precede confirmation. On a wide landscape viewport, the choices sit side by side. After the server commits, the reward uses the same model and rolls the permanent fleet count forward by one. Reduced motion and relayout show the settled count. The stable choice draw, permanent grant and reset rules stay server-owned.
+
+Detached Studio Edit checks framed all six native role models, verified the original control instances survived a selection change, and checked the exact selected drone in the confirmation payload. The choices, terms and confirmation fit at 360 × 720, 844 × 390 and 1,280 × 720. The 240 × 440 case uses the scroll area. The reward count matched the supplied receipt and settled without replaying sound on relayout. Workshop, persistence, Crystal Run and committed flight checks passed with API doubles. Live controls, the fleet-count animation in motion and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **143**. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit b08320b`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — Aftershock helps the rest of the crew
 

@@ -186,6 +186,47 @@ function CardView.housing(U,root,color,_accent)
  return edge
 end
 
+local function safePreview(model)
+ for _,c in ipairs(model:GetDescendants()) do
+  if c:IsA('LuaSourceContainer') or c:IsA('Sound') or c:IsA('BillboardGui') or c:IsA('SurfaceGui') then c:Destroy()
+  elseif c:IsA('BasePart') then c.Anchored=true;c.CanCollide=false;c.CanTouch=false;c.CanQuery=false;c.CastShadow=false;c.Reflectance=0
+  elseif c:IsA('Trail') or c:IsA('Beam') or c:IsA('ParticleEmitter') then c.Enabled=false end
+ end
+end
+local function previewDrone(role,tint,readable)
+ local storage=game:GetService('ReplicatedStorage')
+ local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
+ if not template or not template:IsA('Model') then return end
+ local config=storage:FindFirstChild('Shared')
+ config=config and config:FindFirstChild('DroneConfig')
+ local model=template:Clone();safePreview(model)
+ if config then
+  require(config).decorate(model,role,nil,readable)
+ else
+  local shell=model:FindFirstChild('Mesh')
+  if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(tint,.25) end
+ end
+ safePreview(model)
+ return model
+end
+
+function CardView.dronePortrait(parent,position,size,kind,tint)
+ local role=kind=='Blue' and 'Striker' or kind=='Red' and 'Charger' or kind
+ local model=previewDrone(role,tint,true)
+ if not model then return end
+ local viewport=Instance.new('ViewportFrame');viewport.Name='DronePortrait';viewport.BackgroundTransparency=1
+ viewport.Position=position;viewport.Size=size;viewport.ZIndex=parent.ZIndex+2
+ viewport.Ambient=Color3.fromRGB(182,187,198);viewport.LightColor=Color3.fromRGB(255,245,226)
+ viewport.LightDirection=Vector3.new(-1,-2,1);viewport.Parent=parent
+ local world=Instance.new('WorldModel');world.Parent=viewport
+ local box,bounds=model:GetBoundingBox()
+ model:PivotTo(box:Inverse()*model:GetPivot());model.Parent=world
+ local camera=Instance.new('Camera');camera.FieldOfView=36
+ local from=Vector3.new(1,.48,-1.35).Unit*bounds.Magnitude*1.65
+ camera.CFrame=CFrame.lookAt(from,Vector3.zero);camera.Parent=viewport;viewport.CurrentCamera=camera
+ return viewport
+end
+
 local function mechanicVisual(parent,choice,compact)
  local viewport=Instance.new('ViewportFrame');viewport.Name='MechanicPreview';viewport.BackgroundTransparency=1;viewport.ZIndex=parent.ZIndex+4
  viewport.Position=UDim2.fromScale(.045,.022);viewport.Size=UDim2.fromScale(.91,compact and .32 or .46)
@@ -194,26 +235,9 @@ local function mechanicVisual(parent,choice,compact)
  local camera=Instance.new('Camera');camera.FieldOfView=34;camera.CFrame=CFrame.lookAt(Vector3.new(4,3,7),Vector3.new(0,-.1,0));camera.Parent=viewport;viewport.CurrentCamera=camera
  local identity,body,accent=CardView.identity(choice)
  local storage=game:GetService('ReplicatedStorage')
- local config=storage:FindFirstChild('Shared');config=config and config:FindFirstChild('DroneConfig')
- local roles=config and require(config)
- local function safe(model)
-  for _,c in ipairs(model:GetDescendants()) do
-   if c:IsA('LuaSourceContainer') or c:IsA('Sound') or c:IsA('BillboardGui') or c:IsA('SurfaceGui') then c:Destroy()
-   elseif c:IsA('BasePart') then c.Anchored=true;c.CanCollide=false;c.CanTouch=false;c.CanQuery=false;c.CastShadow=false;c.Reflectance=0
-   elseif c:IsA('Trail') or c:IsA('Beam') or c:IsA('ParticleEmitter') then c.Enabled=false end
-  end
- end
  local function drone(role,size,position,rotation)
-  local template=storage:FindFirstChild('Drone') or workspace:FindFirstChild('Drone')
-  if not template or not template:IsA('Model') then return end
-  local model=template:Clone();safe(model)
-  if roles then
-   roles.decorate(model,role)
-  else
-   local shell=model:FindFirstChild('Mesh')
-   if shell and shell:IsA('BasePart') then shell.Color=Color3.fromRGB(66,87,111):Lerp(body,.25) end
-  end
-  safe(model)
+  local model=previewDrone(role,body)
+  if not model then return end
   local _,bounds=model:GetBoundingBox();model:ScaleTo(model:GetScale()*size/math.max(bounds.X,bounds.Y,bounds.Z,.01))
   local box=model:GetBoundingBox();model:PivotTo(CFrame.new(position)*(rotation or CFrame.new())*box:Inverse()*model:GetPivot())
   model.Parent=world;return model
@@ -223,7 +247,7 @@ local function mechanicVisual(parent,choice,compact)
   local original=storage:FindFirstChild('Crystal') or workspace:FindFirstChild('Crystal')
   local template=(net and net:FindFirstChild('CargoCrystal')) or (original and original:FindFirstChild('Mesh',true))
   if not template or not template:IsA('BasePart') then return end
-  local part=template:Clone();safe(part)
+  local part=template:Clone();safePreview(part)
   part.Size=template.Size*(size/math.max(template.Size.Y,.01));part.CFrame=CFrame.new(position)*(rotation or CFrame.new())
   if part:IsA('PartOperation') then part.UsePartColor=true end
   part.Color=color;part.Material=material or Enum.Material.SmoothPlastic;part.MaterialVariant=''
@@ -592,16 +616,47 @@ function CardView.create(U,parent,choice,index,width,height,options)
 end
 
 -- This acknowledges the chosen drone after the save commits.
-function CardView.revealDrone(U,parent,width,reward,audio,_isVisible,onClose)
+function CardView.revealDrone(U,parent,width,reward,audio,onClose,settled)
  local p=U.palette
  local tint=rarityColor(reward.rewardTier)
- local view=U.panel(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,124),p.ink:Lerp(tint,.22),14)
- view.Name='PrestigeReward';U.stroke(view,tint,2)
- U.icon(view,'drone',UDim2.fromOffset(16,28),UDim2.fromOffset(48,48),tint)
- local name=U.text(view,UDim2.fromOffset(79,19),UDim2.new(1,-90,0,32),reward.rewardName,23,p.white,true)
- local job=U.text(view,UDim2.fromOffset(79,58),UDim2.new(1,-90,0,51),reward.rewardJob,15,p.white,false)
- job.TextWrapped=true;name.TextWrapped=true
- U.button(parent,UDim2.new(.5,-74,0,153),UDim2.fromOffset(148,42),'Continue',onClose,tint)
- audio:play('prestige')
+ local art=width<270 and 60 or 88
+ local textX=art+19
+ local textWidth=width-6-textX-10
+ local measure=game:GetService('TextService')
+ local nameHeight=measure:GetTextSize(reward.rewardName,22,Enum.Font.SourceSansBold,Vector2.new(textWidth,1000)).Y+4
+ local jobHeight=measure:GetTextSize(reward.rewardJob,16,Enum.Font.SourceSans,Vector2.new(textWidth,1000)).Y+4
+ local count=tonumber(reward.fleetCount)
+ local height=math.max(art+16,18+nameHeight+jobHeight)+(count and 33 or 0)
+ local view=U.frame(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,height),p.ink:Lerp(tint,.12))
+ view.Name='PrestigeReward';U.corner(view,5);U.stroke(view,tint,1)
+ CardView.dronePortrait(view,UDim2.fromOffset(8,8),UDim2.fromOffset(art,art),reward.droneType,tint)
+ U.text(view,UDim2.fromOffset(textX,9),UDim2.fromOffset(textWidth,nameHeight),reward.rewardName,22,p.white,true)
+ U.text(view,UDim2.fromOffset(textX,9+nameHeight),UDim2.fromOffset(textWidth,jobHeight),reward.rewardJob,16,p.white,false)
+ if count then
+  local row=U.frame(view,UDim2.new(0,8,1,-32),UDim2.new(1,-16,0,24),p.ink)
+  row.BackgroundTransparency=1
+  U.text(row,UDim2.fromOffset(2,0),UDim2.new(1,-65,1,0),'Permanent drones',16,p.muted,false)
+  local ticker=U.frame(row,UDim2.new(1,-61,0,0),UDim2.fromOffset(60,24),p.ink)
+  ticker.ClipsDescendants=true;U.corner(ticker,3)
+  local function digit(value,y)
+   local text=U.text(ticker,UDim2.fromOffset(0,y),UDim2.fromScale(1,1),tostring(value),18,p.white,true)
+   text.TextXAlignment=Enum.TextXAlignment.Center
+   return text
+  end
+  local reduced=settled==true
+  pcall(function() reduced=reduced or GuiService.ReducedMotionEnabled end)
+  local player=Players.LocalPlayer
+  reduced=reduced or (player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true))
+  local current=digit(count,reduced and 0 or 24)
+  if not reduced then
+   local before=digit(count-1,0)
+   local tween=game:GetService('TweenService')
+   local duration=TweenInfo.new(.32,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+   tween:Create(before,duration,{Position=UDim2.fromOffset(0,-24)}):Play()
+   tween:Create(current,duration,{Position=UDim2.fromOffset(0,0)}):Play()
+  end
+ end
+ U.button(parent,UDim2.new(.5,-74,0,height+24),UDim2.fromOffset(148,42),'Continue',onClose,tint)
+ if not settled then audio:play('prestige') end
 end
 return CardView
