@@ -1376,7 +1376,13 @@ local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),pale
 enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
- starterReachable=function() return selectorView:canReachStarterPlot() end})
+ starterReachable=function() return selectorView:canReachStarterPlot() end,
+ depotApproach=function(pin)
+  local character=player.Character
+  local hr=character and character:FindFirstChild('HumanoidRootPart')
+  local counter=world:GetAttribute('PackCounterPosition')
+  return hr and counter and Mining.onDepotApproach(hr.Position,pin,counter)
+ end})
 logisticsView=LogisticsView.start({interface=U,parent=safeRoot,world=world,localFX=localFX,command=command,dock=tacticalHUD.dock,context=context,
  profile=function() return profile end,hidden=function() return modal.Visible end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end,

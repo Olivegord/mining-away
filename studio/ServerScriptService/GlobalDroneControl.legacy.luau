@@ -1989,6 +1989,11 @@ function M.onSelectorDepotRoute(position,center,depot)
  local offset=delta-route*along
  return math.abs(offset.Y)<16 and offset.X*offset.X+offset.Z*offset.Z<=DEPOT_ROUTE_RADIUS^2
 end
+function M.onDepotApproach(position,center,depot)
+ return not M.selectorInRange(position,center)
+  and (position-depot).Magnitude<(center-depot).Magnitude
+  and M.onSelectorDepotRoute(position,center,depot)
+end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.
 function M.selectorTouches(center,half,frame,size)
@@ -7037,6 +7042,7 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
+if scene.runStart then root:SetAttribute('PackCounterPosition',scene.packStation.Position) end
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
 end

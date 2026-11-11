@@ -45,12 +45,21 @@ profile.run.pendingOffer.opened=true
 assert(HUD.nextStationHint(profile)=='Pick a card at counter')
 profile.run.packIndex=2
 assert(HUD.nextStationHint(profile,true)==nil,'later pack displaced active mining feedback')
+assert(HUD.nextStationHint(profile,true,true)=='Pick a card at counter','the paid choice was hidden on the way back')
 profile.run.pendingOffer=nil
+profile.nextPackPrice=36
 assert(HUD.nextStationHint(profile)==nil)
-profile.prestigePreview={eligible=true}
-assert(HUD.nextStationHint(profile)=='Visit the Prestige beacon' and HUD.nextStationHint(profile,true)==nil)
+profile.deliveryQuartz=16
+assert(HUD.nextStationHint(profile,true,true)=='Pack Counter next' and HUD.nextStationHint(profile,true)==nil)
+profile.prestigePreview={eligible=false,saleRequired=360,earnings=344}
+assert(HUD.nextStationHint(profile,true,true)=='Prestige after sale')
+profile.run.wallet.Quartz=36
+assert(HUD.nextStationHint(profile)=='Pack Counter ready' and HUD.nextStationHint(profile,true,true)=='Pack Counter ready')
+assert(HUD.nextStationHint(profile,true)==nil)
+profile.prestigePreview.eligible=true
+assert(HUD.nextStationHint(profile)=='Prestige ready' and HUD.nextStationHint(profile,true,true)=='Prestige ready' and HUD.nextStationHint(profile,true)==nil)
 profile.run.pendingOffer={opened=false}
 assert(HUD.nextStationHint(profile)=='Open pack at counter')
 profile.run.index=2;profile.run.packIndex=0
 assert(not HUD.needsFirstCutHint(profile,false))
-print('PASS first-cut controls and station hint follow input, committed cargo, affordability, crate state and prestige eligibility')
+print('PASS first-cut and depot cues follow input, actual sales, saved choices and the return walk without displacing later mining feedback at the pin')

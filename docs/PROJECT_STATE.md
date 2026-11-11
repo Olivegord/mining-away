@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ccf877380eeda3299e47e978c17a2e272585eee22b16e8b3a13268611fed8e94` | Includes the original checker finish on the depot paths. |
+| Native-file SHA-256 | `e594e2c7497fcf7fd241408529c2f86ea6fb4913fc6d9abe908988088d745730` | Includes the pack and prestige cues on the depot approach. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the checker finish through the depot** | All seven Sources and three roots verified in Edit. Team Create save returned version 160. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has pack and prestige cues on the depot approach** | All seven Sources and three roots verified in Edit. Team Create save returned version 161. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — show the next depot stop on the walk back
+
+The existing status row shows affordable later packs, paid pack choices and eligible prestige when the player leaves pin range toward the depot. The crew can keep mining under its current pin. The status distinguishes Quartz in transit from a committed sale. At the pin, later milestones leave space for mining feedback. An outstanding paid offer takes precedence over a new purchase or prestige.
+
+In the same controller fixture, the old HUD showed no depot cue with the pin active. After the 40-Quartz Ruby sale the updated HUD showed `Pack Counter ready` on the return walk. After a 300-Quartz sale crossed the threshold, it showed `Prestige ready`. Workshop, Crystal Run, persistence, committed flight and focused HUD checks passed with API or storage doubles. Native font metrics measured the widest cue at 124 px in its 144 px slot. The broader special/logistics suite stops on the same schema-six fleet fixture on `69fffc3` and this revision. Live approach transitions and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **161**. No player release was published. To reproduce from `69fffc3`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit 69fffc3`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — continue the original checker through the depot
 

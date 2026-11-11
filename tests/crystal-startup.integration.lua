@@ -1,5 +1,16 @@
 -- Start the real controller in Crystal Run mode, including its Heartbeat callback.
 assert(scene.runStart and not scene.fieldTools)
+assert(root:GetAttribute('PackCounterPosition')==scene.packStation.Position)
+do
+ local counter=root:GetAttribute('PackCounterPosition')
+ local pin=counter+Vector3.new(38,0,382)
+ assert(not Mining.onDepotApproach(pin+Vector3.yAxis*3,pin,counter))
+ assert(not Mining.onDepotApproach(pin+Vector3.new(0,3,-35),pin,counter))
+ assert(Mining.onDepotApproach(pin:Lerp(counter,.25)+Vector3.yAxis*3,pin,counter))
+ assert(Mining.onDepotApproach(counter+Vector3.yAxis*3,pin,counter))
+ assert(not Mining.onDepotApproach(pin+Vector3.new(0,3,48),pin,counter))
+ assert(not Mining.onDepotApproach(pin:Lerp(counter,.5)+Vector3.new(63,3,0),pin,counter))
+end
 local cfIndex=CF.__index
 CF.__index=function(frame,key)
  if key=='RightVector' then return Vector3.new(math.cos(frame.yaw),0,-math.sin(frame.yaw)) end

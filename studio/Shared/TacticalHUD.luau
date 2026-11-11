@@ -168,19 +168,28 @@ function HUD.activity(folder,ownerId)
  return a
 end
 
-function HUD.nextStationHint(profile: any, pinned: boolean?): string?
+function HUD.nextStationHint(profile: any, pinned: boolean?, depotApproach: boolean?): string?
  local run=profile and profile.run
  if not run then return nil end
+ local showDepot=not pinned or depotApproach==true
  local offer=run.pendingOffer
- if offer and (not pinned or run.packIndex==1) then
-  return offer.opened==false and 'Open pack at counter' or 'Pick a card at counter'
+ if offer then
+  if showDepot or run.packIndex==1 then return offer.opened==false and 'Open pack at counter' or 'Pick a card at counter' end
+  return nil
  end
- if run.packIndex==0 and profile.nextPackPrice then
-  local balance=run.wallet.Quartz or 0
-  if balance>=profile.nextPackPrice then return 'Pack Counter ready' end
-  if balance+(profile.deliveryQuartz or 0)>=profile.nextPackPrice then return 'Pack Counter next' end
+ local balance=run.wallet.Quartz or 0
+ local incoming=profile.deliveryQuartz or 0
+ local price=profile.nextPackPrice
+ local packReady=price and balance>=price
+ local packIncoming=price and balance+incoming>=price
+ if run.packIndex==0 or showDepot then
+  local prestige=showDepot and profile.prestigePreview
+  if prestige and prestige.eligible and (run.packIndex>0 or not packReady) then return 'Prestige ready' end
+  if packReady then return 'Pack Counter ready' end
+  if prestige and prestige.saleRequired and incoming>0 and prestige.earnings<prestige.saleRequired
+   and prestige.earnings+incoming>=prestige.saleRequired then return 'Prestige after sale' end
+  if packIncoming then return 'Pack Counter next' end
  end
- if not pinned and profile.prestigePreview and profile.prestigePreview.eligible then return 'Visit the Prestige beacon' end
  return nil
 end
 function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
@@ -225,11 +234,12 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local full=backpack>=capacity
  r.cargoText.TextColor3=full and C.gold or C.text
  local working=activity.assigned;local delivering=activity.delivering
- local pinned=Players.LocalPlayer:GetAttribute('MA_Selector')~=nil
+ local pin=Players.LocalPlayer:GetAttribute('MA_Selector')
+ local pinned=pin~=nil
  local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
  local guidance
  if not fighting and status~='Paused' and world:GetAttribute('FieldToolsEnabled')==false then
-  guidance=HUD.nextStationHint(p,pinned)
+  guidance=HUD.nextStationHint(p,pinned,pinned and r.depotApproach(pin))
   if not guidance and HUD.needsFirstCutHint(p,pinned) then
    guidance=HUD.firstCutHint(self.input,r.starterReachable())
   end

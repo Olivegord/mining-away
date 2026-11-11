@@ -13,6 +13,7 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
+if scene.runStart then root:SetAttribute('PackCounterPosition',scene.packStation.Position) end
 local function folder(parent,name)
  local f=Instance.new('Folder');f.Name=name;f.Parent=parent;return f
 end
