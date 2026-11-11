@@ -885,8 +885,20 @@ do
  focus(nil)
  rich.slots[rival.drones[1].id]=nil
  local current=crew.miningSquare
+ scene.squareStep(crew,worker)
+ assert(worker.target==quick,'fixture did not start an automatic approach')
+ local available=crew.drones[2]
+ request(rich.id)
+ assert(worker.target==quick,'the order redirected a flight despite another worker being free')
+ scene.squareStep(crew,available)
+ assert(available.target==rich and worker.target==quick,'the free worker did not take the new order')
+ release(available)
+ for i=2,#crew.drones do crew.drones[i].hp=0 end
+ worker.chargedPin=current
  request(rich.id)
  assert(crew.miningSquare==current and current.leadId==rich.id,'same-cell focus did not update the pin')
+ assert(not worker.target and not next(quick.slots),'the only available miner kept an obsolete approach')
+ assert(worker.chargedPin==current,'redirecting a freshly charged miner lost its travel boost')
  assert(tester:GetAttribute('MA_SelectorFocus')=='Queued:'..rich.id,'the accepted order did not confirm until the next snapshot')
  scene.squareStep(crew,worker)
  assert(worker.target==rich and not current.leadId and rich.slots[worker.id],'the selected valuable crystal did not get one real assignment')
@@ -919,7 +931,7 @@ do
  players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
  for _,r in ipairs({quick,rich,third,outside}) do resources[r.id]=nil;r.part:Destroy() end
 end
-print('PASS direct crystal focus confirms the queued and assigned order without stealing or interrupting cuts')
+print('PASS direct crystal focus redirects an obsolete approach when needed and preserves free-worker dispatch, charge speed and active cuts')
 
 do
  local tester=player(98694);players.PlayerAdded:Fire(tester)
@@ -938,29 +950,33 @@ do
  primary.readyAt=now;neighbor.readyAt=now
  tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
  other.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
- local function pin(p,leadId)
-  scene.placeSquare(p,{runId=data(p).run.id,fieldId=field.id,position=center,leadId=leadId})
+ local function pin(p,leadId,position)
+  scene.placeSquare(p,{runId=data(p).run.id,fieldId=field.id,position=position or center,leadId=leadId})
  end
  first.pos=primary.position
  pin(crew);local square=crew.miningSquare
  scene.squareStep(crew,first)
  assert(first.target==primary and not square.pairId)
+ scene.squareStep(crew,second)
+ assert(second.target==neighbor and not second.warmAt)
  first.warmAt=now
  pin(rival,primary.id)
  assert(rival.miningSquare and not rival.miningSquare.pairId,'a second crew paired with a foreign cut')
- pin(crew,primary.id)
- assert(crew.miningSquare==square and square.pairId==primary.id and first.warmAt==now)
+ pin(crew,primary.id,center+Vector3.xAxis*2)
+ assert(crew.miningSquare~=square and first.warmAt==now)
+ square=crew.miningSquare
+ assert(square.pairId==primary.id and second.target==neighbor and second.squareJob==square,'a free laser should join without redirecting another overlapping approach')
  scene.squareStep(crew,second);scene.squareStep(crew,third)
- assert(second.target==primary and second.targetSlot==2 and third.target==neighbor,'pair did not use exactly two slots')
- first.pos=committedStation(first,primary);second.pos=committedStation(second,primary)
- assert(math.abs((first.pos-second.pos).Magnitude-3.2)<.001,'two laser stations overlapped')
- first.mining=true;second.mining=true
+ assert(third.target==primary and third.targetSlot==2 and second.target==neighbor,'pair did not use exactly two slots')
+ first.pos=committedStation(first,primary);third.pos=committedStation(third,primary)
+ assert(math.abs((first.pos-third.pos).Magnitude-3.2)<.001,'two laser stations overlapped')
+ first.mining=true;third.mining=true
  scene.publishSquareStatus(crew)
  assert(tester:GetAttribute('MA_SelectorStatus')=='PairCut')
- pin(crew)
- assert(crew.miningSquare==square and not square.pairId and first.target==primary and second.target==primary,'ground pin cut off committed lasers')
- assert(hitResource(first,primary,50) and hitResource(second,primary,50) and primary.hp==3790)
- assert(hitResource(second,primary,10000) and primary.paid and not next(primary.slots))
+ pin(crew,nil,square.center)
+ assert(crew.miningSquare==square and not square.pairId and first.target==primary and third.target==primary,'ground pin cut off committed lasers')
+ assert(hitResource(first,primary,50) and hitResource(third,primary,50) and primary.hp==3790)
+ assert(hitResource(third,primary,10000) and primary.paid and not next(primary.slots))
  assert(not hitResource(first,primary,10000) and pendingOre(crew)==1,'paired finish granted cargo twice')
  players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
 end

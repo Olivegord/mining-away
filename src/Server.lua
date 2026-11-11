@@ -3080,6 +3080,38 @@ function scene.canPairCut(p,r)
  end
  return false
 end
+function scene.prioritizeSquareApproach(p,square)
+ local focus=resources[square.pairId or square.leadId]
+ if not focus then return end
+ local needed=square.pairId and 2 or 1
+ for _ in pairs(focus.slots) do needed-=1 end
+ if needed<=0 then return end
+ local approaches={}
+ for _,d in ipairs(p.drones) do
+  if d.hp<=0 or d.carrierId or d.recharging or (d.stats.batteryCapacity>0 and d.battery<=0)
+   or not DroneRoles.isWorker(d.role) or (square.pairId and not DroneRoles.isMiner(d.role))
+   or (focus.blockedUntil and now<(focus.blockedUntil[d.id] or 0)) or not sameRockType(d,focus) then continue end
+  if not d.target and not d.breaker and not d.specialRecovery then
+   needed-=1
+   d.squareSearchAt=nil
+  elseif d.target~=focus and d.squareJob and not scene.committedWork(d) then
+   if d.squareJob==square then
+    table.insert(approaches,{drone=d,time=(d.pos-focus.position).Magnitude/travelSpeed(d)})
+   else
+    -- An obsolete approach will release itself on the next worker tick.
+    needed-=1
+    d.squareSearchAt=nil
+   end
+  end
+ end
+ if needed<=0 then return end
+ table.sort(approaches,function(a,b) return a.time==b.time and a.drone.slot<b.drone.slot or a.time<b.time end)
+ for i=1,math.min(needed,#approaches) do
+  local d=approaches[i].drone
+  local chargedPin=d.chargedPin
+  release(d);d.chargedPin=chargedPin;d.squareSearchAt=nil
+ end
+end
 function scene.moveSquareWork(p,current,square)
  if not current or current.field~=square.field then return end
  local press=p.compactor
@@ -3091,12 +3123,11 @@ function scene.moveSquareWork(p,current,square)
  for _,r in ipairs(square.field.resources) do
   if r.lastPin==current and r.lastPinOwner==p.player.UserId and staysInSquare(r) then r.lastPin=square end
  end
- local focus=square.pairId or square.leadId
  for _,d in ipairs(p.drones) do
   local target=d.target
   if d.squareJob==current and staysInSquare(target) then
    local changingPair=current.pairId==target.id and square.pairId~=target.id
-   if scene.committedWork(d) or (not changingPair and (not focus or focus==target.id)) then
+   if scene.committedWork(d) or not changingPair then
     d.squareJob=square
     if d.chargedPin==current then d.chargedPin=square end
    end
@@ -3137,11 +3168,13 @@ function scene.placeSquare(p,payload)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
  if samePin then
   current.leadId=square.leadId;current.pairId=square.pairId;current.focusId=square.focusId
+  scene.prioritizeSquareApproach(p,current)
   scene.publishSquareFocus(p,current)
   return
  end
  scene.moveSquareWork(p,current,square)
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
+ scene.prioritizeSquareApproach(p,square)
  scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_Selector',center)
 end
