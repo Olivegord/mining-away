@@ -66,7 +66,7 @@ local function denseArray(value,limit)
 end
 local function mineralBag(bag)
  if not validBag(bag) then return false end
- for material in pairs(bag) do if not Shops.COLORS[material] and not Workshop.CRYSTAL_BY_MATERIAL[material] then return false end end
+ for material in pairs(bag) do if not Shops.COLORS[material] and not Workshop.CRYSTAL_BY_MATERIAL[material] and not Workshop.crystalCargo(material) then return false end end
  return true
 end
 local function validateLogistics(p,ids)
@@ -378,7 +378,7 @@ function P.buyStarUpgrade(p,id,level,tx,expectedRun)
  local replay=P.receipt(p,'StarUpgrade',tx)
  if replay then return replay.id==id and replay.level==level+1,replay end
  local entry=type(id)=='string' and Workshop.STAR_BY_ID[id]
- if not entry then return false,'Invalid Star Shop upgrade' end
+ if not entry or entry.legacy then return false,'Invalid Star Shop upgrade' end
  local owned=Workshop.starLevel(p,id)
  if level~=owned or owned>=entry.max then return false,'Upgrade level changed' end
  local price=Workshop.starPrice(entry,owned)
@@ -515,18 +515,26 @@ function P.prestigePreview(p)
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the workshop')
  return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  cards=#p.run.cards,runId=p.run.id}
+  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and DroneCatalog.prestigeChoices(p.seed,p.run.index) or nil}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
- local replay=P.receipt(p,'Prestige',tx);if replay then return true,replay end
+ context=context or {}
+ local replay=P.receipt(p,'Prestige',tx)
+ if replay then
+  if replay.oldRunId~=expectedRun or replay.droneType~=context.droneType then return false,'Prestige choice already committed' end
+  return true,replay
+ end
  if expectedRun~=p.run.id then return false,'Stale run' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid transaction ID' end
- context=context or {}
  if not context.atDepot or context.activeEncounter then return false,'Recall your fighting drones and return to the depot' end
  if context.confirmed~=true then return false,'Explicit prestige confirmation required' end
  local preview=P.prestigePreview(p);if not preview.eligible then return false,preview.reason end
- local reward=DroneCatalog.prestigeReward(p.seed,p.run.index)
+ local reward
+ for _,choice in ipairs(preview.droneChoices) do
+  if choice.kind==context.droneType then reward=choice;break end
+ end
+ if not reward then return false,'Choose one of the three offered drones' end
  local oldRun=p.run.id;local serial=p.nextDroneSerial;local awarded=prestigeDrone(p,reward.kind)
  Consumables.refund(p.consumables)
  table.insert(p.fleet,awarded);p.nextDroneSerial=serial+1;p.prestiges=p.prestiges+1;p.run=run(p.userId,p.prestiges+1)

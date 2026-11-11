@@ -6,6 +6,9 @@ local Mining=require('../src/Mining')
 local DroneCatalog=require('../src/DroneCatalog')
 local tests=0
 local function test(name,fn) local ok,err=pcall(fn);assert(ok,name..': '..tostring(err));tests+=1;print('PASS workshop '..name) end
+local function prestige(p,tx,runId)
+ return P.prestige(p,tx,runId,{atDepot=true,confirmed=true,droneType=P.prestigePreview(p).droneChoices[1].kind})
+end
 local function funded(seed)
  local p=P.new(44,seed or 17);p.run.wallet.Quartz=10000;p.run.credits=10000;return p
 end
@@ -97,7 +100,7 @@ test('hardware fits chosen permanent miners once each and clears on prestige',fu
  local duplicate=P.clone(p);table.insert(duplicate.run.cards,P.clone(duplicate.run.cards[1]))
  eq(P.validate(duplicate,44),false)
  p.run.quartzEarnings=360
- assert(P.prestige(p,'reset-hardware',p.run.id,{atDepot=true,confirmed=true}))
+ assert(prestige(p,'reset-hardware',p.run.id))
  eq(#p.run.cards,0);eq(p.fleet[2].id,second.id);eq(C.stats(p,p.fleet[2]).doubleBeam,0)
 end)
 test('Crystal Run drafts trigger effects and offers Batch Press only after Compactor',function()
@@ -118,15 +121,17 @@ test('Crystal Run drafts trigger effects and offers Batch Press only after Compa
  end
  review(false)
  local ok,offer=C.buy(p,'first-press',p.run.id,{atDepot=true,expectedPackIndex=0,crystalRun=true})
- assert(ok);eq(offer.choices[3].cardId,'Q_COMPACTOR');eq(offer.choices[2].rarity,'Common');eq(offer.choices[1].rarity,'Rare')
- assert(choose(p,offer,3,'hire-press'))
+ assert(ok);eq(offer.choices[3].cardId,'Q_CARGO');eq(offer.choices[2].rarity,'Common');eq(offer.choices[1].rarity,'Rare')
+ -- Preserve a pack which was paid before Compactor left the catalog.
+ p.run.pendingOffer.choices[3]=W.card(W.BY_ID.Q_COMPACTOR,2,0)
+ p=assert(P.migrate(p,44));assert(choose(p,offer,3,'hire-press'))
  review(true)
  local nextTier,units,remaining=W.compaction('RunCobalt',5,2)
  eq(nextTier.material,'RunViolet');eq(units,2);eq(remaining,1)
  local highest,n,rest=W.compaction('RunEmerald',6,2)
  eq(highest,nil);eq(n,0);eq(rest,6)
  p.run.quartzEarnings=360
- assert(P.prestige(p,'reset-press',p.run.id,{atDepot=true,confirmed=true}));eq(W.hasCompactor(p),false)
+ assert(prestige(p,'reset-press',p.run.id));eq(W.hasCompactor(p),false)
 end)
 test('Crystal Run work compounds without resizing and refined sales fund Quartz progression',function()
  local starter=Mining.resource(75,'Crystal',1)
@@ -140,23 +145,47 @@ test('Crystal Run work compounds without resizing and refined sales fund Quartz 
  assert(sold);eq(receipt.credits,280);eq(p.run.wallet.Quartz,274);eq(p.run.wallet.Ruby,3);eq(p.run.quartzEarnings,274)
  assert(P.sell(p,{},'refined-sale',p.run.id));eq(p.run.wallet.Quartz,274);assert(P.validate(p,44))
 end)
-test('prestige preview keeps the roll hidden and every listed drone can be awarded',function()
+test('prestige exposes three stable choices and commits exactly one',function()
  local observed={}
  for seed=1,2048 do
-  local reward=DroneCatalog.prestigeReward(seed,1)
-  observed[reward.kind]=(observed[reward.kind] or 0)+1
+  local choices=DroneCatalog.prestigeChoices(seed,1)
+  eq(#choices,3);assert(same(choices,DroneCatalog.prestigeChoices(seed,1)))
+  assert(choices[1].kind~=choices[2].kind and choices[2].kind~=choices[3].kind and choices[1].kind~=choices[3].kind)
+  for _,entry in ipairs(choices) do observed[entry.kind]=true end
  end
- for _,reward in ipairs(DroneCatalog.PrestigeRewards) do
-  assert(observed[reward.kind] and math.abs(observed[reward.kind]/2048*100-reward.weight)<2)
- end
+ for _,reward in ipairs(DroneCatalog.PrestigeRewards) do assert(observed[reward.kind]) end
  local p=funded();p.run.quartzEarnings=360
- local preview=P.prestigePreview(p)
- assert(preview.eligible and not preview.newType and not preview.newRole)
+ local preview=P.prestigePreview(p);assert(preview.eligible)
  local oldRun=p.run.id
- local ok,reward=P.prestige(p,'reward',oldRun,{atDepot=true,confirmed=true})
- assert(ok);eq(reward.droneType,p.fleet[4].type);eq(reward.droneId,p.fleet[4].id)
- local replay,previous=P.prestige(p,'reward',oldRun,{atDepot=true,confirmed=true})
+ local context={atDepot=true,confirmed=true,droneType='unoffered'}
+ assert(not P.prestige(p,'invalid',oldRun,context));eq(#p.fleet,3)
+ context.droneType=preview.droneChoices[2].kind
+ local ok,reward=P.prestige(p,'reward',oldRun,context)
+ assert(ok);eq(reward.droneType,context.droneType);eq(reward.droneId,p.fleet[4].id)
+ local replay,previous=P.prestige(p,'reward',oldRun,context)
  assert(replay and same(previous,reward));eq(#p.fleet,4)
+ context.droneType=preview.droneChoices[1].kind
+ assert(not P.prestige(p,'reward',oldRun,context));eq(#p.fleet,4)
+end)
+test('physical cargo takes one slot and sales preserve old ore and pressed value',function()
+ local p=P.new(44)
+ eq(C.capacity(p),10)
+ local rock=W.cargoKey('Quartz',10)
+ local deep=W.cargoKey('RunRuby',40)
+ local block=W.cargoKey('RunCobalt',120,true)
+ assert(P.addCargo(p,rock,8,10)==8)
+ assert(P.addCargo(p,deep,1,10)==1)
+ assert(P.addCargo(p,block,1,10)==1)
+ assert(P.addCargo(p,deep,1,10)==0)
+ assert(P.validate(p,44))
+ local ok,sale=P.sell(p,{Quartz=1},'cargo-sale',p.run.id)
+ assert(ok);eq(sale.units,10);eq(sale.quartz,240)
+ p.run.stars=8
+ assert(not P.buyStarUpgrade(p,'vacuum',0,'fresh-body',p.run.id))
+ assert(not P.buyStarUpgrade(p,'cultivator',0,'another-body',p.run.id))
+ eq(p.run.stars,8)
+ p.run.starUpgrades.vacuum=1
+ assert(P.validate(p,44));eq(W.starLevel(assert(P.migrate(p,44)),'vacuum'),1)
 end)
 test('Legendary is affordable after spending the last Quartz and exhausted tiers leave the roll',function()
  local sawLegendary=false
@@ -244,13 +273,13 @@ test('Quartz alone advances prestige, upgrades do not subtract progress, resets 
  p.run.cargo={Quartz=360};assert(P.sell(p,{Quartz=1},'quartz',p.run.id));eq(p.run.quartzEarnings,360)
  local ok,o=buy(p,'buy');assert(ok);eq(P.prestigePreview(p).eligible,false);assert(choose(p,o,1,'pick'))
  assert(P.prestigePreview(p).eligible);eq(p.run.quartzEarnings,360)
- local oldRun=p.run.id;assert(P.prestige(p,'prestige',oldRun,{atDepot=true,confirmed=true}));eq(#p.fleet,4);eq(p.fleet[1].id,id);assert(same(p.fleet[1].base,base))
+ local oldRun=p.run.id;assert(prestige(p,'prestige',oldRun));eq(#p.fleet,4);eq(p.fleet[1].id,id);assert(same(p.fleet[1].base,base))
  eq(#p.run.cards,0);eq(p.run.wallet.Quartz,0);eq(p.run.quartzEarnings,0);eq(C.price(p),20);assert(Roles.isWorker(p.fleet[4].role));eq(C.stats(p,p.fleet[1]).miningDPS,37.5)
  assert(P.validate(p,44));local restored=assert(P.migrate(p,44));assert(same(p,restored))
  eq(C.upgrade(p,o.choices[1].cardId,1,'stale',oldRun,{atDepot=true}),false)
  for i=2,12 do
   p.run.quartzEarnings=P.milestone(p).earnings;p.run.saleEarnings=p.run.quartzEarnings
-  assert(P.prestige(p,'prestige'..i,p.run.id,{atDepot=true,confirmed=true}));assert(Roles.isWorker(p.fleet[#p.fleet].role));assert(P.validate(p,44))
+  assert(prestige(p,'prestige'..i,p.run.id));assert(Roles.isWorker(p.fleet[#p.fleet].role));assert(P.validate(p,44))
  end
 end)
 test('v8 profiles keep all ownership, modifiers and already-paid offers exactly',function()
@@ -263,7 +292,7 @@ test('v8 profiles keep all ownership, modifiers and already-paid offers exactly'
   {cardId='D05',scope='Individual',targetDroneId=p.fleet[1].id,effects={startup=1}},
   {cardId='F08',scope='Fleet',effects={yield=.20}},
  }}
- p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,P.SCHEMA);eq(restored.starterDrones,1);eq(C.capacity(restored),100);eq(restored.run.quartzEarnings,177)
+ p.run.pendingOffer=P.clone(old);local restored=assert(P.migrate(p,44));eq(restored.schemaVersion,P.SCHEMA);eq(restored.starterDrones,1);eq(C.capacity(restored),10);eq(restored.run.quartzEarnings,177)
  assert(same(restored.fleet,p.fleet));assert(same(restored.run.cards,p.run.cards));assert(same(restored.run.pendingOffer,old))
  local ok,o=buy(restored,'legacy');assert(ok);assert(same(o,old));assert(C.select(restored,o.id,2,'legacy-pick',restored.run.id,{atDepot=true}))
  eq(restored.run.shopLevels.quartz_power,2);assert(P.validate(restored,44))
@@ -281,7 +310,7 @@ test('pack Stars credit once, Star Shop survives reload, and prestige resets bot
  eq(P.buyStarUpgrade(p,'autosell',0,'unfunded',p.run.id),false)
  p=assert(P.migrate(p,44));eq(p.run.stars,4);eq(W.selectorWidth(p),34)
  p.run.quartzEarnings=360
- assert(P.prestige(p,'prestige-stars',p.run.id,{atDepot=true,confirmed=true}))
+ assert(prestige(p,'prestige-stars',p.run.id))
  eq(p.run.stars,0);eq(W.selectorWidth(p),30);eq(#p.fleet,4)
 end)
 test('pacing model quantifies first-level tradeoffs including selling travel',function()

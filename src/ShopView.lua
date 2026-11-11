@@ -104,6 +104,7 @@ function V.renderStars(U,parent,options)
  local y=55
  for _,entry in ipairs(Workshop.STAR_CATALOG) do
   local level=Workshop.starLevel(p,entry.id)
+  if entry.legacy and level==0 then continue end
   local price=Workshop.starPrice(entry,level)
   local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
   label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
@@ -111,7 +112,7 @@ function V.renderStars(U,parent,options)
   label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),detail,15,false)
   label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
   action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
-   function() options.onBuy(entry.id,level) end,options.canBuy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
+   function() options.onBuy(entry.id,level) end,options.canBuy and not entry.legacy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
   y+=111
  end
 end

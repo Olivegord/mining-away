@@ -116,7 +116,7 @@ function V:update(dt,now)
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
   self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz/ore') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz per rock') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

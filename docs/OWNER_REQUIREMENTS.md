@@ -2,6 +2,12 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 10 — readable mining, cargo slots and chosen prestige drones
+
+Preserve the existing Crystal Run, shops and pack crate. Prioritize physical, readable feedback for each accepted discrete shot and distinct sustained laser contact; show persistent fracture stages, bounded cosmetic breakup, and a separate collectible reward. Keep damage, rewards, choices and ownership authoritative. Make roles legible through their equipment and work; use the neutral Roblox Smile on the existing drone body.
+
+Start with ten cargo slots and try one large raw cargo object per ordinary crystal, with deeper crystals more valuable per slot. Keep both starting Emptiers. Preserve the existing Compactor for players already entitled to it and make intake, pressing and output readable. Preserve the sum of input values; the current batch sizes remain tuning. New packs improve owned capabilities and Stars buy run convenience. Already-paid offers, installed legacy cards and owned Star automation remain valid. Eligible prestige presents three distinct permanent drones and the player chooses exactly one. The expanded roster, Polisher, new sources of Compactor ownership, rare rock gambling, final economy numbers and draw weights are not settled.
+
 ## November 8 latest — physical counters, readable rarity and drone rolls
 
 Press E at the Pack Counter to buy, let the crate drop, then press E on the crate to open. Make card rarity clear in the reveal and give permanent drone unlocks a spinner ticker. Open each shop from its physical location and remove links that jump between different shops. Research automation, growing power and satisfying feedback, then improve the experience of watching the swarm work. Studio is subject to Screen Time.

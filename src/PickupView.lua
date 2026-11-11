@@ -45,10 +45,17 @@ function V.new(root,parent,audio)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,
+  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
+  if r.physical then
+   local value=Instance.new('BillboardGui');value.Name='CargoWorth';value.Size=UDim2.fromOffset(66,18)
+   value.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);value.MaxDistance=18;value.Enabled=false;value.Parent=view
+   local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
+   text.Text=tostring(source:GetAttribute('CargoValue') or 0)..' Q';text.TextSize=13;text.Font=Enum.Font.GothamBold
+   text.TextColor3=PICKUP_HIGHLIGHT;text.TextStrokeTransparency=.18;text.Parent=value;r.valueLabel=value
+  end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -69,28 +76,36 @@ function V.new(root,parent,audio)
   if math.abs(now-(receipt.at or 0))>.7 then return end
   local rootPart=player.Character and player.Character:FindFirstChild('HumanoidRootPart');if not rootPart then return end
   local r=self.byId[receipt.pickupId]
-  if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
+  if r and receipt.exhausted==true then
+   r.collectAt=r.collectAt or now;r.collectFrom=r.collectFrom or r.drawPosition or r.pos
+   r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+  end
   local target,torso=backpack(player,rootPart.Position)
   if type(units)=='number' and units>0 then
    if not self.amountGui then self.amountGui,self.amountText=pickupNumber(parent) end
    if now-(self.amountAt or -math.huge)<.4 then self.amount+=units
    else self.amount=units;self.amountStarted=now end
-   self.amountAt=now
+   local arrival=now+(r and r.physical and .18 or 0)
+   self.amountAt=arrival
    self.amountGui.Adornee=torso or rootPart
-   self.amountText.Text='+'..self.amount..' ore'
+   self.amountText.Text='+'..self.amount..(receipt.physical and ' cargo' or ' ore')
   end
-  if audio and not receipt.quiet and os.clock()-self.lastSound>.09 then
-   local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
-   self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
-  end
+  if audio and not receipt.quiet then self.soundAt=now+(r and r.physical and .18 or 0);self.soundTarget=target end
  end))
  return self
 end
 function V:update(dt,now)
+ if self.soundAt and now>=self.soundAt then
+  if now-self.lastSound>.09 then
+   self.pickupChain=now-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
+   self.lastSound=now;self.audio:play('pickup',backpack(self.player,self.soundTarget),{pitch=1+self.pickupChain*.045})
+  end
+  self.soundAt=nil
+ end
  if self.amountGui then
   local age=math.max(0,now-self.amountAt)
   local reduced=self.player:GetAttribute('ReducedEffects')==true
-  self.amountGui.Enabled=age<.93 and self.amountGui.Adornee.Parent~=nil
+  self.amountGui.Enabled=now>=self.amountAt and age<.93 and self.amountGui.Adornee.Parent~=nil
   if self.amountGui.Enabled then
    local rise=reduced and 0 or .78*(1-math.exp(-math.max(0,now-self.amountStarted)*4))
    self.amountGui.StudsOffset=Vector3.new(1.72,1.05+rise,0)
@@ -101,18 +116,20 @@ function V:update(dt,now)
  end
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
-   local collectedAt=source:GetAttribute('CollectedAt')
+   local processed=source:GetAttribute('ProcessedAt')
+   local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
+    r.processed=processed~=nil
     r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
-    r.collectTarget=source:GetAttribute('CollectedPosition')
+    r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   local scale=1;local glow=0;local done=false
   if r.collectAt then
-   local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=backpack(owner,r.collectTarget or r.collectFrom)
+   local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
@@ -155,6 +172,11 @@ function V:update(dt,now)
     -- Lift the entire trajectory by the rotated support extent, preserving
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+   end
+   if r.valueLabel then
+    local camera=workspace.CurrentCamera
+    r.valueLabel.Enabled=r.owner==self.player.UserId and not pulling and not r.collectAt and not r.removedAt
+     and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and age>.42 and opacity>.35
    end
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)

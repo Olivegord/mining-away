@@ -66,7 +66,7 @@ local function publish(p)
  for key,value in pairs(data(p)) do if key~='seed' and key~='receipts' then copy[key]=Pro.clone(value) end end
  copy.capacity=Ca.capacity(copy,previewPerks(p));copy.cargoUnits=Pro.cargoUnits(copy);copy.nextPackPrice=Ca.price(copy);copy.packSpeed=Shops.packSpeed(copy);copy.packCurrency=Shops.PACK_CURRENCY;copy.prestigePreview=Pro.prestigePreview(data(p))
  copy.workshop=Ca.workshopRows(copy)
- p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy)
+ p.magnetRange=OreDrops.MAGNET_RANGE+Ca.magnetBonus(copy);p.cargoReach=13+Ca.magnetBonus(copy)
  p.fieldCharge=Workshop.effect(copy,'fieldCharge')
  p.compactorBatch=Workshop.compactorBatch(copy)
  p.shiftSeconds=Workshop.effect(copy,'shiftRelay')
@@ -402,7 +402,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
- local original=not junk and kind=='Crystal' and (stageCount or 3)==3 and scene.classicCrystal
+ local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
  local part=(template or original) and (template or original):Clone() or Instance.new('Part')
  if part:IsA('Part') then
   part.Shape=Enum.PartType.Block
@@ -446,8 +446,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference)
  if field.cfg.SelectionOnly then
   part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key)
-  part:SetAttribute('BaseOre',ore)
-  part:SetAttribute('OreValue',field.cfg.Value)
+  part:SetAttribute('BaseOre',1)
+  part:SetAttribute('OreValue',ore*(field.cfg.Value or 1))
  end
  resources[r.id]=r;table.insert(field.resources,r)
  for k,v in pairs({ResourceId=r.id,FieldId=field.id,Kind=kind,Hardness=r.hardness,HP=maxHealth,MaxHP=maxHealth,Stage=0,StageCount=r.stageCount,Mineral=field.cfg.Material or field.cfg.Key,StageSeed=r.stageSeed,SpawnAt=r.spawnAt,ReadyAt=r.readyAt,FullSize=fullSize,FullPosition=finish,StartPosition=start,ReferenceCrystal=reference,GroundY=ground,BreakSerial=0,SlotCapacity=r.limit,SlotsUsed=0}) do part:SetAttribute(k,v) end
@@ -684,7 +684,14 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
- chip.Name='OreFragment';chip.Size=Vector3.new(.64,.74,.56);chip.Position=position;chip.Color=color
+ chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
+ chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.48,1.70,1.42)) or Vector3.new(.64,.74,.56)
+ chip.Position=position;chip.Color=color
+ if drop.raw then
+  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.Glass
+  chip.MaterialVariant='';chip.Reflectance=0;chip:SetAttribute('PhysicalCargo',true)
+  chip:SetAttribute('CargoValue',drop.value)
+ end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
  chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
@@ -705,6 +712,25 @@ end
 local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolean?)
  local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) or r.kind=='Geode' then return end
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
+ if r.field.cfg.SelectionOnly and Workshop.CRYSTAL_BY_MATERIAL[material] then
+  if r.cargoProduced then return end
+  local early=d.stats.earlyDrop or 0
+  if extraction and (early<=0 or r.stage/r.stageCount<1-early or not DroneRoles.isMiner(d.role)) then return end
+  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+  local specialist=completedSpecial and DroneCatalog.Types[d.role]
+  local amount=r.ore*(specialist and specialist.Yield or 1)*d.stats.yieldMultiplier*tier.value+(profile.run.yieldRemainders[material] or 0)
+  local value=math.max(1,math.floor(amount))
+  profile.run.yieldRemainders[material]=math.max(0,amount-value)
+  r.cargoProduced=true;r.extractedOre=r.ore;r.part:SetAttribute('ExtractedOre',r.ore)
+  local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
+  local angle=pickupSerial*2.399
+  local out=Vector3.new(math.cos(angle),0,math.sin(angle))
+  local center=r.part.Position
+  local position=center+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.65)+Vector3.yAxis*.24
+  scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
+   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,out*3+Vector3.yAxis*4.5,r.field.color)
+  p.dirty=true;p.publishDirty=true;return
+ end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
  local reachBonus=extraction and (d.stats.earlyDrop or 0)*56 or 0
  local base=math.max(0,target-(r.extractedOre or 0));if base==0 then return end
@@ -765,6 +791,18 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
 end
 local function pickupStep(dt)
  local pressed=nil
+ local groups={}
+ scene.pressOutputs=scene.pressOutputs or {}
+ for i=#scene.pressOutputs,1,-1 do
+  local item=scene.pressOutputs[i]
+  if now>=item.at then
+   local p=profiles[item.drop.owner]
+   if p and not p.leaving and item.drop.runId==data(p).run.id then
+    scene.spawnOrePickup(item.template,item.drop,item.position,Vector3.new(3,3,0),item.color)
+   end
+   item.template:Destroy();table.remove(scene.pressOutputs,i)
+  end
+ end
  local hasPress=false
  for _,p in pairs(profiles) do
   p.uncollectedOre=0
@@ -775,19 +813,31 @@ local function pickupStep(dt)
   end
  end
  if hasPress then for id,drop in pairs(pickups) do
-  local p=profiles[drop.owner];local tier=Workshop.CRYSTAL_BY_MATERIAL[drop.material]
+  local p=profiles[drop.owner];local tier=Workshop.CRYSTAL_BY_MATERIAL[drop.tierMaterial]
   local press=p and p.compactor;local square=p and p.miningSquare
   if not press or press.hp<=0 or now<(press.pressUntil or 0) or not square or not healthy(p) or not characterRoot(p)
    or drop.runId~=data(p).run.id or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now)
-   or drop.fieldPart~=square.field.part or drop.compacted or not tier or not tier.nextTier or drop.units<p.compactorBatch
-   or not drop.landed or drop.age<OreDrops.SCATTER_TIME or now<(drop.pressBlockedUntil or 0) then continue end
+   or drop.fieldPart~=square.field.part or drop.compacted or not tier or not tier.nextTier
+   or not drop.landed or drop.age<.40 or now<(drop.pressBlockedUntil or 0) then continue end
   local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
   if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
   local distance=(press.pos-position).Magnitude
-  if distance<p.compactorDistance or (distance==p.compactorDistance and id<p.compactorTarget.id) then
-   p.compactorDistance=distance;p.compactorTarget={id=id,position=position}
-  end
+  local byTier=groups[p] or {};groups[p]=byTier
+  local candidates=byTier[tier] or {};byTier[tier]=candidates
+  candidates[#candidates+1]={id=id,position=position,distance=distance}
  end end
+ for p,byTier in pairs(groups) do
+  for _,candidates in pairs(byTier) do
+   if #candidates<p.compactorBatch then continue end
+   table.sort(candidates,function(a,b) return a.distance==b.distance and a.id<b.id or a.distance<b.distance end)
+   local closest=candidates[1]
+   if closest.distance<p.compactorDistance or (closest.distance==p.compactorDistance and closest.id<p.compactorTarget.id) then
+    local batch={}
+    for i=1,p.compactorBatch do batch[candidates[i].id]=true end
+    p.compactorDistance=closest.distance;p.compactorTarget={id=closest.id,position=closest.position,batch=batch}
+   end
+  end
+ end
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
   if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then
@@ -810,12 +860,13 @@ local function pickupStep(dt)
    end
    local from=Vector3.new(drop.x,drop.y,drop.z)
    local hr=characterRoot(p);local target=hr and hr.Position or from
-   local naturalReach=p.magnetRange+(drop.reachBonus or 0)
+   local naturalReach=(drop.raw and (p.cargoReach or 13) or p.magnetRange)+(drop.reachBonus or 0)
    if (target-from).Magnitude>naturalReach then p.uncollectedOre+=drop.units end
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
    local vacuum=p.vacuum
    local press=p.compactor
-   local pressing=p.compactorTarget and p.compactorTarget.id==id or false
+   local pressing=p.compactorTarget and p.compactorTarget.batch[id] or false
+   if not pressing then drop.pressReady=nil end
    local relay=now<(drop.relayUntil or 0)
    local vacuuming=false
    local reach=relay and math.max(p.vacuumReach+12,naturalReach) or naturalReach
@@ -851,16 +902,8 @@ local function pickupStep(dt)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
     if pressing then
-     local nextTier,units,remainder=Workshop.compaction(drop.material,drop.units,p.compactorBatch)
-     local output={owner=drop.owner,runId=drop.runId,nodeId=drop.nodeId,material=nextTier.material,units=units,
-      floor=drop.floor,fieldPart=drop.fieldPart,quiet=true,compacted=true,reachBonus=drop.reachBonus}
-     local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
-     pressed=pressed or {}
-     table.insert(pressed,{template=drop.part,drop=output,position=target,color=tint})
-     RoleEffects.Pulse(target,tint,.4,2.4,.26)
-     press.pressUntil=now+1.4
-     drop.units=remainder;drop.part:SetAttribute('Units',remainder);drop.queryAt=0
-     if remainder==0 then pickups[id]=nil end
+     drop.pressReady=true
+     pressed=pressed or {};pressed[p]=true
     elseif vacuuming then
      drop.relayUntil=now+3;drop.queryAt=0
     else
@@ -871,7 +914,7 @@ local function pickupStep(dt)
      p.collectTotal=(p.collectTotal or 0)+accepted
      p.player:SetAttribute('CollectedOreTotal',p.collectTotal)
      local color=drop.part.Color
-     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,quiet=drop.quiet,x=drop.x,y=drop.y,z=drop.z,
+     p.player:SetAttribute('MA_Collect',Http:JSONEncode({serial=p.collectSerial,total=p.collectTotal,at=now,units=accepted,pickupId=id,exhausted=drop.units==0,quiet=drop.quiet,physical=drop.raw==true,x=drop.x,y=drop.y,z=drop.z,
       r=math.floor(color.R*255),g=math.floor(color.G*255),b=math.floor(color.B*255)}))
      if drop.units==0 then
       drop.part:SetAttribute('Units',0);drop.part:SetAttribute('CollectedPosition',target);drop.part:SetAttribute('CollectedAt',now)
@@ -890,9 +933,33 @@ local function pickupStep(dt)
    end
   end
  end
- if pressed then for _,item in ipairs(pressed) do
-  scene.spawnOrePickup(item.template,item.drop,item.position,Vector3.new(2,4,0),item.color)
-  if item.template:GetAttribute('Units')==0 then item.template:Destroy() end
+ if pressed then for p in pairs(pressed) do
+  local press=p.compactor
+  local batch=p.compactorTarget and p.compactorTarget.batch
+  local first,value,count=nil,0,0
+  local intake=press.pos-Vector3.yAxis*.85
+  for id in pairs(batch or {}) do
+   local drop=pickups[id]
+   if not drop or not drop.pressReady or (Vector3.new(drop.x,drop.y,drop.z)-intake).Magnitude>2.5 then break end
+   first=first or drop;value+=drop.value;count+=1
+  end
+  if count==p.compactorBatch then
+   local nextTier=Workshop.CRYSTAL_BY_MATERIAL[first.tierMaterial].nextTier
+   local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=nextTier.material,
+    material=Workshop.cargoKey(nextTier.material,value,true),value=value,units=1,raw=true,compacted=true,
+    floor=first.floor,fieldPart=first.fieldPart}
+   local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
+   local template=Instance.new('Part')
+   local at=now+.52
+   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+Vector3.xAxis*1.1,color=tint}
+   press.pressUntil=now+1.1
+   press.model:SetAttribute('PressAt',now)
+   for id in pairs(batch) do
+    local drop=pickups[id]
+    drop.part:SetAttribute('ProcessedAt',now);drop.part:SetAttribute('ProcessedPosition',intake)
+    drop.part.Transparency=1;Debris:AddItem(drop.part,.24);pickups[id]=nil
+   end
+  end
  end end
 end
 local hitResource: any
@@ -982,9 +1049,16 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if secondary and not r.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
+ local isShot=special and job.contact~=nil
+ local cutStart=not secondary and not abilityOrigin and not special and d.mining and d.beamSince and d.lastCutFX~=d.beamSince
  local shapeChanged=false
  local revealed=nil
  local broken=R.damage(r,amount)
+ local finalSurface
+ if broken and r.field.cfg.SelectionOnly then
+  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
+  finalSurface=workspace:Raycast(d.pos,r.part.Position-d.pos,query)
+ end
  r.lastHitAt=now
  if r.field.cfg.SelectionOnly and r.hardness>1 and d.squareJob then
   r.lastPin=d.squareJob;r.lastPinOwner=d.owner
@@ -1041,11 +1115,26 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  local scale=Feel.stageScale(r.stage,r.stageCount)
+  local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
  end
  r.part:SetAttribute('HP',actual)
+ if r.field.cfg.SelectionOnly and (isShot or cutStart or broken) then
+  if cutStart then d.lastCutFX=d.beamSince end
+  local hitFrom=d.pos
+  local delta=r.part.Position-hitFrom
+  local direction=delta.Magnitude>.01 and delta.Unit or -Vector3.yAxis
+  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
+  local hit=finalSurface or workspace:Raycast(hitFrom,delta,query)
+  local point=hit and hit.Position or (isShot and job.contact) or r.part.Position-direction*r.part.Size.Y*.32
+  r.part:SetAttribute('CutContactPoint',point);r.part:SetAttribute('CutContactNormal',hit and hit.Normal or -direction)
+  r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
+  if isShot and job.projectile then
+   job.projectile:SetAttribute('ContactPoint',point);job.projectile:SetAttribute('ContactAt',now)
+  end
+  if broken then r.part:SetAttribute('CrystalBreakAt',now) end
+ end
  if not broken and r.kind~='Geode' and r.stage>previous then award(recipient,r,false,true) end
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
@@ -1246,7 +1335,7 @@ function scene.regrow(r,dt)
  r.stage=Feel.stage(r.hp+10,r.maxHP,r.stageCount)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
-  r.part.Size=r.fullSize*Feel.stageScale(r.stage,r.stageCount)*Feel.rockShape(r.slice,r.heatBand)
+  r.part.Size=r.fullSize*(r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount))*Feel.rockShape(r.slice,r.heatBand)
  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
  end
  r.part:SetAttribute('HP',r.hp+10)
@@ -1384,7 +1473,9 @@ local function move(d,goal,dt)
  if d.role=='Striker' then
   local p=profiles[d.owner];local hr=p and characterRoot(p)
   yaw=Feel.referenceYaw(d.pos,goal,speed,hr and hr.CFrame.LookVector,d.yaw)
-  d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,speed,dt)
+  if scene.runStart or d.squareJob then
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,1.35)
+  else d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,speed,dt) end
  else
   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
   yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
@@ -1538,7 +1629,8 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
   d.yaw=Feel.approachYaw(yaw,Feel.levelYaw(d.pos,r.position,yaw),dt)
  end
  local job=d.specialJob
- local starting=not job and d.warmAt and now-d.warmAt>=math.max(.08,d.stats.warmup)
+ local warmup=math.max(.08,d.stats.warmup)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
+ local starting=not job and d.warmAt and now-d.warmAt>=warmup
  local contacting=job and not job.impacted and now>=job.startedAt+job.duration*job.impact
  if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or contacting) then
   -- Monitor obstruction at snapshot cadence, with fresh checks at startup
@@ -1551,8 +1643,9 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
   elseif d.specialJob then release(d) else d.warmAt=nil end;return
  end
  d.warmAt=d.warmAt or now;d.state='Warmup'
- if now-d.warmAt<math.max(.08,d.stats.warmup) then return end
+ if now-d.warmAt<warmup then return end
  if not d.specialJob then
+  d.workShotStarted=true
   local cycle=DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
   if not cycle then return end
   r.specialSerial=(r.specialSerial or 0)+1
@@ -1566,7 +1659,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local flight=projectile=='Dart' and .25 or .48
    d.specialJob.duration=math.max(cycle.duration,flight+.10);d.specialJob.impact=flight/d.specialJob.duration
    d.specialJob.contact=aim
-   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,flight,d.id)
+   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
   else
    for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
    r.part:SetAttribute('EffectSerial',r.specialSerial)
@@ -1575,7 +1668,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.state='SpecialMine'
  job=d.specialJob
  if not job.impacted and now>=job.startedAt+job.duration*job.impact then
-  if hitResource(d,r,job.damage,false,nil,nil,'Special') and projectile then
+  if hitResource(d,r,job.damage,false,nil,nil,'Special') and projectile and not r.field.cfg.SelectionOnly then
    RoleEffects.Pulse(job.contact,RoleConfig.Types[d.role].Color,.35,projectile=='Dart' and 1.9 or 4.2,.18)
   end
  end
@@ -1965,7 +2058,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=profile.run.deliveries[d.id] and profile.run.deliveries[d.id].id or '',AutoFieldId=d.autoField or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
-  CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.converter or scene.packStation).Position,
+  CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.runStart and scene.packStation or scene.converter or scene.packStation).Position,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
   RepairChargeAt=d.repairChargeAt or 0,RepairChargeDuration=RoleConfig.Types.Medic.ChargeWindup,
   CanMine=DroneRoles.isWorker(d.role),AutomationMineEnabled=DroneRoles.isWorker(d.role) and (d.stats.plotAuto or 0)>0,AutomationHaulEnabled=d.role=='Courier',WorkRole=DroneRoles.job(d.role),ImpactSerial=d.impactSerial or 0,
@@ -2176,7 +2269,7 @@ local function serviceDeliveries(p: any)
       p.shiftSquare=p.miningSquare;p.shiftUntil=now+p.shiftSeconds
       proceeds..=' · Crew surge'
      end
-     notice(p,'Emptier sold '..result.units..' ore'..proceeds)
+     notice(p,'Emptier sold '..result.units..' cargo'..proceeds)
     end
     p.publishDirty=true
    end)
@@ -2295,9 +2388,9 @@ local function chooseCard(p: any,pl: any,payload: any)
    if not started then p.pendingOfferTx=nil;offerReply(pl,payload,'rejected','Profile busy; try again') end
 end
 local function executePrestige(p: any,pl: any,payload: any)
- if payload.confirm~=true or not atStation(p,scene.prestigeStation,15) then return end
+ if payload.confirm~=true or type(payload.droneType)~='string' or #payload.droneType>24 or not atStation(p,scene.prestigeStation,15) then return end
  local function applyPrestige(copy: any): (any, any)
-  local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true}
+  local context: any={atDepot=true,activeEncounter=activeAssault(p),confirmed=true,droneType=payload.droneType}
   local ok: boolean,result: any=Pro.prestige(copy,payload.txId,payload.runId,context)
   if ok then return result end
   return nil,result

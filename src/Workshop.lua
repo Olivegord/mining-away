@@ -15,13 +15,27 @@ for i,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
-W.EMPTIER_BATCH=24
+W.EMPTIER_BATCH=4
 W.COMPACTOR_BATCH=3
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 function W.compaction(material,units,batch)
  local tier=W.CRYSTAL_BY_MATERIAL[material]
  if not tier or not tier.nextTier then return nil,0,units end
  return tier.nextTier,math.floor(units/batch),units%batch
+end
+-- New physical cargo occupies one slot per object. Keep legacy mineral keys
+-- unchanged so existing bags and in-flight Emptier manifests retain value.
+function W.cargoKey(material,quartz,pressed)
+ assert(W.CRYSTAL_BY_MATERIAL[material] and quartz>=1 and quartz<=1000000 and quartz%1==0,'Invalid crystal cargo')
+ return (pressed and 'Block:' or 'Rock:')..material..':'..quartz
+end
+function W.crystalCargo(key)
+ if type(key)~='string' then return nil end
+ local form,material,digits=key:match('^(%a+):(%a+):(%d+)$')
+ if (form~='Rock' and form~='Block') or not W.CRYSTAL_BY_MATERIAL[material] then return nil end
+ local value=tonumber(digits)
+ if not value or value<1 or value>1000000 or tostring(value)~=digits then return nil end
+ return material,value,form=='Block'
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
@@ -55,10 +69,10 @@ W.CATALOG={
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_COMPACTOR'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
@@ -70,13 +84,13 @@ end
 function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
 function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
 W.STAR_CATALOG={
- {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum'},
- {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart'},
+ {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
+ {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},
  {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
  {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
  {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
  {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
- {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
+ {id='backpack',title='Backpack Lining',description='+2 cargo slots',cost=3,max=3},
 }
 W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
 W.BATTERY=100

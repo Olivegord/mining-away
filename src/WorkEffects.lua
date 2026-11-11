@@ -362,7 +362,7 @@ function W:courier(drone,record,now)
  end
  if busy then fx.lastAt=now end
  local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
- local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
+ local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
  for _,trail in ipairs(fx.trails) do trail.Enabled=not BeamVFX.reduced() and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local backpack=backpackPosition(source)
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
@@ -381,7 +381,7 @@ function W:courier(drone,record,now)
   local t=progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
  end
- pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
+ pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and .7 or 0,q,0,GOLD)
  if pickup then
@@ -397,7 +397,7 @@ function W:courier(drone,record,now)
   if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
- fx.parcel.Size=Vector3.new(.62,.42,.5)*parcelScale;fx.band.Size=Vector3.new(.65,.07,.53)*parcelScale
+ fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale
  fx.parcel.Transparency=parcelUnits>0 and 0 or 1
  fx.band.Transparency=fx.parcel.Transparency
  if parcelUnits>0 then

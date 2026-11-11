@@ -191,7 +191,7 @@ check('actual Profile prestige crash retains identities and exactly one permanen
  local original=clone(s.data.fleet);s.data.run.saleEarnings=2000;s.data.run.quartzEarnings=2000;s.data.run.wins.Cobalt=1
  local runId=s.data.run.id;b.failAfter=3
  eq(m:transaction(s,'storage-prestige',function(p)
-  local ok,r=Profile.prestige(p,'domain-prestige',runId,{atDepot=true,activeEncounter=false,confirmed=true})
+  local ok,r=Profile.prestige(p,'domain-prestige',runId,{atDepot=true,activeEncounter=false,confirmed=true,droneType=Profile.prestigePreview(p).droneChoices[1].kind})
   if ok then return r end;return nil,r
  end),false)
  eq(#s.data.fleet,#original);eq(s.readOnly,true);c.now=131

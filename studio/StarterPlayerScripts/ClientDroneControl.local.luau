@@ -18,13 +18,27 @@ for i,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
-W.EMPTIER_BATCH=24
+W.EMPTIER_BATCH=4
 W.COMPACTOR_BATCH=3
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
 function W.compaction(material,units,batch)
  local tier=W.CRYSTAL_BY_MATERIAL[material]
  if not tier or not tier.nextTier then return nil,0,units end
  return tier.nextTier,math.floor(units/batch),units%batch
+end
+-- New physical cargo occupies one slot per object. Keep legacy mineral keys
+-- unchanged so existing bags and in-flight Emptier manifests retain value.
+function W.cargoKey(material,quartz,pressed)
+ assert(W.CRYSTAL_BY_MATERIAL[material] and quartz>=1 and quartz<=1000000 and quartz%1==0,'Invalid crystal cargo')
+ return (pressed and 'Block:' or 'Rock:')..material..':'..quartz
+end
+function W.crystalCargo(key)
+ if type(key)~='string' then return nil end
+ local form,material,digits=key:match('^(%a+):(%a+):(%d+)$')
+ if (form~='Rock' and form~='Block') or not W.CRYSTAL_BY_MATERIAL[material] then return nil end
+ local value=tonumber(digits)
+ if not value or value<1 or value>1000000 or tostring(value)~=digits then return nil end
+ return material,value,form=='Block'
 end
 W.TIERS={'Common','Rare','Epic','Legendary'}
 W.CATALOG={
@@ -58,10 +72,10 @@ W.CATALOG={
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
 W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
-W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_COMPACTOR'}
+W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
@@ -73,13 +87,13 @@ end
 function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
 function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
 W.STAR_CATALOG={
- {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum'},
- {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart'},
+ {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
+ {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},
  {id='autosell',title='Auto Sell',description='Sell a full backpack from the field',cost=6,max=1},
  {id='selector',title='Wider Selector',description='+4 studs to the square width',cost=2,max=3},
  {id='walk',title='Walking Speed',description='+2 studs per second on foot',cost=2,max=3},
  {id='charge',title='Quick Charge',description='+30% battery recharge speed',cost=3,max=3},
- {id='backpack',title='Backpack Lining',description='+10 ore capacity',cost=3,max=3},
+ {id='backpack',title='Backpack Lining',description='+2 cargo slots',cost=3,max=3},
 }
 W.STAR_BY_ID={};for _,entry in ipairs(W.STAR_CATALOG) do W.STAR_BY_ID[entry.id]=entry end
 W.BATTERY=100
@@ -295,6 +309,8 @@ function S.reason(p,entry,context)
  return nil
 end
 function S.oreValue(prices,material)
+ local _,cargoValue=Workshop.crystalCargo(material)
+ if cargoValue then return cargoValue end
  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
  return tier and material~='Quartz' and tier.value or (prices and prices[material])
 end
@@ -302,10 +318,11 @@ end
 function S.deposit(run,bag)
  local deposit={}
  for key,n in pairs(bag) do
+  local _,cargoValue=Workshop.crystalCargo(key)
   local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
-  if (not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
-  local currency=tier and 'Quartz' or key
-  deposit[currency]=(deposit[currency] or 0)+n*(tier and tier.value or 1)
+  if (not cargoValue and not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=(cargoValue or tier) and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(cargoValue or (tier and tier.value) or 1)
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
@@ -627,6 +644,10 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
+function F.crystalStageShape(stage,count)
+ local loss=1-F.stageScale(stage,count)
+ return Vector3.new(1-loss*.62,1-loss*.81,1-loss*.46)
+end
 function F.crystalShade(hp,maxHP,stage,count)
  local period=F.stageScale(stage,count)
  return math.clamp(hp/math.max(1,maxHP)/period-(1-period)/4,0,1)
@@ -1151,6 +1172,10 @@ local CUES = {
  click={id='9126066421',volume=.16,duration=1,cooldown=.075,fallback='volume_slider.ogg'},
  sale={id='soft-sale',localSound='rbxasset://sounds/action_jump_land.mp3',volume=.075,duration=.65,pitch=1.05,cooldown=.8,fallback='action_jump_land.mp3'},
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
+ crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
+ crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
+ crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
+ crystal_split={id='9125869495',volume=.27,duration=.55,pitch=.73,cooldown=.105,range=76,maxVoices=3,fallback='action_jump_land.mp3'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
  pack_step={id='9126066421',volume=.16,duration=.38,pitch=1.1,cooldown=.09,range=30,fallback='volume_slider.ogg'},
@@ -2734,7 +2759,7 @@ function W:courier(drone,record,now)
  end
  if busy then fx.lastAt=now end
  local paused=source:GetAttribute('MotionPaused')==true or source:GetAttribute('WorkPaused')==true
- local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
+ local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
  for _,trail in ipairs(fx.trails) do trail.Enabled=not BeamVFX.reduced() and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local backpack=backpackPosition(source)
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
@@ -2753,7 +2778,7 @@ function W:courier(drone,record,now)
   local t=progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
  end
- pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.52,0))
+ pivot=drone.view:GetPivot();mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0))
  fx.drive.CFrame=pivot;fx.anchor.CFrame=facing(mount,Vector3.new(0,-1,0))
  drawSpheres(fx,now,pickup and .3+.7*q or unload and .7 or 0,q,0,GOLD)
  if pickup then
@@ -2769,7 +2794,7 @@ function W:courier(drone,record,now)
   if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
- fx.parcel.Size=Vector3.new(.62,.42,.5)*parcelScale;fx.band.Size=Vector3.new(.65,.07,.53)*parcelScale
+ fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale
  fx.parcel.Transparency=parcelUnits>0 and 0 or 1
  fx.band.Transparency=fx.parcel.Transparency
  if parcelUnits>0 then
@@ -2911,6 +2936,27 @@ function Catalog.prestigeReward(seed,index)
   if ticket<=0 then return reward end
  end
  error('Prestige reward weights must total 100')
+end
+-- Three distinct weighted choices, stable for a run across reconnects.
+function Catalog.prestigeChoices(seed,index)
+ local prime=2147483647
+ local state=(seed%prime*48271+index%prime*69621)%prime
+ local pool=table.clone(Catalog.PrestigeRewards)
+ local choices={}
+ for _=1,3 do
+  local total=0
+  for _,entry in ipairs(pool) do total+=entry.weight end
+  state=(math.max(1,state)*48271)%prime
+  local ticket=state%total+1
+  for i,entry in ipairs(pool) do
+   ticket-=entry.weight
+   if ticket<=0 then
+    choices[#choices+1]={kind=entry.kind,name=entry.name,tier=entry.tier,job=entry.job}
+    table.remove(pool,i);break
+   end
+  end
+ end
+ return choices
 end
 function Catalog.price(kind,fleet)
  local definition=Catalog.Types[kind];if not definition then return nil end
@@ -4685,7 +4731,7 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
-local function fieldStep(record,state,now,dt,shot)
+local function fieldStep(record,state,now,dt,shot,source)
  local recoil,reload=0,0
  if shot and shot.Parent then
   local started=shot:GetAttribute('StartedAt')
@@ -4696,7 +4742,12 @@ local function fieldStep(record,state,now,dt,shot)
    reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
   end
  end
- local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and state=='Press')
+ if record.role=='Needler' or record.role=='Ballcaster' then
+  local warmAt=source:GetAttribute('WarmupStart') or 0
+  local untilShot=(source:GetAttribute('WarmupDuration') or 0)-(now-warmAt)
+  if state=='Warmup' and warmAt>0 and untilShot>=0 and untilShot<.10 then recoil=-.22*(1-untilShot/.10) end
+ end
+ local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and (state=='Intake' or state=='Press'))
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
@@ -4708,7 +4759,10 @@ local function fieldStep(record,state,now,dt,shot)
   if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
   elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
-  elseif kind=='PressJaw' then offset=Vector3.new(-item.side*.57*engagement,0,0)
+  elseif kind=='PressJaw' then
+   local age=now-(source:GetAttribute('PressAt') or 0)
+   local stroke=state=='Press' and smooth(age/.15)*(1-smooth((age-.48)/.22)) or 0
+   offset=Vector3.new(-item.side*.57*stroke,-.12*stroke,0)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
@@ -4719,7 +4773,7 @@ end
 function Motion.step(record,source,resource,now,dt,shot)
  if not record or not record.model.Parent then return end
  local state=source:GetAttribute('State')
- if fieldRoles[record.role] then fieldStep(record,state,now,dt,shot);return end
+ if fieldRoles[record.role] then fieldStep(record,state,now,dt,shot,source);return end
  local id=source:GetAttribute('DroneId')
  if resource and resource:GetAttribute('EffectDrone')==id then record.resource=resource end
  -- The final contact clears TargetId, but its mechanical recoil still finishes
@@ -5220,7 +5274,7 @@ function View.new()
  end
  local root=workspace:FindFirstChild('DroneRoleState');if root then attach(root) end
  self.connections[#self.connections+1]=workspace.ChildAdded:Connect(function(node) if node.Name=='DroneRoleState' then attach(node) end end)
- function self:step(now,droneIndex)
+ function self:step(now,droneIndex,resources)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
@@ -5239,7 +5293,17 @@ function View.new()
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
-    if progress>=1 then
+    local contactAt=node:GetAttribute('ContactAt')
+    local anchor=node:GetAttribute('TargetAnchor')
+    local target=resources and resources[node:GetAttribute('TargetId') or '']
+    if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
+     to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
+    end
+    if contactAt and drone and not r.impacted and now-contactAt<.20 then
+     r.impacted=true;drone.shotImpactAt=now
+    end
+    local resolved=contactAt or progress>1+.16/duration or (not target and progress>=1)
+    if resolved then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true
     elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
@@ -5257,7 +5321,7 @@ function View.new()
      end
      from=r.launchFrom or from
      local direction=(to-from).Unit
-     local center=from:Lerp(to,progress)-direction*(value.Size.Z*.5)
+     local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
     end
    elseif kind=='Orbital' then
@@ -5319,6 +5383,156 @@ function View.new()
  return self
 end
 return View
+
+end)()
+local CrystalImpactView = (function()
+-- Local-only feedback. Rest poses and reward objects belong to other systems.
+local V={}
+local function part(parent,class,name,color)
+ local p=Instance.new(class);p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false
+ p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
+ return p
+end
+function V.new(parent,audio)
+ local self={pieces={},parent=parent,audio=audio,seamBudget=1}
+ function self:chips(at,point,normal,tint,count,large,scale,ground)
+  if not BeamVFX.near(point,large and 92 or 60) then return end
+  if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
+  local sideways=normal:Cross(Vector3.yAxis)
+  sideways=sideways.Magnitude>.01 and sideways.Unit or Vector3.xAxis
+  local up=normal:Cross(sideways).Unit
+  for i=1,count do
+   if #self.pieces>=48 then break end
+   local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
+   local direction=normal*.7+spread*(large and 1.25 or .66)
+   local size=large and scale*(.42+i*.1) or .10+i*.036
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint)
+   p.Size=Vector3.new(size*.72,size*1.45,size)
+   p.CFrame=CFrame.new(point)
+   local origin=point+normal*(size*.85+.025)
+   p.Position=origin
+   self.pieces[#self.pieces+1]={p=p,at=at,from=origin,v=direction*(large and 8 or 9)+Vector3.yAxis*(large and 4 or 2),
+    duration=large and .5 or .24,ground=ground or point.Y-4}
+  end
+ end
+ function self:step(now)
+  for i=#self.pieces,1,-1 do
+   local e=self.pieces[i];local t=now-e.at
+   if t>=e.duration then e.p:Destroy();table.remove(self.pieces,i)
+   else
+    local pos=e.from+e.v*t-Vector3.yAxis*(23*t*t)
+    e.p.CFrame=CFrame.new(pos.X,math.max(e.ground+e.p.Size.Y*.45,pos.Y),pos.Z)*CFrame.Angles(t*9+i,t*7,t*4)
+    e.p.Transparency=math.clamp((t/e.duration-.62)/.38,0,1)
+   end
+  end
+ end
+ function self:clearMarks(r)
+  if r.seams then r.seams:Destroy();r.seams=nil end
+ end
+ function self:marks(r,stage,count)
+  self:clearMarks(r)
+  local view,source=r.view,r.source
+  if stage==0 or not source.CanQuery or not BeamVFX.near(view.Position,125) then return false end
+  local folder=Instance.new('Folder');folder.Name='CrystalSeams';folder.Parent=parent;r.seams=folder
+  local depth=stage/math.max(1,count)
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={source}
+  -- Trace seams onto the current collision surface. Every point is projected;
+  -- narrow discontinuities in the faceted mesh are left as gaps.
+  local function trace(out,across,points,tint,width)
+   local previous=nil
+   for _,xy in ipairs(points) do
+    local base=source.CFrame:PointToWorldSpace((across*xy[1]+Vector3.yAxis*xy[2])*source.Size)
+    local ray=source.CFrame:VectorToWorldSpace(out)*source.Size.Magnitude
+    local hit=workspace:Raycast(base+ray,-ray*1.25,params)
+    local point=hit and hit.Position+hit.Normal*.028
+    if point and previous then
+     local span=(point-previous).Magnitude
+     if span>.015 and span<source.Size.Magnitude*.25 then
+      local line=part(folder,'Part','Seam',tint)
+      line.Size=Vector3.new(width,width,span+.02);line.CFrame=CFrame.lookAt((point+previous)*.5,point)
+     end
+    end
+    previous=point
+   end
+  end
+  local dark=r.baseColor:Lerp(Color3.fromRGB(25,17,30),.82)
+  local interior=r.baseColor:Lerp(Color3.fromRGB(255,238,210),.62)
+  local main={{-.19,-.35},{-.10,-.21},{-.16,-.11},{-.03,.02},{-.06,.13}}
+  if depth>=.60 then table.insert(main,{.07,.27});table.insert(main,{.05,.37}) end
+  for _,out in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.zAxis,-Vector3.zAxis}) do
+   local across=Vector3.yAxis:Cross(out)
+   trace(out,across,main,dark,.055+depth*.052)
+   if depth>=.55 then trace(out,across,{{-.16,-.11},{-.035,-.12},{.10,-.024},{.22,-.052}},interior,.064+depth*.045) end
+  end
+  return true
+ end
+ function self:react(r,now)
+  local s,v=r.source,r.view
+  local impact=s:GetAttribute('CutContactAt') or 0
+  local broken=(s:GetAttribute('BreakSerial') or 0)>0
+  local breakAt=s:GetAttribute('CrystalBreakAt') or 0
+  if impact>r.lastContactAt then
+   r.lastContactAt=impact
+   local at=now-impact
+   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and now>=(r.flashGate or 0) then
+    r.flashAt=now;r.flashGate=now+.105
+    local point=s:GetAttribute('CutContactPoint') or v.Position
+    local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
+    r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
+    self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
+    if s:GetAttribute('CutIsShot') and not broken then
+     local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
+     audio:play('crystal_snap',point,{pitch=1.20-.23*health})
+     audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
+     r.chipTail={at=now+.042,point=point,pitch=1.04+.22*(1-health)}
+    end
+   end
+  end
+  if r.chipTail and now>=r.chipTail.at then
+   local cue=r.chipTail;r.chipTail=nil
+   if not broken and now-cue.at<.10 then audio:play('crystal_chip',cue.point,{pitch=cue.pitch}) end
+  end
+  if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
+   if breakAt>now then return end
+   if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
+    r.splitDue=now+.05;r.flashAt=now
+   end
+   if r.splitDue and now<r.splitDue then
+    v.Transparency=0
+   else
+    r.lastBreakAt=breakAt
+    if r.splitDue then
+     local frame=r.restPose
+     local ground=s:GetAttribute('GroundY') or frame.Position.Y-1
+     local point=Vector3.new(frame.Position.X,ground+math.max(.65,v.Size.Y*.42),frame.Position.Z)
+     for _,side in ipairs({-1,1}) do
+      local normal=frame.RightVector*side
+      self:chips(now,point+normal*v.Size.X*.22,normal,r.baseColor,2,true,math.clamp(v.Size.Y*.36,.65,1.6),ground)
+     end
+     audio:play('crystal_split',point)
+    end
+    r.splitDue=nil;v.Transparency=1;self:clearMarks(r)
+   end
+  end
+  if r.restPose and (r.flashAt or r.vibrating or (r.cutUntil or 0)>now) then
+   local t=r.flashAt and now-r.flashAt or math.huge
+   if t<.06 then v.Color=r.restColor:Lerp(Color3.new(1,1,1),.95*(1-.35*t/.06))
+   else v.Color=r.restColor end
+   local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
+   if t>=.14 then r.flashAt=nil;r.kick=nil end
+   r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
+   local vibration=r.vibrating and math.sin(now*77)*.004 or 0
+   local kick=not BeamVFX.reduced() and r.kick or Vector3.zero
+   local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
+   v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose
+  end
+ end
+ function self:destroy()
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
+ end
+ return self
+end
+return V
 
 end)()
 local Presentation = (function()
@@ -5682,17 +5896,17 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local glow=reference and visible and sample.active and not sample.paused
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
-  halo.Size=Vector3.one;halo.Color=Color3.fromRGB(180,192,173);halo.Material=Enum.Material.Neon
+  halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and .8 or 1
+  beam.referenceGlow.Transparency=glow and (.78+.09*math.sin(now*47)) or 1
   if glow then beam.referenceGlow.Position=point end
  end
  if reference then
-  beam.marker.Size=Vector3.one*.5
-  beam.marker.Color=Color3.fromRGB(192,134,80);beam.marker.Material=Enum.Material.Neon
-  if glow then beam.marker.Position=point end
+  beam.marker.Size=Vector3.one*(.15+.018*math.sin(now*43))
+  beam.marker.Color=Color3.fromRGB(255,250,232);beam.marker.Material=Enum.Material.Neon
+  if glow then beam.marker.Position=point+normal*.06 end
   beam.marker.Transparency=glow and 0 or 1
  else
   beam.marker.Color=tint
@@ -5700,10 +5914,17 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
+ elseif glow and sample.resource and sample.resource.cutFeedback then
+  sample.resource.cutUntil=now+.09
+  if now>=(beam.nextCrystalChip or 0) then
+   beam.nextCrystalChip=now+.23+(now%.07)
+   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
+  end
+ end
  if self.audio and self.audio.setLoop then
-  if visible and sample.active and sample.isMining and not sample.paused and not reference then
-   self.audio:setLoop(beam,'cutting_hum',point,.45+.55*width,.9+.1*width)
+  if visible and sample.active and sample.isMining and not sample.paused then
+   self.audio:setLoop(beam,'cutting_hum',point,reference and (.23+.26*width) or (.45+.55*width),.9+.1*width)
    beam.wasCutting=true
   else
    self.audio:stopLoop(beam)
@@ -6875,9 +7096,9 @@ function CardView.summary(choice)
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
  add('doubleBeam','Two lasers.\n2× damage to one crystal.')
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
- add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
- add('compactor','Presses 3 loose ore into 1 of the next tier.')
- add('batchPress','Your Compactor now needs 2 ore per press.')
+ add('oreDuplicator','Gold ore chamber.\n2× cargo value from this miner.')
+ add('compactor','Legacy unlock: presses 3 matching rocks into 1 block of equal total value.')
+ add('batchPress','Your Compactor now needs 2 rocks per press.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
@@ -6892,14 +7113,14 @@ function CardView.summary(choice)
  add('capacity',amount(e.capacity or 0,'backpack space'))
  add('speed',amount(e.speed or 0,'drone speed'))
  add('startup',amount(e.startup or 0,'laser startup speed'))
- add('yield',amount(e.yield or 0,'ore per crystal'))
+ add('yield',amount(e.yield or 0,'cargo value per crystal'))
  add('range',amount(e.range or 0,'attack range'))
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
  add('aftershock','Each laser crack or break sends a shock into one nearby crystal.')
  add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
- add('earlyDrop','Cracks drop more ore that flies farther to you')
+ add('earlyDrop','The rock drops at a late crack and can be collected from farther away.')
  add('fieldCharge','Depleted drones recharge at your pin')
  add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
  add('battery','+'..(e.battery or 0)..' battery capacity')
@@ -6921,10 +7142,12 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
- elseif e.compactor then target='New drone at your pin'
+ elseif e.compactor then target='Compactor at your pin'
  elseif e.batchPress then target='Your Compactor'
  elseif e.shiftRelay then target='Your mining pin'
- elseif choice.scope=='Player' then target='Your backpack'
+ elseif e.magnetRange then target='Cargo collection'
+ elseif e.capacity then target='Your backpack'
+ elseif choice.scope=='Player' then target='Your run'
  elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
@@ -7410,55 +7633,18 @@ function CardView.create(U,parent,choice,index,width,height,options)
   finish=function(value) installed=value;finishedAt=os.clock() end}
 end
 
--- The strip only reveals the committed result. The client supplies the motion.
-function CardView.revealDrone(U,parent,width,reward,audio,isVisible,onClose)
+-- This acknowledges the chosen drone after the save commits.
+function CardView.revealDrone(U,parent,width,reward,audio,_isVisible,onClose)
  local p=U.palette
- local view=U.frame(parent,UDim2.fromOffset(0,10),UDim2.fromOffset(width,110),p.ink)
- view.Name='DroneRewardTicker';view.ClipsDescendants=true;U.corner(view,12)
- local strip=U.frame(view,UDim2.fromOffset(0,8),UDim2.fromOffset(0,94),p.ink);strip.BackgroundTransparency=1
- local cellWidth=math.min(134,math.floor(width*.46))
- local catalog=DroneCatalog.PrestigeRewards
- local winner=15
- for i=1,winner+2 do
-  local entry=i==winner and {name=reward.rewardName,tier=reward.rewardTier} or catalog[(i+reward.prestiges-1)%#catalog+1]
-  local tint=rarityColor(entry.tier)
-  local cell=U.panel(strip,UDim2.fromOffset((i-1)*cellWidth+3,0),UDim2.fromOffset(cellWidth-6,94),p.ink:Lerp(tint,.25),8)
-  U.stroke(cell,tint,2)
-  U.icon(cell,'drone',UDim2.new(.5,-17,0,9),UDim2.fromOffset(34,34),tint)
-  local name=U.text(cell,UDim2.fromOffset(2,44),UDim2.new(1,-4,0,25),entry.name,15,p.white,true)
-  local tier=U.text(cell,UDim2.fromOffset(2,68),UDim2.new(1,-4,0,18),Packs.Tiers[entry.tier],12,tint,true)
-  name.TextXAlignment=Enum.TextXAlignment.Center;tier.TextXAlignment=Enum.TextXAlignment.Center
- end
- local marker=U.frame(view,UDim2.new(.5,-2,0,0),UDim2.fromOffset(4,13),p.white);marker.ZIndex=10
- local detail=U.text(parent,UDim2.fromOffset(0,128),UDim2.fromOffset(width,56),'Adding a permanent drone…',18,p.text,true)
- detail.TextXAlignment=Enum.TextXAlignment.Center
- local settled=false
  local tint=rarityColor(reward.rewardTier)
- local trigger,connection
- local function place(index) strip.Position=UDim2.fromOffset(width*.5-(index-.5)*cellWidth,8) end
- local function settle()
-  if settled then return end
-  settled=true;place(winner);marker.BackgroundColor3=tint
-  detail.Text=reward.rewardName..' joined your fleet\n'..reward.rewardJob
-  trigger.Text='Continue';audio:play('pack_open',nil,{pitch=.95+reward.rewardTier*.11})
-  if connection then connection:Disconnect();connection=nil end
- end
- trigger=U.button(parent,UDim2.new(.5,-74,0,198),UDim2.fromOffset(148,40),'Skip reveal',function()
-  if settled then onClose() else settle() end
- end,tint)
- if reducedMotion() then settle();return end
- local start=os.clock();local last=2
- place(last)
- connection=RunService.RenderStepped:Connect(function()
-  if not isVisible() then connection:Disconnect();connection=nil;return end
-  local t=math.clamp((os.clock()-start)/(1.45+.17*reward.rewardTier),0,1)
-  local index=2+(winner-2)*(1-(1-t)^3)
-  place(index)
-  local tick=math.floor(index+.5)
-  if tick~=last and tick<winner then last=tick;audio:play('pack_step',nil,{pitch=.82+t*.37}) end
-  if t>=1 then settle() end
- end)
- view.Destroying:Once(function() if connection then connection:Disconnect() end end)
+ local view=U.panel(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,124),p.ink:Lerp(tint,.22),14)
+ view.Name='PrestigeReward';U.stroke(view,tint,2)
+ U.icon(view,'drone',UDim2.fromOffset(16,28),UDim2.fromOffset(48,48),tint)
+ local name=U.text(view,UDim2.fromOffset(79,19),UDim2.new(1,-90,0,32),reward.rewardName,23,p.white,true)
+ local job=U.text(view,UDim2.fromOffset(79,58),UDim2.new(1,-90,0,51),reward.rewardJob,15,p.white,false)
+ job.TextWrapped=true;name.TextWrapped=true
+ U.button(parent,UDim2.new(.5,-74,0,153),UDim2.fromOffset(148,42),'Continue',onClose,tint)
+ audio:play('prestige')
 end
 return CardView
 
@@ -7769,6 +7955,7 @@ function V.renderStars(U,parent,options)
  local y=55
  for _,entry in ipairs(Workshop.STAR_CATALOG) do
   local level=Workshop.starLevel(p,entry.id)
+  if entry.legacy and level==0 then continue end
   local price=Workshop.starPrice(entry,level)
   local card=rounded(U,parent,UDim2.fromOffset(3,y),UDim2.fromOffset(width-6,102),Color3.fromRGB(255,250,226),Color3.fromRGB(218,186,99))
   label(U,card,UDim2.fromOffset(12,7),UDim2.fromOffset(width-26,24),entry.title,19,true)
@@ -7776,7 +7963,7 @@ function V.renderStars(U,parent,options)
   label(U,card,UDim2.fromOffset(12,33),UDim2.fromOffset(width-26,21),detail,15,false)
   label(U,card,UDim2.fromOffset(12,57),UDim2.fromOffset(width-146,36),level..' / '..entry.max..' owned',14,true)
   action(U,card,UDim2.fromOffset(width-124,57),UDim2.fromOffset(104,36),level>=entry.max and 'MAX' or price..' Stars',
-   function() options.onBuy(entry.id,level) end,options.canBuy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
+   function() options.onBuy(entry.id,level) end,options.canBuy and not entry.legacy and level<entry.max and balance>=price,Color3.fromRGB(255,218,102))
   y+=111
  end
 end
@@ -8544,10 +8731,17 @@ function V.new(root,parent,audio)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false;view.Parent=parent
   source.LocalTransparencyModifier=1
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,
+  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
+  if r.physical then
+   local value=Instance.new('BillboardGui');value.Name='CargoWorth';value.Size=UDim2.fromOffset(66,18)
+   value.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);value.MaxDistance=18;value.Enabled=false;value.Parent=view
+   local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
+   text.Text=tostring(source:GetAttribute('CargoValue') or 0)..' Q';text.TextSize=13;text.Font=Enum.Font.GothamBold
+   text.TextColor3=PICKUP_HIGHLIGHT;text.TextStrokeTransparency=.18;text.Parent=value;r.valueLabel=value
+  end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -8568,28 +8762,36 @@ function V.new(root,parent,audio)
   if math.abs(now-(receipt.at or 0))>.7 then return end
   local rootPart=player.Character and player.Character:FindFirstChild('HumanoidRootPart');if not rootPart then return end
   local r=self.byId[receipt.pickupId]
-  if r and receipt.exhausted==true then r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt) end
+  if r and receipt.exhausted==true then
+   r.collectAt=r.collectAt or now;r.collectFrom=r.collectFrom or r.drawPosition or r.pos
+   r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+  end
   local target,torso=backpack(player,rootPart.Position)
   if type(units)=='number' and units>0 then
    if not self.amountGui then self.amountGui,self.amountText=pickupNumber(parent) end
    if now-(self.amountAt or -math.huge)<.4 then self.amount+=units
    else self.amount=units;self.amountStarted=now end
-   self.amountAt=now
+   local arrival=now+(r and r.physical and .18 or 0)
+   self.amountAt=arrival
    self.amountGui.Adornee=torso or rootPart
-   self.amountText.Text='+'..self.amount..' ore'
+   self.amountText.Text='+'..self.amount..(receipt.physical and ' cargo' or ' ore')
   end
-  if audio and not receipt.quiet and os.clock()-self.lastSound>.09 then
-   local at=os.clock();self.pickupChain=at-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
-   self.lastSound=at;audio:play('pickup',target,{pitch=1+self.pickupChain*.045})
-  end
+  if audio and not receipt.quiet then self.soundAt=now+(r and r.physical and .18 or 0);self.soundTarget=target end
  end))
  return self
 end
 function V:update(dt,now)
+ if self.soundAt and now>=self.soundAt then
+  if now-self.lastSound>.09 then
+   self.pickupChain=now-self.lastSound<.6 and math.min(6,(self.pickupChain or 0)+1) or 0
+   self.lastSound=now;self.audio:play('pickup',backpack(self.player,self.soundTarget),{pitch=1+self.pickupChain*.045})
+  end
+  self.soundAt=nil
+ end
  if self.amountGui then
   local age=math.max(0,now-self.amountAt)
   local reduced=self.player:GetAttribute('ReducedEffects')==true
-  self.amountGui.Enabled=age<.93 and self.amountGui.Adornee.Parent~=nil
+  self.amountGui.Enabled=now>=self.amountAt and age<.93 and self.amountGui.Adornee.Parent~=nil
   if self.amountGui.Enabled then
    local rise=reduced and 0 or .78*(1-math.exp(-math.max(0,now-self.amountStarted)*4))
    self.amountGui.StudsOffset=Vector3.new(1.72,1.05+rise,0)
@@ -8600,18 +8802,20 @@ function V:update(dt,now)
  end
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
-   local collectedAt=source:GetAttribute('CollectedAt')
+   local processed=source:GetAttribute('ProcessedAt')
+   local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
+    r.processed=processed~=nil
     r.collectAt=now;r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
-    r.collectTarget=source:GetAttribute('CollectedPosition')
+    r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   local scale=1;local glow=0;local done=false
   if r.collectAt then
-   local t=(now-r.collectAt)/.22;local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=backpack(owner,r.collectTarget or r.collectFrom)
+   local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
@@ -8654,6 +8858,11 @@ function V:update(dt,now)
     -- Lift the entire trajectory by the rotated support extent, preserving
     -- the small rebound instead of clamping it away under the visible mesh.
     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+   end
+   if r.valueLabel then
+    local camera=workspace.CurrentCamera
+    r.valueLabel.Enabled=r.owner==self.player.UserId and not pulling and not r.collectAt and not r.removedAt
+     and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and age>.42 and opacity>.35
    end
    r.drawPosition=position
    r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -8791,7 +9000,7 @@ function V:update(dt,now)
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
   self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz/ore') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz per rock') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end
@@ -9290,6 +9499,7 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new()
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -9413,7 +9623,7 @@ local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
-local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 100',11,palette.muted,true)
+local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Cargo 0 / 10 slots',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
@@ -9754,11 +9964,11 @@ openFleet=function()
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
    local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' ore')
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' loose ore')
-   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 next-tier ore')
+   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' matching rocks')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -9816,7 +10026,7 @@ openPrestige=function()
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
  U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),palette.mineral)
  label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 drone roll · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 chosen drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
@@ -9831,14 +10041,29 @@ openPrestige=function()
  progress(body,y,width,'Quartz sold toward prestige',comma(earnings)..' / '..comma(required)..' Quartz sold this run'..guardRequirement,earnings/math.max(1,required),palette.accent)
  local allowed,blocked=availability('Prestige')
  local can=pre.eligible==true and not pending() and allowed
- local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Prestige · +1 drone and +25% base power' or 'Complete the prestige requirements'))
+ local choices=pre.droneChoices or {}
+ local selected=offerUI.prestigeRun==pre.runId and offerUI.prestigeChoice or nil
  local confirm
+ if #choices>0 then
+  label(body,UDim2.fromOffset(8,y+90),UDim2.fromOffset(width-12,27),'CHOOSE ONE PERMANENT DRONE',15,palette.text,true)
+  for i,entry in ipairs(choices) do
+   local pick=button(body,UDim2.fromOffset(3,y+122+(i-1)*51),UDim2.fromOffset(width,46),
+    (entry.kind==selected and '✓  ' or '')..entry.name..'  ·  '..entry.job,function()
+     if not can or actionPending then return end
+     offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
+     local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
+    end,entry.kind==selected and palette.mineral or palette.paper)
+   pick.Name='PrestigeDrone'..i;enableAction(pick,can)
+  end
+  y+=188
+ end
+ local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or
+  (can and (selected and 'Confirm prestige · Start a new run' or 'Select one drone above') or 'Complete the prestige requirements'))
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
-  if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
- end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can)
- local odds={}
- for _,entry in ipairs(DroneCatalog.PrestigeRewards) do table.insert(odds,entry.name..' '..entry.weight..'%') end
- label(body,UDim2.fromOffset(8,y+154),UDim2.fromOffset(width-10,62),table.concat(odds,'  ·  '),13,palette.text)
+  if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
+   confirm.Text='Starting new run…';enableAction(confirm,false)
+  end
+ end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -10037,6 +10262,11 @@ local function registerDrone(source)
  end
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
+ for _,child in ipairs(pivot:GetChildren()) do
+  if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
+ end
+ local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
+ face.Texture='rbxasset://textures/face.png';face.Parent=pivot
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
@@ -10061,7 +10291,7 @@ local function registerResource(source)
  if source:GetAttribute('Kind')=='Junk' then
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
- resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
+ resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -10130,7 +10360,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback:clearMarks(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -10174,7 +10404,8 @@ local function renderResource(r,now)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local displaySize=full*math.max(.005,growth*period)*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
+  local shape=s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
+  local displaySize=full*math.max(.005,growth)*shape*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -10207,6 +10438,10 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
+ if not r.visual.broken then
+  r.restPose=view.CFrame;r.restColor=view.Color
+  if r.seams and r.seamStage~=stage then rockDamage.feedback:clearMarks(r) end
+ elseif r.splitDue then view.Transparency=0 end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
   crystalAudio:playCrack(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position)
@@ -10267,11 +10502,16 @@ local function renderDrone(d,dt,now)
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
-  if referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
+  if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
+  elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
   else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction) end
  end
  if not motionPaused then
-  local targetYaw=referenceMiner and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw) or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
+   or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
+  else d.workingYaw=nil end
   if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
    local aim=s:GetAttribute('TargetPosition')
    if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -10296,10 +10536,19 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
+ local shotAge=now-(d.shotImpactAt or -100)
+ local recoil=(shotAge>=0 and shotAge<.15) and math.sin(math.pi*shotAge/.15)*(1-shotAge/.15) or 0
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.new(0,0,recoil*.14)*CFrame.Angles(recallPitch+recoil*.045,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
+ end
+ if s:GetAttribute('Role')=='Compactor' then
+  local at=s:GetAttribute('PressAt') or 0
+  if at>(d.pressSoundAt or 0) and now>=at+.15 and now-at<.5 then
+   d.pressSoundAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=.74})
+  end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
@@ -10456,10 +10705,25 @@ connect(RunService.RenderStepped,function(dt)
    end
   end
  end
- roleEffectView:step(now,droneIndex)
  presentation:beginFrame()
  pickupView:update(dt,now)
- for _,r in pairs(resources) do renderResource(r,now) end
+ rockDamage.feedback.seamBudget=1
+ for _,r in pairs(resources) do
+  local dirty=r.dirty
+  renderResource(r,now)
+  if dirty or r.flashAt or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
+  if r.seams and now>=(r.seamCullAt or 0) then
+   r.seamCullAt=now+.65
+   if not BeamVFX.near(r.view.Position,126) then rockDamage.feedback:clearMarks(r);r.seamStage=nil end
+  end
+  if rockDamage.feedback.seamBudget>0 and not r.visual.broken and r.settled and r.seamStage~=r.visual.stage
+   and r.cutFeedback and r.visual.stage>0 and BeamVFX.near(r.view.Position,100) then
+   if rockDamage.feedback:marks(r,r.visual.stage,r.source:GetAttribute('StageCount') or 3) then
+    r.seamStage=r.visual.stage;rockDamage.feedback.seamBudget-=1
+   end
+  end
+ end
+ rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
@@ -10472,6 +10736,7 @@ connect(RunService.RenderStepped,function(dt)
   end
  end
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
+ roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  presentation:update(dt,now)
@@ -10689,8 +10954,8 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
-  local amount=cargoUnits(profile);local capacity=profile.capacity or 100
-  cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
+  local amount=cargoUnits(profile);local capacity=profile.capacity or 10
+  cargoText.Text=string.format('Cargo %s / %s slots',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
 
@@ -10743,6 +11008,8 @@ connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
+ rockDamage.feedback:destroy()
+ for _,r in pairs(resources) do rockDamage.feedback:clearMarks(r) end
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

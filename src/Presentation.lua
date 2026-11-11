@@ -358,17 +358,17 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  local glow=reference and visible and sample.active and not sample.paused
  if glow and not beam.referenceGlow then
   local halo=barePart(beam.holder,'ReferenceContactHalo');halo.Shape=Enum.PartType.Ball
-  halo.Size=Vector3.one;halo.Color=Color3.fromRGB(180,192,173);halo.Material=Enum.Material.Neon
+  halo.Size=Vector3.one*.60;halo.Color=Color3.fromRGB(255,217,147);halo.Material=Enum.Material.Neon
   beam.referenceGlow=halo
  end
  if beam.referenceGlow then
-  beam.referenceGlow.Transparency=glow and .8 or 1
+  beam.referenceGlow.Transparency=glow and (.78+.09*math.sin(now*47)) or 1
   if glow then beam.referenceGlow.Position=point end
  end
  if reference then
-  beam.marker.Size=Vector3.one*.5
-  beam.marker.Color=Color3.fromRGB(192,134,80);beam.marker.Material=Enum.Material.Neon
-  if glow then beam.marker.Position=point end
+  beam.marker.Size=Vector3.one*(.15+.018*math.sin(now*43))
+  beam.marker.Color=Color3.fromRGB(255,250,232);beam.marker.Material=Enum.Material.Neon
+  if glow then beam.marker.Position=point+normal*.06 end
   beam.marker.Transparency=glow and 0 or 1
  else
   beam.marker.Color=tint
@@ -376,10 +376,17 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
+ elseif glow and sample.resource and sample.resource.cutFeedback then
+  sample.resource.cutUntil=now+.09
+  if now>=(beam.nextCrystalChip or 0) then
+   beam.nextCrystalChip=now+.23+(now%.07)
+   sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
+  end
+ end
  if self.audio and self.audio.setLoop then
-  if visible and sample.active and sample.isMining and not sample.paused and not reference then
-   self.audio:setLoop(beam,'cutting_hum',point,.45+.55*width,.9+.1*width)
+  if visible and sample.active and sample.isMining and not sample.paused then
+   self.audio:setLoop(beam,'cutting_hum',point,reference and (.23+.26*width) or (.45+.55*width),.9+.1*width)
    beam.wasCutting=true
   else
    self.audio:stopLoop(beam)

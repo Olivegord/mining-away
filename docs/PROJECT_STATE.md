@@ -1,8 +1,8 @@
 # Shared project context
 
-Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run starts with three permanent miners, two run Emptiers and a 100-ore backpack. Pin a plot, gather ore and sell it manually or let Emptiers carry 24-ore parcels. Each deeper tier has 3× the prior tier's mineable work and 4× the sale price per ore. Buy a pack with E at the Pack Counter and open the dropped crate with E. A first 20-Quartz pack offers Double Beam, Loose Seams and a Compactor Drone. Install one and then visit the Quartz Workshop to stack cards or the Star Shop to buy automation. Prestige at the beacon rolls for one permanent worker and adds 25% base mining power. The ticker reveals the saved result. Prestige resets cards, Stars and purchased run automation. Existing fleets and already-paid offers are preserved.
+**Current implementation:** Crystal Run starts with three permanent miners, two run Emptiers and ten cargo slots. An ordinary crystal gives one substantial raw rock; deeper rocks need 3× the work and carry 4× the value per tier. Emptiers move four-slot batches. New packs contain run upgrades, and new Star purchases add run conveniences. Prestige offers three stable choices and grants the selected permanent drone and +25% base mining power. Paid legacy choices, saved crew and existing Star automation still load.
 
 ## Identity and delivery state
 
@@ -11,18 +11,30 @@ Last substantive handoff: **November 8, 2026, America/Los_Angeles**. Read this w
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `12acf7feab33419bede31f511480eb0a648228e5a2c28174736f112018ed5787` | Physical counters and reward reveals revision. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the reward follow-up below. |
+| Native-file SHA-256 | `548c60f7cd9053c9ef06e155d799ec2bda6daa1065d8adfd0dd4f9d64bcf2190` | Mining feedback, physical cargo and chosen prestige revision. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the November 10 handoff below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **Physical counters and reward reveals in the open shared DRONEREVOLUTION Edit document** | All seven Sources and three sync roots verified on loaded version 112. The initially open editor remains in Edit. Canonical file saved. Persistence across reopening the cloud Edit document was not independently checked. |
-| Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. The current player release was not independently checked in this pass. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the November 10 Sources** | All seven Sources and three roots verified on loaded version 120. Save to Roblox confirmed. Studio was initially closed and closed again from Edit after the save. Fresh Play and an independent post-close reopen were not performed. |
+| Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 10 — mining feedback, physical cargo and chosen prestige
+
+A discrete mining shot displays its accepted contact and rock flash, then a small directional reaction, local chips and a short impact mix. Continuous lasers keep their original ribbons and a hot surface contact with restrained chips, vibration and filtered cutting audio. Health drives the planted crystal's size and visible seams. Final contact plays before a short cosmetic split; the ore award and next target are independent of the animation. Local chip count and seam rebuilds are bounded. Basic Crystal Run miners use damped travel and hold their heading while cutting; projectile miners stagger their first shot without changing repeat rates.
+
+Crystal Run starts at ten slots. A base rock carries one slot and is provisionally worth 10, 40, 160, 640 or 2,560 Quartz by depth. Yield modifiers increase value inside that slot. Loose Seams can release that same reward before the last cut. The Compactor still uses three matching rocks, or two with Batch Press, and produces a single block with their summed value. Its old paid offer and installed run cards still work. Previously purchased Vacuum and Planter remain active for their saved run. The new pool uses eligible run upgrades and no new body grants; the Star Shop keeps travel, charging, bag and selling conveniences. Legacy ore and outstanding delivery manifests retain their prior sale values. Prestige choices are generated by the server for the run, survive reconnect without rerolling, and commit one selected body with the reset.
+
+The Workshop, Crystal Run, persistence, beam, audio, committed-flight and pickup checks passed with Roblox API or storage doubles. These exercised physical pack payment/opening, one-object payouts, full bags, selected fits, legacy claims and automation, projectile hit receipts, value conservation, Emptier replay, stable prestige choices and rejected conflicting claims. The native snapshot verifier confirmed all non-Source chunks and unrelated or backup Sources remained byte-identical. This does not verify the audio mix, normal-zoom readability, pacing or multiplayer.
+
+In Studio Edit, the usual shared entry point resolved to place **124078027733625**, universe **10774898335**, loaded version **120**, with the authored Crystal Run and five zones. The three roots were `SyncedAsRoot` and all seven Source lengths and fingerprints matched the updated disk payload. **File → Save to Roblox** logged `Saved new changes in "DRONEREVOLUTION" to Roblox.` at **10:39 PM Pacific on November 10**. No Publish action was taken. Edit used roughly 3.4–3.6 GB without Play, so no new native gameplay or device simulation was run. Studio was closed at the start, opened for installation and verification, and closed again after the saved Edit session.
+
+Reproduce the native refresh from `03070140928bca42b6944f4caed7f962b77512d8` using `python3 tools/script_sync.py` in the connected shared Edit session and `python3 tools/build.py --previous-commit 0307014` with the prior canonical snapshot. Use `git log -1 -- build/DRONE_GAME.rbxl` for the installed integration revision. The next gameplay check is one session at normal zoom: one laser miner for contact and recovery, the three starters with both Emptiers for the first sell and pack, then several mixed miners for close-range audio and visibility. Time Quartz per minute by depth and compare an ordinary delivery with compaction. Draw weights, final cargo values and future Compactor ownership remain open.
 
 ## Latest follow-up — physical shops, pack taps and drone rewards
 

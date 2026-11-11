@@ -33,6 +33,27 @@ function Catalog.prestigeReward(seed,index)
  end
  error('Prestige reward weights must total 100')
 end
+-- Three distinct weighted choices, stable for a run across reconnects.
+function Catalog.prestigeChoices(seed,index)
+ local prime=2147483647
+ local state=(seed%prime*48271+index%prime*69621)%prime
+ local pool=table.clone(Catalog.PrestigeRewards)
+ local choices={}
+ for _=1,3 do
+  local total=0
+  for _,entry in ipairs(pool) do total+=entry.weight end
+  state=(math.max(1,state)*48271)%prime
+  local ticket=state%total+1
+  for i,entry in ipairs(pool) do
+   ticket-=entry.weight
+   if ticket<=0 then
+    choices[#choices+1]={kind=entry.kind,name=entry.name,tier=entry.tier,job=entry.job}
+    table.remove(pool,i);break
+   end
+  end
+ end
+ return choices
+end
 function Catalog.price(kind,fleet)
  local definition=Catalog.Types[kind];if not definition then return nil end
  if kind~='Laser' then return definition.Price end

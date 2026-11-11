@@ -27,6 +27,7 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape)
 local roleEffectView=RoleEffectView.new()
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'});local burnShakeAt=0
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -150,7 +151,7 @@ local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
-local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Backpack 0 / 100',11,palette.muted,true)
+local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Cargo 0 / 10 slots',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
@@ -491,11 +492,11 @@ openFleet=function()
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
    local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' ore')
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' loose ore')
-   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 next-tier ore')
+   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' matching rocks')
+   statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
    statTile(row,tileWidth+28,91,tileWidth,'COOLDOWN',number(stats.growCooldown or 5)..' sec')
@@ -553,7 +554,7 @@ openPrestige=function()
  local hero=U.panel(body,UDim2.fromOffset(3,3),UDim2.fromOffset(width,118),palette.accent:Lerp(palette.panel,.26),16)
  U.icon(hero,'drone',UDim2.fromOffset(18,25),UDim2.fromOffset(narrow and 48 or 62,narrow and 48 or 62),palette.mineral)
  label(hero,UDim2.fromOffset(narrow and 80 or 98,16),UDim2.new(1,narrow and -96 or -116,0,43),before..' → '..after..(narrow and ' drones' or ' permanent drones'),narrow and 21 or 30,palette.text,true)
- label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 drone roll · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
+ label(hero,UDim2.fromOffset(narrow and 18 or 98,narrow and 78 or 66),UDim2.new(1,narrow and -36 or -116,0,32),('+1 chosen drone · permanent mining bonus\n+'..math.floor((pre.miningBonusBefore or 0)*100)..'% → +'..math.floor((pre.miningBonusAfter or .25)*100)..'%'),12,palette.text)
  local pair=width>=560;local half=pair and (width-18)/2 or width
  local keep=U.panel(body,UDim2.fromOffset(3,141),UDim2.fromOffset(half,119),palette.mineral:Lerp(palette.panel,.34),12)
  label(keep,UDim2.fromOffset(14,10),UDim2.new(1,-28,0,24),'YOU KEEP',17,palette.text,true)
@@ -568,14 +569,29 @@ openPrestige=function()
  progress(body,y,width,'Quartz sold toward prestige',comma(earnings)..' / '..comma(required)..' Quartz sold this run'..guardRequirement,earnings/math.max(1,required),palette.accent)
  local allowed,blocked=availability('Prestige')
  local can=pre.eligible==true and not pending() and allowed
- local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or (can and 'Prestige · +1 drone and +25% base power' or 'Complete the prestige requirements'))
+ local choices=pre.droneChoices or {}
+ local selected=offerUI.prestigeRun==pre.runId and offerUI.prestigeChoice or nil
  local confirm
+ if #choices>0 then
+  label(body,UDim2.fromOffset(8,y+90),UDim2.fromOffset(width-12,27),'CHOOSE ONE PERMANENT DRONE',15,palette.text,true)
+  for i,entry in ipairs(choices) do
+   local pick=button(body,UDim2.fromOffset(3,y+122+(i-1)*51),UDim2.fromOffset(width,46),
+    (entry.kind==selected and '✓  ' or '')..entry.name..'  ·  '..entry.job,function()
+     if not can or actionPending then return end
+     offerUI.prestigeRun=pre.runId;offerUI.prestigeChoice=entry.kind
+     local scroll=body.CanvasPosition;openPrestige();body.CanvasPosition=scroll
+    end,entry.kind==selected and palette.mineral or palette.paper)
+   pick.Name='PrestigeDrone'..i;enableAction(pick,can)
+  end
+  y+=188
+ end
+ local reason=not allowed and blocked or (pending() and 'Choose your paid pack card first' or
+  (can and (selected and 'Confirm prestige · Start a new run' or 'Select one drone above') or 'Complete the prestige requirements'))
  confirm=button(body,UDim2.fromOffset(3,y+95),UDim2.fromOffset(width,50),reason,function()
-  if can and canAct('Prestige') and send('Prestige',{confirm=true}) then confirm.Text='Starting new run…';enableAction(confirm,false) end
- end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can)
- local odds={}
- for _,entry in ipairs(DroneCatalog.PrestigeRewards) do table.insert(odds,entry.name..' '..entry.weight..'%') end
- label(body,UDim2.fromOffset(8,y+154),UDim2.fromOffset(width-10,62),table.concat(odds,'  ·  '),13,palette.text)
+  if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
+   confirm.Text='Starting new run…';enableAction(confirm,false)
+  end
+ end,palette.accent);confirm.Name='ConfirmPrestige';enableAction(confirm,can and selected~=nil)
 end
 local refreshSerial=0
 local function refreshModal()
@@ -774,6 +790,11 @@ local function registerDrone(source)
  end
  hideModel(source)
  local parts={};for _,p in ipairs(clone:GetDescendants()) do if p:IsA('BasePart') then parts[p]=p.Transparency end end
+ for _,child in ipairs(pivot:GetChildren()) do
+  if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
+ end
+ local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
+ face.Texture='rbxasset://textures/face.png';face.Parent=pivot
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
@@ -798,7 +819,7 @@ local function registerResource(source)
  if source:GetAttribute('Kind')=='Junk' then
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
- resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,dirty=true,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
+ resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -867,7 +888,7 @@ end
 connect(world.DescendantRemoving,function(source)
  pendingDroneSources[source]=nil
  if drones[source] then destroyDrone(drones[source]);drones[source]=nil end
- if resources[source] then rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
+ if resources[source] then rockDamage.feedback:clearMarks(resources[source]);rockDamage:remove(resources[source]);resourceIndex[resources[source].id]=nil;resources[source].view:Destroy();resources[source]=nil end
  if turrets[source] then turretIndex[tostring(source:GetAttribute('TurretId'))]=nil;presentation:destroyTurret(turrets[source]);turrets[source]=nil end
  if observed[source] then observed[source]:Disconnect();observed[source]=nil end
  hiddenParts[source]=nil
@@ -911,7 +932,8 @@ local function renderResource(r,now)
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local displaySize=full*math.max(.005,growth*period)*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
+  local shape=s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
+  local displaySize=full*math.max(.005,growth)*shape*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
   local pos=start:Lerp(final,growth)
@@ -944,6 +966,10 @@ local function renderResource(r,now)
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
+ if not r.visual.broken then
+  r.restPose=view.CFrame;r.restColor=view.Color
+  if r.seams and r.seamStage~=stage then rockDamage.feedback:clearMarks(r) end
+ elseif r.splitDue then view.Transparency=0 end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
   crystalAudio:playCrack(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position)
@@ -1004,11 +1030,16 @@ local function renderDrone(d,dt,now)
   local workTravel=state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
   local correction=error.Magnitude>5 and error.Unit*math.min((error.Magnitude-5)*.8,maxStep*60*.25) or Vector3.zero
-  if referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
+  if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
+  elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
   else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction) end
  end
  if not motionPaused then
-  local targetYaw=referenceMiner and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw) or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
+   or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
+  else d.workingYaw=nil end
   if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
    local aim=s:GetAttribute('TargetPosition')
    if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
@@ -1033,10 +1064,19 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)*CFrame.Angles(recallPitch,0,d.bank))
+ local shotAge=now-(d.shotImpactAt or -100)
+ local recoil=(shotAge>=0 and shotAge<.15) and math.sin(math.pi*shotAge/.15)*(1-shotAge/.15) or 0
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.new(0,0,recoil*.14)*CFrame.Angles(recallPitch+recoil*.045,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
+ end
+ if s:GetAttribute('Role')=='Compactor' then
+  local at=s:GetAttribute('PressAt') or 0
+  if at>(d.pressSoundAt or 0) and now>=at+.15 and now-at<.5 then
+   d.pressSoundAt=at;soundscape:play('parcel_latch',d.emitter.Position,{pitch=.74})
+  end
  end
  local reprintAt=s:GetAttribute('ReprintAt') or 0
  local alive=state~='Destroyed' and state~='Reprinting' and (s:GetAttribute('HP') or 1)>0
@@ -1193,10 +1233,25 @@ connect(RunService.RenderStepped,function(dt)
    end
   end
  end
- roleEffectView:step(now,droneIndex)
  presentation:beginFrame()
  pickupView:update(dt,now)
- for _,r in pairs(resources) do renderResource(r,now) end
+ rockDamage.feedback.seamBudget=1
+ for _,r in pairs(resources) do
+  local dirty=r.dirty
+  renderResource(r,now)
+  if dirty or r.flashAt or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
+  if r.seams and now>=(r.seamCullAt or 0) then
+   r.seamCullAt=now+.65
+   if not BeamVFX.near(r.view.Position,126) then rockDamage.feedback:clearMarks(r);r.seamStage=nil end
+  end
+  if rockDamage.feedback.seamBudget>0 and not r.visual.broken and r.settled and r.seamStage~=r.visual.stage
+   and r.cutFeedback and r.visual.stage>0 and BeamVFX.near(r.view.Position,100) then
+   if rockDamage.feedback:marks(r,r.visual.stage,r.source:GetAttribute('StageCount') or 3) then
+    r.seamStage=r.visual.stage;rockDamage.feedback.seamBudget-=1
+   end
+  end
+ end
+ rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)
  specialMiningFX:step(now,dt)
@@ -1209,6 +1264,7 @@ connect(RunService.RenderStepped,function(dt)
   end
  end
  for _,d in pairs(drones) do renderDrone(d,dt,now) end
+ roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
  presentation:update(dt,now)
@@ -1426,8 +1482,8 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.Visible=not modal.Visible and (status:find('preview')~=nil or not status:find('saved'))
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
-  local amount=cargoUnits(profile);local capacity=profile.capacity or 100
-  cargoText.Text=string.format('Backpack %s / %s',comma(amount),comma(capacity))
+  local amount=cargoUnits(profile);local capacity=profile.capacity or 10
+  cargoText.Text=string.format('Cargo %s / %s slots',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
 
@@ -1480,6 +1536,8 @@ connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy()
+ rockDamage.feedback:destroy()
+ for _,r in pairs(resources) do rockDamage.feedback:clearMarks(r) end
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}

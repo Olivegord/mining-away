@@ -9,7 +9,7 @@ local run=Instance.new('Folder');run.Name='CrystalRun';run.Parent=scene.map
 local zone=Instance.new('Folder');zone.Name='TestZone';zone.Parent=run
 local bed=World.part(zone,'Field',Vector3.new(0,5,-68),Vector3.new(68,1,48),Color3.new(1,1,1))
 scene.chargingStation=World.part(run,'ChargingStation',Vector3.new(0,5,-41),Vector3.new(4,1,4),Color3.new(1,1,1))
-local f={id=#patches+1,cfg={Key='Quartz',SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,Hardness=1,Count=3,Ore=20,Turrets=0,Respawn=8},
+local f={id=#patches+1,cfg={Key='Quartz',Value=1,SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,Hardness=1,Count=3,Ore=20,Turrets=0,Respawn=8},
  part=bed,model=zone,center=bed.Position,color=Color3.new(1,0,0),resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
 f.e.phase='Safe';patches[f.id]=f
 local pl=player(98700);players.PlayerAdded:Fire(pl)
@@ -68,7 +68,7 @@ assert(not Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,a.pa
 
 -- Mining regenerates health and restores its stage, with a single ore ledger.
 d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
-assert(hitResource(d,b,65,false));local paid=b.extractedOre;assert(paid>0)
+assert(hitResource(d,b,65,false));local paid=b.extractedOre;assert(paid==nil,'a crack duplicated the ordinary final cargo reward')
 release(d)
 local stage=b.stage
 for _=1,15 do now+=.23;scene.regrow(b,.23) end
@@ -92,11 +92,12 @@ Pro.addCargo(profile,'Quartz',full,full)
 local oreBefore=pendingOre(p)
 step(30);local overflowTarget=assert(d.target,'full backpack prevented a new mining job')
 assert(d.squareJob==p.miningSquare)
-d.pos=committedStation(d,overflowTarget)
-step(32);assert(d.mining);status('BagFull')
+d.pos=committedStation(d,overflowTarget);d.velocity=Vector3.zero
+for _=1,100 do step(1);if d.mining then break end end
+assert(d.mining);status('BagFull')
 for _=1,600 do step(1);if overflowTarget.paid then break end end
 assert(overflowTarget.paid and pendingOre(p)>oreBefore,'mining a full bag did not leave collectible ore')
-assert(Pro.cargoUnits(profile)==100 and full==100)
+assert(Pro.cargoUnits(profile)==10 and full==10)
 profile.run.stars=8
 local function star(id,tx)
  command.OnServerEvent:Fire(pl,'BuyStarUpgrade',{runId=data(p).run.id,upgradeId=id,level=0,txId=tx})
@@ -166,7 +167,7 @@ replacement.readyAt=now
 assert(assignOre(p,d,replacement))
 p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
 d.squareJob=p.miningSquare;d.lingerUntil=nil
-d.pos=committedStation(d,replacement)
+d.pos=committedStation(d,replacement);d.velocity=Vector3.zero
 assert(math.abs(d.pos.Y-replacement.cluster.Position.Y-10)<.001)
 local before=replacement.hp
 step(1);assert(d.state=='Warmup' and replacement.hp==before)
@@ -189,9 +190,9 @@ local function input(action,tx,fields)
  local payload=fields or {};payload.txId=tx;payload.runId=data(buyer).run.id
  command.OnServerEvent:Fire(shopper,action,payload)
 end
-Pro.addCargo(data(buyer),'Quartz',20,100)
+Pro.addCargo(data(buyer),Workshop.cargoKey('Quartz',10),2,10)
 moveBuyer(f.center);input('Sell','remote')
-assert(Pro.cargoUnits(data(buyer))==20 and data(buyer).run.wallet.Quartz==0,'sale worked away from the depot')
+assert(Pro.cargoUnits(data(buyer))==2 and data(buyer).run.wallet.Quartz==0,'sale worked away from the depot')
 moveBuyer(shopStations.Quartz.Position);input('Sell','sale')
 assert(Pro.cargoUnits(data(buyer))==0 and data(buyer).run.wallet.Quartz==20 and data(buyer).run.quartzEarnings==20)
 moveBuyer(scene.packStation.Position)
@@ -241,7 +242,7 @@ end
 local function timedCut()
  isolate()
  local rock=rock(0,1000)
- assert(assignOre(buyer,miner,rock));miner.pos=committedStation(miner,rock)
+ assert(assignOre(buyer,miner,rock));miner.pos=committedStation(miner,rock);miner.velocity=Vector3.zero
  mineDrone(miner,buyer,f,C.Tick)
  miner.warmAt=now-10
  local hp=rock.hp
@@ -260,7 +261,10 @@ local oreBefore=pendingOre(buyer)
 local rich=rock(0,100)
 hit(rich,40);assert(hitResource(miner,rich,200))
 assert(miner.model:GetAttribute('OreDuplicator')==true and otherMiner.stats.oreDuplicator==0)
-assert(pendingOre(buyer)-oreBefore==2*rich.ore,'duplicator did not pay exactly double ore through actual drops')
+assert(pendingOre(buyer)-oreBefore==1,'one crystal created more than one reward object')
+local reward=assert(pickups[pickupSerial])
+assert(reward.value==2*rich.ore and reward.units==1 and rich.part:GetAttribute('CrystalBreakAt')==now,
+ 'double value and immediate break receipt must accompany one cargo')
 
 moveBuyer(f.center)
 input('PlaceSelector','pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
@@ -281,18 +285,15 @@ miner.pos=miner.intentGoal;droneStep(miner,C.Tick)
 assert(miner.battery>0 and miner.state=='Charging')
 print('PASS paid hardware draft, durable miner target, exact double primary damage/flight limit/ore, field charging and distance recall')
 
-moveBuyer(shopStations.Quartz.Position)
-input('BuyStarUpgrade','wrong-vacuum-counter',{upgradeId='vacuum',level=0})
-assert(not buyer.vacuum and data(buyer).run.stars==2)
 moveBuyer(shopStations.Ruby.Position)
 input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})
-assert(data(buyer).run.stars==0 and buyer.vacuum and #buyer.drones==6 and #data(buyer).fleet==3)
-input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})
-assert(#buyer.drones==6,'replayed hire added a duplicate automation drone')
-data(buyer).run.stars=3
 input('BuyStarUpgrade','hire-planter',{upgradeId='cultivator',level=0})
+assert(data(buyer).run.stars==2 and not buyer.vacuum and #buyer.drones==5)
+data(buyer).run.starUpgrades.vacuum=1;data(buyer).run.starUpgrades.cultivator=1
+buyer.session.data=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+scene.syncRuntimeFleet(buyer)
 local planter=buyer.drones[7]
-assert(planter.role=='Dart' and #data(buyer).fleet==3 and Pro.validate(data(buyer),shopper.UserId))
+assert(planter.role=='Dart' and buyer.vacuum and #data(buyer).fleet==3 and Pro.validate(data(buyer),shopper.UserId))
 moveBuyer(f.center)
 local count,queued=nodeUsage(f),#f.respawnQueue
 growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
@@ -303,14 +304,14 @@ for _=1,100 do
  if nodeUsage(f)>count then break end
 end
 assert(nodeUsage(f)==count+1 and #f.respawnQueue==queued-1,'planter did not consume one actual vacancy')
-print('PASS Star hires are run-only and idempotent, planter replaces one real vacant crystal at the pin')
+print('PASS Star purchases cannot grant drones; saved legacy automation still works')
 
 inStudio=true
 function runService:IsStudio() return true end
 local tester=player(98704);players.PlayerAdded:Fire(tester)
 local testCrew=profiles[tester.UserId]
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
-assert(#testCrew.drones==5 and #data(testCrew).fleet==3 and Ca.capacity(data(testCrew),previewPerks(testCrew))==100)
+assert(#testCrew.drones==5 and #data(testCrew).fleet==3 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
 assert(testCrew.drones[1].role=='Striker' and testCrew.drones[2].role=='Striker' and testCrew.drones[3].role=='Striker')
 assert(testCrew.drones[4].role=='Courier' and testCrew.drones[5].role=='Courier' and not testCrew.testFleet)
 for i,role in ipairs({'Needler','Ballcaster'}) do
@@ -333,6 +334,8 @@ for i,role in ipairs({'Needler','Ballcaster'}) do
   if target.hp<before then break end
  end
  assert(target.hp<before,'projectile failed to apply authoritative work')
+ assert(target.part:GetAttribute('CutIsShot') and target.part:GetAttribute('CutContactAt')==now)
+ assert(actor.specialJob.projectile:GetAttribute('ContactAt')==now)
  release(actor)
 end
 command.OnServerEvent:Fire(tester,'DevAddDrone',{role='Vacuum'})
@@ -367,6 +370,7 @@ assert(math.abs(neighbor.hp-(990-990*.12))<1e-8 and farther.hp==990,'Aftershock 
 assert(hitResource(miner,source,1) and math.abs(neighbor.hp-(990-990*.12))<1e-8,'Aftershock procced without a crack')
 
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+data(buyer).run.pendingOffer.choices[3]=Workshop.card(Workshop.BY_ID.Q_COMPACTOR,2,0)
 input('ChooseCard','hire-press',{offerId=first.id,index=3})
 local press=assert(buyer.compactor)
 assert(press.role=='Compactor' and #data(buyer).fleet==3 and #buyer.drones==8)
@@ -377,35 +381,31 @@ input('PlaceSelector','press-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)}
 assert(buyer.miningSquare)
 for id,drop in pairs(pickups) do if drop.owner==shopper.UserId then drop.part:Destroy();pickups[id]=nil end end
 local floor=f.center+Vector3.new(0,.75,0)
-local function pressOre(material,units,owner)
- scene.spawnOrePickup(bed,{owner=owner or shopper.UserId,runId=data(buyer).run.id,nodeId='press-test',material=material,
-  units=units,floor=floor.Y,fieldPart=bed},floor,Vector3.zero,Color3.new(1,0,0))
+local function pressOre(material,value,owner)
+ scene.spawnOrePickup(bed,{owner=owner or shopper.UserId,runId=data(buyer).run.id,nodeId='press-test',
+  material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,raw=true,units=1,
+  floor=floor.Y,fieldPart=bed},floor,Vector3.zero,Color3.new(1,0,0))
  local drop=pickups[pickupSerial];drop.age=1;drop.landed=true
  return drop
 end
-local raw=pressOre('Quartz',7)
+local raw={pressOre('Quartz',10),pressOre('Quartz',12),pressOre('Quartz',14),pressOre('Quartz',16)}
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(-130,3,0)))
-local foreign=pressOre('Quartz',7,tester.UserId);foreign.runId=data(testCrew).run.id
-local emerald=pressOre('RunEmerald',6)
-Pro.addCargo(data(buyer),'Quartz',100,100)
-press.pos=floor+Vector3.new(0,3.2,0)
-for _=1,100 do
- realTime+=C.Tick;now=realTime;pickupStep(C.Tick)
-end
-local pressedOre=pickups[pickupSerial]
-assert(raw.units==1 and pressedOre.units==2 and pressedOre.material=='RunRuby' and pressedOre.compacted)
-assert(emerald.units==6 and foreign.units==7 and Pro.cargoUnits(data(buyer))==100,'press changed foreign/top-tier ore or a full bag')
-local tier=Workshop.CRYSTAL_BY_MATERIAL.RunRuby
-assert(raw.units+pressedOre.units*tier.value==9,'compaction failed to add exactly 2 Quartz of value')
-
-table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3))
-publish(buyer)
-local more=pressOre('RunRuby',5)
+local foreign=pressOre('Quartz',70,tester.UserId);foreign.runId=data(testCrew).run.id
+local emerald=pressOre('RunEmerald',2560)
+Pro.addCargo(data(buyer),'Quartz',10,10)
 press.pos=floor+Vector3.new(0,3.2,0)
 for _=1,100 do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+local pressedOre=pickups[pickupSerial]
+assert(raw[4].part.Parent and pressedOre.units==1 and pressedOre.tierMaterial=='RunRuby' and pressedOre.compacted)
+assert(pressedOre.value==36,'press lost value or minted Quartz')
+assert(emerald.part.Parent and foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign/top-tier ore or a full bag')
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3))
+publish(buyer)
+pressOre('RunRuby',40);pressOre('RunRuby',41)
+for _=1,100 do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
 local upgraded=pickups[pickupSerial]
-assert(more.units==1 and upgraded.material=='RunCobalt' and upgraded.units==2)
-assert(pressedOre.units==2 and pressedOre.part.Parent,'already compacted ore entered the press again')
+assert(upgraded.tierMaterial=='RunCobalt' and upgraded.units==1 and upgraded.value==81)
+assert(pressedOre.units==1 and pressedOre.part.Parent,'already compacted cargo entered the press again')
 
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
 local emptier=buyer.drones[4]
@@ -415,15 +415,15 @@ data(buyer).run.cargo={RunRuby=Workshop.EMPTIER_BATCH}
 local hr=characterRoot(buyer);emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
 droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
-assert(manifest.cargo.RunRuby==24 and Pro.cargoUnits(data(buyer))==0)
+assert(manifest.cargo.RunRuby==Workshop.EMPTIER_BATCH and Pro.cargoUnits(data(buyer))==0)
 assert(Pro.validate(assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId)),shopper.UserId))
 now+=1;emptier.pos=scene.packStation.Position
 droneStep(emptier,C.Tick);emptier.pos=emptier.goal
 droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick)
 local prior=data(buyer).run.quartzEarnings
 serviceDeliveries(buyer);serviceDeliveries(buyer)
-assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+96)
-assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==96)
+assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+4*Workshop.EMPTIER_BATCH)
+assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==4*Workshop.EMPTIER_BATCH)
 assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare)
 isolate()
 local boosted=rock(0,1000)

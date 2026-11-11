@@ -283,6 +283,10 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
+function F.crystalStageShape(stage,count)
+ local loss=1-F.stageScale(stage,count)
+ return Vector3.new(1-loss*.62,1-loss*.81,1-loss*.46)
+end
 function F.crystalShade(hp,maxHP,stage,count)
  local period=F.stageScale(stage,count)
  return math.clamp(hp/math.max(1,maxHP)/period-(1-period)/4,0,1)

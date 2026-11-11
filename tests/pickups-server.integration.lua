@@ -62,7 +62,7 @@ check('another nearby player cannot attract or steal the owners fragments',funct
 end)
 check('a full backpack leaves real fragments until selling makes space',function()
  local _,p,d,r=fixture();assert(hitResource(d,r,500));data(p).run.cargo={Quartz=Ca.capacity(data(p))}
- steps(100);assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==100)
+ steps(100);assert(pendingOre(p)==10 and Pro.cargoUnits(data(p))==Ca.capacity(data(p)))
  realTime+=60;now=realTime;pickupStep(C.Tick)
  assert(pendingOre(p)==10,'ore vanished during a sell trip')
  data(p).run.cargo={};steps(100);assert(pendingOre(p)==0 and Pro.cargoUnits(data(p))==10)

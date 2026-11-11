@@ -14,9 +14,9 @@ function CardView.summary(choice)
  local function add(key,text) if type(e[key])=='number' and e[key]>0 then table.insert(lines,text) end end
  add('doubleBeam','Two lasers.\n2× damage to one crystal.')
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
- add('oreDuplicator','Gold ore chamber.\n2× ore from this miner.')
- add('compactor','Presses 3 loose ore into 1 of the next tier.')
- add('batchPress','Your Compactor now needs 2 ore per press.')
+ add('oreDuplicator','Gold ore chamber.\n2× cargo value from this miner.')
+ add('compactor','Legacy unlock: presses 3 matching rocks into 1 block of equal total value.')
+ add('batchPress','Your Compactor now needs 2 rocks per press.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
@@ -31,14 +31,14 @@ function CardView.summary(choice)
  add('capacity',amount(e.capacity or 0,'backpack space'))
  add('speed',amount(e.speed or 0,'drone speed'))
  add('startup',amount(e.startup or 0,'laser startup speed'))
- add('yield',amount(e.yield or 0,'ore per crystal'))
+ add('yield',amount(e.yield or 0,'cargo value per crystal'))
  add('range',amount(e.range or 0,'attack range'))
  add('crit',percent(e.crit or 0)..' chance to hit twice')
  add('fork','Hit a nearby crystal for '..percent(e.fork or 0)..' damage')
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
  add('aftershock','Each laser crack or break sends a shock into one nearby crystal.')
  add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
- add('earlyDrop','Cracks drop more ore that flies farther to you')
+ add('earlyDrop','The rock drops at a late crack and can be collected from farther away.')
  add('fieldCharge','Depleted drones recharge at your pin')
  add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
  add('battery','+'..(e.battery or 0)..' battery capacity')
@@ -60,10 +60,12 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif choice.scope=='Individual' then target=choice.targetName or 'One drone'
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
- elseif e.compactor then target='New drone at your pin'
+ elseif e.compactor then target='Compactor at your pin'
  elseif e.batchPress then target='Your Compactor'
  elseif e.shiftRelay then target='Your mining pin'
- elseif choice.scope=='Player' then target='Your backpack'
+ elseif e.magnetRange then target='Cargo collection'
+ elseif e.capacity then target='Your backpack'
+ elseif choice.scope=='Player' then target='Your run'
  elseif (e.aftershock or 0)>0 or (e.deepCut or 0)>0 or (e.fork or 0)>0 or e.liveWire then target='Laser miners'
  elseif e.capacity and e.capacity>0 then target='Drones + backpack'
  elseif work and not allRoles or (e.reclaim or 0)>0 or (e.earlyDrop or 0)>0 then target='Mining drones'
@@ -549,54 +551,17 @@ function CardView.create(U,parent,choice,index,width,height,options)
   finish=function(value) installed=value;finishedAt=os.clock() end}
 end
 
--- The strip only reveals the committed result. The client supplies the motion.
-function CardView.revealDrone(U,parent,width,reward,audio,isVisible,onClose)
+-- This acknowledges the chosen drone after the save commits.
+function CardView.revealDrone(U,parent,width,reward,audio,_isVisible,onClose)
  local p=U.palette
- local view=U.frame(parent,UDim2.fromOffset(0,10),UDim2.fromOffset(width,110),p.ink)
- view.Name='DroneRewardTicker';view.ClipsDescendants=true;U.corner(view,12)
- local strip=U.frame(view,UDim2.fromOffset(0,8),UDim2.fromOffset(0,94),p.ink);strip.BackgroundTransparency=1
- local cellWidth=math.min(134,math.floor(width*.46))
- local catalog=DroneCatalog.PrestigeRewards
- local winner=15
- for i=1,winner+2 do
-  local entry=i==winner and {name=reward.rewardName,tier=reward.rewardTier} or catalog[(i+reward.prestiges-1)%#catalog+1]
-  local tint=rarityColor(entry.tier)
-  local cell=U.panel(strip,UDim2.fromOffset((i-1)*cellWidth+3,0),UDim2.fromOffset(cellWidth-6,94),p.ink:Lerp(tint,.25),8)
-  U.stroke(cell,tint,2)
-  U.icon(cell,'drone',UDim2.new(.5,-17,0,9),UDim2.fromOffset(34,34),tint)
-  local name=U.text(cell,UDim2.fromOffset(2,44),UDim2.new(1,-4,0,25),entry.name,15,p.white,true)
-  local tier=U.text(cell,UDim2.fromOffset(2,68),UDim2.new(1,-4,0,18),Packs.Tiers[entry.tier],12,tint,true)
-  name.TextXAlignment=Enum.TextXAlignment.Center;tier.TextXAlignment=Enum.TextXAlignment.Center
- end
- local marker=U.frame(view,UDim2.new(.5,-2,0,0),UDim2.fromOffset(4,13),p.white);marker.ZIndex=10
- local detail=U.text(parent,UDim2.fromOffset(0,128),UDim2.fromOffset(width,56),'Adding a permanent drone…',18,p.text,true)
- detail.TextXAlignment=Enum.TextXAlignment.Center
- local settled=false
  local tint=rarityColor(reward.rewardTier)
- local trigger,connection
- local function place(index) strip.Position=UDim2.fromOffset(width*.5-(index-.5)*cellWidth,8) end
- local function settle()
-  if settled then return end
-  settled=true;place(winner);marker.BackgroundColor3=tint
-  detail.Text=reward.rewardName..' joined your fleet\n'..reward.rewardJob
-  trigger.Text='Continue';audio:play('pack_open',nil,{pitch=.95+reward.rewardTier*.11})
-  if connection then connection:Disconnect();connection=nil end
- end
- trigger=U.button(parent,UDim2.new(.5,-74,0,198),UDim2.fromOffset(148,40),'Skip reveal',function()
-  if settled then onClose() else settle() end
- end,tint)
- if reducedMotion() then settle();return end
- local start=os.clock();local last=2
- place(last)
- connection=RunService.RenderStepped:Connect(function()
-  if not isVisible() then connection:Disconnect();connection=nil;return end
-  local t=math.clamp((os.clock()-start)/(1.45+.17*reward.rewardTier),0,1)
-  local index=2+(winner-2)*(1-(1-t)^3)
-  place(index)
-  local tick=math.floor(index+.5)
-  if tick~=last and tick<winner then last=tick;audio:play('pack_step',nil,{pitch=.82+t*.37}) end
-  if t>=1 then settle() end
- end)
- view.Destroying:Once(function() if connection then connection:Disconnect() end end)
+ local view=U.panel(parent,UDim2.fromOffset(3,12),UDim2.fromOffset(width-6,124),p.ink:Lerp(tint,.22),14)
+ view.Name='PrestigeReward';U.stroke(view,tint,2)
+ U.icon(view,'drone',UDim2.fromOffset(16,28),UDim2.fromOffset(48,48),tint)
+ local name=U.text(view,UDim2.fromOffset(79,19),UDim2.new(1,-90,0,32),reward.rewardName,23,p.white,true)
+ local job=U.text(view,UDim2.fromOffset(79,58),UDim2.new(1,-90,0,51),reward.rewardJob,15,p.white,false)
+ job.TextWrapped=true;name.TextWrapped=true
+ U.button(parent,UDim2.new(.5,-74,0,153),UDim2.fromOffset(148,42),'Continue',onClose,tint)
+ audio:play('prestige')
 end
 return CardView

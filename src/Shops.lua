@@ -135,6 +135,8 @@ function S.reason(p,entry,context)
  return nil
 end
 function S.oreValue(prices,material)
+ local _,cargoValue=Workshop.crystalCargo(material)
+ if cargoValue then return cargoValue end
  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
  return tier and material~='Quartz' and tier.value or (prices and prices[material])
 end
@@ -142,10 +144,11 @@ end
 function S.deposit(run,bag)
  local deposit={}
  for key,n in pairs(bag) do
+  local _,cargoValue=Workshop.crystalCargo(key)
   local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
-  if (not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
-  local currency=tier and 'Quartz' or key
-  deposit[currency]=(deposit[currency] or 0)+n*(tier and tier.value or 1)
+  if (not cargoValue and not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=(cargoValue or tier) and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(cargoValue or (tier and tier.value) or 1)
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end

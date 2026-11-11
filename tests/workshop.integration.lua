@@ -105,7 +105,7 @@ check('a saved four-miner fleet keeps its workers, traits and progress and still
  store.adapter:update('player:'..uid,function(old) assert(not old);return saved end)
  pl=player(uid);players.PlayerAdded:Fire(pl);p=assert(profiles[pl.UserId]);move(field.center)
  assert(#p.drones==4 and #data(p).fleet==4 and data(p).nextDroneSerial==5)
- assert(data(p).run.wallet.Quartz==65 and Ca.capacity(data(p))==100)
+ assert(data(p).run.wallet.Quartz==65 and Ca.capacity(data(p))==10)
  for serial,worker in ipairs(p.drones) do
   local previous=saved.fleet[serial]
   assert(worker.id==previous.id and worker.owned.type==previous.type)
@@ -139,7 +139,7 @@ local firstId,firstBase,offer,selected,baseTime
 local beganAt=now
 check('Studio and production both start with three permanent miners, zero Quartz, actual rocks',function()
  assert(#p.drones==3 and #data(p).fleet==3 and not p.testFleet)
- assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==100)
+ assert(data(p).run.wallet.Quartz==0 and Ca.capacity(data(p))==10)
  assert(data(p).run.quartzEarnings==0 and p.drones[1].stats.plotAuto==0)
  firstId=p.drones[1].id;firstBase=Pro.clone(data(p).fleet[1].base)
  baseTime=mine();mine();sell()
@@ -186,7 +186,7 @@ end)
 check('actual worker ticks pay all Quartz required for prestige after spending on the run',function()
  while data(p).run.quartzEarnings<Pro.milestone(data(p)).earnings do mine();sell() end
  local pre=Pro.prestigePreview(data(p));assert(pre.eligible and pre.winsRequired==0 and pre.field=='Quartz')
- local request=quote({confirm=true});move(shopStations.Quartz.Position);input('Prestige',request);assert(data(p).prestiges==0)
+ local request=quote({confirm=true,droneType=pre.droneChoices[1].kind});move(shopStations.Quartz.Position);input('Prestige',request);assert(data(p).prestiges==0)
  move(scene.prestigeStation.Position);input('Prestige',request)
  assert(#p.drones==4 and #data(p).fleet==4 and data(p).prestiges==1)
  assert(data(p).fleet[1].id==firstId and data(p).fleet[1].base.miningDPS==firstBase.miningDPS)

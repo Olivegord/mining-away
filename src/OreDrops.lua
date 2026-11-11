@@ -55,7 +55,7 @@ function O.step(s,target,dt,attract,magnetRange)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local pulling=attract and s.landed==true and s.age>=O.SCATTER_TIME and distance<=(magnetRange or O.MAGNET_RANGE)
+ local pulling=attract and s.landed==true and s.age>=(s.raw and .40 or O.SCATTER_TIME) and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then

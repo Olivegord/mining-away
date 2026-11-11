@@ -14,7 +14,7 @@ function View.new()
  end
  local root=workspace:FindFirstChild('DroneRoleState');if root then attach(root) end
  self.connections[#self.connections+1]=workspace.ChildAdded:Connect(function(node) if node.Name=='DroneRoleState' then attach(node) end end)
- function self:step(now,droneIndex)
+ function self:step(now,droneIndex,resources)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
@@ -33,7 +33,17 @@ function View.new()
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
-    if progress>=1 then
+    local contactAt=node:GetAttribute('ContactAt')
+    local anchor=node:GetAttribute('TargetAnchor')
+    local target=resources and resources[node:GetAttribute('TargetId') or '']
+    if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
+     to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
+    end
+    if contactAt and drone and not r.impacted and now-contactAt<.20 then
+     r.impacted=true;drone.shotImpactAt=now
+    end
+    local resolved=contactAt or progress>1+.16/duration or (not target and progress>=1)
+    if resolved then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true
     elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
@@ -51,7 +61,7 @@ function View.new()
      end
      from=r.launchFrom or from
      local direction=(to-from).Unit
-     local center=from:Lerp(to,progress)-direction*(value.Size.Z*.5)
+     local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
     end
    elseif kind=='Orbital' then
