@@ -200,6 +200,91 @@ assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Po
 print('PASS full reference-sized patch populations, refill locality, mining and standby heights')
 
 do
+ local refillZone=Instance.new('Folder');refillZone.Name='RefillTest';refillZone.Parent=run
+ local surface=World.part(refillZone,'Field',Vector3.new(0,3.74,158),Vector3.new(108,.6,64),f.color)
+ local centerPlot=World.part(refillZone,'Patch1',Vector3.new(0,3.052,147),Vector3.new(30,2,30),f.color)
+ local leftPlot=World.part(refillZone,'Patch2',Vector3.new(-34,3.052,163),Vector3.new(30,2,30),f.color)
+ local rightPlot=World.part(refillZone,'Patch3',Vector3.new(34,3.052,152),Vector3.new(30,2,30),f.color)
+ local field={id=#patches+1,cfg=table.clone(f.cfg),part=surface,model=refillZone,center=surface.Position,color=f.color,
+  clusters={centerPlot,leftPlot,rightPlot},resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.cfg.Count=1;field.e.phase='Safe';patches[field.id]=field
+ local tester=player(98689);players.PlayerAdded:Fire(tester)
+ local team=profiles[tester.UserId]
+ local worker=team.drones[1]
+ for i=2,#team.drones do team.drones[i].hp=0 end
+ local previousStart,previousCounter=scene.runStart,scene.packStation
+ scene.runStart=surface.Position
+ scene.packStation=World.part(refillZone,'PackStation',Vector3.new(-38,5.5,32),Vector3.new(4,1,4),f.color)
+ local pinCenter=Vector3.new(0,4.04,172)
+ local function advance(seconds)
+  for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
+ end
+ local function breakLastRock()
+  tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
+  command.OnServerEvent:Fire(tester,'PlaceSelector',{runId=data(team).run.id,fieldId=field.id,position=pinCenter})
+  local old=makeResource(field,centerPlot.Position+Vector3.new(0,0,12),'Crystal',75,10,3,3)
+  old.readyAt=now;old.cluster=centerPlot
+  assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
+  assert(hitResource(worker,old,1000) and old.paid)
+  assert(#field.respawnQueue==1 and nodeUsage(field)==0)
+ end
+ local function refillWithCenteredDraw()
+  local original=seed
+  seed={NextInteger=function(_,a,b) return math.floor((a+b)/2) end,NextNumber=function(_,a,b) return a and b and (a+b)/2 or .5 end}
+  advance(.5)
+  seed=original
+  assert(nodeUsage(field)==1 and #field.respawnQueue==0,'one vacancy must produce one replacement')
+  return field.resources[1]
+ end
+ breakLastRock()
+ local square=team.miningSquare
+ assert(scene.idleSquareStatus(team,square)=='Refilling')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(0,8,65)))
+ advance(.15)
+ assert(team.miningSquare==square,'the walk along the return lane dropped the pin')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(-38,8,32)))
+ local cargo=Workshop.cargoKey('Quartz',10)
+ local soldBefore=data(team).run.quartzEarnings
+ Pro.addCargo(data(team),cargo,1,Ca.capacity(data(team)))
+ command.OnServerEvent:Fire(tester,'Sell')
+ assert(data(team).run.quartzEarnings==soldBefore+10 and Pro.cargoUnits(data(team))==0,'the test depot sale did not complete')
+ advance(7.65)
+ assert(nodeUsage(field)==0,'a pinned vacancy grew before the normal delay')
+ local replacement=refillWithCenteredDraw()
+ assert(replacement.cluster==centerPlot and Mining.selectorTouches(square.center,square.half,replacement.part.CFrame,replacement.part.Size),
+  'replacement left the depleted side of the plot')
+ assert(replacement.readyAt-replacement.spawnAt==2 and not next(replacement.slots) and scene.idleSquareStatus(team,square)=='Growing')
+ advance(2.25)
+ local returning
+ for _,drone in ipairs(team.drones) do if drone.target==replacement then returning=drone;break end end
+ assert(returning,'the crew did not resume from the same pin while the owner was at the depot')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(120,8,32)))
+ advance(.15)
+ assert(not team.miningSquare and not returning.target,'going away from the depot route must still recall the crew')
+ release(worker);resources[replacement.id]=nil;replacement.part:Destroy();field.resources={}
+ breakLastRock()
+ command.OnServerEvent:Fire(tester,'Recall')
+ advance(7.8)
+ local ordinary=refillWithCenteredDraw()
+ assert(not team.miningSquare and ordinary.position.Z==centerPlot.Position.Z,'recall kept a cancelled preference')
+ resources[ordinary.id]=nil;ordinary.part:Destroy();field.resources={}
+ breakLastRock()
+ advance(7.8)
+ local raycast=workspace.Raycast
+ function workspace:Raycast(origin,direction,params)
+  if direction.Y<-10 and origin.Z>=157 and table.find(params.FilterDescendantsInstances,refillZone) then return {Instance=surface} end
+  return raycast(self,origin,direction,params)
+ end
+ local fallback=refillWithCenteredDraw()
+ workspace.Raycast=raycast
+ assert(fallback.position.Z==centerPlot.Position.Z and scene.idleSquareStatus(team,team.miningSquare)=='NoCrystals',
+  'blocked local growth must still refill the wider plot')
+ print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after an eight-second cooldown',replacement.position.Z,ordinary.position.Z))
+ scene.runStart,scene.packStation=previousStart,previousCounter
+ players.PlayerRemoving:Fire(tester);resources[fallback.id]=nil;refillZone:Destroy();patches[field.id]=nil
+end
+
+do
  local deep=table.clone(f)
  deep.cfg=table.clone(f.cfg)
  deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4

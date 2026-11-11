@@ -227,6 +227,9 @@ local function recallFromField(p)
  if square then
   local delta=hr.Position-square.center
   if delta.X*delta.X+delta.Z*delta.Z<=Mining.SELECTOR_LEASH^2 and math.abs(delta.Y)<=32 then return end
+  -- A depot trip should leave the crew working at the current Crystal Run pin.
+  if scene.runStart and square.field.clusters and scene.packStation
+   and Mining.onSelectorDepotRoute(hr.Position,square.center,scene.packStation.Position) then return end
  end
  local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
  local field=p.workField and patches[p.workField]
@@ -519,7 +522,7 @@ function scene.replenishJunk(field)
   end
  end
 end
-local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
+local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,onlyCluster)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
@@ -541,32 +544,47 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
  local function sample(patch,neighbors,inset)
-  local preferred
+  local preferred,bounds
   if plan then local p=patch.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
+  if nearPin and not preferred then
+   local frame=patch.CFrame
+   local center=frame:PointToObjectSpace(nearPin.center)
+   local right,look=frame.RightVector,frame.LookVector
+   local padding=onlyCluster and 0 or radius
+   local x=nearPin.half*(math.abs(right.X)+math.abs(right.Z))+padding
+   local z=nearPin.half*(math.abs(look.X)+math.abs(look.Z))+padding
+   bounds={minX=center.X-x,maxX=center.X+x,minZ=center.Z-z,maxZ=center.Z+z}
+  end
   local selected=ResourcePlacement.sample(patch.Size.X-inset,patch.Size.Z-inset,radius,neighbors,
    function(a,b)
     if reference then return seed:NextInteger(a,b) end
     return seed:NextNumber(a,b)
    end,function(x,z)
    local candidate=patch.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
+   if nearPin then
+    if onlyCluster then
+     local delta=candidate-nearPin.center
+     if math.abs(delta.X)>nearPin.half or math.abs(delta.Z)>nearPin.half then return false end
+    elseif not Mining.selectorTouches(nearPin.center,nearPin.half,CFrame.new(candidate),dimensions) then return false end
+   end
     -- Check the footprint and flight space against authored trees/fixtures.
     for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
      local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*visualSize
      if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
      if field.cfg.SelectionOnly then
-      if nearPin and not Mining.selectorTouches(nearPin.center,nearPin.half,CFrame.new(candidate),dimensions) then return false end
       local low=Vector3.new(origin.X,fieldTop-.05,origin.Z)
       if workspace:Raycast(low,Vector3.new(0,19,0),clearance) then return false end
      end
     end
     return true
-   end,preferred,reference,field.clusters and 1 or nil)
+   end,preferred,reference,field.clusters and 1 or nil,bounds)
   return selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  end
  local spot,cluster
  if field.clusters then
   local choices={}
   for _,patch in ipairs(field.clusters) do
+   if onlyCluster and patch~=onlyCluster then continue end
    local neighbors={}
    for _,r in ipairs(field.resources) do if not r.paid and r.cluster==patch then
     local p=patch.CFrame:PointToObjectSpace(r.position)
@@ -610,6 +628,29 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
  resource.cluster=cluster
  return true,kind=='Geode' and 5 or 1,resource
 end
+function scene.respawnEarlier(a,b) return a.at<b.at end
+function scene.replacementSquare(field,vacancy)
+ local owner=vacancy.owner and profiles[vacancy.owner]
+ local square=owner and not owner.leaving and owner.miningSquare
+ if square and square.field==field
+  and Mining.selectorTouches(square.center,square.half,vacancy.frame,vacancy.size)
+  and Mining.selectorTouches(square.center,square.half,vacancy.cluster.CFrame,vacancy.cluster.Size) then return square end
+ return nil
+end
+function scene.spawnReplacement(field,kind,vacancy)
+ local square=scene.replacementSquare(field,vacancy)
+ if square then
+  local empty=true
+  for _,r in ipairs(field.resources) do
+   if not r.paid and r.part.Parent and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then empty=false;break end
+  end
+  if empty then
+   local spawned,cost=spawnResource(field,kind,false,nil,square,vacancy.cluster)
+   if spawned then return true,cost end
+  end
+ end
+ return spawnResource(field,kind)
+end
 local function seedField(field)
  for _,r in ipairs(field.resources) do
   for id in pairs(r.slots) do if drones[id] then release(drones[id]) end end
@@ -621,7 +662,7 @@ local function seedField(field)
  -- Reserve one retry token for each missing unit of the population budget;
  -- geodes already count as five units through nodeUsage.
  for _=1,math.max(0,field.cfg.Count-nodeUsage(field)) do
-  table.insert(field.respawnQueue,now+2)
+  table.insert(field.respawnQueue,{at=now+2})
  end
 end
 local function restoreTurrets(field)
@@ -1313,7 +1354,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
    if not r.field.junk then
     local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
-    table.insert(r.field.respawnQueue,respawnClock+r.field.cfg.Respawn)
+    local vacancy={at=respawnClock+r.field.cfg.Respawn}
+    if r.cluster and d.squareJob and d.squareJob==p.miningSquare then
+     vacancy.owner=d.owner;vacancy.cluster=r.cluster;vacancy.frame=CFrame.new(r.position);vacancy.size=r.fullSize
+    end
+    table.insert(r.field.respawnQueue,vacancy)
    end
   end
  end
@@ -1463,6 +1508,9 @@ function scene.idleSquareStatus(p,square)
  end
  if growing then return 'Growing' end
  if claimed then return 'Claimed' end
+ for _,vacancy in ipairs(square.field.respawnQueue) do
+  if vacancy.owner==p.player.UserId and scene.replacementSquare(square.field,vacancy) then return 'Refilling' end
+ end
  return 'NoCrystals'
 end
 -- Project the current jobs onto one player-facing status. This never grants
@@ -1942,7 +1990,7 @@ local function growerDrone(d,p,hr,dt)
  -- Multiple growers cannot grow on top of each other or inflate field rewards.
  local ok,_,resource=spawnResource(field,'Crystal',false,d.growPlan,square)
  if ok then
-  table.sort(field.respawnQueue);table.remove(field.respawnQueue,1)
+  table.sort(field.respawnQueue,scene.respawnEarlier);table.remove(field.respawnQueue,1)
   resource.part:SetAttribute('GrownBy',d.id)
   RoleEffects.Grow(d.pos,ground,true)
  end
@@ -3443,21 +3491,21 @@ RunService.Heartbeat:Connect(function(dt: number)
     if field.cfg.ReferenceCrystals then field.respawnClock=now
     else field.respawnClock+=snapshotDt*rate end
    end
-   table.sort(field.respawnQueue)
+   table.sort(field.respawnQueue,scene.respawnEarlier)
    local replenished=0
-   while replenishing and #field.respawnQueue>0 and field.respawnClock>=field.respawnQueue[1] and replenished<field.cfg.Count do
-    local due=0;for _,at in ipairs(field.respawnQueue) do if at<=field.respawnClock then due=due+1 end end
+   while replenishing and #field.respawnQueue>0 and field.respawnClock>=field.respawnQueue[1].at and replenished<field.cfg.Count do
+    local due=0;for _,vacancy in ipairs(field.respawnQueue) do if vacancy.at<=field.respawnClock then due+=1 else break end end
     -- A geode reserves five future nodes. Consume five due replenishment tokens,
     -- rather than leaving four immortal retries behind after every shell cycle.
-    local spawned,cost=spawnResource(field,due<5 and 'Crystal' or nil)
+    local spawned,cost=scene.spawnReplacement(field,due<5 and 'Crystal' or nil,field.respawnQueue[1])
     if not spawned then
      -- One failed sample set establishes a field-level backoff for every token
      -- already due, rather than re-running 18 raycasts per snapshot for each
      -- blocked missing slot in turn. Future tokens keep their own due times.
-     for i,at in ipairs(field.respawnQueue) do
-      if at<=field.respawnClock then field.respawnQueue[i]=field.respawnClock+2 end
+     for _,vacancy in ipairs(field.respawnQueue) do
+      if vacancy.at<=field.respawnClock then vacancy.at=field.respawnClock+2 end
      end
-     table.sort(field.respawnQueue);break
+     table.sort(field.respawnQueue,scene.respawnEarlier);break
     end
     for _=1,cost do table.remove(field.respawnQueue,1) end
     replenished=replenished+cost

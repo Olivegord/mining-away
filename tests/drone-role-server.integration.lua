@@ -45,7 +45,7 @@ check('ore queue and direct assignments cannot give specialists ordinary mining 
 end)
 check('grower plants a real replacement with normal health yield growth and bounded population',function()
  local _,p,roles=fixture();local field=patches[1];local d=roles.Dart[1]
- field.respawnQueue={field.respawnClock+100};p.workField=1
+ field.respawnQueue={{at=field.respawnClock+100}};p.workField=1
  ticks(d,C.Tick);assert(d.growPlan and not d.mining)
  local spot=d.growPlan.spot;d.pos=Vector3.new(spot.X,field.part.Position.Y+field.part.Size.Y*.5+3.2,spot.Z)
  local before=#field.resources;ticks(d,1.2,true)
@@ -57,7 +57,7 @@ check('grower plants a real replacement with normal health yield growth and boun
 end)
 check('recall cancels planting and two growers cannot overlap or exceed replacement tokens',function()
  local _,p,roles=fixture();local field=patches[1];local d=roles.Dart[1]
- field.respawnQueue={field.respawnClock+100};p.workField=1;ticks(d,C.Tick)
+ field.respawnQueue={{at=field.respawnClock+100}};p.workField=1;ticks(d,C.Tick)
  local plan=assert(d.growPlan);leaveField(p);assert(not d.growPlan)
  local before=#field.resources;ticks(d,2);assert(#field.resources==before)
  p.workField=1;d.nextGrow=0;d.growPlan=plan

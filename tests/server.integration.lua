@@ -528,7 +528,7 @@ check('geode replenishment consumes its full five-node budget without growing re
  local originalNext=seed.NextNumber
  seed.NextNumber=function(self,lo,hi) if lo==nil then return .01 end;return originalNext(self,lo,hi) end
  for cycle=1,10 do
-  f.respawnQueue={now,now,now,now,now};advance(.2)
+  f.respawnQueue={{at=now},{at=now},{at=now},{at=now},{at=now}};advance(.2)
   eq(#f.respawnQueue,0);eq(nodeUsage(f),5)
   local shell;for _,r in ipairs(f.resources) do if not r.paid then shell=r end end
   eq(shell.kind,'Geode');shell.readyAt=now-1;assignExact(a,f,shell);eq(hitResource(first(a),shell,99999),true)
@@ -537,7 +537,7 @@ check('geode replenishment consumes its full five-node budget without growing re
   end
   eq(#f.respawnQueue,5);eq(nodeUsage(f),0);data(profile(a)).run.cargo={}
   -- This fixture advances the pending due instants, without changing production spawn logic.
-  for i=1,#f.respawnQueue do f.respawnQueue[i]=now end
+  for _,vacancy in ipairs(f.respawnQueue) do vacancy.at=now end
  end
  seed.NextNumber=originalNext;f.cfg.Count=oldCount
 end)

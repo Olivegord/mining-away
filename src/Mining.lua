@@ -4,6 +4,7 @@ local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE
 M.SELECTOR_RANGE=44
 M.SELECTOR_LEASH=100
 local SELECTOR_GRID=2
+local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
  local point=frame:PointToObjectSpace(Vector3.new(position.X,frame.Position.Y,position.Z))
  local halfX,halfZ=size.X*.5,size.Z*.5
@@ -16,6 +17,15 @@ end
 function M.selectorInRange(position,point)
  local delta=point-position
  return math.abs(delta.Y)<16 and delta.X*delta.X+delta.Z*delta.Z<=M.SELECTOR_RANGE^2
+end
+function M.onSelectorDepotRoute(position,center,depot)
+ local route=depot-center
+ local lengthSquared=route.X*route.X+route.Z*route.Z
+ if lengthSquared==0 then return false end
+ local delta=position-center
+ local along=math.clamp((delta.X*route.X+delta.Z*route.Z)/lengthSquared,0,1)
+ local offset=delta-route*along
+ return math.abs(offset.Y)<16 and offset.X*offset.X+offset.Z*offset.Z<=DEPOT_ROUTE_RADIUS^2
 end
 -- Horizontal separating axes for the square and the crystal's current body.
 -- A crystal touching the boundary is eligible even if its center is outside.

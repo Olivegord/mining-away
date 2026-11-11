@@ -94,7 +94,7 @@ local selectorText={
  PairCut='Two lasers cutting',
  Recharging='Miners recharging', Waiting='Waiting at pin', NoMiners='Waiting for miners', Paused='Mining paused',
  BagFull='Backpack full', LooseOre='Move closer to ore', Pressing='Compactor pressing', Surge='Crew surge · +50%',
- Growing='Crystals growing', Claimed='Other crew mining', NoCrystals='Move pin to crystals',
+ Refilling='Plot refilling', Growing='Crystals growing', Claimed='Other crew mining', NoCrystals='Move pin to crystals',
  Hauling='Hauling to Workshop', Gathering='Vacuum gathering',
 }
 local function compact(value)

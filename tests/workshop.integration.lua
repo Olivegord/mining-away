@@ -63,7 +63,7 @@ check('the reference crystal shrinks when cracked and respawns after eight secon
  assert(hitResource(miner,r,1000) and r.paid and r.removeAt==brokenAt+2)
  for _,drone in ipairs(p.drones) do drone.field=field.id end
  local rate,count=respawnRate(field);assert(rate==1 and count==#p.drones)
- assert(field.respawnQueue[1]==brokenAt+8)
+ assert(field.respawnQueue[1].at==brokenAt+8)
  local function advance(seconds)
   for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
  end

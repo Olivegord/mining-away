@@ -36,16 +36,27 @@ local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  end
  return true
 end
-function P.sample(width,depth,radius,occupied,random,clear,preferred,reference,referenceGap)
+function P.sample(width: number,depth: number,radius: number,occupied,random,clear,preferred,reference,referenceGap,
+ bounds: {minX: number,maxX: number,minZ: number,maxZ: number}?)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
  if halfX<0 or halfZ<0 then return nil,0 end
+ local minX,maxX,minZ,maxZ=-halfX,halfX,-halfZ,halfZ
+ if bounds and not preferred then
+  local lowX,highX=math.max(minX,bounds.minX),math.min(maxX,bounds.maxX)
+  local lowZ,highZ=math.max(minZ,bounds.minZ),math.min(maxZ,bounds.maxZ)
+  minX=if reference then math.ceil(lowX) else lowX
+  maxX=if reference then math.floor(highX) else highX
+  minZ=if reference then math.ceil(lowZ) else lowZ
+  maxZ=if reference then math.floor(highZ) else highZ
+  if minX>maxX or minZ>maxZ then return nil,0 end
+ end
  local attempts=preferred and 1 or P.MAX_ATTEMPTS
  for attempt=1,attempts do
   -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
+  if preferred then x,z=preferred.x,preferred.z else x,z=random(minX,maxX),random(minZ,maxZ) end
   local fits
   if reference then fits=fitsReference(x,z,halfX,halfZ,radius,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end

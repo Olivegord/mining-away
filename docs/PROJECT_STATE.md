@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a90b8b1e4e1312ee2abfbf2ae18b9a8af0439e5ca41e3a8f205d51d5b7686586` | Includes the overlapping-pin cut fix. |
+| Native-file SHA-256 | `b617789866d73e32586053c7262cb2c60fde2f9d148dc814675123250edb6749` | Includes the depot route and local plot refill behavior. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit keeps cuts through overlapping pin moves** | All seven Sources and three roots verified in Edit. Team Create save returned version 149. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit keeps the pin along the depot route** | All seven Sources and three roots verified in Edit. Team Create save returned version 150. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — keep mining during the depot trip
+
+The crew stays at its Crystal Run pin along the route to the Pack Counter and back. The usual distance recall applies off the route, and Recall still cancels the order immediately. When the crew clears its pin, its next due replacement can grow at a random clear spot within the same pin and original plot. A blocked spot falls back to ordinary placement. The existing field counts, respawn timers, two-second growth, native crystal art and payout rules still apply. The command row shows `Plot refilling` while the pin waits for its replacement.
+
+A server fixture used the authored Quartz bed, three plot positions and Pack Counter position. The player crossed the old 100-stud leash, sold a cargo item, and still had the same pin when the replacement became ready. With a centered random draw, the replacement grew at Z 159 within the depleted square. Ordinary placement put the same draw at Z 147 outside the square. The fixture also exercised explicit Recall, off-route recall, blocked local growth, and one replacement per vacancy. A geometry check covered the center-lane return from sampled edges of all 15 authored plots. Workshop, Crystal Run, pickup, audio and committed flight checks passed with Roblox API or storage doubles. The older contact-renderer and role fixtures hit the same assertions on `9388639` and this revision. Live play and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **150**. No player release was published. To reproduce from `9388639`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit 9388639`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — keep a deep cut when nudging the pin
 
