@@ -127,10 +127,10 @@ DroneConfig.Types = {
 		Weight = 2,
 	},
 	Orbiter = {
-		DisplayName = "Orbiter",
-		Description = "Orbital controller. Charges and calls a real strike on the biggest rock, then cools down. Does not mine normally.",
-		Color = Color3.fromRGB(221, 165, 78),
-		Accent = Color3.fromRGB(245, 223, 162),
+		DisplayName = "Orbital",
+		Description = "Charges a sky laser that melts the biggest available crystal and damages a second nearby rock.",
+		Color = Color3.fromRGB(172, 115, 231),
+		Accent = Color3.fromRGB(228, 207, 255),
 		Scale = 0.84,
 		MaxHealth = 80,
 		Speed = 22,
@@ -178,6 +178,7 @@ for _,name in ipairs(specialOrder) do
  table.insert(DroneConfig.TypeOrder,name)
 end
 local fieldTestRoles={
+ Ramiel={label='Ramiel',color=Color3.fromRGB(93,203,255),detail='Unfolds a glass aperture and delivers a heavy prism lance.'},
  Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
@@ -212,6 +213,68 @@ DroneConfig.PressSockets = {Vector3.new(0,-1.05,.96),Vector3.new(-1.02,-1.05,.27
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
 -- This only builds the visible hull; flight, reach and articulation are unchanged.
+-- Eight triangular faces assemble into an octahedron, then pivot outward
+-- in paired steps to expose a bright center. Wedges give each face actual glass
+-- thickness and work without a streamed mesh or an editable mesh allocation.
+local function ramielWedges(a: Vector3,b: Vector3,c: Vector3,left: BasePart,right: BasePart)
+ local ab,ac,bc=b-a,c-a,c-b
+ if ab:Dot(ab)>ac:Dot(ac) and ab:Dot(ab)>bc:Dot(bc) then a,c=c,a
+ elseif ac:Dot(ac)>bc:Dot(bc) then a,b=b,a end
+ ab,ac,bc=b-a,c-a,c-b
+ local normal=ac:Cross(ab).Unit
+ local depth=bc.Unit
+ local up=bc:Cross(normal).Unit
+ local height=math.abs(ab:Dot(up));local thickness=.045
+ left.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ab:Dot(depth))))
+ left.CFrame=CFrame.fromMatrix((a+b)*.5,normal,up,depth)
+ right.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ac:Dot(depth))))
+ right.CFrame=CFrame.fromMatrix((a+c)*.5,-normal,up,-depth)
+end
+function DroneConfig.ramielRig(model: Model)
+ local folder=model:FindFirstChild('RamielGlass');if not folder then return nil end
+ local rig={faces={},core=folder:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
+ for i=1,8 do
+  local left=folder:FindFirstChild('Pane'..i..'A');local right=folder:FindFirstChild('Pane'..i..'B')
+  if left and left:IsA('BasePart') and right and right:IsA('BasePart') then rig.faces[i]={left,right} end
+ end
+ return rig
+end
+local function ramielEase(t: number): number
+ t=math.clamp(t,0,1);return t*t*(3-2*t)
+end
+function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,release: number,roll: number)
+ local frame=pivot*CFrame.Angles(0,roll,0)
+ if aim and (aim-pivot.Position).Magnitude>.01 then
+  local forward=(aim-pivot.Position).Unit
+  local up=math.abs(forward.Y)>.94 and Vector3.zAxis or Vector3.yAxis
+  local locked=CFrame.lookAt(pivot.Position,aim,up)*CFrame.Angles(0,0,math.pi*.25+roll*.24)
+  frame=frame:Lerp(locked,ramielEase(charge*4+release))
+ end
+ local radius=rig.scale*1.71
+ for i,panes in ipairs(rig.faces) do
+  local top=i<=4
+  local side=(i-1)%4
+  local angle=side*math.pi*.5
+  local a=Vector3.new(math.cos(angle),0,math.sin(angle))
+  local b=Vector3.new(math.cos(angle+math.pi*.5),0,math.sin(angle+math.pi*.5))
+  local y=top and 1 or -1
+  local diagonal=(a+b).Unit
+  local edge=(b-a).Unit
+  local phase=ramielEase((charge-(side%2)*.15-(top and .03 or .17))/.65)
+  local opened=math.max(phase,release*.95)
+  local hinge=(a+b)*.5
+  local petal=CFrame.fromAxisAngle(edge,-y*opened*1.06)
+  local point=hinge+petal:VectorToWorldSpace(Vector3.yAxis*y-hinge)
+  local shift=diagonal*.73*opened+Vector3.yAxis*y*.44*opened
+  local function world(v: Vector3): Vector3 return frame:PointToWorldSpace((v+shift)*radius) end
+  ramielWedges(world(point),world(a),world(b),panes[1],panes[2])
+ end
+ rig.core.CFrame=frame
+ rig.core.Size=Vector3.one*radius*(.36+.22*charge+.28*release)
+ rig.core.Transparency=.32-.21*math.max(charge,release)
+ rig.core.Color=Color3.fromRGB(93,212,255):Lerp(Color3.fromRGB(254,237,255),math.max(charge,release)*.83)
+end
+
 function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, readable: boolean?): (Model, BasePart?, BasePart?)
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
@@ -355,7 +418,19 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
  end
- if role=='Needler' then
+ if role=='Ramiel' then
+  local glass=Instance.new('Folder');glass.Name='RamielGlass';glass.Parent=model
+  for i=1,8 do
+   local tint=color:Lerp(i<=4 and Color3.fromRGB(179,235,255) or Color3.fromRGB(23,62,176),.30+((i-1)%4)*.085)
+   for _,suffix in ipairs({'A','B'}) do
+    local pane=hardware('Pane'..i..suffix,Vector3.one*.04,CFrame.new(),tint,Enum.Material.Glass,nil,nil,nil,true)
+    pane.Transparency=.27;pane.Reflectance=.12;pane.CastShadow=false;pane.Parent=glass
+   end
+  end
+  local core=hardware('Core',Vector3.one*.6,CFrame.new(),color,Enum.Material.Neon,Enum.PartType.Ball)
+  core.Parent=glass
+  DroneConfig.poseRamiel(DroneConfig.ramielRig(model),pose,nil,0,0,0)
+ elseif role=='Needler' then
   local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
   shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)
   for _,side in ipairs({-1,1}) do

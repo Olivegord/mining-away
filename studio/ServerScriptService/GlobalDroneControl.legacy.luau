@@ -491,6 +491,7 @@ local DroneAbilities = (function()
 local A={}
 A.KINDS={Orbital={cooldown=45,burnSeconds=4,chargeSeconds=2.4},Scrap={cooldown=35}}
 A.CHARGE_SECONDS=1.4
+A.ORBITER={chargeSeconds=1.85,burnSeconds=1.25,cooldown=14,relay=.45}
 A.ORBITAL_ORIGIN_HEIGHT=34
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 local function point(p)
@@ -556,10 +557,11 @@ function A.begin(state,kind,now,ctx)
   end
  end
  state.sequence+=1
- local duration=A.KINDS[kind].chargeSeconds or A.CHARGE_SECONDS
+ local hardware=kind=='Orbital' and ctx.orbiter==true
+ local duration=hardware and A.ORBITER.chargeSeconds or A.KINDS[kind].chargeSeconds or A.CHARGE_SECONDS
  local expires=now+duration+1.1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=chosen.id,target=point(chosen),
-  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+duration,expires=expires}
+  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+duration,expires=expires,hardware=hardware}
  event(ctx,'charge',{ability=kind,target=chosen,expires=expires,duration=duration})
  return true,'Gadget charging'
 end
@@ -579,12 +581,13 @@ function A.confirm(state,token,now,ctx)
  state.charge=nil
  local perks=ctx.perks or {}
  local cooldown=A.KINDS[charge.kind].cooldown
- if charge.kind=='Orbital' and perks.orbitalCycle then cooldown=30 end
+ if charge.hardware then cooldown=A.ORBITER.cooldown
+ elseif charge.kind=='Orbital' and perks.orbitalCycle then cooldown=30 end
  state.cooldowns[charge.kind]=now+cooldown
  if charge.kind=='Orbital' then
-  local duration=A.KINDS.Orbital.burnSeconds
+  local duration=charge.hardware and A.ORBITER.burnSeconds or A.KINDS.Orbital.burnSeconds
   state.burn={fieldId=charge.fieldId,targetId=target.id,actorId=charge.actorId,started=now,
-   remaining=duration,dps=target.hp/duration,precise=precise,nextPose=0,accepted=false}
+   remaining=duration,dps=target.hp/duration,relay=charge.hardware and A.ORBITER.relay or precise and .26 or nil,precise=precise,nextPose=0,accepted=false}
   event(ctx,'clearCharge')
 
  else
@@ -636,10 +639,10 @@ function A.step(state,now,dt,ctx,swarmContext)
      event(ctx,'orbital',{target=target,remaining=burn.remaining,precise=burn.precise})
     end
     if broken or burn.remaining<=1e-7 then
-     if burn.precise then
+     if burn.relay then
       for _,r in ipairs(targets(ctx,burn.fieldId,'OrbitalRelay')) do
        if r.id~=target.id and distance(target,r)<=14 then
-        if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
+        if ctx.hit(r.id,math.max(1,r.maxHP*burn.relay),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
        end
       end
      end
@@ -718,7 +721,7 @@ local DroneCatalog = (function()
 -- Permanent miner identities. The server owns every chunk and repeat cycle.
 -- Power is a finite base-work budget; Chunk is a final cap after all modifiers.
 local Catalog = {
- Order = {'Laser','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'},
+ Order = {'Laser','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel'},
  Types = {
   Laser = {Name='Miner',Price=60,Duration=0,Color={90,230,255},Description='One more permanent mining drone. Works a second rock and stays after prestige. Each additional Miner costs more.'},
   Bubbler = {Name='Bubbler',Price=1800,Duration=2.8,Impact=.68,Power=1.1,Chunk=.25,Yield=1.25,Color={120,225,255},Description='Captures and pops a mineral chunk per bubble cycle. Up to 25% rock health per hit; 1.25× ore on completion.'},
@@ -728,6 +731,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.36,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=.95,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.36,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.065,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.28,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
@@ -836,6 +841,7 @@ local definitions={
  Dart={job='Rock grower',grower=true},
  Courier={job='Backpack emptier',courier=true},
  Medic={job='Healer',healer=true},
+ Ramiel={job='Prism lance',worker=true,special='Ramiel'},
  Orbiter={job='Orbital controller',ability='Orbital'},
  Scrapper={job='Swarm fabricator',ability='Scrap'},
  Bubbler={job='Bubble extractor',worker=true,combat=true,special='Bubbler'},
@@ -2257,11 +2263,77 @@ end
 return J
 
 end)()
+local CrystalCuts = (function()
+-- A few solid cuts, built once per Crystal Run server from convex planes.
+-- They share the original footprint and grounding contract, not its mesh.
+local C={}
+local function plane(list,x,y,z,nx,ny,nz)
+ list[#list+1]={Vector3.new(x,y,z),Vector3.new(nx,ny,nz).Unit}
+end
+local function bevel(list,x,y,z,ny)
+ for _,sx in ipairs({-1,1}) do
+  for _,sz in ipairs({-1,1}) do plane(list,sx*x,y,sz*z,sx,ny,sz) end
+ end
+end
+function C.planes(name)
+ local p={}
+ if name=='Needle' then
+  bevel(p,.77,0,.77,.16)
+  plane(p,.26,1.55,0,1,.43,0);plane(p,.26,1.55,0,-1,.85,0)
+  plane(p,0,1.48,-.13,0,.44,1);plane(p,0,1.48,-.13,0,.62,-1)
+  plane(p,.03,-1.62,0,-1,-.37,.12)
+ elseif name=='Crown' then
+  bevel(p,.71,0,.71,-.08)
+  plane(p,0,1.04,0,-.46,1,-.17);plane(p,0,1.33,0,.48,1,.36)
+  plane(p,.79,.44,.19,1,.85,.24);plane(p,-.38,.38,-.61,-.65,.66,-1)
+  plane(p,.61,-1.68,0,1,-.68,0);plane(p,0,-1.57,.65,0,-.61,1)
+ else -- Cut ore: wide polished table, beveled corners, and a short pavilion.
+  bevel(p,.73,0,.73,0)
+  for _,side in ipairs({-1,1}) do
+   plane(p,side*.49,.90,0,side,.64,0);plane(p,0,.90,side*.47,0,.66,side)
+   plane(p,side*.58,-.85,0,side,-.58,0);plane(p,0,-.85,side*.55,0,-.58,side)
+  end
+  plane(p,0,1.07,0,.10,1,-.08)
+ end
+ return p
+end
+function C.build(name)
+ local function box(size,frame)
+  local p=Instance.new('Part');p.Anchored=true;p.Size=size;p.CFrame=frame
+  p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
+  return p
+ end
+ local base=box(Vector3.new(2,4,2),CFrame.new());local tools={}
+ for _,cut in ipairs(C.planes(name)) do
+  local point,normal=cut[1],cut[2]
+  local center=point+normal*7
+  tools[#tools+1]=box(Vector3.one*14,CFrame.lookAt(center,center-normal))
+ end
+ local ok,result=pcall(function()
+  return game:GetService('GeometryService'):SubtractAsync(base,tools,{
+   CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false,
+  })
+ end)
+ base:Destroy();for _,p in ipairs(tools) do p:Destroy() end
+ if not ok then return nil,tostring(result) end
+ if #result~=1 or not result[1]:IsA('PartOperation') or result[1].Size.Magnitude<2 then
+  for _,p in ipairs(result) do p:Destroy() end
+  return nil,'Expected one solid cut'
+ end
+ local part=result[1];part.Name=name;part.PivotOffset=CFrame.new();part.UsePartColor=true
+ part.Material=Enum.Material.SmoothPlastic
+ return part
+end
+return C
+
+end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
  AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+O.BREAK_DELAY=.11
+O.REWARD_DELAY=.135
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -2286,8 +2358,27 @@ end
 -- A clear rise, apex and fall before the item can be collected.
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
- local speed=block and 5.3 or 5.6+(serial%3)*.35
+ local speed=block and 5.3 or 7.3+(serial%3)*.35
  return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
+end
+-- One analytic flight and one short skid. Server and observer sample the same
+-- curve, so neither a packet boundary nor a bounce can change the resting pose.
+function O.rawArc(x,y,z,vx,vy,vz,floor)
+ local contact=(vy+math.sqrt(vy*vy+2*O.GRAVITY*math.max(0,y-floor)))/O.GRAVITY
+ local decay=math.exp(-O.AIR_DRAG*contact)
+ local travel=(1-decay)/O.AIR_DRAG
+ return {x=x,y=y,z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,skid=.24,
+  landX=x+vx*travel,landZ=z+vz*travel,landVX=vx*decay*.62,landVZ=vz*decay*.62,speed=O.GRAVITY*contact-vy}
+end
+function O.rawPose(a,age)
+ age=math.max(0,age)
+ if age<a.contact then
+  local decay=math.exp(-O.AIR_DRAG*age);local travel=(1-decay)/O.AIR_DRAG
+  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GRAVITY*age,a.vz*decay
+ end
+ local left=1-math.clamp((age-a.contact)/a.skid,0,1)
+ local travel=a.skid/3*(1-left^3)
+ return a.landX+a.landVX*travel,a.floor,a.landZ+a.landVZ*travel,a.landVX*left^2,0,a.landVZ*left^2
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -2343,6 +2434,7 @@ function O.step(s,target,dt,attract,magnetRange)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
+  if s.arc then s.arcEnded=true end
   -- Accelerate into a critically damped homing path, fast enough to catch a
   -- walking player. No orbiting an indefinitely moving pickup target.
   local speed=math.min(42,18+distance*1.6,math.sqrt(200*distance))
@@ -2350,6 +2442,11 @@ function O.step(s,target,dt,attract,magnetRange)
   s.vx+=(dx*scale-s.vx)*k;s.vy+=(dy*scale-s.vy)*k;s.vz+=(dz*scale-s.vz)*k
   s.x+=s.vx*dt;s.y+=s.vy*dt;s.z+=s.vz*dt
   if s.y<s.floor then s.y=s.floor;s.vy=math.max(0,s.vy) end
+ elseif s.arc and not s.arcEnded then
+  s.x,s.y,s.z,s.vx,s.vy,s.vz=O.rawPose(s.arc,s.age)
+  if s.age>=s.arc.contact and not s.landed then
+   s.landed=true;s.firstLandedAge=s.arc.contact;impactSpeed=s.arc.speed
+  end
  else
   impactSpeed=fall(s,dt)
  end
@@ -2459,7 +2556,7 @@ local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','H
 local oversizedStarterCount=1+#excessStarters+#Workshop.STARTER_SPECIALISTS
 local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[crystalStarterCount]=true,[oversizedStarterCount]=true}
 local types={'Blue','Red','Green'}
-local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local specialTypes={Ramiel=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
@@ -3054,13 +3151,30 @@ local function prestigeDrone(p,kind)
  return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
   or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
 end
+local function prestigeChoices(p)
+ local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index)
+ -- Keep the opening choices, then give each missing flagship a clear route
+ -- through the ordinary one-of-three permanent selection.
+ if p.run.index>1 then
+  local owned={}
+  for _,d in ipairs(p.fleet) do owned[d.role]=true end
+  local first=p.run.index%2==0 and 'Ramiel' or 'Orbiter'
+  local second=first=='Ramiel' and 'Orbiter' or 'Ramiel'
+  local kind=not owned[first] and first or not owned[second] and second
+  if kind then
+   choices[3]={kind=kind,name=DroneCatalog.Types[kind].Name,tier=4,job=kind=='Ramiel'
+    and 'Unfolds a glass prism for huge mining pulses' or 'Sky laser melts the largest crystal and strikes a neighbor'}
+  end
+ end
+ return choices
+end
 function P.prestigePreview(p)
  local m=P.milestone(p);local earned=p.run.quartzEarnings
  local eligible=earned>=m.earnings and p.run.pendingOffer==nil
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the Prestige beacon')
  return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and DroneCatalog.prestigeChoices(p.seed,p.run.index) or nil}
+  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and prestigeChoices(p) or nil}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -4035,10 +4149,10 @@ DroneConfig.Types = {
 		Weight = 2,
 	},
 	Orbiter = {
-		DisplayName = "Orbiter",
-		Description = "Orbital controller. Charges and calls a real strike on the biggest rock, then cools down. Does not mine normally.",
-		Color = Color3.fromRGB(221, 165, 78),
-		Accent = Color3.fromRGB(245, 223, 162),
+		DisplayName = "Orbital",
+		Description = "Charges a sky laser that melts the biggest available crystal and damages a second nearby rock.",
+		Color = Color3.fromRGB(172, 115, 231),
+		Accent = Color3.fromRGB(228, 207, 255),
 		Scale = 0.84,
 		MaxHealth = 80,
 		Speed = 22,
@@ -4086,6 +4200,7 @@ for _,name in ipairs(specialOrder) do
  table.insert(DroneConfig.TypeOrder,name)
 end
 local fieldTestRoles={
+ Ramiel={label='Ramiel',color=Color3.fromRGB(93,203,255),detail='Unfolds a glass aperture and delivers a heavy prism lance.'},
  Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
@@ -4120,6 +4235,68 @@ DroneConfig.PressSockets = {Vector3.new(0,-1.05,.96),Vector3.new(-1.02,-1.05,.27
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
 -- This only builds the visible hull; flight, reach and articulation are unchanged.
+-- Eight triangular faces assemble into an octahedron, then pivot outward
+-- in paired steps to expose a bright center. Wedges give each face actual glass
+-- thickness and work without a streamed mesh or an editable mesh allocation.
+local function ramielWedges(a: Vector3,b: Vector3,c: Vector3,left: BasePart,right: BasePart)
+ local ab,ac,bc=b-a,c-a,c-b
+ if ab:Dot(ab)>ac:Dot(ac) and ab:Dot(ab)>bc:Dot(bc) then a,c=c,a
+ elseif ac:Dot(ac)>bc:Dot(bc) then a,b=b,a end
+ ab,ac,bc=b-a,c-a,c-b
+ local normal=ac:Cross(ab).Unit
+ local depth=bc.Unit
+ local up=bc:Cross(normal).Unit
+ local height=math.abs(ab:Dot(up));local thickness=.045
+ left.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ab:Dot(depth))))
+ left.CFrame=CFrame.fromMatrix((a+b)*.5,normal,up,depth)
+ right.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ac:Dot(depth))))
+ right.CFrame=CFrame.fromMatrix((a+c)*.5,-normal,up,-depth)
+end
+function DroneConfig.ramielRig(model: Model)
+ local folder=model:FindFirstChild('RamielGlass');if not folder then return nil end
+ local rig={faces={},core=folder:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
+ for i=1,8 do
+  local left=folder:FindFirstChild('Pane'..i..'A');local right=folder:FindFirstChild('Pane'..i..'B')
+  if left and left:IsA('BasePart') and right and right:IsA('BasePart') then rig.faces[i]={left,right} end
+ end
+ return rig
+end
+local function ramielEase(t: number): number
+ t=math.clamp(t,0,1);return t*t*(3-2*t)
+end
+function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,release: number,roll: number)
+ local frame=pivot*CFrame.Angles(0,roll,0)
+ if aim and (aim-pivot.Position).Magnitude>.01 then
+  local forward=(aim-pivot.Position).Unit
+  local up=math.abs(forward.Y)>.94 and Vector3.zAxis or Vector3.yAxis
+  local locked=CFrame.lookAt(pivot.Position,aim,up)*CFrame.Angles(0,0,math.pi*.25+roll*.24)
+  frame=frame:Lerp(locked,ramielEase(charge*4+release))
+ end
+ local radius=rig.scale*1.71
+ for i,panes in ipairs(rig.faces) do
+  local top=i<=4
+  local side=(i-1)%4
+  local angle=side*math.pi*.5
+  local a=Vector3.new(math.cos(angle),0,math.sin(angle))
+  local b=Vector3.new(math.cos(angle+math.pi*.5),0,math.sin(angle+math.pi*.5))
+  local y=top and 1 or -1
+  local diagonal=(a+b).Unit
+  local edge=(b-a).Unit
+  local phase=ramielEase((charge-(side%2)*.15-(top and .03 or .17))/.65)
+  local opened=math.max(phase,release*.95)
+  local hinge=(a+b)*.5
+  local petal=CFrame.fromAxisAngle(edge,-y*opened*1.06)
+  local point=hinge+petal:VectorToWorldSpace(Vector3.yAxis*y-hinge)
+  local shift=diagonal*.73*opened+Vector3.yAxis*y*.44*opened
+  local function world(v: Vector3): Vector3 return frame:PointToWorldSpace((v+shift)*radius) end
+  ramielWedges(world(point),world(a),world(b),panes[1],panes[2])
+ end
+ rig.core.CFrame=frame
+ rig.core.Size=Vector3.one*radius*(.36+.22*charge+.28*release)
+ rig.core.Transparency=.32-.21*math.max(charge,release)
+ rig.core.Color=Color3.fromRGB(93,212,255):Lerp(Color3.fromRGB(254,237,255),math.max(charge,release)*.83)
+end
+
 function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, readable: boolean?): (Model, BasePart?, BasePart?)
  local body=model.PrimaryPart or model:FindFirstChildWhichIsA('BasePart',true)
  local emitter: any=model:FindFirstChild('Emmiter',true)
@@ -4263,7 +4440,19 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   model:SetAttribute('RoleGeometry',role);return model,body,emitter and emitter:IsA('BasePart') and emitter or nil
  end
- if role=='Needler' then
+ if role=='Ramiel' then
+  local glass=Instance.new('Folder');glass.Name='RamielGlass';glass.Parent=model
+  for i=1,8 do
+   local tint=color:Lerp(i<=4 and Color3.fromRGB(179,235,255) or Color3.fromRGB(23,62,176),.30+((i-1)%4)*.085)
+   for _,suffix in ipairs({'A','B'}) do
+    local pane=hardware('Pane'..i..suffix,Vector3.one*.04,CFrame.new(),tint,Enum.Material.Glass,nil,nil,nil,true)
+    pane.Transparency=.27;pane.Reflectance=.12;pane.CastShadow=false;pane.Parent=glass
+   end
+  end
+  local core=hardware('Core',Vector3.one*.6,CFrame.new(),color,Enum.Material.Neon,Enum.PartType.Ball)
+  core.Parent=glass
+  DroneConfig.poseRamiel(DroneConfig.ramielRig(model),pose,nil,0,0,0)
+ elseif role=='Needler' then
   local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
   shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)
   for _,side in ipairs({-1,1}) do
@@ -7442,7 +7631,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
  local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
- local optional={Starforge=true,Frostbite=true,Resonator=true}
+ local optional={Starforge=true,Frostbite=true,Resonator=true,Ramiel=true}
  for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
  if scene.runStart and not starterOnly then table.insert(order,'Needler');table.insert(order,'Ballcaster') end
  for i,name in ipairs(order) do
@@ -7545,9 +7734,14 @@ scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=ho
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 if scene.runStart and scene.classicCrystal then
- -- Courier loads use the same original mesh as field ore, even while the
- -- source map model is outside a streaming client's view.
- local cargoShape=scene.classicCrystal:Clone()
+ scene.crystalCuts={}
+ -- Only three CSG operations per server; never perform one per node or hit.
+ for _,name in ipairs({'Needle','Crown','Gem'}) do
+  local shape=CrystalCuts.build(name)
+  if shape then scene.crystalCuts[name]=shape end
+ end
+ -- Couriers show the cut cargo even while the original field is streamed out.
+ local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
  cargoShape.Name='CargoCrystal';cargoShape.Parent=net
 end
@@ -7571,7 +7765,11 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
- local part=(template or original) and (template or original):Clone() or Instance.new('Part')
+ local variant=original and field.cfg.SelectionOnly and scene.crystalCuts and
+  (resourceSerial%5==2 and 'Needle' or resourceSerial%5==4 and 'Crown')
+ local cut=variant and scene.crystalCuts[variant]
+ local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
+ if cut then part:SetAttribute('CrystalCut',variant) end
  if part:IsA('Part') then
   part.Shape=Enum.PartType.Block
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
@@ -7899,27 +8097,34 @@ local pickups={}
 local pickupSerial=0
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
+ local launchAt=now+(drop.finishing and OreDrops.REWARD_DELAY or 0)
+ drop.launchAt=launchAt
+ if drop.oreArc and drop.raw and not drop.compacted then
+  template=scene.crystalCuts and scene.crystalCuts.Gem or template
+  drop.arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+ end
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.48,1.70,1.42)) or Vector3.new(.64,.74,.56)
+ chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.55,1.16,1.40)) or Vector3.new(.64,.74,.56)
  chip.Position=position;chip.Color=color
  if drop.raw then
   chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
-  chip.MaterialVariant='';chip.Reflectance=0;chip:SetAttribute('PhysicalCargo',true)
+  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or .10;chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
- chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
- chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',now)
+ chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('FadeAt',launchAt+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',launchAt+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
+ chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',launchAt)
  if drop.oreArc then
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
+  if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
- drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=now
+ drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=launchAt
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=false;drop.publishedFloor=drop.floor;drop.publishedFade=0
  pickups[pickupSerial]=drop
@@ -7945,6 +8150,9 @@ function scene.snapshotOrePickup(drop)
   part:SetAttribute('Velocity',velocity)
  end
  if homing~=drop.publishedHoming then part:SetAttribute('Homing',homing) end
+ if drop.arcEnded and not drop.publishedArcEnd then
+  drop.publishedArcEnd=true;part:SetAttribute('CargoArcEnded',true)
+ end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=homing;drop.publishedSocket=drop.pressSocket;drop.publishedFloor=drop.floor
  part:SetAttribute('SnapshotAt',now)
@@ -7973,10 +8181,11 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
   local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
   local out=Vector3.new(vx,0,vz).Unit
-  local position=r.part.Position+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42)
-   +Vector3.yAxis*(r.part.Size.Y*.28+.18)
+  -- The reward emerges from the split. Early extraction still clears a living rock.
+  local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
+  local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,oreArc=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
+   units=1,raw=true,oreArc=true,finishing=not extraction,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -8173,6 +8382,7 @@ local function pickupStep(dt)
  end
  if next(activePresses) then
   for id,drop in pairs(pickups) do
+  if now<(drop.launchAt or 0) then continue end
    local active=activePresses[drop.owner]
    local p=active and active.profile
    if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
@@ -8299,7 +8509,7 @@ local function pickupStep(dt)
     drop.firstImpactPublished=true
     drop.part:SetAttribute('GroundImpactAt',now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
-    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.floor,drop.z))
+    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
@@ -8495,7 +8705,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.heat=math.min(1,(r.heat or 0)+amount/math.max(1,r.maxHP-10)*rate)
   local heat=math.floor(r.heat*4+1e-6)
   local changed=heat~=(r.heatBand or 0)
-  if not broken and (changed or tool=='Melt' or tool=='JellyGrenade') then
+  if not broken and not (fractureContext and fractureContext.noScar) and (changed or tool=='Melt' or tool=='JellyGrenade') then
    local contact=fractureContext and fractureContext.point or abilityOrigin
    local point=contact and r.part.CFrame:PointToObjectSpace(contact)/r.part.Size or Vector3.zero
    local band=math.max(1,heat)
@@ -8549,7 +8759,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutProjectileFX',shotKind~=nil and job.projectile~=nil and job.projectile.Parent~=nil)
   r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
-  if broken then r.part:SetAttribute('CrystalBreakAt',now) end
+  if broken then
+   r.part:SetAttribute('CrystalBreakAt',now);r.part:SetAttribute('CrystalSplitAt',now+OreDrops.BREAK_DELAY)
+  end
  end
  if shotKind and hitSurface then
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
@@ -9112,6 +9324,7 @@ function scene.miningWarmup(d,r)
  -- Ignition upgrades still shorten it, with a small floor for readability.
  if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
+ if r and d.role=='Ramiel' then return .08 end
  if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
@@ -10210,11 +10423,12 @@ local function abilityContext(p,fieldId,operator,deployment)
   end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
   -- Gadgets survey the current health-scaled body and actual cut height.
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false))
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal))
   local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},
+  orbiter=not deployment and actor and actor.role=='Orbiter' and scene.runStart~=nil,
   placement=deployment and {x=origin.X,y=origin.Y,z=origin.Z},selectedId=deployment and deployment.targetId,perks=deployment and {scrapBots=2} or Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
@@ -10248,8 +10462,8 @@ local function abilityContext(p,fieldId,operator,deployment)
    local resource=resources[id]
    if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' or not targetRecord(resource) then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
-   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z)} or nil)
-   if accepted then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
+   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z),noScar=scene.runStart~=nil and actor.role=='Orbiter'} or nil)
+   if accepted and not scene.runStart then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
    if accepted and deployment and deployment.finishTemporary then
     deployment.finishTemporary(true);deployment.finishTemporary=nil
    end
@@ -10324,6 +10538,7 @@ do
  roleAbilityStep=function(d,p,hr,dt)
   d.mining=false
   local kind=DroneRoles.ability(d.role);local field=workingField(p,hr)
+  if scene.runStart and kind=='Orbital' and not p.miningSquare then followRole(d,p,hr,dt);return end
   if not field or field.junk then followRole(d,p,hr,dt);return end
   p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
   local ability=p.ability;local charge=ability.charge
@@ -10335,7 +10550,7 @@ do
   local context=abilityContext(p,field.id,d)
   if charge and charge.actorId==d.id then
    d.state=kind=='Orbital' and 'OrbitalCharge' or 'SwarmDeploy'
-   if now>=charge.started+1.4 then finishAbility(p,charge.token,context) end
+   if now>=charge.readyAt then finishAbility(p,charge.token,context) end
   elseif kind=='Orbital' and ability.burn and ability.burn.actorId==d.id then d.state='OrbitalBurn'
   elseif kind=='Scrap' and ability.swarm and ability.swarm.actorId==d.id then d.state='SwarmActive'
   elseif now<(ability.cooldowns[kind] or 0) then d.state=kind=='Orbital' and 'OrbitalCool' or 'SwarmCool'
@@ -10346,7 +10561,9 @@ do
    if not target and (d.surveyField~=field.id or now>=(d.nextSurveyAt or 0)) then
     d.surveyField=field.id;d.nextSurveyAt=now+C.Snapshot;d.surveyTargetId=nil
     local largest=-1
-    for _,node in ipairs(context.targets(field.id,'Orbital')) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
+    for _,node in ipairs(context.targets(field.id,'Orbital')) do
+     if node.maxHP>largest or node.maxHP==largest and node.id<target.id then target=resources[node.id];largest=node.maxHP end
+    end
     d.surveyTargetId=target and target.id or nil
    end
    if not target then target=d.surveyTargetId and resources[d.surveyTargetId] end
@@ -10357,6 +10574,10 @@ do
   -- Hardware performs the normal server gadget, sharing its saved cooldown and
   -- completing its charge automatically without a timing minigame.
   if not ability.charge and not (kind=='Orbital' and ability.burn) and not (kind=='Scrap' and ability.swarm) and now>=(ability.cooldowns[kind] or 0) and (d.pos-goal).Magnitude<1 then
+   if kind=='Orbital' then
+    if not d.surveyTargetId then return end
+    context.selectedId=d.surveyTargetId
+   end
    local ok=DroneAbilities.begin(ability,kind,now,context)
    if ok then ability.charge.actorId=d.id;ability.charge.automatic=true;p.publishDirty=true end
   end

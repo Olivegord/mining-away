@@ -106,7 +106,7 @@ function View.new(audio)
     local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
     local contactAt=node:GetAttribute('ContactAt')
     local landed=contactAt and now>=contactAt
-    if drone and not r.bound and age>=0 and progress<1 and not landed then
+    if drone and not r.bound and age>=0 and (progress<1 and not landed or node:GetAttribute('Shape')=='Prism' and age<windup+.35) then
      r.bound=true
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
@@ -116,9 +116,30 @@ function View.new(audio)
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    local ball=node:GetAttribute('Shape')=='Ball'
+    local shape=node:GetAttribute('Shape')
+    local ball=shape=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
+    if shape=='Prism' then
+     if landed and not r.impacted then
+      r.impacted=true
+      local point=node:GetAttribute('ContactPoint') or to
+      local origin=drone and drone.view:GetPivot().Position or from
+      local travel=point-origin
+      if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
+       RoleVisuals.setTime(contactAt)
+       local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
+       RoleVisuals.Beam(origin+travel.Unit*.28,point,color,reduced and .85 or 2.30,.33,'Lance')
+       if not reduced then
+        RoleVisuals.Beam(origin+travel.Unit*.32,point,Color3.fromRGB(225,240,255),.63,.21,'Lance')
+        burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
+         node:GetAttribute('ContactNormal') or -travel.Unit,color,true,true,1.35,now)
+       end
+       if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.25,pitch=.77}) end
+      end
+     end
+     continue
+    end
     local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
     if muzzle and ((muzzle-from).Magnitude>=2.5 or (to-muzzle).Magnitude<=1) then muzzle=nil end
     if ball and windup>0 and not r.loaded and age>=0 and progress<0 and not landed then

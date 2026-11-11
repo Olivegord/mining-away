@@ -1,5 +1,10 @@
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
+function V.releaseAt(source,breakAt)
+ return (source:GetAttribute('CrystalSplitAt') or breakAt)+PickupMotion.DELAY
+end
+local WARM=Color3.fromRGB(255,218,139)
+local HOT=Color3.fromRGB(255,249,216)
 local Players=game:GetService('Players')
 local GuiService=game:GetService('GuiService')
 function V.reducedMotion()
@@ -14,6 +19,9 @@ local function part(parent,class,name,color)
 end
 function V.new(parent,audio)
  local self={pieces={},tints={},parent=parent,audio=audio}
+ local function track(p,at,from,velocity,duration,ground,spin)
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin}
+ end
  function self:chips(at,point,normal,tint,count,large,scale,ground)
   if not BeamVFX.near(point,large and 92 or 60) then return end
   if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
@@ -30,18 +38,57 @@ function V.new(parent,audio)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   self.pieces[#self.pieces+1]={p=p,at=at,from=origin,v=direction*(large and 8 or 9)+Vector3.yAxis*(large and 4 or 2),
-    duration=large and .5 or .24,ground=ground or point.Y-4}
+   track(p,at,origin,direction*(large and 8 or 9)+Vector3.yAxis*(large and 4 or 2),
+    large and .5 or .24,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
   end
  end
  function self:step(now)
   for i=#self.pieces,1,-1 do
    local e=self.pieces[i];local t=now-e.at
    if t>=e.duration then e.p:Destroy();table.remove(self.pieces,i)
+   elseif e.burst then
+    local q=t/e.duration;local scale=1-(1-q)^3
+    e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)
+    e.p.Transparency=.15+.85*q^.64
    else
     local pos=e.from+e.v*t-Vector3.yAxis*(23*t*t)
-    e.p.CFrame=CFrame.new(pos.X,math.max(e.ground+e.p.Size.Y*.45,pos.Y),pos.Z)*CFrame.Angles(t*9+i,t*7,t*4)
+    local rx,ry,rz=t*9+e.spin.X,t*7+e.spin.Y,t*4+e.spin.Z
+    local size=e.p.Size
+    local rotation=CFrame.Angles(rx,ry,rz)
+    local support=PickupMotion.supportHeight(size.X,size.Y,size.Z,rx,ry,rz)
+    e.p.CFrame=CFrame.new(pos.X,math.max(e.ground+support-.06,pos.Y),pos.Z)*rotation
     e.p.Transparency=math.clamp((t/e.duration-.62)/.38,0,1)
+   end
+  end
+ end
+ local function split(self,r,now)
+  local v,s=r.view,r.source
+  local frame=r.restPose
+  local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
+  local strength=math.clamp(v.Size.Magnitude*.25,.96,2.10)
+  local point=Vector3.new(frame.Position.X,ground+math.max(.52,v.Size.Y*.34),frame.Position.Z)
+  local axis=frame.RightVector
+  local reduced=BeamVFX.reduced() or V.reducedMotion()
+  for _,side in ipairs({-1,1}) do
+   if #self.pieces>=46 then break end
+   local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .32 or .09))
+   wing.Size=Vector3.new(.72,1.43,1.04)*strength
+   local origin=point+axis*side*strength*.24
+   wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
+   track(wing,now,origin,axis*side*(4.6+strength)+Vector3.yAxis*(4.8+strength),.51,ground,Vector3.new(side*.7,side*.5,side*.2))
+  end
+  if not reduced then
+   if RoleVisuals then
+    local floor=Vector3.new(point.X,ground+.085,point.Z)
+    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.58),strength*.8,strength*4.4,.42)
+   end
+   self:chips(now,point,frame.LookVector,r.baseColor:Lerp(WARM,.30),4,false,nil,ground)
+   self:chips(now,point,-frame.LookVector,r.baseColor:Lerp(WARM,.12),3,false,nil,ground)
+   if #self.pieces<48 then
+    local spark=part(parent,'Part','CrystalSplitSpark',r.baseColor:Lerp(WARM,.77))
+    spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
+    spark.Size=Vector3.one*.10;spark.Position=point
+    self.pieces[#self.pieces+1]={p=spark,at=now,duration=.19,burst=true,size=strength}
    end
   end
  end
@@ -49,8 +96,14 @@ function V.new(parent,audio)
   r.cutUntil=now+.09
   r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
   r.cutPulseAt=now;self.tints[r]=true
+  local hp=r.source:GetAttribute('HP') or 10
+  local cap=math.max(1,(r.source:GetAttribute('MaxHP') or 10)-10)
+  if hp>0 then
+   local heat=1-math.clamp(((hp-10)/cap-.035)/.25,0,1)
+   r.pressure=heat*heat
+  end
  end
- function self:forget(r) self.tints[r]=nil end
+ function self:forget(r) self.tints[r]=nil;r.pressure=nil;r.finalLoad=nil end
  function self:applyTints(now)
   local player=Players.LocalPlayer
   local reduced=player and (player:GetAttribute('ReducedFlashing')==true or player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true)
@@ -64,9 +117,12 @@ function V.new(parent,audio)
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
     local pulse=(r.cutPulse or 0)*afterglow
     local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
-    view.Color=r.restColor:Lerp(Color3.new(1,1,1),white)
+    local pressure=(r.pressure or 0)*afterglow
+    local load=r.finalLoad or 0
+    local warm=math.max(pressure*(.21+.15*pulse),load*.76)
+    view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
     if initial<=0 then r.flashAt=nil end
-    if initial<=0 and afterglow<=0 then self:forget(r) end
+    if initial<=0 and afterglow<=0 and not r.finalLoad then self:forget(r) end
    end
   end
  end
@@ -108,32 +164,39 @@ function V.new(parent,audio)
    if not broken and now-cue.at<.10 then audio:play('crystal_chip',cue.point,{pitch=cue.pitch}) end
   end
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
-   if breakAt>now then return end
-   if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
-    r.splitDue=now+(V.reducedMotion() and 0 or .05)
-   end
-   if r.splitDue and now<r.splitDue then
-    v.Transparency=0
-   else
-    r.lastBreakAt=breakAt
-    if r.splitDue then
-     local frame=r.restPose
-     local ground=s:GetAttribute('GroundY') or frame.Position.Y-1
-     local point=Vector3.new(frame.Position.X,ground+math.max(.65,v.Size.Y*.42),frame.Position.Z)
-     for _,side in ipairs({-1,1}) do
-      local normal=frame.RightVector*side
-      self:chips(now,point+normal*v.Size.X*.22,normal,r.baseColor,2,true,math.clamp(v.Size.Y*.36,.65,1.6),ground)
+   local release=V.releaseAt(s,breakAt)
+   if not r.restPose then r.lastBreakAt=breakAt;return end
+   if now<release then
+    local nearby=BeamVFX.near(v.Position,92)
+    local load=math.clamp((now-breakAt)/math.max(.001,release-breakAt-.035),0,1)^2
+    if nearby and now>=breakAt then
+     r.finalLoad=load;self.tints[r]=true
+     if not r.finalCue and release-breakAt>.15 then
+      r.finalCue=true
+      if not s:GetAttribute('CutIsShot') and audio then
+       audio:play('crystal_snap',s:GetAttribute('CutContactPoint') or v.Position,{pitch=.83,level=.74})
+      end
+     end
+     if not BeamVFX.reduced() and not V.reducedMotion() then
+      r.breakSize=r.breakSize or v.Size
+      local squash=r.breakSize*Vector3.new(1+.10*load,1-.27*load,1+.10*load)
+      v.Size=squash;v.CFrame=r.restPose*CFrame.new(0,-(r.breakSize.Y-squash.Y)*.5,0)
      end
     end
-    r.splitDue=nil;v.Transparency=1;self:forget(r)
+   else
+    r.lastBreakAt=breakAt
+    if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
+    if now-release<.18 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now) end
+    v.Transparency=1;self:forget(r)
    end
+   return
   end
   if r.restPose and (r.kick or r.vibrating or (r.cutUntil or 0)>now) then
    local t=r.impactAt and now-r.impactAt or math.huge
    local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
    if t>=.14 then r.kick=nil end
    r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
-   local vibration=r.vibrating and math.sin(now*77)*.004 or 0
+   local vibration=r.vibrating and math.sin(now*51)*(.004+.009*(r.pressure or 0)) or 0
    local kick=not BeamVFX.reduced() and not V.reducedMotion() and r.kick or Vector3.zero
    local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
    v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose

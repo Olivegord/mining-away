@@ -24,17 +24,18 @@ local function removeTrail(self,r)
  r.ribbon=nil;self.trailCount-=1
 end
 local function idleGlow(view,tint)
- local halo=Instance.new('BillboardGui');halo.Name='OreBloom';halo.Adornee=view
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=62
- local function glow(name,scale,color)
-  local image=Instance.new('ImageLabel');image.Name=name;image.Size=UDim2.fromScale(scale,scale)
-  image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5)
-  image.BackgroundTransparency=1;image.Image='rbxasset://textures/glow.png'
-  image.ImageColor3=color;image.ImageTransparency=1;image.Parent=halo
-  return image
+ local halo=Instance.new('BillboardGui');halo.Name='FacetGleam';halo.Adornee=view
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=56
+ halo.Size=UDim2.fromScale(.67,.67);halo.StudsOffsetWorldSpace=Vector3.new(0,.44,0)
+ local function ray(width,height,rotation,color)
+  local frame=Instance.new('Frame');frame.BorderSizePixel=0
+  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5,.5)
+  frame.Size=UDim2.fromScale(width,height);frame.Rotation=rotation;frame.BackgroundColor3=color
+  frame.BackgroundTransparency=1;frame.Parent=halo
+  return frame
  end
- local outer=glow('OuterBloom',1,tint:Lerp(PICKUP_HIGHLIGHT,.23))
- local inner=glow('InnerBloom',.68,tint:Lerp(PICKUP_HIGHLIGHT,.62))
+ local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
+ local outer=ray(.13,.87,13,warm);local inner=ray(.63,.11,13,PICKUP_HIGHLIGHT)
  halo.Parent=view
  return {halo=halo,outer=outer,inner=inner}
 end
@@ -91,7 +92,7 @@ function V.new(root,parent,audio,reducedMotion)
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
-  source.LocalTransparencyModifier=1;view.Parent=parent
+  source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
@@ -100,11 +101,16 @@ function V.new(root,parent,audio,reducedMotion)
   local velocity=source:GetAttribute('OreLaunchVelocity')
   if typeof(origin)=='Vector3' and typeof(velocity)=='Vector3' and math.abs(velocity.X)+math.abs(velocity.Z)>.01 then
    r.hasArc=true
+   local floor=source:GetAttribute('FloorY')
+   if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
+    r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
+    r.landAge=r.arc.contact
+   end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
    r.arcTimeout=(velocity.Y+math.sqrt(velocity.Y^2+2*PickupMotion.GRAVITY*height))/PickupMotion.GRAVITY+.18
   end
   local contactAt=source:GetAttribute('GroundImpactAt')
-  if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
+  if not r.arc and type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -214,6 +220,7 @@ function V:update(dt,now)
    -- window, then fade in place for expiry/cleanup without inventing collection.
    opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
   end
+  if r.arc and displayAt<r.born then opacity=0 end
   if done then
    removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
@@ -222,12 +229,14 @@ function V:update(dt,now)
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
+   if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
    if live and r.hasArc and r.physical and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
     r.landCue=true
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
+    if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ);speed=r.arc.speed end
     if self.audio and age-r.landAge<.14 and typeof(point)=='Vector3' and speed>0 then
      self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
     end
@@ -237,28 +246,32 @@ function V:update(dt,now)
    local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
    local distanceFade=math.clamp((58-idleDistance)/10,0,1)
    local atRest=resting and not seated and (r.physical or r.hasArc)
-   local settle=atRest and math.clamp((age-r.landAge-PickupMotion.SETTLE_TIME)/.46,0,1) or 0
-   local idleStrength=settle*settle*(3-2*settle)*distanceFade
-   local bloomTarget=idleStrength*opacity
-   if bloomTarget>.01 and not reducedEffects and not r.idle and self.idleCount<16 then
+   -- A quiet gleam on the stone, with no bob or camera-facing depth offset.
+   local settledAge=age-(r.landAge or 0)
+   local gleam=settledAge<.38 and math.sin(math.pi*math.clamp(settledAge/.38,0,1))^2
+    or math.sin(math.pi*math.clamp(((settledAge+.42+r.seed*.61)%3.8)/.28,0,1))^2*.65
+   local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
+    and gleam*distanceFade*opacity or 0
+   if shine>.01 and not reducedEffects and not r.idle and self.idleCount<12 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
    end
    if r.idle then
-    local previous=r.idle.strength or 0
-    local strength=previous+(bloomTarget-previous)*(1-math.exp(-math.min(dt,.1)*13))
-    if reducedEffects or (bloomTarget<=.01 and strength<=.01) then
-     removeIdle(self,r)
-    elseif math.abs(strength-previous)>.0001 then
-     r.idle.strength=strength
-     r.idle.outer.ImageTransparency=1-.64*strength
-     r.idle.inner.ImageTransparency=1-.54*strength
+    if reducedEffects or not live or pulling or seated or distanceFade==0 then removeIdle(self,r)
+    else
+     r.idle.outer.BackgroundTransparency=1-.65*shine
+     r.idle.inner.BackgroundTransparency=1-.81*shine
     end
    end
+   local arcMix=r.arc and (not r.arcExit and 1 or 1-math.clamp((displayAt-r.arcExit)/.12,0,1)) or 0
    local newPose=not (resting and r.restSample==latest and r.restUnits==r.units)
    if newPose then
     if live then
      local x,y,z=PickupMotion.position(r.samples,now)
      if x then r.pos=Vector3.new(x,y,z) end
+     if arcMix>0 then
+      local ax,ay,az=OreDrops.rawPose(r.arc,age)
+      r.pos=r.pos:Lerp(Vector3.new(ax,ay,az),arcMix)
+     end
     end
     r.socketScale=(r.socketScale or 1)+(socketScale-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
     if math.abs(r.socketScale-socketScale)<.001 then r.socketScale=socketScale end
@@ -268,14 +281,25 @@ function V:update(dt,now)
     local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
     scale*=pile*(1+.14*r.pull)*r.socketScale
     glow=math.max(glow,.34*r.pull)
-    local tumble=PickupMotion.tumble(age,r.landAge)
-    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
+    local rx,ry,rz
+    if r.arc then
+     local turn=math.clamp(age/math.max(.01,r.arc.contact),0,1)
+     turn=turn*turn*(3-2*turn)
+     local remaining=reducedMotion and 0 or (1-turn)*2*math.pi
+     rx=.10+remaining;ry=(r.seed*.92)%6.283+(reducedMotion and 0 or .78*(1-turn));rz=-.08+.19*math.sin(turn*math.pi)
+    else
+     local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
+     rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
+    end
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-     -- Lift the trajectory by the rotated support extent so the rebound and
-     -- resting pose stay above the contact plane.
-     position=Vector3.new(position.X,math.max(latest.floor+support-.22,position.Y),position.Z)
+     local raised=math.max(latest.floor+support-.22,position.Y)
+     if r.arc and arcMix>0 then
+      local t=math.clamp((age/r.arc.contact-.65)/.35,0,1)
+      raised=raised+(position.Y+(support-.22)*t*t*(3-2*t)-raised)*arcMix
+     end
+     position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
@@ -283,42 +307,15 @@ function V:update(dt,now)
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
    end
-   local lift=0
-   if not reducedMotion and not r.collectAt and live then
-    local height=r.physical and .27 or .14
-    local target=idleStrength*height*(1+.48*math.sin(age*2.25+r.seed*1.51))
-    local previous=r.lift or 0
-    lift=previous+(target-previous)*(1-math.exp(-math.min(dt,.1)*11))
-    if lift<.001 then lift=0 end
-   end
-   if newPose or lift~=r.lift then
-    r.lift=lift
-    local pose=CFrame.new(Vector3.yAxis*lift)*r.motionPose
-    r.drawPosition=pose.Position;r.view.CFrame=pose
-   end
-   if r.idle and cameraPosition then
-    local size=r.view.Size.Magnitude
-    if size~=r.idle.size then
-     local width=math.max(1.8,size*1.45)
-     r.idle.halo.Size=UDim2.fromScale(width,width);r.idle.size=size
-    end
-    local away=r.drawPosition-cameraPosition
-    if away.Magnitude>.001 then
-     local behind=away.Unit*(size*.5+.28)
-     -- Preserve occlusion by the ore without burying the glow in the floor.
-     local floor=(latest.floor or r.pos.Y)-.14
-     behind=Vector3.new(behind.X,math.max(behind.Y,floor-r.drawPosition.Y),behind.Z)
-     if not r.idle.offset or (r.idle.offset-behind).Magnitude>.004 then
-      r.idle.offset=behind;r.idle.halo.StudsOffsetWorldSpace=behind
-     end
-    end
+   if newPose then
+    r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
-    local inFlight=air and live and not pulling
+    local inFlight=air and live and not pulling and displayAt>=r.born
     if r.ribbon then
      if not inFlight or reducedEffects then
       if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end

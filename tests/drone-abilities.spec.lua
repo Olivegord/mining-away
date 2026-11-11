@@ -68,6 +68,21 @@ test('four seconds of accepted orbital work melts one biggest rock',function()
  for _,hit in ipairs(h) do assert(hit.id=='big' and hit.damage<1 and hit.origin.y==34) end
  assert(s.cooldowns.Orbital==orbitalReady+45 and not A.begin(s,'Orbital',15,c))
 end)
+test('Orbital hardware charges then clears its fixed target and hits just one nearby rock',function()
+ local s,c,r,h=setup();c.orbiter=true
+ local token=begin(s,c);s.charge.actorId='orbiter:flagship'
+ local ready=10+A.ORBITER.chargeSeconds
+ assert(s.charge.readyAt==ready and not A.confirm(s,token,ready-.01,c))
+ A.step(s,ready,.01,c);assert(s.burn.actorId=='orbiter:flagship' and #h==1)
+ burn(s,c,ready,A.ORBITER.burnSeconds+.1)
+ local relays=0
+ for _,hit in ipairs(h) do
+  if hit.kind=='OrbitalRelay' then
+   relays+=1;assert(hit.id=='near' and hit.damage==r[3].maxHP*A.ORBITER.relay)
+  else assert(hit.id=='big') end
+ end
+ assert(r[1].hp==0 and relays==1 and not s.burn and s.cooldowns.Orbital==ready+A.ORBITER.cooldown)
+end)
 test('player timing no longer grants neighboring hits or bonus bots',function()
  for _,delay in ipairs({0,.4,.8}) do
   local time=orbitalReady+delay

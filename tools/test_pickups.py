@@ -15,7 +15,7 @@ for name in ('ore-drops', 'pickup-motion'):
 source = '\n'.join((
     (ROOT / 'tests/mock-roblox.lua').read_text(),
     (ROOT / 'tests/energy-effects.setup.lua').read_text(),
-    module_bundle(('AudioFeedback', 'PickupMotion', 'PickupView')),
+    module_bundle(('AudioFeedback', 'OreDrops', 'PickupMotion', 'PickupView')),
     (ROOT / 'tests/pickup-view.integration.lua').read_text(),
 ))
 with tempfile.TemporaryDirectory(prefix='physical-pickups-') as directory:

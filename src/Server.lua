@@ -304,7 +304,7 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  local fleet,counts={},{}
  local names={Striker='Miner',Courier='Emptier',Medic='Healer',Dart='Grower',Charger='Breaker',Orbiter='Orbital',Scrapper='Swarm'}
  local order={'Striker','Courier','Courier','Medic','Dart','Charger','Orbiter','Scrapper'}
- local optional={Starforge=true,Frostbite=true,Resonator=true}
+ local optional={Starforge=true,Frostbite=true,Resonator=true,Ramiel=true}
  for _,name in ipairs(DroneCatalog.Order) do if name~='Laser' and (not starterOnly or not optional[name]) then table.insert(order,name) end end
  if scene.runStart and not starterOnly then table.insert(order,'Needler');table.insert(order,'Ballcaster') end
  for i,name in ipairs(order) do
@@ -407,9 +407,14 @@ scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=ho
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 if scene.runStart and scene.classicCrystal then
- -- Courier loads use the same original mesh as field ore, even while the
- -- source map model is outside a streaming client's view.
- local cargoShape=scene.classicCrystal:Clone()
+ scene.crystalCuts={}
+ -- Only three CSG operations per server; never perform one per node or hit.
+ for _,name in ipairs({'Needle','Crown','Gem'}) do
+  local shape=CrystalCuts.build(name)
+  if shape then scene.crystalCuts[name]=shape end
+ end
+ -- Couriers show the cut cargo even while the original field is streamed out.
+ local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
  cargoShape.Name='CargoCrystal';cargoShape.Parent=net
 end
@@ -433,7 +438,11 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
- local part=(template or original) and (template or original):Clone() or Instance.new('Part')
+ local variant=original and field.cfg.SelectionOnly and scene.crystalCuts and
+  (resourceSerial%5==2 and 'Needle' or resourceSerial%5==4 and 'Crown')
+ local cut=variant and scene.crystalCuts[variant]
+ local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
+ if cut then part:SetAttribute('CrystalCut',variant) end
  if part:IsA('Part') then
   part.Shape=Enum.PartType.Block
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
@@ -761,27 +770,34 @@ local pickups={}
 local pickupSerial=0
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
+ local launchAt=now+(drop.finishing and OreDrops.REWARD_DELAY or 0)
+ drop.launchAt=launchAt
+ if drop.oreArc and drop.raw and not drop.compacted then
+  template=scene.crystalCuts and scene.crystalCuts.Gem or template
+  drop.arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+ end
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.48,1.70,1.42)) or Vector3.new(.64,.74,.56)
+ chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.55,1.16,1.40)) or Vector3.new(.64,.74,.56)
  chip.Position=position;chip.Color=color
  if drop.raw then
   chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
-  chip.MaterialVariant='';chip.Reflectance=0;chip:SetAttribute('PhysicalCargo',true)
+  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or .10;chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
- chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
- chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',now)
+ chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('FadeAt',launchAt+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',launchAt+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
+ chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',launchAt)
  if drop.oreArc then
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
+  if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
- drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=now
+ drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=launchAt
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=false;drop.publishedFloor=drop.floor;drop.publishedFade=0
  pickups[pickupSerial]=drop
@@ -807,6 +823,9 @@ function scene.snapshotOrePickup(drop)
   part:SetAttribute('Velocity',velocity)
  end
  if homing~=drop.publishedHoming then part:SetAttribute('Homing',homing) end
+ if drop.arcEnded and not drop.publishedArcEnd then
+  drop.publishedArcEnd=true;part:SetAttribute('CargoArcEnded',true)
+ end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=homing;drop.publishedSocket=drop.pressSocket;drop.publishedFloor=drop.floor
  part:SetAttribute('SnapshotAt',now)
@@ -835,10 +854,11 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local fieldTop=r.field.part.Position.Y+r.field.part.Size.Y*.5
   local vx,vy,vz=OreDrops.cargoLaunch(pickupSerial+1,false)
   local out=Vector3.new(vx,0,vz).Unit
-  local position=r.part.Position+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42)
-   +Vector3.yAxis*(r.part.Size.Y*.28+.18)
+  -- The reward emerges from the split. Early extraction still clears a living rock.
+  local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
+  local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,oreArc=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
+   units=1,raw=true,oreArc=true,finishing=not extraction,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -1035,6 +1055,7 @@ local function pickupStep(dt)
  end
  if next(activePresses) then
   for id,drop in pairs(pickups) do
+  if now<(drop.launchAt or 0) then continue end
    local active=activePresses[drop.owner]
    local p=active and active.profile
    if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
@@ -1161,7 +1182,7 @@ local function pickupStep(dt)
     drop.firstImpactPublished=true
     drop.part:SetAttribute('GroundImpactAt',now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
-    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.floor,drop.z))
+    drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
@@ -1357,7 +1378,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.heat=math.min(1,(r.heat or 0)+amount/math.max(1,r.maxHP-10)*rate)
   local heat=math.floor(r.heat*4+1e-6)
   local changed=heat~=(r.heatBand or 0)
-  if not broken and (changed or tool=='Melt' or tool=='JellyGrenade') then
+  if not broken and not (fractureContext and fractureContext.noScar) and (changed or tool=='Melt' or tool=='JellyGrenade') then
    local contact=fractureContext and fractureContext.point or abilityOrigin
    local point=contact and r.part.CFrame:PointToObjectSpace(contact)/r.part.Size or Vector3.zero
    local band=math.max(1,heat)
@@ -1411,7 +1432,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutProjectileFX',shotKind~=nil and job.projectile~=nil and job.projectile.Parent~=nil)
   r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
-  if broken then r.part:SetAttribute('CrystalBreakAt',now) end
+  if broken then
+   r.part:SetAttribute('CrystalBreakAt',now);r.part:SetAttribute('CrystalSplitAt',now+OreDrops.BREAK_DELAY)
+  end
  end
  if shotKind and hitSurface then
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
@@ -1974,6 +1997,7 @@ function scene.miningWarmup(d,r)
  -- Ignition upgrades still shorten it, with a small floor for readability.
  if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
+ if r and d.role=='Ramiel' then return .08 end
  if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
@@ -3072,11 +3096,12 @@ local function abilityContext(p,fieldId,operator,deployment)
   end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
   -- Gadgets survey the current health-scaled body and actual cut height.
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false))
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal))
   local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end
  return {runId=data(p).run.id,fieldId=fieldId,origin={x=origin.X,y=origin.Y,z=origin.Z},
+  orbiter=not deployment and actor and actor.role=='Orbiter' and scene.runStart~=nil,
   placement=deployment and {x=origin.X,y=origin.Y,z=origin.Z},selectedId=deployment and deployment.targetId,perks=deployment and {scrapBots=2} or Ca.abilityPerks(data(p)),unlocked=unlocked,
   valid=function(id) return actor~=nil and actor.hp>0 and actor.owner==p.player.UserId and valid(id) end,
   full=function() return false end,
@@ -3110,8 +3135,8 @@ local function abilityContext(p,fieldId,operator,deployment)
    local resource=resources[id]
    if not resource or not actor or actor.hp<=0 or not valid(resource.field.id) or type(from)~='table' or not targetRecord(resource) then return false end
    if not R.finite(from.x) or not R.finite(from.y) or not R.finite(from.z) then return false end
-   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z)} or nil)
-   if accepted then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
+   local accepted=hitResource(actor,resource,math.min(damage,resource.maxHP+10),false,nil,Vector3.new(from.x,from.y,from.z),deployment and 'Consumable' or nil,_kind=='Orbital' and {toolKind='Melt',point=Vector3.new(from.x,resource.part.Position.Y,from.z),noScar=scene.runStart~=nil and actor.role=='Orbiter'} or nil)
+   if accepted and not scene.runStart then scene.hazards:beam(Vector3.new(from.x,from.y,from.z),resource.part.Position,7,'laser') end
    if accepted and deployment and deployment.finishTemporary then
     deployment.finishTemporary(true);deployment.finishTemporary=nil
    end
@@ -3186,6 +3211,7 @@ do
  roleAbilityStep=function(d,p,hr,dt)
   d.mining=false
   local kind=DroneRoles.ability(d.role);local field=workingField(p,hr)
+  if scene.runStart and kind=='Orbital' and not p.miningSquare then followRole(d,p,hr,dt);return end
   if not field or field.junk then followRole(d,p,hr,dt);return end
   p.ability=p.ability or DroneAbilities.new(data(p).run.abilityCooldowns,data(p).run.id)
   local ability=p.ability;local charge=ability.charge
@@ -3197,7 +3223,7 @@ do
   local context=abilityContext(p,field.id,d)
   if charge and charge.actorId==d.id then
    d.state=kind=='Orbital' and 'OrbitalCharge' or 'SwarmDeploy'
-   if now>=charge.started+1.4 then finishAbility(p,charge.token,context) end
+   if now>=charge.readyAt then finishAbility(p,charge.token,context) end
   elseif kind=='Orbital' and ability.burn and ability.burn.actorId==d.id then d.state='OrbitalBurn'
   elseif kind=='Scrap' and ability.swarm and ability.swarm.actorId==d.id then d.state='SwarmActive'
   elseif now<(ability.cooldowns[kind] or 0) then d.state=kind=='Orbital' and 'OrbitalCool' or 'SwarmCool'
@@ -3208,7 +3234,9 @@ do
    if not target and (d.surveyField~=field.id or now>=(d.nextSurveyAt or 0)) then
     d.surveyField=field.id;d.nextSurveyAt=now+C.Snapshot;d.surveyTargetId=nil
     local largest=-1
-    for _,node in ipairs(context.targets(field.id,'Orbital')) do if node.maxHP>largest then target=resources[node.id];largest=node.maxHP end end
+    for _,node in ipairs(context.targets(field.id,'Orbital')) do
+     if node.maxHP>largest or node.maxHP==largest and node.id<target.id then target=resources[node.id];largest=node.maxHP end
+    end
     d.surveyTargetId=target and target.id or nil
    end
    if not target then target=d.surveyTargetId and resources[d.surveyTargetId] end
@@ -3219,6 +3247,10 @@ do
   -- Hardware performs the normal server gadget, sharing its saved cooldown and
   -- completing its charge automatically without a timing minigame.
   if not ability.charge and not (kind=='Orbital' and ability.burn) and not (kind=='Scrap' and ability.swarm) and now>=(ability.cooldowns[kind] or 0) and (d.pos-goal).Magnitude<1 then
+   if kind=='Orbital' then
+    if not d.surveyTargetId then return end
+    context.selectedId=d.surveyTargetId
+   end
    local ok=DroneAbilities.begin(ability,kind,now,context)
    if ok then ability.charge.actorId=d.id;ability.charge.automatic=true;p.publishDirty=true end
   end

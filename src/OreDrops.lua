@@ -2,6 +2,8 @@
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
  AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+O.BREAK_DELAY=.11
+O.REWARD_DELAY=.135
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -26,8 +28,27 @@ end
 -- A clear rise, apex and fall before the item can be collected.
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
- local speed=block and 5.3 or 5.6+(serial%3)*.35
+ local speed=block and 5.3 or 7.3+(serial%3)*.35
  return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
+end
+-- One analytic flight and one short skid. Server and observer sample the same
+-- curve, so neither a packet boundary nor a bounce can change the resting pose.
+function O.rawArc(x,y,z,vx,vy,vz,floor)
+ local contact=(vy+math.sqrt(vy*vy+2*O.GRAVITY*math.max(0,y-floor)))/O.GRAVITY
+ local decay=math.exp(-O.AIR_DRAG*contact)
+ local travel=(1-decay)/O.AIR_DRAG
+ return {x=x,y=y,z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,skid=.24,
+  landX=x+vx*travel,landZ=z+vz*travel,landVX=vx*decay*.62,landVZ=vz*decay*.62,speed=O.GRAVITY*contact-vy}
+end
+function O.rawPose(a,age)
+ age=math.max(0,age)
+ if age<a.contact then
+  local decay=math.exp(-O.AIR_DRAG*age);local travel=(1-decay)/O.AIR_DRAG
+  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GRAVITY*age,a.vz*decay
+ end
+ local left=1-math.clamp((age-a.contact)/a.skid,0,1)
+ local travel=a.skid/3*(1-left^3)
+ return a.landX+a.landVX*travel,a.floor,a.landZ+a.landVZ*travel,a.landVX*left^2,0,a.landVZ*left^2
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -83,6 +104,7 @@ function O.step(s,target,dt,attract,magnetRange)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
  if pulling then
+  if s.arc then s.arcEnded=true end
   -- Accelerate into a critically damped homing path, fast enough to catch a
   -- walking player. No orbiting an indefinitely moving pickup target.
   local speed=math.min(42,18+distance*1.6,math.sqrt(200*distance))
@@ -90,6 +112,11 @@ function O.step(s,target,dt,attract,magnetRange)
   s.vx+=(dx*scale-s.vx)*k;s.vy+=(dy*scale-s.vy)*k;s.vz+=(dz*scale-s.vz)*k
   s.x+=s.vx*dt;s.y+=s.vy*dt;s.z+=s.vz*dt
   if s.y<s.floor then s.y=s.floor;s.vy=math.max(0,s.vy) end
+ elseif s.arc and not s.arcEnded then
+  s.x,s.y,s.z,s.vx,s.vy,s.vz=O.rawPose(s.arc,s.age)
+  if s.age>=s.arc.contact and not s.landed then
+   s.landed=true;s.firstLandedAge=s.arc.contact;impactSpeed=s.arc.speed
+  end
  else
   impactSpeed=fall(s,dt)
  end

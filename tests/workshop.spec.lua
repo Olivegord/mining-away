@@ -419,6 +419,23 @@ test('pack Stars credit once, Star Shop survives reload, and prestige resets bot
  assert(prestige(p,'prestige-stars',p.run.id))
  eq(p.run.stars,0);eq(W.selectorWidth(p),30);eq(#p.fleet,4)
 end)
+test('flagship prestige choices unlock one drone and keep both on later runs',function()
+ local p=P.new(44)
+ p.run.quartzEarnings=P.milestone(p).earnings
+ assert(P.prestigePreview(p).droneChoices[3].kind~='Ramiel')
+ assert(prestige(p,'first-normal',p.run.id))
+ for i,kind in ipairs({'Ramiel','Orbiter'}) do
+  p.run.quartzEarnings=P.milestone(p).earnings
+  local offer=P.prestigePreview(p).droneChoices;eq(#offer,3);eq(offer[3].kind,kind)
+  eq(offer[3].tier,4)
+  assert(P.prestige(p,'flagship-'..i,p.run.id,{atDepot=true,confirmed=true,droneType=kind}))
+  p=assert(P.migrate(p,44));eq(p.fleet[#p.fleet].role,kind)
+ end
+ eq(p.fleet[#p.fleet-1].role,'Ramiel')
+ assert(Roles.isWorker('Ramiel') and Roles.ability('Orbiter')=='Orbital')
+ assert(DroneCatalog.cycle('Ramiel',30,30).damage>300)
+ eq(DroneCatalog.capDamage('Ramiel',110,400),68)
+end)
 test('pacing model quantifies first-level tradeoffs including selling travel',function()
  local p=P.new(44);local d=p.fleet[1]
  local function rate(profile)

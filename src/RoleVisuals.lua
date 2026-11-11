@@ -7,6 +7,7 @@ local Effects = {}
 local animations={}
 local beamTimelines={}
 local chargeTimelines={}
+local orbitalTimelines={}
 local pulseTimelines={}
 local pulseCount=0
 local eventAt=nil
@@ -41,11 +42,32 @@ function Effects.step(now)
   else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
  end
  for group,t in pairs(chargeTimelines) do
-  if not group.Parent then BeamVFX.destroy(t.rig);chargeTimelines[group]=nil
+  if not group.Parent then chargeTimelines[group]=nil
   else
-   local q=(now-t.at)/t.duration
-   if q>=0 and q<1 then BeamVFX.draw(t.rig,t.position,t.position-Vector3.yAxis,now,0,q,nil)
-   else BeamVFX.hide(t.rig,true) end
+   local q=math.clamp((now-t.at)/t.duration,0,1)
+   local lock=math.clamp((q-.72)/.28,0,1)
+   local reduced=BeamVFX.reduced() or now>=t.at+t.duration+.12
+   for i,value in ipairs(t.rings) do
+    local phase=math.clamp((q-(i-1)*.12)/.86,0,1)
+    local y=(1-phase)^2*(2.5+i*2.9)+.12*i
+    value.root.Position=t.floor+Vector3.yAxis*y
+    local opacity=not reduced and math.clamp(phase*5,0,1)*(.25+.65*lock) or 0
+    PlaneBurst.pose(value.plane,Vector3.yAxis,t.radius*(1.7-1.02*phase),opacity,.046+.032*lock)
+   end
+  end
+ end
+ for group,t in pairs(orbitalTimelines) do
+  if not group.Parent or group:GetAttribute('EndedAt') then orbitalTimelines[group]=nil
+  else
+   local age=math.max(0,now-t.at)
+   local reduced=BeamVFX.reduced()
+   local surge=reduced and 0 or (1-math.clamp(age/.23,0,1))^3
+   local rise=math.clamp(age/.045,0,1)
+   local settle=math.max(.14,rise)*(1+.70*surge)
+   for i,column in ipairs(t.columns) do
+    local width=t.widths[i]*settle
+    column.Size=Vector3.new(column.Size.X,width,width)
+   end
   end
  end
  for value,animation in pairs(animations) do
@@ -67,7 +89,9 @@ local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
 local SMOKE='rbxasset://textures/particles/smoke_main.dds'
 local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local ORBITAL_HEIGHT=260
-local ORBITAL_COLOR=Color3.new(1,1,1)
+local ORBITAL_COLOR=Color3.fromRGB(248,241,255)
+local ORBITAL_VIOLET=Color3.fromRGB(170,102,255)
+local ORBITAL_PINK=Color3.fromRGB(238,144,255)
 local ORBITAL_TAIL=4.4
 
 local function folder(): Folder
@@ -244,7 +268,7 @@ local function clearBurn(owner: any)
   if effect:IsA('ParticleEmitter') then effect.Enabled=false end
  end
  local core=old:FindFirstChild('MeltCore')
- if core and core:IsA('BasePart') then
+ if core and core:IsA('BasePart') and not BeamVFX.reduced() then
   -- A full volume leaves a continuous vertical trail, rather than twelve
   -- isolated pairs of dots. Its fixed carrier must not shrink with the laser.
   local trail=part()
@@ -262,7 +286,7 @@ local function clearBurn(owner: any)
    embers.Acceleration=Vector3.new(0,.08,0)
    embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.2,.3,.06),NumberSequenceKeypoint.new(1,0)})
    embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.55,.55),NumberSequenceKeypoint.new(1,1)})
-   embers.Parent=trail;embers:Emit(312)
+   embers.Parent=trail;embers:Emit(56)
   end
  end
  for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalResidualColumn' then
@@ -295,7 +319,7 @@ local function targetSight(owner: any,target: any,duration: number?)
  local seconds=duration or 2.4
  local radius=math.clamp((target.radius or 1)*1.5,1.65,12)
  local floor=Vector3.new(target.x,(target.ground or target.y)+.065,target.z)
- local red=Color3.fromRGB(255,40,48)
+ local red=Color3.fromRGB(255,106,154)
  value.Name='ThinRedSight';value.Shape=Enum.PartType.Cylinder;value.Color=red;value.Transparency=.28
  value.Size=Vector3.new(ORBITAL_HEIGHT,.052,.052)
  value.CFrame=CFrame.new(floor+Vector3.yAxis*(ORBITAL_HEIGHT*.5))*CFrame.Angles(0,0,math.pi/2)
@@ -306,12 +330,13 @@ local function targetSight(owner: any,target: any,duration: number?)
   pulseCount+=1
   pulseTimelines[cue]={at=clock(),duration=seconds,first=radius*2.85,last=radius*2,plane=PlaneBurst.create(cue,red),sight=true}
  end
- local rig=BeamVFX.new(group,'Orbital',Color3.fromRGB(172,113,255))
- if rig then
-  local camera=workspace.CurrentCamera
-  local height=math.max(260,(camera and camera.CFrame.Position.Y or target.y)-target.y+180)
-  chargeTimelines[group]={rig=rig,at=clock(),duration=seconds,position=floor+Vector3.yAxis*height}
+ local rings={}
+ for i=1,3 do
+  local mark=Instance.new('Part');mark.Name='ConvergingLock';mark.Anchored=true;mark.CanCollide=false;mark.CanTouch=false;mark.CanQuery=false
+  mark.Size=Vector3.one*.025;mark.Transparency=1;mark.CastShadow=false;mark.Position=floor;mark.Parent=group
+  rings[i]={root=mark,plane=PlaneBurst.create(mark,i==3 and ORBITAL_COLOR or ORBITAL_VIOLET)}
  end
+ chargeTimelines[group]={at=clock(),duration=seconds,floor=floor,radius=radius,rings=rings}
  animate(value,seconds,Enum.EasingStyle.Sine,Enum.EasingDirection.In,{Transparency=.06})
  Debris:AddItem(group,seconds+1.15)
 end
@@ -326,27 +351,33 @@ local function sustainedStrike(owner: any,event: any)
   local floor=Vector3.new(event.target.x,(event.target.ground or event.target.y)+.045,event.target.z)
   local age=workspace:GetServerTimeNow()-(event.startedAt or clock())
   if age<.32 then
-   Effects.Pulse(floor,Color3.fromRGB(202,168,255),radius*1.25,radius*4.8,.88)
-   Effects.Pulse(location(event.target),ORBITAL_COLOR,radius*.45,radius*2.7,.52)
+   Effects.Pulse(floor,ORBITAL_VIOLET,radius*.9,radius*5.2,.72)
+   Effects.Pulse(floor+Vector3.yAxis*.18,ORBITAL_PINK,radius*.6,radius*3.6,.47)
+   Effects.Pulse(location(event.target),ORBITAL_COLOR,radius*.28,radius*2.2,.29)
   end
   local scale=math.clamp(.75+radius*.2,1,1.85)
-  for index,width in ipairs({.78*scale,.18*scale}) do
+  local reduced=BeamVFX.reduced()
+  local columns,widths={},reduced and {.56*scale,.20*scale} or {2.1*scale,.89*scale,.27*scale}
+  for index,width in ipairs(widths) do
    local value=part();if not value then break end
-   value.Name=index==1 and 'MeltHalo' or 'MeltCore';value.Shape=Enum.PartType.Cylinder
-   value.Color=index==1 and Color3.fromRGB(155,94,245) or ORBITAL_COLOR
-   value.Transparency=index==1 and .88 or .17;value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group
+   local core=index==#widths
+   value.Name=core and 'MeltCore' or index==1 and 'MeltHalo' or 'MeltSheath';value.Shape=Enum.PartType.Cylinder
+   value.Color=core and ORBITAL_COLOR or index==1 and ORBITAL_VIOLET or ORBITAL_PINK
+   value.Transparency=core and .10 or index==1 and .86 or .59
+   value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group;columns[index]=value
    value:SetAttribute('BurnTransparency',value.Transparency)
-   if index==2 then
+   if core and not reduced then
     local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
     energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=1.25
-    energy.Rate=10;energy.Lifetime=NumberRange.new(2,3.5);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
+    energy.Rate=12;energy.Lifetime=NumberRange.new(.7,1.8);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
     energy.Shape=Enum.ParticleEmitterShape.Cylinder;energy.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume;energy.EmissionDirection=Enum.NormalId.Right
     energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(0,-.1,0);energy.WindAffectsDrag=false
     energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.32,.06),NumberSequenceKeypoint.new(1,0)})
     energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.5,.6),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
    end
   end
-  local contact=part()
+  orbitalTimelines[group]={at=event.startedAt or clock(),columns=columns,widths=widths}
+  local contact=not reduced and part() or nil
   if contact then
    contact.Name='MeltContact';contact.Shape=Enum.PartType.Ball;contact.Color=ORBITAL_COLOR
    contact.Transparency=.56;contact.Size=Vector3.one*(.55*scale);contact.Parent=group;contact:SetAttribute('BurnTransparency',.56)
@@ -362,7 +393,6 @@ local function sustainedStrike(owner: any,event: any)
   group.Parent=folder();watchBurn(owner,group)
  end
  local position=location(event.target)
- local ground=Vector3.new(position.X,(event.target.ground or position.Y)+.045,position.Z)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',clock())
  local fresh=workspace:GetServerTimeNow()-clock()<=.3
  local suspended=not fresh
@@ -371,7 +401,7 @@ local function sustainedStrike(owner: any,event: any)
   for _,v in ipairs(group:GetDescendants()) do if v:IsA('ParticleEmitter') then v.Enabled=fresh end end
  end
  for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(ground+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   value.CFrame=pose
   value.Transparency=not fresh and 1 or (value:GetAttribute('BurnTransparency') or value.Transparency)
  end end
@@ -410,8 +440,7 @@ end
 
 function Effects.destroy()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
- for _,t in pairs(chargeTimelines) do BeamVFX.destroy(t.rig) end
- table.clear(beamTimelines);table.clear(chargeTimelines)
+ table.clear(beamTimelines);table.clear(chargeTimelines);table.clear(orbitalTimelines)
  table.clear(animations)
  for root in pairs(pulseTimelines) do root:Destroy() end;table.clear(pulseTimelines);pulseCount=0;table.clear(markers);table.clear(burns);table.clear(swarms)
  eventAt=nil

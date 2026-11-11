@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e726fd322c2ea961b391c1aa90d45cff894d7d8f09d271726be2697157fbb0d0` | Includes the gun drone impact pass and cargo landing sound. |
+| Native-file SHA-256 | `a0c6733f7b157a1dcf5e54f9aae529f0e9d365e57129ae968d5ffa56d8876d3c` | Includes the charge, rock break, gem motion and flagship pass. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the gun drone impact pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 182. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the charge, rock break, gem motion and flagship pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 184. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give rock breaks a visible payoff
+
+Near-empty crystals warm under the beam. A final hit holds and compresses the silhouette before two faces split outward. A beveled gem follows the split by 25 ms, completes one arc and skid, and then sits still. Needle and Crown are genuinely different solids mixed with the original crystal. Four converging vanes give the ordinary laser an earlier visible charge and the hard color pop overlaps ignition. Ramiel hinges open sixteen blue glass panes around its core before firing a confirmed prism shot. Orbital warns with three converging ground marks and lands a white-violet column. Both are permanent prestige choices after the first prestige.
+
+The final single-client Studio Play used the normal Ruby selector and temporary Studio crew commands. The client saw 144 original, 48 Needle and 48 Crown crystals, observed the held compression and two split faces, and recorded one staged gem reveal, one landing and a steady resting pose. Ramiel and Orbital both delivered confirmed strikes. The client error log was empty. The targeted workshop, pickup, beam and contact-clock checks passed. The broader gadget suite stops at the previously documented client inertia fixture. Sound mix, multiplayer, device performance and owner judgment of the feel remain unverified. See [the research and playtest notes](review/CRYSTAL_RUN_PAYOFF.md).
+
+Studio was initially open and was left in Edit. All seven managed Source hashes and three Script Sync roots matched at place **124078027733625**, universe **10774898335**. Team Create save **184** succeeded; the player release was not published. Reproduce from `e229a60` by applying this revision's modular Source changes, running `python3 tools/script_sync.py`, and running `python3 tools/build.py --previous-commit e229a60` against that baseline's canonical file. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — give gun drones a distinct hit and cadence
 

@@ -10,6 +10,7 @@ local definitions={
  Dart={job='Rock grower',grower=true},
  Courier={job='Backpack emptier',courier=true},
  Medic={job='Healer',healer=true},
+ Ramiel={job='Prism lance',worker=true,special='Ramiel'},
  Orbiter={job='Orbital controller',ability='Orbital'},
  Scrapper={job='Swarm fabricator',ability='Scrap'},
  Bubbler={job='Bubble extractor',worker=true,combat=true,special='Bubbler'},

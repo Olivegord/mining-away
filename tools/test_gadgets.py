@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'resource-render': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('BeamVFX','Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'crystal-clock': mock + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + crystal_clock_setup +
-        module_bundle(('Feel', 'Feedback', 'CrystalImpactView', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
+        module_bundle(('Feel', 'Feedback', 'PickupMotion', 'CrystalImpactView', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
         '\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'swarm': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/swarm-motion.integration.lua').read_text(),

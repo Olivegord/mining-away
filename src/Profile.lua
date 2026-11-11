@@ -10,7 +10,7 @@ local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','H
 local oversizedStarterCount=1+#excessStarters+#Workshop.STARTER_SPECIALISTS
 local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[crystalStarterCount]=true,[oversizedStarterCount]=true}
 local types={'Blue','Red','Green'}
-local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local specialTypes={Ramiel=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
@@ -605,13 +605,30 @@ local function prestigeDrone(p,kind)
  return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
   or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
 end
+local function prestigeChoices(p)
+ local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index)
+ -- Keep the opening choices, then give each missing flagship a clear route
+ -- through the ordinary one-of-three permanent selection.
+ if p.run.index>1 then
+  local owned={}
+  for _,d in ipairs(p.fleet) do owned[d.role]=true end
+  local first=p.run.index%2==0 and 'Ramiel' or 'Orbiter'
+  local second=first=='Ramiel' and 'Orbiter' or 'Ramiel'
+  local kind=not owned[first] and first or not owned[second] and second
+  if kind then
+   choices[3]={kind=kind,name=DroneCatalog.Types[kind].Name,tier=4,job=kind=='Ramiel'
+    and 'Unfolds a glass prism for huge mining pulses' or 'Sky laser melts the largest crystal and strikes a neighbor'}
+  end
+ end
+ return choices
+end
 function P.prestigePreview(p)
  local m=P.milestone(p);local earned=p.run.quartzEarnings
  local eligible=earned>=m.earnings and p.run.pendingOffer==nil
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the Prestige beacon')
  return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and DroneCatalog.prestigeChoices(p.seed,p.run.index) or nil}
+  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and prestigeChoices(p) or nil}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)

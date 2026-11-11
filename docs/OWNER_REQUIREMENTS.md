@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 — make the break feel earned
+
+The rock should show pressure before it gives way. Make the split much more satisfying and make the dropped rock look valuable and stay still after landing. Try distinct crystal silhouettes in the existing mineral style. Research the charge and effects. Add a glass Ramiel drone with unfolding geometric motion and bring back Orbital with a stronger warning and strike. Preserve the curated starter fleet and keep these two as earned permanent options.
+
 ## November 10 follow-up — curated starter fleet and follow ring
 
 Start Crystal Run with the three basic laser miners, the simple dart and energy-ball gunners, Vacuum, Compactor and both Emptiers. The earlier all-role grant was too broad. Restore the idle follow ring and preserve earned drones and progress when correcting the oversized grant. The packing and hauling changes use visible input sockets and cargo mounts, preserve cargo value and handle partial loads.

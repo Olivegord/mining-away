@@ -103,7 +103,20 @@ check('physical launch trail fades on the displayed landing and never reappears 
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
  renderer:destroy();workspace.CurrentCamera=camera
 end)
-check('nearby ore bobs without spinning, caps bloom effects and shares one price label',function()
+check('a finishing gem stays hidden until its synchronized release',function()
+ local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
+ local born=realTime+.135
+ for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
+  FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
+ local renderer=PickupView.new(root,fx,audio)
+ local r=assert(renderer.records[cargo])
+ renderer:update(1/60,born+.099)
+ assert(r.view.Transparency==1 and not r.ribbon)
+ renderer:update(1/60,born+.101)
+ assert(r.view.Transparency==0)
+ renderer:destroy();cargo:Destroy()
+end)
+check('settled gems remain still as the camera moves and share one price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -112,7 +125,8 @@ check('nearby ore bobs without spinning, caps bloom effects and shares one price
   local drop=fixturePart(pile,'SettledCargo',Vector3.new(i*.75,.22,0),Vector3.new(1.48,1.70,1.42))
   for k,v in pairs({PickupId=10+i,Owner=i==1 and pl.UserId+1 or pl.UserId,PhysicalCargo=true,CargoValue=i,
    SpawnAt=realTime-4,SnapshotAt=realTime,GroundImpactAt=realTime-3,FadeAt=realTime+10,ExpiresAt=realTime+15,
-   FloorY=.22,Position=drop.Position,Velocity=Vector3.zero}) do drop:SetAttribute(k,v) end
+   FloorY=.22,Position=drop.Position,Velocity=Vector3.zero,
+   CleanCargoArc=true,OreLaunchOrigin=drop.Position-Vector3.xAxis*.6,OreLaunchVelocity=Vector3.new(2.3,25,0)}) do drop:SetAttribute(k,v) end
   sources[i]=drop
  end
  local reducedMotion=false
@@ -128,32 +142,25 @@ check('nearby ore bobs without spinning, caps bloom effects and shares one price
   local record=renderer.records[source]
   if record.idle then
    lit+=1
-   assert(record.idle.halo.Parent==record.view and record.idle.outer.ImageTransparency<1)
-   local offset=record.idle.halo.StudsOffsetWorldSpace
-   assert(offset:Dot(record.drawPosition-workspace.CurrentCamera.CFrame.Position)>0)
-   assert(record.drawPosition.Y+offset.Y>=.22-.14-1e-6,'the glow sank below the floor')
+   assert(record.idle.halo.Parent==record.view and record.idle.halo.StudsOffsetWorldSpace.Y==.44)
   end
-  assert(record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],'idle ore rotated or changed size')
-  if i<60 then
-   assert(record.view.Position.Y>poses[i].Position.Y and record.lift<.41,'nearby ore failed to bob gently')
-  elseif i>79 then
-   assert(record.view.CFrame==poses[i],'distant ore wrote a redundant pose')
-  end
+  assert(record.view.Position==poses[i].Position and record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],
+   'idle ore moved, rotated or changed size')
  end
- assert(lit==16 and renderer.idleCount==16)
+ assert(lit>0 and lit<=12 and renderer.idleCount==lit)
  local gui=renderer.valueGui
  assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
  assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')
  workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
  renderer:update(1/60,realTime+5)
- assert(renderer.valueGui==gui and gui.Adornee==renderer.records[sources[20]].view)
+ assert(renderer.valueGui==gui and math.abs(gui.Adornee.CFrame.Position.X-15)<.7)
  local first=renderer.records[sources[2]]
  sources[2]:SetAttribute('Units',4)
  renderer:update(1/60,realTime+6)
  assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
  reducedMotion=true
  renderer:update(1/60,realTime+6.1)
- assert(first.lift==0,'reduced motion still lifts the ore')
+ assert(first.view.Position.Y>0 and first.lift==nil,'reduced motion must not animate resting ore')
  local pose=first.view.CFrame
  renderer:update(1/60,realTime+13)
  assert(first.view.CFrame==pose and first.view.Transparency>0,'expiry did not fade a static pile in place')

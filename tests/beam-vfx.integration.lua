@@ -20,8 +20,9 @@ check('charge gathers compresses and changes silhouette before release',function
  assert(full>.99 and compressed<.4)
  local _,glint=BeamVFX.charge(1);near(glint,1)
  local r=BeamVFX.new(root,'Orbital',color)
+ BeamVFX.draw(r,from,to,9.7,0,.58,nil)
+ assert(r.rich and r.rich.core.Transparency<.85 and r.rich.collars[1].beam.Enabled and not r.core.Enabled)
  BeamVFX.draw(r,from,to,10,0,.965,nil)
- assert(r.rich and r.rich.core.Transparency<.85 and not r.core.Enabled)
  assert(not r.paths[1].beam.Enabled,'decorative orbit returned')
  local size=r.rich.glass.Size.X;BeamVFX.draw(r,from,to,10.1,0,.985,nil);assert(r.rich.glass.Size.X<size)
  BeamVFX.draw(r,from,to,10.2,1,nil,0)
@@ -115,7 +116,7 @@ check('repeated charges reuse detached rigs without keeping active leases or par
   if previous then assert(h==previous,'charge rebuilt instead of reusing') end
   previous=h
   BeamVFX.draw(r,from,to,70+i+.1,1,nil,0)
-  assert(r.rich==h and r.body.Enabled and h.mask.Enabled,'missing ignition overlap')
+  assert(r.rich==h and r.body.Enabled and h.glass.Transparency<1,'missing ignition overlap')
   BeamVFX.draw(r,from,to,70+i+.19,1,nil,.09)
   assert(r.rich==nil and h.root.Parent==nil and not h.sparks.Enabled and not h.vapor.Enabled)
   local _,_,active,cached=BeamVFX.counts();assert(active==0 and cached<=6)
@@ -150,17 +151,16 @@ check('charge lens follows emitter and overlaps ignition for only 80 millisecond
  local r=BeamVFX.new(root,'Cutter',color)
  local moving=Vector3.new(9,8,3)
  BeamVFX.draw(r,from,to,60,0,.3,nil)
- local h=assert(r.rich);assert(h.glass.Transparency==1 and not h.mask.Enabled,'lens appeared during early inflow')
+ local h=assert(r.rich);assert(h.glass.Transparency==1, 'lens appeared during early inflow')
  BeamVFX.draw(r,moving,to,60.1,0,.965,nil)
- near((h.glass.Position-moving).Magnitude,0);assert(h.mask.Parent==h.glass)
- assert(h.glass.Material==Enum.Material.Glass and not h.glass.CanQuery and h.glass.Transparency>1 and h.mask.Enabled)
- assert(h.mask.FillTransparency>1, 'color lens failed to appear')
+ near((h.glass.CFrame.Position-moving).Magnitude,0)
+ assert(h.glass.Material==Enum.Material.Neon and not h.glass.CanQuery and h.glass.Transparency>=0 and h.glass.Transparency<1)
  local expanded=h.glass.Size.X
  BeamVFX.draw(r,moving,to,60.15,0,.985,nil);assert(h.glass.Size.X<expanded)
  BeamVFX.draw(r,moving,to,60.2,0,.9999,nil)
- assert(h.mask.Enabled,'pop finished before ignition')
+ assert(h.glass.Transparency<1,'pop finished before ignition')
  BeamVFX.draw(r,moving,to,60.3,1,nil,0)
- assert(r.rich==h and h.mask.Enabled and r.body.Enabled,'pop and laser did not overlap')
+ assert(r.rich==h and h.glass.Transparency<1 and r.body.Enabled,'pop and laser did not overlap')
  for _,path in ipairs(h.paths) do assert(not path.beam.Enabled,'inflow survived ignition') end
  BeamVFX.draw(r,moving,to,60.39,1,nil,.09)
  assert(r.rich==nil and h.root.Parent==nil,'lens outlived its short ignition overlap')
@@ -194,7 +194,7 @@ check('original flash shape and duration with hard colors and overlapping igniti
   BeamVFX.draw(r,from,to,99,0,.999,nil,1,.8)
   if sample[1]<.9 then BeamVFX.draw(r,from,to,99,0,sample[1]+.1,nil,1,.8)
   else BeamVFX.draw(r,from,to,99,1,nil,(sample[1]-.9)*.8,1) end
-  local c=r.rich.mask.FillColor
+  local c=r.rich.glass.Color
   near(c.R,sample[2]);near(c.G,sample[3]);near(c.B,sample[4])
  end
  for _,duration in ipairs({.8,1.6,3.2}) do
@@ -204,14 +204,13 @@ check('original flash shape and duration with hard colors and overlapping igniti
    near(BeamVFX.flashProgress(q,duration),oldQ)
    BeamVFX.draw(r,from,to,100+q,0,q,nil,1,duration)
    local lens=BeamVFX.lensEnvelope(oldQ)
-   near(r.rich.glass.Size.X,.4*(.025+4.475*lens))
-   near(r.rich.glass.Transparency,lens>.002 and 1+2*lens or 1)
-   assert(r.rich.mask.FillTransparency<=2.200001,'revised high-contrast flash survived rollback')
+   assert(r.rich.glass.Size.X<=1.15 and r.rich.glass.Size.X>=.02)
+   assert((lens==0)==(r.rich.glass.Transparency==1) and r.rich.glass.Transparency>=0)
   end
  end
  local aftermath=assert(r.aftermath)
  BeamVFX.draw(r,from,to,101,1,nil,.04,1)
- assert(r.rich and r.rich.mask.Enabled and r.body.Enabled and r.body.Width0<.17)
+ assert(r.rich and r.rich.glass.Transparency<1 and r.body.Enabled and r.body.Width0<.17)
  for _,ray in ipairs(aftermath.plane.rays) do
   assert(ray.beam.Enabled and not ray.beam.FaceCamera)
   near(ray.a.Position.Y,0);near(ray.b.Position.Y,0)
@@ -234,7 +233,7 @@ check('launch keeps smoke and electrical fragments alive after lens and drone ri
  local f=assert(r.aftermath);local smoke=f.smoke[1].e;assert(smoke.Emitted>0)
  smoke.Cleared=false
  BeamVFX.draw(r,from,to,110.3,1,nil,0,1)
- assert(r.rich and r.rich.mask.Enabled and not r.aftermath and not smoke.Cleared)
+ assert(r.rich and r.rich.glass.Transparency<1 and not r.aftermath and not smoke.Cleared)
  assert(smoke.Acceleration.Magnitude>10,'existing smoke got no pressure impulse')
  local emitted=smoke.Emitted
  BeamVFX.destroy(r)
@@ -343,8 +342,10 @@ check('partial charge waits then uses its server duration and cancels cleanly',f
  view:step(200.7)
  local effect=assert(workspace:FindFirstChild('DroneRoleClientEffects'))
  local group=assert(effect:FindFirstChild('OrbitalTargetSight'))
- local rig=group:FindFirstChild('BeamVFX');assert(rig and rig.Position.Y>=260,'orbital charge was placed at its impact instead of sky source')
- view:step(201.6);assert(not group:FindFirstChild('ClearGlassDistortion',true),'expired charge kept its lens')
+ local mark=assert(group:FindFirstChild('ConvergingLock'))
+ local height=mark.Position.Y
+ assert(height>1 and height<12,'orbital charge cue is detached from its target')
+ view:step(201.6);assert(mark.Position.Y<height,'orbital markers did not converge')
  node:Destroy();view:step(201.61);assert(group.Parent==nil)
  view:destroy();state:Destroy();local a,b=BeamVFX.counts();assert(a==0 and b==0)
 end)

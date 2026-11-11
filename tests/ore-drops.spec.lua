@@ -44,6 +44,22 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
   end
  end
 end)
+check('raw gems land once and settle to the same pose at all step rates',function()
+ local a=O.rawArc(2,3,-4,7.2,30,-1.5,.2)
+ local x,y,z=O.rawPose(a,2)
+ for _,fps in ipairs({30,60,144}) do
+  local s={x=2,y=3,z=-4,vx=7.2,vy=30,vz=-1.5,age=0,floor=.2,raw=true,arc=a}
+  local hits=0
+  for _=1,fps*2 do
+   local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false)
+   if speed>0 then hits+=1;assert(speed==a.speed) end
+   assert(s.y>=s.floor)
+  end
+  assert(hits==1 and s.firstLandedAge==a.contact and s.x==x and s.y==y and s.z==z)
+  assert(s.vx==0 and s.vy==0 and s.vz==0)
+  assert(O.step(s,{x=x,y=1,z=z},1/fps,true) and s.arcEnded)
+ end
+end)
 check('magnet catches a player moving at walking speed at 30 60 and 144 FPS',function()
  for _,fps in ipairs({30,60,144}) do
   local s=drop(-2);s.landed=true;s.y=s.floor;s.age=1

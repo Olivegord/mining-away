@@ -40,12 +40,15 @@ crystalFrame(resources,102.06)
 assert(r.visual.stage==1 and #cues==1 and audio[6]=='crystal_chip','the retained contact did not crack once')
 
 shot(103.01,0,3)
-source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01)
+source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.12)
 crystalFrame(resources,103)
 assert(r.view.Transparency==0 and not r.visual.broken and #audio==6,'break hid before the shot landed')
 crystalFrame(resources,103.01)
-assert(r.view.Transparency==0 and r.splitDue and #audio==8,'finishing hit did not show its brief hold')
-crystalFrame(resources,103.07)
+assert(r.view.Transparency==0 and r.breakSize and #audio==8,'finishing hit did not show its brief hold')
+local height=r.view.Size.Y
+crystalFrame(resources,103.18)
+assert(r.view.Transparency==0 and r.view.Size.Y<height*.8 and not r.visual.broken,'final load must visibly compress before release')
+crystalFrame(resources,103.23)
 assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==8 and #cues==1,'split repeated the final-hit sound')
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}

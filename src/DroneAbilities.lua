@@ -3,6 +3,7 @@
 local A={}
 A.KINDS={Orbital={cooldown=45,burnSeconds=4,chargeSeconds=2.4},Scrap={cooldown=35}}
 A.CHARGE_SECONDS=1.4
+A.ORBITER={chargeSeconds=1.85,burnSeconds=1.25,cooldown=14,relay=.45}
 A.ORBITAL_ORIGIN_HEIGHT=34
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 local function point(p)
@@ -68,10 +69,11 @@ function A.begin(state,kind,now,ctx)
   end
  end
  state.sequence+=1
- local duration=A.KINDS[kind].chargeSeconds or A.CHARGE_SECONDS
+ local hardware=kind=='Orbital' and ctx.orbiter==true
+ local duration=hardware and A.ORBITER.chargeSeconds or A.KINDS[kind].chargeSeconds or A.CHARGE_SECONDS
  local expires=now+duration+1.1
  state.charge={kind=kind,fieldId=ctx.fieldId,targetId=chosen.id,target=point(chosen),
-  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+duration,expires=expires}
+  token=ctx.runId..':gadget:'..state.sequence,started=now,readyAt=now+duration,expires=expires,hardware=hardware}
  event(ctx,'charge',{ability=kind,target=chosen,expires=expires,duration=duration})
  return true,'Gadget charging'
 end
@@ -91,12 +93,13 @@ function A.confirm(state,token,now,ctx)
  state.charge=nil
  local perks=ctx.perks or {}
  local cooldown=A.KINDS[charge.kind].cooldown
- if charge.kind=='Orbital' and perks.orbitalCycle then cooldown=30 end
+ if charge.hardware then cooldown=A.ORBITER.cooldown
+ elseif charge.kind=='Orbital' and perks.orbitalCycle then cooldown=30 end
  state.cooldowns[charge.kind]=now+cooldown
  if charge.kind=='Orbital' then
-  local duration=A.KINDS.Orbital.burnSeconds
+  local duration=charge.hardware and A.ORBITER.burnSeconds or A.KINDS.Orbital.burnSeconds
   state.burn={fieldId=charge.fieldId,targetId=target.id,actorId=charge.actorId,started=now,
-   remaining=duration,dps=target.hp/duration,precise=precise,nextPose=0,accepted=false}
+   remaining=duration,dps=target.hp/duration,relay=charge.hardware and A.ORBITER.relay or precise and .26 or nil,precise=precise,nextPose=0,accepted=false}
   event(ctx,'clearCharge')
 
  else
@@ -148,10 +151,10 @@ function A.step(state,now,dt,ctx,swarmContext)
      event(ctx,'orbital',{target=target,remaining=burn.remaining,precise=burn.precise})
     end
     if broken or burn.remaining<=1e-7 then
-     if burn.precise then
+     if burn.relay then
       for _,r in ipairs(targets(ctx,burn.fieldId,'OrbitalRelay')) do
        if r.id~=target.id and distance(target,r)<=14 then
-        if ctx.hit(r.id,math.max(1,r.maxHP*.26),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
+        if ctx.hit(r.id,math.max(1,r.maxHP*burn.relay),'OrbitalRelay',{x=r.x,y=r.y+9,z=r.z}) then event(ctx,'relay',{from=target,target=r});break end
        end
       end
      end

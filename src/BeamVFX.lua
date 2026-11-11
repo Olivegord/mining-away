@@ -221,13 +221,9 @@ acquireRich=function(r)
   h.startup=StartupFX.create(folder,r.startupStyle,1)
   return
  end
- h.glass=visualPart(folder,'ClearGlassDistortion',Enum.Material.Glass,GLASS_COLOR,Enum.PartType.Ball)
- h.glass.Reflectance=0
- -- Glass + Highlight is a native renderer technique, verified in this Studio.
- -- Keep it local and optional: above-one transparency is engine-dependent.
- h.mask=Instance.new('Highlight');h.mask.Name='ChromaticDistortionMask'
- h.mask.DepthMode=Enum.HighlightDepthMode.Occluded;h.mask.OutlineTransparency=.999
- h.mask.FillTransparency=1;h.mask.FillColor=Color3.fromRGB(255,255,0);h.mask.Enabled=false;h.mask.Parent=h.glass
+ h.glass=visualPart(folder,'ChromaticRelease',Enum.Material.Neon,GLASS_COLOR,Enum.PartType.Ball)
+ h.collars={}
+ for i=1,4 do h.collars[i]=richPath(r,'FocusVane'..i,CYAN,ARC) end
  h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.Neon,CYAN,Enum.PartType.Ball)
  for i=1,8 do
   h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
@@ -259,7 +255,8 @@ end
 hideRich=function(r)
  local h=r.rich;if not h then return end
  if h.startup then StartupFX.hide(h.startup);return end
- h.glass.Transparency=1;h.mask.Enabled=false;h.core.Transparency=1
+ h.glass.Transparency=1;h.core.Transparency=1
+ for _,vane in ipairs(h.collars) do vane.beam.Enabled=false end
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
  for _,p in ipairs(h.comets) do p.head.Transparency=1 end
@@ -285,17 +282,16 @@ function B.flashProgress(q,duration)
  duration=math.max(.01,duration or .8)
  return 1-(1-q)*duration/math.min(.8,duration)-.1
 end
-local function drawFlash(h,from,flashQ,s)
+local function drawFlash(h,from,direction,flashQ,s)
  local lens=B.lensEnvelope(flashQ)
- local radius=s*(.025+4.475*lens)
- h.glass.CFrame=CFrame.new(from);h.glass.Size=Vector3.one*radius*2
- h.mask.Enabled=lens>.002
- h.glass.Transparency=lens>.002 and (1+2*lens) or 1
- local colorPulse=smooth((flashQ-.70)/.045)*(1-smooth((flashQ-.975)/.025))
- local colorAt=clamp((flashQ-.73)/.24)*3
- local index=math.min(4,math.floor(colorAt)+1)
- h.mask.FillColor=LENS_COLORS[index]
- h.mask.FillTransparency=1+1.2*colorPulse
+ local radius=math.max(.01,s*(.025+2.8*lens))
+ h.glass.CFrame=CFrame.lookAt(from,from+direction)
+ h.glass.Size=Vector3.new(radius*2,radius*2,radius*.63)
+ local index=math.min(4,math.floor(clamp((flashQ-.73)/.24)*3)+1)
+ h.glass.Color=LENS_COLORS[index]
+ local player=Players.LocalPlayer
+ local reduced=player and player:GetAttribute('ReducedFlashing')==true
+ h.glass.Transparency=1-(reduced and .21 or .83)*lens
 end
 drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDuration)
  local h=r.rich;if not h then return end
@@ -314,7 +310,8 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  local flashQ=B.flashProgress(q,chargeDuration)
  h.flashDuration=math.min(.8,math.max(.01,chargeDuration or .8))
  if h.tint~=r.color then
-  h.tint=r.color;h.glass.Color=GLASS_COLOR
+  h.tint=r.color
+  for _,vane in ipairs(h.collars) do vane.beam.Color=ColorSequence.new(r.color:Lerp(WHITE,.55)) end
   h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
   for i,item in ipairs(h.comets) do
    local color=r.color:Lerp(WHITE,i%2==0 and .64 or .26)
@@ -323,14 +320,29 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  end
  local delta=to-from
  LaunchAftermath.charge(r,from,delta.Unit,now,q,scale)
- local alive=smooth(q/.1)*(1-smooth((q-.94)/.06))
+ local alive=smooth(q/.12)*(1-smooth((q-.82)/.18))
  -- The single surface goes clear -> chromatic -> clear, so nested Glass
  -- cannot hide the color layer. It stays exactly on the emitting attachment.
- drawFlash(h,from,flashQ,s)
+ local direction=delta.Unit
+ local across=direction:Cross(math.abs(direction.Y)>.94 and Vector3.zAxis or Vector3.yAxis).Unit
+ local upright=across:Cross(direction).Unit
+ -- Four narrow vanes close in the firing plane. Their radius and speed
+ -- communicate how close the charge is, even with several drones in view.
+ local lock=smooth((q-.12)/.73)
+ local vaneAlpha=smooth(q/.18)*(1-smooth((q-.78)/.19))
+ for i,vane in ipairs(h.collars) do
+  local angle=(i-1)*math.pi*.5+lock*.63
+  local radial=across*math.cos(angle)+upright*math.sin(angle)
+  local tangent=across*-math.sin(angle)+upright*math.cos(angle)
+  local center=radial*s*(3.7-2.86*lock)-direction*s*(.87-.87*lock)
+  local span=s*(1.06-.56*lock)
+  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.34*vaneAlpha)
+ end
+ drawFlash(h,from,direction,flashQ,s)
  local focus=smooth(q/.78)
- h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.24+.55*focus)
+ h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.26+1.05*focus)
  h.core.Color=r.color:Lerp(WHITE,.26+.63*focus)
- h.core.Transparency=1-alive*.88
+ h.core.Transparency=1-alive*.94
  h.particleSource.Position=toward*s*.8
  -- The video's streams are moving inward immediately. Their curvature is
  -- generated by attraction acting on momentum, not an orbit angle animation.
@@ -338,7 +350,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   local a,va,captured=PullMotion.sample(i,q)
   local b,vb=PullMotion.sample(i,math.max(0,q-.13))
   local visible=smooth(q/.035)*(1-smooth((q-captured+.035)/.035))
-  local head=a*s*3.05;local tail=b*s*3.05
+  local head=a*s*4.6;local tail=b*s*4.6
   local span=(tail-head).Magnitude
   if va.Magnitude>.01 and vb.Magnitude>.01 and span>.002 then
    curve(item.path,head,tail,-va.Unit,-vb.Unit,span*.27,(i%2==0 and .24 or .16)*s*visible)
@@ -414,7 +426,7 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
   if h and not h.startup and releaseAge and releaseAge>=0 and releaseAge<h.flashDuration*.1 then
    hideRich(r)
    local major=r.style=='Orbital' and 1 or r.style=='Singularity' and .34 or .2
-   drawFlash(h,from,.9+releaseAge/h.flashDuration,major*scale)
+   drawFlash(h,from,direction,.9+releaseAge/h.flashDuration,major*scale)
   else releaseRich(r) end
  end
  if r.rich and r.rich.startup then

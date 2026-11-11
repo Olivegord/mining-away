@@ -32,7 +32,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
  for source,name in pairs(roleAudio) do
   if not source.Parent or now>(source:GetAttribute('AudioUntil') or 0) then soundscape:stopLoop(source);roleAudio[source]=nil
   else
-   local progress=math.clamp((now-(source:GetAttribute('AudioAt') or now))/1.4,0,1)
+   local progress=math.clamp((now-(source:GetAttribute('AudioAt') or now))/math.max(.1,(source:GetAttribute('AudioUntil') or now)-(source:GetAttribute('AudioAt') or now)),0,1)
    soundscape:setLoop(source,name,source.Position,.65+.35*progress,.75+.55*progress)
   end
  end
@@ -78,7 +78,7 @@ local function roleImpact(source)
   for _,part in ipairs(source:GetDescendants()) do track(part) end
   record.connection=source.DescendantAdded:Connect(track)
   orbitalBurns[source]=record
-  if AudioFeedback.fresh(source:GetAttribute('ContactAt'),workspace:GetServerTimeNow(),.35) then soundscape:play('orbital',source:GetAttribute('Position')) end
+  if AudioFeedback.fresh(source:GetAttribute('StartedAt'),workspace:GetServerTimeNow(),.35) then soundscape:play('orbital',source:GetAttribute('Position')) end
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
   local now=workspace:GetServerTimeNow();local at=source:GetAttribute('ImpactAt') or 0
@@ -501,7 +501,7 @@ openFleet=function()
   if player:GetAttribute('MA_DevToolsEnabled')==true then
   local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
-  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Scrapper','+ Swarm'}}
+  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'}}
   local columns=width>=560 and 4 or 2;local gap=8;local cell=(width-gap*(columns-1))/columns
   for index,choice in ipairs(choices) do
    local b=button(body,UDim2.fromOffset(3+((index-1)%columns)*(cell+gap),157+math.floor((index-1)/columns)*46),UDim2.fromOffset(cell,38),choice[2],function()
@@ -875,7 +875,7 @@ local function registerDrone(source)
  local emitter=clone:FindFirstChild('Emmiter',true) or clone:FindFirstChild('MiningEmitter',true) or clone:FindFirstChild('Emitter',true)
  if not emitter or not emitter:IsA('BasePart') then clone:Destroy();pendingDroneSources[source]=true;return false end
  for _,part in ipairs(clone:GetDescendants()) do
-  if part:IsA('BasePart') then part.Reflectance=0 end
+  if part:IsA('BasePart') and role~='Ramiel' then part.Reflectance=0 end
  end
  local typeColor=colors[source:GetAttribute('Role')] or colors[source:GetAttribute('Type')]
  emitter.Color=typeColor or emitter.Color
@@ -901,10 +901,11 @@ local function registerDrone(source)
   if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
- face.Texture='rbxasset://textures/face.png';face.Parent=pivot
+ if role~='Ramiel' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
+ if source:GetAttribute('Role')=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone) end
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
  TacticalHUD.attachHealth(clone,source,typeColor or colors.Blue)
@@ -1028,7 +1029,7 @@ local function renderResource(r,now)
  if r.cutFeedback and not r.visual.broken then
   if broken then
    local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
-   if breakAt>now then r.dirty=true;return end
+   if breakAt>0 and CrystalImpactView.releaseAt(s,breakAt)>now then r.dirty=true;return end
   elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
    local contact=s:GetAttribute('CutContactAt') or 0
    if contact>now then r.dirty=true;return end
@@ -1088,7 +1089,7 @@ local function renderResource(r,now)
  end
  if not r.visual.broken then
   r.restPose=view.CFrame;r.restColor=view.Color
- elseif r.splitDue then view.Transparency=0 end
+ end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
   crystalAudio:playCrack(reference and (final-Vector3.yAxis*Feel.ReferenceCrystalPivot) or view.Position)
@@ -1189,6 +1190,26 @@ local function renderDrone(d,dt,now)
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
+ if d.ramiel and (BeamVFX.near(d.pos,120) or not d.ramielNeutral) then
+  local near=BeamVFX.near(d.pos,120)
+  d.ramielNeutral=not near
+  local shot=near and d.shotReceipt
+  local charge,release,aim=0,0,nil
+  local reduced=CrystalImpactView.reducedMotion()
+  if shot and shot.Parent and not motionPaused and (s:GetAttribute('HP') or 0)>0 then
+   local started=shot:GetAttribute('StartedAt') or now
+   local paused=shot:GetAttribute('PausedAt') or 0
+   local age=(paused>0 and math.min(now,paused) or now)-started
+   local windup=shot:GetAttribute('Windup') or .9
+   if age>=0 and age<windup+.52 then
+    aim=shot:GetAttribute('Position')
+    charge=age<windup and math.clamp(age/windup,0,1) or 0
+    release=age>=windup and 1-math.clamp((age-windup)/.52,0,1) or 0
+   end
+  end
+  if reduced then charge*=.42;release*=.42 end
+  DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,release,reduced and 0 or now*.38%6.283)
+ end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
   if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
@@ -1204,7 +1225,7 @@ local function renderDrone(d,dt,now)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
-  else part.Transparency=original end
+  elseif not d.ramiel or part~=d.ramiel.core then part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
@@ -1360,7 +1381,7 @@ connect(RunService.RenderStepped,function(dt)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then
+  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.vibrating or (r.cutUntil or 0)>now then
    rockDamage.feedback:react(r,now)
   end
  end

@@ -316,7 +316,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  beam.visibility=visible and 1 or 0
  beam.core.Transparency=1;beam.halo.Transparency=1
  local reference=sample.droneRole=='Striker' and sample.isMining
- local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster'
+ local projectile=sample.droneRole=='Needler' or sample.droneRole=='Ballcaster' or sample.droneRole=='Ramiel'
  local charging=sample.alive and sample.charging and not sample.paused and not projectile
  local ignition=predicted and deadline or sample.since or now
  local launchTail=visible and beam.vfx and not sample.paused and now-ignition<.18
