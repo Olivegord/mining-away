@@ -800,15 +800,15 @@ local function pendingOre(p)
  local count=0;for _ in pairs(nodes) do count+=1 end
  return units,count
 end
-local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolean?)
+local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
  local p=profiles[d.owner];if not healthy(p) or not playerCanMine(p,r.field) or r.kind=='Geode' then return end
  local profile=data(p);local material=r.field.cfg.Material or r.field.cfg.Key or r.field.cfg.Name
  if r.field.cfg.SelectionOnly and Workshop.CRYSTAL_BY_MATERIAL[material] then
   if r.cargoProduced then return end
   local early=d.stats.earlyDrop or 0
-  if extraction and (early<=0 or r.stage/r.stageCount<1-early or not DroneRoles.isMiner(d.role)) then return end
+  if extraction and (not DroneRoles.isWorker(d.role) or not Mining.looseSeamsReady(r.hp,r.maxHP,early)) then return end
   local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
-  local specialist=completedSpecial and DroneCatalog.Types[d.role]
+  local specialist=specialistCut and DroneCatalog.Types[d.role]
   local amount=r.ore*(specialist and specialist.Yield or 1)*d.stats.yieldMultiplier*tier.value+(profile.run.yieldRemainders[material] or 0)
   local value=math.max(1,math.floor(amount))
   profile.run.yieldRemainders[material]=math.max(0,amount-value)
@@ -825,7 +825,7 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
  local reachBonus=extraction and (d.stats.earlyDrop or 0)*56 or 0
  local base=math.max(0,target-(r.extractedOre or 0));if base==0 then return end
- local special=not extraction and completedSpecial and d.specialJob and d.specialJob.targetId==r.id and DroneCatalog.Types[d.role]
+ local special=not extraction and specialistCut and d.specialJob and d.specialJob.targetId==r.id and DroneCatalog.Types[d.role]
  -- Keep the existing whole-rock specialist bonus on the final collapse.
  -- Partial extraction advances one shared ledger, independent of worker.
  local bonus=special and r.ore*((special.Yield or 1)-1) or 0
@@ -1323,7 +1323,12 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
   if broken then r.part:SetAttribute('CrystalBreakAt',now) end
  end
- if not broken and r.kind~='Geode' and r.stage>previous then award(recipient,r,false,true) end
+ -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
+ local specialistCut=special==true or (assist and recipient~=d)
+ if not broken and r.kind~='Geode' and (r.stage>previous or (r.field.cfg.SelectionOnly and not r.cargoProduced
+  and Mining.looseSeamsReady(r.hp,r.maxHP,recipient.stats.earlyDrop))) then
+  award(recipient,r,specialistCut,true)
+ end
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
@@ -1343,7 +1348,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
    for _,child in ipairs(revealed) do child.consumableWorked=r.consumableWorked end
   else
-   award(recipient,r,special==true)
+   award(recipient,r,specialistCut)
    if (recipient.stats.oreDuplicator or 0)>0 and not abilityOrigin then
     RoleEffects.Pulse(r.part.Position,Color3.fromRGB(255,211,93),.45,3.5,.20)
    end
@@ -1426,7 +1431,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)
- local best,score,bestPriority=nil,math.huge,-1
+ local best,score,bestPriority=nil,math.huge,-math.huge
  local definition=DroneCatalog.Types[d.role]
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
@@ -1455,9 +1460,10 @@ local function chooseResource(d: any,field: any,square: any?)
      distance+(used>0 and 10000 or 0)
      else Mining.targetScore(d.owned.type,d.stats,r,distance,neighbors)
     -- A paired cut takes two lasers. An ordinary lead gets one assignment.
-    -- Otherwise resume this worker's interrupted cut before other unfinished cuts.
+    -- Resume ore-bearing work before dispatching an idle drone to clear an empty shell.
     local priority=0
-    if paired or square and square.leadId==r.id then priority=3
+    if square and r.cargoProduced then priority=-1
+    elseif paired or square and square.leadId==r.id then priority=3
     elseif square and r.lastPin==square and r.lastPinOwner==d.owner and r.hp<r.maxHP-10 then
      priority=(d.resumePin==square and d.resumeResourceId==r.id) and 2 or 1
     end

@@ -869,6 +869,10 @@ end
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
  return math.floor(ore*math.min(1,M.EXTRACTION_SHARE+(bonus or 0))*math.clamp(stage/math.max(1,count),0,1))
 end
+function M.looseSeamsReady(hp: number,maxHP: number,bonus: number?): boolean
+ local work=math.max(1,maxHP-10)
+ return bonus~=nil and bonus>0 and hp<=work*(bonus+1e-10)
+end
 function M.efficiency(kind: string,nodeKind: string): number
  return M.kind(kind)=='Red' and (nodeKind=='Geode' or nodeKind=='Core') and 1.5 or 1
 end

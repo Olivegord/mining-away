@@ -553,6 +553,83 @@ assert(relayed and not pickups[-1] and Pro.cargoUnits(data(testCrew))==2,string.
 assert(Pro.validate(data(testCrew),tester.UserId))
 print('PASS curated starter fleet, stable prestige ownership, projectile flight and vacuum relay')
 
+do
+ buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+ moveBuyer(scene.packStation.Position)
+ input('ChooseCard','loose-seams',{offerId=first.id,index=2})
+ local seams=data(buyer).run.cards[1]
+ assert(seams.cardId=='Q_EARLY_DROP' and seams.effects.earlyDrop==.25 and not data(buyer).run.pendingOffer)
+
+ local field=table.clone(f)
+ field.id=#patches+1;field.cfg=table.clone(f.cfg);field.cfg.Hardness=3;field.cfg.Material='RunRuby'
+ field.resources={};field.respawnQueue={};patches[field.id]=field
+ local halver=spawnDrone(testCrew,{id=tester.UserId..':fixture:halver',name='Halver',role='Halver',type='Halver',
+  base=Pro.clone(RoleConfig.StudioRoles.Halver.base)},#testCrew.drones+1)
+ local function removeRock(r)
+  resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,table.find(field.resources,r))
+ end
+ local function runCut(actor)
+  local r=makeResource(field,field.center,'Crystal',270,10,3,3);r.readyAt=now
+  assert(assignOre(testCrew,actor,r))
+  actor.pos=committedStation(actor,r);actor.velocity=Vector3.zero;actor.battery=actor.stats.batteryCapacity
+  local before,began=pickupSerial,now
+  local releasedAt,workLeft
+  for _=1,math.ceil(45/C.Tick) do
+   realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+   if pickupSerial>before and not releasedAt then releasedAt=now-began;workLeft=r.hp end
+   if r.paid then break end
+  end
+  assert(r.paid and pickupSerial==before+1 and releasedAt,'one cut must pay exactly one cargo item')
+  local drop=assert(pickups[pickupSerial]);assert(drop.nodeId==r.id and drop.units==1 and drop.raw)
+  local value=drop.value
+  drop.part:Destroy();pickups[pickupSerial]=nil;release(actor);removeRock(r)
+  return releasedAt,workLeft,value
+ end
+ local actors={starterActors.Needler,starterActors.Ballcaster,halver}
+ local ordinary={}
+ for i,actor in ipairs(actors) do
+  local elapsed,work,value=runCut(actor)
+  assert(work==0 and value==(actor==halver and 60 or 40))
+  ordinary[i]=elapsed
+ end
+ table.insert(data(testCrew).run.cards,Pro.clone(seams));refreshStats(testCrew)
+ for i,actor in ipairs(actors) do
+  local elapsed,work,value=runCut(actor)
+  assert(work>0 and work<=65+1e-7 and value==(actor==halver and 60 or 40),'Loose Seams lost early cargo or the specialist payout')
+  assert(elapsed<ordinary[i],'Loose Seams did not pay before the unmodified cut')
+  print(string.format('MODEL Loose Seams %s drops %d Quartz %.2fs before its ordinary finish',actor.role,value,ordinary[i]-elapsed))
+ end
+
+ local spent=makeResource(field,field.center,'Crystal',270,10,3,3)
+ local fresh=makeResource(field,field.center+Vector3.xAxis*8,'Crystal',270,10,3,3)
+ spent.readyAt=now;spent.hp=10;spent.stage=3;spent.cargoProduced=true;fresh.readyAt=now
+ local square={field=field,center=field.center,half=15}
+ spent.lastPin=square;spent.lastPinOwner=tester.UserId
+ local needler=starterActors.Needler
+ needler.pos=spent.position
+ assert(chooseResource(needler,field,square)==fresh,'idle miner chased an empty shell before an ore-bearing rock')
+ release(needler);removeRock(fresh)
+ assert(chooseResource(needler,field,square)==spent,'empty shell never gets cleared when it is the last job')
+ release(needler);removeRock(spent)
+
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2));refreshStats(testCrew)
+ local primary=makeResource(field,field.center,'Crystal',400,10,3,3)
+ local ally=makeResource(field,field.center+Vector3.xAxis*5,'Crystal',270,10,3,3)
+ primary.readyAt=now;ally.readyAt=now;ally.hp=100;ally.stage=2
+ local laser=testCrew.drones[1]
+ assert(assignOre(testCrew,halver,ally) and assignOre(testCrew,laser,primary))
+ laser.pos=committedStation(laser,primary)
+ local before=pickupSerial
+ assert(hitResource(laser,primary,120) and ally.cargoProduced and not ally.paid and halver.target==ally)
+ local assisted=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and assisted.nodeId==ally.id and assisted.value==60,'Aftershock stripped the allied specialist cargo bonus')
+ assisted.part:Destroy();pickups[before+1]=nil
+ release(laser);release(halver);halver.model:Destroy();drones[halver.id]=nil;table.remove(testCrew.drones)
+ removeRock(primary);removeRock(ally);patches[field.id]=nil
+ table.remove(data(testCrew).run.cards);table.remove(data(testCrew).run.cards);refreshStats(testCrew)
+ print('PASS Loose Seams applies to projectile and chunk jobs, keeps one cargo per rock and leaves empty shells as fallback work')
+end
+
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
 moveBuyer(scene.packStation.Position)
 input('ChooseCard','aftershock',{offerId=first.id,index=3})

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b617789866d73e32586053c7262cb2c60fde2f9d148dc814675123250edb6749` | Includes the depot route and local plot refill behavior. |
+| Native-file SHA-256 | `95297c0bc19cf927088ffbfc585e1f8e48be6af6b6e67672fb954ff6752c07b9` | Includes fleet-wide Loose Seams. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit keeps the pin along the depot route** | All seven Sources and three roots verified in Edit. Team Create save returned version 150. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has fleet-wide Loose Seams** | All seven Sources and three roots verified in Edit. Team Create save returned version 151. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — Loose Seams applies to the fleet
+
+Loose Seams releases the one physical cargo item when the crew has removed 75% of the mineable work with one stack, or 50% with two. The timing uses mineable work above the original crystal health floor, so the upgrade can trigger between discrete specialist cuts. A worker already on the crystal finishes the shell. Idle workers choose ore-bearing crystals first and clear shells when those are the only jobs left. A specialist keeps its cargo bonus if its cut or an allied Aftershock releases the ore. The original crystal models, cargo arc, sounds, and saved card definitions are preserved.
+
+The same Ruby work fixture on `e769d33` showed no Loose Seams timing change for Needler, Ballcaster or Halver. On this revision, they dropped cargo 2.55, 1.65 and 3.63 seconds earlier respectively. The fixture installed the saved first-pack choice, stepped real projectile and chunk cycles, verified one cargo item per crystal, and checked that an Aftershock assist kept Halver's 60 Quartz payout. Workshop, Crystal Run, pickup, audio and committed flight checks passed with Roblox API or storage doubles. Live feel and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **151**. No player release was published. To reproduce from `e769d33`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit e769d33`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — keep mining during the depot trip
 
