@@ -941,6 +941,10 @@ function scene.pressPair(candidates,previous)
  end
  return best
 end
+function scene.cargoInSquare(square,position)
+ local reach=square.half+8
+ return math.abs(position.X-square.center.X)<=reach and math.abs(position.Z-square.center.Z)<=reach
+end
 local function pickupStep(dt)
  scene.pressOutputs=scene.pressOutputs or {}
  for i=#scene.pressOutputs,1,-1 do
@@ -1008,7 +1012,7 @@ local function pickupStep(dt)
     if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
    end
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
-   if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
+   if not scene.cargoInSquare(square,position) then continue end
    local distance=((press.pressDock or press.pos)-position).Magnitude
    if active.groups then
     local group=active.groups[drop.tierMaterial]
@@ -1101,7 +1105,7 @@ local function pickupStep(dt)
    local square=p.miningSquare
    if not p.pinOreOutOfReach and square and drop.raw and drop.fieldPart==square.field.part
     and drop.landed and drop.age>=OreDrops.SCATTER_TIME and hasSpace and not canCollect and not assignedToPress and not vacuumApproaching
-    and math.abs(from.X-square.center.X)<=square.half+8 and math.abs(from.Z-square.center.Z)<=square.half+8 then
+    and scene.cargoInSquare(square,from) then
     p.pinOreOutOfReach=square
    end
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
@@ -2656,7 +2660,7 @@ local function serviceDeliveries(p: any)
     transact(p,'deliveryBegin:'..tx,function(copy)
      if not scene.emptierReady(p,copy) then return nil,'Courier is waiting for cargo' end
      local batch=scene.runStart and Workshop.emptierBatch(copy) or d.stats.courierCapacity or RoleConfig.Courier.BatchUnits
-     local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch);if ok then return result end;return nil,result
+     local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch,scene.runStart~=nil);if ok then return result end;return nil,result
     end,function(result)
      if Pro.cargoUnits(data(p))==0 then p.emptierBagSince=nil end
      local worker=drones[id]
@@ -3068,6 +3072,8 @@ function scene.canPairCut(p,r)
 end
 function scene.moveSquareWork(p,current,square)
  if not current or current.field~=square.field then return end
+ local press=p.compactor
+ if press and press.pressSquare==current and press.pressDock and scene.cargoInSquare(square,press.pressDock) then press.pressSquare=square end
  local function staysInSquare(r)
   return r and not r.paid and r.part.Parent
    and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)

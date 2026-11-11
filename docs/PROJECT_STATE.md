@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `500d69ffe3c1aeba30536ba3cfa9f5f3ae8f959295ff3a8bffacca95accd0430` | Includes the direct crystal order readout. |
+| Native-file SHA-256 | `42686b64422447fc95c7a56f32385f31dec93431b736dd3d2f879c4db3427d1d` | Includes the Compactor and Emptier cargo changes. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit confirms direct crystal orders** | All seven Sources and three roots verified in Edit. Team Create save returned version 154. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the Compactor and Emptier cargo changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 155. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — keep loaded cargo moving
+
+Crystal Run Emptiers load the highest-Quartz-value cargo first when a backpack holds more than one parcel. The same parcel selection applies to the milestone calculation. Existing manifests still sell their saved cargo exactly once. The Compactor keeps its loaded rocks through a pin adjustment while the dock remains in the same field and within the new pin's intake reach. Moving beyond that reach releases the rocks. The same cargo models, slots, sale values and batch timers apply.
+
+In the matched controller tests, a two-stud nudge on `cba0fac` released the two seated rocks and produced no block in the next 1.17 seconds. This revision kept both sockets occupied and produced the full 36-Quartz block in 0.83 seconds. A mixed backpack's first four-slot Emptier parcel rose from 120 to 440 Quartz and reached the prestige milestone on its first sale. Workshop, Crystal Run, persistence, pickup, audio and committed flight checks passed with Roblox API or storage doubles. The standalone legacy shops fixture still expects one starter on both revisions. Live pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **155**. No player release was published. To reproduce from `cba0fac`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit cba0fac`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — confirm the selected crystal
 

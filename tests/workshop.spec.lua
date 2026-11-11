@@ -38,7 +38,7 @@ test('milestone dispatch uses the actual manifest and counts only Quartz proceed
  local rock=W.cargoKey('Quartz',10)
  local block=W.cargoKey('RunRuby',55,true)
  p.run.cargo={Cobalt=1,[rock]=2}
- assert(not P.deliveryFundsMilestone(p,2) and P.deliveryFundsMilestone(p,3))
+ assert(not P.deliveryFundsMilestone(p,1) and P.deliveryFundsMilestone(p,2))
  p.run.cargo={[block]=1}
  assert(P.deliveryFundsMilestone(p,4))
  local id=W.emptierId(p.run.id,1)
@@ -68,6 +68,24 @@ test('milestone dispatch uses the actual manifest and counts only Quartz proceed
  assert(P.deliveryFundsMilestone(prestige,4))
  prestige.run.pendingOffer={}
  assert(not P.deliveryFundsMilestone(prestige,4),'a paid choice still needs to be picked')
+end)
+test('Crystal Run couriers pack the richest Quartz cargo before lower-value slots',function()
+ local p=P.new(44)
+ local ordinary=W.cargoKey('Quartz',10)
+ local rich=W.cargoKey('RunEmerald',300)
+ local block=W.cargoKey('RunCobalt',90,true)
+ local ruby=W.cargoKey('RunRuby',40)
+ p.run.wallet.Quartz=20;p.run.quartzEarnings=20
+ p.run.cargo={[ordinary]=6,[rich]=1,[block]=1,[ruby]=1}
+ local id=W.emptierId(p.run.id,1)
+ assert(P.deliveryFundsMilestone(p,4),'the proposed parcel missed a milestone it could fund')
+ local old=P.clone(p)
+ assert(P.beginDelivery(old,id,'legacy',p.run.id,4));eq(P.deliveryQuartz(old),120)
+ assert(P.beginDelivery(p,id,'crystal-run',p.run.id,4,true));eq(P.deliveryQuartz(p),440)
+ eq(P.cargoUnits(p),5);eq(p.run.cargo[ordinary],5)
+ assert(P.beginDelivery(p,id,'crystal-run',p.run.id,4,true));eq(P.deliveryQuartz(p),440)
+ assert(P.finishDelivery(p,id,{},'crystal-run',p.run.id));eq(p.run.quartzEarnings,460)
+ assert(P.prestigePreview(p).eligible and P.validate(p,44))
 end)
 test('shared pool allows more than three owned upgrades and stable repeated drafts across 150 seeds',function()
  for seed=1,150 do

@@ -705,6 +705,11 @@ for _=1,50 do
 end
 assert(raw[1].pressSocket==1 and raw[2].pressSocket==2 and not raw[3].pressSocket)
 assert(raw[1].x~=raw[2].x or raw[1].z~=raw[2].z,'press inputs overlapped')
+local beforeNudge=buyer.miningSquare
+input('PlaceSelector','nudge-press',{fieldId=f.id,position=f.center+Vector3.xAxis*2})
+pressTicks(1)
+assert(buyer.miningSquare~=beforeNudge and press.pressSquare==buyer.miningSquare and raw[1].pressSocket==1 and raw[2].pressSocket==2,
+ 'nudging the pin released the loaded press')
 pressTicks(70)
 local pressedOre=pickups[pickupSerial]
 assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
@@ -736,15 +741,33 @@ assert(dense.tierMaterial=='RunCobalt' and dense.compacted and dense.units==1 an
  'a partial timer fired before the five-rock batch finished')
 table.remove(data(buyer).run.cards);table.insert(data(buyer).run.cards,legacyPress);publish(buyer)
 
+do
+ local first,second=pressOre('RunRuby',38),pressOre('RunRuby',42)
+ for _=1,50 do pressTicks(1);if second.pressSocket then break end end
+ assert(first.pressSocket and second.pressSocket)
+ input('PlaceSelector','move-past-press',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
+ pressTicks(1)
+ assert(not press.pressSquare and not first.pressSocket and not second.pressSocket and first.part.Parent and second.part.Parent,
+  'a press outside the new pin kept the old batch docked')
+ for _,drop in ipairs({first,second}) do pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy() end
+ input('PlaceSelector','return-to-press-field',{fieldId=f.id,position=f.center})
+ print('PASS moving the pin keeps a nearby Compactor batch and releases an out-of-range one')
+end
+
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
 local emptier=buyer.drones[4]
 assert(emptier.role=='Courier')
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_SHIFT_RELAY,3));publish(buyer)
-data(buyer).run.cargo={RunRuby=Workshop.EMPTIER_BATCH}
+local rubyCargo=Workshop.cargoKey('RunRuby',40)
+local emeraldCargo=Workshop.cargoKey('RunEmerald',300)
+local pressedCargo=Workshop.cargoKey('RunCobalt',90,true)
+local quartzCargo=Workshop.cargoKey('Quartz',10)
+data(buyer).run.cargo={[rubyCargo]=1,[emeraldCargo]=1,[pressedCargo]=1,[quartzCargo]=6}
 local hr=characterRoot(buyer);emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
 droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
-assert(manifest.cargo.RunRuby==Workshop.EMPTIER_BATCH and Pro.cargoUnits(data(buyer))==0)
+assert(manifest.cargo[rubyCargo]==1 and manifest.cargo[emeraldCargo]==1 and manifest.cargo[pressedCargo]==1 and manifest.cargo[quartzCargo]==1)
+assert(Pro.cargoUnits(data(buyer))==5 and data(buyer).run.cargo[quartzCargo]==5)
 snapshotDrone(emptier)
 local counter=scene.packStation
 local landing=counter.CFrame:PointToObjectSpace(emptier.model:GetAttribute('SellPosition'))
@@ -760,12 +783,13 @@ droneStep(emptier,C.Tick);emptier.pos=emptier.goal
 droneStep(emptier,C.Tick);now+=1;droneStep(emptier,C.Tick)
 local prior=data(buyer).run.quartzEarnings
 serviceDeliveries(buyer);serviceDeliveries(buyer)
-assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+4*Workshop.EMPTIER_BATCH)
-assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==4*Workshop.EMPTIER_BATCH)
+assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+440)
+assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==440 and Pro.prestigePreview(data(buyer)).eligible)
 assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare)
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
 -- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
 data(buyer).run.cargo={[Workshop.cargoKey('RunRuby',5,true)]=1}
+buyer.emptierBagSince=nil
 now+=3;emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
 droneStep(emptier,C.Tick);assert(not emptier.pickupAt)
 now+=Workshop.EMPTIER_WAIT;droneStep(emptier,C.Tick)
