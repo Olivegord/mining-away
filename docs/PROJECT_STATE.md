@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0c413593248c7df6104c0c7939c70dbf09d0196b15a39cbf38d742c3d1e3d109` | Includes the authored Legendary stand, glossy cards, crew camera and pickup revisions. |
+| Native-file SHA-256 | `afdb3ccd890fc6ec95e1248568eb6127c15d096f24aca59b9d2535203977ad6c` | Includes the taller ore arcs and geometric launch and landing effects. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the Legendary stand and latest card, crew, and ore changes** | All seven Sources and three roots verified in Edit. Team Create save returned version 179. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the taller ore launches and new effects** | All seven Sources and three roots verified in Edit. Team Create save returned version 180. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — higher ore arcs and geometric effects
+
+Raw crystal cargo now rises 6.4 to 7.4 studs above its release point, up from 2.9 to 3.4. Small fragments rise higher too. The launch sends five tapered light streaks along the ejection direction. A ribbon traces the arc, and a flat diamond expands across the floor when the ore first touches down. Ore stays grounded after it settles. Horizontal speed keeps the larger arc near the old pickup area, and the Compactor keeps its short outlet toss. The server records the first contact once so rebounds cannot restart the landing effect.
+
+Pickup and workshop checks passed, including Crystal Run hauling, prestige, and first contact. A detached Studio Edit check exercised the five launch streaks, the four sides of the landing diamond, and cleanup under reduced effects. The broader physical mining fixture still hits the full-bag assertion reproduced on `cc4512c`. Live visuals and multiplayer remain unverified. All seven Sources matched shared Edit at place **124078027733625**, universe **10774898335**, and Team Create save **180** succeeded. This revision is unpublished. To reproduce from `cc4512c`, apply the changes, run `python3 tools/script_sync.py`, and then run `python3 tools/build.py --previous-commit cc4512c`. The native refresh preserved the map and all unrelated Sources.
 
 ## November 11 — glossy cards, Legendary preview and close pickup
 

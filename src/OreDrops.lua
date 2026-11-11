@@ -10,8 +10,10 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- local speed=7.5+(serial%5)*.5
- return math.cos(angle)*speed,15+index*.8,math.sin(angle)*speed
+ -- The longer hang time gives the arc room to read without sending small
+ -- fragments out of their usual pickup area.
+ local speed=6.2+(serial%5)*.4
+ return math.cos(angle)*speed,20+index*.9,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -24,8 +26,8 @@ end
 -- A clear rise, apex and fall before the item can be collected.
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
- local speed=block and 5.3 or 6.0+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 20+(serial%4)*.65,math.sin(angle)*speed
+ local speed=block and 5.3 or 5.6+(serial%3)*.35
+ return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end

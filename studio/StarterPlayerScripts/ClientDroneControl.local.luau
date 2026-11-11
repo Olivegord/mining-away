@@ -9800,19 +9800,79 @@ local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
-local TRAIL_LIFETIME,TRAIL_LIMIT=.24,12
-local function launchTrail(view,tint)
- local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-.23,0,.04);a.Parent=view
- local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(.23,0,.04);b.Parent=view
+local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
+local BURST_LIMIT,BURST_DISTANCE=8,80
+local function launchTrail(view,tint,halfWidth)
+ local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
+ local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
  local trail=Instance.new('Trail');trail.Name='CargoLaunchTrail'
  trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true
- trail.Lifetime=TRAIL_LIFETIME;trail.MinLength=.035;trail.MaxLength=5.2
+ trail.Lifetime=TRAIL_LIFETIME;trail.MinLength=.045;trail.MaxLength=7.5
  trail.LightEmission=.78;trail.LightInfluence=0
- trail.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.80),tint:Lerp(PICKUP_HIGHLIGHT,.34))
- trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.14),NumberSequenceKeypoint.new(.46,.36),NumberSequenceKeypoint.new(1,1)})
- trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.86),NumberSequenceKeypoint.new(.46,.51),NumberSequenceKeypoint.new(1,0)})
+ trail.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.85),tint:Lerp(PICKUP_HIGHLIGHT,.22))
+ trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.11),NumberSequenceKeypoint.new(.32,.27),NumberSequenceKeypoint.new(1,1)})
+ trail.WidthScale=NumberSequence.new({NumberSequenceKeypoint.new(0,.90),NumberSequenceKeypoint.new(.32,.52),NumberSequenceKeypoint.new(1,0)})
  trail.Parent=view
  return {trail=trail,a=a,b=b}
+end
+local function makeBurst()
+ local folder=Instance.new('Folder');folder.Name='OreBurst'
+ local marks={}
+ for i=1,5 do
+  local part=Instance.new('Part');part.Name='OreLightMark';part.Material=Enum.Material.Neon
+  part.Anchored=true;part.CanCollide=false;part.CanQuery=false;part.CanTouch=false;part.CastShadow=false
+  part.Parent=folder;marks[i]=part
+ end
+ return {folder=folder,marks=marks}
+end
+local function startBurst(self,r,origin,at,direction)
+ if #self.bursts>=BURST_LIMIT then return end
+ local burst=table.remove(self.burstPool) or makeBurst()
+ burst.origin=origin;burst.at=at;burst.direction=direction
+ burst.scale=r.physical and 1 or .64
+ if direction then burst.side=Vector3.yAxis:Cross(direction).Unit end
+ for i,part in ipairs(burst.marks) do
+  part.Color=r.color:Lerp(PICKUP_HIGHLIGHT,(i==3 or not direction) and .72 or .36)
+  part.Transparency=1
+ end
+ table.insert(self.bursts,burst)
+end
+local function drawBursts(self,now,reduced)
+ for i=#self.bursts,1,-1 do
+  local burst=self.bursts[i]
+  local age=math.max(0,now-burst.at)
+  local t=age/(burst.direction and .24 or .34)
+  if reduced or t>=1 then
+   burst.folder.Parent=nil;table.insert(self.burstPool,burst);table.remove(self.bursts,i)
+  else
+   local spread=1-math.exp(-t*5.8)
+   local scale=burst.scale
+   if burst.direction then
+    for j,part in ipairs(burst.marks) do
+     local fan=j-3
+     local direction=(burst.direction+burst.side*(fan*.28)-Vector3.yAxis*(math.abs(fan)*.14)).Unit
+     local center=burst.origin+direction*((.18+(1.35-math.abs(fan)*.24)*spread)*scale)
+     local width=(.04+.075*(1-t))*scale
+     part.Size=Vector3.new(width,width,(.08+.57*(1-t))*scale)
+     part.CFrame=CFrame.lookAt(center,center+direction)
+     part.Transparency=.08+.92*t^1.35
+    end
+   else
+    local radius=(.45+1.45*spread+.28*t)*scale
+    local floor=burst.origin-Vector3.yAxis*.18
+    for j=1,4 do
+     local angle=(j-1)*math.pi*.5
+     local first=floor+Vector3.new(math.cos(angle),0,math.sin(angle))*radius
+     local last=floor+Vector3.new(-math.sin(angle),0,math.cos(angle))*radius
+     local part=burst.marks[j]
+     part.Size=Vector3.new((.036+.10*(1-t))*scale,.035,(first-last).Magnitude)
+     part.CFrame=CFrame.lookAt((first+last)*.5,last)
+     part.Transparency=.12+.88*t^1.5
+    end
+   end
+   if not burst.folder.Parent then burst.folder.Parent=self.parent end
+  end
+ end
 end
 local function removeTrail(self,r)
  if not r.ribbon then return end
@@ -9878,7 +9938,7 @@ local function sample(r,source,now)
 end
 function V.new(root,parent,audio)
  local player=Players.LocalPlayer
- local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,
+ local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,bursts={},burstPool={},
   player=player,trailCount=0,idleCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
@@ -9892,6 +9952,13 @@ function V.new(root,parent,audio)
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
+  local origin=source:GetAttribute('OreLaunchOrigin')
+  local velocity=source:GetAttribute('OreLaunchVelocity')
+  if typeof(origin)=='Vector3' and typeof(velocity)=='Vector3' and math.abs(velocity.X)+math.abs(velocity.Z)>.01 then
+   r.launchOrigin=origin;r.launchDirection=velocity.Unit
+   local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
+   r.arcTimeout=(velocity.Y+math.sqrt(velocity.Y^2+2*PickupMotion.GRAVITY*height))/PickupMotion.GRAVITY+.18
+  end
   local contactAt=source:GetAttribute('GroundImpactAt')
   if type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
@@ -9955,6 +10022,7 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
+ local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
@@ -10009,7 +10077,7 @@ function V:update(dt,now)
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
-   local age=math.max(0,now-PickupMotion.DELAY-r.born)
+   local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
@@ -10036,13 +10104,13 @@ function V:update(dt,now)
     scale*=pile*(1+.14*r.pull)*r.socketScale
     glow=math.max(glow,.34*r.pull)
     local tumble=PickupMotion.tumble(age,r.landAge)
-    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
+    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
      -- Lift the trajectory by the rotated support extent so the rebound and
      -- resting pose stay above the contact plane.
-     position=Vector3.new(position.X,math.max(latest.floor,position.Y)+support-.22,position.Z)
+     position=Vector3.new(position.X,math.max(latest.floor+support-.22,position.Y),position.Z)
     end
     r.drawPosition=position
     r.view.CFrame=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -10052,10 +10120,27 @@ function V:update(dt,now)
     r.restUnits=r.units
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.physical and cameraPosition then
+   if r.launchOrigin and live then
+    if not r.launchSeen and displayAt>=r.born then
+     r.launchSeen=true
+     if not reducedEffects and cameraPosition and age<.16 and (r.launchOrigin-cameraPosition).Magnitude<BURST_DISTANCE then
+      startBurst(self,r,r.launchOrigin,r.born,r.launchDirection)
+     end
+    end
+    if not r.contactSeen and r.landAge and age>=r.landAge then
+     local impact=source:GetAttribute('GroundImpactPosition')
+     if typeof(impact)=='Vector3' then
+      r.contactSeen=true
+      if not reducedEffects and cameraPosition and age-r.landAge<.18 and (impact-cameraPosition).Magnitude<BURST_DISTANCE then
+       startBurst(self,r,impact,r.born+r.landAge)
+      end
+     end
+    end
+   end
+   if (r.physical or r.launchOrigin) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
-    local air=r.landAge and age<r.landAge or not r.landAge and age<1.2
+    local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
     local inFlight=air and live and not pulling
     if r.ribbon then
      if not inFlight or reducedEffects then
@@ -10063,9 +10148,9 @@ function V:update(dt,now)
      end
      if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
-     r.ribbon=launchTrail(r.view,r.color);r.trailUsed=true;self.trailCount+=1
+     r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
-    if r.owner==self.player.UserId and live and r.landAge and not seated and not inFlight and not pulling and distance<18^2 and opacity>.35 then
+    if r.physical and r.owner==self.player.UserId and live and r.landAge and not seated and not inFlight and not pulling and distance<18^2 and opacity>.35 then
      local rank=distance-(self.valueTarget==r and 8 or 0)
      if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
     end
@@ -10074,6 +10159,7 @@ function V:update(dt,now)
    end
   end
  end
+ drawBursts(self,displayAt,reducedEffects)
  if closest~=self.valueTarget then
   self.valueTarget=closest
   if closest then
@@ -10086,6 +10172,10 @@ function V:destroy()
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
+ for _,list in ipairs({self.bursts,self.burstPool}) do
+  for _,burst in ipairs(list) do burst.folder:Destroy() end
+  table.clear(list)
+ end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}

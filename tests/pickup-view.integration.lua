@@ -77,19 +77,28 @@ check('physical launch trail fades on the displayed landing and never reappears 
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
  for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,SpawnAt=realTime,SnapshotAt=realTime,
-  FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(3,20,0)}) do cargo:SetAttribute(k,v) end
+  FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,
+  OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
  assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not renderer.valueGui)
- cargo:SetAttribute('GroundImpactAt',realTime+.68)
- renderer:update(1/60,realTime+.73);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
- renderer:update(1/60,realTime+.80)
- assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
+ local burst=assert(renderer.bursts[1]);assert(burst.direction and #burst.marks==5 and burst.folder.Parent==fx)
+ renderer:update(1/60,realTime+.40);assert(not burst.folder.Parent and #renderer.bursts==0)
+ cargo:SetAttribute('GroundImpactAt',realTime+.98)
+ cargo:SetAttribute('GroundImpactPosition',Vector3.new(4,.22,0))
+ renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
+ assert(#renderer.bursts==0,'diamond arrived before the rock touched down')
  renderer:update(1/60,realTime+1.10)
+ assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
+ assert(renderer.bursts[1]==burst and not burst.direction and burst.marks[5].Transparency==1,'contact did not reuse the launch geometry')
+ cargo:SetAttribute('CollectedAt',realTime+1.16)
+ renderer:update(1/60,realTime+1.16)
+ renderer:update(1/60,realTime+1.37)
+ assert(renderer.records[cargo]==nil and burst.folder.Parent==fx,'collection cut off the landing diamond')
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
- cargo:SetAttribute('CollectedAt',realTime+1.2)
- renderer:update(1/60,realTime+1.20);assert(not record.ribbon)
+ renderer:update(1/60,realTime+1.43)
+ assert(not burst.folder.Parent and #renderer.bursts==0)
  renderer:destroy();workspace.CurrentCamera=camera
 end)
 check('80 grounded pieces cap halo effects and share one owner price label',function()

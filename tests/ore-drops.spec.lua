@@ -39,8 +39,8 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
     if not landing or s.age-landing<.075 then assert(not s.homing and not reached) end
     if reached then break end
    end
-   assert(peak>=3+(block and 1.7 or 2.8),'cargo did not visibly rise')
-   assert(landing and landing>.50 and s.homing,'cargo never returned to collection')
+   assert(peak>=3+(block and 1.7 or 6.4),'cargo did not reach the intended apex')
+   assert(landing and landing>(block and .50 or .92) and s.homing,'cargo never returned to collection')
   end
  end
 end)

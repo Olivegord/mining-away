@@ -2267,8 +2267,10 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- local speed=7.5+(serial%5)*.5
- return math.cos(angle)*speed,15+index*.8,math.sin(angle)*speed
+ -- The longer hang time gives the arc room to read without sending small
+ -- fragments out of their usual pickup area.
+ local speed=6.2+(serial%5)*.4
+ return math.cos(angle)*speed,20+index*.9,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -2281,8 +2283,8 @@ end
 -- A clear rise, apex and fall before the item can be collected.
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
- local speed=block and 5.3 or 6.0+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 20+(serial%4)*.65,math.sin(angle)*speed
+ local speed=block and 5.3 or 5.6+(serial%3)*.35
+ return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -7899,6 +7901,10 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
  chip:SetAttribute('SpawnAt',now);chip:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
  chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',now)
+ if drop.oreArc then
+  chip:SetAttribute('OreLaunchOrigin',position)
+  chip:SetAttribute('OreLaunchVelocity',velocity)
+ end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
  drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=now
@@ -7958,7 +7964,7 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local position=r.part.Position+out*(Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42)
    +Vector3.yAxis*(r.part.Size.Y*.28+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
+   units=1,raw=true,oreArc=true,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -8015,7 +8021,7 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local ox,oy,oz,vx,vy,vz=OreDrops.launch(index,pickupSerial+1,r.part.Size.X,r.part.Size.Y,r.part.Size.Z)
   local position=r.part.Position+Vector3.new(ox,oy,oz)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,quiet=r.referenceCrystal,
-   floor=ground+.22,fieldPart=r.field.part,reachBonus=reachBonus},position,Vector3.new(vx,vy,vz),r.field.color)
+   oreArc=true,floor=ground+.22,fieldPart=r.field.part,reachBonus=reachBonus},position,Vector3.new(vx,vy,vz),r.field.color)
  end
  p.dirty=true;p.publishDirty=true
 end
@@ -8277,12 +8283,12 @@ local function pickupStep(dt)
     p.pinOreOutOfReach=square
    end
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
-   if groundSpeed and groundSpeed>1 then
-    drop.groundSerial=(drop.groundSerial or 0)+1
+   if groundSpeed and groundSpeed>1 and not drop.firstImpactPublished then
+    drop.firstImpactPublished=true
     drop.part:SetAttribute('GroundImpactAt',now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
     drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.x,drop.floor,drop.z))
-    drop.part:SetAttribute('GroundImpactSerial',drop.groundSerial)
+    drop.part:SetAttribute('GroundImpactSerial',1)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
     if pressing then
