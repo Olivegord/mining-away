@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0b049514e95703d4158ee83dc2baa7aa67cb8b2c774ff80d040d2ecb4336fbf0` | Includes Auto Sell priority at full capacity. |
+| Native-file SHA-256 | `e217be794ed89706c1c2f79bdd28a947074bd500a60ca3893e14e1cca2ce9a2c` | Includes up to two local replacements at a cleared pin. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes Auto Sell priority at full capacity** | All seven Sources and three roots verified in Edit. Team Create save returned version 167. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the two-crystal refill at a cleared pin** | All seven Sources and three roots verified in Edit. Team Create save returned version 168. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — bring two cuts back to a cleared pin
+
+Up to two due replacements from a cleared pin can grow within that pin and their original plots. This lets two miners find work when the player holds the pin through regrowth. Once a ready crystal or two growing crystals occupy the pin, further replacements use ordinary placement. Blocked spots still fall back to ordinary placement. The field population and the eight-second Quartz cooldown plus two-second growth stay on their existing schedule. Both replacements use the original crystal and random clear-spot placement.
+
+In a matched three-crystal controller fixture, `2c72234` brought one crystal back to the pin. The updated controller brought two back, assigned each to a different miner after growth and placed the third in another plot. Both revisions replenished three crystals. The existing tests also cover clearing a pin by recall, blocked local growth and continuing to work during a depot sale. Workshop, Crystal Run, persistence and committed-flight checks passed with API or storage doubles. Live refill pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **168**. No player release was published. To reproduce from `2c72234`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit 2c72234`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — sell a full backpack before the next Emptier pickup
 

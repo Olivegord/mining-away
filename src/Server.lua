@@ -651,14 +651,17 @@ end
 function scene.spawnReplacement(field,kind,vacancy)
  local square=scene.replacementSquare(field,vacancy)
  if square then
-  local empty=true
+  -- Give a cleared pin two cuts to return to. Once it has mature work,
+  -- replenish the rest of the field through ordinary placement.
+  local growing=0
   for _,r in ipairs(field.resources) do
-   if not r.paid and r.part.Parent and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then empty=false;break end
+   if not r.paid and r.part.Parent and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then
+    growing+=1
+    if now>=r.readyAt or growing>=2 then return spawnResource(field,kind) end
+   end
   end
-  if empty then
-   local spawned,cost=spawnResource(field,kind,false,nil,square,vacancy.cluster)
-   if spawned then return true,cost end
-  end
+  local spawned,cost=spawnResource(field,kind,false,nil,square,vacancy.cluster)
+  if spawned then return true,cost end
  end
  return spawnResource(field,kind)
 end

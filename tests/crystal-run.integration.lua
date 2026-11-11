@@ -219,13 +219,18 @@ do
  local function advance(seconds)
   for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
  end
- local function breakLastRock()
-  tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
-  command.OnServerEvent:Fire(tester,'PlaceSelector',{runId=data(team).run.id,fieldId=field.id,position=pinCenter})
-  local old=makeResource(field,centerPlot.Position+Vector3.new(0,0,12),'Crystal',75,10,3,3)
+ local function breakRockAt(x)
+  local old=makeResource(field,centerPlot.Position+Vector3.new(x,0,12),'Crystal',75,10,3,3)
   old.readyAt=now;old.cluster=centerPlot
   assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
   assert(hitResource(worker,old,1000) and old.paid)
+ end
+ local function pin()
+  tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
+  command.OnServerEvent:Fire(tester,'PlaceSelector',{runId=data(team).run.id,fieldId=field.id,position=pinCenter})
+ end
+ local function breakLastRock()
+  pin();breakRockAt(0)
   assert(#field.respawnQueue==1 and nodeUsage(field)==0)
  end
  local function refillWithCenteredDraw()
@@ -280,8 +285,32 @@ do
  assert(fallback.position.Z==centerPlot.Position.Z and scene.idleSquareStatus(team,team.miningSquare)=='NoCrystals',
   'blocked local growth must still refill the wider plot')
  print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after an eight-second cooldown',replacement.position.Z,ordinary.position.Z))
+
+ resources[fallback.id]=nil;fallback.part:Destroy();field.resources={}
+ field.cfg.Count=3
+ pin();breakRockAt(-6);breakRockAt(0);breakRockAt(6)
+ assert(#field.respawnQueue==3 and nodeUsage(field)==0)
+ advance(7.7)
+ assert(nodeUsage(field)==0,'a second replacement shortened the refill cooldown')
+ local originalSeed=seed;seed=Random.new(828)
+ advance(.55)
+ seed=originalSeed
+ local inside={}
+ for _,rock in ipairs(field.resources) do
+  if not rock.paid and Mining.selectorTouches(pinCenter,team.miningSquare.half,rock.part.CFrame,rock.part.Size) then table.insert(inside,rock) end
+ end
+ assert(nodeUsage(field)==3 and #field.respawnQueue==0 and #inside==2,'the cleared pin should regrow two of the three replacements')
+ for _,rock in ipairs(inside) do
+  assert(rock.cluster==centerPlot and rock.readyAt==rock.spawnAt+2 and not next(rock.slots))
+ end
+ advance(2.1)
+ local firstWorker,secondWorker=next(inside[1].slots),next(inside[2].slots)
+ assert(firstWorker and secondWorker and firstWorker~=secondWorker,'the two replacements did not give the returning miners separate cuts')
+ print('PASS a cleared Quartz pin grows two local replacements on the original schedule, leaving the third for another plot')
  scene.runStart,scene.packStation=previousStart,previousCounter
- players.PlayerRemoving:Fire(tester);resources[fallback.id]=nil;refillZone:Destroy();patches[field.id]=nil
+ players.PlayerRemoving:Fire(tester)
+ for _,rock in ipairs(field.resources) do resources[rock.id]=nil end
+ refillZone:Destroy();patches[field.id]=nil
 end
 
 do
