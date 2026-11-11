@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `dfdc6326eacc792a5ff896ea3a4d1202df0aaffa664c3672b29ce1ec6ebdf519` | Includes the full-backpack cargo return timer. |
+| Native-file SHA-256 | `a90b8b1e4e1312ee2abfbf2ae18b9a8af0439e5ca41e3a8f205d51d5b7686586` | Includes the overlapping-pin cut fix. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the cargo return timer** | All seven Sources and three roots verified in Edit. Team Create save returned version 148. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit keeps cuts through overlapping pin moves** | All seven Sources and three roots verified in Edit. Team Create save returned version 149. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — keep a deep cut when nudging the pin
+
+Moving the mining square keeps existing work on crystals still inside it. A deep cut stays protected while its drone recharges, and the worker can resume that cut and keep its return speed through another nudge. A new direct focus can redirect travel before a cut starts. Crystals left behind heal after their committed work ends and their reservations clear.
+
+In the same production-server fixture, moving the square two studs on `5cb4abe` dropped the return order and allowed the crystal to heal from 25 to 33.69 work remaining. This revision held it at 25 and sent the worker back to that crystal despite another unfinished cut closer to the charger. The fixture also confirmed that the worker retained its reservation and travel speed through a second nudge, and that leaving and returning to a crystal restored ordinary healing. Workshop, Crystal Run, committed flight, pickup and audio checks passed with Roblox API or storage doubles. Live pacing, animation and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **149**. No player release was published. To reproduce from `5cb4abe`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit 5cb4abe`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — retrieve ore after a depot sale
 

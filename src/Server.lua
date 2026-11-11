@@ -2986,6 +2986,28 @@ function scene.canPairCut(p,r)
  end
  return false
 end
+function scene.moveSquareWork(p,current,square)
+ if not current or current.field~=square.field then return end
+ local function staysInSquare(r)
+  return r and not r.paid and r.part.Parent
+   and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)
+ end
+ for _,r in ipairs(square.field.resources) do
+  if r.lastPin==current and r.lastPinOwner==p.player.UserId and staysInSquare(r) then r.lastPin=square end
+ end
+ local focus=square.pairId or square.leadId
+ for _,d in ipairs(p.drones) do
+  local target=d.target
+  if d.squareJob==current and staysInSquare(target) then
+   local changingPair=current.pairId==target.id and square.pairId~=target.id
+   if scene.committedWork(d) or (not changingPair and (not focus or focus==target.id)) then
+    d.squareJob=square
+    if d.chargedPin==current then d.chargedPin=square end
+   end
+  end
+  if d.resumePin==current and staysInSquare(resources[d.resumeResourceId]) then d.resumePin=square end
+ end
+end
 function scene.placeSquare(p,payload)
  if type(payload)~='table' or payload.runId~=data(p).run.id or not R.finite(payload.fieldId) or typeof(payload.position)~='Vector3' then return end
  local field=patches[payload.fieldId]
@@ -3015,6 +3037,7 @@ function scene.placeSquare(p,payload)
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
  if samePin then current.leadId=square.leadId;current.pairId=square.pairId;return end
+ scene.moveSquareWork(p,current,square)
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.publishSquareStatus(p)
  p.player:SetAttribute('MA_Selector',center)

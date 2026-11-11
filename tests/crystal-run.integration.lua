@@ -84,12 +84,26 @@ d.battery=0
 step(1);assert(d.state=='ToCharge' and d.recharging and not d.target)
 assert(d.resumeResourceId==b.id and not next(b.slots),'the interrupted cut must remain available to other crews')
 status('Recharging')
-local nearer=rock(1,100)
+local beforeNudge=p.miningSquare
+pl.Character:PivotTo(CFrame.new(Vector3.new(13,8,-68)))
+pin(16)
+assert(p.miningSquare~=beforeNudge and p.miningSquare.center.X==16)
+local interruptedHP=b.hp
+now+=5;scene.regrow(b,.23)
+assert(b.hp==interruptedHP,'an overlapping pin healed the interrupted cut')
+assert(d.resumePin==p.miningSquare and d.resumeResourceId==b.id,'an overlapping pin lost the returning worker')
+local nearer=rock(4,100)
 nearer.lastPin=p.miningSquare;nearer.lastPinOwner=d.owner;nearer.hp=nearer.maxHP-15
 for _=1,1200 do step(1);if not d.recharging then break end end
 assert(not d.recharging and d.battery==d.stats.batteryCapacity,'failed to recharge at the pad')
 step(1);assert(d.target==b and d.squareJob==p.miningSquare,'charged worker picked a different unfinished cut')
 assert(d.state=='Travel' and travelSpeed(d)==d.stats.maxStep60*1.5,'return to the field lost the charger travel speed')
+local beforeTravelNudge=p.miningSquare
+pin(18)
+step(1)
+assert(p.miningSquare~=beforeTravelNudge and d.squareJob==p.miningSquare and d.target==b and b.slots[d.id],
+ 'an overlapping pin dropped the returning worker reservation')
+assert(travelSpeed(d)==d.stats.maxStep60*1.5,'an overlapping pin slowed the return flight')
 resources[nearer.id]=nil;nearer.part:Destroy()
 release(d);d.field=nil
 local profile=data(p)
@@ -608,12 +622,20 @@ local deep=rock(0,Mining.resource(75,'Crystal',81).maxHP)
 deep.hardness=81
 assert(assignOre(buyer,miner,deep));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,deep)
 assert(hitResource(miner,deep,100));local hp=deep.hp
+buyer.player.Character:PivotTo(CFrame.new(f.center+Vector3.yAxis*3))
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(2,0,0)})
+assert(miner.squareJob==buyer.miningSquare and miner.target==deep and deep.slots[miner.id],'overlapping pin interrupted the committed cut')
+assert(hitResource(miner,deep,10));hp=deep.hp
 release(miner);now+=5;scene.regrow(deep,.23)
-assert(deep.hp==hp,'charging lost progress on a pinned deep crystal')
+assert(deep.hp==hp,'work after a pin move recorded the old pin')
 local fresh=rock(1,deep.maxHP);fresh.hardness=81;miner.pos=fresh.position
 assert(chooseResource(miner,f,buyer.miningSquare)==deep,'returning drone ignored its unfinished deep cut')
-release(miner);scene.clearSquare(buyer);now+=5;scene.regrow(deep,.23)
-assert(deep.hp>hp,'recalling failed to restore ordinary healing')
+release(miner)
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(24,0,0)})
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(2,0,0)})
+now+=5;scene.regrow(deep,.23)
+assert(deep.hp>hp,'leaving and returning to the same area incorrectly kept the old cut protected')
+scene.clearSquare(buyer)
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_LIVE_WIRE,3));refreshStats(buyer)
 local live=rock(0,1000)
 miner.battery=miner.stats.batteryCapacity;hit(live,10)
