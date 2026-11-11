@@ -1185,6 +1185,17 @@ end
 function scene.shiftReady(p)
  return (p.shiftSeconds or 0)>0 and p.shiftReadyRun==data(p).run.id
 end
+function scene.reclaimBattery(d,r,broken,abilityOrigin,contactKind)
+ -- Violet and Emerald have extra fracture layers. Regrowth does not restore their charge.
+ local deepCrystal=r.kind=='Crystal' and r.field.cfg.SelectionOnly and r.stageCount>3
+ local freshCrack=deepCrystal and not broken and r.stage>(r.deepestFracture or 0)
+ if freshCrack then r.deepestFracture=r.stage end
+ if not (broken or freshCrack) or (abilityOrigin and not (deepCrystal and contactKind=='Breaker'))
+  or d.recharging or (d.stats.reclaim or 0)<=0 then return end
+ local before=d.battery
+ d.battery=math.min(d.stats.batteryCapacity,before+d.stats.reclaim)
+ if d.battery-before>=1 then RoleEffects.Pulse(d.pos,Color3.fromRGB(134,221,129),.4,2.4,.20) end
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
@@ -1345,12 +1356,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
+ scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind)
  if broken then
-  if not abilityOrigin and (d.stats.reclaim or 0)>0 and not d.recharging then
-   local before=d.battery
-   d.battery=math.min(d.stats.batteryCapacity,d.battery+d.stats.reclaim)
-   if d.battery-before>=1 then RoleEffects.Pulse(d.pos,Color3.fromRGB(134,221,129),.4,2.4,.20) end
-  end
   r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)

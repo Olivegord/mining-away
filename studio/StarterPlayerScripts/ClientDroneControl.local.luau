@@ -78,6 +78,9 @@ W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
 function W.shiftDescription(seconds)
  return 'Emptier sale primes your next cut.\n+50% damage for '..seconds..'s.'
 end
+function W.reclaimDescription(battery)
+ return '+'..battery..' battery on breaks\nand new Violet or Emerald cracks.'
+end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -7290,7 +7293,8 @@ function CardView.summary(choice)
  add('deepCut',amount(e.deepCut or 0,'damage in Ruby through Emerald'))
  local echo=(e.aftershock or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.aftershock or 0)
  add('aftershock','Cracks hit a neighbor.\n'..percent(echo).." of the cracked rock's HP.")
- add('reclaim','Recover '..(e.reclaim or 0)..' battery when you break a crystal')
+ local reclaim=(e.reclaim or 0)+(choice.stackBefore or 0)*(choice.step and choice.step.reclaim or 0)
+ add('reclaim',Workshop.reclaimDescription(reclaim))
  add('earlyDrop',Workshop.LOOSE_SEAMS_TEXT)
  add('fieldCharge','Depleted drones recharge at your pin')
  add('magnetRange','Pull ore from '..(e.magnetRange or 0)..' studs farther away')
@@ -8147,7 +8151,7 @@ function V.effect(c)
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
- if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
+ if e.reclaim then table.insert(parts,Workshop.reclaimDescription(e.reclaim)) end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.shiftRelay then table.insert(parts,Workshop.shiftDescription(e.shiftRelay)) end
  if e.earlyDrop then table.insert(parts,(Workshop.LOOSE_SEAMS_TEXT:gsub('\n',' '))) end
@@ -8203,7 +8207,7 @@ function V.render(U,parent,options)
   local copyWidth=width-(narrow and 76 or 228)
   local hardware=Workshop.isHardware(c)
   label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
-  local effectSize=narrow and c.effects.shiftRelay and 13 or 15
+  local effectSize=narrow and (c.effects.shiftRelay or c.effects.reclaim) and 13 or 15
   label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),effectSize,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
    UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)

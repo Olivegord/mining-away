@@ -75,6 +75,9 @@ W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
 function W.shiftDescription(seconds)
  return 'Emptier sale primes your next cut.\n+50% damage for '..seconds..'s.'
 end
+function W.reclaimDescription(battery)
+ return '+'..battery..' battery on breaks\nand new Violet or Emerald cracks.'
+end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}

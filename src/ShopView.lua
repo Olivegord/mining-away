@@ -33,7 +33,7 @@ function V.effect(c)
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Cracks hit one nearby rock for '..percent(e.aftershock)..' of starting HP') end
- if e.reclaim then table.insert(parts,'+'..e.reclaim..' battery per crystal broken') end
+ if e.reclaim then table.insert(parts,Workshop.reclaimDescription(e.reclaim)) end
  if e.liveWire then table.insert(parts,'+'..percent(e.liveWire)..' laser damage above half battery') end
  if e.shiftRelay then table.insert(parts,Workshop.shiftDescription(e.shiftRelay)) end
  if e.earlyDrop then table.insert(parts,(Workshop.LOOSE_SEAMS_TEXT:gsub('\n',' '))) end
@@ -89,7 +89,7 @@ function V.render(U,parent,options)
   local copyWidth=width-(narrow and 76 or 228)
   local hardware=Workshop.isHardware(c)
   label(U,card,UDim2.fromOffset(62,6),UDim2.fromOffset(copyWidth,28),entry.title..(hardware and '' or ('  '..c.level..'×')),18,true)
-  local effectSize=narrow and c.effects.shiftRelay and 13 or 15
+  local effectSize=narrow and (c.effects.shiftRelay or c.effects.reclaim) and 13 or 15
   label(U,card,UDim2.fromOffset(62,34),UDim2.fromOffset(copyWidth,43),V.effect(c),effectSize,false)
   label(U,card,UDim2.fromOffset(narrow and 12 or 62,narrow and 77 or 76),
    UDim2.fromOffset(narrow and width-28 or copyWidth,20),hardware and ('Fitted to '..(c.targetName or 'miner')) or nextEffect(row),14,false)

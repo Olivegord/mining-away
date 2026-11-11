@@ -78,6 +78,9 @@ W.LOOSE_SEAMS_TEXT='Ore drops mid-cut.\nLonger pickup reach.'
 function W.shiftDescription(seconds)
  return 'Emptier sale primes your next cut.\n+50% damage for '..seconds..'s.'
 end
+function W.reclaimDescription(battery)
+ return '+'..battery..' battery on breaks\nand new Violet or Emerald cracks.'
+end
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
  Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
@@ -8206,6 +8209,17 @@ end
 function scene.shiftReady(p)
  return (p.shiftSeconds or 0)>0 and p.shiftReadyRun==data(p).run.id
 end
+function scene.reclaimBattery(d,r,broken,abilityOrigin,contactKind)
+ -- Violet and Emerald have extra fracture layers. Regrowth does not restore their charge.
+ local deepCrystal=r.kind=='Crystal' and r.field.cfg.SelectionOnly and r.stageCount>3
+ local freshCrack=deepCrystal and not broken and r.stage>(r.deepestFracture or 0)
+ if freshCrack then r.deepestFracture=r.stage end
+ if not (broken or freshCrack) or (abilityOrigin and not (deepCrystal and contactKind=='Breaker'))
+  or d.recharging or (d.stats.reclaim or 0)<=0 then return end
+ local before=d.battery
+ d.battery=math.min(d.stats.batteryCapacity,before+d.stats.reclaim)
+ if d.battery-before>=1 then RoleEffects.Pulse(d.pos,Color3.fromRGB(134,221,129),.4,2.4,.20) end
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
@@ -8366,12 +8380,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
+ scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind)
  if broken then
-  if not abilityOrigin and (d.stats.reclaim or 0)>0 and not d.recharging then
-   local before=d.battery
-   d.battery=math.min(d.stats.batteryCapacity,d.battery+d.stats.reclaim)
-   if d.battery-before>=1 then RoleEffects.Pulse(d.pos,Color3.fromRGB(134,221,129),.4,2.4,.20) end
-  end
   r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
    local core=Mining.resource(seed:NextInteger(50,100),'Core',r.hardness)

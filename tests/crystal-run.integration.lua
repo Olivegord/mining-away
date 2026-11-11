@@ -642,7 +642,8 @@ assert(hitResource(miner,source,1) and math.abs(neighbor.hp-(990-990*.12))<1e-8,
 do
  isolate()
  local laser,needler=testCrew.drones[1],starterActors.Needler
- table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2));refreshStats(testCrew)
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2))
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_RECLAIM,1));refreshStats(testCrew)
  local primary,foreign,ally,spare=rock(0,1000),rock(3,1000),rock(5,200),rock(9,1000)
  assert(assignOre(buyer,miner,foreign))
  assert(assignOre(testCrew,needler,ally))
@@ -653,11 +654,13 @@ do
  assert(ally.slots[needler.id]==1 and next(ally.slots,needler.id)==nil and needler.target==ally)
  assert(laser.forkTargetId==ally.id,'the impact did not reach the existing branch renderer')
  local previous=select(2,pendingOre(testCrew))
+ laser.battery=50;needler.battery=50
  assert(hitResource(laser,primary,240) and ally.paid and needler.target==nil)
+ assert(laser.battery==50 and needler.battery==56,'an assisted finish should recharge the allied worker')
  assert(select(2,pendingOre(testCrew))==previous+1 and foreign.hp==990 and spare.hp==990)
  assert(not hitResource(needler,ally,30) and select(2,pendingOre(testCrew))==previous+1,'the assisted finish paid twice')
  release(laser);release(miner)
- table.remove(data(testCrew).run.cards);refreshStats(testCrew)
+ table.remove(data(testCrew).run.cards);table.remove(data(testCrew).run.cards);refreshStats(testCrew)
  print('PASS Aftershock helps an allied Needler without taking its slot, respects foreign claims, and pays an assisted finish once')
 end
 
@@ -853,6 +856,43 @@ assert(live.hp==975,'Live Wire did not amplify a high-battery hit')
 miner.battery=miner.stats.batteryCapacity*.5
 assert(hitResource(miner,live,10) and live.hp==965,'Live Wire activated below its battery threshold')
 print('PASS Aftershock, Live Wire, Compactor conversion, durable Emptier sales, Shift Relay timing and deep-cut recharge')
+
+do
+ local tester=player(98691);players.PlayerAdded:Fire(tester)
+ local crew=profiles[tester.UserId];local worker=crew.drones[1]
+ table.insert(data(crew).run.cards,Workshop.card(Workshop.BY_ID.Q_RECLAIM,1));refreshStats(crew)
+ tester.Character:PivotTo(CFrame.new(f.center+Vector3.yAxis*3))
+ local crystal=makeResource(f,f.center,'Crystal',810,10,3,7)
+ crystal.hardness=81;crystal.readyAt=now
+ local function strike(r,damage)
+  if worker.target~=r then assert(assignOre(crew,worker,r)) end
+  worker.pos=committedStation(worker,r)
+  assert(hitResource(worker,r,damage))
+ end
+ worker.battery=40;strike(crystal,50)
+ assert(crystal.stage==0 and worker.battery==40,'ordinary chip recharged the battery')
+ strike(crystal,65)
+ assert(crystal.stage==1 and worker.battery==46,'first Emerald fracture did not recharge')
+ release(worker)
+ for _=1,20 do now+=.25;scene.regrow(crystal,.25) end
+ assert(crystal.stage==0 and crystal.hp==800)
+ strike(crystal,115)
+ assert(crystal.stage==1 and worker.battery==46,'a regrown layer paid twice')
+ strike(crystal,220)
+ assert(crystal.stage==3 and worker.battery==52,'a single hit crossing several layers should recharge once')
+ worker.battery=worker.stats.batteryCapacity-2
+ strike(crystal,1500)
+ assert(crystal.paid and worker.battery==worker.stats.batteryCapacity,'the last break must recharge and respect capacity')
+ local cobalt=makeResource(f,f.center,'Crystal',810,10,3,3)
+ cobalt.hardness=9;cobalt.readyAt=now;worker.battery=40
+ strike(cobalt,250)
+ assert(cobalt.stage==1 and worker.battery==40,'Cobalt intermediate fractures should use the ordinary rule')
+ strike(cobalt,1500)
+ assert(cobalt.paid and worker.battery==46,'ordinary crystal breaks no longer recharge')
+ players.PlayerRemoving:Fire(tester)
+ for _,r in ipairs({crystal,cobalt}) do resources[r.id]=nil;r.part:Destroy() end
+ print('PASS Reclaim recharges at new deep fractures, does not farm regrowth and keeps ordinary final-break recovery')
+end
 
 do
  local tester=player(98692);players.PlayerAdded:Fire(tester)
