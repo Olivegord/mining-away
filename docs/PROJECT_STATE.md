@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `7d869068364a054a4d1cf50e54decc49b2b0a31ed56881fcbc6750f876dd539c` | Includes coordinated Emptier pickups. |
+| Native-file SHA-256 | `2af7861e371f4106e02320619e86d847c5700ef19fd8a99b1bea42236bc19deb` | Includes the two physical shop counters. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit assigns one Emptier per available load** | All seven Sources and three roots verified in Edit. Team Create save returned version 164. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has physical Quartz Workshop and Star Shop counters** | All seven Sources and three roots verified in Edit. Team Create save returned version 165. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give both depot shops physical counters
+
+The Quartz Workshop and Star Shop have low counters built from copies of the existing Pack Counter body and pad. Their tops use the colors of the existing shop signs. Each counter sits beneath its board and surrounds the same prompt position.
+
+Both counters were visible beneath their lettering in shared Studio Edit. The check verified 18 sightlines, eight approach spots within prompt range, 18 counter-top samples and 72 unchanged aisle samples. The canonical mirror added two models and four parts and preserved all 50 Sources. Live prompt interaction and avatar movement remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **165**. No player release was published. To reproduce from `d86dc42`, stage [the counters](../tools/studio_depot_counters.lua) in shared Edit and extract `shared.DepotCounters.scenery` as `scenery.b64`. Run [the scoped mirror](../tools/refresh_depot_counters.py) with the export directory and `--baseline-sha256 7d869068364a054a4d1cf50e54decc49b2b0a31ed56881fcbc6750f876dd539c`. Save the receipt from `shared.DepotCounters.apply()` as `verified.json`, rerun the mirror with `--write`, and verify with `python3 tools/build.py`.
 
 ## November 11 — give each Emptier its own load
 
