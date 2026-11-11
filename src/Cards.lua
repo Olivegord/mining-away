@@ -273,6 +273,8 @@ function C.workshopOffer(p,tier,seed,crystalRun)
  end end
  local triples,total={},0
  local triggerTriples,triggerTotal={},0
+ local variedTriples,variedTotal={},0
+ local secondCrystalPack=crystalRun and p.run.packIndex==1
  for i=1,#pool-2 do
   for j=i+1,#pool-1 do
    if compatible[i][j] then
@@ -284,13 +286,20 @@ function C.workshopOffer(p,tier,seed,crystalRun)
       total+=weight;table.insert(triples,triple)
       if crystalRun and (Workshop.TRIGGER_CARDS[pool[i].cardId] or Workshop.TRIGGER_CARDS[pool[j].cardId] or Workshop.TRIGGER_CARDS[pool[k].cardId]) then
        triggerTotal+=weight;table.insert(triggerTriples,triple)
+       -- The next purchase should let a new build improve a different part
+       -- of the loop even when the rolled rarity is Common.
+       if secondCrystalPack then
+        local a,b,c=pool[i].category,pool[j].category,pool[k].category
+        if a~=b and b~=c and a~=c then variedTotal+=weight;table.insert(variedTriples,triple) end
+       end
       end
      end
     end
    end
   end
  end
- if triggerTotal>0 then triples,total=triggerTriples,triggerTotal end
+ if variedTotal>0 then triples,total=variedTriples,variedTotal
+ elseif triggerTotal>0 then triples,total=triggerTriples,triggerTotal end
  if total==0 then return nil end
  local random=rng(seed);local ticket=random(total);local selected=triples[1]
  for _,triple in ipairs(triples) do ticket-=triple[4];if ticket<=0 then selected=triple;break end end

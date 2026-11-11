@@ -276,6 +276,22 @@ do
  end
  saleFromOneSlot(40,'Pack Counter ready')
  assert(stone.paid and data(crew).run.wallet.Quartz==40 and data(crew).run.quartzEarnings==60)
+ runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(runner,'BuyPack',{runId=run.id,packIndex=1,txId='second-pack'})
+ local second=assert(data(crew).run.pendingOffer)
+ assert(second.price==27 and data(crew).run.wallet.Quartz==13)
+ local paths={}
+ for index,choice in ipairs(second.choices) do paths[choice.category]=index end
+ assert(paths.mining and paths.flight and paths.cargo)
+ local secondCrate=assert(crew.packDelivery)
+ advance(2)
+ runner.Character:PivotTo(CFrame.new(secondCrate.part.Position+Vector3.yAxis))
+ secondCrate.prompt.Triggered:Fire(runner)
+ assert(data(crew).run.pendingOffer.opened)
+ local flight=second.choices[paths.flight]
+ local target=Workshop.isHardware(flight) and crew.drones[1].id or nil
+ command.OnServerEvent:Fire(runner,'ChooseCard',{runId=run.id,txId='second-choice',offerId=second.id,index=paths.flight,targetDroneId=target})
+ assert(Workshop.find(data(crew),flight.cardId,target) and not data(crew).run.pendingOffer)
  scene.clearSquare(crew)
  local shortfall=Pro.milestone(data(crew)).earnings-data(crew).run.quartzEarnings
  local shipment=Workshop.cargoKey('RunCobalt',shortfall,true)
@@ -343,7 +359,7 @@ do
  assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==released.value-Workshop.PACK_BASE)
  players.PlayerRemoving:Fire(runner)
  print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
- print('PASS a mined Ruby funds pack two and a single valuable block funds prestige through early courier sales')
+ print('PASS a mined Ruby funds a second pack with distinct upgrade paths, and one valuable block funds prestige')
  print('PASS the chosen permanent prestige drone cuts, sells and funds a pack on its first run-two pin')
 end
 do

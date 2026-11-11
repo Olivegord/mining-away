@@ -193,6 +193,31 @@ test('Crystal Run drafts trigger effects and offers Denser Packing only after Co
  p.run.quartzEarnings=360
  assert(prestige(p,'reset-press',p.run.id));eq(W.hasCompactor(p),false)
 end)
+test('second Crystal Run pack offers a choice between cutting, flight and cargo',function()
+ local function buyCrystal(p,tx)
+  local ok,offer=C.buy(p,tx,p.run.id,{atDepot=true,expectedPackIndex=p.run.packIndex,crystalRun=true})
+  assert(ok,offer);return offer
+ end
+ for firstPick=1,3 do
+  for seed=1,12 do
+   local p=funded(seed)
+   local first=buyCrystal(p,'first');assert(C.open(p,first.id))
+   local target=W.isHardware(first.choices[firstPick]) and p.fleet[1].id or nil
+   assert(C.select(p,first.id,firstPick,'choose-first',p.run.id,{atDepot=true,targetDroneId=target}))
+   local before=p.run.wallet.Quartz
+   local second=buyCrystal(p,'second')
+   local categories,rarity={},false
+   for _,choice in ipairs(second.choices) do
+    categories[choice.category]=true
+    rarity=rarity or choice.upgradeTier==second.packTier
+   end
+   assert(categories.mining and categories.flight and categories.cargo,'missing a choice after '..first.choices[firstPick].cardId)
+   assert(rarity and second.price==27 and p.run.wallet.Quartz==before-27)
+   local restored=assert(P.migrate(p,p.userId))
+   assert(same(second,buyCrystal(restored,'reopen-second')) and restored.run.wallet.Quartz==before-27)
+  end
+ end
+end)
 test('Crystal Run work compounds without resizing and refined sales fund Quartz progression',function()
  local starter=Mining.resource(75,'Crystal',1)
  for i,tier in ipairs(W.CRYSTAL_TIERS) do
