@@ -33,6 +33,26 @@ test('three basic starter miners, no free packs or money',function()
  eq(p.run.wallet.Quartz,0);eq(C.price(p),20);eq(buy(p,'empty'),false);eq(p.run.packIndex,0)
  assert(P.validate(p,44))
 end)
+test('first pack dispatch uses the actual manifest and counts only Quartz proceeds',function()
+ local p=P.new(44)
+ local rock=W.cargoKey('Quartz',10)
+ local block=W.cargoKey('RunRuby',55,true)
+ p.run.cargo={Cobalt=1,[rock]=2}
+ assert(not P.firstPackDeliveryReady(p,2) and P.firstPackDeliveryReady(p,3))
+ p.run.cargo={[block]=1}
+ assert(P.firstPackDeliveryReady(p,4))
+ local id=W.emptierId(p.run.id,1)
+ assert(P.beginDelivery(p,id,'first-trip',p.run.id,4))
+ p.run.cargo={[rock]=2}
+ assert(not P.firstPackDeliveryReady(p,4),'an outstanding sale started a second rush trip')
+ assert(P.finishDelivery(p,id,{},'first-trip',p.run.id))
+ eq(p.run.wallet.Quartz,55)
+ assert(not P.firstPackDeliveryReady(p,4))
+ p.run.wallet.Quartz=10;p.run.credits=10;p.run.cargo={[rock]=1}
+ assert(P.firstPackDeliveryReady(p,4),'a top-up failed to fund the pack')
+ p.run.packIndex=1
+ assert(not P.firstPackDeliveryReady(p,4))
+end)
 test('shared pool allows more than three owned upgrades and stable repeated drafts across 150 seeds',function()
  for seed=1,150 do
   local p=funded(seed)

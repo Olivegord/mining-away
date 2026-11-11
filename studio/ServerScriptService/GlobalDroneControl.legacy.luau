@@ -320,15 +320,19 @@ function S.oreValue(prices,material)
  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
  return tier and material~='Quartz' and tier.value or (prices and prices[material])
 end
+function S.quartzValue(material)
+ local _,value=Workshop.crystalCargo(material)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+ return value or (tier and tier.value)
+end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
  local deposit={}
  for key,n in pairs(bag) do
-  local _,cargoValue=Workshop.crystalCargo(key)
-  local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
-  if (not cargoValue and not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
-  local currency=(cargoValue or tier) and 'Quartz' or key
-  deposit[currency]=(deposit[currency] or 0)+n*(cargoValue or (tier and tier.value) or 1)
+  local quartz=S.quartzValue(key)
+  if (not quartz and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=quartz and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(quartz or 1)
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
@@ -1973,6 +1977,16 @@ function M.resource(roll: number,kind: string,hardness: number?)
  local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
  return {maxHP=work+10,work=work,size=size,mass=mass}
 end
+function M.deepCrystal(roll: number,hardness: number,baseOre: number)
+ -- Size shows the work up front. Small cuts pay sooner; big cuts return
+ -- more Quartz in the same cargo slot.
+ local sizeRoll=(roll-50)/50
+ return {
+  size=2.15+1.7*sizeRoll,
+  work=65*hardness*(.5+sizeRoll)*M.HEALTH_MULTIPLIER,
+  ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
+ }
+end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
@@ -2065,13 +2079,14 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-local function fitsReference(x,z,halfX,halfZ,occupied,gap)
+local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
  for _,other in ipairs(occupied or {}) do
   local dx,dz=x-other.x,z-other.z
-  -- Mining Away scatters on whole studs, including adjacent centers.
-  -- Keep coincident clicks from selecting two crystals at the same point.
-  if dx*dx+dz*dz<gap*gap then return false end
+  -- The starter patch keeps Mining Away's spacing. Larger deposits reserve
+  -- room for both meshes to turn when they fracture.
+  local separation=other.radius and radius+other.radius or gap
+  if dx*dx+dz*dz<separation*separation then return false end
  end
  return true
 end
@@ -2086,7 +2101,7 @@ function P.sample(width,depth,radius,occupied,random,clear,preferred,reference,r
   local x,z
   if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
   local fits
-  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied,referenceGap or 2)
+  if reference then fits=fitsReference(x,z,halfX,halfZ,radius,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end
   if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt
@@ -2836,6 +2851,26 @@ function P.addMiningCargo(p,material,units,capacity,droneId)
  bag[material]=(bag[material] or 0)+units
  return units
 end
+local function deliveryCargo(cargo,batchSize)
+ local manifest,remaining={},batchSize
+ local materials={};for material in pairs(cargo) do table.insert(materials,material) end;table.sort(materials)
+ for _,material in ipairs(materials) do
+  local units=math.min(remaining,cargo[material])
+  if units>0 then manifest[material]=units;remaining-=units end
+  if remaining==0 then break end
+ end
+ return manifest
+end
+function P.firstPackDeliveryReady(p,batchSize)
+ local run=p.run
+ local shortfall=Workshop.PACK_BASE-run.wallet.Quartz
+ if run.packIndex~=0 or shortfall<=0 or next(run.deliveries) then return false end
+ local quartz=0
+ for material,units in pairs(deliveryCargo(run.cargo,batchSize)) do
+  quartz+=units*(Shops.quartzValue(material) or 0)
+ end
+ return quartz>=shortfall
+end
 function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid delivery ID' end
@@ -2846,13 +2881,10 @@ function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
  if not integer(batchSize) or batchSize<1 or batchSize>32 then return false,'Invalid courier batch' end
  if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
- local bag,remaining={},batchSize
- local materials={};for material in pairs(p.run.cargo) do table.insert(materials,material) end;table.sort(materials)
- for _,material in ipairs(materials) do
-  local units=math.min(remaining,p.run.cargo[material]);remaining=remaining-units
-  if units>0 then bag[material]=units;p.run.cargo[material]=p.run.cargo[material]-units end
-  if p.run.cargo[material]==0 then p.run.cargo[material]=nil end
-  if remaining==0 then break end
+ local bag=deliveryCargo(p.run.cargo,batchSize)
+ for material,units in pairs(p.run.cargo) do
+  local left=units-(bag[material] or 0)
+  p.run.cargo[material]=left>0 and left or nil
  end
  p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=bag}
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(bag)}
@@ -7270,11 +7302,11 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  end
  part:SetAttribute('CubicRock',not original)
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
- local shell=kind=='Geode';local size=reference and 3 or visualSize or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1)
+ local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  local ground=field.part.Position.Y+field.part.Size.Y*.5
- -- The live reference's mesh center sits three studs above the patch center.
- if reference then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*.5+.06 end
+ -- Anchor every size to the bottom of the reference mesh at its original scale.
+ if reference then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*1.5/size+.06 end
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=junk and junk.name or kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=not junk;part.Size=fullSize;part.Position=finish
@@ -7375,8 +7407,13 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
  for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
- local mineral=plan and plan.mineral or Mining.resource(seed:NextInteger(50,100),kind,field.cfg.Hardness)
- local visualSize=reference and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local deep=reference and field.cfg.SelectionOnly and (field.cfg.Hardness or 1)>1
+ local mineral=plan and plan.mineral
+ if not mineral then
+  local roll=seed:NextInteger(50,100)
+  mineral=deep and Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore) or Mining.resource(roll,kind,field.cfg.Hardness)
+ end
+ local visualSize=reference and not deep and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
@@ -7410,7 +7447,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
    local neighbors={}
    for _,r in ipairs(field.resources) do if not r.paid and r.cluster==patch then
     local p=patch.CFrame:PointToObjectSpace(r.position)
-    table.insert(neighbors,{x=p.X,z=p.Z})
+    local reserved=deep and ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true) or nil
+    table.insert(neighbors,{x=p.X,z=p.Z,radius=reserved})
    end end
    if #neighbors<16 and (not plan or plan.cluster==patch) and (not nearPin or Mining.selectorTouches(nearPin.center,nearPin.half,patch.CFrame,patch.Size)) then
     table.insert(choices,{patch=patch,neighbors=neighbors})
@@ -7432,7 +7470,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
   local occupied={}
   for _,r in ipairs(field.resources) do if not r.paid then
    local p=field.part.CFrame:PointToObjectSpace(r.position)
-   occupied[#occupied+1]={x=p.X,z=p.Z,radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference and r.kind=='Crystal')}
+   local reserved=(not reference or deep) and ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference and r.kind=='Crystal') or nil
+   occupied[#occupied+1]={x=p.X,z=p.Z,radius=reserved}
   end end
   for _,t in ipairs(field.turrets) do
    local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
@@ -7443,7 +7482,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
  if not spot then return false end
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,cluster=cluster} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
- local resource=makeResource(field,spot,kind,work+10,field.cfg.Ore*(boulder and Mining.BOULDER_WORK or 1),visualSize,boulder and 7 or field.cfg.Cracks or 3)
+ local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
+ local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or field.cfg.Cracks or 3)
  resource.cluster=cluster
  return true,kind=='Geode' and 5 or 1,resource
 end
@@ -7686,6 +7726,13 @@ function scene.finishPress(press)
  end
  scene.resetPress(press)
 end
+function scene.orePullClear(drop,from,target,targetModel)
+ if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0) then
+  drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder})
+  drop.queryAt=now+.15;drop.pullTarget=targetModel
+ end
+ return drop.clearPath==true
+end
 local function pickupStep(dt)
  scene.pressOutputs=scene.pressOutputs or {}
  for i=#scene.pressOutputs,1,-1 do
@@ -7706,10 +7753,11 @@ local function pickupStep(dt)
   local press=p.compactor
   if not press then continue end
   p.compactorTarget=nil;p.compactorDistance=math.huge
-  if press.pressSquare and (p.miningSquare~=press.pressSquare or press.hp<=0 or not characterRoot(p)) then
+  local hr=characterRoot(p)
+  if press.pressSquare and (p.miningSquare~=press.pressSquare or press.hp<=0 or not hr) then
    scene.resetPress(press)
   end
-  if not p.miningSquare or press.hp<=0 or now<(press.pressUntil or 0) or not healthy(p) or not characterRoot(p) then continue end
+  if not p.miningSquare or press.hp<=0 or now<(press.pressUntil or 0) or not healthy(p) or not hr then continue end
   local inputs=press.pressInputs
   if inputs then
    for _,id in ipairs(inputs) do
@@ -7720,17 +7768,29 @@ local function pickupStep(dt)
    if #inputs>=2 then scene.finishPress(press) else scene.resetPress(press) end
    continue
   end
-  if now>=(press.pressNextInputAt or 0) then activePresses[press.owner]=p end
+  if now>=(press.pressNextInputAt or 0) then
+   local hasRoom=Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
+   activePresses[press.owner]={profile=p,playerRoot=hasRoom and not inputs and hr or nil}
+  end
  end
  if next(activePresses) then
   for id,drop in pairs(pickups) do
-   local p=activePresses[drop.owner]
+   local active=activePresses[drop.owner]
+   local p=active and active.profile
    if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
     or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1)
     or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
    local press=p.compactor
    if press.pressMaterial and (press.pressMaterial~=drop.tierMaterial or press.pressInputValue+drop.value>1000000) then continue end
    local square=p.miningSquare
+   -- Let the player's backpack take nearby ore before starting another
+   -- batch. A press already loaded can finish with the next matching rock.
+   local hr=active.playerRoot
+   if hr then
+    local from=Vector3.new(drop.x,drop.y,drop.z)
+    local reach=p.cargoReach+(drop.reachBonus or 0)
+    if (hr.Position-from).Magnitude<=reach and scene.orePullClear(drop,from,hr.Position,hr.Parent) then continue end
+   end
    local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
    if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
    local distance=((press.pressDock or press.pos)-position).Magnitude
@@ -7790,10 +7850,7 @@ local function pickupStep(dt)
    local canCollect=(pressing or hasSpace) and (target-from).Magnitude<=reach
    local targetModel=pressing and press.model or vacuuming and vacuum.model or hr and hr.Parent
    if canCollect then
-    if drop.pullTarget~=targetModel or now>=(drop.queryAt or 0) then
-     drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder});drop.queryAt=now+.15;drop.pullTarget=targetModel
-    end
-    canCollect=drop.clearPath==true
+    canCollect=scene.orePullClear(drop,from,target,targetModel)
     if pressing and not canCollect then drop.pressBlockedUntil=now+2 end
    end
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
@@ -8747,7 +8804,8 @@ function scene.emptierReady(p,profile)
   p.emptierBagRun=profile.run.id;p.emptierBagSince=nil
  end
  if units>0 then p.emptierBagSince=p.emptierBagSince or now end
- return Workshop.emptierReady(units,Workshop.emptierBatch(profile),p.emptierBagSince,now)
+ local batch=Workshop.emptierBatch(profile)
+ return Workshop.emptierReady(units,batch,p.emptierBagSince,now) or (units>0 and Pro.firstPackDeliveryReady(profile,batch))
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end

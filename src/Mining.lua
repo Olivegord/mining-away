@@ -50,6 +50,16 @@ function M.resource(roll: number,kind: string,hardness: number?)
  local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
  return {maxHP=work+10,work=work,size=size,mass=mass}
 end
+function M.deepCrystal(roll: number,hardness: number,baseOre: number)
+ -- Size shows the work up front. Small cuts pay sooner; big cuts return
+ -- more Quartz in the same cargo slot.
+ local sizeRoll=(roll-50)/50
+ return {
+  size=2.15+1.7*sizeRoll,
+  work=65*hardness*(.5+sizeRoll)*M.HEALTH_MULTIPLIER,
+  ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
+ }
+end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number

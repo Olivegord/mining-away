@@ -502,6 +502,26 @@ function P.addMiningCargo(p,material,units,capacity,droneId)
  bag[material]=(bag[material] or 0)+units
  return units
 end
+local function deliveryCargo(cargo,batchSize)
+ local manifest,remaining={},batchSize
+ local materials={};for material in pairs(cargo) do table.insert(materials,material) end;table.sort(materials)
+ for _,material in ipairs(materials) do
+  local units=math.min(remaining,cargo[material])
+  if units>0 then manifest[material]=units;remaining-=units end
+  if remaining==0 then break end
+ end
+ return manifest
+end
+function P.firstPackDeliveryReady(p,batchSize)
+ local run=p.run
+ local shortfall=Workshop.PACK_BASE-run.wallet.Quartz
+ if run.packIndex~=0 or shortfall<=0 or next(run.deliveries) then return false end
+ local quartz=0
+ for material,units in pairs(deliveryCargo(run.cargo,batchSize)) do
+  quartz+=units*(Shops.quartzValue(material) or 0)
+ end
+ return quartz>=shortfall
+end
 function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid delivery ID' end
@@ -512,13 +532,10 @@ function P.beginDelivery(p,droneId,tx,expectedRun,batchSize)
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
  if not integer(batchSize) or batchSize<1 or batchSize>32 then return false,'Invalid courier batch' end
  if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
- local bag,remaining={},batchSize
- local materials={};for material in pairs(p.run.cargo) do table.insert(materials,material) end;table.sort(materials)
- for _,material in ipairs(materials) do
-  local units=math.min(remaining,p.run.cargo[material]);remaining=remaining-units
-  if units>0 then bag[material]=units;p.run.cargo[material]=p.run.cargo[material]-units end
-  if p.run.cargo[material]==0 then p.run.cargo[material]=nil end
-  if remaining==0 then break end
+ local bag=deliveryCargo(p.run.cargo,batchSize)
+ for material,units in pairs(p.run.cargo) do
+  local left=units-(bag[material] or 0)
+  p.run.cargo[material]=left>0 and left or nil
  end
  p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=bag}
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(bag)}

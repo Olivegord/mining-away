@@ -320,15 +320,19 @@ function S.oreValue(prices,material)
  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
  return tier and material~='Quartz' and tier.value or (prices and prices[material])
 end
+function S.quartzValue(material)
+ local _,value=Workshop.crystalCargo(material)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+ return value or (tier and tier.value)
+end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
  local deposit={}
  for key,n in pairs(bag) do
-  local _,cargoValue=Workshop.crystalCargo(key)
-  local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
-  if (not cargoValue and not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
-  local currency=(cargoValue or tier) and 'Quartz' or key
-  deposit[currency]=(deposit[currency] or 0)+n*(cargoValue or (tier and tier.value) or 1)
+  local quartz=S.quartzValue(key)
+  if (not quartz and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=quartz and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(quartz or 1)
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end
@@ -831,6 +835,16 @@ function M.resource(roll: number,kind: string,hardness: number?)
  local work=(mass-10)*(hardness or 1)*M.HEALTH_MULTIPLIER
  local size=mass/(kind=='Geode' and 37.5 or 25)*(kind=='Shard' and .8 or 1)
  return {maxHP=work+10,work=work,size=size,mass=mass}
+end
+function M.deepCrystal(roll: number,hardness: number,baseOre: number)
+ -- Size shows the work up front. Small cuts pay sooner; big cuts return
+ -- more Quartz in the same cargo slot.
+ local sizeRoll=(roll-50)/50
+ return {
+  size=2.15+1.7*sizeRoll,
+  work=65*hardness*(.5+sizeRoll)*M.HEALTH_MULTIPLIER,
+  ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
+ }
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
@@ -9100,8 +9114,13 @@ function V:update(dt,now)
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
-  self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz per rock') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,34)
+  self.title.TextSize=value and 16 or 13
+  local label=if value then ((s:GetAttribute('ExtractedOre') or 0)>0 and ' · Ore released' or ' · '..value..' Quartz')
+   elseif ore then ' · '..ore..' base ore'
+   elseif capacity>1 then ' · '..usedSlots..'/'..capacity
+   else ''
+  self.title.Text=tostring(name)..label
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

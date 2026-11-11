@@ -115,8 +115,13 @@ function V:update(dt,now)
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
-  self.meter.Size=UDim2.fromOffset(value and 206 or ore and 176 or 132,34)
-  self.title.Text=tostring(name)..(value and (' · '..value..' Quartz per rock') or ore and (' · '..ore..' base ore') or capacity>1 and (' · '..usedSlots..'/'..capacity) or '')
+  self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,34)
+  self.title.TextSize=value and 16 or 13
+  local label=if value then ((s:GetAttribute('ExtractedOre') or 0)>0 and ' · Ore released' or ' · '..value..' Quartz')
+   elseif ore then ' · '..ore..' base ore'
+   elseif capacity>1 then ' · '..usedSlots..'/'..capacity
+   else ''
+  self.title.Text=tostring(name)..label
   self.health.Size=UDim2.fromScale(math.clamp((s:GetAttribute('HP') or 0)/math.max(1,s:GetAttribute('MaxHP') or 1),0,1),1)
  elseif self.meter then self.meter.Enabled=false end
 end

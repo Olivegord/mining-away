@@ -63,3 +63,48 @@ assert(migrated.run.pendingOffer.id==offer.id and migrated.run.cargo[quartz]==1)
 assert(Pro.receipt(migrated,'Prestige','earned-before-repair').droneId==earned.droneId)
 assert(#assert(Pro.migrate(migrated,uid)).fleet==8 and #old.fleet==18)
 print('PASS oversized starter repair preserves earned drone IDs and traits, cargo, paid offers and replay receipts')
+
+do
+ local cfIndex=CF.__index
+ CF.__index=function(frame,key)
+  if key=='RightVector' then return Vector3.new(math.cos(frame.yaw),0,-math.sin(frame.yaw)) end
+  return cfIndex(frame,key)
+ end
+ local runner=player(98903);players.PlayerAdded:Fire(runner)
+ local crew=profiles[runner.UserId]
+ local pin=scene.packStation.Position+Vector3.new(0,0,125)
+ local zone=Instance.new('Folder');zone.Name='FirstPackPlot';zone.Parent=scene.map
+ local bed=World.part(zone,'Field',pin-Vector3.yAxis*.5,Vector3.new(30,1,30),Color3.new(1,0,0))
+ local field={id=#patches+1,cfg={Key='Quartz',Material='Quartz',Value=1,SelectionOnly=true,AlwaysUnlocked=true,
+  ReferenceCrystals=true,Hardness=1,Count=2,Ore=10,Turrets=0,Respawn=30},part=bed,model=zone,center=bed.Position,color=bed.Color,
+  resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ runner.Character:PivotTo(CFrame.new(pin+Vector3.yAxis*3))
+ advance(10)
+ for _,x in ipairs({-4,4}) do
+  local crystal=makeResource(field,bed.Position+Vector3.new(x,0,0),'Crystal',75,10,3,3)
+  crystal.readyAt=now
+ end
+ local run=data(crew).run
+ command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=run.id,fieldId=field.id,position=pin})
+ assert(crew.miningSquare and crew.compactor)
+ local sent,bagStarted
+ for _=1,math.ceil(15/C.Tick) do
+  advance(C.Tick)
+  bagStarted=bagStarted or crew.emptierBagSince
+  sent=next(data(crew).run.deliveries)
+  if sent then break end
+ end
+ local manifest=assert(data(crew).run.deliveries[sent],'two mined rocks never left for the Workshop')
+ local cargo=Workshop.cargoKey('Quartz',10)
+ assert(manifest.cargo[cargo]==2 and not crew.compactor.pressInputs,'the press took reachable starter ore')
+ assert(bagStarted and now-bagStarted<Workshop.EMPTIER_WAIT,'shipment used the normal partial-load timeout')
+ advance(18)
+ assert(data(crew).run.wallet.Quartz==Workshop.PACK_BASE and not next(data(crew).run.deliveries))
+ runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
+ command.OnServerEvent:Fire(runner,'BuyPack',{runId=run.id,packIndex=0,txId='earned-first-pack'})
+ assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==0)
+ players.PlayerRemoving:Fire(runner)
+ CF.__index=cfIndex
+ print('PASS Crystal Run mines two rocks, leaves nearby cargo for the player and pays for the first pack through a partial Emptier trip')
+end

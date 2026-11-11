@@ -25,13 +25,14 @@ function P.fits(x,z,width,depth,radius,occupied)
  end
  return true
 end
-local function fitsReference(x,z,halfX,halfZ,occupied,gap)
+local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  if not finite(x) or not finite(z) or x%1~=0 or z%1~=0 or math.abs(x)>halfX or math.abs(z)>halfZ then return false end
  for _,other in ipairs(occupied or {}) do
   local dx,dz=x-other.x,z-other.z
-  -- Mining Away scatters on whole studs, including adjacent centers.
-  -- Keep coincident clicks from selecting two crystals at the same point.
-  if dx*dx+dz*dz<gap*gap then return false end
+  -- The starter patch keeps Mining Away's spacing. Larger deposits reserve
+  -- room for both meshes to turn when they fracture.
+  local separation=other.radius and radius+other.radius or gap
+  if dx*dx+dz*dz<separation*separation then return false end
  end
  return true
 end
@@ -46,7 +47,7 @@ function P.sample(width,depth,radius,occupied,random,clear,preferred,reference,r
   local x,z
   if preferred then x,z=preferred.x,preferred.z else x,z=random(-halfX,halfX),random(-halfZ,halfZ) end
   local fits
-  if reference then fits=fitsReference(x,z,halfX,halfZ,occupied,referenceGap or 2)
+  if reference then fits=fitsReference(x,z,halfX,halfZ,radius,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end
   if fits and (not clear or clear(x,z,radius)) then
    return {x=x,z=z,radius=radius},attempt

@@ -140,15 +140,19 @@ function S.oreValue(prices,material)
  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
  return tier and material~='Quartz' and tier.value or (prices and prices[material])
 end
+function S.quartzValue(material)
+ local _,value=Workshop.crystalCargo(material)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+ return value or (tier and tier.value)
+end
 -- Validate the complete mixed bag before touching any balance.
 function S.deposit(run,bag)
  local deposit={}
  for key,n in pairs(bag) do
-  local _,cargoValue=Workshop.crystalCargo(key)
-  local tier=Workshop.CRYSTAL_BY_MATERIAL[key]
-  if (not cargoValue and not tier and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
-  local currency=(cargoValue or tier) and 'Quartz' or key
-  deposit[currency]=(deposit[currency] or 0)+n*(cargoValue or (tier and tier.value) or 1)
+  local quartz=S.quartzValue(key)
+  if (not quartz and not S.COLORS[key]) or not integer(n) then return false,'Invalid mineral deposit' end
+  local currency=quartz and 'Quartz' or key
+  deposit[currency]=(deposit[currency] or 0)+n*(quartz or 1)
  end
  for key,n in pairs(deposit) do
   if not integer(run.wallet[key]+n) then return false,'Invalid mineral deposit' end

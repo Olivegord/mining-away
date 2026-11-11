@@ -178,6 +178,34 @@ d.pos=Vector3.new(0,14.5,-68)
 assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)
 print('PASS full reference-sized patch populations, refill locality, mining and standby heights')
 
+do
+ local deep=table.clone(f)
+ deep.cfg=table.clone(f.cfg)
+ deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4
+ deep.resources={}
+ seedField(deep)
+ assert(#deep.resources==48,'deep patches failed to fill at mixed crystal sizes')
+ local low,high=math.huge,0
+ for i,r in ipairs(deep.resources) do
+  local base=r.part:GetAttribute('GroundY')
+  assert(math.abs(base-(r.cluster.Position.Y+Feel.ReferenceCrystalPivot-1.5+.06))<.001)
+  assert(r.part:GetAttribute('OreValue')==r.ore*deep.cfg.Value)
+  low=math.min(low,r.ore);high=math.max(high,r.ore)
+  for j=1,i-1 do
+   local other=deep.resources[j]
+   if r.cluster~=other.cluster then continue end
+   local a=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true)
+   local b=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
+   local delta=r.position-other.position
+   assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=a+b,'deep deposits overlapped their turn clearance')
+   assert((r.hp-other.hp)*(r.fullSize.Y-other.fullSize.Y)>=0,'size did not predict work')
+  end
+  resources[r.id]=nil;r.part:Destroy()
+ end
+ assert(low<=8 and high>=14,'deep field never offered both short and rich cuts')
+ print('PASS deep fields expose work and sale value through planted crystal size and keep separate turn clearance')
+end
+
 -- Earn a first pack at the Workshop, then exercise all three actual choices.
 local shopper=player(98703);players.PlayerAdded:Fire(shopper)
 scene.runStart=f.center

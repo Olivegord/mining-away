@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock, and deeper rocks need 3× the work and carry 4× the value per tier. Emptiers carry four cargo items by default and take partial loads. The Compactor packs matching rocks into one block worth their total value. Packs grant run upgrades and Stars. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when a sale will fund the first pack. The Compactor packs matching rocks into one block worth their total value. Packs grant run upgrades and Stars. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f891839432dcb51b91b5c38eb8306eeb15c9bcb045c6a4395c5dd37358147b3d` | Curated starter fleet and follow ring fix. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the follow-ring handoff below. |
+| Native-file SHA-256 | `e1ad46156eda60d5a0e8f547755fb52b8ab36d55f47a15f7831afda06b862e1e` | Deep crystal sizes and first pack delivery. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the curated starter fleet and working follow ring** | All seven Sources and three roots verified in Edit. Team Create save returned version 126. Play Solo verified all nine follow slots. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the mining pacing pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 127. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 10 — readable deep cuts and first pack delivery
+
+Ruby through Emerald use different sizes of the original crystal union. Size tracks mineable work, with the smallest and largest cuts at 0.5× and 1.5× median work. Raw cargo from those cuts is worth 7–16 times the field's ore multiplier in the same slot. Deposits share the original planting depth and reserve room for their fracture turns. The existing focus readout shows base Quartz value or that ore has already been released. The starter Quartz field keeps the reference size, spacing, work and payout.
+
+An Emptier can leave with a partial load as soon as its exact manifest can fund the first pack. An outstanding sale prevents another early dispatch. Later pickups still use full loads or the normal partial-load timer. The Compactor leaves reachable loose ore for a backpack with room before starting a batch, and finishes a batch already in its sockets. Cargo still follows the same persistent sale ledger and compaction conserves its value.
+
+Workshop, Crystal Run, pickup and committed-flight suites passed using API or storage doubles. The Crystal Run fixture cut two rocks, collected their drops, dispatched an Emptier before the six-second timeout, and paid for a pack after the real controller flew the delivery. A deep-field fixture checked mixed sizes, planting height, spacing and advertised value across 48 crystals. The older physical-mining suite fails at the same full-bag manual-mining assertion on `e628147` and this revision. Studio Edit measured the longest revised hover text at 160.5 px in its 188 px slot. Normal-zoom motion, sound, multiplayer and enjoyment are unverified for this revision.
+
+The shared Studio entry point was already open in Edit at place **124078027733625**, universe **10774898335**. All seven Source fingerprints matched the disk bundles, all three roots reported `SyncedAsRoot`, and the Edit map had five zones and fifteen plots. Team Create returned save version **127**. Studio stayed in Edit with no new Play session. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit e628147`. The canonical refresh preserved every non-Source chunk and every unrelated or backup Source.
 
 ## November 10 — curated starter fleet and follow ring
 
