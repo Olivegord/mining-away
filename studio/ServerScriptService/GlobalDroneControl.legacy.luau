@@ -13,19 +13,16 @@ W.CRYSTAL_TIERS={
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
-for i,tier in ipairs(W.CRYSTAL_TIERS) do
- tier.nextTier=W.CRYSTAL_TIERS[i+1]
+for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
+W.STARTER_SPECIALISTS={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
+W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
+W.COMPACTOR_WAIT=5
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
-function W.compaction(material,units,batch)
- local tier=W.CRYSTAL_BY_MATERIAL[material]
- if not tier or not tier.nextTier then return nil,0,units end
- return tier.nextTier,math.floor(units/batch),units%batch
-end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
 function W.cargoKey(material,quartz,pressed)
@@ -68,6 +65,8 @@ W.CATALOG={
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_CARGO_RACK',title='Cargo Rack',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
@@ -75,17 +74,24 @@ W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
  return total
 end
-function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
-function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
+function W.hasCompactor(p,extra)
+ for _,d in ipairs(p.fleet) do if d.role=='Compactor' then return true end end
+ return W.effect(p,'compactor',extra)>0
+end
+function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
+function W.emptierBatch(p,extra) return W.EMPTIER_BATCH+W.effect(p,'cargoRack',extra) end
+function W.emptierReady(units,capacity,waitingSince,now)
+ return units>=capacity or units>0 and waitingSince~=nil and now-waitingSince>=W.EMPTIER_WAIT
+end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},
@@ -795,7 +801,7 @@ local definitions={
  Needler={job='Dart thrower',worker=true,special='Needler'},
  Ballcaster={job='Energy ball thrower',worker=true,special='Ballcaster'},
  Vacuum={job='Collects loose ore'},
- Compactor={job='Compresses loose ore into the next tier'},
+ Compactor={job='Compresses loose ore into equal-value blocks'},
 }
 local function finite(n) return type(n)=='number' and n==n and n>-math.huge and n<math.huge end
 function R.canonical(role) return legacy[role] or role end
@@ -2333,14 +2339,17 @@ local Profile = (function()
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
 local P={SCHEMA=12,CONTENT=1}
 local STARTER_COUNT=3
-local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true}
+local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[1+#Workshop.STARTER_SPECIALISTS]=true}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
+local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
+for role in pairs(starterTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
 effectKeys.compactor=true;effectKeys.batchPress=true;effectKeys.liveWire=true;effectKeys.shiftRelay=true
+effectKeys.denserPacking=true;effectKeys.cargoRack=true
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -2437,17 +2446,26 @@ local function specialDrone(uid,serial,kind,seed)
  base.maxHealth=kind=='Halver' and 110 or (kind=='Singularity' and 100 or 80)
  return {id=tostring(uid)..':drone:'..serial,name=DroneCatalog.Types[kind].Name..' '..serial,type=kind,role=kind,base=base,flightHeight=3.4}
 end
-function P.new(uid,seed)
+function P.new(uid,seed,roleConfig)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
- for serial=1,STARTER_COUNT do
+ for serial=1,(roleConfig and 1 or STARTER_COUNT) do
   local miner=drone(uid,serial,'Blue',seed,1)
   -- Use the reference's 12–30 studs/second flight roll for each basic miner.
   miner.base.maxStep60=(20+((seed+serial*17)%31))/100
   fleet[serial]=miner
  end
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=STARTER_COUNT,nextDroneSerial=STARTER_COUNT+1,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
+ if roleConfig then
+  for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
+   local serial=#fleet+1
+   local stats=roleConfig.StudioRoles[role]
+   local kind=role=='Charger' and 'Red' or role=='Medic' and 'Green' or role
+   fleet[serial]={id=tostring(uid)..':drone:'..serial,name=roleConfig.Types[role].DisplayName,role=role,type=kind,
+    base=clone(stats.base),flightHeight=stats.height}
+  end
+ end
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=#fleet,nextDroneSerial=#fleet+1,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
@@ -2456,10 +2474,10 @@ function P.validate(p,uid)
  if not denseArray(p.fleet) or not supportedStarterCounts[p.starterDrones] or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
  for serial,d in ipairs(p.fleet) do
-  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
+  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type] and not starterTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=d
-  if not roles[d.role] or (specialTypes[d.type] and d.role~=d.type) then return false,'Invalid permanent role' end
+  if not roles[d.role] or ((specialTypes[d.type] or starterTypes[d.type]) and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end
@@ -3091,7 +3109,9 @@ local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  local compactor=Workshop.hasCompactor(p,c)
  out.compactor=compactor and 1 or 0
- out.batchPress=compactor and Workshop.COMPACTOR_BATCH-Workshop.compactorBatch(p,c) or 0
+ out.batchPress=compactor and Workshop.effect(p,'batchPress',c) or 0
+ out.denserPacking=compactor and Workshop.effect(p,'denserPacking',c) or 0
+ out.cargoRack=Workshop.effect(p,'cargoRack',c)
  out.shiftRelay=Workshop.effect(p,'shiftRelay',c)
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
@@ -3126,7 +3146,8 @@ local function preview(p,c)
  local lines={}
  if c.effects.compactor then table.insert(lines,{label='Compactor drones',before=0,after=1,unit=''}) end
  if c.effects.shiftRelay then table.insert(lines,{label='Mining boost after delivery',before=Workshop.effect(p,'shiftRelay'),after=Workshop.effect(p,'shiftRelay',c),unit='s'}) end
- if c.effects.batchPress then table.insert(lines,{label='Input per compressed ore',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='ore'}) end
+ if c.effects.batchPress or c.effects.denserPacking then table.insert(lines,{label='Rocks per full press',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='rocks'}) end
+ if c.effects.cargoRack then table.insert(lines,{label='Cargo mounts per Emptier',before=Workshop.emptierBatch(p),after=Workshop.emptierBatch(p,c),unit='slots'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end
@@ -3813,7 +3834,7 @@ local fieldTestRoles={
  Needler={label='Dart thrower',color=Color3.fromRGB(255,195,94),detail='Throws quick darts into the side of a crystal.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Launches a slower, heavier energy ball from the side.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
- Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Pulls in loose ore at your pin and presses it into the next tier.'},
+ Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Presses loose rocks into one block worth the sum of its inputs.'},
 }
 for name,role in pairs(fieldTestRoles) do
  DroneConfig.Types[name]={DisplayName=role.label,Description=role.detail,Color=role.color,Accent=role.color:Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=80,Speed=26,FlightHeight=3.2,AttackStyle='Special',AttackRange=20,AttackCooldown=1,Damage=12,Weight=1}
@@ -3839,6 +3860,7 @@ for name in pairs(fieldTestRoles) do
 end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
+DroneConfig.PressSockets = {Vector3.new(0,-1.05,.96),Vector3.new(-1.02,-1.05,.27),Vector3.new(1.02,-1.05,.27),Vector3.new(-.58,-1.05,-.86),Vector3.new(.58,-1.05,-.86)}
 
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
@@ -4012,9 +4034,13 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   hardware('PressCap',Vector3.new(1.43,.20,1.23),CFrame.new(0,.32,0),pale,smooth)
   hardware('PressIntake',Vector3.new(.19,.95,.95),CFrame.new(0,-.45,0)*vertical,dark,metal,cylinder)
   hardware('PressIndicator',Vector3.new(.09,.57,.57),CFrame.new(0,-.56,0)*vertical,color,Enum.Material.Neon,cylinder)
+  for i,position in ipairs(DroneConfig.PressSockets) do
+   hardware('PressSocket'..i,Vector3.new(.13,.63,.63),CFrame.new(position-Vector3.yAxis*.28)*vertical,dark,metal)
+  end
   for _,side in ipairs({-1,1}) do
    hardware('PressRail',Vector3.new(.27,.91,1.52),CFrame.new(side*.93,-.21,0),dark,metal)
    hardware('PressJaw',Vector3.new(.27,.25,1.31),CFrame.new(side*.76,-.73,0),pale,metal,nil,'PressJaw',side)
+   hardware('PressFoot',Vector3.new(.39,.33,1.22),CFrame.new(side*.97,-.49,0),pale,metal,nil,'PressFoot',side)
   end
  elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)
@@ -6831,7 +6857,7 @@ else adapter=Persistence.dataStore(game:GetService('DataStoreService'):GetDataSt
 local store=Persistence.new(adapter,{
  owner=instanceId,now=os.time,wait=task.wait,leaseSeconds=180,maxAttempts=3,
  newProfile=function(uid)
-  local profile=Pro.new(uid,seed:NextInteger(1,2147483000))
+  local profile=Pro.new(uid,seed:NextInteger(1,2147483000),scene.runStart and RoleConfig or nil)
   -- Studio starts with the real earned Quartz economy; no free workshop money.
   return profile
  end,
@@ -7038,7 +7064,9 @@ function scene.runtimeFleet(p: any)
   for slot=1,Workshop.EMPTIERS do
    table.insert(fleet,{id=Workshop.emptierId(profile.run.id,slot),type='Courier',role='Courier',name='Emptier '..slot,flightHeight=role.height,base=role.base})
   end
-  if Workshop.hasCompactor(profile) then
+  local hasPress=false
+  for _,owned in ipairs(base) do if owned.role=='Compactor' then hasPress=true;break end end
+  if not hasPress and Workshop.effect(profile,'compactor')>0 then
    role=RoleConfig.StudioRoles.Compactor
    table.insert(fleet,{id=profile.run.id..':compactor',type='Compactor',role='Compactor',name='Compactor',flightHeight=role.height,base=role.base})
   end
@@ -7573,9 +7601,44 @@ local function award(d: any,r: any,completedSpecial: boolean?,extraction: boolea
  end
  p.dirty=true;p.publishDirty=true
 end
+function scene.pressSocket(press,slot)
+ local pose=CFrame.new(press.pos)*CFrame.Angles(0,press.yaw or 0,0)
+ return pose:PointToWorldSpace(RoleConfig.PressSockets[slot]*press.model:GetScale())
+end
+function scene.resetPress(press)
+ for _,id in ipairs(press.pressInputs or {}) do
+  local drop=pickups[id]
+  if drop then
+   drop.pressSocket=nil;drop.pressCarrier=nil;drop.pressBlockedUntil=now+8
+   drop.part:SetAttribute('PressSocket',nil)
+  end
+ end
+ press.pressInputs=nil;press.pressInputValue=nil;press.pressDeadline=nil
+ press.pressMaterial=nil;press.pressDock=nil;press.pressSquare=nil;press.pressNextInputAt=nil
+end
+function scene.finishPress(press)
+ local inputs=press.pressInputs
+ local first=pickups[inputs[1]]
+ local intake=press.pos-Vector3.yAxis*.85
+ local outlet=CFrame.Angles(0,press.yaw or 0,0)
+ local tier=Workshop.CRYSTAL_BY_MATERIAL[first.tierMaterial]
+ local value=press.pressInputValue
+ local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=tier.material,
+  material=Workshop.cargoKey(tier.material,value,true),value=value,units=1,raw=true,compacted=true,
+  floor=first.floor,fieldPart=first.fieldPart}
+ local tint=Color3.fromRGB(table.unpack(Shops.COLORS[tier.name]))
+ table.insert(scene.pressOutputs,{at=now+.52,template=Instance.new('Part'),drop=output,
+  position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint})
+ press.pressUntil=now+1.1
+ press.model:SetAttribute('PressAt',now)
+ for _,id in ipairs(inputs) do
+  local drop=pickups[id]
+  drop.part:SetAttribute('ProcessedPosition',intake);drop.part:SetAttribute('ProcessedAt',now)
+  drop.part.Transparency=1;Debris:AddItem(drop.part,.24);pickups[id]=nil
+ end
+ scene.resetPress(press)
+end
 local function pickupStep(dt)
- local pressed=nil
- local groups={}
  scene.pressOutputs=scene.pressOutputs or {}
  for i=#scene.pressOutputs,1,-1 do
   local item=scene.pressOutputs[i]
@@ -7588,46 +7651,53 @@ local function pickupStep(dt)
    item.template:Destroy();table.remove(scene.pressOutputs,i)
   end
  end
- local hasPress=false
+ local activePresses={}
  for _,p in pairs(profiles) do
   p.uncollectedOre=0
   if p.vacuum then p.vacuumTarget=nil;p.vacuumDistance=math.huge end
-  if p.compactor then
-   p.compactorTarget=nil;p.compactorDistance=math.huge
-   hasPress=hasPress or (p.miningSquare~=nil and now>=(p.compactor.pressUntil or 0))
+  local press=p.compactor
+  if not press then continue end
+  p.compactorTarget=nil;p.compactorDistance=math.huge
+  if press.pressSquare and (p.miningSquare~=press.pressSquare or press.hp<=0 or not characterRoot(p)) then
+   scene.resetPress(press)
   end
+  if not p.miningSquare or press.hp<=0 or now<(press.pressUntil or 0) or not healthy(p) or not characterRoot(p) then continue end
+  local inputs=press.pressInputs
+  if inputs then
+   for _,id in ipairs(inputs) do
+    if not pickups[id] then scene.resetPress(press);inputs=nil;break end
+   end
+  end
+  if inputs and (#inputs>=p.compactorBatch or now>=press.pressDeadline) then
+   if #inputs>=2 then scene.finishPress(press) else scene.resetPress(press) end
+   continue
+  end
+  if now>=(press.pressNextInputAt or 0) then activePresses[press.owner]=p end
  end
- if hasPress then for id,drop in pairs(pickups) do
-  local p=profiles[drop.owner];local tier=Workshop.CRYSTAL_BY_MATERIAL[drop.tierMaterial]
-  local press=p and p.compactor;local square=p and p.miningSquare
-  if not press or press.hp<=0 or now<(press.pressUntil or 0) or not square or not healthy(p) or not characterRoot(p)
-   or drop.runId~=data(p).run.id or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now)
-   or drop.fieldPart~=square.field.part or drop.compacted or not tier or not tier.nextTier
-   or not drop.landed or drop.age<.40 or now<(drop.pressBlockedUntil or 0) then continue end
-  local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
-  if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
-  local distance=(press.pos-position).Magnitude
-  local byTier=groups[p] or {};groups[p]=byTier
-  local candidates=byTier[tier] or {};byTier[tier]=candidates
-  candidates[#candidates+1]={id=id,position=position,distance=distance}
- end end
- for p,byTier in pairs(groups) do
-  for _,candidates in pairs(byTier) do
-   if #candidates<p.compactorBatch then continue end
-   table.sort(candidates,function(a,b) return a.distance==b.distance and a.id<b.id or a.distance<b.distance end)
-   local closest=candidates[1]
-   if closest.distance<p.compactorDistance or (closest.distance==p.compactorDistance and closest.id<p.compactorTarget.id) then
-    local batch={}
-    for i=1,p.compactorBatch do batch[candidates[i].id]=true end
-    p.compactorDistance=closest.distance;p.compactorTarget={id=closest.id,position=closest.position,batch=batch}
+ if next(activePresses) then
+  for id,drop in pairs(pickups) do
+   local p=activePresses[drop.owner]
+   if not p or not drop.raw or drop.compacted or drop.pressSocket or not drop.landed or drop.age<.40
+    or now<(drop.pressBlockedUntil or 0) or OreDrops.expired(drop.spawnAt,now+Workshop.COMPACTOR_WAIT+1)
+    or drop.runId~=data(p).run.id or drop.fieldPart~=p.miningSquare.field.part then continue end
+   local press=p.compactor
+   if press.pressMaterial and (press.pressMaterial~=drop.tierMaterial or press.pressInputValue+drop.value>1000000) then continue end
+   local square=p.miningSquare
+   local position=Vector3.new(drop.x,drop.floor+3.2,drop.z)
+   if math.abs(position.X-square.center.X)>square.half+8 or math.abs(position.Z-square.center.Z)>square.half+8 then continue end
+   local distance=((press.pressDock or press.pos)-position).Magnitude
+   if press.pressDock and distance>12 then continue end
+   if distance<p.compactorDistance or (distance==p.compactorDistance and id<p.compactorTarget.id) then
+    p.compactorDistance=distance;p.compactorTarget={id=id,position=press.pressDock or position}
    end
   end
  end
  for id,drop in pairs(pickups) do
   local p=profiles[drop.owner]
+  if p and drop.pressCarrier and drop.pressCarrier~=p.compactor then scene.resetPress(drop.pressCarrier) end
   if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
-  elseif healthy(p) then
+  elseif healthy(p) and not drop.pressSocket then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
    -- outside its original footprint, at bounded intervals while moving.
    if drop.fieldPart and now>=(drop.floorQueryAt or 0) then
@@ -7650,13 +7720,14 @@ local function pickupStep(dt)
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
    local vacuum=p.vacuum
    local press=p.compactor
-   local pressing=p.compactorTarget and p.compactorTarget.batch[id] or false
-   if not pressing then drop.pressReady=nil end
+   local pressing=p.compactorTarget and p.compactorTarget.id==id
+    and (press.pressDock or (press.pos-p.compactorTarget.position).Magnitude<1.1)
+   local socket=pressing and #(press.pressInputs or {})+1
    local relay=now<(drop.relayUntil or 0)
    local vacuuming=false
    local reach=relay and math.max(p.vacuumReach+12,naturalReach) or naturalReach
    if pressing then
-    target=press.pos-Vector3.new(0,.85,0);reach=13
+    target=scene.pressSocket(press,socket);reach=13
    elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
     if distance>naturalReach-4 and distance<=p.vacuumReach then
@@ -7675,7 +7746,7 @@ local function pickupStep(dt)
      drop.clearPath=los(from,target,targetModel,{pickupFolder,droneFolder});drop.queryAt=now+.15;drop.pullTarget=targetModel
     end
     canCollect=drop.clearPath==true
-    if pressing and not canCollect and p.compactorDistance<2 then drop.pressBlockedUntil=now+2 end
+    if pressing and not canCollect then drop.pressBlockedUntil=now+2 end
    end
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
    if groundSpeed and groundSpeed>1 then
@@ -7687,8 +7758,15 @@ local function pickupStep(dt)
    end
    if reached and los(Vector3.new(drop.x,drop.y,drop.z),target,targetModel,{pickupFolder,droneFolder}) then
     if pressing then
-     drop.pressReady=true
-     pressed=pressed or {};pressed[p]=true
+     if not press.pressInputs then
+      press.pressInputs={};press.pressInputValue=0;press.pressDeadline=now+Workshop.COMPACTOR_WAIT
+      press.pressMaterial=drop.tierMaterial;press.pressSquare=p.miningSquare;press.pressDock=press.pos
+     end
+     table.insert(press.pressInputs,id);press.pressInputValue+=drop.value
+     press.pressNextInputAt=now+.22
+     drop.x=target.X;drop.y=target.Y;drop.z=target.Z
+     drop.vx=0;drop.vy=0;drop.vz=0;drop.homing=false;drop.snapshotAt=0
+     drop.pressSocket=socket;drop.pressCarrier=press;drop.part:SetAttribute('PressSocket',socket)
     elseif vacuuming then
      drop.relayUntil=now+3;drop.queryAt=0
     else
@@ -7718,35 +7796,6 @@ local function pickupStep(dt)
    end
   end
  end
- if pressed then for p in pairs(pressed) do
-  local press=p.compactor
-  local batch=p.compactorTarget and p.compactorTarget.batch
-  local first,value,count=nil,0,0
-  local intake=press.pos-Vector3.yAxis*.85
-  for id in pairs(batch or {}) do
-   local drop=pickups[id]
-   if not drop or not drop.pressReady or (Vector3.new(drop.x,drop.y,drop.z)-intake).Magnitude>2.5 then break end
-   first=first or drop;value+=drop.value;count+=1
-  end
-  if count==p.compactorBatch then
-   local nextTier=Workshop.CRYSTAL_BY_MATERIAL[first.tierMaterial].nextTier
-   local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=nextTier.material,
-    material=Workshop.cargoKey(nextTier.material,value,true),value=value,units=1,raw=true,compacted=true,
-    floor=first.floor,fieldPart=first.fieldPart}
-   local tint=Color3.fromRGB(table.unpack(Shops.COLORS[nextTier.name]))
-   local template=Instance.new('Part')
-   local at=now+.52
-   local outlet=CFrame.Angles(0,press.yaw or 0,0)
-   scene.pressOutputs[#scene.pressOutputs+1]={at=at,template=template,drop=output,position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint}
-   press.pressUntil=now+1.1
-   press.model:SetAttribute('PressAt',now)
-   for id in pairs(batch) do
-    local drop=pickups[id]
-    drop.part:SetAttribute('ProcessedAt',now);drop.part:SetAttribute('ProcessedPosition',intake)
-    drop.part.Transparency=1;Debris:AddItem(drop.part,.24);pickups[id]=nil
-   end
-  end
- end end
 end
 local hitResource: any
 local function secondaryMining(d: any,primary: any,amount: number,radius: number)
@@ -7835,7 +7884,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if secondary and not r.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
  if not secondary and not abilityOrigin then r.processingPrimary=d.id end
  local previous=r.stage
- local isShot=special and job.contact~=nil
+ local isShot=special==true or contactKind=='Breaker'
  local cutStart=not secondary and not abilityOrigin and not special and d.mining and d.beamSince and d.lastCutFX~=d.beamSince
  local shapeChanged=false
  local revealed=nil
@@ -7913,10 +7962,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local direction=delta.Magnitude>.01 and delta.Unit or -Vector3.yAxis
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
   local hit=finalSurface or workspace:Raycast(hitFrom,delta,query)
-  local point=hit and hit.Position or (isShot and job.contact) or r.part.Position-direction*r.part.Size.Y*.32
+  local point=hit and hit.Position or (job and job.contact) or r.part.Position-direction*r.part.Size.Y*.32
   r.part:SetAttribute('CutContactPoint',point);r.part:SetAttribute('CutContactNormal',hit and hit.Normal or -direction)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
-  if isShot and job.projectile then
+  if special and job.projectile then
    job.projectile:SetAttribute('ContactPoint',point);job.projectile:SetAttribute('ContactAt',now)
   end
   if broken then r.part:SetAttribute('CrystalBreakAt',now) end
@@ -8643,6 +8692,15 @@ local function breakerDrone(d,p,hr,field,dt)
   d.breaker=job
  elseif event=='missed' or event=='canceled' then release(d) end
 end
+function scene.emptierReady(p,profile)
+ local units=Pro.cargoUnits(profile)
+ if not scene.runStart then return units>0 end
+ if profile.run.id~=p.emptierBagRun or units==0 then
+  p.emptierBagRun=profile.run.id;p.emptierBagSince=nil
+ end
+ if units>0 then p.emptierBagSince=p.emptierBagSince or now end
+ return Workshop.emptierReady(units,Workshop.emptierBatch(profile),p.emptierBagSince,now)
+end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
  if d.specialRecovery and not d.specialPausedAt and (not d.specialRecovery.part.Parent or now>=d.specialRecovery.startedAt+d.specialRecovery.duration+1.15) then d.specialRecovery=nil end
@@ -8749,8 +8807,7 @@ local function droneStep(d: any,dt: number)
    if scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
   end
-  local minimum=scene.runStart and Workshop.EMPTIER_BATCH or 1
-  if Pro.cargoUnits(data(p))>=minimum and now>=(d.collectAfter or 0) then
+  if scene.emptierReady(p,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
    local side=rank%2==0 and 1 or -1
    d.state='Collect';move(d,hr.Position+Vector3.new(side*2.2,2.4,1),dt)
@@ -8772,6 +8829,8 @@ local function droneStep(d: any,dt: number)
   return
  elseif d.role=='Compactor' then
   if now<(d.pressUntil or 0) then d.state='Press';d.goal=d.pos;d.velocity=Vector3.zero
+  elseif d.pressDock then
+   d.state='Intake';d.goal=d.pressDock;d.velocity=Vector3.zero
   elseif p.compactor==d and p.compactorTarget then
    d.state='Intake';move(d,p.compactorTarget.position,dt)
   elseif not scene.holdSquare(d,p,dt) then followRole(d,p,hr,dt) end
@@ -8824,6 +8883,21 @@ local function snapshotDrone(d)
  local pose=CFrame.new(d.pos)*CFrame.Angles(0,d.yaw,0)
  if d.publishedPose~=pose then d.model:PivotTo(pose);d.publishedPose=pose end
  local profile=data(profiles[d.owner])
+ local delivery=profile.run.deliveries[d.id]
+ local slots=scene.runStart and d.role=='Courier' and Workshop.emptierBatch(profile) or 0
+ local deliveryId=delivery and delivery.id or ''
+ if slots>0 and d.displayedDelivery~=deliveryId then
+  d.displayedDelivery=deliveryId
+  local materials,load={},{}
+  if delivery then
+   for material in pairs(delivery.cargo) do table.insert(materials,material) end
+   table.sort(materials)
+   for _,material in ipairs(materials) do
+    for _=1,math.min(delivery.cargo[material],6-#load) do table.insert(load,material) end
+   end
+  end
+  d.deliveryMaterials=table.concat(load,';')
+ end
  local target=d.target
  if target and (target.paid or target.hp<=0 or not target.part.Parent) then retireTarget(d);target=nil end
  local breakContact=d.mineBreakContact
@@ -8842,7 +8916,7 @@ local function snapshotDrone(d)
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
-  DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=profile.run.deliveries[d.id] and profile.run.deliveries[d.id].id or '',AutoFieldId=d.autoField or 0,
+  DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=(scene.runStart and scene.packStation or scene.converter or scene.packStation).Position,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
@@ -9062,15 +9136,16 @@ local function serviceDeliveries(p: any)
    return
   elseif d.role=='Courier' and d.hp>0 and d.deliveryRequested and not manifest and now>=(d.collectAfter or 0) then
    local hr=characterRoot(p)
-   local minimum=scene.runStart and Workshop.EMPTIER_BATCH or 1
-   if Pro.cargoUnits(data(p))<minimum or (d.pos-hr.Position).Magnitude>RoleConfig.Courier.PickupDistance or not d.pickupAt or now-d.pickupAt<RoleConfig.Courier.PickupHold or not los(d.pos,hr.Position,hr.Parent,{droneFolder}) then d.deliveryRequested=false;d.pickupAt=nil
+   if not scene.emptierReady(p,data(p)) or (d.pos-hr.Position).Magnitude>RoleConfig.Courier.PickupDistance or not d.pickupAt or now-d.pickupAt<RoleConfig.Courier.PickupHold or not los(d.pos,hr.Position,hr.Parent,{droneFolder}) then d.deliveryRequested=false;d.pickupAt=nil
    else
     local tx,runId,id=Http:GenerateGUID(false),run.id,d.id
     p.nextDeliveryAction=now+1
     transact(p,'deliveryBegin:'..tx,function(copy)
-     local batch=scene.runStart and Workshop.EMPTIER_BATCH or d.stats.courierCapacity or RoleConfig.Courier.BatchUnits
+     if not scene.emptierReady(p,copy) then return nil,'Courier is waiting for cargo' end
+     local batch=scene.runStart and Workshop.emptierBatch(copy) or d.stats.courierCapacity or RoleConfig.Courier.BatchUnits
      local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch);if ok then return result end;return nil,result
     end,function(result)
+     if Pro.cargoUnits(data(p))==0 then p.emptierBagSince=nil end
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
       release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
@@ -9097,6 +9172,7 @@ local function sellBackpack(p: any,automatic: boolean?)
   local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
+  p.emptierBagSince=nil
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]

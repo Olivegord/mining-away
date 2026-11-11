@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** Crystal Run starts with three permanent miners, two run Emptiers and ten cargo slots. An ordinary crystal gives one substantial raw rock; deeper rocks need 3× the work and carry 4× the value per tier. Emptiers move four-slot batches. New packs contain run upgrades, and new Star purchases add run conveniences. Prestige offers three stable choices and grants the selected permanent drone and +25% base mining power. Paid legacy choices, saved crew and existing Star automation still load.
+**Current implementation:** New Crystal Run players start with all 18 implemented roles across 17 permanent drones and two run Emptiers. Returning players keep their saved fleets. The backpack starts with ten slots. Each ordinary crystal gives one raw rock, and deeper rocks need 3× the work and carry 4× the value per tier. Emptiers carry four cargo items by default and take partial loads. The Compactor packs matching rocks into one block worth their total value. Packs grant run upgrades and Stars. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 10, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `93c7c068ed182bebff92138982757a6f05135091f1688826d7e359b204363ac4` | Ore arcs and beam rhythm follow-up. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the ore arcs handoff below. |
+| Native-file SHA-256 | `b4e9b32e9ce33558820cf68d4df35db61debc2bd62ee582f0235a2c3b213fdab` | All-role starter fleet and cargo follow-up. |
+| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | Verified in the cargo handoff below. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the ore arc and beam rhythm update** | All seven Sources and three roots verified on loaded version 122. Save to Roblox confirmed. The existing Play session was stopped and Studio remains open in Edit. No fresh Play ran after the install. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the all-role starter fleet and cargo update** | All seven Sources and three roots verified in Edit. Team Create save returned version 125. Studio was already open and remains in Edit. No Play ran in this pass. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 10 — starter fleet, compaction and hauling
+
+Fresh Crystal Run profiles receive one Laser Miner and the other 16 permanent roles, including Needler, Ballcaster, Vacuum and Compactor. The two Emptiers join every run. Returning profiles keep their saved fleets. Permanent starter roles survive prestige. Older paid Compactor cards, Batch Press and legacy Star automation continue to load.
+
+The Compactor docks by loose cargo and draws one matching raw rock at a time into separate sockets. A full press normally takes three rocks. After five seconds it presses a partial load of two or more or releases a lone rock. One block carries the sum of its inputs, including Emerald. Blocks skip intake. Denser Packing adds two inputs to a full press. Emptiers leave with a full four-slot load or a partial load after six seconds. Cargo Rack adds up to two mounts per Emptier. Visible cargo uses each manifest's material and packed shape. Discrete mining hits now flash for 70 ms, with a short local hold before an intermediate fracture. Reduced flashing and reduced motion act independently for that response. The final breakup has no separate sound.
+
+Workshop, Crystal Run, persistence, pickup and beam checks passed with API or storage doubles. The older special/logistics suite stops at the same schema-six fixture assertion as `61fd7e0`. Native refresh verification found the map and unrelated Sources byte-identical. No native gameplay, fleet readability, pacing or multiplayer checks ran.
+
+Studio was already open in Edit at place **124078027733625**, universe **10774898335**. All seven Source lengths and fingerprints matched disk and all three roots reported `SyncedAsRoot`. The Studio save tool returned `Saved`, `TeamCreate`, version **125** at about **11:05 PM Pacific on November 10**. Studio stayed in Edit. No player release was published. Reproduce from `61fd7e0` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 61fd7e0`.
 
 ## November 10 — ore arcs and beam rhythm
 

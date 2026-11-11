@@ -5,14 +5,17 @@ local Consumables=require('./Consumables')
 -- Pure permanent ownership and run transactions. Durable storage commits working copies.
 local P={SCHEMA=12,CONTENT=1}
 local STARTER_COUNT=3
-local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true}
+local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[1+#Workshop.STARTER_SPECIALISTS]=true}
 local types={'Blue','Red','Green'}
 local specialTypes={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
+local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
+for role in pairs(starterTypes) do roles[role]=true end
 local guardedFields={Cobalt=1,Violet=3,Emerald=5}
 local effectKeys={orbitalLaser=true,scrapSwarm=true,orbitalRelay=true,scrapRecycle=true,mining=true,speed=true,combat=true,health=true,reduction=true,capacity=true,startup=true,yield=true,range=true,crit=true,splash=true,fork=true,shield=true,rate=true,finisher=true,geode=true,salvage=true,chain=true,forkRange=true,plotAuto=true,fullAuto=true,battery=true,deepCut=true,magnetRange=true,aftershock=true,reclaim=true,earlyDrop=true,fieldCharge=true,doubleBeam=true,twinThrusters=true,oreDuplicator=true}
 effectKeys.compactor=true;effectKeys.batchPress=true;effectKeys.liveWire=true;effectKeys.shiftRelay=true
+effectKeys.denserPacking=true;effectKeys.cargoRack=true
 local scopes={Fleet=true,Player=true,Color=true,Individual=true,Tradeoff=true}
 local function validRarity(v) return v==nil or v=='Common' or v=='Uncommon' or v=='Rare' or v=='Epic' or v=='Legendary' end
 P.BASE={miningDPS=30,combatDPS=12,maxHealth=80,warmup=.8,range=18,shotInterval=.8}
@@ -109,17 +112,26 @@ local function specialDrone(uid,serial,kind,seed)
  base.maxHealth=kind=='Halver' and 110 or (kind=='Singularity' and 100 or 80)
  return {id=tostring(uid)..':drone:'..serial,name=DroneCatalog.Types[kind].Name..' '..serial,type=kind,role=kind,base=base,flightHeight=3.4}
 end
-function P.new(uid,seed)
+function P.new(uid,seed,roleConfig)
  assert(finite(uid) and uid%1==0 and math.abs(uid)<1e14,'Invalid user ID')
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
- for serial=1,STARTER_COUNT do
+ for serial=1,(roleConfig and 1 or STARTER_COUNT) do
   local miner=drone(uid,serial,'Blue',seed,1)
   -- Use the reference's 12–30 studs/second flight roll for each basic miner.
   miner.base.maxStep60=(20+((seed+serial*17)%31))/100
   fleet[serial]=miner
  end
- return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=STARTER_COUNT,nextDroneSerial=STARTER_COUNT+1,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
+ if roleConfig then
+  for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
+   local serial=#fleet+1
+   local stats=roleConfig.StudioRoles[role]
+   local kind=role=='Charger' and 'Red' or role=='Medic' and 'Green' or role
+   fleet[serial]={id=tostring(uid)..':drone:'..serial,name=roleConfig.Types[role].DisplayName,role=role,type=kind,
+    base=clone(stats.base),flightHeight=stats.height}
+  end
+ end
+ return {schemaVersion=P.SCHEMA,contentVersion=P.CONTENT,userId=uid,revision=0,prestiges=0,purchasedDrones=0,starterDrones=#fleet,nextDroneSerial=#fleet+1,seed=seed,fleet=fleet,run=run(uid,1),receipts={},settings={},clearedFields={},logistics=logisticsOwnership(),consumables=Consumables.fresh()}
 end
 function P.validate(p,uid)
  if type(p)~='table' or p.schemaVersion~=P.SCHEMA or p.userId~=uid then return false,'Unsupported profile schema or owner' end
@@ -128,10 +140,10 @@ function P.validate(p,uid)
  if not denseArray(p.fleet) or not supportedStarterCounts[p.starterDrones] or #p.fleet~=p.prestiges+p.starterDrones+p.purchasedDrones or #p.fleet<1 then return false,'Permanent fleet invariant violated' end
  local ids={}
  for serial,d in ipairs(p.fleet) do
-  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
+  if type(d)~='table' or type(d.id)~='string' or #d.id>100 or ids[d.id] or type(d.name)~='string' or #d.name>80 or (not table.find(types,d.type) and not specialTypes[d.type] and not starterTypes[d.type]) or type(d.base)~='table' then return false,'Invalid permanent drone' end
   if d.id~=tostring(uid)..':drone:'..serial then return false,'Permanent drone ID does not match owner/serial' end
   ids[d.id]=d
-  if not roles[d.role] or (specialTypes[d.type] and d.role~=d.type) then return false,'Invalid permanent role' end
+  if not roles[d.role] or ((specialTypes[d.type] or starterTypes[d.type]) and d.role~=d.type) then return false,'Invalid permanent role' end
   for _,k in ipairs({'miningDPS','combatDPS','maxHealth','maxStep60','warmup','range','shotInterval'}) do if not finite(d.base[k]) or d.base[k]<=0 or d.base[k]>1e6 then return false,'Invalid permanent base trait' end end
  end
  if type(p.clearedFields)~='table' then return false,'Missing permanent plot unlocks' end

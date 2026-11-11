@@ -179,9 +179,10 @@ assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Po
 print('PASS full reference-sized patch populations, refill locality, mining and standby heights')
 
 -- Earn a first pack at the Workshop, then exercise all three actual choices.
-scene.runStart=f.center
 local shopper=player(98703);players.PlayerAdded:Fire(shopper)
-local buyer=profiles[shopper.UserId];local miner=buyer.drones[1]
+scene.runStart=f.center
+local buyer=profiles[shopper.UserId];scene.syncRuntimeFleet(buyer)
+local miner=buyer.drones[1]
 local function moveBuyer(position)
  shopper.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0)))
 end
@@ -311,13 +312,18 @@ function runService:IsStudio() return true end
 local tester=player(98704);players.PlayerAdded:Fire(tester)
 local testCrew=profiles[tester.UserId]
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
-assert(#testCrew.drones==5 and #data(testCrew).fleet==3 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
-assert(testCrew.drones[1].role=='Striker' and testCrew.drones[2].role=='Striker' and testCrew.drones[3].role=='Striker')
-assert(testCrew.drones[4].role=='Courier' and testCrew.drones[5].role=='Courier' and not testCrew.testFleet)
+assert(#testCrew.drones==19 and #data(testCrew).fleet==17 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
+local starterActors={}
+for _,actor in ipairs(testCrew.drones) do starterActors[actor.role]=actor end
+for role in pairs(RoleConfig.StudioRoles) do assert(starterActors[role],'missing starter role '..role) end
+local saved=assert(Pro.migrate(Pro.clone(data(testCrew)),tester.UserId))
+assert(#saved.fleet==17 and Workshop.hasCompactor(saved) and not testCrew.testFleet)
+saved.run.quartzEarnings=360
+local choice=Pro.prestigePreview(saved).droneChoices[1]
+assert(Pro.prestige(saved,'mixed-starter-prestige',saved.run.id,{confirmed=true,atDepot=true,droneType=choice.kind}))
+assert(#saved.fleet==18 and Pro.validate(saved,tester.UserId))
 for i,role in ipairs({'Needler','Ballcaster'}) do
- command.OnServerEvent:Fire(tester,'DevAddDrone',{role=role})
- local actor=testCrew.drones[#testCrew.drones];local target=rock(i*4,150)
- assert(actor.role==role)
+ local actor=starterActors[role];local target=rock(i*4,150)
  assert(assignOre(testCrew,actor,target))
  local station=committedStation(actor,target)
  local offset=station-target.position
@@ -338,7 +344,6 @@ for i,role in ipairs({'Needler','Ballcaster'}) do
  assert(actor.specialJob.projectile:GetAttribute('ContactAt')==now)
  release(actor)
 end
-command.OnServerEvent:Fire(tester,'DevAddDrone',{role='Vacuum'})
 for id,drop in pairs(pickups) do
  if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end
 end
@@ -357,7 +362,7 @@ for _=1,200 do
 end
 assert(relayed and not pickups[-1] and Pro.cargoUnits(data(testCrew))==2,string.format('vacuum relay=%s, drop=%s, backpack=%d',tostring(relayed),tostring(pickups[-1]),Pro.cargoUnits(data(testCrew))))
 assert(Pro.validate(data(testCrew),tester.UserId))
-print('PASS automation-first Studio roster, opt-in projectile flight and vacuum relay')
+print('PASS all-role starter fleet, stable prestige ownership, projectile flight and vacuum relay')
 
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
 data(buyer).run.pendingOffer.choices[2]=Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2,0)
@@ -391,21 +396,36 @@ end
 local raw={pressOre('Quartz',10),pressOre('Quartz',12),pressOre('Quartz',14),pressOre('Quartz',16)}
 tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(-130,3,0)))
 local foreign=pressOre('Quartz',70,tester.UserId);foreign.runId=data(testCrew).run.id
-local emerald=pressOre('RunEmerald',2560)
 Pro.addCargo(data(buyer),'Quartz',10,10)
 press.pos=floor+Vector3.new(0,3.2,0)
-for _=1,100 do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+local function pressTicks(count)
+ for _=1,count do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+end
+for _=1,50 do
+ pressTicks(1)
+ if raw[2].pressSocket then break end
+end
+assert(raw[1].pressSocket==1 and raw[2].pressSocket==2 and not raw[3].pressSocket)
+assert(raw[1].x~=raw[2].x or raw[1].z~=raw[2].z,'press inputs overlapped')
+pressTicks(70)
 local pressedOre=pickups[pickupSerial]
-assert(raw[4].part.Parent and pressedOre.units==1 and pressedOre.tierMaterial=='RunRuby' and pressedOre.compacted)
+assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
 assert(pressedOre.value==36,'press lost value or minted Quartz')
-assert(emerald.part.Parent and foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign/top-tier ore or a full bag')
-table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3))
-publish(buyer)
+pressTicks(math.ceil((Workshop.COMPACTOR_WAIT+1)/C.Tick))
+assert(not raw[4].pressSocket and raw[4].part.Parent,'a single rock was trapped')
+assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
+
+pressOre('RunEmerald',2560);pressOre('RunEmerald',2700)
+pressTicks(math.ceil((Workshop.COMPACTOR_WAIT+2)/C.Tick))
+local deepBlock=pickups[pickupSerial]
+assert(deepBlock.tierMaterial=='RunEmerald' and deepBlock.compacted and deepBlock.units==1 and deepBlock.value==5260)
+assert(pressedOre.part.Parent and pressedOre.units==1,'already compacted cargo entered the press again')
+
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3));publish(buyer)
 pressOre('RunRuby',40);pressOre('RunRuby',41)
-for _=1,100 do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+pressTicks(90)
 local upgraded=pickups[pickupSerial]
-assert(upgraded.tierMaterial=='RunCobalt' and upgraded.units==1 and upgraded.value==81)
-assert(pressedOre.units==1 and pressedOre.part.Parent,'already compacted cargo entered the press again')
+assert(upgraded.tierMaterial=='RunRuby' and upgraded.units==1 and upgraded.value==81)
 
 -- Actual movement consumes one parcel and unloads its manifest exactly once.
 local emptier=buyer.drones[4]
@@ -425,6 +445,15 @@ serviceDeliveries(buyer);serviceDeliveries(buyer)
 assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+4*Workshop.EMPTIER_BATCH)
 assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==4*Workshop.EMPTIER_BATCH)
 assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare)
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
+data(buyer).run.cargo={[Workshop.cargoKey('RunEmerald',5260,true)]=1}
+now+=3;emptier.pos=hr.Position+Vector3.new(2.2,2.4,1)
+droneStep(emptier,C.Tick);assert(not emptier.pickupAt)
+now+=Workshop.EMPTIER_WAIT;droneStep(emptier,C.Tick)
+now+=1;droneStep(emptier,C.Tick);serviceDeliveries(buyer)
+assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==0)
+snapshotDrone(emptier)
+assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunEmerald:5260')
 isolate()
 local boosted=rock(0,1000)
 assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)

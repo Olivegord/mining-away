@@ -174,7 +174,9 @@ local function vector(p,c)
  local out={fieldCharge=Workshop.effect(p,'fieldCharge',c),capacity=C.capacity(p,c),magnetBonus=C.magnetBonus(p,c),orbitalLaser=Shops.abilityUnlocked(p,'Orbital',c) and 1 or 0,scrapSwarm=Shops.abilityUnlocked(p,'Scrap',c) and 1 or 0}
  local compactor=Workshop.hasCompactor(p,c)
  out.compactor=compactor and 1 or 0
- out.batchPress=compactor and Workshop.COMPACTOR_BATCH-Workshop.compactorBatch(p,c) or 0
+ out.batchPress=compactor and Workshop.effect(p,'batchPress',c) or 0
+ out.denserPacking=compactor and Workshop.effect(p,'denserPacking',c) or 0
+ out.cargoRack=Workshop.effect(p,'cargoRack',c)
  out.shiftRelay=Workshop.effect(p,'shiftRelay',c)
  for _,d in ipairs(p.fleet) do
   local st=C.stats(p,d,c)
@@ -209,7 +211,8 @@ local function preview(p,c)
  local lines={}
  if c.effects.compactor then table.insert(lines,{label='Compactor drones',before=0,after=1,unit=''}) end
  if c.effects.shiftRelay then table.insert(lines,{label='Mining boost after delivery',before=Workshop.effect(p,'shiftRelay'),after=Workshop.effect(p,'shiftRelay',c),unit='s'}) end
- if c.effects.batchPress then table.insert(lines,{label='Input per compressed ore',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='ore'}) end
+ if c.effects.batchPress or c.effects.denserPacking then table.insert(lines,{label='Rocks per full press',before=Workshop.compactorBatch(p),after=Workshop.compactorBatch(p,c),unit='rocks'}) end
+ if c.effects.cargoRack then table.insert(lines,{label='Cargo mounts per Emptier',before=Workshop.emptierBatch(p),after=Workshop.emptierBatch(p,c),unit='slots'}) end
  if c.effects.fieldCharge then table.insert(lines,{label='Field recharge',before=Workshop.effect(p,'fieldCharge'),after=Workshop.effect(p,'fieldCharge',c),unit='battery/s'}) end
  if c.effects.capacity then table.insert(lines,{label='Backpack space',before=C.capacity(p),after=C.capacity(p,c),unit='ore'}) end
  if c.effects.magnetRange then table.insert(lines,{label='Extra pickup reach',before=C.magnetBonus(p),after=C.magnetBonus(p,c),unit='studs'}) end

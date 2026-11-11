@@ -108,6 +108,7 @@ local function fieldStep(record,state,now,dt,shot,source)
   if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
   elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
    local age=now-(source:GetAttribute('PressAt') or 0)
    local stroke=state=='Press' and smooth(age/.15)*(1-smooth((age-.48)/.22)) or 0

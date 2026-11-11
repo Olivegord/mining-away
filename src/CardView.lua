@@ -16,7 +16,9 @@ function CardView.summary(choice)
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
  add('oreDuplicator','Gold ore chamber.\n2× cargo value from this miner.')
  add('compactor','Legacy unlock: presses 3 matching rocks into 1 block of equal total value.')
- add('batchPress','Your Compactor now needs 2 rocks per press.')
+ add('batchPress','The press can start with one fewer rock.')
+ add('denserPacking','Pack '..(e.denserPacking or 0)..' more rocks in each full block.')
+ add('cargoRack','+'..(e.cargoRack or 0)..' cargo mount on each Emptier.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
@@ -61,7 +63,8 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
  elseif e.compactor then target='Compactor at your pin'
- elseif e.batchPress then target='Your Compactor'
+ elseif e.batchPress or e.denserPacking then target='Your Compactor'
+ elseif e.cargoRack then target='All Emptiers'
  elseif e.shiftRelay then target='Your mining pin'
  elseif e.magnetRange then target='Cargo collection'
  elseif e.capacity then target='Your backpack'
@@ -122,7 +125,8 @@ function CardView.identity(choice)
  if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
  if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
- if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('compactor') or has('batchPress') or has('denserPacking') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('cargoRack') then return 'rack',Color3.fromRGB(129,83,23),Color3.fromRGB(255,207,113) end
  if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
  if has('shiftRelay') then return 'cargo',Color3.fromRGB(158,94,21),Color3.fromRGB(255,221,123) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
@@ -244,11 +248,18 @@ local function mechanicVisual(parent,choice,compact)
   end
  elseif identity=='press' then
   drone('Compactor',2.5,Vector3.new(0,.45,0),CFrame.Angles(0,-.2,0))
-  local inputs=choice.effects.batchPress and 2 or 3
+  local inputs=choice.effects.batchPress and 2 or (choice.effects.denserPacking and 5 or 3)
   for i=1,inputs do
-   crystal(.66,Vector3.new(-1.55,-1.6+(i-1)*.57,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
+   crystal(.66,Vector3.new(-1.55-(i-1)%2*.52,-1.5+math.floor((i-1)/2)*.54,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
   end
-  crystal(1.58,Vector3.new(1.25,-1.18,.48),Color3.fromRGB(250,91,143),CFrame.Angles(0,-.3,-.22))
+  visualPart(world,Vector3.new(1.14,.76,.83),Vector3.new(1.4,-1.15,.54),Color3.fromRGB(241,103,96))
+ elseif identity=='rack' then
+  drone('Courier',3.05,Vector3.new(0,.65,0),CFrame.Angles(0,-.28,.08))
+  for i=1,5 do
+   local x=(i-3)*.67
+   visualPart(world,Vector3.new(.56,.14,.79),Vector3.new(x,-1.08,.64),i==5 and accent or Color3.fromRGB(104,112,132))
+   crystal(.76,Vector3.new(x,-.72,.64),i==5 and accent or Color3.fromRGB(144,217,246),CFrame.Angles(0,i*.5,.12))
+  end
  elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))

@@ -103,7 +103,7 @@ test('hardware fits chosen permanent miners once each and clears on prestige',fu
  assert(prestige(p,'reset-hardware',p.run.id))
  eq(#p.run.cards,0);eq(p.fleet[2].id,second.id);eq(C.stats(p,p.fleet[2]).doubleBeam,0)
 end)
-test('Crystal Run drafts trigger effects and offers Batch Press only after Compactor',function()
+test('Crystal Run drafts trigger effects and offers Denser Packing only after Compactor',function()
  local p=funded()
  local function review(ownsPress)
   local sawBatch=false
@@ -113,7 +113,7 @@ test('Crystal Run drafts trigger effects and offers Batch Press only after Compa
    for _,choice in ipairs(offer) do
     trigger=trigger or W.TRIGGER_CARDS[choice.cardId]==true
     rarity=rarity or choice.upgradeTier==tier
-    if choice.cardId=='Q_BATCH_PRESS' then sawBatch=true end
+    if choice.cardId=='Q_DENSER_PACK' then sawBatch=true end
    end
    assert(trigger and rarity)
   end end
@@ -126,10 +126,12 @@ test('Crystal Run drafts trigger effects and offers Batch Press only after Compa
  p.run.pendingOffer.choices[3]=W.card(W.BY_ID.Q_COMPACTOR,2,0)
  p=assert(P.migrate(p,44));assert(choose(p,offer,3,'hire-press'))
  review(true)
- local nextTier,units,remaining=W.compaction('RunCobalt',5,2)
- eq(nextTier.material,'RunViolet');eq(units,2);eq(remaining,1)
- local highest,n,rest=W.compaction('RunEmerald',6,2)
- eq(highest,nil);eq(n,0);eq(rest,6)
+ eq(W.compactorBatch(p,W.card(W.BY_ID.Q_DENSER_PACK,3)),5)
+ eq(W.compactorBatch(p,W.card(W.BY_ID.Q_BATCH_PRESS,3)),2)
+ eq(W.emptierBatch(p,W.card(W.BY_ID.Q_CARGO_RACK,2)),5)
+ eq(W.emptierReady(4,4,nil,0),true)
+ eq(W.emptierReady(2,4,10,15.99),false)
+ eq(W.emptierReady(2,4,10,16),true)
  p.run.quartzEarnings=360
  assert(prestige(p,'reset-press',p.run.id));eq(W.hasCompactor(p),false)
 end)

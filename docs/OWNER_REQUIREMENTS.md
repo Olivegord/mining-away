@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 10 follow-up — start with every drone role
+
+New Crystal Run players start with at least one of each implemented drone role. One permanent drone of each non-courier role and the two run Emptiers meet that request. Existing players keep their saved fleets. The packing and hauling follow-up makes input sockets and cargo mounts visible, preserves each rock's value through compaction, and lets both systems handle partial loads.
+
 ## November 10 follow-up — ore arcs and beam pulses
 
 Give the new physical ore a readable upward arc, a tapering trail and a visible fall before it can be collected. Remove the added drawn crack lines. Let the first white contact flash fade gradually, then pulse the rock faintly with the continuous beam's rhythm. This is a visual follow-up to the mining pass; rewards and choices are unchanged.

@@ -492,10 +492,10 @@ openFleet=function()
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
    local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' cargo')
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.emptierBatch(profile) or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' matching rocks')
+   statTile(row,14,91,tileWidth,'INPUT','Up to '..Workshop.compactorBatch(profile)..' rocks')
    statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
@@ -918,6 +918,13 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
+ if r.cutFeedback and not broken and authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
+  local contact=s:GetAttribute('CutContactAt') or 0
+  if contact~=(r.fractureContact or 0) and now-contact>=0 and now-contact<.21 and not CrystalImpactView.reducedMotion() then
+   r.fractureContact=contact;r.fractureUntil=now+.045
+  end
+  if now<(r.fractureUntil or 0) then r.dirty=true;return end
+ end
  local healed=s:GetAttribute('RegrowAt') or 0
  if not broken and healed>0 then
   if authoritativeStage<r.visual.knownStage then
@@ -1050,7 +1057,7 @@ local function renderDrone(d,dt,now)
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=state=='BreakerDive' or state=='BreakerImpact'
+ local grounded=state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

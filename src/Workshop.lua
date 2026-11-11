@@ -10,19 +10,16 @@ W.CRYSTAL_TIERS={
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
-for i,tier in ipairs(W.CRYSTAL_TIERS) do
- tier.nextTier=W.CRYSTAL_TIERS[i+1]
+for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
+W.STARTER_SPECIALISTS={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
+W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
+W.COMPACTOR_WAIT=5
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
-function W.compaction(material,units,batch)
- local tier=W.CRYSTAL_BY_MATERIAL[material]
- if not tier or not tier.nextTier then return nil,0,units end
- return tier.nextTier,math.floor(units/batch),units%batch
-end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
 function W.cargoKey(material,quartz,pressed)
@@ -65,6 +62,8 @@ W.CATALOG={
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_CARGO_RACK',title='Cargo Rack',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
@@ -72,17 +71,24 @@ W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
  return total
 end
-function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
-function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
+function W.hasCompactor(p,extra)
+ for _,d in ipairs(p.fleet) do if d.role=='Compactor' then return true end end
+ return W.effect(p,'compactor',extra)>0
+end
+function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
+function W.emptierBatch(p,extra) return W.EMPTIER_BATCH+W.effect(p,'cargoRack',extra) end
+function W.emptierReady(units,capacity,waitingSince,now)
+ return units>=capacity or units>0 and waitingSince~=nil and now-waitingSince>=W.EMPTIER_WAIT
+end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},

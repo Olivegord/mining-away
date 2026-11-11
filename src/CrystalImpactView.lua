@@ -1,5 +1,12 @@
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
+local Players=game:GetService('Players')
+local GuiService=game:GetService('GuiService')
+function V.reducedMotion()
+ local player=Players.LocalPlayer
+ local system=false;pcall(function() system=GuiService.ReducedMotionEnabled end)
+ return system or player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true)
+end
 local function part(parent,class,name,color)
  local p=Instance.new(class);p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
@@ -45,7 +52,8 @@ function V.new(parent,audio)
  end
  function self:forget(r) self.tints[r]=nil end
  function self:applyTints(now)
-  local reduced=BeamVFX.reduced()
+  local player=Players.LocalPlayer
+  local reduced=player and (player:GetAttribute('ReducedFlashing')==true or player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true)
   for r in pairs(self.tints) do
    local view=r.view
    if not view.Parent or view.Transparency>=1 or not r.restColor then
@@ -55,7 +63,7 @@ function V.new(parent,audio)
     local initial=Feedback.impactWhite(age,r.flashDuration or .28)
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .57 or 1),pulse*(reduced and .055 or .17))
+    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
     view.Color=r.restColor:Lerp(Color3.new(1,1,1),white)
     if initial<=0 then r.flashAt=nil end
     if initial<=0 and afterglow<=0 then self:forget(r) end
@@ -70,15 +78,15 @@ function V.new(parent,audio)
   if impact>r.lastContactAt then
    r.lastContactAt=impact
    local at=now-impact
-   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and now>=(r.flashGate or 0) then
-    local shot=s:GetAttribute('CutIsShot')
-    r.flashAt=now;r.flashDuration=shot and .20 or .30;r.flashGate=now+.12
+   local shot=s:GetAttribute('CutIsShot')
+   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
+    r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
     self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if shot and not broken then
+    if shot then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -93,7 +101,7 @@ function V.new(parent,audio)
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
    if breakAt>now then return end
    if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
-    r.splitDue=now+.05;r.flashAt=now;r.flashDuration=.20;self.tints[r]=true
+    r.splitDue=now+(V.reducedMotion() and 0 or .05)
    end
    if r.splitDue and now<r.splitDue then
     v.Transparency=0
@@ -107,7 +115,6 @@ function V.new(parent,audio)
       local normal=frame.RightVector*side
       self:chips(now,point+normal*v.Size.X*.22,normal,r.baseColor,2,true,math.clamp(v.Size.Y*.36,.65,1.6),ground)
      end
-     audio:play('crystal_split',point)
     end
     r.splitDue=nil;v.Transparency=1;self:forget(r)
    end

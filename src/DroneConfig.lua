@@ -181,7 +181,7 @@ local fieldTestRoles={
  Needler={label='Dart thrower',color=Color3.fromRGB(255,195,94),detail='Throws quick darts into the side of a crystal.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Launches a slower, heavier energy ball from the side.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
- Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Pulls in loose ore at your pin and presses it into the next tier.'},
+ Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Presses loose rocks into one block worth the sum of its inputs.'},
 }
 for name,role in pairs(fieldTestRoles) do
  DroneConfig.Types[name]={DisplayName=role.label,Description=role.detail,Color=role.color,Accent=role.color:Lerp(Color3.new(1,1,1),.5),Scale=.9,MaxHealth=80,Speed=26,FlightHeight=3.2,AttackStyle='Special',AttackRange=20,AttackCooldown=1,Damage=12,Weight=1}
@@ -207,6 +207,7 @@ for name in pairs(fieldTestRoles) do
 end
 
 DroneConfig.Courier = {BatchUnits=8,PickupDistance=4,PickupCooldown=2,PickupHold=.55,LaunchHold=.25,UnloadHold=.65}
+DroneConfig.PressSockets = {Vector3.new(0,-1.05,.96),Vector3.new(-1.02,-1.05,.27),Vector3.new(1.02,-1.05,.27),Vector3.new(-.58,-1.05,-.86),Vector3.new(.58,-1.05,-.86)}
 
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
@@ -380,9 +381,13 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   hardware('PressCap',Vector3.new(1.43,.20,1.23),CFrame.new(0,.32,0),pale,smooth)
   hardware('PressIntake',Vector3.new(.19,.95,.95),CFrame.new(0,-.45,0)*vertical,dark,metal,cylinder)
   hardware('PressIndicator',Vector3.new(.09,.57,.57),CFrame.new(0,-.56,0)*vertical,color,Enum.Material.Neon,cylinder)
+  for i,position in ipairs(DroneConfig.PressSockets) do
+   hardware('PressSocket'..i,Vector3.new(.13,.63,.63),CFrame.new(position-Vector3.yAxis*.28)*vertical,dark,metal)
+  end
   for _,side in ipairs({-1,1}) do
    hardware('PressRail',Vector3.new(.27,.91,1.52),CFrame.new(side*.93,-.21,0),dark,metal)
    hardware('PressJaw',Vector3.new(.27,.25,1.31),CFrame.new(side*.76,-.73,0),pale,metal,nil,'PressJaw',side)
+   hardware('PressFoot',Vector3.new(.39,.33,1.22),CFrame.new(side*.97,-.49,0),pale,metal,nil,'PressFoot',side)
   end
  elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)

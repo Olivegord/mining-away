@@ -26,8 +26,10 @@ function V.effect(c)
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
  if e.oreDuplicator then return 'This miner produces 2× ore' end
- if e.compactor then return 'Presses loose ore into the next tier at your pin' end
- if e.batchPress then return 'Compactor needs only 2 ore per press' end
+ if e.compactor then return 'Presses loose ore into one equal-value block' end
+ if e.batchPress then return 'Press a full batch with one fewer rock' end
+ if e.denserPacking then return '+'..e.denserPacking..' rocks per full block' end
+ if e.cargoRack then return '+'..e.cargoRack..' cargo mount per Emptier' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end

@@ -13,19 +13,16 @@ W.CRYSTAL_TIERS={
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
-for i,tier in ipairs(W.CRYSTAL_TIERS) do
- tier.nextTier=W.CRYSTAL_TIERS[i+1]
+for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
 W.EMPTIERS=2
+W.STARTER_SPECIALISTS={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
+W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
+W.COMPACTOR_WAIT=5
 function W.emptierId(runId,slot) return runId..':emptier:'..slot end
-function W.compaction(material,units,batch)
- local tier=W.CRYSTAL_BY_MATERIAL[material]
- if not tier or not tier.nextTier then return nil,0,units end
- return tier.nextTier,math.floor(units/batch),units%batch
-end
 -- New physical cargo occupies one slot per object. Keep legacy mineral keys
 -- unchanged so existing bags and in-flight Emptier manifests retain value.
 function W.cargoKey(material,quartz,pressed)
@@ -68,6 +65,8 @@ W.CATALOG={
  {id='Q_ORE_DUPLICATOR',title='Ore Duplicator',scope='Individual',category='cargo',tier=2,max=1,step={oreDuplicator=1},color={255,216,93},icon='crystal',crystalRun=true,hardware=true},
  {id='Q_COMPACTOR',title='Compactor Drone',scope='Player',category='cargo',tier=2,max=1,step={compactor=1},color={255,184,83},icon='cargo',crystalRun=true},
  {id='Q_BATCH_PRESS',title='Batch Press',scope='Player',category='cargo',tier=3,max=1,step={batchPress=1},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_DENSER_PACK',title='Denser Packing',scope='Player',category='cargo',tier=3,max=1,step={denserPacking=2},color={255,216,93},icon='cargo',crystalRun=true},
+ {id='Q_CARGO_RACK',title='Cargo Rack',scope='Player',category='cargo',tier=2,max=2,step={cargoRack=1},color={255,190,65},icon='cargo',crystalRun=true},
  {id='Q_LIVE_WIRE',title='Live Wire',scope='Fleet',category='mining',tier=3,max=2,step={liveWire=.5},color={134,221,129},icon='mining',crystalRun=true},
  {id='Q_SHIFT_RELAY',title='Shift Relay',scope='Player',category='mining',tier=3,max=3,step={shiftRelay=12},color={255,200,110},icon='relay',crystalRun=true},
 }
@@ -75,17 +74,24 @@ W.BY_ID={};for _,entry in ipairs(W.CATALOG) do W.BY_ID[entry.id]=entry end
 W.FIRST_PACK={'Q_DOUBLE_BEAM','Q_EARLY_DROP','Q_CARGO'}
 W.CRYSTAL_DRAFT={Q_POWER=true,Q_CARGO=true,Q_BATTERY=true,Q_DOUBLE_BEAM=true,Q_TURBO_ROTOR=true,Q_ORE_DUPLICATOR=true,
  Q_FIELD_CHARGE=true,Q_DEEP_DRILL=true,Q_ORE_MAGNET=true,Q_PRISM_DRIVE=true,Q_OVERDRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.TRIGGER_CARDS={Q_DOUBLE_BEAM=true,Q_ORE_DUPLICATOR=true,Q_FIELD_CHARGE=true,Q_PRISM_DRIVE=true,Q_PRISM_CORE=true,
- Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
+ Q_AFTERSHOCK=true,Q_EARLY_DROP=true,Q_RECLAIM=true,Q_COMPACTOR=true,Q_BATCH_PRESS=true,Q_DENSER_PACK=true,Q_CARGO_RACK=true,Q_LIVE_WIRE=true,Q_SHIFT_RELAY=true}
 W.DEEP_CUT_HARDNESS=1.75
 function W.effect(p,key,extra)
  local total=extra and (extra.effects[key] or 0) or 0
  for _,card in ipairs(p.run.cards) do total+=card.effects[key] or 0 end
  return total
 end
-function W.hasCompactor(p,extra) return W.effect(p,'compactor',extra)>0 end
-function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra) end
+function W.hasCompactor(p,extra)
+ for _,d in ipairs(p.fleet) do if d.role=='Compactor' then return true end end
+ return W.effect(p,'compactor',extra)>0
+end
+function W.compactorBatch(p,extra) return W.COMPACTOR_BATCH-W.effect(p,'batchPress',extra)+W.effect(p,'denserPacking',extra) end
+function W.emptierBatch(p,extra) return W.EMPTIER_BATCH+W.effect(p,'cargoRack',extra) end
+function W.emptierReady(units,capacity,waitingSince,now)
+ return units>=capacity or units>0 and waitingSince~=nil and now-waitingSince>=W.EMPTIER_WAIT
+end
 W.STAR_CATALOG={
  {id='vacuum',title='Vacuum Drone',description='Gathers loose ore and sends it to your bag.',cost=2,max=1,role='Vacuum',legacy=true},
  {id='cultivator',title='Crystal Planter',description='Replants empty spots under your pin.',cost=3,max=1,role='Dart',legacy=true},
@@ -2743,7 +2749,8 @@ function W:courier(drone,record,now)
  local fx=record.courier
  if not enabled then self:destroyCourier(record);return end
  local parcelUnits=source:GetAttribute('DeliveryUnits') or 0
- local busy=state=='Pickup' or state=='Unload' or parcelUnits>0
+ local slots=source:GetAttribute('DeliverySlots') or 0
+ local busy=state=='Pickup' or state=='Unload' or parcelUnits>0 or slots>0 and cameraNear(drone.pos,105)
  if not busy and not fx then return end
  if fx and not busy and now-fx.lastAt>ENERGY_TAIL then self:destroyCourier(record);return end
  if not fx then
@@ -2762,7 +2769,7 @@ function W:courier(drone,record,now)
    trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
-  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
+  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,mounts={},spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
   if detailed then
    fx.sparks=particle(anchor,'CourierSparks',GOLD);fx.sparks.Brightness=1.2;fx.sparks.LightEmission=.65;self.courierCount+=1
   end
@@ -2806,7 +2813,7 @@ function W:courier(drone,record,now)
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
  fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale
- fx.parcel.Transparency=parcelUnits>0 and 0 or 1
+ fx.parcel.Transparency=parcelUnits>0 and slots==0 and 0 or 1
  fx.band.Transparency=fx.parcel.Transparency
  if parcelUnits>0 then
   local position=mount
@@ -2823,6 +2830,48 @@ function W:courier(drone,record,now)
   end
   fx.parcel.CFrame=CFrame.new(position)*pivot.Rotation
   fx.band.CFrame=fx.parcel.CFrame
+ end
+ if slots>0 then
+  local materials=source:GetAttribute('DeliveryMaterials') or ''
+  if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
+  local count=math.max(slots,math.min(parcelUnits,6))
+  local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
+  for i=1,count do
+   local slot=fx.mounts[i]
+   if not slot then
+    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.52,.13,.62)
+    tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
+    local cargo=part(fx.root,'MountedCargo');cargo.Material=Enum.Material.SmoothPlastic
+    slot={tray=tray,cargo=cargo};fx.mounts[i]=slot
+   end
+   local side=i%2==1 and -1 or 1
+   local frame=pivot*CFrame.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)
+   slot.tray.CFrame=frame;slot.tray.Transparency=0
+   slot.cargo.Transparency=i<=parcelUnits and 0 or 1
+   if i<=parcelUnits then
+    local material=fx.load[i] or ''
+    if slot.material~=material then
+     slot.material=material
+     local key,_,packed=Workshop.crystalCargo(material)
+     local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
+     local rgb=Shops.COLORS[tier and tier.name or material]
+     slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)
+     slot.packed=packed
+    end
+    local position=frame.Position-Vector3.yAxis*.28
+    if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
+     local t=math.clamp(transfer*1.3-(i-1)*.06,0,1)
+     position=backpack:Lerp(position,t*t*(3-2*t))+Vector3.yAxis*(math.sin(t*math.pi)*.35)
+    elseif unload then
+     local t=fx.unloadProgress or 0
+     local finish=sell+Vector3.new(side*.28,1.25+math.floor((i-1)/2)*.14,0)
+     position=position:Lerp(finish,t*.9)+Vector3.yAxis*(math.sin(t*math.pi)*.3)
+    end
+    slot.cargo.CFrame=CFrame.new(position)*pivot.Rotation*CFrame.Angles(0,slot.packed and 0 or .7+i*.28,slot.packed and 0 or .26)
+   end
+  end
+  for i=count+1,#fx.mounts do fx.mounts[i].tray.Transparency=1;fx.mounts[i].cargo.Transparency=1 end
  end
 end
 -- A monochrome beam with alternating opaque/clear bands. Shift the sequence
@@ -4770,6 +4819,7 @@ local function fieldStep(record,state,now,dt,shot,source)
   if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
   elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
+  elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
    local age=now-(source:GetAttribute('PressAt') or 0)
    local stroke=state=='Press' and smooth(age/.15)*(1-smooth((age-.48)/.22)) or 0
@@ -5399,6 +5449,13 @@ end)()
 local CrystalImpactView = (function()
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
+local Players=game:GetService('Players')
+local GuiService=game:GetService('GuiService')
+function V.reducedMotion()
+ local player=Players.LocalPlayer
+ local system=false;pcall(function() system=GuiService.ReducedMotionEnabled end)
+ return system or player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true)
+end
 local function part(parent,class,name,color)
  local p=Instance.new(class);p.Name=name;p.Anchored=true;p.CanCollide=false;p.CanQuery=false
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
@@ -5444,7 +5501,8 @@ function V.new(parent,audio)
  end
  function self:forget(r) self.tints[r]=nil end
  function self:applyTints(now)
-  local reduced=BeamVFX.reduced()
+  local player=Players.LocalPlayer
+  local reduced=player and (player:GetAttribute('ReducedFlashing')==true or player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true)
   for r in pairs(self.tints) do
    local view=r.view
    if not view.Parent or view.Transparency>=1 or not r.restColor then
@@ -5454,7 +5512,7 @@ function V.new(parent,audio)
     local initial=Feedback.impactWhite(age,r.flashDuration or .28)
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .57 or 1),pulse*(reduced and .055 or .17))
+    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
     view.Color=r.restColor:Lerp(Color3.new(1,1,1),white)
     if initial<=0 then r.flashAt=nil end
     if initial<=0 and afterglow<=0 then self:forget(r) end
@@ -5469,15 +5527,15 @@ function V.new(parent,audio)
   if impact>r.lastContactAt then
    r.lastContactAt=impact
    local at=now-impact
-   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and now>=(r.flashGate or 0) then
-    local shot=s:GetAttribute('CutIsShot')
-    r.flashAt=now;r.flashDuration=shot and .20 or .30;r.flashGate=now+.12
+   local shot=s:GetAttribute('CutIsShot')
+   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
+    r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
     self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if shot and not broken then
+    if shot then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -5492,7 +5550,7 @@ function V.new(parent,audio)
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
    if breakAt>now then return end
    if not r.splitDue and now-breakAt<.24 and r.restPose and BeamVFX.near(v.Position,92) then
-    r.splitDue=now+.05;r.flashAt=now;r.flashDuration=.20;self.tints[r]=true
+    r.splitDue=now+(V.reducedMotion() and 0 or .05)
    end
    if r.splitDue and now<r.splitDue then
     v.Transparency=0
@@ -5506,7 +5564,6 @@ function V.new(parent,audio)
       local normal=frame.RightVector*side
       self:chips(now,point+normal*v.Size.X*.22,normal,r.baseColor,2,true,math.clamp(v.Size.Y*.36,.65,1.6),ground)
      end
-     audio:play('crystal_split',point)
     end
     r.splitDue=nil;v.Transparency=1;self:forget(r)
    end
@@ -7094,7 +7151,9 @@ function CardView.summary(choice)
  add('twinThrusters','Two thrusters.\n2× top flight speed.')
  add('oreDuplicator','Gold ore chamber.\n2× cargo value from this miner.')
  add('compactor','Legacy unlock: presses 3 matching rocks into 1 block of equal total value.')
- add('batchPress','Your Compactor now needs 2 rocks per press.')
+ add('batchPress','The press can start with one fewer rock.')
+ add('denserPacking','Pack '..(e.denserPacking or 0)..' more rocks in each full block.')
+ add('cargoRack','+'..(e.cargoRack or 0)..' cargo mount on each Emptier.')
  add('liveWire',amount(e.liveWire or 0,'laser damage above half battery'))
  add('shiftRelay','Emptier sales boost pin damage by 50% for '..(e.shiftRelay or 0)..'s.')
  add('orbitalLaser','Call an orbital strike on the biggest rock')
@@ -7139,7 +7198,8 @@ function CardView.terms(choice,_targetOverride,hasBadge)
  elseif choice.scope=='Color' then target=(choice.type or '')..(work and not allRoles and ' mining drones' or ' drones')
  elseif (e.fieldCharge or 0)>0 then target='Your mining pin'
  elseif e.compactor then target='Compactor at your pin'
- elseif e.batchPress then target='Your Compactor'
+ elseif e.batchPress or e.denserPacking then target='Your Compactor'
+ elseif e.cargoRack then target='All Emptiers'
  elseif e.shiftRelay then target='Your mining pin'
  elseif e.magnetRange then target='Cargo collection'
  elseif e.capacity then target='Your backpack'
@@ -7200,7 +7260,8 @@ function CardView.identity(choice)
  if has('doubleBeam') then return 'double',Color3.fromRGB(20,82,163),Color3.fromRGB(113,236,255) end
  if has('twinThrusters') then return 'boost',Color3.fromRGB(159,55,23),Color3.fromRGB(255,168,69) end
  if has('oreDuplicator') then return 'duplicate',Color3.fromRGB(130,81,12),Color3.fromRGB(255,224,104) end
- if has('compactor') or has('batchPress') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('compactor') or has('batchPress') or has('denserPacking') then return 'press',Color3.fromRGB(135,71,19),Color3.fromRGB(255,208,116) end
+ if has('cargoRack') then return 'rack',Color3.fromRGB(129,83,23),Color3.fromRGB(255,207,113) end
  if has('liveWire') then return 'thrust',Color3.fromRGB(29,111,71),Color3.fromRGB(178,255,116) end
  if has('shiftRelay') then return 'cargo',Color3.fromRGB(158,94,21),Color3.fromRGB(255,221,123) end
  if has('orbitalLaser') then return 'orbital',Color3.fromRGB(219,58,35),Color3.fromRGB(255,223,82) end
@@ -7322,11 +7383,18 @@ local function mechanicVisual(parent,choice,compact)
   end
  elseif identity=='press' then
   drone('Compactor',2.5,Vector3.new(0,.45,0),CFrame.Angles(0,-.2,0))
-  local inputs=choice.effects.batchPress and 2 or 3
+  local inputs=choice.effects.batchPress and 2 or (choice.effects.denserPacking and 5 or 3)
   for i=1,inputs do
-   crystal(.66,Vector3.new(-1.55,-1.6+(i-1)*.57,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
+   crystal(.66,Vector3.new(-1.55-(i-1)%2*.52,-1.5+math.floor((i-1)/2)*.54,.5),Color3.fromRGB(241,103,96),CFrame.Angles(0,i*.6,.2))
   end
-  crystal(1.58,Vector3.new(1.25,-1.18,.48),Color3.fromRGB(250,91,143),CFrame.Angles(0,-.3,-.22))
+  visualPart(world,Vector3.new(1.14,.76,.83),Vector3.new(1.4,-1.15,.54),Color3.fromRGB(241,103,96))
+ elseif identity=='rack' then
+  drone('Courier',3.05,Vector3.new(0,.65,0),CFrame.Angles(0,-.28,.08))
+  for i=1,5 do
+   local x=(i-3)*.67
+   visualPart(world,Vector3.new(.56,.14,.79),Vector3.new(x,-1.08,.64),i==5 and accent or Color3.fromRGB(104,112,132))
+   crystal(.76,Vector3.new(x,-.72,.64),i==5 and accent or Color3.fromRGB(144,217,246),CFrame.Angles(0,i*.5,.12))
+  end
  elseif identity=='orbital' then
   drone('Orbiter',2.6,Vector3.new(0,1.25,0))
   crystal(2,Vector3.new(0,-1.4,0),Color3.fromRGB(246,116,57),CFrame.Angles(0,.3,-.1))
@@ -7873,8 +7941,10 @@ function V.effect(c)
  if e.doubleBeam then return 'Two lasers cut the same crystal for 2× damage' end
  if e.twinThrusters then return 'Two thrusters double top flight speed' end
  if e.oreDuplicator then return 'This miner produces 2× ore' end
- if e.compactor then return 'Presses loose ore into the next tier at your pin' end
- if e.batchPress then return 'Compactor needs only 2 ore per press' end
+ if e.compactor then return 'Presses loose ore into one equal-value block' end
+ if e.batchPress then return 'Press a full batch with one fewer rock' end
+ if e.denserPacking then return '+'..e.denserPacking..' rocks per full block' end
+ if e.cargoRack then return '+'..e.cargoRack..' cargo mount per Emptier' end
  if e.battery then table.insert(parts,'+'..e.battery..' battery') end
  if e.plotAuto then table.insert(parts,'Auto retarget in side fields') end
  if e.aftershock then table.insert(parts,'Laser cracks echo '..percent(e.aftershock)..' of rock health nearby') end
@@ -8857,18 +8927,21 @@ function V:update(dt,now)
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
+   local socket=source.Parent and source:GetAttribute('PressSocket')
+   local seated=socket and not r.collectAt
+   r.socketScale=(r.socketScale or 1)+((seated and .48 or 1)-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
    local pulling=latest and latest.homing and not r.collectAt and not r.removedAt
    local targetPull=pulling and 1 or 0
    r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
    if r.pull<.001 then r.pull=0 end
    local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
-   scale*=pile*(1+.14*r.pull)
+   scale*=pile*(1+.14*r.pull)*r.socketScale
    glow=math.max(glow,.34*r.pull)
    local age=math.max(0,now-PickupMotion.DELAY-r.born)
    local tumble=PickupMotion.tumble(age,r.landAge)
    local rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.6,r.seed*.43+tumble*.8
    local position=r.pos
-   if not r.collectAt and latest and latest.floor then
+   if not seated and not r.collectAt and latest and latest.floor then
     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
     -- Lift the entire trajectory by the rotated support extent, preserving
     -- the small rebound instead of clamping it away under the visible mesh.
@@ -8888,7 +8961,7 @@ function V:update(dt,now)
      r.ribbon=launchTrail(r.view,r.color);r.trailUsed=true;self.trailCount+=1
     end
     if r.valueLabel then
-     r.valueLabel.Enabled=r.owner==self.player.UserId and r.landAge~=nil and not inFlight and not pulling and not r.collectAt and not r.removedAt
+     r.valueLabel.Enabled=r.owner==self.player.UserId and r.landAge~=nil and not seated and not inFlight and not pulling and not r.collectAt and not r.removedAt
       and camera~=nil and (position-camera.CFrame.Position).Magnitude<18 and opacity>.35
     end
    end
@@ -9992,10 +10065,10 @@ openFleet=function()
    statTile(row,tileWidth+28,91,tileWidth,'INTERVAL',tostring(DroneConfig.Types.Medic.AttackCooldown)..' sec')
   elseif role=='Courier' then
    local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
-   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.EMPTIER_BATCH or DroneConfig.Courier.BatchUnits)..' cargo')
+   statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.emptierBatch(profile) or DroneConfig.Courier.BatchUnits)..' cargo')
    statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
   elseif role=='Compactor' then
-   statTile(row,14,91,tileWidth,'INPUT',Workshop.compactorBatch(profile)..' matching rocks')
+   statTile(row,14,91,tileWidth,'INPUT','Up to '..Workshop.compactorBatch(profile)..' rocks')
    statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
   elseif role=='Dart' then
    statTile(row,14,91,tileWidth,'JOB','Grow rocks')
@@ -10418,6 +10491,13 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
+ if r.cutFeedback and not broken and authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
+  local contact=s:GetAttribute('CutContactAt') or 0
+  if contact~=(r.fractureContact or 0) and now-contact>=0 and now-contact<.21 and not CrystalImpactView.reducedMotion() then
+   r.fractureContact=contact;r.fractureUntil=now+.045
+  end
+  if now<(r.fractureUntil or 0) then r.dirty=true;return end
+ end
  local healed=s:GetAttribute('RegrowAt') or 0
  if not broken and healed>0 then
   if authoritativeStage<r.visual.knownStage then
@@ -10550,7 +10630,7 @@ local function renderDrone(d,dt,now)
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=state=='BreakerDive' or state=='BreakerImpact'
+ local grounded=state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

@@ -335,7 +335,8 @@ function W:courier(drone,record,now)
  local fx=record.courier
  if not enabled then self:destroyCourier(record);return end
  local parcelUnits=source:GetAttribute('DeliveryUnits') or 0
- local busy=state=='Pickup' or state=='Unload' or parcelUnits>0
+ local slots=source:GetAttribute('DeliverySlots') or 0
+ local busy=state=='Pickup' or state=='Unload' or parcelUnits>0 or slots>0 and cameraNear(drone.pos,105)
  if not busy and not fx then return end
  if fx and not busy and now-fx.lastAt>ENERGY_TAIL then self:destroyCourier(record);return end
  if not fx then
@@ -354,7 +355,7 @@ function W:courier(drone,record,now)
    trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
-  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
+  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,mounts={},spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
   if detailed then
    fx.sparks=particle(anchor,'CourierSparks',GOLD);fx.sparks.Brightness=1.2;fx.sparks.LightEmission=.65;self.courierCount+=1
   end
@@ -398,7 +399,7 @@ function W:courier(drone,record,now)
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
  fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale
- fx.parcel.Transparency=parcelUnits>0 and 0 or 1
+ fx.parcel.Transparency=parcelUnits>0 and slots==0 and 0 or 1
  fx.band.Transparency=fx.parcel.Transparency
  if parcelUnits>0 then
   local position=mount
@@ -415,6 +416,48 @@ function W:courier(drone,record,now)
   end
   fx.parcel.CFrame=CFrame.new(position)*pivot.Rotation
   fx.band.CFrame=fx.parcel.CFrame
+ end
+ if slots>0 then
+  local materials=source:GetAttribute('DeliveryMaterials') or ''
+  if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
+  local count=math.max(slots,math.min(parcelUnits,6))
+  local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
+  for i=1,count do
+   local slot=fx.mounts[i]
+   if not slot then
+    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.52,.13,.62)
+    tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
+    local cargo=part(fx.root,'MountedCargo');cargo.Material=Enum.Material.SmoothPlastic
+    slot={tray=tray,cargo=cargo};fx.mounts[i]=slot
+   end
+   local side=i%2==1 and -1 or 1
+   local frame=pivot*CFrame.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)
+   slot.tray.CFrame=frame;slot.tray.Transparency=0
+   slot.cargo.Transparency=i<=parcelUnits and 0 or 1
+   if i<=parcelUnits then
+    local material=fx.load[i] or ''
+    if slot.material~=material then
+     slot.material=material
+     local key,_,packed=Workshop.crystalCargo(material)
+     local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
+     local rgb=Shops.COLORS[tier and tier.name or material]
+     slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)
+     slot.packed=packed
+    end
+    local position=frame.Position-Vector3.yAxis*.28
+    if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
+     local t=math.clamp(transfer*1.3-(i-1)*.06,0,1)
+     position=backpack:Lerp(position,t*t*(3-2*t))+Vector3.yAxis*(math.sin(t*math.pi)*.35)
+    elseif unload then
+     local t=fx.unloadProgress or 0
+     local finish=sell+Vector3.new(side*.28,1.25+math.floor((i-1)/2)*.14,0)
+     position=position:Lerp(finish,t*.9)+Vector3.yAxis*(math.sin(t*math.pi)*.3)
+    end
+    slot.cargo.CFrame=CFrame.new(position)*pivot.Rotation*CFrame.Angles(0,slot.packed and 0 or .7+i*.28,slot.packed and 0 or .26)
+   end
+  end
+  for i=count+1,#fx.mounts do fx.mounts[i].tray.Transparency=1;fx.mounts[i].cargo.Transparency=1 end
  end
 end
 -- A monochrome beam with alternating opaque/clear bands. Shift the sequence
