@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `4bd7cf97c6ddfcefc6e3ebc835f94ed5fea6b4c8b4039c861825522a5ad72e98` | Includes five native trail trees. |
+| Native-file SHA-256 | `500d69ffe3c1aeba30536ba3cfa9f5f3ae8f959295ff3a8bffacca95accd0430` | Includes the direct crystal order readout. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the Crystal Run trail grove** | All seven Sources and three roots verified in Edit. Team Create save returned version 153. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit confirms direct crystal orders** | All seven Sources and three roots verified in Edit. Team Create save returned version 154. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — confirm the selected crystal
+
+When the server accepts a direct crystal order, the existing rock readout stays with the target and shows `Queued`, `En route`, `Starting` or `Cutting`. It can also show `Claimed` if another crew gets to a queued rock first, or `Paused` during a save. Hovering a different crystal still shows its usual value and work. One readout and the existing outline-free fill are reused. A ground pin, finished crystal or Recall clears the order cue. Current cuts, pair eligibility, reservations, assets and payouts keep their existing rules.
+
+The Crystal Run fixture exercised a second click within the same square while the first worker was busy, confirmed the queued target before the next snapshot, and followed it through dispatch, cutting and cleanup. It also covered a foreign claim and a paused crew. The focused client fixture passed with API doubles. A detached Studio Edit check ran the production readout with native objects and measured the longest status at 45.5 px in the existing 52 px slot. Workshop, persistence and committed flight checks passed. The older broad client runner still stops on its missing `requestPlot` source anchor, which was also absent on `f4fd036`. Live input, streaming and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **154**. No player release was published. To reproduce from `f4fd036`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit f4fd036`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — frame Crystal Run with the original grove trees
 

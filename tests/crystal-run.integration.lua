@@ -821,36 +821,57 @@ do
  local function request(leadId,position)
   scene.placeSquare(crew,{runId=data(crew).run.id,fieldId=f.id,position=position or center,leadId=leadId})
  end
+ local function focus(phase,rock)
+  scene.publishSquareStatus(crew)
+  assert(tester:GetAttribute('MA_SelectorFocus')==(phase and phase..':'..rock.id or nil),'focus did not show the current order')
+ end
  local outside=makeResource(f,center+Vector3.new(25,0,0),'Crystal',100,10,3,3)
  request(outside.id)
  assert(crew.miningSquare and not crew.miningSquare.leadId,'an out-of-square target became the lead')
+ focus(nil)
  request(rich.id,center+Vector3.new(0,0,66))
  assert(not crew.miningSquare.leadId,'remote focus bypassed pin range')
  rich.slots[rival.drones[1].id]=1
  request(rich.id)
  assert(not crew.miningSquare.leadId,'a claimed target became the lead')
+ focus(nil)
  rich.slots[rival.drones[1].id]=nil
  local current=crew.miningSquare
  request(rich.id)
  assert(crew.miningSquare==current and current.leadId==rich.id,'same-cell focus did not update the pin')
+ assert(tester:GetAttribute('MA_SelectorFocus')=='Queued:'..rich.id,'the accepted order did not confirm until the next snapshot')
  scene.squareStep(crew,worker)
  assert(worker.target==rich and not current.leadId and rich.slots[worker.id],'the selected valuable crystal did not get one real assignment')
+ focus('Travel',rich)
  worker.warmAt=now
+ focus('Starting',rich)
+ worker.mining=true;focus('Cutting',rich)
+ crew.busy=true;focus('Paused',rich);crew.busy=false
  request(third.id)
  scene.squareStep(crew,worker)
  assert(worker.target==rich and worker.warmAt and current.leadId==third.id,'a same-cell lead interrupted an active cut')
+ focus('Queued',third)
+ third.slots[rival.drones[1].id]=1;focus('Claimed',third);third.slots[rival.drones[1].id]=nil
  release(worker)
  now+=.25
  scene.squareStep(crew,worker)
  assert(worker.target==third and not current.leadId,'the next free worker did not take the new lead')
+ focus('Travel',third)
+ worker.pos=committedStation(worker,third)
+ assert(hitResource(worker,third,1000));focus(nil)
  release(worker)
+ worker.pos=quick.position+Vector3.yAxis*4
  now+=.25
  scene.squareStep(crew,worker)
  assert(worker.target==quick,'the consumed lead changed ordinary square dispatch')
+ request(quick.id);focus('Travel',quick)
+ request(nil);focus(nil)
+ request(quick.id);scene.clearSquare(crew)
+ assert(not tester:GetAttribute('MA_SelectorFocus'),'recall left a stale target on the HUD')
  players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
  for _,r in ipairs({quick,rich,third,outside}) do resources[r.id]=nil;r.part:Destroy() end
 end
-print('PASS direct crystal focus assigns one available worker without stealing or interrupting cuts')
+print('PASS direct crystal focus confirms the queued and assigned order without stealing or interrupting cuts')
 
 do
  local tester=player(98694);players.PlayerAdded:Fire(tester)

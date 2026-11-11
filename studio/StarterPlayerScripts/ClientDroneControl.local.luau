@@ -9221,6 +9221,7 @@ local BLUE=Color3.fromRGB(135,218,255)
 local GOLD=Color3.fromRGB(255,201,100)
 local GREEN=Color3.fromRGB(136,235,163)
 local RED=Color3.fromRGB(233,134,120)
+local orderText={Queued='Queued',Travel='En route',Starting='Starting',Cutting='Cutting',Claimed='Claimed',Paused='Paused'}
 function V.new(ctx)
  return setmetatable({ctx=ctx,pool={},pending={},queued={},queueJSON='',clock=0},V)
 end
@@ -9278,6 +9279,7 @@ function V:update(dt,now)
   end
  end
  local marked={};local records=ctx.resources
+ local phase,ordered=(player:GetAttribute('MA_SelectorFocus') or ''):match('^(%a+):(.+)$')
  local hovered=hover and records[hover]
  local zone=hovered and hovered.source.Parent
  if zone and zone.Parent and zone.Parent.Name=='CrystalRun' then self:endDrag() end
@@ -9286,14 +9288,15 @@ function V:update(dt,now)
   self.nextPaint=os.clock()+.12;self:request(hover,true)
  end
  if hover and records[hover] then table.insert(marked,hover) end
- for id in pairs(self.queued) do if id~=hover then table.insert(marked,id) end end
- for id in pairs(working) do if id~=hover and not self.queued[id] then table.insert(marked,id) end end
+ if ordered and ordered~=hover then table.insert(marked,ordered) end
+ for id in pairs(self.queued) do if id~=hover and id~=ordered then table.insert(marked,id) end end
+ for id in pairs(working) do if id~=hover and id~=ordered and not self.queued[id] then table.insert(marked,id) end end
  for id,pending in pairs(self.pending) do
   if os.clock()-pending.at>3 then self.pending[id]=nil
-  elseif id~=hover and not self.queued[id] and not working[id] then table.insert(marked,id) end
+  elseif id~=hover and id~=ordered and not self.queued[id] and not working[id] then table.insert(marked,id) end
  end
  local flash=self.flash
- if flash and os.clock()-flash.at<.8 and flash.id~=hover and not working[flash.id] and not self.queued[flash.id] and not self.pending[flash.id] then table.insert(marked,flash.id) end
+ if flash and os.clock()-flash.at<.8 and flash.id~=hover and flash.id~=ordered and not working[flash.id] and not self.queued[flash.id] and not self.pending[flash.id] then table.insert(marked,flash.id) end
  local used=0
  for _,id in ipairs(marked) do
   local r=records[id]
@@ -9306,16 +9309,17 @@ function V:update(dt,now)
    local growing=now<(r.source:GetAttribute('ReadyAt') or 0)
    local busy=(r.source:GetAttribute('SlotsUsed') or 0)>=(r.source:GetAttribute('SlotCapacity') or 1)
    local color=working[id] and GREEN or self.queued[id] and GOLD or (growing or busy) and RED or BLUE
+   if id==ordered then color=phase=='Claimed' and RED or phase=='Cutting' and GREEN or GOLD end
    local pulse=flash and flash.id==id and math.clamp(1-(os.clock()-flash.at)/.8,0,1) or 0
    if pulse>0 then color=flash.color end
    h.Adornee=r.view;h.Enabled=true;h.FillColor=color
-   h.FillTransparency=(id==hover and .86 or .95)-pulse*.2
+   h.FillTransparency=(id==hover and .86 or id==ordered and .90 or .95)-pulse*.2
 
   end
  end
  for index=used+1,#self.pool do self.pool[index].Enabled=false end
  -- One contextual readout, never a field of floating health bars.
- local focused=hover and records[hover]
+ local focused=hovered or (ordered and records[ordered])
  if focused and visible and focused.view.Parent and (focused.source:GetAttribute('HP') or 0)>0 then
   if not self.meter then
    local gui=Instance.new('BillboardGui');gui.Name='FocusedRock';gui.Size=UDim2.fromOffset(132,34)
@@ -9336,6 +9340,7 @@ function V:update(dt,now)
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
+  self.meter.AlwaysOnTop=focused==hovered
   local name=s:GetAttribute('JunkName') or s:GetAttribute('ZoneName') or s:GetAttribute('Mineral') or 'Rock'
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
@@ -9349,12 +9354,15 @@ function V:update(dt,now)
   self.title.Text=tostring(name)..label
   local hp=s:GetAttribute('HP') or 0
   local maxHP=s:GetAttribute('MaxHP') or 1
-  local pair=value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
+  local order=if ordered and focused==records[ordered] then orderText[phase] else nil
+  local pair=not order and value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
    and (s:GetAttribute('Hardness') or 0)>=Workshop.PAIRED_CUT_HARDNESS
+  local showOrder=order~=nil or pair
   self.work.Visible=value~=nil
-  self.pair.Visible=pair
-  self.track.Position=UDim2.fromOffset(pair and 56 or 5,24)
-  self.track.Size=UDim2.new(1,pair and -116 or value and -65 or -10,0,7)
+  self.pair.Visible=showOrder;self.pair.Text=order or '2 lasers'
+  self.pair.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
+  self.track.Position=UDim2.fromOffset(showOrder and 56 or 5,24)
+  self.track.Size=UDim2.new(1,showOrder and -116 or value and -65 or -10,0,7)
   if value then
    -- Crystal snapshots include the reference game's 10 HP break floor.
    hp=math.max(0,hp-10);maxHP-=10

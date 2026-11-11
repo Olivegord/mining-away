@@ -8498,6 +8498,7 @@ function scene.clearSquare(p)
  p.player:SetAttribute('MA_Selector',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
  p.player:SetAttribute('MA_SelectorStatus',nil)
+ p.player:SetAttribute('MA_SelectorFocus',nil)
 end
 function scene.squareInRange(position,square)
  return Mining.selectorInRange(position,square.center)
@@ -8505,6 +8506,24 @@ end
 function scene.committedWork(d)
  return d.target~=nil and (d.warmAt~=nil or d.mining or d.specialJob~=nil
   or (d.breaker~=nil and d.breaker.phase~='Approach'))
+end
+function scene.publishSquareFocus(p,square)
+ local focus=resources[square.focusId]
+ local receipt
+ if focus and not focus.paid and focus.hp>0 and focus.part.Parent then
+  local phase,foreign='Queued',false
+  for id in pairs(focus.slots) do
+   local worker=drones[id]
+   if worker and worker.owner==p.player.UserId and worker.target==focus then
+    if worker.mining or worker.specialJob or (worker.breaker and worker.breaker.phase~='Approach') then phase='Cutting';break end
+    if worker.warmAt then phase='Starting' elseif phase=='Queued' then phase='Travel' end
+   else foreign=true end
+  end
+  if not healthy(p) then phase='Paused'
+  elseif foreign and phase=='Queued' then phase='Claimed' end
+  receipt=phase..':'..focus.id
+ elseif square.focusId then square.focusId=nil end
+ if p.player:GetAttribute('MA_SelectorFocus')~=receipt then p.player:SetAttribute('MA_SelectorFocus',receipt) end
 end
 function scene.idleSquareStatus(p,square)
  local growing,claimed=false,false
@@ -8534,6 +8553,7 @@ end
 function scene.publishSquareStatus(p)
  local square=p.miningSquare
  if not square then return end
+ scene.publishSquareFocus(p,square)
  local working,finishing,moving=false,false,false
  local available,recharging=0,0
  local pair=resources[square.pairId]
@@ -10094,19 +10114,26 @@ function scene.placeSquare(p,payload)
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
  if lead and lead.field==field and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
   and Mining.selectorTouches(center,square.half,lead.part.CFrame,lead.part.Size) then
-  if scene.canPairCut(p,lead) then square.pairId=leadId
-  elseif not next(lead.slots) then square.leadId=leadId end
+  if scene.canPairCut(p,lead) then square.pairId=leadId;square.focusId=leadId
+  elseif not next(lead.slots) then square.leadId=leadId;square.focusId=leadId
+  else
+   for id in pairs(lead.slots) do
+    local worker=drones[id]
+    if worker and worker.owner==p.player.UserId and worker.target==lead then square.focusId=leadId;break end
+   end
+  end
  end
  local current=p.miningSquare
  local samePin=current and current.field==field and current.half==square.half and (current.center-center).Magnitude==0
- if samePin and not square.leadId and not square.pairId then
-  if leadId==nil then current.leadId=nil;current.pairId=nil end
-  return
- end
+ if samePin and leadId~=nil and not square.focusId then return end
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Include;params.FilterDescendantsInstances={part.Parent.Parent};params.RespectCanCollide=true
  local from=hr.Position+Vector3.new(0,1,0)
  if workspace:Raycast(from,center+Vector3.new(0,2,0)-from,params) then return end
- if samePin then current.leadId=square.leadId;current.pairId=square.pairId;return end
+ if samePin then
+  current.leadId=square.leadId;current.pairId=square.pairId;current.focusId=square.focusId
+  scene.publishSquareFocus(p,current)
+  return
+ end
  scene.moveSquareWork(p,current,square)
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.publishSquareStatus(p)

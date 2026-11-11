@@ -1,4 +1,4 @@
-local ctx={world=world,parent=fx,resources={rock={source=rock,view=view}},drones={},profile=function() return {run={id='run'}} end,hidden=function() return false end,blocks=function() return false end}
+local ctx={world=world,parent=fx,resources={rock={source=rock,view=view}},drones={},profile=function() return {run={id='run'}} end,hidden=function() return false end,blocks=function() return false end,touchPoint=function() return nil end}
 local v=CommandView.new(ctx)
 v:update(.1,1000)
 assert(v.pool[1] and v.pool[1].Enabled and v.pool[1].Adornee==view,'starter hover must mark the clicked rock')
@@ -18,6 +18,22 @@ for step=1,60 do v:update(.1,1000+step*.1) end
 local outlines=0
 for _,h in ipairs(fx:GetDescendants()) do if h:IsA('Highlight') and h.Adornee==drone then outlines+=1 end end
 assert(outlines==0,'mining command created a drone outline')
-v:endDrag();v:destroy();assert(v.meter._destroyed,'context readout must be cleaned')
+v:endDrag()
+rock:SetAttribute('OreValue',40);rock:SetAttribute('MaxHP',120)
+hit=floor
+local meter=v.meter
+localPlayer:SetAttribute('MA_SelectorFocus','Queued:rock')
+v:update(.1,1010)
+assert(v.meter==meter and meter.Enabled and meter.Adornee==view and not meter.AlwaysOnTop and v.pair.Text=='Queued')
+localPlayer:SetAttribute('MA_SelectorFocus','Travel:rock');v:update(.1,1010.1)
+assert(v.pair.Text=='En route' and v.pool[1].OutlineTransparency==1)
+localPlayer:SetAttribute('MA_SelectorFocus','Cutting:rock');v:update(.1,1010.2)
+assert(v.pair.Text=='Cutting' and v.pair.Visible and v.title.Text=='Rock · 40 Quartz')
+ctx.hidden=function() return true end;v:update(.1,1010.3)
+assert(not meter.Enabled,'focus appeared over a menu')
+ctx.hidden=function() return false end
+localPlayer:SetAttribute('MA_SelectorFocus',nil);v:update(.1,1010.4)
+assert(not meter.Enabled,'cleared focus left the meter visible')
+v:destroy();assert(v.meter._destroyed,'context readout must be cleaned')
 assert(v.pool[1]._destroyed,'highlights must be cleaned')
 print('PASS current command highlight scope and cleanup (API doubles)')

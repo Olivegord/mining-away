@@ -2,6 +2,7 @@ local localPlayer=player(7);players.LocalPlayer=localPlayer
 local UIS={MouseEnabled=true,GamepadEnabled=false}
 function UIS:GetFocusedTextBox() return nil end
 function UIS:GetMouseLocation() return Vector2.new(100,100) end
+function UIS:GetLastInputType() return {Name='MouseMovement'} end
 local oldGetService=game.GetService
 function game:GetService(name) if name=='UserInputService' then return UIS end;return oldGetService(self,name) end
 local camera={}
