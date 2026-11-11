@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ebc7e32d9d8e0fb18af6ae70222562a2ba84dcfeb2d346e8e7252750926b5aac` | Mounted Crystal Run field signs. |
+| Native-file SHA-256 | `ebc73e1d46fb243e33c64fc6ebe4d7b143ac50c00aceca8b69ca96fde1ae1cf3` | Original checker on the service deck. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the mounted Crystal Run field signs** | All seven Sources and three roots verified in Edit. Team Create save returned version 145. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the service deck finish** | All seven Sources and three roots verified in Edit. Team Create save returned version 146. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — checker through the depot approach
+
+The service deck and three walkway sections by the counters use the existing deck-side color. The deck's top uses the original Mining Away checker texture with its eight-stud scale, tint and opacity. The edit preserves the walking surfaces, station assemblies, authored signs and plot boundaries.
+
+A matching Studio Edit viewport showed the checker across the former pale slab and into the Quartz approach. All 99 floor samples hit the same instance at the same height. The canonical mirror changed four part colors, added one native Texture, and preserved all 50 Sources. Live movement and phone presentation remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **146**. No player release was published. To reproduce from `5b6be66`, stage [the deck finish](../tools/studio_service_deck_finish.lua) and extract `shared.ServiceDeckFinish.scenery` into `scenery.b64`. Run [the scoped mirror](../tools/refresh_service_deck_finish.py) with the export directory and baseline hash `ebc7e32d9d8e0fb18af6ae70222562a2ba84dcfeb2d346e8e7252750926b5aac`. Save the receipt from `shared.ServiceDeckFinish.apply()` as `verified.json`, rerun the mirror with `--write`, and run `python3 tools/build.py`.
 
 ## November 11 — field signs on the Crystal Run approach
 
