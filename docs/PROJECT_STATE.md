@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `2eeaa71597203ab30cd5cb5a5687f57a01c68ca7c3f752ba865fd72ea08cfcc7` | Includes Aftershock prioritizing the next nearby cargo drop. |
+| Native-file SHA-256 | `0c906e4af96d6287161bdc776c6df4bdb7480ff8b9f1eee2fd94d609f5e77aeb` | Includes base Quartz payouts on the five Crystal Run boards. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes Aftershock prioritizing payable ore** | All seven Sources and three roots verified in Edit. Team Create save returned version 171. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit shows base payouts on the Crystal Run field boards** | All seven Sources and three roots verified in Edit. Team Create save returned version 172. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — put the next field’s payout on its board
+
+Both faces of the five existing boards list base Quartz per raw rock beneath the original 64-pixel title. Quartz reads 10 and Ruby reads 28–64. The deeper ranges are 112–256 in Cobalt, 448–1,024 in Violet, and 1,792–4,096 in Emerald. The ranges come from the ordinary rock generator before crew bonuses and show why a player might head past Quartz with a new upgrade. Each board keeps its native canvas, font, color, posts and position.
+
+All ten live labels reported that the text fits. Native font metrics left 14 vertical pixels, and 30 sightlines to the payout lines were clear. The scoped mirror changed only text, text size and RichText for those labels and preserved every authored instance and Source. The earlier 20-face lettering workflow reproduced its historical binary byte for byte. The Studio screenshot request timed out. In-motion legibility and player route choices remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **172**. No player release was published. To reproduce from `7eeed50`, prefix [the payout staging script](../tools/studio_crystal_payouts.lua) with `module_bundle(('Workshop','Mining'))` from `tools/build.py` and run it in shared Edit. Save its returned JSON as `edits.json`. Run [the scoped mirror](../tools/refresh_sign_lettering.py) with the export directory, `--payouts` and `--baseline-sha256 2eeaa71597203ab30cd5cb5a5687f57a01c68ca7c3f752ba865fd72ea08cfcc7`. Save the receipt from `shared.CrystalPayoutSigns.apply()` as `verified.json`, rerun the mirror with `--write`, and verify with `python3 tools/build.py`. Recheck the labels if Crystal Run payout tuning changes.
 
 ## November 11 — aim Aftershock at the next cargo drop
 
