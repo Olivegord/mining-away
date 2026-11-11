@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `712adbbee5c923e8432d9ea5995575dc1eed28beacad5ed7e0a68f486193a4c6` | Includes the mounted shop signs and local side-field labels. |
+| Native-file SHA-256 | `ccf877380eeda3299e47e978c17a2e272585eee22b16e8b3a13268611fed8e94` | Includes the original checker finish on the depot paths. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the mounted Quartz Workshop and Star Shop signs** | All seven Sources and three roots verified in Edit. Team Create save returned version 159. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit has the checker finish through the depot** | All seven Sources and three roots verified in Edit. Team Create save returned version 160. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — continue the original checker through the depot
+
+The shop apron and seven walkway pieces now use the original Mining Away checker with the service deck's existing warm tint. The hub and service deck checker offsets follow the same eight-stud grid as the baseplate and Quartz field. The depot uses the original texture, scale and opacity.
+
+The same Edit camera showed the checker across the former pale approach and beneath both shop signs. All 221 sampled floor points hit the same parts at the same heights. The canonical mirror added eight Texture instances, tinted five surfaces, adjusted two existing offsets and preserved all 50 Sources. Movement and low-graphics appearance remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **160**. No player release was published. To reproduce from `4ffd60e`, stage [the depot checker](../tools/studio_depot_checker.lua) in shared Edit and extract `shared.DepotChecker.scenery` as `scenery.b64`. Run [the scoped mirror](../tools/refresh_depot_checker.py) with the export directory and `--baseline-sha256 712adbbee5c923e8432d9ea5995575dc1eed28beacad5ed7e0a68f486193a4c6`. Save the receipt from `shared.DepotChecker.apply()` as `verified.json`, rerun the mirror with `--write`, and verify with `python3 tools/build.py`.
 
 ## November 11 — mount the active depot shop signs
 
