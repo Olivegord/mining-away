@@ -75,11 +75,14 @@ function V.new(parent,audio)
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
   local breakAt=s:GetAttribute('CrystalBreakAt') or 0
-  if impact>r.lastContactAt then
+  if impact>now and impact>r.lastContactAt then
+   r.nextContactAt=impact
+  elseif impact>r.lastContactAt then
+   r.nextContactAt=nil
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
-   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
+   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
     r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position

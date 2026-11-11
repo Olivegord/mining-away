@@ -5477,15 +5477,16 @@ function View.new()
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
     local contactAt=node:GetAttribute('ContactAt')
+    local landed=contactAt and now>=contactAt
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    if contactAt and drone and not r.impacted and now-contactAt<.20 then
+    if landed and r.bound and drone and not r.impacted and now-contactAt<.20 then
      r.impacted=true;drone.shotImpactAt=now
     end
-    local resolved=contactAt or progress>1+.16/duration or (not target and progress>=1)
+    local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
     if resolved then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true
@@ -5646,11 +5647,14 @@ function V.new(parent,audio)
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
   local breakAt=s:GetAttribute('CrystalBreakAt') or 0
-  if impact>r.lastContactAt then
+  if impact>now and impact>r.lastContactAt then
+   r.nextContactAt=impact
+  elseif impact>r.lastContactAt then
+   r.nextContactAt=nil
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
-   if at>=0 and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
+   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
     r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
@@ -10956,12 +10960,18 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- if r.cutFeedback and not broken and authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
-  local contact=s:GetAttribute('CutContactAt') or 0
-  if contact~=(r.fractureContact or 0) and now-contact>=0 and now-contact<.21 and not CrystalImpactView.reducedMotion() then
-   r.fractureContact=contact;r.fractureUntil=now+.045
+ if r.cutFeedback and not r.visual.broken then
+  if broken then
+   local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
+   if breakAt>now then r.dirty=true;return end
+  elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
+   local contact=s:GetAttribute('CutContactAt') or 0
+   if contact>now then r.dirty=true;return end
+   if contact~=(r.fractureContact or 0) and now-contact<.21 and not CrystalImpactView.reducedMotion() then
+    r.fractureContact=contact;r.fractureUntil=now+.045
+   end
+   if now<(r.fractureUntil or 0) then r.dirty=true;return end
   end
-  if now<(r.fractureUntil or 0) then r.dirty=true;return end
  end
  local healed=s:GetAttribute('RegrowAt') or 0
  if not broken and healed>0 then
@@ -11284,7 +11294,9 @@ connect(RunService.RenderStepped,function(dt)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or r.kick or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then rockDamage.feedback:react(r,now) end
+  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.splitDue or r.vibrating or (r.cutUntil or 0)>now then
+   rockDamage.feedback:react(r,now)
+  end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

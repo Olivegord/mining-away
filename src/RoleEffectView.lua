@@ -34,15 +34,16 @@ function View.new()
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
     local contactAt=node:GetAttribute('ContactAt')
+    local landed=contactAt and now>=contactAt
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    if contactAt and drone and not r.impacted and now-contactAt<.20 then
+    if landed and r.bound and drone and not r.impacted and now-contactAt<.20 then
      r.impacted=true;drone.shotImpactAt=now
     end
-    local resolved=contactAt or progress>1+.16/duration or (not target and progress>=1)
+    local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
     if resolved then
      if r.projectile then r.projectile:Destroy();r.projectile=nil end
      r.started=true

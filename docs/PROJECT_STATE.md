@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `0294de548c04cbd63d687f1d7cce081cee8a316321cdcbe1fa9062dd820122c5` | Includes committed attacks finishing before the battery return. |
+| Native-file SHA-256 | `9289987a33f40bcbd04645d4e94c66b6d3a30c089a65bed2d8116187404cfe65` | Includes client scheduling for confirmed crystal contacts. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit lets committed attacks finish before charging** | All seven Sources and three roots verified in Edit. Team Create save returned version 162. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit aligns the existing shot and crystal feedback at contact** | All seven Sources and three roots verified in Edit. Team Create save returned version 163. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — line up the shot, flash and fracture
+
+When a contact arrives ahead of the client's clock, the observer keeps the projectile and the old rock shape through the scheduled contact. The existing white flash and spatial hit sound start together, with the same intermediate fracture hold and silent final split. A late observer does not replay recoil for a projectile it never saw in flight.
+
+In the same production-renderer fixture with API doubles, a hit arriving 10 ms early yielded zero audio cues and no flash on `1b5ac77`. The current renderer plays the two contact layers and delayed chip cue, and shows the flash. The fixture also verifies fracture and split timing, late observers and one-time projectile cleanup. Audio, beam, Workshop and Crystal Run checks passed. The contact-sparks fixture now expects the existing fast start and close drag. The broader gadget suite passes both contact fixtures and then stops at the older client-inertia mock, which lacks `world` in its fixture setup. In-game motion, listening and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven managed Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **163**. No player release was published. To reproduce from `1b5ac77`, apply the Source changes and run `python3 tools/script_sync.py` followed by `python3 tools/build.py --previous-commit 1b5ac77`. The native refresh preserved all non-Source chunks and unrelated Sources.
 
 ## November 11 — finish the attack before charging
 
