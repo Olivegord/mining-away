@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `22b6bc0c263a1a96df3f16daa7bfb4915f02804c0e316ddeb8b47ef33b45fa3f` | Direct crystal priority and focused HP readout. |
+| Native-file SHA-256 | `41a48896b9859226105ff374f092486d1fb080b90d2d2c542d01a177a574bf31` | Mounted depot nameplates and return-facing Pack Counter arrow. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains direct crystal priority** | All seven Sources and three roots verified in Edit. Team Create save returned version 134. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the depot signs** | Both nameplates, the return arrow, all seven Sources and three roots verified in Edit. Team Create save returned version 135. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — depot nameplates and return route
+
+The existing Pack Counter and Prestige stations have double-sided nameplates made from the Crystal Run sign's native parts and lettering. Their previous floating name labels are disabled. The field-facing side of the depot wayfinder points left to the Pack Counter. The outbound face still points toward Crystal Run.
+
+Studio Edit showed both mounted plates from the Crystal Run approach. Native ray checks found clear sightlines to both plates from spawn and the return route. The canonical snapshot verifier confirmed both nameplates, each wayfinder face, the two disabled billboards and all 50 preserved Sources. The sign pass left the station assemblies, collision and routes in place. Native Play and small-screen legibility remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched, and Team Create returned version **135**. Studio stayed in Edit and no player release was published. To reproduce from `303109f`, stage [the depot signs](../tools/studio_depot_station_plates.lua) in the baseline Edit map. Extract `shared.DepotStationPlates.scenery` into `scenery.b64` and its `edits` into the plan's `properties`, with `baseline` set to the SHA-256 of that commit's native file. Check with `python3 tools/refresh_workshop_signs.py <plan> --plates <export-dir>`. After `shared.DepotStationPlates.apply()` verifies, rerun the saver with `--write` and run `python3 tools/build.py`.
 
 ## November 11 — choose the next crystal within a pin
 
