@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler prefers quick finishes, while Ballcaster prefers intact deep shells and hits them harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
 ## Identity and delivery state
 
@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `64a2e292526f9096bc81b788cd5829a975dc61acf862ff6c32843ef348cff5c2` | Includes ore bob and bloom and the restored laser buildup. |
+| Native-file SHA-256 | `e726fd322c2ea961b391c1aa90d45cff894d7d8f09d271726be2697157fbb0d0` | Includes the gun drone impact pass and cargo landing sound. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the ore bloom and laser buildup fixes** | All seven Sources and three roots verified in Edit. Team Create save returned version 181. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the gun drone impact pass** | All seven Sources and three roots verified in Edit. Team Create save returned version 182. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give gun drones a distinct hit and cadence
+
+Needler fires faster and gains 25% damage on exposed deep cores. Ballcaster gathers a visible charge, launches a heavier orb and retains its 50% bonus against the first two layers. Each has its own launch sound and confirmed hit. The heavy impact pushes sparks away from the crystal surface and briefly tilts the crystal about its foot. A shot now records its contact before the fracture can turn or shrink the crystal. Laser fractures give a short pulse and a few chips, with the original crack. Nearby cargo gives its owner a quiet clink at first landing.
+
+Crystal Run, workshop, beam and pickup fixtures passed, as did the targeted contact clock. The broader audio suite still hits the owner-only pickup assertion reproduced on `33b8e16`, and the broader gadget suite stops at its existing client inertia fixture. A detached Studio Edit fixture checked the launch/impact sequence, wake cleanup and reduced effects; all six reused audio assets loaded. A live playtest, the sound mix in motion and multiplayer remain unverified.
+
+All seven Sources matched in shared Edit at place **124078027733625**, universe **10774898335**, with three connected Script Sync roots. Team Create save **182** succeeded; no player release was published. Reproduce from `33b8e16` by applying the Source changes, running `python3 tools/script_sync.py`, then `python3 tools/build.py --previous-commit 33b8e16`. The native refresh preserved all non-Source chunks and unrelated Sources. See [the research and playtest notes](review/CRYSTAL_RUN_IMPACT.md).
 
 ## November 11 — ore bloom and a readable laser charge
 

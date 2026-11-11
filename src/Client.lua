@@ -1183,10 +1183,8 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- local shotAge=now-(d.shotImpactAt or -100)
- local recoil=(shotAge>=0 and shotAge<.15) and math.sin(math.pi*shotAge/.15)*(1-shotAge/.15) or 0
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.new(0,0,recoil*.14)*CFrame.Angles(recallPitch+recoil*.045,0,d.bank))
+  *CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)

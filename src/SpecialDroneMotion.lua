@@ -81,14 +81,21 @@ local function offset(record,item,t)
 end
 
 local function fieldStep(record,state,now,dt,shot,source)
- local recoil,reload=0,0
- if shot and shot.Parent then
+ local recoil,reload,charge=0,0,0
+ local ball=record.role=='Ballcaster'
+ local active=state=='SpecialMine' or state=='Warmup' or state=='Recover' or (source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil
+ if active and shot and shot.Parent then
   local started=shot:GetAttribute('StartedAt')
   local paused=shot:GetAttribute('PausedAt') or 0
   local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
-  if age>=0 then
-   recoil=smooth(age/.035)*(1-smooth(age/.28))
-   reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
+  local windup=shot:GetAttribute('Windup') or 0
+  if age>=0 and age<windup then
+   charge=smooth(age/windup)
+   recoil=-.45*charge
+  elseif age>=windup then
+   local fire=age-windup
+   recoil=smooth(fire/(ball and .028 or .018))*(1-smooth(fire/(ball and .36 or .16)))
+   reload=(1-smooth((fire-.065)/.46))
   end
  end
  if record.role=='Needler' or record.role=='Ballcaster' then
@@ -105,8 +112,8 @@ local function fieldStep(record,state,now,dt,shot,source)
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
-  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
+  if kind=='DartSlide' then offset=Vector3.new(0,0,.36*recoil)
+  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.52*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
@@ -118,7 +125,9 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
-  if kind=='BallReload' then item.part.Size=item.size*(1-.82*reload) end
+  if kind=='BallReload' then
+   item.part.Size=item.size*(.78+.46*charge)*(1-.92*reload)
+  end
  end
 end
 

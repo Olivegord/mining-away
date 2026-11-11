@@ -1300,10 +1300,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not abilityOrigin and r.field.cfg.SelectionOnly then
   if r.hardness>=Workshop.DEEP_CUT_HARDNESS then
    amount*=d.stats.deepCutMultiplier or 1
-   if special and job.projectile then amount*=DroneCatalog.projectileShellPower(d.role,r.stage) end
   end
   if d.battery>d.stats.batteryCapacity*.5 then amount*=1+(d.stats.liveWire or 0) end
  end
+ local shotKind=special and DroneCatalog.Types[d.role].Projectile or nil
+ local shotPower=shotKind and r.field.cfg.SelectionOnly and r.hardness>=Workshop.DEEP_CUT_HARDNESS
+  and DroneCatalog.projectileLayerPower(d.role,r.stage) or 1
+ amount*=shotPower
  local pinnedWork=(not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.miningSquare
  local startShift=pinnedWork and not secondary and scene.shiftReady(p)
  if pinnedWork and (startShift or (d.squareJob==p.shiftSquare and now<(p.shiftUntil or 0))) then amount*=1.5 end
@@ -1325,13 +1328,21 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local revealed=nil
  local before=r.hp
  local broken=R.damage(r,amount)
+ local actual=r.paid and 0 or r.hp+10
+ local nextStage=Feel.stage(actual,r.maxHP,r.stageCount)
+ local fractured=nextStage>previous and not broken
  if startShift and r.hp<before then
   p.shiftReadyRun=nil;p.shiftSquare=d.squareJob;p.shiftUntil=now+p.shiftSeconds
  end
- local finalSurface
- if broken and r.field.cfg.SelectionOnly then
+ -- Capture the incoming surface before any fracture changes its size or facing.
+ local hitSurface
+ if shotKind or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart)) then
+  local hitFrom=shotKind and (job.from or d.pos) or d.pos
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
-  finalSurface=workspace:Raycast(d.pos,r.part.Position-d.pos,query)
+  local delta=r.part.Position-hitFrom
+  local direction=delta.Magnitude>.01 and delta.Unit or -Vector3.yAxis
+  local hit=workspace:Raycast(hitFrom,delta,query)
+  hitSurface={point=hit and hit.Position or (shotKind and job.contact) or r.part.Position-direction*r.part.Size.Y*.32,normal=hit and hit.Normal or -direction}
  end
  r.lastHitAt=now
  if r.field.cfg.SelectionOnly and r.hardness>1 and d.squareJob then
@@ -1385,8 +1396,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   job.impacted=true
   r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
  end
- local actual=r.paid and 0 or r.hp+10
- r.stage=Feel.stage(actual,r.maxHP,r.stageCount)
+ r.stage=nextStage
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
   local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
@@ -1394,20 +1404,17 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
  end
  r.part:SetAttribute('HP',actual)
- if r.field.cfg.SelectionOnly and (isShot or cutStart or broken) then
+ if r.field.cfg.SelectionOnly and hitSurface then
   if cutStart then d.lastCutFX=d.beamSince end
-  local hitFrom=d.pos
-  local delta=r.part.Position-hitFrom
-  local direction=delta.Magnitude>.01 and delta.Unit or -Vector3.yAxis
-  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
-  local hit=finalSurface or workspace:Raycast(hitFrom,delta,query)
-  local point=hit and hit.Position or (job and job.contact) or r.part.Position-direction*r.part.Size.Y*.32
-  r.part:SetAttribute('CutContactPoint',point);r.part:SetAttribute('CutContactNormal',hit and hit.Normal or -direction)
+  r.part:SetAttribute('CutContactPoint',hitSurface.point);r.part:SetAttribute('CutContactNormal',hitSurface.normal)
+  r.part:SetAttribute('CutProjectile',shotKind or '')
+  r.part:SetAttribute('CutProjectileFX',shotKind~=nil and job.projectile~=nil and job.projectile.Parent~=nil)
+  r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
-  if special and job.projectile then
-   job.projectile:SetAttribute('ContactPoint',point);job.projectile:SetAttribute('ContactAt',now)
-  end
   if broken then r.part:SetAttribute('CrystalBreakAt',now) end
+ end
+ if shotKind and hitSurface then
+  RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
  end
  -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
  local specialistCut=special==true or (assist and recipient~=d)
@@ -1967,6 +1974,7 @@ function scene.miningWarmup(d,r)
  -- Ignition upgrades still shorten it, with a small floor for readability.
  if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
+ if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
  end
@@ -2048,10 +2056,11 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local flight=projectile=='Dart' and .25 or .48
-   d.specialJob.duration=math.max(cycle.duration,flight+.10);d.specialJob.impact=flight/d.specialJob.duration
-   d.specialJob.contact=aim
-   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
+   local windup=math.min(definition.Windup,cycle.duration*.38)
+   local flight=definition.Flight
+   d.specialJob.duration=math.max(cycle.duration,windup+flight+.10);d.specialJob.impact=(windup+flight)/d.specialJob.duration
+   d.specialJob.from=from;d.specialJob.contact=aim
+   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
   else
    for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
    r.part:SetAttribute('EffectSerial',r.specialSerial)
@@ -2062,9 +2071,6 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  if not job.impacted and now>=job.startedAt+job.duration*job.impact then
   if not hitResource(d,r,job.damage,false,nil,nil,'Special') then
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+3;release(d);return
-  end
-  if projectile and not r.field.cfg.SelectionOnly then
-   RoleEffects.Pulse(job.contact,RoleConfig.Types[d.role].Color,.35,projectile=='Dart' and 1.9 or 4.2,.18)
   end
  end
  -- Keep the same reservation during recovery. A new serial can begin only

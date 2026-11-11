@@ -1305,6 +1305,12 @@ local CUES = {
  counter_settle={id='9125869495',volume=.14,duration=.38,pitch=.88,cooldown=.2,range=34,maxVoices=2,fallback='action_jump_land.mp3'},
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
+ needle_fire={id='9113500510',volume=.21,duration=.20,pitch=1.46,attack=.008,cooldown=.07,range=54,maxVoices=3,fallback='volume_slider.ogg'},
+ needle_hit={ids={'9125869504','9125869138'},volume=.29,duration=.26,pitch=1.32,attack=.008,cooldown=.075,range=59,maxVoices=3,fallback='action_jump_land.mp3'},
+ coil_load={id='9119816710',volume=.12,duration=.30,pitch=1.26,attack=.027,cooldown=.16,range=42,maxVoices=2,fallback='volume_slider.ogg'},
+ coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
+ coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
+ ore_land={id='9125869138',volume=.13,duration=.29,pitch=1.22,attack=.009,cooldown=.11,range=35,maxVoices=2,fallback='action_jump_land.mp3'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
  reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
  resonance={id='91735091370012',volume=.12,duration=.8,pitch=.65,cooldown=.14,fallback='volume_slider.ogg'},
@@ -3085,8 +3091,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts. Favors small and chipped crystals in deep fields.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',ShellPower=1.5,Color={150,124,255},Description='Favors large deep crystals. Deals 50% more damage through their first two layers.'},
+  Needler = {Name='Needler',Duration=.66,Impact=.36,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.065,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.28,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -3169,10 +3175,13 @@ function Catalog.projectileTargetScore(kind,stats,node,distance)
   local shellWork=math.max(0,node.hp-shellEnd)
   return travel-shellWork/rate*(1-1/shellPower)
  end
- return travel+node.hp/rate
+ local shellEnd=math.max(0,node.maxHP*(1-SHELL_LAYERS/(node.stageCount+1))-10)
+ local coreWork=math.min(node.hp,shellEnd)
+ return travel+(node.hp-coreWork+coreWork/Catalog.Types[kind].CorePower)/rate
 end
-function Catalog.projectileShellPower(kind,stage)
- return stage<SHELL_LAYERS and Catalog.Types[kind].ShellPower or 1
+function Catalog.projectileLayerPower(kind,stage)
+ local def=Catalog.Types[kind]
+ return (stage<SHELL_LAYERS and def.ShellPower or stage>=SHELL_LAYERS and def.CorePower) or 1
 end
 return Catalog
 
@@ -4926,14 +4935,21 @@ local function offset(record,item,t)
 end
 
 local function fieldStep(record,state,now,dt,shot,source)
- local recoil,reload=0,0
- if shot and shot.Parent then
+ local recoil,reload,charge=0,0,0
+ local ball=record.role=='Ballcaster'
+ local active=state=='SpecialMine' or state=='Warmup' or state=='Recover' or (source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil
+ if active and shot and shot.Parent then
   local started=shot:GetAttribute('StartedAt')
   local paused=shot:GetAttribute('PausedAt') or 0
   local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
-  if age>=0 then
-   recoil=smooth(age/.035)*(1-smooth(age/.28))
-   reload=smooth(age/.05)*(1-smooth((age-.16)/.37))
+  local windup=shot:GetAttribute('Windup') or 0
+  if age>=0 and age<windup then
+   charge=smooth(age/windup)
+   recoil=-.45*charge
+  elseif age>=windup then
+   local fire=age-windup
+   recoil=smooth(fire/(ball and .028 or .018))*(1-smooth(fire/(ball and .36 or .16)))
+   reload=(1-smooth((fire-.065)/.46))
   end
  end
  if record.role=='Needler' or record.role=='Ballcaster' then
@@ -4950,8 +4966,8 @@ local function fieldStep(record,state,now,dt,shot,source)
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' then offset=Vector3.new(0,0,.28*recoil)
-  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.38*recoil)
+  if kind=='DartSlide' then offset=Vector3.new(0,0,.36*recoil)
+  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.52*recoil)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
@@ -4963,7 +4979,9 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='Canister' then offset=Vector3.new(item.side*.17*engagement,0,0)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
-  if kind=='BallReload' then item.part.Size=item.size*(1-.82*reload) end
+  if kind=='BallReload' then
+   item.part.Size=item.size*(.78+.46*charge)*(1-.92*reload)
+  end
  end
 end
 
@@ -5458,9 +5476,9 @@ local RoleEffectView = (function()
 -- Observe server-authored receipts. Every client renders locally, regardless
 -- of ownership. State records also cover late joins and canceled abilities.
 local View={}
-local Debris=game:GetService('Debris')
+local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
-local TRAIL_LIMIT=12
+local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
  local part=Instance.new('Part')
@@ -5476,24 +5494,45 @@ local function addRibbon(part,color,ball)
  local b=Instance.new('Attachment');b.Position=Vector3.new(0,ball and .26 or .085,.08);b.Parent=part
  local trail=Instance.new('Trail');trail.Name=ball and 'EnergyWake' or 'NeedleTrace'
  trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true;trail.LightInfluence=0;trail.LightEmission=.88
- trail.Lifetime=ball and .17 or .10;trail.MinLength=.055;trail.MaxLength=ball and 5 or 4
+ trail.Lifetime=ball and .16 or .085;trail.MinLength=.055;trail.MaxLength=ball and 5 or 3.5
  trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
  trail.WidthScale=NumberSequence.new(1,0)
  trail.Transparency=NumberSequence.new(.16,1);trail.Parent=part
  return trail
 end
 
-local function sparks(from,direction,color,ball,impact)
- if BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
- local node=shotPart(workspace.CurrentCamera,'ShotSparks',Vector3.one*.025,color,false,1)
+local function burst(self,from,direction,color,ball,impact,grade,at)
+ local camera=workspace.CurrentCamera
+ if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
+ local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
- local burst=Instance.new('ParticleEmitter')
- burst.Texture='rbxasset://textures/particles/sparkles_main.dds';burst.Enabled=false
- burst.EmissionDirection=Enum.NormalId.Front;burst.SpreadAngle=Vector2.new(impact and 46 or 28,impact and 46 or 28)
- burst.Color=ColorSequence.new(WHITE,color);burst.LightInfluence=0;burst.LightEmission=.72
- burst.Lifetime=NumberRange.new(.08,ball and .24 or .16);burst.Speed=NumberRange.new(4,ball and 13 or 18);burst.Drag=8
- burst.Size=NumberSequence.new(ball and .21 or .13,0);burst.Transparency=NumberSequence.new(.11,1)
- burst.Parent=node;burst:Emit(ball and 8 or 5);Debris:AddItem(node,.29)
+ local sparks=Instance.new('ParticleEmitter')
+ sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Enabled=false
+ local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
+ sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
+ sparks.Color=ColorSequence.new(WHITE,color);sparks.LightInfluence=0;sparks.LightEmission=.8
+ sparks.Lifetime=NumberRange.new(.07,ball and .27 or .16)
+ sparks.Speed=NumberRange.new(impact and 8 or 6,(ball and 16 or 24)*grade);sparks.Drag=ball and 7 or 10
+ sparks.Size=NumberSequence.new((ball and .21 or .13)*grade,0);sparks.Transparency=NumberSequence.new(.08,1)
+ sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 9 or 5)*grade) or (impact and 5 or 3))
+ local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
+ flash.CFrame=node.CFrame
+ local ring=ball and PlaneBurst.create(node,color) or nil
+ self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
+end
+local function stepBursts(self,now)
+ for i=#self.bursts,1,-1 do
+  local b=self.bursts[i];local age=math.max(0,now-b.at)
+  if age>=.30 or not b.node.Parent or BeamVFX.reduced() then
+   b.node:Destroy();table.remove(self.bursts,i)
+  else
+   local flash=math.clamp(1-age/(b.ball and .095 or .062),0,1)
+   local player=Players.LocalPlayer
+   b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
+   b.flash.Size=(b.ball and Vector3.one or Vector3.new(.36,.36,1.85))*math.max(.04,b.scale*(1.15-.65*flash))
+   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/.24,b.scale*.88) end
+  end
+ end
 end
 
 local function clearProjectile(self,r,now,carryTail)
@@ -5503,6 +5542,7 @@ local function clearProjectile(self,r,now,carryTail)
   r.trail.Enabled=false;r.after=part;r.afterUntil=now+r.trail.Lifetime
  else
   if part then part:Destroy() end
+  if part then self.heads-=1 end
   if r.trail then self.trails-=1;r.trail=nil end
   r.after=nil
  end
@@ -5510,7 +5550,7 @@ local function clearProjectile(self,r,now,carryTail)
 end
 
 function View.new(audio)
- local self={records={},connections={},root=nil,trails=0}
+ local self={records={},connections={},root=nil,trails=0,heads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -5534,16 +5574,18 @@ function View.new(audio)
     if r.after and now>=r.afterUntil then clearProjectile(self,r,now,false) end
     local from=node:GetAttribute('From');local to=node:GetAttribute('Position')
     local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
-    if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
-    local progress=((paused>0 and paused or now)-at)/duration
+    if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or type(duration)~='number' or duration<=0 or (to-from).Magnitude<.01 then continue end
+    local windup=node:GetAttribute('Windup') or 0
+    local age=(paused>0 and math.min(paused,now) or now)-at
+    local progress=(age-windup)/duration
     local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
-    if drone and not r.bound and progress>=0 and progress<1 then
+    local contactAt=node:GetAttribute('ContactAt')
+    local landed=contactAt and now>=contactAt
+    if drone and not r.bound and age>=0 and progress<1 and not landed then
      r.bound=true
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
-    local contactAt=node:GetAttribute('ContactAt')
-    local landed=contactAt and now>=contactAt
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
@@ -5552,17 +5594,22 @@ function View.new(audio)
     local ball=node:GetAttribute('Shape')=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
-    if landed and r.projectile and not r.impacted and now-contactAt<.20 then
+    local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
+    if muzzle and ((muzzle-from).Magnitude>=2.5 or (to-muzzle).Magnitude<=1) then muzzle=nil end
+    if ball and windup>0 and not r.loaded and age>=0 and progress<0 and not landed then
+     r.loaded=true
+     if paused<=0 and age<.11 and audio then audio:play('coil_load',muzzle or from) end
+    end
+    if landed and not r.impacted then
      r.impacted=true
-     if r.bound and drone then drone.shotImpactAt=now end
      local point=node:GetAttribute('ContactPoint') or to
      local travel=point-(r.launchFrom or from)
-     if travel.Magnitude>.01 then
-      sparks(point-travel.Unit*.04,-travel.Unit,color,ball,true)
-      if ball then
-       RoleVisuals.setTime(contactAt)
-       RoleVisuals.Pulse(point,color,.23,1.85,.19)
-      end
+     if now-contactAt<.16 and travel.Magnitude>.01 then
+      local normal=node:GetAttribute('ContactNormal') or -travel.Unit
+      local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
+      local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
+      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
@@ -5571,27 +5618,29 @@ function View.new(audio)
      r.started=true
     elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
      local value=r.projectile
-     if not value then
+     if not value and self.heads<SHOT_LIMIT then
       local camera=workspace.CurrentCamera
       if not camera then continue end
-      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.73 or Vector3.new(.14,.14,1.07),color:Lerp(WHITE,.58),ball)
-      r.projectile=value
-      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.06,color,true,.58) end
-      local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
-      if muzzle and (muzzle-from).Magnitude<2.5 and (to-muzzle).Magnitude>1 then r.launchFrom=muzzle end
-      from=r.launchFrom or from
+      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.81 or Vector3.new(.15,.15,1.48),color:Lerp(WHITE,.53),ball)
+      r.projectile=value;self.heads+=1
+      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.07,color,true,.47) end
+      r.launchFrom=muzzle or from
       if self.trails<TRAIL_LIMIT and not BeamVFX.reduced() then
        r.trail=addRibbon(value,color,ball);self.trails+=1
-      end
-      if now-at<.13 and (to-from).Magnitude>.01 then
-       sparks(from,(to-from).Unit,color,ball,false)
-       if audio then audio:play('shot',from,{pitch=ball and .61 or 1.13,level=ball and .76 or .66}) end
       end
      end
      from=r.launchFrom or from
      local delta=to-from
      if delta.Magnitude<.01 then continue end
      local direction=delta.Unit
+     if not r.fired then
+      r.fired=true
+      if paused<=0 and age-windup<.12 then
+       burst(self,from+direction*.17,direction,color,ball,false,1,now)
+       if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
+      end
+     end
+     if not value then continue end
      local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
      if r.shell then r.shell.CFrame=value.CFrame end
@@ -5645,12 +5694,14 @@ function View.new(audio)
     end
    end
   end
+  stepBursts(self,now)
   RoleVisuals.setTime(nil);RoleVisuals.step(now)
  end
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for _,r in pairs(self.records) do clearProjectile(self,r,0,false) end
-  table.clear(self.records);RoleVisuals.destroy()
+  for _,b in ipairs(self.bursts) do b.node:Destroy() end
+  table.clear(self.bursts);table.clear(self.records);RoleVisuals.destroy()
  end
  return self
 end
@@ -5720,7 +5771,7 @@ function V.new(parent,audio)
     self:forget(r)
    else
     local age=r.flashAt and now-r.flashAt or math.huge
-    local initial=Feedback.impactWhite(age,r.flashDuration or .28)
+    local initial=Feedback.impactWhite(age,r.flashDuration or .28)*(r.flashStrength or 1)
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
     local pulse=(r.cutPulse or 0)*afterglow
     local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
@@ -5742,14 +5793,20 @@ function V.new(parent,audio)
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
-   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
-    r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
+   local fractured=s:GetAttribute('CutFractured')
+   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
+    local projectile=s:GetAttribute('CutProjectile')
+    local heavy=projectile=='Ball'
+    r.flashAt=now;r.flashDuration=heavy and .095 or shot and .07 or fractured and .13 or .30;r.flashGate=now+.12
+    r.flashStrength=fractured and not shot and .57 or 1
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
-    r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
-    self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if shot then
+    local tilt=Vector3.new(-normal.Z,0,normal.X)
+    if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
+    r.kick=tilt*(heavy and .13 or projectile=='Dart' and .073 or fractured and .065 or .038)
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
+    if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -5788,7 +5845,7 @@ function V.new(parent,audio)
    if t>=.14 then r.kick=nil end
    r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
    local vibration=r.vibrating and math.sin(now*77)*.004 or 0
-   local kick=not BeamVFX.reduced() and r.kick or Vector3.zero
+   local kick=not BeamVFX.reduced() and not V.reducedMotion() and r.kick or Vector3.zero
    local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
    v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose
   end
@@ -10020,6 +10077,14 @@ function V:update(dt,now)
    local pulling=live and latest and latest.homing
    local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
+   if live and r.hasArc and r.physical and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
+    r.landCue=true
+    local point=source:GetAttribute('GroundImpactPosition')
+    local speed=source:GetAttribute('GroundImpactSpeed') or 0
+    if self.audio and age-r.landAge<.14 and typeof(point)=='Vector3' and speed>0 then
+     self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
+    end
+   end
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
    local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
@@ -12050,10 +12115,8 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- local shotAge=now-(d.shotImpactAt or -100)
- local recoil=(shotAge>=0 and shotAge<.15) and math.sin(math.pi*shotAge/.15)*(1-shotAge/.15) or 0
  d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.new(0,0,recoil*.14)*CFrame.Angles(recallPitch+recoil*.045,0,d.bank))
+  *CFrame.Angles(recallPitch,0,d.bank))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)

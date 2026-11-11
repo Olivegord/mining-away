@@ -178,7 +178,7 @@ for _,name in ipairs(specialOrder) do
  table.insert(DroneConfig.TypeOrder,name)
 end
 local fieldTestRoles={
- Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Throws quick darts. Favors small and chipped crystals in deep fields.'},
+ Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
  Compactor={label='Compactor',color=Color3.fromRGB(255,184,83),detail='Presses loose rocks into one block worth the sum of its inputs.'},

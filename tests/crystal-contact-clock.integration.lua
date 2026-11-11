@@ -56,30 +56,36 @@ assert(late.view.Transparency==1 and #audio==8 and #cues==1,'a late observer rep
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()
 local roleFolder=Instance.new('Folder');roleFolder.Name='DroneRoleState';roleFolder.ChildAdded=signal();roleFolder.Parent=workspace
-local function receipt(actor,start)
+local function receipt(actor,start,shape,windup)
  local node=Instance.new('Folder');node.Parent=roleFolder
- for k,v in pairs({Kind='MiningShot',Shape='Ball',Actor=actor,StartedAt=start,Duration=.25,
+ for k,v in pairs({Kind='MiningShot',Shape=shape or 'Ball',Actor=actor,StartedAt=start,Windup=windup or 0,Duration=.25,
   From=Vector3.new(0,2,0),Position=Vector3.new(0,2,8),Color=Color3.new(1,1,1),TargetId='live'}) do node:SetAttribute(k,v) end
  return node
 end
-local node=receipt('gunner',110)
-local observer=RoleEffectView.new()
+local node=receipt('gunner',110,'Ball',.28)
+local shotAudio={}
+local observer=RoleEffectView.new({play=function(_,name,_,options) table.insert(shotAudio,{name,options}) end})
 local gunner={}
 local drones={gunner=gunner,late={}}
 local targets={live={view=r.view}}
-observer:step(110.1,drones,targets)
+observer:step(110.03,drones,targets)
+assert(not observer.records[node].projectile and gunner.shotReceipt==node and shotAudio[1][1]=='coil_load')
+observer:step(110.32,drones,targets)
 assert(observer.records[node].projectile and gunner.shotReceipt==node)
-node:SetAttribute('ContactAt',110.26)
-observer:step(110.25,drones,targets)
-assert(observer.records[node].projectile and not gunner.shotImpactAt,'projectile vanished or recoiled before contact')
-observer:step(110.26,drones,targets)
-assert(not observer.records[node].projectile and gunner.shotImpactAt==110.26)
+assert(shotAudio[2][1]=='coil_fire')
+node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
+observer:step(110.53,drones,targets)
+assert(observer.records[node].projectile and #shotAudio==2,'projectile vanished or hit before contact')
+observer:step(110.54,drones,targets)
+assert(not observer.records[node].projectile and shotAudio[3][1]=='coil_hit' and shotAudio[3][2].level>1)
 assert(observer.records[node].after and not observer.records[node].trail.Enabled,'shot wake disappeared with the projectile head')
 local old=receipt('late',110.01);old:SetAttribute('ContactAt',110.27)
 roleFolder.ChildAdded:Fire(old)
-observer:step(110.3,drones,targets)
-assert(gunner.shotImpactAt==110.26 and not drones.late.shotImpactAt,'contact repeated or replayed without an observed flight')
-observer:step(110.5,drones,targets)
-assert(not observer.records[node].after and observer.trails==0,'shot wake retained an expired trail')
+local fresh=receipt('late',110.33,'Dart');fresh:SetAttribute('ContactAt',110.59)
+roleFolder.ChildAdded:Fire(fresh)
+observer:step(110.60,drones,targets)
+assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
+observer:step(110.94,drones,targets)
+assert(#shotAudio==4 and not observer.records[node].after and observer.trails==0 and observer.heads==0 and #observer.bursts==0,'contact replayed or shot visuals leaked')
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

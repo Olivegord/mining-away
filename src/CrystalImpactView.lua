@@ -60,7 +60,7 @@ function V.new(parent,audio)
     self:forget(r)
    else
     local age=r.flashAt and now-r.flashAt or math.huge
-    local initial=Feedback.impactWhite(age,r.flashDuration or .28)
+    local initial=Feedback.impactWhite(age,r.flashDuration or .28)*(r.flashStrength or 1)
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
     local pulse=(r.cutPulse or 0)*afterglow
     local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
@@ -82,14 +82,20 @@ function V.new(parent,audio)
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
-   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and now>=(r.flashGate or 0)) then
-    r.flashAt=now;r.flashDuration=shot and .07 or .30;r.flashGate=now+.12
+   local fractured=s:GetAttribute('CutFractured')
+   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
+    local projectile=s:GetAttribute('CutProjectile')
+    local heavy=projectile=='Ball'
+    r.flashAt=now;r.flashDuration=heavy and .095 or shot and .07 or fractured and .13 or .30;r.flashGate=now+.12
+    r.flashStrength=fractured and not shot and .57 or 1
     r.impactAt=now;self.tints[r]=true
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
-    r.kick=Vector3.new(-normal.Z,0,normal.X)*.021
-    self:chips(now,point,normal,r.baseColor,3,false,nil,s:GetAttribute('GroundY'))
-    if shot then
+    local tilt=Vector3.new(-normal.Z,0,normal.X)
+    if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
+    r.kick=tilt*(heavy and .13 or projectile=='Dart' and .073 or fractured and .065 or .038)
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
+    if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
      audio:play('crystal_electric',point,{pitch=.95+.12*(1-health)})
@@ -128,7 +134,7 @@ function V.new(parent,audio)
    if t>=.14 then r.kick=nil end
    r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
    local vibration=r.vibrating and math.sin(now*77)*.004 or 0
-   local kick=not BeamVFX.reduced() and r.kick or Vector3.zero
+   local kick=not BeamVFX.reduced() and not V.reducedMotion() and r.kick or Vector3.zero
    local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
    v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose
   end

@@ -616,9 +616,47 @@ do
  for _=1,12 do if large.stage<2 then shot() else break end end
  assert(large.stage==2 and math.abs(shot()-base)<1e-6,'the shell bonus stayed on an exposed core')
  release(ballcaster);ballcaster.field=nil
+ local cut=makeResource(deep,f.center,'Crystal',1000,40,4,3)
+ cut.readyAt=now;cut.stage=2;cut.hp=cut.maxHP*.25
+ local function dart(render)
+  assert(assignOre(testCrew,needler,cut));needler.field=deep.id
+  needler.pos=committedStation(needler,cut);needler.velocity=Vector3.zero
+  local old=RoleEffects.Projectile
+  if not render then RoleEffects.Projectile=function() return nil end end
+  for _=1,60 do
+   realTime+=C.Tick;now=realTime;droneStep(needler,C.Tick)
+   if needler.specialJob then break end
+  end
+  RoleEffects.Projectile=old
+  local job=assert(needler.specialJob)
+  local before=cut.hp;local size=cut.part.Size
+  local hitPoint=cut.part.Position+Vector3.xAxis*size.X*.5
+  local ray=workspace.Raycast
+  workspace.Raycast=function(_,origin,delta,params)
+   if params and params.FilterType==Enum.RaycastFilterType.Include then
+    assert(cut.part.Size==size,'contact ray sampled the already fractured shell')
+    return {Instance=cut.part,Position=hitPoint,Normal=Vector3.xAxis}
+   end
+   return ray(workspace,origin,delta,params)
+  end
+  for _=1,60 do
+   realTime+=C.Tick;now=realTime;droneStep(needler,C.Tick)
+   if cut.hp<before then break end
+  end
+  workspace.Raycast=ray
+  assert(math.abs(before-cut.hp-job.damage*1.25)<1e-6,'exposed-core bonus depended on cosmetic receipt capacity')
+  if render then
+   assert(cut.stage==3 and job.projectile:GetAttribute('ContactFracture') and job.projectile:GetAttribute('ContactPowered'))
+   assert((job.projectile:GetAttribute('ContactPoint')-hitPoint).Magnitude<1e-6,'projectile did not confirm the pre-fracture contact')
+  else
+   assert(not job.projectile and cut.part:GetAttribute('CutProjectileFX')==false)
+  end
+  release(needler);needler.field=nil
+ end
+ dart(true);dart(false)
  for _,r in ipairs(deep.resources) do resources[r.id]=nil;r.part:Destroy() end
  patches[deep.id]=nil
- print('PASS projectile miners choose different deep targets; Ballcaster lands stronger shell hits from its approach side')
+ print('PASS gun drones pick different deep targets, hit the original surface, and keep real layer bonuses when FX receipts are full')
 end
 for id,drop in pairs(pickups) do
  if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end

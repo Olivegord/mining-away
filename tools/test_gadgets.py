@@ -22,6 +22,7 @@ crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
 local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end}
 local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
+local NumberSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
 function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end
 local nativeType=typeof
 local function typeof(value) return getmetatable(value)==VM and 'Vector3' or nativeType(value) end
@@ -36,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'resource-render': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('BeamVFX','Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'crystal-clock': mock + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + crystal_clock_setup +
-        module_bundle(('Feel', 'Feedback', 'CrystalImpactView', 'RoleEffectView')) + '\n' + resource_render +
+        module_bundle(('Feel', 'Feedback', 'CrystalImpactView', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
         '\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'swarm': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/swarm-motion.integration.lua').read_text(),

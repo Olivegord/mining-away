@@ -224,6 +224,14 @@ function V:update(dt,now)
    local pulling=live and latest and latest.homing
    local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
+   if live and r.hasArc and r.physical and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
+    r.landCue=true
+    local point=source:GetAttribute('GroundImpactPosition')
+    local speed=source:GetAttribute('GroundImpactSpeed') or 0
+    if self.audio and age-r.landAge<.14 and typeof(point)=='Vector3' and speed>0 then
+     self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
+    end
+   end
    local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
    local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge

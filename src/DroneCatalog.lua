@@ -11,8 +11,8 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Needler = {Name='Needler',Duration=.82,Impact=.36,Power=1.05,Chunk=.40,Projectile='Dart',Color={255,195,94},Description='Fires quick darts. Favors small and chipped crystals in deep fields.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',ShellPower=1.5,Color={150,124,255},Description='Favors large deep crystals. Deals 50% more damage through their first two layers.'},
+  Needler = {Name='Needler',Duration=.66,Impact=.36,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.065,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.28,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -95,9 +95,12 @@ function Catalog.projectileTargetScore(kind,stats,node,distance)
   local shellWork=math.max(0,node.hp-shellEnd)
   return travel-shellWork/rate*(1-1/shellPower)
  end
- return travel+node.hp/rate
+ local shellEnd=math.max(0,node.maxHP*(1-SHELL_LAYERS/(node.stageCount+1))-10)
+ local coreWork=math.min(node.hp,shellEnd)
+ return travel+(node.hp-coreWork+coreWork/Catalog.Types[kind].CorePower)/rate
 end
-function Catalog.projectileShellPower(kind,stage)
- return stage<SHELL_LAYERS and Catalog.Types[kind].ShellPower or 1
+function Catalog.projectileLayerPower(kind,stage)
+ local def=Catalog.Types[kind]
+ return (stage<SHELL_LAYERS and def.ShellPower or stage>=SHELL_LAYERS and def.CorePower) or 1
 end
 return Catalog

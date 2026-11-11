@@ -81,6 +81,7 @@ check('physical launch trail fades on the displayed landing and never reappears 
   FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,
   OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
+ local sounds=#audio.calls
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
  assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not renderer.valueGui)
@@ -88,14 +89,17 @@ check('physical launch trail fades on the displayed landing and never reappears 
  assert(cargo.LocalTransparencyModifier==1 and not record.idle)
  cargo:SetAttribute('GroundImpactAt',realTime+.98)
  cargo:SetAttribute('GroundImpactPosition',Vector3.new(4,.22,0))
- renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled,'trail ended before the buffered landing pose')
+ cargo:SetAttribute('GroundImpactSpeed',23)
+ renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled and #audio.calls==sounds,'landing cue ran ahead of the buffered ore')
  renderer:update(1/60,realTime+1.10)
  assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
+ assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land' and audio.calls[#audio.calls].position.X==4)
  assert(not record.idle,'bloom appeared before the ore settled')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
  renderer:update(1/60,realTime+1.37)
  assert(renderer.records[cargo]==nil)
+ assert(#audio.calls==sounds+1,'landing sound replayed during collection')
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
  renderer:destroy();workspace.CurrentCamera=camera
 end)

@@ -1,9 +1,9 @@
 -- Observe server-authored receipts. Every client renders locally, regardless
 -- of ownership. State records also cover late joins and canceled abilities.
 local View={}
-local Debris=game:GetService('Debris')
+local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
-local TRAIL_LIMIT=12
+local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
  local part=Instance.new('Part')
@@ -19,24 +19,45 @@ local function addRibbon(part,color,ball)
  local b=Instance.new('Attachment');b.Position=Vector3.new(0,ball and .26 or .085,.08);b.Parent=part
  local trail=Instance.new('Trail');trail.Name=ball and 'EnergyWake' or 'NeedleTrace'
  trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true;trail.LightInfluence=0;trail.LightEmission=.88
- trail.Lifetime=ball and .17 or .10;trail.MinLength=.055;trail.MaxLength=ball and 5 or 4
+ trail.Lifetime=ball and .16 or .085;trail.MinLength=.055;trail.MaxLength=ball and 5 or 3.5
  trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
  trail.WidthScale=NumberSequence.new(1,0)
  trail.Transparency=NumberSequence.new(.16,1);trail.Parent=part
  return trail
 end
 
-local function sparks(from,direction,color,ball,impact)
- if BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
- local node=shotPart(workspace.CurrentCamera,'ShotSparks',Vector3.one*.025,color,false,1)
+local function burst(self,from,direction,color,ball,impact,grade,at)
+ local camera=workspace.CurrentCamera
+ if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
+ local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
- local burst=Instance.new('ParticleEmitter')
- burst.Texture='rbxasset://textures/particles/sparkles_main.dds';burst.Enabled=false
- burst.EmissionDirection=Enum.NormalId.Front;burst.SpreadAngle=Vector2.new(impact and 46 or 28,impact and 46 or 28)
- burst.Color=ColorSequence.new(WHITE,color);burst.LightInfluence=0;burst.LightEmission=.72
- burst.Lifetime=NumberRange.new(.08,ball and .24 or .16);burst.Speed=NumberRange.new(4,ball and 13 or 18);burst.Drag=8
- burst.Size=NumberSequence.new(ball and .21 or .13,0);burst.Transparency=NumberSequence.new(.11,1)
- burst.Parent=node;burst:Emit(ball and 8 or 5);Debris:AddItem(node,.29)
+ local sparks=Instance.new('ParticleEmitter')
+ sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Enabled=false
+ local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
+ sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
+ sparks.Color=ColorSequence.new(WHITE,color);sparks.LightInfluence=0;sparks.LightEmission=.8
+ sparks.Lifetime=NumberRange.new(.07,ball and .27 or .16)
+ sparks.Speed=NumberRange.new(impact and 8 or 6,(ball and 16 or 24)*grade);sparks.Drag=ball and 7 or 10
+ sparks.Size=NumberSequence.new((ball and .21 or .13)*grade,0);sparks.Transparency=NumberSequence.new(.08,1)
+ sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 9 or 5)*grade) or (impact and 5 or 3))
+ local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
+ flash.CFrame=node.CFrame
+ local ring=ball and PlaneBurst.create(node,color) or nil
+ self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
+end
+local function stepBursts(self,now)
+ for i=#self.bursts,1,-1 do
+  local b=self.bursts[i];local age=math.max(0,now-b.at)
+  if age>=.30 or not b.node.Parent or BeamVFX.reduced() then
+   b.node:Destroy();table.remove(self.bursts,i)
+  else
+   local flash=math.clamp(1-age/(b.ball and .095 or .062),0,1)
+   local player=Players.LocalPlayer
+   b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
+   b.flash.Size=(b.ball and Vector3.one or Vector3.new(.36,.36,1.85))*math.max(.04,b.scale*(1.15-.65*flash))
+   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/.24,b.scale*.88) end
+  end
+ end
 end
 
 local function clearProjectile(self,r,now,carryTail)
@@ -46,6 +67,7 @@ local function clearProjectile(self,r,now,carryTail)
   r.trail.Enabled=false;r.after=part;r.afterUntil=now+r.trail.Lifetime
  else
   if part then part:Destroy() end
+  if part then self.heads-=1 end
   if r.trail then self.trails-=1;r.trail=nil end
   r.after=nil
  end
@@ -53,7 +75,7 @@ local function clearProjectile(self,r,now,carryTail)
 end
 
 function View.new(audio)
- local self={records={},connections={},root=nil,trails=0}
+ local self={records={},connections={},root=nil,trails=0,heads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -77,16 +99,18 @@ function View.new(audio)
     if r.after and now>=r.afterUntil then clearProjectile(self,r,now,false) end
     local from=node:GetAttribute('From');local to=node:GetAttribute('Position')
     local at=node:GetAttribute('StartedAt');local duration=node:GetAttribute('Duration');local paused=node:GetAttribute('PausedAt') or 0
-    if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or not duration or (to-from).Magnitude<.01 then continue end
-    local progress=((paused>0 and paused or now)-at)/duration
+    if typeof(from)~='Vector3' or typeof(to)~='Vector3' or type(at)~='number' or type(duration)~='number' or duration<=0 or (to-from).Magnitude<.01 then continue end
+    local windup=node:GetAttribute('Windup') or 0
+    local age=(paused>0 and math.min(paused,now) or now)-at
+    local progress=(age-windup)/duration
     local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
-    if drone and not r.bound and progress>=0 and progress<1 then
+    local contactAt=node:GetAttribute('ContactAt')
+    local landed=contactAt and now>=contactAt
+    if drone and not r.bound and age>=0 and progress<1 and not landed then
      r.bound=true
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
     end
-    local contactAt=node:GetAttribute('ContactAt')
-    local landed=contactAt and now>=contactAt
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
@@ -95,17 +119,22 @@ function View.new(audio)
     local ball=node:GetAttribute('Shape')=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
-    if landed and r.projectile and not r.impacted and now-contactAt<.20 then
+    local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
+    if muzzle and ((muzzle-from).Magnitude>=2.5 or (to-muzzle).Magnitude<=1) then muzzle=nil end
+    if ball and windup>0 and not r.loaded and age>=0 and progress<0 and not landed then
+     r.loaded=true
+     if paused<=0 and age<.11 and audio then audio:play('coil_load',muzzle or from) end
+    end
+    if landed and not r.impacted then
      r.impacted=true
-     if r.bound and drone then drone.shotImpactAt=now end
      local point=node:GetAttribute('ContactPoint') or to
      local travel=point-(r.launchFrom or from)
-     if travel.Magnitude>.01 then
-      sparks(point-travel.Unit*.04,-travel.Unit,color,ball,true)
-      if ball then
-       RoleVisuals.setTime(contactAt)
-       RoleVisuals.Pulse(point,color,.23,1.85,.19)
-      end
+     if now-contactAt<.16 and travel.Magnitude>.01 then
+      local normal=node:GetAttribute('ContactNormal') or -travel.Unit
+      local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
+      local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
+      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
     local resolved=landed or (not contactAt and (progress>1+.16/duration or (not target and progress>=1)))
@@ -114,27 +143,29 @@ function View.new(audio)
      r.started=true
     elseif progress>=0 and not r.started and (r.projectile or BeamVFX.near(from,140)) then
      local value=r.projectile
-     if not value then
+     if not value and self.heads<SHOT_LIMIT then
       local camera=workspace.CurrentCamera
       if not camera then continue end
-      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.73 or Vector3.new(.14,.14,1.07),color:Lerp(WHITE,.58),ball)
-      r.projectile=value
-      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.06,color,true,.58) end
-      local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
-      if muzzle and (muzzle-from).Magnitude<2.5 and (to-muzzle).Magnitude>1 then r.launchFrom=muzzle end
-      from=r.launchFrom or from
+      value=shotPart(camera,'MiningProjectile',ball and Vector3.one*.81 or Vector3.new(.15,.15,1.48),color:Lerp(WHITE,.53),ball)
+      r.projectile=value;self.heads+=1
+      if ball and not BeamVFX.reduced() then r.shell=shotPart(value,'EnergyShell',Vector3.one*1.07,color,true,.47) end
+      r.launchFrom=muzzle or from
       if self.trails<TRAIL_LIMIT and not BeamVFX.reduced() then
        r.trail=addRibbon(value,color,ball);self.trails+=1
-      end
-      if now-at<.13 and (to-from).Magnitude>.01 then
-       sparks(from,(to-from).Unit,color,ball,false)
-       if audio then audio:play('shot',from,{pitch=ball and .61 or 1.13,level=ball and .76 or .66}) end
       end
      end
      from=r.launchFrom or from
      local delta=to-from
      if delta.Magnitude<.01 then continue end
      local direction=delta.Unit
+     if not r.fired then
+      r.fired=true
+      if paused<=0 and age-windup<.12 then
+       burst(self,from+direction*.17,direction,color,ball,false,1,now)
+       if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
+      end
+     end
+     if not value then continue end
      local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
      if r.shell then r.shell.CFrame=value.CFrame end
@@ -188,12 +219,14 @@ function View.new(audio)
     end
    end
   end
+  stepBursts(self,now)
   RoleVisuals.setTime(nil);RoleVisuals.step(now)
  end
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for _,r in pairs(self.records) do clearProjectile(self,r,0,false) end
-  table.clear(self.records);RoleVisuals.destroy()
+  for _,b in ipairs(self.bursts) do b.node:Destroy() end
+  table.clear(self.bursts);table.clear(self.records);RoleVisuals.destroy()
  end
  return self
 end
