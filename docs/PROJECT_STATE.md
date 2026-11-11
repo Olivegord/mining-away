@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `350c5ba55575ca1578bd2fb64e52818c52718682f18f31bf2e56c34fe1452b4f` | Early courier trips for upgrade and prestige sales. |
+| Native-file SHA-256 | `55bd95b2be92560e0cdf803615dddec4f772c32bc89b2b10769b31dcf7ee3c01` | Aftershock helps nearby cuts by the same crew. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the courier milestone update** | All seven Sources and three roots verified in Edit. Team Create save returned version 141. Studio was already open and remains in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit contains the Aftershock update** | All seven Sources and three roots verified in Edit. Team Create save returned version 142. Studio was already open and remains in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — Aftershock helps the rest of the crew
+
+A laser fracture in Crystal Run can now help a nearby rock being cut by a different drone type in the same crew. The server chooses one eligible neighbor within the committed pin and existing contact range. An assisted rock keeps its current worker until it finishes. Other players' claims stay protected. The card specifies that damage scales with the HP of the cracked rock. It uses the existing branch effect, fracture and cargo assets.
+
+In a matched controller fixture, the old shock reached a farther unclaimed rock while the Needler's rock stayed at 190 HP. The new shock reduced the Needler's rock to 71.2 HP on the first fracture and finished it on the second, releasing one cargo object. The closer foreign claim was unchanged. Workshop, Crystal Run, committed flight, card and beam suites passed with API doubles. Studio font metrics fit the revised card text at six viewport widths from 240 to 1,280 px. Live effects, pacing and multiplayer remain unverified.
+
+Studio was already open at place **124078027733625**, universe **10774898335**. All seven Sources and three Script Sync roots matched in shared Edit, and Team Create returned version **142**. No player release was published. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f19757c`. The native refresh preserved the authored map and unrelated or backup Sources.
 
 ## November 11 — send a milestone load as soon as it is ready
 

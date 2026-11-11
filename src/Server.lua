@@ -128,13 +128,13 @@ local function updateSlots(r)
  local count=0;for _ in pairs(r.slots) do count=count+1 end
  if r.part and r.part.Parent then r.part:SetAttribute('SlotsUsed',count) end
 end
-local function sameRockType(d,r)
+local function sameRockType(d,r,allowCrewAssist: boolean?)
  -- A rock hosts one drone type at a time, even when a boulder has spare
- -- slots. Releasing its last worker leaves it available to any type again.
+ -- slots. An Aftershock assist never takes a worker slot.
  local role=DroneRoles.canonical(d.role)
  for id in pairs(r.slots) do
   local worker=drones[id]
-  if not worker or worker.owner~=d.owner or DroneRoles.canonical(worker.role)~=role then return false end
+  if not worker or worker.owner~=d.owner or (not allowCrewAssist and DroneRoles.canonical(worker.role)~=role) then return false end
  end
  -- Autonomous orbital/scrap drones also occupy their real current job.
  -- Player-placed consumables have no actor reservation and remain tools.
@@ -143,7 +143,7 @@ local function sameRockType(d,r)
   if ability and ability.runId==data(p).run.id then
    local function conflicts(id,target)
     local worker=id and drones[id]
-    return target==r.id and worker and worker.hp>0 and (worker.owner~=d.owner or DroneRoles.canonical(worker.role)~=role)
+    return target==r.id and worker and worker.hp>0 and (worker.owner~=d.owner or (not allowCrewAssist and DroneRoles.canonical(worker.role)~=role))
    end
    if ability.charge and now<=ability.charge.expires and conflicts(ability.charge.actorId,ability.charge.targetId) then return false end
    if ability.burn and ability.burn.remaining>0 and conflicts(ability.burn.actorId,ability.burn.targetId) then return false end
@@ -1096,8 +1096,9 @@ local function pickupStep(dt)
  end
 end
 local hitResource: any
-local function secondaryMining(d: any,primary: any,amount: number,radius: number)
+local function secondaryMining(d: any,primary: any,amount: number,radius: number,contactKind: string?)
  if primary.field.junk then return false end -- One claimed target per salvage job.
+ local assist=contactKind=='Aftershock'
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
   if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
@@ -1107,15 +1108,12 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end
  table.sort(candidates,function(a,b) return a.distance==b.distance and a.resource.id<b.resource.id or a.distance<b.distance end)
  for _,candidate in ipairs(candidates) do
-  local other=candidate.resource;local sameOwner=true
+  local other=candidate.resource
   if d.squareJob and not Mining.selectorTouches(d.squareJob.center,d.squareJob.half,other.part.CFrame,other.part.Size) then continue end
-  for id in pairs(other.slots) do local worker=drones[id];if not worker or worker.owner~=d.owner then sameOwner=false end end
-  -- A teammate may help a fully occupied node; no foreign reservation is
-  -- displaced, and the worker holding the node receives its ore.
-  if sameOwner and sameRockType(d,other) and not other.slots[d.id] then
-   other.slots[d.id]=1
-   local accepted=hitResource(d,other,amount,true,radius)
-   other.slots[d.id]=nil;updateSlots(other)
+  if sameRockType(d,other,assist) and not other.slots[d.id] then
+   if not assist then other.slots[d.id]=1 end
+   local accepted=hitResource(d,other,amount,true,radius,nil,contactKind)
+   if not assist then other.slots[d.id]=nil;updateSlots(other) end
    -- An obstructed first candidate must not starve a reachable second one.
    if accepted then return other.id end
   end
@@ -1130,8 +1128,9 @@ function scene.recordToolScar(r,point,width,depth,heat)
 end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
- if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r) then return false end
+ local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
  local recipient=d
  local job=d.specialJob
  local special=contactKind=='Special' and DroneCatalog.Types[d.role] and r.kind~='Geode' and job and not job.impacted and job.targetId==r.id and now>=job.startedAt+job.duration*job.impact
@@ -1157,6 +1156,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   -- The synchronous primary resolver alone can retain its contact through a
   -- final hit. No saved state/remote can authorize an echo from a retired node.
   if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+  if assist and primary.processingPrimary~=d.id then return false end
  elseif d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
@@ -1310,7 +1310,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   local secondaryId
   if (d.stats.forkFraction or 0)>0 then secondaryId=secondaryMining(d,r,baseAmount*d.stats.forkFraction,d.stats.forkRange or 6) end
   if (d.stats.aftershock or 0)>0 and (broken or r.stage>previous) then
-   local echoed=secondaryMining(d,r,(r.maxHP-10)*d.stats.aftershock/discoverySpeed,9)
+   local echoed=secondaryMining(d,r,(r.maxHP-10)*d.stats.aftershock/discoverySpeed,9,r.field.cfg.SelectionOnly and 'Aftershock' or nil)
    if echoed then
     secondaryId=echoed
     RoleEffects.Pulse(r.part.Position,Color3.fromRGB(125,208,255),1,8,.23)

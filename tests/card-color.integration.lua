@@ -19,9 +19,9 @@ local first={}
 for i,id in ipairs(Workshop.FIRST_PACK) do first[i]=Workshop.card(Workshop.BY_ID[id],2,0) end
 assert(CardView.identity(first[1])=='double' and CardView.identity(first[2])=='seams' and CardView.identity(first[3])=='aftershock')
 assert(CardView.summary(first[2])==Workshop.LOOSE_SEAMS_TEXT and CardView.terms(first[2]):find('Laser miners',1,true))
-assert(CardView.summary(first[3]):find('12% of starting HP',1,true))
+assert(CardView.summary(first[3]):find("12% of the cracked rock's HP",1,true))
 local stacked=Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2,1)
-assert(CardView.summary(stacked):find('24% of starting HP',1,true),'stacked offer showed only the added damage')
+assert(CardView.summary(stacked):find("24% of the cracked rock's HP",1,true),'stacked offer showed only the added damage')
 local miner={name='Striker 2'};local stats={miningDPS=31,maxStep60=.4,yieldMultiplier=1.25}
 assert(CardView.fitText(first[1],miner,stats,true)=='Striker 2  ›\n31 → 62 HP/s')
 assert(CardView.fitText(first[1],miner,nil,false)=='Striker 2')

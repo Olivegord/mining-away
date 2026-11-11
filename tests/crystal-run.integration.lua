@@ -463,6 +463,28 @@ hit(source,270)
 assert(math.abs(neighbor.hp-(990-990*.12))<1e-8 and farther.hp==990,'Aftershock must reach exactly one neighbor')
 assert(hitResource(miner,source,1) and math.abs(neighbor.hp-(990-990*.12))<1e-8,'Aftershock procced without a crack')
 
+do
+ isolate()
+ local laser,needler=testCrew.drones[1],starterActors.Needler
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2));refreshStats(testCrew)
+ local primary,foreign,ally,spare=rock(0,1000),rock(3,1000),rock(5,200),rock(9,1000)
+ assert(assignOre(buyer,miner,foreign))
+ assert(assignOre(testCrew,needler,ally))
+ assert(assignOre(testCrew,laser,primary));laser.pos=committedStation(laser,primary)
+ assert(not hitResource(laser,ally,118.8,true,9,nil,'Aftershock'),'a hit without a primary fracture was accepted')
+ assert(hitResource(laser,primary,270))
+ assert(foreign.hp==990 and spare.hp==990 and math.abs(ally.hp-71.2)<1e-8,'shock missed the allied Needler or hit another crew')
+ assert(ally.slots[needler.id]==1 and next(ally.slots,needler.id)==nil and needler.target==ally)
+ assert(laser.forkTargetId==ally.id,'the impact did not reach the existing branch renderer')
+ local previous=select(2,pendingOre(testCrew))
+ assert(hitResource(laser,primary,240) and ally.paid and needler.target==nil)
+ assert(select(2,pendingOre(testCrew))==previous+1 and foreign.hp==990 and spare.hp==990)
+ assert(not hitResource(needler,ally,30) and select(2,pendingOre(testCrew))==previous+1,'the assisted finish paid twice')
+ release(laser);release(miner)
+ table.remove(data(testCrew).run.cards);refreshStats(testCrew)
+ print('PASS Aftershock helps an allied Needler without taking its slot, respects foreign claims, and pays an assisted finish once')
+end
+
 buyer.session.data=Pro.clone(opened);refreshStats(buyer)
 data(buyer).run.pendingOffer.choices[3]=Workshop.card(Workshop.BY_ID.Q_COMPACTOR,2,0)
 input('ChooseCard','hire-press',{offerId=first.id,index=3})
