@@ -424,7 +424,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism)
+function View.new(audio,onPrism,onNomadImpact)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -449,7 +449,7 @@ function View.new(audio,onPrism)
      if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
      if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     end
-    if not r.after or now>=r.afterUntil then
+    if NomadView.detach(r,now) and (not r.after or now>=r.afterUntil) then
      clearProjectile(self,r,now,false);self.records[node]=nil
     end
    elseif kind=='MiningShot' then
@@ -473,6 +473,10 @@ function View.new(audio,onPrism)
     end
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
+    if shape=='Nomad' then
+     NomadView.step(r,node,now,from,to,age,windup,progress,target,audio,onNomadImpact)
+     continue
+    end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
@@ -651,6 +655,7 @@ function View.new(audio,onPrism)
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for node,r in pairs(self.records) do
    clearProjectile(self,r,0,false);clearLoad(self,r)
+   NomadView.clear(r)
    if audio and audio.stopLoop then audio:stopLoop(node) end
   end
   for _,b in ipairs(self.bursts) do b.node:Destroy() end

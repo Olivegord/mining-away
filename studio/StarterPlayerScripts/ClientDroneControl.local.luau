@@ -574,9 +574,9 @@ function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
  return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
- return ownerPosition+Vector3.new(x,y,z)
+ return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 local function swarmHash(id)
  local value=0
@@ -3166,7 +3166,7 @@ local DroneCatalog = (function()
 -- Permanent miner identities. The server owns every chunk and repeat cycle.
 -- Power is a finite base-work budget; Chunk is a final cap after all modifiers.
 local Catalog = {
- Order = {'Laser','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel'},
+ Order = {'Laser','Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator','Ramiel','Nomad'},
  Types = {
   Laser = {Name='Miner',Price=60,Duration=0,Color={90,230,255},Description='One more permanent mining drone. Works a second rock and stays after prestige. Each additional Miner costs more.'},
   Bubbler = {Name='Bubbler',Price=1800,Duration=2.8,Impact=.68,Power=1.1,Chunk=.25,Yield=1.25,Color={120,225,255},Description='Captures and pops a mineral chunk per bubble cycle. Up to 25% rock health per hit; 1.25× ore on completion.'},
@@ -3177,6 +3177,7 @@ local Catalog = {
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
   Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.08,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
+  Nomad = {Name='Nomad',Duration=3,CycleDuration=9.20,Impact=5/9.20,Power=4,Chunk=1,Yield=1,Projectile='Nomad',Windup=4.05,Flight=.95,StationHeight=38,BlastRadius=13,BlastTargets=5,Color={101,194,255},Description='Sweeps the field from high above and drops a tiny rocket that shatters up to five nearby crystals.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5758,6 +5759,382 @@ return Effects
 
 
 end)()
+local NomadView = (function()
+-- Local rendering from one server-clock shot receipt. All geometry is cosmetic.
+local N={}
+local DEEP=Color3.fromRGB(38,94,233)
+local BLUE=Color3.fromRGB(65,150,255)
+local CYAN=Color3.fromRGB(113,220,255)
+local ICE=Color3.fromRGB(220,248,255)
+local AMBER=Color3.fromRGB(255,142,68)
+local GOLD=Color3.fromRGB(255,218,146)
+local CLAY=Color3.fromRGB(111,69,72)
+local VERTICAL=Vector3.yAxis
+local CLOUD_TIME=2.05
+local live={}
+local leases={NomadTracker=4,NomadRocket=10,NomadMushroom=8}
+
+local function smooth(t)
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
+
+local function part(parent,name,color,size,shape)
+ local value=Instance.new('Part')
+ value.Name=name;value.Color=color;value.Size=size;value.Shape=shape or Enum.PartType.Block
+ value.Material=Enum.Material.Neon;value.Transparency=1;value.Anchored=true;value.CastShadow=false
+ value.CanCollide=false;value.CanTouch=false;value.CanQuery=false;value.Parent=parent
+ return value
+end
+
+local function group(parent,name)
+ if (live[name] or 0)>=leases[name] then return nil end
+ local value=Instance.new('Folder');value.Name=name;value.Parent=parent
+ live[name]=(live[name] or 0)+1
+ value.Destroying:Connect(function() live[name]-=1 end)
+ return value
+end
+
+local function beam(parent,name,a,b,colors,alpha,faceCamera)
+ local value=Instance.new('Beam')
+ value.Name=name;value.Attachment0=a;value.Attachment1=b;value.FaceCamera=faceCamera
+ value.LightEmission=1;value.LightInfluence=0;value.Color=colors;value.Transparency=alpha
+ value.Parent=parent
+ return value
+end
+
+local function falloff(foot,middle,sky)
+ return NumberSequence.new({NumberSequenceKeypoint.new(0,foot),NumberSequenceKeypoint.new(.42,middle),NumberSequenceKeypoint.new(1,sky)})
+end
+local function fadeCurves(foot,middle,sky)
+ local curves={}
+ for i=0,16 do
+  local alpha=i/16
+  curves[i]=falloff(1-(1-foot)*alpha,1-(1-middle)*alpha,1-(1-sky)*alpha)
+ end
+ return curves
+end
+local SHEET_ALPHA=fadeCurves(.79,.90,.984)
+local CORE_ALPHA=fadeCurves(.10,.37,.965)
+local HALO_ALPHA=fadeCurves(.50,.76,.998)
+local SHEET_COLOR=ColorSequence.new(BLUE,DEEP)
+local CORE_COLOR=ColorSequence.new(ICE,CYAN)
+local HALO_COLOR=ColorSequence.new(BLUE,DEEP)
+
+local function scanLine(root,isSheet)
+ local a=Instance.new('Attachment');a.Parent=root
+ local b=Instance.new('Attachment');b.Parent=root
+ local alpha=isSheet and SHEET_ALPHA or CORE_ALPHA
+ local main=beam(root,isSheet and 'BlueCurtain' or 'IceFilament',a,b,isSheet and SHEET_COLOR or CORE_COLOR,alpha[0],not isSheet)
+ if isSheet then main.LightEmission=.42 else main.ZOffset=.02 end
+ local halo=not isSheet and beam(root,'CobaltHalo',a,b,HALO_COLOR,HALO_ALPHA[0],true) or nil
+ return {a=a,b=b,main=main,halo=halo,alpha=alpha}
+end
+
+local function paintLine(line,foot,sky,across,width,gain)
+ line.a.WorldCFrame=CFrame.fromMatrix(foot,VERTICAL,across)
+ line.b.WorldCFrame=CFrame.fromMatrix(sky,VERTICAL,across)
+ line.main.Width0=width;line.main.Width1=width
+ local grade=math.clamp(math.round(gain*16),0,16)
+ line.main.Transparency=line.alpha[grade]
+ line.main.Enabled=grade>0
+ line.main.Brightness=.82+.63*gain
+ if line.halo then
+  line.halo.Width0=width*6;line.halo.Width1=width*4.3
+  line.halo.Transparency=HALO_ALPHA[grade];line.halo.Enabled=grade>0
+ end
+end
+
+local function rail(parent,name)
+ return {core=part(parent,name,ICE,Vector3.one*.08),halo=part(parent,name..'Halo',BLUE,Vector3.one*.08)}
+end
+
+local function paintRail(line,a,b,width,opacity)
+ local delta=b-a
+ if opacity<=.01 or delta.Magnitude<=.01 then
+  line.core.Transparency=1;line.halo.Transparency=1
+  return
+ end
+ local pose=CFrame.lookAt(a+delta*.5,b)
+ line.core.CFrame=pose;line.halo.CFrame=pose
+ line.core.Size=Vector3.new(width,width,delta.Magnitude)
+ line.halo.Size=Vector3.new(width*4,width*2.6,delta.Magnitude)
+ line.core.Transparency=1-opacity;line.halo.Transparency=1-opacity*.27
+end
+
+local function newScanner(parent)
+ local folder=group(parent,'NomadTracker')
+ if not folder then return nil end
+ local root=part(folder,'TrackerAnchor',BLUE,Vector3.one*.05)
+ local scan={folder=folder,panes={},seams={rail(folder,'Join'),rail(folder,'Join')}}
+ for i=1,3 do
+  local pane={sheet=scanLine(root,true),edges={},feet={},ends={},contour={}}
+  for j=1,3 do pane.edges[j]=scanLine(root,false);pane.feet[j]=rail(folder,'FootRail') end
+  for j=1,2 do pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball) end
+  for j=1,8 do pane.contour[j]=rail(folder,'CrystalScanEdge') end
+  scan.panes[i]=pane
+ end
+ return scan
+end
+
+-- Offset passes move as a rake, swing across it, then converge on one point.
+-- The last hold uses the same three panels with shorter stagger and width.
+local SCAN_POSES={
+ {0,-11,-7,-.47,7.7,2.0},
+ {.15,-4,-3,-.24,8.1,2.2},
+ {.30,7,3,.16,8.1,2.1},
+ {.39,8,5,.46,7.5,1.9},
+ {.53,1,6,.94,6.7,1.55},
+ {.65,-4,2,1.21,5.6,1.4},
+ {.76,-1,-1,1.38,3.0,.81},
+ {.87,0,0,1.48,1.10,.35},
+ {1,0,0,1.48,1.10,.35},
+}
+local function scanPose(q)
+ for i=2,#SCAN_POSES do
+  local b=SCAN_POSES[i]
+  if q<=b[1] then
+   local a=SCAN_POSES[i-1]
+   local t=smooth((q-a[1])/(b[1]-a[1]))
+   return a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t,a[4]+(b[4]-a[4])*t,a[5]+(b[5]-a[5])*t,a[6]+(b[6]-a[6])*t
+  end
+ end
+ return 0,0,1.48,1.10,.35
+end
+
+local function traceCrystal(pane,a,b,ground,params)
+ local last
+ for i=0,8 do
+  local base=a:Lerp(b,i/8)
+  local hit=workspace:Raycast(base+VERTICAL*10,-VERTICAL*10,params)
+  local point=hit and hit.Instance:GetAttribute('ResourceId') and hit.Position.Y>ground+.16
+   and hit.Position+VERTICAL*.08 or nil
+  if i>0 then
+   local edge=pane.contour[i]
+   if point and last and math.abs(last.Y-point.Y)<2 then
+    paintRail(edge,last,point,.068,.89)
+   else
+    paintRail(edge,base,base,0,0)
+   end
+  end
+  last=point
+ end
+end
+
+local function drawScanner(scan,from,to,ground,q,now,target,reduced,steady)
+ local flat=Vector3.new(to.X-from.X,0,to.Z-from.Z)
+ local bearing=flat.Magnitude>.05 and flat.Unit or Vector3.zAxis
+ local across=VERTICAL:Cross(bearing)
+ local sample=steady and (q<.4 and .15 or q<.75 and .53 or .92) or q
+ local x,z,yaw,width,stagger=scanPose(sample)
+ local along=across*math.cos(yaw)+bearing*math.sin(yaw)
+ local normal=VERTICAL:Cross(along)
+ local floor=Vector3.new(to.X,ground+.065,to.Z)+across*x+bearing*z
+ local height=math.max(8,from.Y-ground)
+ local envelope=smooth(q/.09)*(1-smooth((q-.923)/.077))
+ local query
+ if not reduced and target and target.source.Parent and now>=(scan.nextTrace or 0) then
+  scan.nextTrace=now+.071
+  query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include
+  query.FilterDescendantsInstances={target.source.Parent}
+ end
+ local last
+ for i,pane in ipairs(scan.panes) do
+  local index=i-2
+  local center=floor+along*(index*(width+.22))+normal*(index*stagger)
+  local a=center-along*width*.5
+  local b=center+along*width*.5
+  local slide=steady and 0 or .035*math.sin(q*13+i*.94)
+  local localGain=envelope*(.81+.19*smooth(q/.22+i*.08)+slide)
+  local lock=smooth((q-.74)/.13)
+  local top=VERTICAL*(height*(.79+.19*lock))
+  paintLine(pane.sheet,center,center+top,along,width,reduced and 0 or localGain*.83)
+  local inward=along*math.min(.43,width*.22)
+  paintLine(pane.edges[1],a,a+top,along,.055,localGain*.95)
+  paintLine(pane.edges[2],b,b+top,along,.084,localGain*1.08)
+  paintLine(pane.edges[3],b-inward,b-inward+top,along,.034,reduced and 0 or localGain*.71)
+  local returnDepth=normal*math.min(1.40,width*.28)
+  paintRail(pane.feet[1],a,b,.063,localGain*.88)
+  paintRail(pane.feet[2],a,a+returnDepth,.046,localGain*.68)
+  paintRail(pane.feet[3],b,b-returnDepth,.054,localGain*.8)
+  if last then paintRail(scan.seams[i-1],last,a,.049,localGain*.57) end
+  last=b
+  for j,glint in ipairs(pane.ends) do
+   glint.Position=j==1 and a or b
+   glint.Transparency=1-localGain*(j==1 and .64 or .87)
+  end
+  if query then traceCrystal(pane,a,b,ground,query)
+  elseif reduced or not target or envelope<.12 then
+   for _,edge in ipairs(pane.contour) do edge.core.Transparency=1;edge.halo.Transparency=1 end
+  end
+ end
+end
+
+local function newRocket(parent,reduced)
+ local root=group(parent,'NomadRocket')
+ if not root then return nil end
+ local body=part(root,'Capsule',Color3.fromRGB(234,97,97),Vector3.new(.66,.38,.38),Enum.PartType.Cylinder)
+ body.Material=Enum.Material.SmoothPlastic
+ local nose=part(root,'IvoryNose',ICE,Vector3.new(.43,.38,.38),Enum.PartType.Ball)
+ nose.Material=Enum.Material.SmoothPlastic
+ local flame=part(root,'AmberTail',GOLD,Vector3.new(.42,.19,.19),Enum.PartType.Ball)
+ local fins={}
+ for i=1,4 do fins[i]=part(root,'PetalFin',Color3.fromRGB(177,55,89),Vector3.new(.31,.22,.07));fins[i].Material=Enum.Material.SmoothPlastic end
+ local trail
+ if not reduced then
+  local a=Instance.new('Attachment');a.Position=Vector3.new(-.28,-.09,0);a.Parent=body
+  local b=Instance.new('Attachment');b.Position=Vector3.new(-.28,.09,0);b.Parent=body
+  trail=Instance.new('Trail');trail.Name='RocketEmber';trail.Attachment0=a;trail.Attachment1=b
+  trail.Color=ColorSequence.new(GOLD,AMBER);trail.Transparency=NumberSequence.new(.16,1)
+  trail.WidthScale=NumberSequence.new(1,0);trail.LightEmission=1;trail.FaceCamera=true
+  trail.Lifetime=.24;trail.MinLength=.04;trail.Parent=body
+ end
+ return {root=root,body=body,nose=nose,flame=flame,fins=fins,trail=trail}
+end
+
+local function drawRocket(rocket,from,to,t,steady)
+ local delta=to-from
+ local direction=delta.Unit
+ local u=t*(.28+.72*t)
+ local side=direction:Cross(Vector3.xAxis).Unit
+ local drift=steady and 0 or math.sin(t*math.pi*2)*math.sin(t*math.pi)*.36
+ local position=from+delta*u+side*drift
+ local pose=CFrame.fromMatrix(position,direction,side)
+ rocket.body.CFrame=pose;rocket.body.Transparency=0
+ rocket.nose.CFrame=pose*CFrame.new(.31,0,0);rocket.nose.Transparency=0
+ rocket.flame.CFrame=pose*CFrame.new(-.46,0,0);rocket.flame.Transparency=.15
+ for i,fin in ipairs(rocket.fins) do
+  fin.CFrame=pose*CFrame.Angles(i*math.pi*.5+(steady and 0 or t*.7),0,0)*CFrame.new(-.25,.20,0)*CFrame.Angles(0,0,-.28)
+  fin.Transparency=0
+ end
+end
+
+local function stopRocket(rocket,now)
+ if rocket.tailAt then return end
+ rocket.tailAt=now
+ for _,piece in ipairs(rocket.root:GetChildren()) do piece.Transparency=1 end
+ if rocket.trail then rocket.trail.Enabled=false end
+end
+
+local function newCloud(parent,ground,reduced)
+ local root=group(parent,'NomadMushroom')
+ if not root then return nil end
+ local cap,stem={},{}
+ for i=1,reduced and 5 or 8 do
+  cap[i]=part(root,'CloudCap',AMBER,Vector3.one*.1,Enum.PartType.Ball)
+  cap[i].Material=Enum.Material.SmoothPlastic
+ end
+ for i=1,3 do
+  stem[i]=part(root,'CloudStem',AMBER,Vector3.one*.1,Enum.PartType.Ball)
+  stem[i].Material=Enum.Material.SmoothPlastic
+ end
+ local heart=part(root,'BlastHeart',GOLD,Vector3.one*.1,Enum.PartType.Ball)
+ heart.Position=ground+VERTICAL*.42
+ local light=Instance.new('PointLight');light.Color=AMBER;light.Range=13;light.Brightness=0;light.Parent=heart
+ return {root=root,cap=cap,stem=stem,heart=heart,light=light}
+end
+
+local function drawCloud(cloud,ground,age,reduced,lowFlash)
+ local bloom=1-math.exp(-age*8.2)
+ local rise=smooth(age/.70)
+ local cool=smooth((age-.13)/.86)
+ local fade=smooth((age-.66)/(CLOUD_TIME-.66))
+ local capHeight=.66+2.36*rise+.7*smooth((age-.65)/1.4)
+ local stemHeight=.45+2.42*rise
+ local core=math.max(0,1-age/.25)^2
+ cloud.light.Brightness=not lowFlash and not reduced and 2.35*core or 0
+ cloud.heart.Transparency=1-core*(lowFlash and .28 or .76)
+ cloud.heart.Size=Vector3.new(2.7,1.65,2.7)*(.13+.87*bloom)
+ for i,puff in ipairs(cloud.stem) do
+  local step=i/3
+  puff.Position=ground+Vector3.new((step-.5)*.28,.18+stemHeight*step,0)
+  puff.Size=Vector3.new(1.32-step*.42,.76+step*.49,1.32-step*.42)*(.2+bloom)
+  puff.Color=GOLD:Lerp(CLAY,cool*.91)
+  puff.Transparency=.24+fade*.76
+ end
+ for i,puff in ipairs(cloud.cap) do
+  local angle=i*math.pi*2/(#cloud.cap-1)
+  local radius=i==1 and 0 or (.42+1.06*bloom)*(.95+.14*math.sin(i*2.3))
+  puff.Position=ground+Vector3.new(radius*math.cos(angle),capHeight+(i==1 and .40 or .21*math.sin(i*1.9)),radius*math.sin(angle))
+  puff.Size=Vector3.new(1.92,1.44,1.84)*(.19+bloom)*(.88+(i%3)*.09)*(1+fade*.14)
+  puff.Color=(i%3==0 and GOLD or AMBER):Lerp(CLAY,cool*.88)
+  puff.Transparency=.13+fade*.87
+ end
+end
+
+function N.clear(r)
+ if not (r.scan or r.rocket or r.cloud) then return end
+ for _,key in ipairs({'scan','rocket','cloud'}) do
+  local value=r[key]
+  if value then (value.folder or value.root):Destroy();r[key]=nil end
+ end
+end
+
+function N.step(r,node,now,from,to,age,windup,progress,target,audio,onImpact)
+ local camera=workspace.CurrentCamera
+ local ground=node:GetAttribute('ScanGround') or to.Y-1
+ local contactAt=node:GetAttribute('ContactAt')
+ local landed=contactAt and now>=contactAt
+ local near=camera and BeamVFX.near(Vector3.new(to.X,ground,to.Z),150)
+ local player=game:GetService('Players').LocalPlayer
+ local reduced=BeamVFX.reduced()
+ local steady=game:GetService('GuiService').ReducedMotionEnabled or (player and player:GetAttribute('ReducedMotion')==true)
+ local lowFlash=reduced or (player and player:GetAttribute('ReducedFlashing')==true)
+ if not landed and age>=0 and age<windup and near then
+  r.scan=r.scan or newScanner(camera)
+  local q=age/windup
+  if r.scan then drawScanner(r.scan,from,to,ground,q,now,target,reduced,steady) end
+  if audio and audio.setLoop and q>.06 and (node:GetAttribute('PausedAt') or 0)<=0 then
+   audio:setLoop(node,'orbital_charge',Vector3.new(to.X,ground+4,to.Z),.23+.42*smooth(q),.58+.52*q)
+  elseif audio and audio.stopLoop then audio:stopLoop(node) end
+ else
+  if r.scan then r.scan.folder:Destroy();r.scan=nil end
+  if audio and audio.stopLoop then audio:stopLoop(node) end
+ end
+ if not landed and progress>=0 and progress<1.12 and near and not (r.rocket and r.rocket.tailAt) then
+  if not r.fired then
+   r.fired=true
+   if audio and progress<.20 then audio:play('coil_fire',from,{pitch=1.32,level=.79}) end
+  end
+  r.rocket=r.rocket or newRocket(camera,reduced)
+  if r.rocket then drawRocket(r.rocket,from,to,math.min(progress,1),steady) end
+ elseif r.rocket then
+  stopRocket(r.rocket,now)
+  if now-r.rocket.tailAt>=.25 then r.rocket.root:Destroy();r.rocket=nil end
+ end
+ if not landed then return end
+ local ageSince=now-contactAt
+ local floor=node:GetAttribute('BlastGround')
+ if typeof(floor)~='Vector3' then return end
+ if not r.impacted then
+  r.impacted=true
+  if ageSince<.20 and near then
+   local radius=node:GetAttribute('BlastRadius') or 13
+   RoleVisuals.setTime(contactAt)
+   RoleVisuals.Pulse(floor+VERTICAL*.085,AMBER,.7,radius*2,.48)
+   if not reduced then RoleVisuals.ImpactParticles(floor+VERTICAL*.37,AMBER,1.25,'NomadBlast') end
+   if audio then audio:play('prism_blast',floor,{level=.88,pitch=.94}) end
+   if onImpact and not steady then onImpact(floor,1.6,contactAt) end
+  end
+ end
+ if ageSince<CLOUD_TIME and near then
+  r.cloud=r.cloud or newCloud(camera,floor,reduced)
+  if r.cloud then drawCloud(r.cloud,floor,ageSince,reduced,lowFlash) end
+ elseif r.cloud then r.cloud.root:Destroy();r.cloud=nil end
+end
+
+function N.detach(r,now)
+ if r.scan then r.scan.folder:Destroy();r.scan=nil end
+ if r.rocket then
+  stopRocket(r.rocket,now)
+  if now-r.rocket.tailAt<.25 then return false end
+ end
+ N.clear(r)
+ return true
+end
+return N
+
+end)()
 local RoleEffectView = (function()
 -- Observe server-authored receipts. Every client renders locally, regardless
 -- of ownership. State records also cover late joins and canceled abilities.
@@ -6185,7 +6562,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism)
+function View.new(audio,onPrism,onNomadImpact)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -6210,7 +6587,7 @@ function View.new(audio,onPrism)
      if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
      if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     end
-    if not r.after or now>=r.afterUntil then
+    if NomadView.detach(r,now) and (not r.after or now>=r.afterUntil) then
      clearProjectile(self,r,now,false);self.records[node]=nil
     end
    elseif kind=='MiningShot' then
@@ -6234,6 +6611,10 @@ function View.new(audio,onPrism)
     end
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
+    if shape=='Nomad' then
+     NomadView.step(r,node,now,from,to,age,windup,progress,target,audio,onNomadImpact)
+     continue
+    end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
@@ -6412,6 +6793,7 @@ function View.new(audio,onPrism)
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for node,r in pairs(self.records) do
    clearProjectile(self,r,0,false);clearLoad(self,r)
+   NomadView.clear(r)
    if audio and audio.stopLoop then audio:stopLoop(node) end
   end
   for _,b in ipairs(self.bursts) do b.node:Destroy() end
@@ -6583,7 +6965,7 @@ function V.new(parent,audio,onSplit)
    end
   end
  end
- local function split(self,r,now,prism)
+ local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
@@ -6594,13 +6976,13 @@ function V.new(parent,audio,onSplit)
   local reduced=BeamVFX.reduced() or V.reducedMotion()
   local player=Players.LocalPlayer
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
-  if audio then
+  if audio and not nomad then
    local volume=owned and 1 or .62
    audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume})
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
-  if (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
+  if not nomad and (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
   if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
@@ -6614,7 +6996,7 @@ function V.new(parent,audio,onSplit)
    end
   end
   if not reduced then
-   if RoleVisuals then
+   if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
     if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
@@ -6688,7 +7070,9 @@ function V.new(parent,audio,onSplit)
   self.prismTargets[r]=s:GetAttribute('PrismBlackAt')
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
-  local prism=s:GetAttribute('CutProjectile')=='Prism'
+  local projectile=s:GetAttribute('CutProjectile')
+  local prism=projectile=='Prism'
+  local nomad=projectile=='Nomad'
   local breakAt=s:GetAttribute('CrystalBreakAt') or 0
   if impact>now and impact>r.lastContactAt then
    r.nextContactAt=impact
@@ -6699,8 +7083,7 @@ function V.new(parent,audio,onSplit)
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
-    local projectile=s:GetAttribute('CutProjectile')
+   if not prism and not nomad and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
     local heavy=projectile=='Ball'
     r.chipGate=now+.12
     if shot or fractured or impact-previousContact>.30 then
@@ -6737,7 +7120,7 @@ function V.new(parent,audio,onSplit)
     -- The server can already dispatch the crew's next target during this beat.
     local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
     load=1-(1-load)^3
-    if nearby and not prism and now>=breakAt then
+    if nearby and not prism and not nomad and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
      if not BeamVFX.reduced() and not V.reducedMotion() then
       r.breakSize=r.breakSize or v.Size
@@ -6748,7 +7131,7 @@ function V.new(parent,audio,onSplit)
    else
     r.lastBreakAt=breakAt
     if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
-    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism) end
+    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism,nomad) end
     v.Transparency=1;self:forget(r)
    end
    return
@@ -9134,6 +9517,7 @@ local definitions={
  Courier={job='Backpack emptier',courier=true},
  Medic={job='Healer',healer=true},
  Ramiel={job='Prism lance',worker=true,special='Ramiel'},
+ Nomad={job='High-altitude cluster miner',worker=true,special='Nomad'},
  Orbiter={job='Orbital controller',ability='Orbital'},
  Scrapper={job='Swarm fabricator',ability='Scrap'},
  Bubbler={job='Bubble extractor',worker=true,combat=true,special='Bubbler'},
@@ -12184,6 +12568,8 @@ end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
+end,function(position,strength,at)
+ presentation:crystalKick(position,strength,at,false)
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
  presentation:crystalKick(position,strength,now,prism)
@@ -12670,7 +13056,7 @@ openFleet=function()
   if player:GetAttribute('MA_DevToolsEnabled')==true then
   local fill=button(body,UDim2.fromOffset(3,109),UDim2.fromOffset(width,40),'Fill backpack',function() command:FireServer('DevFillBag');modal.Visible=false end,palette.accent)
   fill.Name='DevFillBag'
-  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'}}
+  local choices={{'Striker','+ Miner'},{'Courier','+ Courier'},{'Medic','+ Healer'},{'Dart','+ Grower'},{'Charger','+ Smasher'},{'Orbiter','+ Orbital'},{'Ramiel','+ Ramiel'},{'Scrapper','+ Swarm'},{'Nomad','+ Nomad'}}
   local columns=width>=560 and 4 or 2;local gap=8;local cell=(width-gap*(columns-1))/columns
   for index,choice in ipairs(choices) do
    local b=button(body,UDim2.fromOffset(3+((index-1)%columns)*(cell+gap),157+math.floor((index-1)/columns)*46),UDim2.fromOffset(cell,38),choice[2],function()
@@ -13068,7 +13454,7 @@ local function registerDrone(source)
   if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
- if role~='Ramiel' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
+ if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
@@ -13288,7 +13674,8 @@ local function renderDrone(d,dt,now)
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
  local isRamiel=role=='Ramiel'
- local heavyFlight=isRamiel and DroneConfig.Prominent.Ramiel
+ local isNomad=role=='Nomad'
+ local heavyFlight=(isRamiel or isNomad) and DroneConfig.Prominent[role]
  local referenceMiner=role=='Striker'
  local logical=s:GetAttribute('Position');local goal=s:GetAttribute('Goal') or logical
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
@@ -13301,7 +13688,7 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel)
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel,isNomad and heavyFlight.altitude or nil)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -13340,7 +13727,7 @@ local function renderDrone(d,dt,now)
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(heavyFlight or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)

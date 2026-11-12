@@ -10,7 +10,7 @@ local excessStarters={'Charger','Medic','Dart','Orbiter','Scrapper','Bubbler','H
 local oversizedStarterCount=1+#excessStarters+#Workshop.STARTER_SPECIALISTS
 local supportedStarterCounts={[1]=true,[STARTER_COUNT]=true,[4]=true,[crystalStarterCount]=true,[oversizedStarterCount]=true}
 local types={'Blue','Red','Green'}
-local specialTypes={Ramiel=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
+local specialTypes={Ramiel=true,Nomad=true,Orbiter=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local roles={Striker=true,Charger=true,Medic=true,Courier=true,Orbiter=true,Scrapper=true,Dart=true}
 for role in pairs(specialTypes) do roles[role]=true end
 local starterTypes={Dart=true,Orbiter=true,Scrapper=true,Needler=true,Ballcaster=true,Vacuum=true,Compactor=true}
@@ -612,6 +612,9 @@ local function prestigeChoices(p)
  if p.run.index>1 then
   local owned={}
   for _,d in ipairs(p.fleet) do owned[d.role]=true end
+  if not owned.Nomad then
+   choices[2]={kind='Nomad',name='Nomad',tier=4,job='Scans from high above and shatters up to five clustered crystals'}
+  end
   local first=p.run.index%2==0 and 'Ramiel' or 'Orbiter'
   local second=first=='Ramiel' and 'Orbiter' or 'Ramiel'
   local kind=not owned[first] and first or not owned[second] and second

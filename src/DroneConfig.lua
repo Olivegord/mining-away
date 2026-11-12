@@ -178,6 +178,7 @@ for _,name in ipairs(specialOrder) do
 end
 local fieldTestRoles={
  Ramiel={label='Ramiel',color=Color3.fromRGB(93,203,255),detail='Locks into a five-pointed glass star and fires one red beam.'},
+ Nomad={label='Nomad',color=Color3.fromRGB(101,194,255),detail='Sweeps the field from high above and shatters clusters with a tiny rocket.'},
  Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
@@ -623,6 +624,7 @@ end
 
 DroneConfig.Prominent={
  Ramiel={span=11.25,lift=15.0,speed=.55,response=.52,turn=.34},Orbiter={span=3.30,lift=1.5},
+ Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 
@@ -819,6 +821,28 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
    light.Range=8;light.Enabled=false;light.Parent=core
    DroneConfig.poseRamiel(DroneConfig.ramielRig(model),pose,nil,0,nil,0)
   end
+ elseif role=='Nomad' then
+  local ice=Color3.fromRGB(188,233,255)
+  for i=1,16 do
+   local angle=(i-.5)*math.pi/8
+   local rim=CFrame.Angles(0,angle,0)*CFrame.new(0,0,1.11)
+   hardware('OpenRing',Vector3.new(.49,.25,.35),rim,dark,metal)
+   hardware('InnerRingLight',Vector3.new(.35,.045,.05),rim*CFrame.new(0,-.109,-.157),i%4==0 and ice or color,Enum.Material.Neon)
+  end
+  for _,side in ipairs({-1,1}) do
+   local wing=CFrame.new(side*2.63,.09,.37)*CFrame.Angles(0,-side*.16,side*.045)
+   hardware('SweptWing',Vector3.new(3.33,.34,.93),wing,dark,metal)
+   hardware('WingArmor',Vector3.new(2.87,.13,.76),wing*CFrame.new(0,.184,0),painted,slate)
+   hardware('WingTip',Vector3.new(1.05,.21,.51),wing*CFrame.new(side*1.62,.01,.13),dark,metal)
+   hardware('WingEdge',Vector3.new(2.73,.055,.065),wing*CFrame.new(-side*.09,-.138,-.46),color,Enum.Material.Neon)
+   for i=1,4 do
+    hardware('WingRunningLight',Vector3.new(.18,.047,.055),wing*CFrame.new((i-2.5)*.49,-.11,-.50),ice,Enum.Material.Neon)
+   end
+   hardware('KeelStrut',Vector3.new(.18,.25,1.05),CFrame.new(side*.39,-.34,-.70)*CFrame.Angles(-.52,side*.37,0),dark,metal)
+  end
+  local bay=hardware('DropBay',Vector3.new(.39,.40,.56),CFrame.new(0,-.49,-.49),dark,metal)
+  shotMuzzle(bay,Vector3.new(0,-.24,0)*scale)
+  hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(0,-.715,-.49),ice,Enum.Material.Neon)
  elseif role=='Needler' then
   local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
   shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)

@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `125de4691cc27ec99420991950fd232606fdfe9e7e398c33a274c59262a82d60` | Slower ore hover and effects that begin on touchdown. |
-| Shared Studio Sources | Verified Team Create save **209** | All seven managed Sources match the canonical file and Script Sync export. |
+| Native-file SHA-256 | `f12eca02b84a99a6258675ba4d40e4da0fd589b2e4b6cf748adf9bfe3a01275f` | Nomad high-altitude cluster miner and staged tracker. |
+| Shared Studio Sources | Verified Team Create save **210** | All seven managed Sources match the canonical file and Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the slower hover and touchdown effects in save **209**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad and the Studio crew panel's **+ Nomad** button in save **210**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — Nomad cluster miner
+
+Nomad follows 45 studs above the owner and locks from 38 studs above the field. Its open ring and swept wings carry cyan running lights. The scanner sweeps three staggered blue curtains across the field, turns for a second pass, then contracts onto the target. Separate ice filaments, cobalt halos, foot rails, short returns and sampled crystal edges give the projection depth. The tracker fades before a tiny red-and-ivory rocket drops. One warm shock ring and a compact mushroom cloud mark impact. [Nomad reference](https://www.youtube.com/watch?v=S1Zffn_XO08)
+
+The server picks a primary within the pin and favors dense clusters. The rocket breaks the primary and up to four eligible neighbors within 13 studs, using the normal ore path. Other crews' reservations, growing crystals, geode shells and blocked paths are respected. Nomad is a permanent prestige choice from the second run onward until acquired. The opening roster and first prestige offer are unchanged.
+
+Focused production logic checks with API doubles passed for Nomad and Ramiel, including Nomad's impact clock, payout, cap, obstruction, crew claims, and saved ownership. The broader gadget suite hits the same client inertia fixture failure as `53d45cb`. A temporary Studio Edit preview showed the three panels and rail joins, and native checks measured the panel contraction from 8.1 to 1.1 studs, rocket descent, cloud rise and 14.2-stud hull. Live gameplay, audio balance and multiplayer presentation remain unverified. Studio was already open in Edit and remains open. After Team Create save **210**, all seven managed Sources matched the canonical file at place **124078027733625**, universe **10774898335**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 53d45cb`. This revision is unpublished.
 
 ## November 11 — slow the ore hover and join the landing effects
 

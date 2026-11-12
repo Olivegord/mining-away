@@ -80,7 +80,7 @@ function V.new(parent,audio,onSplit)
    end
   end
  end
- local function split(self,r,now,prism)
+ local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
@@ -91,13 +91,13 @@ function V.new(parent,audio,onSplit)
   local reduced=BeamVFX.reduced() or V.reducedMotion()
   local player=Players.LocalPlayer
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
-  if audio then
+  if audio and not nomad then
    local volume=owned and 1 or .62
    audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume})
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
-  if (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
+  if not nomad and (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
   if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
@@ -111,7 +111,7 @@ function V.new(parent,audio,onSplit)
    end
   end
   if not reduced then
-   if RoleVisuals then
+   if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
     if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
@@ -185,7 +185,9 @@ function V.new(parent,audio,onSplit)
   self.prismTargets[r]=s:GetAttribute('PrismBlackAt')
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
-  local prism=s:GetAttribute('CutProjectile')=='Prism'
+  local projectile=s:GetAttribute('CutProjectile')
+  local prism=projectile=='Prism'
+  local nomad=projectile=='Nomad'
   local breakAt=s:GetAttribute('CrystalBreakAt') or 0
   if impact>now and impact>r.lastContactAt then
    r.nextContactAt=impact
@@ -196,8 +198,7 @@ function V.new(parent,audio,onSplit)
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
-    local projectile=s:GetAttribute('CutProjectile')
+   if not prism and not nomad and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
     local heavy=projectile=='Ball'
     r.chipGate=now+.12
     if shot or fractured or impact-previousContact>.30 then
@@ -234,7 +235,7 @@ function V.new(parent,audio,onSplit)
     -- The server can already dispatch the crew's next target during this beat.
     local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
     load=1-(1-load)^3
-    if nearby and not prism and now>=breakAt then
+    if nearby and not prism and not nomad and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
      if not BeamVFX.reduced() and not V.reducedMotion() then
       r.breakSize=r.breakSize or v.Size
@@ -245,7 +246,7 @@ function V.new(parent,audio,onSplit)
    else
     r.lastBreakAt=breakAt
     if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
-    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism) end
+    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism,nomad) end
     v.Transparency=1;self:forget(r)
    end
    return

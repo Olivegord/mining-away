@@ -31,10 +31,10 @@ end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
-function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery)
+function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery,ground)
  -- Pending records are owned by the job. Pause can outlast a fixed TTL;
  -- release destroys a canceled shot and contact starts the short cleanup.
- return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery})
+ return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery,ScanGround=ground})
 end
 function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
  if not node or not node.Parent then return end
@@ -52,6 +52,12 @@ function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNor
  end
  node:SetAttribute('PrismHits',#contacts)
  Effects.ProjectileContact(node,primary.point,primary.normal,false,false,false,at)
+end
+function Effects.NomadContact(node,point,ground,radius,at)
+ if not node or not node.Parent then return end
+ node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',ground);node:SetAttribute('BlastRadius',radius)
+ node:SetAttribute('ContactAt',at)
+ Debris:AddItem(node,2.4)
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)

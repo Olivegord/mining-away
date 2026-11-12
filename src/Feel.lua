@@ -136,9 +136,9 @@ function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
  return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
- return ownerPosition+Vector3.new(x,y,z)
+ return ownerPosition+Vector3.new(x,altitude or y,z)
 end
 local function swarmHash(id)
  local value=0
