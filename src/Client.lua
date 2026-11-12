@@ -49,7 +49,12 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   else
    local ended=source:GetAttribute('EndedAt')~=nil
    local active=not ended and now-(source:GetAttribute('ContactAt') or 0)<.3
-   if active then soundscape:setLoop(source,'orbital_hum',source:GetAttribute('Position'),1,1)
+   if active then
+    local position=source:GetAttribute('Position')
+    soundscape:setLoop(source,'orbital_hum',position,1,1)
+    if position and not CrystalImpactView.reducedMotion() and now>=(record.nextKick or 0) then
+     record.nextKick=now+.19;presentation:kick(position,.045,now)
+    end
    else soundscape:stopLoop(source) end
    local visibility=ended and 'fading' or active and 'active' or 'stale'
    if record.visibility~=visibility then
@@ -75,7 +80,7 @@ local function roleImpact(source)
  end
  if source:IsA('Folder') and source:GetAttribute('OrbitalBurn') then
   if orbitalBurns[source] then return end
-  local record={effects={}}
+  local record={effects={},nextKick=workspace:GetServerTimeNow()+.19}
   local function track(part)
    if part:IsA('BasePart') or part:IsA('ParticleEmitter') then table.insert(record.effects,part);record.visibility=nil end
   end
@@ -829,7 +834,7 @@ connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
  end
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
@@ -1420,12 +1425,20 @@ local function renderBackpacks()
 end
 
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
- onImpact=function(source,at)
+ onImpact=function(source,at,kind,depleted,now)
   local size=source:GetAttribute('FullSize') or source.Size
   if type(size)=='number' then size=Vector3.one*size end
   local p=source.Position
-  local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
-  RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+  if now-at<.18 and (source:GetAttribute('EffectPausedAt') or 0)<=0 then
+   local point=source:GetAttribute('EffectContactPoint') or p+Vector3.yAxis*size.Y*.34
+   RoleVisuals.setTime(at)
+   RoleVisuals.SpecialistContact(kind,point,source:GetAttribute('EffectContactNormal') or Vector3.yAxis,depleted,soundscape)
+   RoleVisuals.setTime(nil)
+  end
+  if depleted then
+   local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
+   RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+  end
  end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)

@@ -3,7 +3,9 @@
 CF.Rotation=CFrame.new()
 local world=Instance.new('Folder');world.Parent=workspace
 local visibleRoot=Instance.new('Folder');visibleRoot.Parent=workspace
-local views={};local ctrl=DroneFX.new(world,{resolve=function(source) return views[source] end})
+local views={};local contacts={}
+local ctrl=DroneFX.new(world,{resolve=function(source) return views[source] end,
+ onImpact=function(source,at,kind,depleted) contacts[source]={count=(contacts[source] and contacts[source].count or 0)+1,at=at,kind=kind,depleted=depleted} end})
 local durations={Bubbler=2.8,Halver=3.6,Gridcutter=2.5,Singularity=2,Starforge=3,Frostbite=2.4,Resonator=2.6}
 local checks=0
 local function resource(kind,start,noView)
@@ -12,7 +14,7 @@ local function resource(kind,start,noView)
  if not noView then local view=p:Clone();view.Position=Vector3.new(10,4,0);view.LocalTransparencyModifier=.2;view.Parent=visibleRoot;views[p]=view end
  return p
 end
-local function dispose(p) local view=views[p];p:Destroy();if view then view:Destroy() end;views[p]=nil end
+local function dispose(p) local view=views[p];p:Destroy();if view then view:Destroy() end;views[p]=nil;contacts[p]=nil end
 local function finite(e,kind)
  assert(#e.parts<=48,kind..' per-effect geometry budget')
  for _,part in ipairs(e.parts) do
@@ -20,6 +22,22 @@ local function finite(e,kind)
  end
 end
 local now=20
+for kind,duration in pairs(durations) do
+ local p=resource(kind,now,true)
+ local at=now+duration*.68
+ p:SetAttribute('EffectDoneAt',at)
+ ctrl:step(at-.03,1/60);assert(not contacts[p],kind..' future contact cannot play early')
+ ctrl:step(at+.04,1/60)
+ local receipt=contacts[p]
+ assert(receipt and receipt.count==1 and receipt.at==at and receipt.kind==kind and not receipt.depleted,kind..' nonlethal hit gets one cue')
+ p:SetAttribute('EffectDuration',duration+.01);ctrl:step(at+.06,1/60)
+ assert(contacts[p].count==1,kind..' repeat attributes cannot replay contact')
+ dispose(p);now+=5
+end
+local stale=resource('Bubbler',now-5,true);stale:SetAttribute('EffectDoneAt',now-3)
+ctrl:step(now,1/60);assert(not contacts[stale],'old nonlethal hit must not replay on stream-in');dispose(stale)
+print('PASS all seven specialist contact receipts wait for accepted damage, dedupe and skip stale nonlethal hits')
+
 for kind,duration in pairs(durations) do
  local p=resource(kind,now);local view=views[p]
  for j=0,68 do

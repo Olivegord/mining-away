@@ -166,7 +166,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   -- finish naturally when changing rocks; only a new life invalidates the tail.
   if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
   fx.key=sample.key;fx.life=sample.life
-  fx.pulseSerial=sample.pulseSerial or 0
+  fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
  if fx.contact then fx.contact.Transparency=1 end
  if fx.inner then fx.inner.Transparency=1 end
@@ -200,23 +200,26 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.impact:Emit(crowded and 3 or 6);fx.sparks:Emit(crowded and 1 or 3)
-  end
- end
- if point and normal then
-  if fx.contact then
-   fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse)
-   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.68-.05*pulse) or 1
-   if fx.inner then
-    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse)
-    fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25);fx.inner.Transparency=working and .45 or 1
-   end
+   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(crowded and 4 or 7);fx.sparks:Emit(crowded and 1 or 3) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then
+   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+  end
   fx.pulseSerial=sample.pulseSerial
+ end
+ if point and normal then
+  if fx.contact then
+   local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
+   fx.contact.CFrame=CFrame.new(point+normal*.05)
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
+   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
+   if fx.inner then
+    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
+    fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
+   end
+  end
  end
 end
 local function backpackPosition(source)

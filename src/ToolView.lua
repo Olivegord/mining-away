@@ -101,6 +101,15 @@ function V:blocks(point)
  local p,s=self.gui.AbsolutePosition,self.gui.AbsoluteSize
  return point.X>=p.X and point.X<=p.X+s.X and point.Y>=p.Y and point.Y<=p.Y+s.Y
 end
+local toolImpacts={
+ BowlingBall={cue='breaker_contact',pitch=.9,kick=.09,particles='Touchdown',scale=.9},
+ Crowbar={cue='tool_pipe',pitch=1.06,kick=.045,particles='Scrap',scale=.68},
+ Greatsword={cue='tool_slice',pitch=1.08,kick=.065,particles='Halver',scale=.9},
+ Sledgehammer={cue='breaker_contact',pitch=.71,kick=.12,particles='Touchdown',scale=1.3},
+ JellyGrenade={cue='impact',pitch=.65,kick=.14,particles='OrbitalImpact',scale=1.5},
+ MoltenTongs={cue='tool_sizzle',pitch=.96,kick=.04,particles='Starforge',scale=1.1},
+ Shatter={cue='rubble',pitch=.84,kick=.08},
+}
 function V:impact(source)
  local now=workspace:GetServerTimeNow();local at=source:GetAttribute('StartedAt') or 0
  if now-at>.3 then return end
@@ -120,13 +129,21 @@ function V:impact(source)
   RoleVisuals.Pulse(position,color,.25,3,.42)
   return
  end
- if kind~='Drop' then
-  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
-  self.ctx.presentation:kick(position,grenade and .14 or .075,now)
- end
  local slab=source:GetAttribute('Slab');local size=source:GetAttribute('RockSize')
  local rockFrame=source:GetAttribute('RockFrame')
  local radius=size and math.clamp(math.max(size.X,size.Z)*.5,.8,8) or 1
+ local hit=toolImpacts[kind]
+ if hit then
+  self.ctx.audio:play(hit.cue,position,{pitch=hit.pitch})
+  self.ctx.presentation:kick(position,hit.kick,now)
+  if hit.particles then
+   local normal=kind=='Greatsword' and rockFrame and rockFrame.UpVector or nil
+   RoleVisuals.ImpactParticles(position,color,hit.scale*math.clamp(radius*.45,.65,1.5),hit.particles,normal)
+  end
+ elseif kind~='Drop' then
+  self.ctx.audio:play('rock_clack',position,{pitch=.8})
+  self.ctx.presentation:kick(position,.075,now)
+ end
  local reduced=BeamVFX.reduced()
  if slab and rockFrame then
   local frame=CFrame.new(position)*rockFrame.Rotation
@@ -137,10 +154,10 @@ function V:impact(source)
    local left=(frame*CFrame.new(-slab.X*.62,-slab.Y*.5,.02)).Position
    local right=(frame*CFrame.new(slab.X*.62,-slab.Y*.5,.02)).Position
    RoleVisuals.Beam(left,right,Color3.fromRGB(178,232,255),.14*scale,.16,'Lance')
-   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.46)
+   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.39,frame.UpVector,.8)
   end
  end
- if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47)
+ if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47,Vector3.yAxis,1.7)
  elseif kind=='BowlingBall' or kind=='Sledgehammer' then RoleVisuals.Pulse(position,Color3.fromRGB(238,203,154),radius*.8,radius*3.2,.37)
  elseif kind=='MoltenTongs' then RoleVisuals.Pulse(position,color,radius*.6,radius*2.25,.58) end
 end

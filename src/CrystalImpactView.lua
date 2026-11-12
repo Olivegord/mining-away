@@ -218,7 +218,10 @@ function V.new(parent,audio,onSplit)
     if shot or fractured then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'))
+    if fractured and not shot then
+     RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
+    end
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})

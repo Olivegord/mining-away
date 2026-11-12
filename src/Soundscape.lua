@@ -83,6 +83,7 @@ local CUES = {
  courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
  counter_settle={id='9125869495',volume=.14,duration=.38,pitch=.88,cooldown=.2,range=34,maxVoices=2,fallback='action_jump_land.mp3'},
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
+ scrap_tap={id='9113500510',volume=.11,duration=.18,pitch=1.46,attack=.006,cooldown=.085,range=29,maxVoices=2,fallback='volume_slider.ogg'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
  needle_fire={id='9113500510',volume=.21,duration=.20,pitch=1.46,attack=.008,cooldown=.07,range=54,maxVoices=3,fallback='volume_slider.ogg'},
  needle_cock={id='9126066421',volume=.096,duration=.13,pitch=1.47,attack=.012,cooldown=.14,range=38,maxVoices=2,fallback='volume_slider.ogg'},

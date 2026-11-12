@@ -105,7 +105,7 @@ function Effects.step(now)
    -- mark instead accelerates into contact; neither is an expanding ball.
    local u=t.last>=t.first and (1-math.exp(-q*14))*.88+.12*q or q*q*q
    local radius=(t.first+(t.last-t.first)*u)*.5
-   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,.035+.055*(1-q))
+   PlaneBurst.pose(t.plane,t.normal or Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,(.035+.055*(1-q))*(t.stroke or 1))
   end
  end
  for rig,t in pairs(beamTimelines) do
@@ -254,14 +254,14 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	end
 end
 
-function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?)
+function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?, normal: Vector3?, stroke: number?)
  local duration=math.max(.01,lifetime or .3)
  local at=clock()
  if pulseCount>=24 or workspace:GetServerTimeNow()-at>=duration or not BeamVFX.near(position,140) or BeamVFX.reduced() then return end
  local value=part();if not value then return end
  pulseCount+=1
  value.Name='RolePressureFront';value.Transparency=1;value.Size=Vector3.one*.025;value.Position=position
- pulseTimelines[value]={at=at,duration=duration,first=startSize or .8,last=endSize or 5,plane=PlaneBurst.create(value,color)}
+ pulseTimelines[value]={at=at,duration=duration,first=startSize or .8,last=endSize or 5,plane=PlaneBurst.create(value,color),normal=normal,stroke=stroke}
  Debris:AddItem(value,duration+.05)
 end
 
@@ -275,11 +275,23 @@ end
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
 local impactCount,prismImpactCount=0,0
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string)
+local impactStyles={
+ Bubbler={speed=NumberRange.new(2,7),spread=62,lift=2,count=6,dust=0},
+ Halver={speed=NumberRange.new(10,20),spread=82,lift=-8,count=7,dust=0},
+ Gridcutter={speed=NumberRange.new(12,22),spread=32,lift=-14,count=7,dust=0},
+ Singularity={speed=NumberRange.new(3,8),spread=35,lift=4,count=7,dust=2},
+ Starforge={speed=NumberRange.new(10,19),spread=63,lift=-19,count=12,dust=3},
+ Frostbite={speed=NumberRange.new(13,24),spread=59,lift=-18,count=11,dust=0},
+ Resonator={speed=NumberRange.new(5,12),spread=79,lift=-6,count=6,dust=1},
+ Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
+ Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
+}
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
+ if normal then root.CFrame=CFrame.lookAt(position,position+normal) end
  if prism then
   prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
  else
@@ -287,31 +299,54 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  end
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
+ local style=impactStyles[kind]
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
  sparks.Enabled=false;sparks.Rate=0
  sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
- sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
+ local spread=style and style.spread or 63
+ sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
- sparks.Speed=prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
- sparks.Acceleration=Vector3.new(0,residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
- sparks.Parent=root;sparks:Emit(prism and 20 or residual and 9 or orbital and 10 or 8)
+ sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
+ sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or 8)
+ local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
+ Debris:AddItem(root,residual and 2.7 or 1.4)
+ if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
  dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
- dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
+ dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
- dust.Parent=root;dust:Emit(prism and 9 or orbital and 5 or 4)
- Debris:AddItem(root,residual and 2.7 or 1.4)
+ dust.Parent=root;dust:Emit(dustCount)
+end
+
+local specialistHits={
+ Bubbler={color=Color3.fromRGB(167,244,225),cue='tool_stick',pitch=1.23,scale=.64,radius=1.85,tail=.28},
+ Halver={color=Color3.fromRGB(246,246,255),cue='tool_slice',pitch=1.06,scale=.63,radius=2.7,tail=.18},
+ Gridcutter={color=Color3.fromRGB(101,242,204),cue='crystal_electric',pitch=.85,scale=.59,radius=1.5,tail=.15},
+ Singularity={color=Color3.fromRGB(169,116,255),cue='crystal_impact',pitch=.76,scale=.85,radius=2.6,tail=.35},
+ Starforge={color=Color3.fromRGB(255,174,83),cue='tool_sizzle',pitch=.87,scale=.94,radius=3.1,tail=.32},
+ Frostbite={color=Color3.fromRGB(166,226,255),cue='crystal_snap',pitch=1.31,scale=.8,radius=2.25,tail=.21},
+ Resonator={color=Color3.fromRGB(249,165,255),cue='coil_hit',pitch=1.19,scale=.63,radius=3.15,tail=.39},
+}
+function Effects.SpecialistContact(kind: string,point: Vector3,normal: Vector3,depleted: boolean,audio: any)
+ local hit=specialistHits[kind];if not hit then return end
+ local scale=depleted and 1.25 or 1
+ local plane=(kind=='Halver' or kind=='Resonator' or kind=='Starforge') and Vector3.yAxis or normal
+ local closing=kind=='Singularity'
+ Effects.Pulse(point+normal*.08,hit.color,closing and hit.radius*scale or .22,closing and .18 or hit.radius*scale,hit.tail,plane,kind=='Halver' and .62 or 1.25)
+ Effects.ImpactParticles(point,hit.color,hit.scale*scale,kind,normal)
+ audio:play(hit.cue,point,{pitch=hit.pitch,level=depleted and .85 or .62})
 end
 
 function Effects.PrismWave(position: Vector3,radius: number,duration: number)
- Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration)
- Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62)
+ Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration,Vector3.yAxis,2.25)
+ Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62,Vector3.yAxis,1.65)
 end
 
 function Effects.PrismShatter(position: Vector3,radius: number,at: number,direction: Vector3)
@@ -332,6 +367,7 @@ function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	if impact then
 		Effects.Beam(position, target, color, 0.3, 0.2,'Combat')
 		Effects.Pulse(target, color, .7, 4.2, 0.28)
+		Effects.ImpactParticles(target,color,.65,'Gridcutter')
 	else
 		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.5, 3.4, 0.8)
 	end
@@ -375,9 +411,9 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
    local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';EnergyDisc.configure(dust,1.18,.69,.60,1.22)
    dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
    dust.Enabled=false;dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
-   dust.Speed=NumberRange.new(4,7);dust.Drag=10;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
+   dust.Speed=NumberRange.new(6,11);dust.Drag=7;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Parent=attachment;dust:Emit(7)
+   dust.Parent=attachment;dust:Emit(10)
    Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
@@ -389,6 +425,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
   local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
   Effects.Pulse(target,Color3.fromRGB(244,211,155),.3*scale,2.5*scale,.17)
   Effects.Pulse(target,Color3.fromRGB(255,206,107),.2*scale,1.1*scale,.9)
+  Effects.ImpactParticles(target,amber,.52*scale,'Touchdown')
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
  end

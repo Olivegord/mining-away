@@ -210,7 +210,7 @@ function A.step(state,now,dt,ctx,swarmContext)
      local accepted=ctx.hit(target.id,chip,'Scrap',point(bot))
      if accepted then
       bot.pulse+=1
-
+      bot.hitAt=now;bot.hitPosition=bot.target
      end
     end
    else bot.charge=0 end

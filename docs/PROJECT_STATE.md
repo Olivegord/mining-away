@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `ad6d83e448f2ef7ee2d3951d49d85e359a1017b40a4a3942f22069b8d383da99` | Nomad's restored scanner and slower visible approach. |
-| Shared Studio Sources | Team Create save **217** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `c0a6bec64355e40c918cba225d3b9875335fb298ce521408de4e5dddfeb3eb74` | Mining, gadget, field-tool and combat impact feedback. |
+| Shared Studio Sources | Team Create save **218** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's restored scanner and slower approach in save **217**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the attack feedback pass in save **218**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — give attacks distinct contact and finish cues
+
+The Laser Miner briefly intensifies its original two-ball glow when the cut bites. Needler leaves a quick surface snap and Ballcaster sends a wider pressure ripple. Each of the seven specialists plays its own spatial contact sound and particle motion on an accepted hit, including partial damage. Breaker has separate touchdown grit and a heavier dust release when the rock fractures. Scrap bots spark and tap when the chisel lands. Field tools have individual sound pitch, particle weight and recoil. Strikers get a muzzle burst, and sentry hits get sparks at the confirmed contact.
+
+Ramiel's firing shockwave reads with a brighter, thicker front and the rocks still shatter on the delayed beat. Nomad's dust travels farther across the field and both pressure fronts are clearer. Orbital adds a nearby tremor during the burn and a closing pulse on completion. Existing damage, rewards, attack timings and reduced-effects settings carry through.
+
+Beam, energy, specialist contact, crystal contact-clock, Ramiel and Nomad checks passed with API doubles. Broader gadget, animation, field-tool and special-logistics suites still encounter their existing fixture failures. Studio gameplay, audio balance and multiplayer presentation remain unverified. All seven managed Sources matched the canonical file after Team Create save **218** at place **124078027733625**, universe **10774898335**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 3c657c9`. This revision is unpublished.
 
 ## November 12 — restore Nomad's fixed beam patterns and slow the sweep
 

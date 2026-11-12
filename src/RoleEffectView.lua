@@ -446,7 +446,7 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
- local ring=ball and PlaneBurst.create(node,color) or nil
+ local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
  self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
 end
 local function stepBursts(self,now)
@@ -459,7 +459,7 @@ local function stepBursts(self,now)
    local player=Players.LocalPlayer
    b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
    b.flash.Size=(b.ball and Vector3.one*1.25 or Vector3.new(.53,.53,1.95))*math.max(.04,b.scale*(1.15-.53*flash))
-   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/.24,b.scale*.88) end
+   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68)) end
   end
  end
 end
@@ -640,6 +640,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
       local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
       local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
       burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
@@ -687,7 +688,13 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
      local radius=node:GetAttribute('Radius') or 1
      if ended and now>=ended and node:GetAttribute('Completed')==true and not r.rubble then
       r.rubble=true
-      RoleVisuals.Crater(Vector3.new(position.X,ground or position.Y,position.Z),math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+      local floor=Vector3.new(position.X,ground or position.Y,position.Z)
+      RoleVisuals.Crater(floor,math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+      if now-ended<.19 then
+       RoleVisuals.setTime(ended)
+       RoleVisuals.Pulse(floor+Vector3.yAxis*.10,Color3.fromRGB(220,149,255),.55,5+radius*2,.44,Vector3.yAxis,1.6)
+       if audio then audio:play('crystal_impact',floor,{pitch=.82,level=.8}) end
+      end
      end
      MotionBuffer.push(r.samples,at,CFrame.new(position))
      local pose=MotionBuffer.pose(r.samples,now)

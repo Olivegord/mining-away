@@ -692,7 +692,10 @@ function P:renderDrone(drone,_dt,now)
   if emitter and emitter:IsA('BasePart') then
    local critical=source:GetAttribute('Critical')==true or now-(source:GetAttribute('LastCritAt') or -100)<.15
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
-   if now-(source:GetAttribute('ShotAt') or 0)<.35 then self:_sound(emitter.Position,'shot',now) end
+   if now-(source:GetAttribute('ShotAt') or 0)<.23 then
+    self:_sound(emitter.Position,'shot',now)
+    self.work:burst(emitter.Position,emitter.CFrame.LookVector,critical and HOT or ICE,critical and 5 or 3,now)
+   end
   end
  end
  self.work:courier(drone,record,now)
@@ -878,7 +881,14 @@ function P:renderTurret(record,dt,now)
   for _,item in ipairs(record.pieces) do item.rebuildFrom=item.part.CFrame end
  end
  if event.hit then record.hitAt=now end
- if event.shot then record.shotAt=now;self:_sound(record.eye.Position,'hit',now) end
+ if event.shot then
+  record.shotAt=now;self:_sound(record.eye.Position,'hit',now)
+  local contact=source:GetAttribute('ShotContact')
+  if contact and now-(source:GetAttribute('ShotAt') or 0)<.2 then
+   local incoming=record.eye.Position-contact
+   if incoming.Magnitude>.01 then self.work:burst(contact,incoming.Unit,HOT,6,now) end
+  end
+ end
  local awake=source:GetAttribute('Awake')
  -- Older in-memory preview servers have no new attributes. This fallback only
  -- derives presentation from their authoritative field phase, never local input.

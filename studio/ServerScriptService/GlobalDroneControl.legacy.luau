@@ -698,7 +698,7 @@ function A.step(state,now,dt,ctx,swarmContext)
      local accepted=ctx.hit(target.id,chip,'Scrap',point(bot))
      if accepted then
       bot.pulse+=1
-
+      bot.hitAt=now;bot.hitPosition=bot.target
      end
     end
    else bot.charge=0 end
@@ -5157,6 +5157,7 @@ function Effects.Ability(owner,event,template)
    if not node then node=Instance.new('Folder');node.Name=name;node:SetAttribute('ScrapBot',true);node.Parent=group end
    node:SetAttribute('Position',point(bot));node:SetAttribute('Active',bot.active)
    node:SetAttribute('TargetPosition',bot.target and point(bot.target) or point(bot))
+   if bot.hitPosition then node:SetAttribute('HitPosition',point(bot.hitPosition));node:SetAttribute('HitAt',bot.hitAt) end
    node:SetAttribute('Pulse',bot.pulse);node:SetAttribute('PoseAt',now)
   end
  end
@@ -9256,7 +9257,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  -- Capture the incoming surface before any fracture changes its size or facing.
  local hitSurface=clusterHit
- if not hitSurface and (shotKind or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart))) then
+ if not hitSurface and (shotKind or special or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart))) then
   local hitFrom=shotKind and (job.from or d.pos) or d.pos
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
   local delta=r.part.Position-hitFrom
@@ -9314,6 +9315,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  if special then
   job.impacted=true
+  r.part:SetAttribute('EffectContactPoint',hitSurface.point);r.part:SetAttribute('EffectContactNormal',hitSurface.normal)
   r.part:SetAttribute('EffectDepleted',broken);r.part:SetAttribute('EffectDoneAt',now)
  end
  r.stage=nextStage
@@ -9831,11 +9833,13 @@ local function turretStep(field: any)
     if p and p.busy then t.fireAt=now+.2;t.model:SetAttribute('FireAt',t.fireAt)
     elseif not d or not p or not R.participates(field.e,d,data(p).run.id) then t.fireAt=nil;t.lock=nil;t.nextShot=now+1
     elseif now>=t.fireAt then
-     t.shotSerial=t.shotSerial+1;t.model:SetAttribute('ShotSerial',t.shotSerial)
      scene.hazards:beam(t.emitter.Position,t.aim,field.cfg.Damage,'turret')
-     if (d.pos-t.aim).Magnitude<=3.5 and (d.pos-t.emitter.Position).Magnitude<55 and los(t.emitter.Position,t.aim,d.model,{t.model,droneFolder}) then
+     local hit=(d.pos-t.aim).Magnitude<=3.5 and (d.pos-t.emitter.Position).Magnitude<55 and los(t.emitter.Position,t.aim,d.model,{t.model,droneFolder})
+     if hit then
       local stats=field.e.roster[d.id].stats;hurtDrone(d,field.cfg.Damage*(1-(stats.damageReduction or 0)))
      end
+     t.model:SetAttribute('ShotContact',hit and d.pos or nil);t.model:SetAttribute('ShotAt',now)
+     t.shotSerial=t.shotSerial+1;t.model:SetAttribute('ShotSerial',t.shotSerial)
      t.fireAt=nil;t.lock=nil;t.nextShot=now+(field.cfg.ShotCooldown or 1.6)
     end
    elseif now>=t.nextShot then

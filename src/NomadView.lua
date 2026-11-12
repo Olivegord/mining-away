@@ -326,11 +326,13 @@ local function newBlast(parent,ground,radius,reduced,lowFlash,at)
   light.Range=math.min(48,radius*3.3);light.Brightness=0;light.Parent=root;blast.light=light
  end
  local count=reduced and 4 or 8
+ local reach=math.clamp(radius/20,1,1.45)
  for i=1,count do
   local a=(i-1)*math.pi*2/count
   local radial=Vector3.new(math.cos(a),0,math.sin(a))
   local direction=(radial+VERTICAL*.22).Unit
   blast.skirt[i]=plumeEmitter(root,'GroundDust',radial*.94+VERTICAL*.24,direction,SKIRT,scale)
+  blast.skirt[i].Speed=NumberRange.new(SKIRT.speed.Min*reach,SKIRT.speed.Max*reach)
   blast.cap[i]=plumeEmitter(root,'RollingSmokeCap',radial*(1.7*scale)+VERTICAL*((10.8+(i%3)*.97)*scale),direction,CAP,scale)
  end
  if not reduced then
@@ -440,7 +442,7 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   r.impacted=true
   if ageSince<.20 and near then
    RoleVisuals.setTime(contactAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,waveRadius*2.1,.67)
+   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,waveRadius*2.1,.67,VERTICAL,2.45)
    if audio then audio:play('nomad_impact',floor) end
    if onFlash and not lowFlash then onFlash(floor,contactAt) end
    if onImpact and not steady then onImpact(floor,2.7,contactAt) end
@@ -463,7 +465,7 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   RoleVisuals.Crater(floor,math.min(34,radius*.96),'Nomad',shatterAt)
   if now-shatterAt<.24 and near then
    RoleVisuals.setTime(shatterAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,waveRadius*.46,waveRadius*2.24,.82)
+   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,waveRadius*.46,waveRadius*2.24,.82,VERTICAL,2.2)
    if r.blast then
     for _,emitter in ipairs(r.blast.skirt) do emitter:Emit(reduced and 2 or 3) end
     if r.blast.sparks then r.blast.sparks:Emit(20) end

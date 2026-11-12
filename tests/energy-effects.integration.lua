@@ -97,7 +97,7 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  local shock=assert(source:FindFirstChild('BreakerPressureWave'))
  local sparks=shock:FindFirstChildWhichIsA('ParticleEmitter',true)
  round(sparks,1,1.5)
- assert(sparks.Lifetime.Min==1 and sparks.Lifetime.Max==1.6 and sparks.Speed.Max<=7 and sparks.Drag>=10 and shock.EnergyCleanup>sparks.Lifetime.Max)
+ assert(sparks.Lifetime.Min==1 and sparks.Lifetime.Max==1.6 and sparks.Speed.Max==11 and sparks.Drag>=7 and shock.EnergyCleanup>sparks.Lifetime.Max)
  RoleVisuals.Ability(991,{kind='orbital',target={x=0,y=2,z=0}},nil)
  local group=assert(source:FindFirstChild('OrbitalMelt'));local tick=delayedEnergy[#delayedEnergy]
  assert(group.EnergyCleanup==nil,'creation timer can truncate a later final tail')

@@ -273,14 +273,18 @@ function FX.new(world,options)
     local kind=v:GetAttribute('EffectType')
     local start=v:GetAttribute('EffectStartedAt')
     local duration=v:GetAttribute('EffectDuration')
-    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and v:GetAttribute('EffectDepleted')==true then
+    local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
+    local depleted=v:GetAttribute('EffectDepleted')==true
+    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and (depleted or not cancelled) then
      local done=v:GetAttribute('EffectDoneAt') or 0
      if done>now then self.retry[v]=done
-     elseif done>0 then finished[v]=serial;options.onImpact(v,done) end
+     elseif done>0 and type(start)=='number' and done>=start then
+      finished[v]=serial
+      if depleted or now-done<.18 then options.onImpact(v,done,kind,depleted,now) end
+     end
     end
-    local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
-    if e and e.serial==serial and cancelled and v:GetAttribute('EffectDepleted')==true then concealDepleted(e)
+    if e and e.serial==serial and cancelled and depleted then concealDepleted(e)
     elseif e and (e.serial~=serial or e.kind~=kind or cancelled or type(start)~='number' or type(duration)~='number' or duration<=0) then remove(v);e=nil end
     if e and not e.tombstone then e.start=start;e.duration=duration;e.tail=math.min(TAIL,duration*(1-e.impact)*.98) end -- Save-pause clock shifts preserve geometry and phase.
     if not e and self.completed[v]~=serial and serial>0 and not cancelled and supported[kind] and type(start)=='number' and type(duration)=='number' and duration>0 then

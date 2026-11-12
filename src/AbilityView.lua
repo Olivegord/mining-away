@@ -5,6 +5,8 @@ local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
+local SCRAP_TIP=Color3.fromRGB(185,174,126)
+local SCRAP_HIT=Color3.fromRGB(255,232,154)
 local function enabled(profile,kind)
  return profile and profile.run and Shops.abilityUnlocked(profile,kind) or false
 end
@@ -88,7 +90,7 @@ function View.start(options)
    part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
    part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
-  local chisel=beam(.05,Color3.fromRGB(185,174,126))
+  local chisel=beam(.05,SCRAP_TIP)
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,alpha=0,yaw=0,samples={}}
  end
  local function scan()
@@ -139,7 +141,14 @@ function View.start(options)
     -- Solid miniature chisels tap on confirmed damage pulses; these bots do
     -- close mechanical work rather than projecting the miner's laser again.
     local serial=source:GetAttribute('Pulse') or 0
-    if serial~=(record.serial or serial) then record.hitAt=now end
+    if serial~=(record.serial or serial) then
+     local hitAt=source:GetAttribute('HitAt');local point=source:GetAttribute('HitPosition')
+     if hitAt and point and now-hitAt<.23 then
+      record.hitAt=now
+      RoleVisuals.ImpactParticles(point,SCRAP_HIT,.36,'Scrap')
+      if options.audio then options.audio:play('scrap_tap',point,{pitch=1+serial%3*.06}) end
+     end
+    end
     record.serial=serial
     local tap=math.max(0,1-(now-(record.hitAt or -100))/.18)
     local height=math.min(1.3,math.max(.1,record.pos.Y-target.Y))
@@ -148,7 +157,7 @@ function View.start(options)
     record.beam.Size=Vector3.new(height,.065,.065);record.beam.CFrame=pose
     record.beam.Color=Color3.fromRGB(99,111,103);record.beam.Transparency=1-record.alpha
     record.core.Size=Vector3.new(.16,.22,.22);record.core.CFrame=CFrame.new(base-Vector3.new(0,height-.08,0))*CFrame.Angles(0,0,math.pi/2)
-    record.core.Color=Color3.fromRGB(185,174,126);record.core.Transparency=1-record.alpha
+    record.core.Color=SCRAP_TIP:Lerp(SCRAP_HIT,tap);record.core.Transparency=1-record.alpha
     if active then record.view:PivotTo(CFrame.new(record.pos+Vector3.new(0,-tap*.08,0))*CFrame.Angles(0,record.yaw,0)) end
    end
   end

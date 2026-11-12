@@ -1394,6 +1394,7 @@ local CUES = {
  courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
  counter_settle={id='9125869495',volume=.14,duration=.38,pitch=.88,cooldown=.2,range=34,maxVoices=2,fallback='action_jump_land.mp3'},
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
+ scrap_tap={id='9113500510',volume=.11,duration=.18,pitch=1.46,attack=.006,cooldown=.085,range=29,maxVoices=2,fallback='volume_slider.ogg'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
  needle_fire={id='9113500510',volume=.21,duration=.20,pitch=1.46,attack=.008,cooldown=.07,range=54,maxVoices=3,fallback='volume_slider.ogg'},
  needle_cock={id='9126066421',volume=.096,duration=.13,pitch=1.47,attack=.012,cooldown=.14,range=38,maxVoices=2,fallback='volume_slider.ogg'},
@@ -2783,7 +2784,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   -- finish naturally when changing rocks; only a new life invalidates the tail.
   if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
   fx.key=sample.key;fx.life=sample.life
-  fx.pulseSerial=sample.pulseSerial or 0
+  fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
  if fx.contact then fx.contact.Transparency=1 end
  if fx.inner then fx.inner.Transparency=1 end
@@ -2817,23 +2818,26 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.impact:Emit(crowded and 3 or 6);fx.sparks:Emit(crowded and 1 or 3)
-  end
- end
- if point and normal then
-  if fx.contact then
-   fx.contact.CFrame=CFrame.new(point+normal*.05)
-   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse)
-   fx.contact.Color=beam.tint or WHITE;fx.contact.Transparency=working and (.68-.05*pulse) or 1
-   if fx.inner then
-    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse)
-    fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25);fx.inner.Transparency=working and .45 or 1
-   end
+   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(crowded and 4 or 7);fx.sparks:Emit(crowded and 1 or 3) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then
+   fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+  end
   fx.pulseSerial=sample.pulseSerial
+ end
+ if point and normal then
+  if fx.contact then
+   local bite=math.max(0,1-(now-(fx.biteAt or -100))/.13)^2
+   fx.contact.CFrame=CFrame.new(point+normal*.05)
+   fx.contact.Size=Vector3.one*(.22+.18*width+.08*pulse+.26*bite)
+   fx.contact.Color=(beam.tint or WHITE):Lerp(YELLOW,bite*.32);fx.contact.Transparency=working and (.68-.05*pulse-.15*bite) or 1
+   if fx.inner then
+    fx.inner.CFrame=CFrame.new(point+normal*.06);fx.inner.Size=Vector3.one*(.09+.05*pulse+.15*bite)
+    fx.inner.Color=(beam.tint or WHITE):Lerp(WHITE,.25+.53*bite);fx.inner.Transparency=working and (.45-.15*bite) or 1
+   end
+  end
  end
 end
 local function backpackPosition(source)
@@ -4878,14 +4882,18 @@ function FX.new(world,options)
     local kind=v:GetAttribute('EffectType')
     local start=v:GetAttribute('EffectStartedAt')
     local duration=v:GetAttribute('EffectDuration')
-    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and v:GetAttribute('EffectDepleted')==true then
+    local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
+    local depleted=v:GetAttribute('EffectDepleted')==true
+    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and (depleted or not cancelled) then
      local done=v:GetAttribute('EffectDoneAt') or 0
      if done>now then self.retry[v]=done
-     elseif done>0 then finished[v]=serial;options.onImpact(v,done) end
+     elseif done>0 and type(start)=='number' and done>=start then
+      finished[v]=serial
+      if depleted or now-done<.18 then options.onImpact(v,done,kind,depleted,now) end
+     end
     end
-    local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
-    if e and e.serial==serial and cancelled and v:GetAttribute('EffectDepleted')==true then concealDepleted(e)
+    if e and e.serial==serial and cancelled and depleted then concealDepleted(e)
     elseif e and (e.serial~=serial or e.kind~=kind or cancelled or type(start)~='number' or type(duration)~='number' or duration<=0) then remove(v);e=nil end
     if e and not e.tombstone then e.start=start;e.duration=duration;e.tail=math.min(TAIL,duration*(1-e.impact)*.98) end -- Save-pause clock shifts preserve geometry and phase.
     if not e and self.completed[v]~=serial and serial>0 and not cancelled and supported[kind] and type(start)=='number' and type(duration)=='number' and duration>0 then
@@ -5470,7 +5478,7 @@ function Effects.step(now)
    -- mark instead accelerates into contact; neither is an expanding ball.
    local u=t.last>=t.first and (1-math.exp(-q*14))*.88+.12*q or q*q*q
    local radius=(t.first+(t.last-t.first)*u)*.5
-   PlaneBurst.pose(t.plane,Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,.035+.055*(1-q))
+   PlaneBurst.pose(t.plane,t.normal or Vector3.yAxis,radius,t.sight and (.42+.5*q) or (1-q)^.7*.8,(.035+.055*(1-q))*(t.stroke or 1))
   end
  end
  for rig,t in pairs(beamTimelines) do
@@ -5619,14 +5627,14 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	end
 end
 
-function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?)
+function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?, normal: Vector3?, stroke: number?)
  local duration=math.max(.01,lifetime or .3)
  local at=clock()
  if pulseCount>=24 or workspace:GetServerTimeNow()-at>=duration or not BeamVFX.near(position,140) or BeamVFX.reduced() then return end
  local value=part();if not value then return end
  pulseCount+=1
  value.Name='RolePressureFront';value.Transparency=1;value.Size=Vector3.one*.025;value.Position=position
- pulseTimelines[value]={at=at,duration=duration,first=startSize or .8,last=endSize or 5,plane=PlaneBurst.create(value,color)}
+ pulseTimelines[value]={at=at,duration=duration,first=startSize or .8,last=endSize or 5,plane=PlaneBurst.create(value,color),normal=normal,stroke=stroke}
  Debris:AddItem(value,duration+.05)
 end
 
@@ -5640,11 +5648,23 @@ end
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
 local impactCount,prismImpactCount=0,0
-function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string)
+local impactStyles={
+ Bubbler={speed=NumberRange.new(2,7),spread=62,lift=2,count=6,dust=0},
+ Halver={speed=NumberRange.new(10,20),spread=82,lift=-8,count=7,dust=0},
+ Gridcutter={speed=NumberRange.new(12,22),spread=32,lift=-14,count=7,dust=0},
+ Singularity={speed=NumberRange.new(3,8),spread=35,lift=4,count=7,dust=2},
+ Starforge={speed=NumberRange.new(10,19),spread=63,lift=-19,count=12,dust=3},
+ Frostbite={speed=NumberRange.new(13,24),spread=59,lift=-18,count=11,dust=0},
+ Resonator={speed=NumberRange.new(5,12),spread=79,lift=-6,count=6,dust=1},
+ Touchdown={speed=NumberRange.new(5,10),spread=79,lift=-16,count=4,dust=3},
+ Scrap={speed=NumberRange.new(4,8),spread=52,lift=-18,count=3,dust=0},
+}
+function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string,normal: Vector3?)
  local prism=kind=='PrismBlast'
  if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
+ if normal then root.CFrame=CFrame.lookAt(position,position+normal) end
  if prism then
   prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
  else
@@ -5652,31 +5672,54 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  end
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
+ local style=impactStyles[kind]
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
  sparks.Enabled=false;sparks.Rate=0
  sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
- sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
+ local spread=style and style.spread or 63
+ sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
- sparks.Speed=prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
- sparks.Acceleration=Vector3.new(0,residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
- sparks.Parent=root;sparks:Emit(prism and 20 or residual and 9 or orbital and 10 or 8)
+ sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
+ sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or 8)
+ local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
+ Debris:AddItem(root,residual and 2.7 or 1.4)
+ if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
  dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
- dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
+ dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
- dust.Parent=root;dust:Emit(prism and 9 or orbital and 5 or 4)
- Debris:AddItem(root,residual and 2.7 or 1.4)
+ dust.Parent=root;dust:Emit(dustCount)
+end
+
+local specialistHits={
+ Bubbler={color=Color3.fromRGB(167,244,225),cue='tool_stick',pitch=1.23,scale=.64,radius=1.85,tail=.28},
+ Halver={color=Color3.fromRGB(246,246,255),cue='tool_slice',pitch=1.06,scale=.63,radius=2.7,tail=.18},
+ Gridcutter={color=Color3.fromRGB(101,242,204),cue='crystal_electric',pitch=.85,scale=.59,radius=1.5,tail=.15},
+ Singularity={color=Color3.fromRGB(169,116,255),cue='crystal_impact',pitch=.76,scale=.85,radius=2.6,tail=.35},
+ Starforge={color=Color3.fromRGB(255,174,83),cue='tool_sizzle',pitch=.87,scale=.94,radius=3.1,tail=.32},
+ Frostbite={color=Color3.fromRGB(166,226,255),cue='crystal_snap',pitch=1.31,scale=.8,radius=2.25,tail=.21},
+ Resonator={color=Color3.fromRGB(249,165,255),cue='coil_hit',pitch=1.19,scale=.63,radius=3.15,tail=.39},
+}
+function Effects.SpecialistContact(kind: string,point: Vector3,normal: Vector3,depleted: boolean,audio: any)
+ local hit=specialistHits[kind];if not hit then return end
+ local scale=depleted and 1.25 or 1
+ local plane=(kind=='Halver' or kind=='Resonator' or kind=='Starforge') and Vector3.yAxis or normal
+ local closing=kind=='Singularity'
+ Effects.Pulse(point+normal*.08,hit.color,closing and hit.radius*scale or .22,closing and .18 or hit.radius*scale,hit.tail,plane,kind=='Halver' and .62 or 1.25)
+ Effects.ImpactParticles(point,hit.color,hit.scale*scale,kind,normal)
+ audio:play(hit.cue,point,{pitch=hit.pitch,level=depleted and .85 or .62})
 end
 
 function Effects.PrismWave(position: Vector3,radius: number,duration: number)
- Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration)
- Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62)
+ Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration,Vector3.yAxis,2.25)
+ Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62,Vector3.yAxis,1.65)
 end
 
 function Effects.PrismShatter(position: Vector3,radius: number,at: number,direction: Vector3)
@@ -5697,6 +5740,7 @@ function Effects.Charge(position: Vector3, target: Vector3, impact: boolean?)
 	if impact then
 		Effects.Beam(position, target, color, 0.3, 0.2,'Combat')
 		Effects.Pulse(target, color, .7, 4.2, 0.28)
+		Effects.ImpactParticles(target,color,.65,'Gridcutter')
 	else
 		Effects.Pulse(position, Color3.fromRGB(255, 218, 105), 0.5, 3.4, 0.8)
 	end
@@ -5740,9 +5784,9 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
    local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';EnergyDisc.configure(dust,1.18,.69,.60,1.22)
    dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
    dust.Enabled=false;dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
-   dust.Speed=NumberRange.new(4,7);dust.Drag=10;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
+   dust.Speed=NumberRange.new(6,11);dust.Drag=7;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Parent=attachment;dust:Emit(7)
+   dust.Parent=attachment;dust:Emit(10)
    Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
@@ -5754,6 +5798,7 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
   local cue=part();if cue then cue.Name='ConfirmedBreakerContact';cue.Transparency=1;cue.Position=target;cue:SetAttribute('MiningImpact','BreakerContact');cue:SetAttribute('ImpactAt',clock());Debris:AddItem(cue,1) end
   Effects.Pulse(target,Color3.fromRGB(244,211,155),.3*scale,2.5*scale,.17)
   Effects.Pulse(target,Color3.fromRGB(255,206,107),.2*scale,1.1*scale,.9)
+  Effects.ImpactParticles(target,amber,.52*scale,'Touchdown')
  elseif phase=='Recover' then
   Effects.Pulse(position,Color3.fromRGB(168,155,123),.15,.7,.2)
  end
@@ -6309,11 +6354,13 @@ local function newBlast(parent,ground,radius,reduced,lowFlash,at)
   light.Range=math.min(48,radius*3.3);light.Brightness=0;light.Parent=root;blast.light=light
  end
  local count=reduced and 4 or 8
+ local reach=math.clamp(radius/20,1,1.45)
  for i=1,count do
   local a=(i-1)*math.pi*2/count
   local radial=Vector3.new(math.cos(a),0,math.sin(a))
   local direction=(radial+VERTICAL*.22).Unit
   blast.skirt[i]=plumeEmitter(root,'GroundDust',radial*.94+VERTICAL*.24,direction,SKIRT,scale)
+  blast.skirt[i].Speed=NumberRange.new(SKIRT.speed.Min*reach,SKIRT.speed.Max*reach)
   blast.cap[i]=plumeEmitter(root,'RollingSmokeCap',radial*(1.7*scale)+VERTICAL*((10.8+(i%3)*.97)*scale),direction,CAP,scale)
  end
  if not reduced then
@@ -6423,7 +6470,7 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   r.impacted=true
   if ageSince<.20 and near then
    RoleVisuals.setTime(contactAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,waveRadius*2.1,.67)
+   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,waveRadius*2.1,.67,VERTICAL,2.45)
    if audio then audio:play('nomad_impact',floor) end
    if onFlash and not lowFlash then onFlash(floor,contactAt) end
    if onImpact and not steady then onImpact(floor,2.7,contactAt) end
@@ -6446,7 +6493,7 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   RoleVisuals.Crater(floor,math.min(34,radius*.96),'Nomad',shatterAt)
   if now-shatterAt<.24 and near then
    RoleVisuals.setTime(shatterAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,waveRadius*.46,waveRadius*2.24,.82)
+   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,waveRadius*.46,waveRadius*2.24,.82,VERTICAL,2.2)
    if r.blast then
     for _,emitter in ipairs(r.blast.skirt) do emitter:Emit(reduced and 2 or 3) end
     if r.blast.sparks then r.blast.sparks:Emit(20) end
@@ -6922,7 +6969,7 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
- local ring=ball and PlaneBurst.create(node,color) or nil
+ local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
  self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
 end
 local function stepBursts(self,now)
@@ -6935,7 +6982,7 @@ local function stepBursts(self,now)
    local player=Players.LocalPlayer
    b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
    b.flash.Size=(b.ball and Vector3.one*1.25 or Vector3.new(.53,.53,1.95))*math.max(.04,b.scale*(1.15-.53*flash))
-   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/.24,b.scale*.88) end
+   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68)) end
   end
  end
 end
@@ -7116,6 +7163,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
       local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
       local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
       burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
@@ -7163,7 +7211,13 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
      local radius=node:GetAttribute('Radius') or 1
      if ended and now>=ended and node:GetAttribute('Completed')==true and not r.rubble then
       r.rubble=true
-      RoleVisuals.Crater(Vector3.new(position.X,ground or position.Y,position.Z),math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+      local floor=Vector3.new(position.X,ground or position.Y,position.Z)
+      RoleVisuals.Crater(floor,math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+      if now-ended<.19 then
+       RoleVisuals.setTime(ended)
+       RoleVisuals.Pulse(floor+Vector3.yAxis*.10,Color3.fromRGB(220,149,255),.55,5+radius*2,.44,Vector3.yAxis,1.6)
+       if audio then audio:play('crystal_impact',floor,{pitch=.82,level=.8}) end
+      end
      end
      MotionBuffer.push(r.samples,at,CFrame.new(position))
      local pose=MotionBuffer.pose(r.samples,now)
@@ -7537,7 +7591,10 @@ function V.new(parent,audio,onSplit)
     if shot or fractured then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'))
+    if fractured and not shot then
+     RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
+    end
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
      audio:play('crystal_snap',point,{pitch=1.20-.23*health})
@@ -8287,7 +8344,10 @@ function P:renderDrone(drone,_dt,now)
   if emitter and emitter:IsA('BasePart') then
    local critical=source:GetAttribute('Critical')==true or now-(source:GetAttribute('LastCritAt') or -100)<.15
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
-   if now-(source:GetAttribute('ShotAt') or 0)<.35 then self:_sound(emitter.Position,'shot',now) end
+   if now-(source:GetAttribute('ShotAt') or 0)<.23 then
+    self:_sound(emitter.Position,'shot',now)
+    self.work:burst(emitter.Position,emitter.CFrame.LookVector,critical and HOT or ICE,critical and 5 or 3,now)
+   end
   end
  end
  self.work:courier(drone,record,now)
@@ -8473,7 +8533,14 @@ function P:renderTurret(record,dt,now)
   for _,item in ipairs(record.pieces) do item.rebuildFrom=item.part.CFrame end
  end
  if event.hit then record.hitAt=now end
- if event.shot then record.shotAt=now;self:_sound(record.eye.Position,'hit',now) end
+ if event.shot then
+  record.shotAt=now;self:_sound(record.eye.Position,'hit',now)
+  local contact=source:GetAttribute('ShotContact')
+  if contact and now-(source:GetAttribute('ShotAt') or 0)<.2 then
+   local incoming=record.eye.Position-contact
+   if incoming.Magnitude>.01 then self.work:burst(contact,incoming.Unit,HOT,6,now) end
+  end
+ end
  local awake=source:GetAttribute('Awake')
  -- Older in-memory preview servers have no new attributes. This fallback only
  -- derives presentation from their authoritative field phase, never local input.
@@ -10953,6 +11020,8 @@ local Players=game:GetService('Players')
 local RunService=game:GetService('RunService')
 local UIS=game:GetService('UserInputService')
 local Http=game:GetService('HttpService')
+local SCRAP_TIP=Color3.fromRGB(185,174,126)
+local SCRAP_HIT=Color3.fromRGB(255,232,154)
 local function enabled(profile,kind)
  return profile and profile.run and Shops.abilityUnlocked(profile,kind) or false
 end
@@ -11036,7 +11105,7 @@ function View.start(options)
    part.Material=Enum.Material.CorrodedMetal;part.MaterialVariant='QuarryDrone_Ribbed'
    part.Color=color;part.Transparency=1;part.Size=Vector3.new(.01,width,width);part.Parent=visualRoot;return part
   end
-  local chisel=beam(.05,Color3.fromRGB(185,174,126))
+  local chisel=beam(.05,SCRAP_TIP)
   bots[source]={view=view,pos=position,beam=beam(.16,Color3.fromRGB(99,111,103)),core=chisel,alpha=0,yaw=0,samples={}}
  end
  local function scan()
@@ -11087,7 +11156,14 @@ function View.start(options)
     -- Solid miniature chisels tap on confirmed damage pulses; these bots do
     -- close mechanical work rather than projecting the miner's laser again.
     local serial=source:GetAttribute('Pulse') or 0
-    if serial~=(record.serial or serial) then record.hitAt=now end
+    if serial~=(record.serial or serial) then
+     local hitAt=source:GetAttribute('HitAt');local point=source:GetAttribute('HitPosition')
+     if hitAt and point and now-hitAt<.23 then
+      record.hitAt=now
+      RoleVisuals.ImpactParticles(point,SCRAP_HIT,.36,'Scrap')
+      if options.audio then options.audio:play('scrap_tap',point,{pitch=1+serial%3*.06}) end
+     end
+    end
     record.serial=serial
     local tap=math.max(0,1-(now-(record.hitAt or -100))/.18)
     local height=math.min(1.3,math.max(.1,record.pos.Y-target.Y))
@@ -11096,7 +11172,7 @@ function View.start(options)
     record.beam.Size=Vector3.new(height,.065,.065);record.beam.CFrame=pose
     record.beam.Color=Color3.fromRGB(99,111,103);record.beam.Transparency=1-record.alpha
     record.core.Size=Vector3.new(.16,.22,.22);record.core.CFrame=CFrame.new(base-Vector3.new(0,height-.08,0))*CFrame.Angles(0,0,math.pi/2)
-    record.core.Color=Color3.fromRGB(185,174,126);record.core.Transparency=1-record.alpha
+    record.core.Color=SCRAP_TIP:Lerp(SCRAP_HIT,tap);record.core.Transparency=1-record.alpha
     if active then record.view:PivotTo(CFrame.new(record.pos+Vector3.new(0,-tap*.08,0))*CFrame.Angles(0,record.yaw,0)) end
    end
   end
@@ -11444,6 +11520,15 @@ function V:blocks(point)
  local p,s=self.gui.AbsolutePosition,self.gui.AbsoluteSize
  return point.X>=p.X and point.X<=p.X+s.X and point.Y>=p.Y and point.Y<=p.Y+s.Y
 end
+local toolImpacts={
+ BowlingBall={cue='breaker_contact',pitch=.9,kick=.09,particles='Touchdown',scale=.9},
+ Crowbar={cue='tool_pipe',pitch=1.06,kick=.045,particles='Scrap',scale=.68},
+ Greatsword={cue='tool_slice',pitch=1.08,kick=.065,particles='Halver',scale=.9},
+ Sledgehammer={cue='breaker_contact',pitch=.71,kick=.12,particles='Touchdown',scale=1.3},
+ JellyGrenade={cue='impact',pitch=.65,kick=.14,particles='OrbitalImpact',scale=1.5},
+ MoltenTongs={cue='tool_sizzle',pitch=.96,kick=.04,particles='Starforge',scale=1.1},
+ Shatter={cue='rubble',pitch=.84,kick=.08},
+}
 function V:impact(source)
  local now=workspace:GetServerTimeNow();local at=source:GetAttribute('StartedAt') or 0
  if now-at>.3 then return end
@@ -11463,13 +11548,21 @@ function V:impact(source)
   RoleVisuals.Pulse(position,color,.25,3,.42)
   return
  end
- if kind~='Drop' then
-  local grenade=kind=='JellyGrenade';self.ctx.audio:play(grenade and 'impact' or kind=='BowlingBall' and 'breaker_contact' or kind=='Crowbar' and 'tool_pipe' or kind=='Greatsword' and 'tool_slice' or kind=='MoltenTongs' and 'tool_sizzle' or kind=='Sledgehammer' and 'breaker_contact' or kind=='Shatter' and 'rubble' or 'rock_clack',position,{pitch=grenade and .65 or .8,level=1})
-  self.ctx.presentation:kick(position,grenade and .14 or .075,now)
- end
  local slab=source:GetAttribute('Slab');local size=source:GetAttribute('RockSize')
  local rockFrame=source:GetAttribute('RockFrame')
  local radius=size and math.clamp(math.max(size.X,size.Z)*.5,.8,8) or 1
+ local hit=toolImpacts[kind]
+ if hit then
+  self.ctx.audio:play(hit.cue,position,{pitch=hit.pitch})
+  self.ctx.presentation:kick(position,hit.kick,now)
+  if hit.particles then
+   local normal=kind=='Greatsword' and rockFrame and rockFrame.UpVector or nil
+   RoleVisuals.ImpactParticles(position,color,hit.scale*math.clamp(radius*.45,.65,1.5),hit.particles,normal)
+  end
+ elseif kind~='Drop' then
+  self.ctx.audio:play('rock_clack',position,{pitch=.8})
+  self.ctx.presentation:kick(position,.075,now)
+ end
  local reduced=BeamVFX.reduced()
  if slab and rockFrame then
   local frame=CFrame.new(position)*rockFrame.Rotation
@@ -11480,10 +11573,10 @@ function V:impact(source)
    local left=(frame*CFrame.new(-slab.X*.62,-slab.Y*.5,.02)).Position
    local right=(frame*CFrame.new(slab.X*.62,-slab.Y*.5,.02)).Position
    RoleVisuals.Beam(left,right,Color3.fromRGB(178,232,255),.14*scale,.16,'Lance')
-   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.46)
+   RoleVisuals.Pulse(position,Color3.fromRGB(178,232,255),radius*.9,radius*3.1,.39,frame.UpVector,.8)
   end
  end
- if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47)
+ if kind=='JellyGrenade' then RoleVisuals.Pulse(position,color,radius*.65,24,.47,Vector3.yAxis,1.7)
  elseif kind=='BowlingBall' or kind=='Sledgehammer' then RoleVisuals.Pulse(position,Color3.fromRGB(238,203,154),radius*.8,radius*3.2,.37)
  elseif kind=='MoltenTongs' then RoleVisuals.Pulse(position,color,radius*.6,radius*2.25,.58) end
 end
@@ -13059,7 +13152,12 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   else
    local ended=source:GetAttribute('EndedAt')~=nil
    local active=not ended and now-(source:GetAttribute('ContactAt') or 0)<.3
-   if active then soundscape:setLoop(source,'orbital_hum',source:GetAttribute('Position'),1,1)
+   if active then
+    local position=source:GetAttribute('Position')
+    soundscape:setLoop(source,'orbital_hum',position,1,1)
+    if position and not CrystalImpactView.reducedMotion() and now>=(record.nextKick or 0) then
+     record.nextKick=now+.19;presentation:kick(position,.045,now)
+    end
    else soundscape:stopLoop(source) end
    local visibility=ended and 'fading' or active and 'active' or 'stale'
    if record.visibility~=visibility then
@@ -13085,7 +13183,7 @@ local function roleImpact(source)
  end
  if source:IsA('Folder') and source:GetAttribute('OrbitalBurn') then
   if orbitalBurns[source] then return end
-  local record={effects={}}
+  local record={effects={},nextKick=workspace:GetServerTimeNow()+.19}
   local function track(part)
    if part:IsA('BasePart') or part:IsA('ParticleEmitter') then table.insert(record.effects,part);record.visibility=nil end
   end
@@ -13839,7 +13937,7 @@ connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
  end
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,profile=function() return profile end,hidden=menusVisible})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
@@ -14430,12 +14528,20 @@ local function renderBackpacks()
 end
 
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
- onImpact=function(source,at)
+ onImpact=function(source,at,kind,depleted,now)
   local size=source:GetAttribute('FullSize') or source.Size
   if type(size)=='number' then size=Vector3.one*size end
   local p=source.Position
-  local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
-  RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+  if now-at<.18 and (source:GetAttribute('EffectPausedAt') or 0)<=0 then
+   local point=source:GetAttribute('EffectContactPoint') or p+Vector3.yAxis*size.Y*.34
+   RoleVisuals.setTime(at)
+   RoleVisuals.SpecialistContact(kind,point,source:GetAttribute('EffectContactNormal') or Vector3.yAxis,depleted,soundscape)
+   RoleVisuals.setTime(nil)
+  end
+  if depleted then
+   local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
+   RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+  end
  end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)

@@ -137,6 +137,7 @@ function Effects.Ability(owner,event,template)
    if not node then node=Instance.new('Folder');node.Name=name;node:SetAttribute('ScrapBot',true);node.Parent=group end
    node:SetAttribute('Position',point(bot));node:SetAttribute('Active',bot.active)
    node:SetAttribute('TargetPosition',bot.target and point(bot.target) or point(bot))
+   if bot.hitPosition then node:SetAttribute('HitPosition',point(bot.hitPosition));node:SetAttribute('HitAt',bot.hitAt) end
    node:SetAttribute('Pulse',bot.pulse);node:SetAttribute('PoseAt',now)
   end
  end
