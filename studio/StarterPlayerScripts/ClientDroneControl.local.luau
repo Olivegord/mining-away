@@ -575,8 +575,76 @@ function F.followOffset(slot,count,time,maxStep60,steady)
  return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
 function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
+ if altitude then
+  local radius=32+(slot%3)*3
+  local angle=time*.135+2*math.pi*slot/math.max(1,count)
+  return ownerPosition+Vector3.new(radius*math.cos(angle),altitude,radius*math.sin(angle))
+ end
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
- return ownerPosition+Vector3.new(x,altitude or y,z)
+ return ownerPosition+Vector3.new(x,y,z)
+end
+
+local function nomadCurve(route,q)
+ local u=1-q
+ return route.from*u^3+route.lead*(3*u^2*q)+route.turn*(3*u*q^2)+route.goal*q^3
+end
+local function nomadTangent(route,q)
+ local u=1-q
+ return ((route.lead-route.from)*u^2+(route.turn-route.lead)*(2*u*q)+(route.goal-route.turn)*q^2)*3
+end
+local NOMAD_SEGMENTS=24
+function F.nomadRoute(from,center,velocity,heading,slot,speed,keelOffset)
+ local chord=Vector3.new(center.X-from.X,0,center.Z-from.Z)
+ local distance=chord.Magnitude
+ local forward=distance>1 and chord.Unit or heading
+ local sideways=Vector3.yAxis:Cross(forward)
+ local current=Vector3.new(velocity.X,0,velocity.Z)
+ local drift=current:Dot(sideways)
+ sideways*=math.abs(drift)>.7 and math.sign(drift) or (slot%2==0 and -1 or 1)
+ local bend=math.clamp(32+distance*.24,34,52)
+ local tangent=current.Magnitude>1.2 and current.Unit or (forward*.44+sideways*.9).Unit
+ local rise=center.Y-from.Y
+ local turn=center+sideways*bend-forward*math.min(12,distance*.24)
+ local exit=Vector3.new(center.X-turn.X,0,center.Z-turn.Z).Unit
+ local offset=-exit*keelOffset
+ local route={from=from,lead=from+tangent*bend*.82+Vector3.yAxis*(rise*.14+2),
+  turn=turn+offset+Vector3.yAxis*(-rise*.19+2),goal=center+offset,
+  yaw=math.atan2(-exit.X,-exit.Z),elapsed=0,distances={[0]=0}}
+ local length=0
+ for i=1,NOMAD_SEGMENTS do
+  local a,b=(i-1)/NOMAD_SEGMENTS,i/NOMAD_SEGMENTS
+  local start,finish=nomadTangent(route,a),nomadTangent(route,b)
+  local middle=nomadTangent(route,(a+b)*.5)*2-(start+finish)*.5
+  -- The derivative lies in the convex hull of these three vectors. Each
+  -- segment's distance budget therefore bounds instantaneous speed as well.
+  length+=math.max(start.Magnitude,middle.Magnitude,finish.Magnitude)/NOMAD_SEGMENTS
+  route.distances[i]=length
+ end
+ route.length=length
+ route.duration=math.max(6.5,length*1.5/math.max(.1,speed))
+ route.entry=math.clamp(current.Magnitude*route.duration/length,0,1)
+ return route
+end
+function F.nomadPose(route,elapsed)
+ if elapsed>=route.duration then return route.goal,Vector3.zero end
+ local t=math.clamp(elapsed/route.duration,0,1)
+ local m=route.entry
+ local distance=t*(m+t*((3-2*m)+t*(m-2)))*route.length
+ local speed=(m+t*(2*(3-2*m)+3*t*(m-2)))*route.length/route.duration
+ local first,last=1,NOMAD_SEGMENTS
+ while first<last do
+  local i=math.floor((first+last)/2)
+  if route.distances[i]<distance then first=i+1 else last=i end
+ end
+ local start=route.distances[first-1]
+ local length=route.distances[first]-start
+ local q=(first-1+(distance-start)/length)/NOMAD_SEGMENTS
+ return nomadCurve(route,q),nomadTangent(route,q)*(speed/(length*NOMAD_SEGMENTS))
+end
+function F.nomadYaw(yaw,target,dt)
+ local delta=(target-yaw+math.pi)%(2*math.pi)-math.pi
+ local limit=math.rad(9)*math.max(0,dt)
+ return yaw+math.clamp(delta,-limit,limit)
 end
 local function swarmHash(id)
  local value=0
@@ -1309,6 +1377,8 @@ local CUES = {
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
  prism_fire={id='9118612324',volume=.65,duration=1.05,pitch=.72,attack=.012,cooldown=.14,range=110,maxVoices=2,reserved=true,fallback='action_jump_land.mp3'},
  prism_blast={id='9125871199',volume=.73,duration=1.1,pitch=.57,attack=.009,cooldown=.055,range=110,maxVoices=4,reserved=true,fallback='impact_explosion_03.mp3'},
+ nomad_impact={id='nomad-impact',localSound='rbxasset://sounds/impact_explosion_03.mp3',volume=.94,duration=2.15,pitch=.76,attack=.006,cooldown=.11,nearDistance=28,range=145,maxVoices=2,reserved=true},
+ nomad_shatter={id='9125871199',volume=.92,duration=1.45,pitch=.49,attack=.008,cooldown=.11,nearDistance=28,range=140,maxVoices=2,reserved=true,fallback='impact_explosion_03.mp3'},
  prism_sustain={id='9118614717',loopFallback='139131445232833',volume=.43,pitch=.72,range=118,nearDistance=23,priority=7,reserved=true,softLaser=true},
  prism_charge={id='9119816710',volume=.33,duration=2.1,pitch=.83,cooldown=.1,range=80,priority=4,fallback='volume_slider.ogg'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
@@ -3177,7 +3247,7 @@ local Catalog = {
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
   Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.08,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
-  Nomad = {Name='Nomad',Duration=3,CycleDuration=9.20,Impact=5/9.20,Power=4,Chunk=1,Yield=1,Projectile='Nomad',Windup=4.05,Flight=.95,StationHeight=38,BlastRadius=13,BlastTargets=5,Color={101,194,255},Description='Sweeps the field from high above and drops a tiny rocket that shatters up to five nearby crystals.'},
+  Nomad = {Name='Nomad',Duration=3,CycleDuration=9.20,Impact=5/9.20,Power=4,Chunk=1,Yield=1,Projectile='Nomad',Windup=4.05,Flight=.95,StationHeight=38,BlastPause=.50,BlastRadius=13,BlastTargets=5,Color={101,194,255},Description='Banks high over the field, then calls down a blast that shatters up to five nearby crystals.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5768,11 +5838,10 @@ local CYAN=Color3.fromRGB(113,220,255)
 local ICE=Color3.fromRGB(220,248,255)
 local AMBER=Color3.fromRGB(255,142,68)
 local GOLD=Color3.fromRGB(255,218,146)
-local CLAY=Color3.fromRGB(111,69,72)
 local VERTICAL=Vector3.yAxis
-local CLOUD_TIME=2.05
+local BLAST_TAIL=4.8
 local live={}
-local leases={NomadTracker=4,NomadRocket=10,NomadMushroom=8}
+local leases={NomadTracker=4,NomadCruiseTracker=4,NomadRocket=10,NomadBlast=4}
 
 local function smooth(t)
  t=math.clamp(t,0,1)
@@ -5862,8 +5931,8 @@ local function paintRail(line,a,b,width,opacity)
  line.core.Transparency=1-opacity;line.halo.Transparency=1-opacity*.27
 end
 
-local function newScanner(parent,projectors)
- local folder=group(parent,'NomadTracker')
+local function newScanner(parent,projectors,cruise)
+ local folder=group(parent,cruise and 'NomadCruiseTracker' or 'NomadTracker')
  if not folder then return nil end
  local root=part(folder,'TrackerAnchor',BLUE,Vector3.one*.05)
  local scan={folder=folder,projectors=projectors,panes={},mounts={},seams={rail(folder,'Join'),rail(folder,'Join')}}
@@ -5983,6 +6052,43 @@ local function drawScanner(scan,stage,pins,ground,now,target,reduced,lowFlash)
  scan.lastStage=stage
 end
 
+function N.clearCruise(drone)
+ if not drone.nomadCruise then return end
+ drone.nomadCruise.folder:Destroy();drone.nomadCruise=nil
+end
+
+function N.cruise(drone,now,world)
+ local camera=workspace.CurrentCamera
+ local state=drone.source:GetAttribute('State')
+ local shot=drone.shotReceipt
+ local contact=shot and shot.Parent and shot:GetAttribute('ContactAt')
+ local active=shot and shot.Parent and shot:GetAttribute('Shape')=='Nomad' and (not contact or now<contact+.50)
+ local position=drone.view:GetPivot().Position
+ if not camera or active or state=='Destroyed' or state=='Reprinting' or state=='Docked' or state=='Charging'
+  or not BeamVFX.near(position,205) then N.clearCruise(drone);return end
+ local scan=drone.nomadCruise
+ if not scan then
+  scan=newScanner(camera,drone.nomadProjectors,true)
+  if not scan then return end
+  drone.nomadCruise=scan
+  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.RespectCanCollide=true
+  query.FilterDescendantsInstances={workspace.Terrain,world:FindFirstChild('Map')}
+  scan.groundQuery=query
+ end
+ if now>=(scan.nextGround or 0) then
+  scan.nextGround=now+.09
+  local hit=workspace:Raycast(position,-VERTICAL*110,scan.groundQuery)
+  scan.ground=hit and hit.Position.Y or position.Y-(drone.source:GetAttribute('FlightHeight') or 45)
+ end
+ local slot=drone.source:GetAttribute('FormationSlot') or 1
+ local q=((now+slot*.39)/6.30)%.773
+ local stage,pins=scanStage(q)
+ local player=game:GetService('Players').LocalPlayer
+ local reduced=BeamVFX.reduced()
+ drawScanner(scan,stage,pins,math.min(scan.ground,position.Y-3.5),now,nil,reduced,
+  reduced or (player and player:GetAttribute('ReducedFlashing')==true))
+end
+
 local function newRocket(parent,reduced)
  local root=group(parent,'NomadRocket')
  if not root then return nil end
@@ -6029,61 +6135,116 @@ local function stopRocket(rocket,now)
  if rocket.trail then rocket.trail.Enabled=false end
 end
 
-local function newCloud(parent,ground,reduced)
- local root=group(parent,'NomadMushroom')
- if not root then return nil end
- local cap,stem={},{}
- for i=1,reduced and 5 or 8 do
-  cap[i]=part(root,'CloudCap',AMBER,Vector3.one*.1,Enum.PartType.Ball)
-  cap[i].Material=Enum.Material.SmoothPlastic
- end
- for i=1,3 do
-  stem[i]=part(root,'CloudStem',AMBER,Vector3.one*.1,Enum.PartType.Ball)
-  stem[i].Material=Enum.Material.SmoothPlastic
- end
- local heart=part(root,'BlastHeart',GOLD,Vector3.one*.1,Enum.PartType.Ball)
- heart.Position=ground+VERTICAL*.42
- local light=Instance.new('PointLight');light.Color=AMBER;light.Range=13;light.Brightness=0;light.Parent=heart
- return {root=root,cap=cap,stem=stem,heart=heart,light=light}
+local SMOKE='rbxasset://textures/particles/smoke_main.dds'
+local SOOT=Color3.fromRGB(49,44,48)
+local COPPER=Color3.fromRGB(191,80,41)
+local ASH=Color3.fromRGB(109,92,86)
+local HEAT=Color3.fromRGB(255,248,217)
+local function cooling(mid,last)
+ return ColorSequence.new({ColorSequenceKeypoint.new(0,HEAT),ColorSequenceKeypoint.new(.10,GOLD),
+  ColorSequenceKeypoint.new(.36,mid),ColorSequenceKeypoint.new(1,last)})
+end
+local function smokeTone(first,middle)
+ return ColorSequence.new({ColorSequenceKeypoint.new(0,first),ColorSequenceKeypoint.new(.18,middle),
+  ColorSequenceKeypoint.new(.61,ASH),ColorSequenceKeypoint.new(1,SOOT)})
+end
+local function billowOpacity(mid,falloff)
+ return NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.13,mid),
+  NumberSequenceKeypoint.new(.62,falloff),NumberSequenceKeypoint.new(1,1)})
+end
+local STEM={sizes={2.8,8.8,10.4},life=NumberRange.new(1.42,2.45),speed=NumberRange.new(19,28),
+ drag=1.33,rise=3.6,spread=Vector2.new(13,15),color=cooling(COPPER,SOOT),alpha=billowOpacity(.27,.48),emission=.19}
+local CAP={sizes={4.5,12.9,15.5},life=NumberRange.new(1.82,3.25),speed=NumberRange.new(12,21),
+ drag=2.2,rise=2.6,spread=Vector2.new(21,16),color=smokeTone(Color3.fromRGB(204,117,66),Color3.fromRGB(132,76,53)),
+ alpha=billowOpacity(.32,.52),emission=.035}
+local SKIRT={sizes={1.8,5.8,8.9},life=NumberRange.new(.84,1.78),speed=NumberRange.new(27,37),
+ drag=2.25,rise=1.1,spread=Vector2.new(19,9),color=smokeTone(Color3.fromRGB(168,133,103),ASH),
+ alpha=billowOpacity(.44,.63),emission=.03}
+local FLASH={sizes={2.2,12.1,14.3},life=NumberRange.new(.27,.51),speed=NumberRange.new(10,17),
+ drag=1.9,rise=1.7,spread=Vector2.new(66,66),color=cooling(AMBER,COPPER),alpha=billowOpacity(.10,.55),emission=.92}
+
+local function plumeEmitter(root,name,offset,direction,spec,scale)
+ local anchor=Instance.new('Attachment')
+ anchor.CFrame=direction and CFrame.lookAt(offset,offset+direction) or CFrame.new(offset)
+ anchor.Parent=root
+ local emitter=Instance.new('ParticleEmitter');emitter.Name=name;emitter.Texture=SMOKE
+ emitter.Enabled=false;emitter.Rate=0;emitter.LockedToPart=false
+ emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+ emitter.EmissionDirection=direction and Enum.NormalId.Front or Enum.NormalId.Top
+ emitter.Lifetime=spec.life;emitter.Speed=spec.speed
+ emitter.Drag=spec.drag;emitter.Acceleration=VERTICAL*spec.rise
+ emitter.SpreadAngle=spec.spread
+ emitter.Rotation=NumberRange.new(0,360);emitter.RotSpeed=NumberRange.new(-39,39)
+ emitter.Color=spec.color;emitter.Transparency=spec.alpha
+ local sizes=spec.sizes
+ emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,sizes[1]*scale),
+  NumberSequenceKeypoint.new(.27,sizes[2]*scale,sizes[2]*scale*.21),NumberSequenceKeypoint.new(1,sizes[3]*scale)})
+ emitter.LightEmission=spec.emission;emitter.LightInfluence=.18
+ emitter.Parent=anchor
+ return emitter
 end
 
-local function drawCloud(cloud,ground,age,reduced,lowFlash)
- local bloom=1-math.exp(-age*8.2)
- local rise=smooth(age/.70)
- local cool=smooth((age-.13)/.86)
- local fade=smooth((age-.66)/(CLOUD_TIME-.66))
- local capHeight=.66+2.36*rise+.7*smooth((age-.65)/1.4)
- local stemHeight=.45+2.42*rise
- local core=math.max(0,1-age/.25)^2
- cloud.light.Brightness=not lowFlash and not reduced and 2.35*core or 0
- cloud.heart.Transparency=1-core*(lowFlash and .28 or .76)
- cloud.heart.Size=Vector3.new(2.7,1.65,2.7)*(.13+.87*bloom)
- for i,puff in ipairs(cloud.stem) do
-  local step=i/3
-  puff.Position=ground+Vector3.new((step-.5)*.28,.18+stemHeight*step,0)
-  puff.Size=Vector3.new(1.32-step*.42,.76+step*.49,1.32-step*.42)*(.2+bloom)
-  puff.Color=GOLD:Lerp(CLAY,cool*.91)
-  puff.Transparency=.24+fade*.76
+local function newBlast(parent,ground,radius,reduced,lowFlash,at)
+ local folder=group(parent,'NomadBlast')
+ if not folder then return nil end
+ local root=part(folder,'PlumeOrigin',HEAT,Vector3.one*.05)
+ root.Position=ground+VERTICAL*.24
+ local scale=radius/13
+ local blast={root=folder,skirt={},cap={},capAt=at+.25,untilAt=at+BLAST_TAIL,reduced=reduced}
+ blast.stem=plumeEmitter(root,'RisingFireAndSmoke',VERTICAL*.58,nil,STEM,scale)
+ if not lowFlash then
+  blast.fire=plumeEmitter(root,'ImpactFireball',VERTICAL*.80,nil,FLASH,scale)
+  local light=Instance.new('PointLight');light.Name='ImpactLight';light.Color=HEAT
+  light.Range=math.min(48,radius*3.3);light.Brightness=0;light.Parent=root;blast.light=light
  end
- for i,puff in ipairs(cloud.cap) do
-  local angle=i*math.pi*2/(#cloud.cap-1)
-  local radius=i==1 and 0 or (.42+1.06*bloom)*(.95+.14*math.sin(i*2.3))
-  puff.Position=ground+Vector3.new(radius*math.cos(angle),capHeight+(i==1 and .40 or .21*math.sin(i*1.9)),radius*math.sin(angle))
-  puff.Size=Vector3.new(1.92,1.44,1.84)*(.19+bloom)*(.88+(i%3)*.09)*(1+fade*.14)
-  puff.Color=(i%3==0 and GOLD or AMBER):Lerp(CLAY,cool*.88)
-  puff.Transparency=.13+fade*.87
+ local count=reduced and 4 or 8
+ for i=1,count do
+  local a=(i-1)*math.pi*2/count
+  local radial=Vector3.new(math.cos(a),0,math.sin(a))
+  local direction=(radial+VERTICAL*.22).Unit
+  blast.skirt[i]=plumeEmitter(root,'GroundDust',radial*.94+VERTICAL*.24,direction,SKIRT,scale)
+  blast.cap[i]=plumeEmitter(root,'RollingSmokeCap',radial*(1.7*scale)+VERTICAL*((10.8+(i%3)*.97)*scale),direction,CAP,scale)
+ end
+ if not reduced then
+  local sparks=Instance.new('ParticleEmitter');sparks.Name='HotMineralSparks';sparks.Rate=0;sparks.Enabled=false
+  EnergyDisc.configure(sparks,.54,.16,.8,.22)
+  sparks.Color=ColorSequence.new(GOLD,AMBER)
+  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(69,69)
+  sparks.Lifetime=NumberRange.new(.44,1.15);sparks.Speed=NumberRange.new(19,34)
+  sparks.Drag=2.1;sparks.Acceleration=-VERTICAL*28;sparks.Parent=root;blast.sparks=sparks
+ end
+ return blast
+end
+
+local function startBlast(blast)
+ if blast.fire then blast.fire:Emit(14) end
+ blast.stem:Emit(blast.reduced and 9 or 18)
+ for _,emitter in ipairs(blast.skirt) do emitter:Emit(blast.reduced and 3 or 5) end
+ if blast.sparks then blast.sparks:Emit(18) end
+end
+
+local function stepBlast(blast,at,now)
+ if blast.light then
+  local glow=math.max(0,1-(now-at)/.24)^2
+  blast.light.Brightness=glow*9
+  blast.light.Enabled=glow>.01
+ end
+ if not blast.rolled and now>=blast.capAt then
+  blast.rolled=true
+  for _,emitter in ipairs(blast.cap) do emitter:Emit(blast.reduced and 3 or 5) end
+  blast.stem:Emit(blast.reduced and 4 or 8)
  end
 end
 
 function N.clear(r)
- if not (r.scan or r.rocket or r.cloud) then return end
- for _,key in ipairs({'scan','rocket','cloud'}) do
+ if not (r.scan or r.rocket or r.blast) then return end
+ for _,key in ipairs({'scan','rocket','blast'}) do
   local value=r[key]
   if value then (value.folder or value.root):Destroy();r[key]=nil end
  end
 end
 
-function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpact)
+function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpact,onFlash)
  local camera=workspace.CurrentCamera
  local ground=node:GetAttribute('ScanGround') or to.Y-1
  local contactAt=node:GetAttribute('ContactAt')
@@ -6100,6 +6261,7 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
   local q=age/windup
   local stage,pins=scanStage(q)
   if projectors and projectors.Parent then
+   N.clearCruise(drone)
    if r.scan and r.scan.projectors~=projectors then r.scan.folder:Destroy();r.scan=nil end
    r.scan=r.scan or newScanner(camera,projectors)
    if r.scan then
@@ -6135,21 +6297,42 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
  local ageSince=now-contactAt
  local floor=node:GetAttribute('BlastGround')
  if typeof(floor)~='Vector3' then return end
+ local radius=node:GetAttribute('BlastRadius') or 13
  if not r.impacted then
   r.impacted=true
   if ageSince<.20 and near then
-   local radius=node:GetAttribute('BlastRadius') or 13
    RoleVisuals.setTime(contactAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.085,AMBER,.7,radius*2,.48)
-   if not reduced then RoleVisuals.ImpactParticles(floor+VERTICAL*.37,AMBER,1.25,'NomadBlast') end
-   if audio then audio:play('prism_blast',floor,{level=.88,pitch=.94}) end
-   if onImpact and not steady then onImpact(floor,1.6,contactAt) end
+   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,radius*2.64,.67)
+   if audio then audio:play('nomad_impact',floor) end
+   if onFlash and not lowFlash then onFlash(floor,contactAt) end
+   if onImpact and not steady then onImpact(floor,2.7,contactAt) end
   end
  end
- if ageSince<CLOUD_TIME and near then
-  r.cloud=r.cloud or newCloud(camera,floor,reduced)
-  if r.cloud then drawCloud(r.cloud,floor,ageSince,reduced,lowFlash) end
- elseif r.cloud then r.cloud.root:Destroy();r.cloud=nil end
+ if not r.blast and not r.plumeStarted and ageSince<.85 and near then
+  r.blast=newBlast(camera,floor,radius,reduced,lowFlash,contactAt)
+  if r.blast then
+   r.plumeStarted=true
+   if ageSince<.22 then startBlast(r.blast) end
+  end
+ end
+ if r.blast then
+  if now<r.blast.untilAt then stepBlast(r.blast,contactAt,now)
+  else r.blast.root:Destroy();r.blast=nil end
+ end
+ local shatterAt=node:GetAttribute('ShatterAt')
+ if shatterAt and now>=shatterAt and not r.shattered then
+  r.shattered=true
+  if now-shatterAt<.24 and near then
+   RoleVisuals.setTime(shatterAt)
+   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,radius*.46,radius*3.06,.82)
+   if r.blast then
+    for _,emitter in ipairs(r.blast.skirt) do emitter:Emit(reduced and 2 or 3) end
+    if r.blast.sparks then r.blast.sparks:Emit(20) end
+   end
+   if audio then audio:play('nomad_shatter',floor) end
+   if onImpact and not steady then onImpact(floor,4.0,shatterAt) end
+  end
+ end
 end
 
 function N.detach(r,now)
@@ -6157,6 +6340,10 @@ function N.detach(r,now)
  if r.rocket then
   stopRocket(r.rocket,now)
   if now-r.rocket.tailAt<.25 then return false end
+ end
+ if r.blast and now<r.blast.untilAt then
+  if r.blast.light then r.blast.light.Enabled=false end
+  return false
  end
  N.clear(r)
  return true
@@ -6459,31 +6646,35 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(.62+6.2*expansion),pressure*.70,scale*(.025+.045*pressure))
 end
 
-local function releaseLighting(self,at,weight)
+local function releaseLighting(self,at,weight,nomad)
  local flash=self.prismFlash
  if flash and math.abs(at-flash.at)<.22 then
   flash.weight=math.max(weight,flash.weight)
+  if nomad then flash.at=at;flash.nomad=true end
   return
  end
  if not flash then
-  local correction=Instance.new('ColorCorrectionEffect');correction.Name='RamielReleaseExposure';correction.Enabled=false;correction.Parent=Lighting
-  local bloom=Instance.new('BloomEffect');bloom.Name='RamielReleaseBloom';bloom.Enabled=false;bloom.Parent=Lighting
+  local correction=Instance.new('ColorCorrectionEffect');correction.Name=nomad and 'NomadImpactExposure' or 'RamielReleaseExposure';correction.Enabled=false;correction.Parent=Lighting
+  local bloom=Instance.new('BloomEffect');bloom.Name=nomad and 'NomadImpactBloom' or 'RamielReleaseBloom';bloom.Enabled=false;bloom.Parent=Lighting
   flash={correction=correction,bloom=bloom};self.prismFlash=flash
  end
- flash.at=at;flash.weight=weight
+ flash.at=at;flash.weight=weight;flash.nomad=nomad
 end
 
 local function stepReleaseLighting(self,now)
  local flash=self.prismFlash
  if not flash then return end
  local age=now-flash.at
- if age>=.44 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
+ local player=Players.LocalPlayer
+ if age>=.44 or BeamVFX.reduced() or player and player:GetAttribute('ReducedFlashing')==true then
   flash.correction:Destroy();flash.bloom:Destroy();self.prismFlash=nil
   return
  end
- local strength=(1-.82*smooth((age-.025)/.14))*(1-smooth((age-.12)/.32))*flash.weight
- flash.correction.Brightness=.94*strength
- flash.correction.Contrast=-.19*strength
+ local strength
+ if flash.nomad then strength=(1-.76*smooth((age-.039)/.16))*(1-smooth((age-.14)/.29))*flash.weight
+ else strength=(1-.82*smooth((age-.025)/.14))*(1-smooth((age-.12)/.32))*flash.weight end
+ flash.correction.Brightness=(flash.nomad and 1 or .94)*strength
+ flash.correction.Contrast=flash.nomad and -.24*strength*(1-strength) or -.19*strength
  flash.correction.Saturation=-.94*strength
  flash.bloom.Threshold=.69-.45*strength
  flash.bloom.Intensity=3.1*strength;flash.bloom.Size=54
@@ -6593,6 +6784,15 @@ end
 
 function View.new(audio,onPrism,onNomadImpact)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
+ local function nomadFlash(position,at)
+  local camera=workspace.CurrentCamera
+  if not camera then return end
+  local player=Players.LocalPlayer
+  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+  local cameraDistance=(camera.CFrame.Position-position).Magnitude
+  local distance=root and math.max((root.Position-position).Magnitude,cameraDistance*.65) or cameraDistance
+  if distance<115 then releaseLighting(self,at,1-smooth((distance-25)/90),true) end
+ end
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -6641,7 +6841,7 @@ function View.new(audio,onPrism,onNomadImpact)
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
-     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact)
+     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact,nomadFlash)
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
@@ -6935,7 +7135,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio,onSplit)
- local self={pieces={},tints={},prismTargets={},parent=parent,audio=audio}
+ local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
  end
@@ -6998,8 +7198,8 @@ function V.new(parent,audio,onSplit)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
-  local clusterSize=prism and (s:GetAttribute('PrismClusterSize') or 1) or 1
+  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*((prism or nomad) and 1.30 or 1)
+  local clusterSize=(prism or nomad) and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -7012,7 +7212,7 @@ function V.new(parent,audio,onSplit)
    audio:play('crystal_release_tink',point,{level=volume})
   end
   if not nomad and (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
-  if clusterSize<=5 then
+  if clusterSize<=5 and not nomad then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
     local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
@@ -7025,17 +7225,19 @@ function V.new(parent,audio,onSplit)
    end
   end
   if not reduced then
-   if RoleVisuals and not nomad then
+   if RoleVisuals and nomad then
+    RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(HOT,.46),strength*.78,'NomadCrystal')
+   elseif RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
     if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
-   for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
+   for i=1,nomad and 2 or prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chipColor=nomad and CHAR:Lerp(r.baseColor,.43) or prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(.11+.052*(i%4))
     chip.Size=Vector3.new(size*.55,size*2.1,size)
@@ -7046,7 +7248,7 @@ function V.new(parent,audio,onSplit)
      .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
-   if #self.pieces<48 and clusterSize<=5 then
+   if #self.pieces<48 and clusterSize<=5 and not nomad then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))
     spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
     spark.Size=Vector3.one*.10;spark.Position=point
@@ -7089,14 +7291,14 @@ function V.new(parent,audio,onSplit)
     if not r.flashAt and afterglow<=0 and not r.finalLoad then self:forget(r) end
    end
   end
-  for r,blackAt in pairs(self.prismTargets) do
-   if not r.view.Parent or r.view.Transparency>=1 then self.prismTargets[r]=nil
+  for r,blackAt in pairs(self.clusterTargets) do
+   if not r.view.Parent or r.view.Transparency>=1 then self.clusterTargets[r]=nil
    elseif now>=blackAt then r.view.Color=CHAR end
   end
  end
  function self:react(r,now)
   local s,v=r.source,r.view
-  self.prismTargets[r]=s:GetAttribute('PrismBlackAt')
+  self.clusterTargets[r]=s:GetAttribute('ClusterBlackAt')
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
   local projectile=s:GetAttribute('CutProjectile')
@@ -7175,7 +7377,7 @@ function V.new(parent,audio,onSplit)
   end
  end
  function self:destroy()
-  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints);table.clear(self.prismTargets)
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints);table.clear(self.clusterTargets)
  end
  return self
 end
@@ -8214,20 +8416,23 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
-function P:crystalKick(position,strength,now,prism)
+function P:crystalKick(position,strength,now,prism,nomad)
  local camera=workspace.CurrentCamera
  local age=now-(self.crystalShakeAt or -math.huge)
- if not camera or age<.24 and (not prism or age>0) then return end
+ local major=prism or nomad
+ if not camera or age<.24 and (not major or age>0) then return end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
- if not prism then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
- local amount=prism and math.clamp((82-distance)/64,0,1)*2.65
+ if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
+ local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
+  or prism and math.clamp((82-distance)/64,0,1)*2.65
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
- if prism and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
+ if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
- self.crystalShakePrism=prism
+ self.crystalShakePrism=major
+ self.crystalShakeDuration=nomad and .62 or major and .46 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 function P:prismPressure(from,to,at,duration)
@@ -8263,7 +8468,7 @@ function P:cameraOffset(now)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
- local impactDuration=self.crystalShakePrism and .46 or .22
+ local impactDuration=self.crystalShakeDuration or .22
  if impactAge<0 or impactAge>=impactDuration then return ordinary end
  local t=impactAge/impactDuration
  if self.crystalShakePrism then
@@ -12598,7 +12803,7 @@ local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reduc
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end,function(position,strength,at)
- presentation:crystalKick(position,strength,at,false)
+ presentation:crystalKick(position,strength,at,false,true)
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
  presentation:crystalKick(position,strength,now,prism)
@@ -13574,6 +13779,7 @@ local function destroyDrone(d)
  if d.healMuzzle then d.healMuzzle:Destroy() end
  if d.healTarget then d.healTarget:Destroy() end
  presentation:destroyDrone(d)
+ NomadView.clearCruise(d)
  presentation:destroyMiningBeam(d.beam);d.view:Destroy()
 end
 connect(world.DescendantRemoving,function(source)
@@ -13609,10 +13815,10 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- if (r.cutFeedback or s:GetAttribute('PrismBlackAt')) and not r.visual.broken then
+ if (r.cutFeedback or s:GetAttribute('ClusterBlackAt')) and not r.visual.broken then
   if broken then
    local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
-   if breakAt<=0 and s:GetAttribute('PrismBlackAt') then r.dirty=true;return end
+   if breakAt<=0 and s:GetAttribute('ClusterBlackAt') then r.dirty=true;return end
    if breakAt>0 and CrystalImpactView.releaseAt(s,breakAt)>now then r.dirty=true;return end
   elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
    local contact=s:GetAttribute('CutContactAt') or 0
@@ -13713,6 +13919,7 @@ local function renderDrone(d,dt,now)
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local nomadApproach=isNomad and s:GetAttribute('NomadApproach')==true and state=='Travel'
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -13734,6 +13941,11 @@ local function renderDrone(d,dt,now)
    -- The impact plane is a hard stop, followed by the server-owned weight hold.
    d.pos=impact;d.velocity=Vector3.zero
   end
+ elseif not motionPaused and nomadApproach then
+  local velocity=s:GetAttribute('Velocity') or Vector3.zero
+  local ahead=s:GetAttribute('WorkPaused') and 0 or math.clamp(now-(s:GetAttribute('SnapshotAt') or now),0,.12)
+  local blend=1-math.exp(-math.min(dt,.1)*14)
+  d.pos=d.pos:Lerp(logical+velocity*ahead,blend);d.velocity=d.velocity:Lerp(velocity,blend)
  elseif not motionPaused then
   local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -13748,13 +13960,17 @@ local function renderDrone(d,dt,now)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+  if nomadApproach or isNomad and state=='Travel' and (s:GetAttribute('TargetId') or '')~='' then targetYaw=s:GetAttribute('Yaw') or d.yaw
+  elseif d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
   end
-  local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
-  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  if isNomad then d.yaw=Feel.nomadYaw(d.yaw,targetYaw,math.min(dt,.1))
+  else
+   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
+   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  end
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
@@ -13831,6 +14047,7 @@ local function renderDrone(d,dt,now)
   end
  end
  d.view:PivotTo(visiblePose)
+ if d.nomadProjectors then NomadView.cruise(d,now,world) end
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)

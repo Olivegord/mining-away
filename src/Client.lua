@@ -21,7 +21,7 @@ local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reduc
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end,function(position,strength,at)
- presentation:crystalKick(position,strength,at,false)
+ presentation:crystalKick(position,strength,at,false,true)
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
  presentation:crystalKick(position,strength,now,prism)
@@ -997,6 +997,7 @@ local function destroyDrone(d)
  if d.healMuzzle then d.healMuzzle:Destroy() end
  if d.healTarget then d.healTarget:Destroy() end
  presentation:destroyDrone(d)
+ NomadView.clearCruise(d)
  presentation:destroyMiningBeam(d.beam);d.view:Destroy()
 end
 connect(world.DescendantRemoving,function(source)
@@ -1032,10 +1033,10 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- if (r.cutFeedback or s:GetAttribute('PrismBlackAt')) and not r.visual.broken then
+ if (r.cutFeedback or s:GetAttribute('ClusterBlackAt')) and not r.visual.broken then
   if broken then
    local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
-   if breakAt<=0 and s:GetAttribute('PrismBlackAt') then r.dirty=true;return end
+   if breakAt<=0 and s:GetAttribute('ClusterBlackAt') then r.dirty=true;return end
    if breakAt>0 and CrystalImpactView.releaseAt(s,breakAt)>now then r.dirty=true;return end
   elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
    local contact=s:GetAttribute('CutContactAt') or 0
@@ -1136,6 +1137,7 @@ local function renderDrone(d,dt,now)
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local nomadApproach=isNomad and s:GetAttribute('NomadApproach')==true and state=='Travel'
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -1157,6 +1159,11 @@ local function renderDrone(d,dt,now)
    -- The impact plane is a hard stop, followed by the server-owned weight hold.
    d.pos=impact;d.velocity=Vector3.zero
   end
+ elseif not motionPaused and nomadApproach then
+  local velocity=s:GetAttribute('Velocity') or Vector3.zero
+  local ahead=s:GetAttribute('WorkPaused') and 0 or math.clamp(now-(s:GetAttribute('SnapshotAt') or now),0,.12)
+  local blend=1-math.exp(-math.min(dt,.1)*14)
+  d.pos=d.pos:Lerp(logical+velocity*ahead,blend);d.velocity=d.velocity:Lerp(velocity,blend)
  elseif not motionPaused then
   local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -1171,13 +1178,17 @@ local function renderDrone(d,dt,now)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+  if nomadApproach or isNomad and state=='Travel' and (s:GetAttribute('TargetId') or '')~='' then targetYaw=s:GetAttribute('Yaw') or d.yaw
+  elseif d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
    local aim=s:GetAttribute('TargetPosition')
    if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
    elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
   end
-  local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
-  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  if isNomad then d.yaw=Feel.nomadYaw(d.yaw,targetYaw,math.min(dt,.1))
+  else
+   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
+   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  end
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
@@ -1254,6 +1265,7 @@ local function renderDrone(d,dt,now)
   end
  end
  d.view:PivotTo(visiblePose)
+ if d.nomadProjectors then NomadView.cruise(d,now,world) end
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)

@@ -20,17 +20,21 @@ local function checkNomadView()
  local keelA,keelB=slit('KeelLeft',-1.25,-1,1)
  local _,keelRight=slit('KeelRight',.25,-1,1)
  local muzzle=Instance.new('Attachment');muzzle.WorldPosition=Vector3.new(2.65,37.15,.17);muzzle.Parent=hull
- local drone={nomadProjectors=ports,shotMuzzle=muzzle}
+ local drone={nomadProjectors=ports,shotMuzzle=muzzle,view=hull,source=hull}
  local node=Instance.new('Folder');node:SetAttribute('ScanGround',0)
  local record={}
  local windup=4.05
- local launches,cutAudio=0,0
- local audio={setLoop=function() end,play=function() launches+=1 end,
+ local launches,cutAudio,flashes=0,0,0
+ local impactBeats,played={},{}
+ local audio={setLoop=function() end,play=function(_,cue)
+  if cue=='coil_fire' then launches+=1 else played[#played+1]=cue end
+ end,
   stopLoop=function(_,_,immediate) if immediate then cutAudio+=1 end end}
  local target=Vector3.new(0,2,0)
  local function at(q)
   local age=q*windup
-  NomadView.step(record,node,age,muzzle.WorldPosition,target,age,windup,(age-windup)/.95,drone,nil,audio)
+  NomadView.step(record,node,age,muzzle.WorldPosition,target,age,windup,(age-windup)/.95,drone,nil,audio,
+   function(_,strength) impactBeats[#impactBeats+1]=strength end,function() flashes+=1 end)
  end
  local function filaments(scan)
   local count=0
@@ -43,7 +47,12 @@ local function checkNomadView()
   local top,bottom=line.b.WorldCFrame.Position,line.a.WorldCFrame.Position
   assert((top-port.WorldPosition).Magnitude<1e-5 and top.X==bottom.X and top.Z==bottom.Z)
  end
+ for i=1,240 do
+  NomadView.cruise(drone,i/60,workspace)
+  assert(filaments(drone.nomadCruise)>0,'the cruise pattern blacked out')
+ end
  at(.10)
+ assert(not drone.nomadCruise)
  local scan=record.scan
  local first=scan.panes[1]
  assert(first.sheet.main.Enabled and first.sheet.main.Width0==4 and first.sheet.main.Width1==4)
@@ -65,7 +74,24 @@ local function checkNomadView()
  at(.946);assert(filaments(scan)==0 and scan.glint.Position==muzzle.WorldPosition and scan.glint.Transparency<1 and not record.rocket)
  at(1)
  assert(not record.scan and record.rocket and launches==1 and (record.launchFrom-muzzle.WorldPosition).Magnitude<1e-5)
+ node:SetAttribute('ContactAt',5);node:SetAttribute('BlastGround',Vector3.zero);node:SetAttribute('BlastRadius',13)
+ at(5.02/windup)
+ local blast=assert(record.blast)
+ assert(flashes==1 and #impactBeats==1 and played[1]=='nomad_impact' and RoleVisuals.pulses==1)
+ assert(blast.stem.Emitted==18 and not blast.cap[1].Emitted and blast.fire.Emitted==14)
+ at(5.28/windup)
+ assert(blast.cap[1].Emitted==5 and blast.stem.Emitted==26 and not record.rocket)
+ assert(blast.cap[1].Size[2].Value>12 and blast.cap[1].Lifetime.Max>3)
+ assert(blast.root:GetChildren()[1].Transparency==1,'the plume used visible geometry')
+ at(5.49/windup)
+ assert(#impactBeats==1 and not record.shattered)
+ node:SetAttribute('ShatterAt',5.50)
+ at(5.51/windup)
+ assert(impactBeats[2]>impactBeats[1] and RoleVisuals.pulses==2 and played[2]=='nomad_shatter')
+ at(5.52/windup)
+ assert(#impactBeats==2 and flashes==1 and not NomadView.detach(record,7))
+ assert(NomadView.detach(record,10) and not blast.root.Parent)
  NomadView.clear(record)
- print('PASS Nomad fixed slit banks, straight projections, keel sheets, twin pins, blackout, and wing release')
+ print('PASS Nomad continuous cruise scan, launch cutoff, particle plume, one white flash and confirmed shatter beat')
 end
 checkNomadView()

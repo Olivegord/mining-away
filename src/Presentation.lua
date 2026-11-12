@@ -1029,20 +1029,23 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
-function P:crystalKick(position,strength,now,prism)
+function P:crystalKick(position,strength,now,prism,nomad)
  local camera=workspace.CurrentCamera
  local age=now-(self.crystalShakeAt or -math.huge)
- if not camera or age<.24 and (not prism or age>0) then return end
+ local major=prism or nomad
+ if not camera or age<.24 and (not major or age>0) then return end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
- if not prism then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
- local amount=prism and math.clamp((82-distance)/64,0,1)*2.65
+ if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
+ local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
+  or prism and math.clamp((82-distance)/64,0,1)*2.65
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
- if prism and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
+ if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
- self.crystalShakePrism=prism
+ self.crystalShakePrism=major
+ self.crystalShakeDuration=nomad and .62 or major and .46 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 function P:prismPressure(from,to,at,duration)
@@ -1078,7 +1081,7 @@ function P:cameraOffset(now)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
- local impactDuration=self.crystalShakePrism and .46 or .22
+ local impactDuration=self.crystalShakeDuration or .22
  if impactAge<0 or impactAge>=impactDuration then return ordinary end
  local t=impactAge/impactDuration
  if self.crystalShakePrism then

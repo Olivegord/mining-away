@@ -78,7 +78,7 @@ RoleVisuals.ImpactParticles=function(point,color,strength,kind)
  impactParticles(point,color,strength,kind)
 end
 local charred=source:Clone();charred.Parent=workspace
-for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,PrismBlackAt=104.34,PrismClusterSize=7}) do charred:SetAttribute(key,value) end
+for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,ClusterBlackAt=104.34,BlastClusterSize=7}) do charred:SetAttribute(key,value) end
 local target={source=charred,view=charred:Clone(),baseColor=charred.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,104,3)}
 target.view.Parent=fx
@@ -262,6 +262,21 @@ local reducedPrism=RoleEffectView.new(nil)
 reducedPrism:step(130.01,{},targets)
 assert(#beamCalls==3 and not lighting:FindFirstChild('RamielReleaseExposure'),'reduced flashing suppressed the beam or replayed the flash')
 reducedPrism:destroy();reducedCast:Destroy();player:SetAttribute('ReducedFlashing',nil)
+local bomb=receipt('nomad',125,'Nomad',4.05)
+bomb:SetAttribute('Duration',.95);bomb:SetAttribute('ContactAt',130)
+bomb:SetAttribute('BlastGround',workspace.CurrentCamera.CFrame.Position)
+local nomad=RoleEffectView.new(nil)
+nomad:step(130.02,{},targets)
+local nomadExposure=assert(lighting:FindFirstChild('NomadImpactExposure'))
+assert(nomadExposure.Brightness==1 and nomadExposure.Contrast==0,'nearby blast did not wash the screen white')
+nomad:step(130.46,{},targets)
+assert(not nomadExposure.Parent,'Nomad flash did not clear before the shatter')
+nomad:destroy()
+player:SetAttribute('ReducedFlashing',true)
+local reducedNomad=RoleEffectView.new(nil)
+reducedNomad:step(130.02,{},targets)
+assert(not lighting:FindFirstChild('NomadImpactExposure'),'Nomad ignored reduced flashing')
+reducedNomad:destroy();player:SetAttribute('ReducedFlashing',nil);bomb:Destroy()
 prismCore:Destroy()
 local sustained=source:Clone();sustained.Color=Color3.fromRGB(205,26,63);sustained.Parent=workspace
 for key,value in pairs({HP=270,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,CutIsShot=false,CutFractured=false}) do

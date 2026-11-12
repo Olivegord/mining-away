@@ -57,7 +57,11 @@ function Effects.NomadContact(node,point,ground,radius,at)
  if not node or not node.Parent then return end
  node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',ground);node:SetAttribute('BlastRadius',radius)
  node:SetAttribute('ContactAt',at)
- Debris:AddItem(node,2.4)
+end
+function Effects.NomadShatter(node,at)
+ if not node or not node.Parent then return end
+ if at then node:SetAttribute('ShatterAt',at) end
+ Debris:AddItem(node,5.2)
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)

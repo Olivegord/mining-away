@@ -46,29 +46,29 @@ local function checkPrism()
  assert(math.abs((endpoint-origin).Magnitude-distance(4))<.001,'path did not stop at the reserved rock')
  assert(receipt:GetAttribute('PrismHit1') and receipt:GetAttribute('PrismHit2') and not receipt:GetAttribute('PrismHit3'))
  assert(not scene.firePrism(drone,target,drone.specialJob),'a confirmed job fired a second time')
- assert(nearby.part:GetAttribute('PrismBlackAt')==fireAt and not guarded.part:GetAttribute('PrismBlackAt'))
+ assert(nearby.part:GetAttribute('ClusterBlackAt')==fireAt and not guarded.part:GetAttribute('ClusterBlackAt'))
  for _,t in ipairs({.01,spec.BeamHold,spec.BeamHold+spec.BlackPause-.01}) do
   now=fireAt+t
-  scene.stepPrismShots()
+  scene.stepClusterShots()
   for _,rock in ipairs({target,second,third,nearby}) do
    assert(rock.hp==800 and rock.stage==0 and not rock.extractedOre,'health or rewards changed before the explosion')
-   assert(rock.part:GetAttribute('PrismBlackAt')==fireAt)
+   assert(rock.part:GetAttribute('ClusterBlackAt')==fireAt)
   end
   assert(not hitResource(drone,target,30,false,nil,nil,'Special'),'a competing cut landed during the shot')
  end
  now=fireAt+spec.BeamHold+spec.BlackPause+.001
  p.busy=true
- scene.stepPrismShots()
- assert(target.hp==800 and target.prismShot,'a temporary save canceled or awarded a pending shot')
+ scene.stepClusterShots()
+ assert(target.hp==800 and target.clusterShot,'a temporary save canceled or awarded a pending shot')
  p.busy=false
- scene.stepPrismShots()
+ scene.stepClusterShots()
  local rewardSerial=pickupSerial
  assert(rewardSerial>beforePickup,'the blast did not award ore')
  for _,rock in ipairs({target,second,third,nearby}) do
-  assert(rock.hp==0 and rock.paid and rock.extractedOre==rock.ore and not rock.prismShot,'the explosion did not finish the hit rock')
+  assert(rock.hp==0 and rock.paid and rock.extractedOre==rock.ore and not rock.clusterShot,'the explosion did not finish the hit rock')
   assert(rock.part:GetAttribute('CrystalSplitAt')==now and rock.part:GetAttribute('CutProjectile')=='Prism')
  end
- scene.stepPrismShots()
+ scene.stepClusterShots()
  assert(pickupSerial==rewardSerial,'a delayed shot awarded cargo twice')
  assert(guarded.hp==800 and behind.hp==800 and offRay.hp==800,'shot damaged reserved or off-axis rock')
  guarded.slots[worker.id]=nil

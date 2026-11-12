@@ -142,6 +142,7 @@ local function sameRockType(d,r,allowCrewAssist: boolean?)
  -- A rock hosts one drone type at a time, even when a boulder has spare
  -- slots. An Aftershock assist never takes a worker slot.
  local role=DroneRoles.canonical(d.role)
+ if r.clusterShot and r.clusterShot.drone~=d then return false end
  if role=='Nomad' and r.kind=='Geode' then return false end
  for id in pairs(r.slots) do
   local worker=drones[id]
@@ -180,7 +181,7 @@ local function release(d: any,keepCombatEffects: boolean?,keepBreakContact: bool
  d.chargeSite=nil
  if d.target then local r=d.target;r.slots[d.id]=nil;updateSlots(r) end
  d.target=nil;d.squareJob=nil;d.mining=false;d.beamSince=0;d.warmAt=nil;d.mineCharge=0;d.forkUntil=0;d.forkTargetId=nil;d.combatTarget=nil;d.targetPosition=nil
- d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil;d.workYaw=nil
+ d.breaker=nil;d.growPlan=nil;d.growAt=nil;d.workStation=nil;d.workTargetId=nil;d.workYaw=nil;d.nomadRoute=nil
  d.lingerUntil=nil;d.lingerGoal=nil
  if not keepBreakContact then d.mineBreakContact=nil end
  if not keepCombatEffects then d.chainUntil=0;d.chainTargetId=nil end
@@ -349,12 +350,14 @@ local function spawnDrone(p,owned,slot,origin)
  elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local hr=characterRoot(p)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
- local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',roleName=='Nomad' and flightHeight or nil)
+ local count=#scene.runtimeFleet(p)
+ local pos=Feel.followGoal(origin,slot,count,now,owned.base.maxStep60,roleName=='Ramiel',roleName=='Nomad' and flightHeight or nil)
+ local yaw=roleName=='Nomad' and Feel.levelYaw(pos,Feel.followGoal(origin,slot,count,now+.1,owned.base.maxStep60,true,flightHeight),0) or 0
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
  local d={id=owned.id,owner=p.player.UserId,owned=owned,name=owned.name,role=owned.role or owned.type,flightHeight=flightHeight,model=model,body=body,emitter=emitter,slot=slot,
-  pos=pos,goal=pos,velocity=Vector3.zero,yaw=0,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,battery=stats.batteryCapacity,
+  pos=pos,goal=pos,velocity=Vector3.zero,yaw=yaw,life=1,state='Follow',hp=stats.maxHealth,stats=stats,field=nil,target=nil,mining=false,battery=stats.batteryCapacity,
   beamSince=0,readyAt=0,shotAt=0,shield=0,evade=0,commandOutAt=nil,shotSerial=0,lastShotAt=0,lastCritAt=0,forkUntil=0,chainUntil=0,
   mineCharge=0,minePulseSerial=0,minePulseAt=0,minePulseTargetId='',mineBreakSerial=0,healAt=0,chargeAt=nil}
  if roleName=='Vacuum' and not p.vacuum then p.vacuum=d end
@@ -1307,8 +1310,8 @@ function scene.reclaimBattery(d,r,broken,abilityOrigin,contactKind)
 end
 -- Resolve the full ray before any crystal shrinks or loses CanQuery.
 -- The same path drives the damage and the client beam endpoints.
-local function prismEligible(d,p,rock,field)
- return rock.field==field and not rock.paid and rock.hp>0 and not rock.prismShot
+local function clusterEligible(d,p,rock,field)
+ return rock.field==field and not rock.paid and rock.hp>0 and not rock.clusterShot
   and rock.part.Parent and now>=rock.readyAt and rock.kind~='Geode'
   and playerCanMine(p,rock.field) and sameRockType(d,rock)
 end
@@ -1333,7 +1336,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
   local part=hit.Instance
   local rock=resources[part:GetAttribute('ResourceId') or '']
   if rock and rock.part==part then
-   if #hits>=spec.BeamTargets or not prismEligible(d,p,rock,primary.field) then
+   if #hits>=spec.BeamTargets or not clusterEligible(d,p,rock,primary.field) then
     endpoint=hit.Position;break
    end
    local item={rock=rock,point=hit.Position,normal=hit.Normal}
@@ -1354,13 +1357,13 @@ end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
- local prism=fractureContext and fractureContext.prism
- local shot=fractureContext and fractureContext.prismShot
+ local clusterHit=fractureContext and fractureContext.clusterHit
+ local shot=fractureContext and fractureContext.clusterShot
  local clusterRole=contactKind=='PrismFinish' and 'Ramiel' or contactKind=='NomadFinish' and 'Nomad'
- local piercing=clusterRole==d.role and prism and prism.rock==r and shot and shot==r.prismShot
-  and shot.drone==d and now>=shot.blastAt
- if r.prismShot and not piercing then return false end
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not piercing and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ local clusterFinish=clusterRole==d.role and clusterHit and clusterHit.rock==r and shot and shot==r.clusterShot
+  and shot.finishKind==contactKind and shot.drone==d and now>=shot.blastAt
+ if r.clusterShot and not clusterFinish then return false end
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not clusterFinish and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
  local recipient=d
  local job=d.specialJob
@@ -1376,7 +1379,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
  end
  if not DroneRoles.isWorker(d.role) and not (abilityOrigin and DroneRoles.ability(d.role)) then return false end
- if not abilityOrigin and not DroneRoles.isMiner(d.role) and not special and not shell and not piercing then return false end
+ if not abilityOrigin and not DroneRoles.isMiner(d.role) and not special and not shell and not clusterFinish then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
   local carrierImpact=d.deployedCarrier and contactKind=='Breaker'
@@ -1388,8 +1391,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   -- final hit. No saved state/remote can authorize an echo from a retired node.
   if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
   if assist and primary.processingPrimary~=d.id then return false end
- elseif not piercing and (d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1
-  or (not prism and not los(d.pos,r.position,r.part,{droneFolder}))) then return false end
+ elseif not clusterFinish and (d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1
+  or (not clusterHit and not los(d.pos,r.position,r.part,{droneFolder}))) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
@@ -1408,11 +1411,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   and DroneCatalog.projectileLayerPower(d.role,r.stage) or 1
  amount*=shotPower
  local pinnedWork=(not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.miningSquare
- local startShift=pinnedWork and not secondary and not piercing and scene.shiftReady(p)
+ local startShift=pinnedWork and not secondary and not clusterFinish and scene.shiftReady(p)
  if pinnedWork and (startShift or (d.squareJob==p.shiftSquare and now<(p.shiftUntil or 0))) then amount*=1.5 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
- if piercing then
+ if clusterFinish then
   amount=r.hp
  elseif special then
   amount=DroneCatalog.capDamage(d.role,r.maxHP,amount)
@@ -1422,9 +1425,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if secondary and not r.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
- if not secondary and not abilityOrigin and not piercing then r.processingPrimary=d.id end
+ if not secondary and not abilityOrigin and not clusterFinish then r.processingPrimary=d.id end
  local previous=r.stage
- local isShot=special==true or piercing or contactKind=='Breaker'
+ local isShot=special==true or clusterFinish or contactKind=='Breaker'
  local cutStart=not secondary and not abilityOrigin and not special and d.mining and d.beamSince and d.lastCutFX~=d.beamSince
  local shapeChanged=false
  local revealed=nil
@@ -1437,7 +1440,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   p.shiftReadyRun=nil;p.shiftSquare=d.squareJob;p.shiftUntil=now+p.shiftSeconds
  end
  -- Capture the incoming surface before any fracture changes its size or facing.
- local hitSurface=prism
+ local hitSurface=clusterHit
  if not hitSurface and (shotKind or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart))) then
   local hitFrom=shotKind and (job.from or d.pos) or d.pos
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
@@ -1501,32 +1504,32 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=nextStage
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  if not piercing then
+  if not clusterFinish then
    local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
    r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
    r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
   end
  end
  r.part:SetAttribute('HP',actual)
- if (r.field.cfg.SelectionOnly or piercing) and hitSurface then
+ if (r.field.cfg.SelectionOnly or clusterFinish) and hitSurface then
   if cutStart then d.lastCutFX=d.beamSince end
   r.part:SetAttribute('CutContactPoint',hitSurface.point);r.part:SetAttribute('CutContactNormal',hitSurface.normal)
-  local projectile=prism and fractureContext.projectile or shotKind and job.projectile
-  r.part:SetAttribute('CutProjectile',piercing and DroneCatalog.Types[d.role].Projectile or shotKind or '')
+  local projectile=clusterHit and fractureContext.projectile or shotKind and job.projectile
+  r.part:SetAttribute('CutProjectile',clusterFinish and DroneCatalog.Types[d.role].Projectile or shotKind or '')
   r.part:SetAttribute('CutProjectileFX',projectile~=nil and projectile.Parent~=nil)
   r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
    r.part:SetAttribute('CrystalBreakOwner',recipient.owner)
-   r.part:SetAttribute('CrystalSplitAt',now+(piercing and 0 or OreDrops.BREAK_DELAY))
+   r.part:SetAttribute('CrystalSplitAt',now+(clusterFinish and 0 or OreDrops.BREAK_DELAY))
    r.part:SetAttribute('CrystalBreakAt',now)
   end
  end
- if shotKind and hitSurface and not prism then
+ if shotKind and hitSurface and not clusterHit then
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
  end
  -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
- local specialistCut=special==true or piercing or (assist and recipient~=d)
+ local specialistCut=special==true or clusterFinish or (assist and recipient~=d)
  if not broken and r.kind~='Geode' and (r.stage>previous or (r.field.cfg.SelectionOnly and not r.cargoProduced
   and Mining.looseSeamsReady(r.hp,r.maxHP,recipient.stats.earlyDrop))) then
   award(recipient,r,specialistCut,true)
@@ -1534,7 +1537,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
- if not piercing then scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind) end
+ if not clusterFinish then scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind) end
  if broken then
   r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
@@ -1567,7 +1570,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
   end
  end
- if not secondary and not abilityOrigin and not piercing then
+ if not secondary and not abilityOrigin and not clusterFinish then
   local secondaryId
   if (d.stats.forkFraction or 0)>0 then secondaryId=secondaryMining(d,r,baseAmount*d.stats.forkFraction,d.stats.forkRange or 6) end
   if (d.stats.aftershock or 0)>0 and (broken or r.stage>previous) then
@@ -1639,7 +1642,18 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  return true,broken,r.stage>previous
 end
-scene.prismShots={}
+scene.clusterShots={}
+function scene.queueCluster(d,profile,job,hits,blastAt,finishKind)
+ local shot={drone=d,profile=profile,runId=data(profile).run.id,hits=hits,
+  projectile=job.projectile,blastAt=blastAt,finishKind=finishKind}
+ scene.clusterShots[shot]=true
+ job.impacted=true
+ for _,hit in ipairs(hits) do
+  hit.rock.clusterShot=shot
+  hit.rock.part:SetAttribute('BlastClusterSize',#hits)
+  hit.rock.part:SetAttribute('ClusterBlackAt',now)
+ end
+end
 local function prismCluster(d,p,path,field,radius)
  local hits=table.clone(path.hits)
  local seen={}
@@ -1647,7 +1661,7 @@ local function prismCluster(d,p,path,field,radius)
  for _,hit in ipairs(hits) do seen[hit.rock]=true end
  for _,rock in ipairs(field.resources) do ignore[#ignore+1]=rock.part end
  for _,rock in ipairs(field.resources) do
-  if seen[rock] or not prismEligible(d,p,rock,field) then continue end
+  if seen[rock] or not clusterEligible(d,p,rock,field) then continue end
   for _,direct in ipairs(path.hits) do
    local origin=direct.rock.part.Position
    local delta=rock.part.Position-origin
@@ -1668,17 +1682,9 @@ function scene.firePrism(d,primary,job)
  local profile=profiles[d.owner]
  local hits=prismCluster(d,profile,path,primary.field,spec.BlastRadius)
  local beamEnd=now+spec.BeamHold
- local shot={drone=d,profile=profile,runId=data(profile).run.id,
-  hits=hits,projectile=job.projectile,blastAt=beamEnd+spec.BlackPause}
- scene.prismShots[shot]=true
- job.impacted=true
+ scene.queueCluster(d,profile,job,hits,beamEnd+spec.BlackPause,'PrismFinish')
  job.prismFired=true
  d.prismReadyAt=beamEnd+RoleConfig.RamielCloseTime
- for _,hit in ipairs(hits) do
-  hit.rock.prismShot=shot
-  hit.rock.part:SetAttribute('PrismClusterSize',#hits)
-  hit.rock.part:SetAttribute('PrismBlackAt',now)
- end
  local contacts={}
  for _,hit in ipairs(path.hits) do
   if hit~=path.selected then table.insert(contacts,hit) end
@@ -1691,7 +1697,7 @@ function scene.fireNomad(d,primary,job)
   or not primary.slots[d.id] or now<job.startedAt+job.duration*job.impact then return false end
  local p=profiles[d.owner]
  local field=primary.field
- if not healthy(p) or not prismEligible(d,p,primary,field) or not los(job.from,job.contact,primary.part,{droneFolder,pickupFolder,p.player.Character}) then return false end
+ if not healthy(p) or not clusterEligible(d,p,primary,field) or not los(job.from,job.contact,primary.part,{droneFolder,pickupFolder,p.player.Character}) then return false end
  local spec=DroneCatalog.Types.Nomad
  local center=primary.part.Position
  local ground=primary.part:GetAttribute('GroundY') or center.Y-primary.part.Size.Y*.5
@@ -1702,7 +1708,7 @@ function scene.fireNomad(d,primary,job)
   if rock==primary then continue end
   local delta=rock.part.Position-center
   local distance=Vector3.new(delta.X,0,delta.Z).Magnitude
-  if distance<=spec.BlastRadius and math.abs(delta.Y)<=6 and prismEligible(d,p,rock,field)
+  if distance<=spec.BlastRadius and math.abs(delta.Y)<=6 and clusterEligible(d,p,rock,field)
    and los(center,rock.part.Position,nil,ignore) then
    neighbors[#neighbors+1]={rock=rock,point=rock.part.Position,normal=delta.Magnitude>.01 and delta.Unit or Vector3.yAxis,distance=distance}
   end
@@ -1713,42 +1719,38 @@ function scene.fireNomad(d,primary,job)
  local hits={}
  for i=1,math.min(#neighbors,spec.BlastTargets-1) do hits[i]=neighbors[i] end
  hits[#hits+1]={rock=primary,point=job.contact,normal=(job.from-job.contact).Unit}
- local shot={drone=d,blastAt=now}
- job.impacted=true
+ scene.queueCluster(d,p,job,hits,now+spec.BlastPause,'NomadFinish')
  d.nomadReadyAt=job.startedAt+job.duration
  RoleEffects.NomadContact(job.projectile,job.contact,Vector3.new(center.X,ground,center.Z),spec.BlastRadius,now)
- for _,hit in ipairs(hits) do
-  local rock=hit.rock
-  rock.prismShot=shot
-  hitResource(d,rock,rock.hp,false,nil,nil,'NomadFinish',{prism=hit,projectile=job.projectile,prismShot=shot})
-  rock.prismShot=nil
- end
  return true
 end
-function scene.stepPrismShots()
- for shot in pairs(scene.prismShots) do
+function scene.stepClusterShots()
+ for shot in pairs(scene.clusterShots) do
   if now<shot.blastAt then continue end
   local drone=shot.drone
   local profile=profiles[drone.owner]
   if profile==shot.profile and profile.busy and not profile.leaving then continue end
-  scene.prismShots[shot]=nil
+  scene.clusterShots[shot]=nil
   local valid=profile==shot.profile and healthy(profile) and data(profile).run.id==shot.runId
    and drones[drone.id]==drone and drone.hp>0
+  local anyBroken=false
   for _,hit in ipairs(shot.hits) do
    local rock=hit.rock
-   if rock.prismShot~=shot then continue end
+   if rock.clusterShot~=shot then continue end
    local broken=false
    if valid and resources[rock.id]==rock then
     local accepted
-    accepted,broken=hitResource(drone,rock,rock.hp,false,nil,nil,'PrismFinish',
-     {prism=hit,projectile=shot.projectile,prismShot=shot})
+    accepted,broken=hitResource(drone,rock,rock.hp,false,nil,nil,shot.finishKind,
+     {clusterHit=hit,projectile=shot.projectile,clusterShot=shot})
     broken=accepted and broken
+    anyBroken=anyBroken or broken
    end
-   rock.prismShot=nil
+   rock.clusterShot=nil
    if not broken and rock.part.Parent then
-    rock.part:SetAttribute('PrismBlackAt',nil);rock.part:SetAttribute('PrismClusterSize',nil)
+    rock.part:SetAttribute('ClusterBlackAt',nil);rock.part:SetAttribute('BlastClusterSize',nil)
    end
   end
+  if shot.finishKind=='NomadFinish' then RoleEffects.NomadShatter(shot.projectile,anyBroken and now or nil) end
  end
 end
 function scene.nomadTargetScore(d,rock,distance)
@@ -1759,7 +1761,7 @@ function scene.nomadTargetScore(d,rock,distance)
  for _,other in ipairs(rock.field.resources) do
   if other==rock then continue end
   local delta=other.part.Position-center
-  if delta.X^2+delta.Z^2<=spec.BlastRadius^2 and math.abs(delta.Y)<=6 and prismEligible(d,p,other,rock.field) then
+  if delta.X^2+delta.Z^2<=spec.BlastRadius^2 and math.abs(delta.Y)<=6 and clusterEligible(d,p,other,rock.field) then
    neighbors+=1
    if neighbors==spec.BlastTargets-1 then break end
   end
@@ -1772,7 +1774,7 @@ local function chooseResource(d: any,field: any,square: any?)
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
-  if not r.paid and r.hp>0 and not r.prismShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
+  if not r.paid and r.hp>0 and not r.clusterShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
@@ -1949,7 +1951,7 @@ function scene.squareStep(p,d)
  end
 end
 function scene.regrow(r,dt)
- if not r.field.cfg.SelectionOnly or r.paid or r.prismShot or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
+ if not r.field.cfg.SelectionOnly or r.paid or r.clusterShot or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
  local owner=r.lastPinOwner and profiles[r.lastPinOwner]
  if owner and not owner.leaving and owner.miningSquare==r.lastPin then return end
  local maxWork=r.maxHP-10
@@ -2084,6 +2086,7 @@ end
 local function travelSpeed(d)
  local tuning=RoleConfig.Prominent[d.role]
  local roleScale=tuning and tuning.speed or 1
+ if d.role=='Nomad' then return math.min(d.stats.maxStep60*roleScale,tuning.maxStep60) end
  local returning=d.state=='Travel' and d.chargedPin and d.chargedPin==d.squareJob
  if d.state=='ToCharge' or returning then
   local p=profiles[d.owner]
@@ -2115,12 +2118,18 @@ local function move(d,goal,dt)
   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,flight and flight.response or nil)
   yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
  end
- d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1))
+ if d.role=='Nomad' then d.yaw=Feel.nomadYaw(d.yaw,yaw,dt)
+ else d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1)) end
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
 function scene.holdSquare(d,p,dt)
  local square=p.miningSquare
  if not square or d.carrierId then return false end
+ if d.role=='Nomad' then
+  d.mining=false;d.state='HoldSelector'
+  move(d,Feel.followGoal(square.center,d.slot,#p.drones,now,d.owned.base.maxStep60,true,d.flightHeight),dt)
+  return true
+ end
  local offset=Feel.formation(d.slot,#p.drones)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
@@ -2199,10 +2208,11 @@ local function committedStation(d,r)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile=='Nomad' then
    local approach=r.position-d.pos
-   d.workYaw=approach.X^2+approach.Z^2>1 and Feel.levelYaw(d.pos,r.position,d.yaw) or d.slot*2.4
+   local yaw=approach.X^2+approach.Z^2>1 and Feel.levelYaw(d.pos,r.position,d.yaw) or d.slot*2.4
    local ground=r.part:GetAttribute('GroundY') or r.position.Y
-   local frame=CFrame.new(r.position.X,ground,r.position.Z)*CFrame.Angles(0,d.workYaw,0)
-   d.workStation=frame:PointToWorldSpace(Vector3.new(0,definition.StationHeight,1.43))
+   local center=Vector3.new(r.position.X,ground+definition.StationHeight,r.position.Z)
+   local route=Feel.nomadRoute(d.pos,center,d.velocity,CFrame.Angles(0,yaw,0).LookVector,d.slot,travelSpeed(d)*60,RoleConfig.NomadKeelOffset)
+   d.workYaw=route.yaw;d.workStation=route.goal;d.nomadRoute=route
   elseif r.field.cfg.SelectionOnly and d.targetSlot==2 and not (definition and definition.Projectile=='Prism') then
    local base=d.workStation
    for turn=0,3 do
@@ -2241,7 +2251,8 @@ function scene.miningWarmup(d,r)
  -- Ignition upgrades still shorten it, with a small floor for readability.
  if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
- if r and (d.role=='Ramiel' or d.role=='Nomad') then return .08 end
+ if r and d.role=='Nomad' then return .60 end
+ if r and d.role=='Ramiel' then return .08 end
  if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end
  if r and r.field.cfg.SelectionOnly and r.kind=='Crystal' and definition and not definition.Projectile then
   return math.max(.08,d.stats.warmup/Ca.LASER_CHARGE_SCALE)
@@ -2284,6 +2295,19 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
  end
 end
+function scene.flyNomad(d,goal,dt)
+ local route=d.nomadRoute
+ route.elapsed=math.min(route.duration,route.elapsed+dt)
+ d.intentGoal=goal;d.goal=goal;d.swarmOffset=Vector3.zero
+ d.pos,d.velocity=Feel.nomadPose(route,route.elapsed)
+ local remaining=route.duration-route.elapsed
+ if remaining<=0 then return true end
+ local heading=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+ local alignment=1-math.clamp(remaining/1.25,0,1)
+ local turn=math.atan2(math.sin(d.workYaw-heading),math.cos(d.workYaw-heading))
+ d.yaw=Feel.nomadYaw(d.yaw,heading+turn*alignment,dt)
+ return false
+end
 local function specialDrone(d: any,p: any,field: any,dt: number)
  if d.specialJob and d.specialJob.prismFired and now<d.prismReadyAt then
   d.state='SpecialMine';d.mining=false
@@ -2295,10 +2319,17 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  if not r or r.kind=='Geode' then mineDrone(d,p,field,dt);return end
  local definition=DroneCatalog.Types[d.role]
  local projectile=definition.Projectile
- local goal=committedStation(d,r);local yaw=d.yaw;d.state='Travel';d.mining=false;move(d,goal,dt)
+ local goal=committedStation(d,r);local yaw=d.yaw;d.state='Travel';d.mining=false
+ if projectile=='Nomad' then
+  if not scene.flyNomad(d,goal,dt) then return end
+ else move(d,goal,dt) end
  local arrived=Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0)
  if projectile and arrived then
-  d.yaw=Feel.approachYaw(yaw,d.workYaw or Feel.levelYaw(d.pos,r.position,yaw),dt*((RoleConfig.Prominent[d.role] or {}).turn or 1))
+  if projectile=='Nomad' then
+   d.yaw=Feel.nomadYaw(yaw,d.workYaw,dt)
+   local delta=(d.workYaw-d.yaw+math.pi)%(2*math.pi)-math.pi
+   if math.abs(delta)>math.rad(3) then return end
+  else d.yaw=Feel.approachYaw(yaw,Feel.levelYaw(d.pos,r.position,yaw),dt*(projectile=='Prism' and RoleConfig.Prominent.Ramiel.turn or 1)) end
  end
  local job=d.specialJob
  local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
@@ -2636,7 +2667,7 @@ local function droneStep(d: any,dt: number)
   if d.lingerUntil then d.lingerUntil+=dt end
   -- Storage freezes work, not safe flight. No profile, damage, reservation or
   -- job transition is mutated here; travel retains its committed destination.
-  if store:healthy(p.session) and d.goal then
+  if store:healthy(p.session) and d.goal and not d.nomadRoute then
    if d.breaker and d.breaker.phase=='Dive' and d.breaker.diveStart then
     local job=d.breaker;d.goal=job.impact;d.intentGoal=job.impact
     d.pos,d.velocity=Feel.powerDive(job.diveStart,job.impact,now-job.phaseAt,DroneRoles.BREAKER.diveDuration)
@@ -2890,6 +2921,7 @@ local function snapshotDrone(d)
   ForkTargetPosition=d.forkTarget or d.pos,ForkTargetId=(d.forkUntil or 0)>now and (d.forkTargetId or '') or '',ForkUntil=d.forkUntil or 0,
   ChainTargetPosition=d.chainTarget or d.pos,ChainTargetId=(d.chainUntil or 0)>now and (d.chainTargetId or '') or '',ChainUntil=d.chainUntil or 0,
   GeodeMultiplier=d.stats.geodeMultiplier,FinisherMultiplier=d.stats.finisherMultiplier,SalvageFraction=d.stats.salvageFraction,ChainRange=d.stats.splashRange}
+ if d.role=='Nomad' then values.NomadApproach=d.state=='Travel' and d.nomadRoute~=nil and d.nomadRoute.elapsed<d.nomadRoute.duration end
  local published=d.publishedAttributes or {};d.publishedAttributes=published
  for k,v in pairs(values) do if published[k]~=v then d.model:SetAttribute(k,v);published[k]=v end end
  if published.CarrierId~=d.carrierId then d.model:SetAttribute('CarrierId',d.carrierId);published.CarrierId=d.carrierId end
@@ -4012,7 +4044,7 @@ Players.PlayerRemoving:Connect(removePlayer)
 for _,pl in ipairs(Players:GetPlayers()) do task.spawn(addPlayer,pl) end
 RunService.Heartbeat:Connect(function(dt: number)
  now=workspace:GetServerTimeNow()
- scene.stepPrismShots()
+ scene.stepClusterShots()
  discoveries:Step()
  elapsed=math.min(elapsed+math.max(0,dt),C.Tick*(C.MaxCatchup or 6))
  local steps=0

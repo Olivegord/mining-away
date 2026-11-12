@@ -292,31 +292,35 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(.62+6.2*expansion),pressure*.70,scale*(.025+.045*pressure))
 end
 
-local function releaseLighting(self,at,weight)
+local function releaseLighting(self,at,weight,nomad)
  local flash=self.prismFlash
  if flash and math.abs(at-flash.at)<.22 then
   flash.weight=math.max(weight,flash.weight)
+  if nomad then flash.at=at;flash.nomad=true end
   return
  end
  if not flash then
-  local correction=Instance.new('ColorCorrectionEffect');correction.Name='RamielReleaseExposure';correction.Enabled=false;correction.Parent=Lighting
-  local bloom=Instance.new('BloomEffect');bloom.Name='RamielReleaseBloom';bloom.Enabled=false;bloom.Parent=Lighting
+  local correction=Instance.new('ColorCorrectionEffect');correction.Name=nomad and 'NomadImpactExposure' or 'RamielReleaseExposure';correction.Enabled=false;correction.Parent=Lighting
+  local bloom=Instance.new('BloomEffect');bloom.Name=nomad and 'NomadImpactBloom' or 'RamielReleaseBloom';bloom.Enabled=false;bloom.Parent=Lighting
   flash={correction=correction,bloom=bloom};self.prismFlash=flash
  end
- flash.at=at;flash.weight=weight
+ flash.at=at;flash.weight=weight;flash.nomad=nomad
 end
 
 local function stepReleaseLighting(self,now)
  local flash=self.prismFlash
  if not flash then return end
  local age=now-flash.at
- if age>=.44 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
+ local player=Players.LocalPlayer
+ if age>=.44 or BeamVFX.reduced() or player and player:GetAttribute('ReducedFlashing')==true then
   flash.correction:Destroy();flash.bloom:Destroy();self.prismFlash=nil
   return
  end
- local strength=(1-.82*smooth((age-.025)/.14))*(1-smooth((age-.12)/.32))*flash.weight
- flash.correction.Brightness=.94*strength
- flash.correction.Contrast=-.19*strength
+ local strength
+ if flash.nomad then strength=(1-.76*smooth((age-.039)/.16))*(1-smooth((age-.14)/.29))*flash.weight
+ else strength=(1-.82*smooth((age-.025)/.14))*(1-smooth((age-.12)/.32))*flash.weight end
+ flash.correction.Brightness=(flash.nomad and 1 or .94)*strength
+ flash.correction.Contrast=flash.nomad and -.24*strength*(1-strength) or -.19*strength
  flash.correction.Saturation=-.94*strength
  flash.bloom.Threshold=.69-.45*strength
  flash.bloom.Intensity=3.1*strength;flash.bloom.Size=54
@@ -426,6 +430,15 @@ end
 
 function View.new(audio,onPrism,onNomadImpact)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
+ local function nomadFlash(position,at)
+  local camera=workspace.CurrentCamera
+  if not camera then return end
+  local player=Players.LocalPlayer
+  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+  local cameraDistance=(camera.CFrame.Position-position).Magnitude
+  local distance=root and math.max((root.Position-position).Magnitude,cameraDistance*.65) or cameraDistance
+  if distance<115 then releaseLighting(self,at,1-smooth((distance-25)/90),true) end
+ end
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -474,7 +487,7 @@ function View.new(audio,onPrism,onNomadImpact)
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
-     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact)
+     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact,nomadFlash)
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then

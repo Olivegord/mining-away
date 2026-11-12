@@ -39,6 +39,8 @@ function Color3.fromRGB(r,g,b) return Color3.new(r/255,g/255,b/255) end
 local UDim2={fromOffset=function(...) return {...} end,fromScale=function(...) return {...} end,new=function(...) return {...} end}
 local UDim={new=function(scale,offset) return {Scale=scale,Offset=offset} end}
 local NumberSequence={new=function(x) return x end};local ColorSequence=NumberSequence
+local ColorSequenceKeypoint={new=function(t,value) return {Time=t,Value=value} end}
+local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
 local Enum=setmetatable({},{__index=function(t,k) local v=setmetatable({},{__index=function(_,x) return x end});rawset(t,k,v);return v end})
 local IM={};local IT={}
 IT.__index=function(i,k)

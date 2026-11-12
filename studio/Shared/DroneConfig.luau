@@ -624,24 +624,25 @@ end
 
 DroneConfig.Prominent={
  Ramiel={span=11.25,lift=15.0,speed=.55,response=.52,turn=.34},Orbiter={span=3.30,lift=1.5},
- Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
+ Nomad={span=35.5,lift=0,altitude=45,speed=.46,maxStep60=.15,response=.65},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
 -- also serve as projector apertures on the visible model.
 local nomadSlits={
- OuterLeft={a=Vector3.new(-1.23,-.14,.11),b=Vector3.new(-4.42,-.14,.61),returnDepth=-.35},
- OuterRight={a=Vector3.new(1.23,-.14,.11),b=Vector3.new(4.42,-.14,.61),returnDepth=-.35},
- MidLeft={a=Vector3.new(-3.85,-.17,.24),b=Vector3.new(-1.17,-.17,-.12),returnDepth=.48},
- Bridge={a=Vector3.new(-1.22,-.18,.48),b=Vector3.new(1.22,-.18,.48),returnDepth=.42},
- MidRight={a=Vector3.new(1.17,-.17,-.12),b=Vector3.new(3.85,-.17,.24),returnDepth=-.48},
- RearLeft={a=Vector3.new(-3.85,-.17,.70),b=Vector3.new(-1.17,-.17,.34),returnDepth=.48},
- RearRight={a=Vector3.new(1.17,-.17,.34),b=Vector3.new(3.85,-.17,.70),returnDepth=-.48},
+ OuterLeft={a=Vector3.new(-.38,-.37,-.57),b=Vector3.new(-1.34,-.37,-.38),returnDepth=-.20},
+ OuterRight={a=Vector3.new(.38,-.37,-.57),b=Vector3.new(1.34,-.37,-.38),returnDepth=-.20},
+ MidLeft={a=Vector3.new(-1.18,-.39,-.62),b=Vector3.new(-.43,-.39,-.71),returnDepth=.22},
+ Bridge={a=Vector3.new(-.67,-.42,-.31),b=Vector3.new(.67,-.42,-.31),returnDepth=.16},
+ MidRight={a=Vector3.new(.43,-.39,-.71),b=Vector3.new(1.18,-.39,-.62),returnDepth=-.22},
+ RearLeft={a=Vector3.new(-1.18,-.34,-.14),b=Vector3.new(-.43,-.34,-.23),returnDepth=.22},
+ RearRight={a=Vector3.new(.43,-.34,-.23),b=Vector3.new(1.18,-.34,-.14),returnDepth=-.22},
  KeelLeft={a=Vector3.new(-.76,-.43,-.47),b=Vector3.new(-.19,-.43,-.96),returnDepth=0},
  KeelRight={a=Vector3.new(.76,-.43,-.47),b=Vector3.new(.19,-.43,-.96),returnDepth=0},
 }
-DroneConfig.NomadDropOffset=Vector3.new(2.65,-.85,.17)
+DroneConfig.NomadDropOffset=Vector3.new(6.625,-2.125,.425)
+DroneConfig.NomadKeelOffset=3.575
 
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
@@ -854,6 +855,8 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
     hardware('WingRunningLight',Vector3.new(.18,.047,.055),wing*CFrame.new((i-2.5)*.49,-.11,-.50),ice,Enum.Material.Neon)
    end
    hardware('KeelStrut',Vector3.new(.18,.25,1.05),CFrame.new(side*.39,-.34,-.70)*CFrame.Angles(-.52,side*.37,0),dark,metal)
+   hardware('ScannerShoulder',Vector3.new(1.10,.21,.76),CFrame.new(side*.90,-.25,-.40)*CFrame.Angles(0,side*.12,0),dark,metal)
+   hardware('KeelTooth',Vector3.new(.24,.43,.29),CFrame.new(side*.22,-.38,-.96),dark,metal)
   end
   local projectors=Instance.new('Folder');projectors.Name='NomadProjectors';projectors.Parent=model
   for name,slit in pairs(nomadSlits) do
