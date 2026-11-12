@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — rebuild Ramiel's silhouette
+
+The owner rejected the animation in Team Create version 202 as completely different from the reference. Match the first attack's visible shapes and timing. Keep the pointed halves through the initial split and narrow column. Let smaller layers grow outward once along the centerline, then form the broader crossed stacks and reveal the tiny pyramids. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
+## November 11 follow-up — remove the gem's default shine
+
+Remove the white reflection shapes and replace the gem's star with a small four-point glint on a transparent background. Use the native metallic material for the gem and keep its landing cue.
+
 ## November 11 follow-up — Ramiel's one-way slab sweep and short beam
 
 Generate new glass layers near the core. Each layer grows and moves outward continuously until it disappears, with no return trip. Start fading the red beam as soon as it appears. Explode the blackened rocks sooner and give their blast a stronger camera shake. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)

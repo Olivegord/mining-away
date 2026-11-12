@@ -157,8 +157,21 @@ end
 local pieces={}
 for _,half in ipairs(rig.halves) do
  for _,slab in ipairs(half.sweeps) do pieces[slab]={sweep=true} end
- for _,band in ipairs(half.bands) do pieces[band.near]={} end
+ for j=1,2 do pieces[half.bands[j].near]={} end
 end
+local upper=rig.halves[1]
+local cap=upper.bands[3].near
+sample(.36/4.94)
+local splitWidth=cap.Size.X
+assert(cap.LocalTransparencyModifier==0 and rig.closedParts[1].LocalTransparencyModifier==1
+ and upper.bands[1].near.LocalTransparencyModifier==1,'the diamond did not split into two solid pointed halves')
+sample(1.04/4.94)
+assert(cap.LocalTransparencyModifier==0 and cap.Size.X<splitWidth*.30,'the end cap did not pinch into the narrow column')
+sample(1.85/4.94)
+local blockWidth=upper.bands[1].near.Size.X
+assert(blockWidth>splitWidth*.40 and upper.bands[1].near.LocalTransparencyModifier==0,'the broad center of the stack did not form')
+sample(1)
+assert(upper.bands[1].near.Size.X>blockWidth*1.60,'the last wave did not flare out into crossed slabs')
 for frame=0,300 do
  sample(frame/300)
  for part,state in pairs(pieces) do
@@ -170,15 +183,15 @@ for frame=0,300 do
    assert(distance>=(state.distance or 0)-1e-6,'a layer reversed towards the core')
    assert(part.Size.X>=(state.width or 0)-1e-6,'a layer shrank during outward growth')
    state.distance,state.width=distance,part.Size.X
-   state.widestOffset=math.max(state.widestOffset or 0,Vector3.new(offset.X,0,offset.Z).Magnitude)
+   assert(Vector3.new(offset.X,0,offset.Z).Magnitude<1e-5,'a layer wandered off the diamond axis')
   elseif state.distance then state.gone=true end
  end
 end
 for part,state in pairs(pieces) do
  assert(state.distance and state.width,'a layer never appeared')
  if state.sweep then
-  assert(state.gone and state.widestOffset>.13 and part.LocalTransparencyModifier==1,
-   'the outgoing slab failed to travel laterally and disappear')
+  assert(state.gone and state.distance>.52 and part.LocalTransparencyModifier==1,
+   'the outgoing slab failed to move up the stack and disappear')
  else
   assert(not state.gone and part.LocalTransparencyModifier==0,'the crossed shell did not hold')
  end

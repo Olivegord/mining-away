@@ -128,25 +128,21 @@ end)
 check('a finished gem stays hidden until release, then hits the ground with one clink',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,6,35)}
  local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
- cargo.Material=Enum.Material.Metal;cargo.Reflectance=.28
+ cargo.Material=Enum.Material.Metal;cargo.Reflectance=.62
  local born=realTime+.135
  local launch=Vector3.new(7,55,0)
  for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
   FloorY=.22,Position=cargo.Position,Velocity=launch,OreLaunchOrigin=cargo.Position,OreLaunchVelocity=launch}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio)
  local r=assert(renderer.records[cargo])
- assert(r.view.Material==Enum.Material.SmoothPlastic and r.view.Reflectance==.62 and r.view.CastShadow)
+ assert(r.view.Material==Enum.Material.Metal and r.view.Reflectance==.62 and r.view.CastShadow)
  renderer:update(1/60,born+.099)
  assert(r.view.Transparency==1 and not r.ribbon)
  renderer:update(1/60,born+.101)
  assert(r.view.Transparency==0)
  renderer:update(1/60,born+PickupMotion.DELAY+.29)
- assert(r.idle and r.idle.halo.AlwaysOnTop and #r.idle.dots==17 and #r.sheen==3)
- assert(r.sheen[1].Transparency<.52 and r.sheen[1].Material==Enum.Material.Neon)
- local raycast=workspace.Raycast;workspace.Raycast=function() return {} end
- renderer:update(1/60,born+PickupMotion.DELAY+.38)
- assert(not r.idle,'star drew through an obstruction')
- workspace.Raycast=raycast
+ assert(not r.idle,'gem sparkled during its drop')
+ for _,child in ipairs(r.view:GetDescendants()) do assert(not child:IsA('BasePart'),'gem has a fake reflection part') end
  local sounds=#audio.calls
  local contact=born+r.arc.contact+PickupMotion.DELAY
  renderer:update(1/60,contact-.015)
@@ -156,13 +152,14 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  local landed=r.view.CFrame
  assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
  renderer:update(1/60,contact+.11)
- assert(r.idle and r.idle.dots[1].frame.BackgroundTransparency<.26,'landing shine did not peak before the pickup hold ended')
+ assert(r.idle and r.idle.sprite.Image=='rbxassetid://6997866340' and r.idle.sprite.ImageTransparency<.26)
+ assert(not r.idle.halo.AlwaysOnTop and #r.idle.halo:GetChildren()==1)
  renderer:update(1/60,contact+.27)
  assert(#audio.calls==sounds+1 and (r.view.Position-landed.Position).Magnitude<1e-8 and r.view.CFrame.yaw==landed.yaw,
   'gem moved or chimed again after touchdown')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
-check('grounded gems flash thin dotted stars in place and share one price label',function()
+check('grounded gems use one sourced sprite and share one price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -193,7 +190,7 @@ check('grounded gems flash thin dotted stars in place and share one price label'
   if record.idle then
    lit+=1
    assert(record.idle.anchor.Parent==record.view and record.idle.halo.Adornee==record.idle.anchor)
-   assert(#record.idle.dots==17 and record.idle.dots[1].frame.BackgroundTransparency<1)
+   assert(record.idle.sprite.Image=='rbxassetid://6997866340' and record.idle.sprite.ImageTransparency<1)
   end
   assert(math.abs(record.view.Position.Y-record.view.Size.Y*.5)<1e-8,'gem failed to sit on the ground')
   assert(record.view.Position==poses[i].Position and record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],
@@ -221,7 +218,7 @@ check('grounded gems flash thin dotted stars in place and share one price label'
  renderer:update(1/60,realTime+13.1)
  assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to reset the fade')
  pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+13.2)
- assert(renderer.idleCount==0,'reduced effects left dotted stars on screen')
+ assert(renderer.idleCount==0,'reduced effects left sparkles on screen')
  pl:SetAttribute('ReducedEffects',false)
  renderer:destroy();visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)

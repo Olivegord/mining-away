@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `c0941e79d24df4ac64f8d44388eda0099f0bf96954b6239ca1936597194d0cdd` | Includes Ramiel's one-way slab motion, short beam and stronger blast, plus the dropped gem correction. |
-| Shared Studio Sources | Team Create save **202**, gameplay revision `a4d0bf2` | All seven managed Source fingerprints matched the canonical payload in shared Edit after the save. All three Script Sync roots reported `SyncedAsRoot`. |
+| Native-file SHA-256 | `bb31ed230e7731856db555cdabe35f658908154c17f4e00805d91a389a0d28ae` | Includes the rebuilt Ramiel silhouette and the revised metallic gems. |
+| Shared Studio Sources | Last verified Team Create save **202**, gameplay revision `a4d0bf2` | The new revision needs Script Sync and save in shared Edit. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | The open shared document has the current Sources and is ready for a fresh Play session. |
+| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session** | Client and drone configuration fingerprints match the scripts from Team Create save 202. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — restore Ramiel's reference silhouette and revise gems
+
+The owner rejected the motion in Team Create version 202. Fourteen reference frames from 19.07 to 23.07 show a pointed split diamond, a narrow column with moving inner prisms, a compact widening stack, and a sharp flare into crossed slabs. The rebuilt rig follows that sequence on a shared axis. Smaller layers move outward once and disappear. The outer tips remain visible through the windup. During the owner's test the camera was 136 studs from Ramiel, close to the old 140-stud cutoff. The rig now starts rendering within 165 studs and stays active until 185 studs. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
+An offline projection of the production geometry was compared with the reference frames. A detached Studio check measured the split face narrowing from 7.95 to 2.07 studs, the main band widening from 3.83 to 6.61 studs, and verified the final crossed stacks, eight pyramids and hard latch. Focused motion, beam, pickup and workshop checks passed. Cut gems use native Metal at 0.62 reflectance and one transparent four-point glint. The asset loaded in Studio. [Glint asset](https://create.roblox.com/store/asset/6997866346)
+
+The owner's Play session at place **124078027733625**, universe **10774898335**, was already open and uses the prior revision. Shared Edit arrival, save and the in-game appearance remain pending. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit 1dc0453`. The refresh preserved the authored map and unrelated or backup Sources. This revision is unpublished.
 
 ## November 11 — one-way Ramiel slabs and a quicker rock blast
 

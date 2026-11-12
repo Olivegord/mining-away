@@ -1210,11 +1210,11 @@ local function renderDrone(d,dt,now)
   *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
  local ramielLatched=false
- local showRamiel=d.ramiel and (BeamVFX.near(visiblePose.Position,140) or not d.ramielNeutral)
+ local ramielInRange=d.ramiel and BeamVFX.near(visiblePose.Position,d.ramielNeutral and 165 or 185)
+ local showRamiel=d.ramiel and (ramielInRange or not d.ramielNeutral)
  if showRamiel then
-  local near=BeamVFX.near(visiblePose.Position,140)
-  d.ramielNeutral=not near
-  local shot=near and d.shotReceipt
+  d.ramielNeutral=not ramielInRange
+  local shot=ramielInRange and d.shotReceipt
   if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
