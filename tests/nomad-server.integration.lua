@@ -2,91 +2,110 @@
 local function checkNomad()
  local owner=player(195030);players.PlayerAdded:Fire(owner)
  local p=assert(profiles[owner.UserId])
- local field=patches[1];field.resources={}
+ local bed=World.part(scene.map,'NomadTestField',Vector3.new(0,5,222),Vector3.new(108,1,64),Color3.new(1,0,0))
+ local field={id=#patches+1,cfg={Key='Quartz',Value=1,SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,
+  Hardness=1,Count=48,Ore=10,Turrets=0,Respawn=8},part=bed,model=scene.map,center=bed.Position,color=bed.Color,
+  resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ patches[field.id]=field
  owner.Character:PivotTo(CFrame.new(field.center+Vector3.new(0,3,0)))
- local d=p.drones[1];d.role='Nomad'
+ local ownedNomad=Pro.clone(p.drones[1].owned)
+ ownedNomad.id='nomad:test';ownedNomad.type='Nomad';ownedNomad.role='Nomad'
+ local d=spawnDrone(p,ownedNomad,#p.drones+1)
+ for _,part in ipairs(d.model:GetDescendants()) do
+  if part:IsA('BasePart') then assert(part.Transparency==1 and not part.CanQuery) end
+ end
  local function rock(x,z,kind)
   local r=makeResource(field,field.center+Vector3.new(x,0,z),kind or 'Crystal',810,10,3)
   r.readyAt=now;return r
  end
- local primary=rock(0,0)
- local nearest={rock(2,0),rock(4,0),rock(5,0),rock(7,0)}
- local extra=rock(11,0)
- local distant=rock(16,0)
+ local exposed={}
+ for x=-50,50,10 do
+  for z=-27,27,18 do exposed[#exposed+1]=rock(x,z) end
+ end
  local reserved=rock(0,3)
- local behindWall=rock(0,4)
+ local behindCover=rock(0,4)
  local geode=rock(0,5,'Geode')
  local growing=rock(0,6);growing.readyAt=now+100
+ local otherField=patches[1]
+ local outside=makeResource(otherField,otherField.center,'Crystal',810,10,3)
+ outside.readyAt=now
  local foreign=player(195031);players.PlayerAdded:Fire(foreign)
  local other=profiles[foreign.UserId].drones[1]
  reserved.slots[other.id]=1
- release(d);d.target=primary;d.targetSlot=1;d.field=field.id;primary.slots[d.id]=1
+ local allied=p.drones[1]
+ allied.target=exposed[2];exposed[2].slots[allied.id]=1
  local spec=DroneCatalog.Types.Nomad
- d.pos=primary.position+Vector3.new(9,spec.StationHeight,0)
- local routeStart=d.pos
- d.pos=committedStation(d,primary)
- local ground=primary.part:GetAttribute('GroundY')
- local frame=CFrame.new(d.pos)*CFrame.Angles(0,d.workYaw,0)
- local from=frame:PointToWorldSpace(RoleConfig.NomadDropOffset)
- assert(math.abs(d.pos.Y-ground-spec.StationHeight)<1e-4)
- assert((frame:PointToWorldSpace(Vector3.new(0,ground-d.pos.Y,-RoleConfig.NomadKeelOffset))-Vector3.new(primary.position.X,ground,primary.position.Z)).Magnitude<1e-4)
- local route=d.nomadRoute
- local peak,furthest=0,0
- for i=0,300 do
-  local position,velocity=Feel.nomadPose(route,route.duration*i/300)
-  peak=math.max(peak,velocity.Magnitude)
-  furthest=math.max(furthest,math.abs(position.Z-routeStart.Z))
+ local start=d.pos
+ droneStep(d,1/60)
+ assert(d.state=='Patrol' and not d.target and not d.nomadJob)
+ assert((start-home).Magnitude>570 and start.Y==home.Y+spec.StationHeight and spec.StationHeight>=400)
+ assert((Feel.nomadPatrol(home,spec.StationHeight,d.slot,d.owner,now+56)-start).Magnitude>1100)
+ p.miningSquare={field=field,center=field.center,half=5}
+ local peak=0
+ for _=1,60*35 do
+  now+=1/60
+  droneStep(d,1/60)
+  peak=math.max(peak,d.velocity.Magnitude)
+  if d.nomadJob and d.nomadJob.projectile then break end
  end
- assert(peak<=9+.001 and furthest>15 and route.duration>6.5,'Nomad needs a wide approach under its speed cap')
- local stop,still=Feel.nomadPose(route,route.duration)
- assert((stop-d.pos).Magnitude<.001 and still.Magnitude==0)
- assert(math.abs(Feel.nomadYaw(0,math.pi/2,1)-math.rad(9))<1e-6)
- local cruise=Feel.followGoal(primary.position,1,1,0,.4,true,45)-primary.position
- assert(cruise.Y==45 and cruise.X>34)
- local receipt=RoleEffects.Projectile('Nomad',from,primary.position,Color3.new(1,1,1),now,spec.Windup,spec.Flight,d.id,primary.id)
- local job={startedAt=now,duration=spec.CycleDuration,impact=spec.Impact,projectile=receipt,serial=1,
-  from=from,contact=primary.position,targetId=primary.id}
- d.specialJob=job
+ local job=assert(d.nomadJob)
+ local receipt=assert(job.projectile)
+ assert(peak<=75.001 and not d.target and d.state=='SpecialMine')
+ assert(job.from.Y-job.contact.Y==spec.StationHeight)
+ assert((job.scanFrom-job.from).Magnitude>job.radius and receipt:GetAttribute('ScanFrom')==job.scanFrom)
+ assert((Feel.nomadPass(job.scanFrom,job.from,.36)-job.from).Magnitude>10)
+ assert(Feel.nomadPass(job.scanFrom,job.from,.72)==job.from)
  local barrier=Instance.new('Part');barrier.Parent=workspace
  local pathBlocked=true
  function workspace:Raycast(from,delta)
-  if (pathBlocked and delta.Y<-10) or (from+delta-behindWall.part.Position).Magnitude<.01 then
+  local finish=from+delta
+  if delta.Y< -10 and ((pathBlocked and (finish-job.contact).Magnitude<.01)
+   or math.abs(finish.X-behindCover.part.Position.X)+math.abs(finish.Z-behindCover.part.Position.Z)<.01) then
    return {Instance=barrier,Position=from+delta*.5,Normal=Vector3.yAxis}
   end
   return nil
  end
- assert(not scene.fireNomad(d,primary,job) and not receipt:GetAttribute('ContactAt'))
- assert(not hitResource(d,nearest[1],810,false,nil,nil,'NomadFinish'))
- now=now+5.01
- assert(not scene.fireNomad(d,primary,job) and not primary.paid,'obstruction did not stop the rocket')
+ assert(not scene.fireNomad(d,field,job) and not receipt:GetAttribute('ContactAt'))
+ assert(not hitResource(d,exposed[1],810,false,nil,nil,'NomadFinish'))
+ now=job.startedAt+1
+ setMotionPaused(p,true)
+ assert(receipt:GetAttribute('PausedAt')==now)
+ now+=2
+ setMotionPaused(p,false)
+ assert(receipt:GetAttribute('PausedAt')==0 and receipt:GetAttribute('StartedAt')==job.startedAt)
+ now=job.startedAt+spec.Windup+spec.Flight+.01
+ assert(not scene.fireNomad(d,field,job) and not exposed[1].paid,'obstruction did not stop the strike')
  pathBlocked=false
  p.busy=true
- assert(not scene.fireNomad(d,primary,job),'a paused job awarded ore')
+ assert(not scene.fireNomad(d,field,job),'a paused job awarded ore')
  p.busy=false
  local before=pickupSerial
- assert(scene.fireNomad(d,primary,job))
+ droneStep(d,1/60)
  local contactAt=now
- assert(receipt:GetAttribute('ContactAt')==contactAt and receipt:GetAttribute('BlastRadius')==13)
+ assert(receipt:GetAttribute('ContactAt')==contactAt and receipt:GetAttribute('BlastRadius')==job.radius and job.impacted)
  now=contactAt+spec.BlastPause-.001
  scene.stepClusterShots()
- assert(primary.hp==800 and not primary.paid and pickupSerial==before and not receipt:GetAttribute('ShatterAt'))
- assert(primary.part:GetAttribute('ClusterBlackAt')==contactAt and not sameRockType(other,nearest[1]))
- for _,r in ipairs(nearest) do assert(r.hp==800 and r.clusterShot) end
+ assert(pickupSerial==before and not receipt:GetAttribute('ShatterAt'))
+ for _,r in ipairs(exposed) do
+  assert(r.hp==800 and r.clusterShot and r.part:GetAttribute('ClusterBlackAt')==contactAt)
+  assert(not sameRockType(other,r))
+ end
  now=contactAt+spec.BlastPause+.001
  p.busy=true;scene.stepClusterShots()
- assert(not primary.paid and primary.clusterShot and pickupSerial==before)
+ assert(not exposed[1].paid and exposed[1].clusterShot and pickupSerial==before)
  p.busy=false;scene.stepClusterShots()
  assert(receipt:GetAttribute('ShatterAt')==now)
- assert(primary.paid and primary.part:GetAttribute('CrystalSplitAt')==now)
- for _,r in ipairs(nearest) do
+ for _,r in ipairs(exposed) do
   assert(r.paid and r.part:GetAttribute('CutProjectile')=='Nomad' and r.part:GetAttribute('CrystalSplitAt')==now)
   assert(not r.clusterShot,'the finished rock kept its blast reservation')
  end
- for _,r in ipairs({extra,distant,reserved,behindWall,geode,growing}) do assert(not r.paid and r.hp==800) end
- assert(pickupSerial>before and d.nomadReadyAt>now)
+ for _,r in ipairs({reserved,behindCover,geode,growing,outside}) do assert(not r.paid and r.hp==800) end
+ assert(pickupSerial>before and d.nomadReadyAt==contactAt+spec.Cooldown and not allied.target)
  local after=pickupSerial
  scene.stepClusterShots()
- assert(not scene.fireNomad(d,primary,job) and pickupSerial==after)
+ assert(not scene.fireNomad(d,field,job) and pickupSerial==after)
+ droneStep(d,1/60)
+ assert(not d.nomadJob and d.state=='Patrol','a finished pass must go back to patrol')
  local profile=Pro.new(195032,123)
  profile.run.quartzEarnings=Pro.milestone(profile).earnings
  local first=Pro.prestigePreview(profile)
@@ -101,6 +120,6 @@ local function checkNomad()
  assert(migrated.fleet[#migrated.fleet].id==owned.id and owned.role=='Nomad')
  profile.run.quartzEarnings=Pro.milestone(profile).earnings
  for _,choice in ipairs(Pro.prestigePreview(profile).droneChoices) do assert(choice.kind~='Nomad') end
- print('PASS Nomad arc, speed and turn limits, delayed cluster shatter, crew reservations, ore, and permanent prestige ownership')
+ print('PASS Nomad invisible patrol, side entry, delayed field shatter, claims, cover, ore and prestige ownership')
 end
 checkNomad()

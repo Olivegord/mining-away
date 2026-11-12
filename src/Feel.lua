@@ -136,73 +136,22 @@ function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
  return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
- if altitude then
-  local radius=32+(slot%3)*3
-  local angle=time*.135+2*math.pi*slot/math.max(1,count)
-  return ownerPosition+Vector3.new(radius*math.cos(angle),altitude,radius*math.sin(angle))
- end
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,y,z)
 end
 
-local function nomadCurve(route,q)
- local u=1-q
- return route.from*u^3+route.lead*(3*u^2*q)+route.turn*(3*u*q^2)+route.goal*q^3
+function F.nomadPatrol(center,altitude,slot,owner,now)
+ local angle=(now%112)*(2*math.pi/112)+slot*2.39996+(owner%211)/211*(2*math.pi)
+ return center+Vector3.new(680*math.cos(angle),altitude,565*math.sin(angle))
 end
-local function nomadTangent(route,q)
- local u=1-q
- return ((route.lead-route.from)*u^2+(route.turn-route.lead)*(2*u*q)+(route.goal-route.turn)*q^2)*3
+
+function F.nomadPass(from,to,q)
+ if q>=.72 then return to end
+ local t=math.clamp(q/.72,0,1)
+ return from:Lerp(to,t*t*(3-2*t))
 end
-local NOMAD_SEGMENTS=24
-function F.nomadRoute(from,center,velocity,heading,slot,speed,keelOffset)
- local chord=Vector3.new(center.X-from.X,0,center.Z-from.Z)
- local distance=chord.Magnitude
- local forward=distance>1 and chord.Unit or heading
- local sideways=Vector3.yAxis:Cross(forward)
- local current=Vector3.new(velocity.X,0,velocity.Z)
- local drift=current:Dot(sideways)
- sideways*=math.abs(drift)>.7 and math.sign(drift) or (slot%2==0 and -1 or 1)
- local bend=math.clamp(32+distance*.24,34,52)
- local tangent=current.Magnitude>1.2 and current.Unit or (forward*.44+sideways*.9).Unit
- local rise=center.Y-from.Y
- local turn=center+sideways*bend-forward*math.min(12,distance*.24)
- local exit=Vector3.new(center.X-turn.X,0,center.Z-turn.Z).Unit
- local offset=-exit*keelOffset
- local route={from=from,lead=from+tangent*bend*.82+Vector3.yAxis*(rise*.14+2),
-  turn=turn+offset+Vector3.yAxis*(-rise*.19+2),goal=center+offset,
-  yaw=math.atan2(-exit.X,-exit.Z),elapsed=0,distances={[0]=0}}
- local length=0
- for i=1,NOMAD_SEGMENTS do
-  local a,b=(i-1)/NOMAD_SEGMENTS,i/NOMAD_SEGMENTS
-  local start,finish=nomadTangent(route,a),nomadTangent(route,b)
-  local middle=nomadTangent(route,(a+b)*.5)*2-(start+finish)*.5
-  -- The derivative lies in the convex hull of these three vectors. Each
-  -- segment's distance budget therefore bounds instantaneous speed as well.
-  length+=math.max(start.Magnitude,middle.Magnitude,finish.Magnitude)/NOMAD_SEGMENTS
-  route.distances[i]=length
- end
- route.length=length
- route.duration=math.max(6.5,length*1.5/math.max(.1,speed))
- route.entry=math.clamp(current.Magnitude*route.duration/length,0,1)
- return route
-end
-function F.nomadPose(route,elapsed)
- if elapsed>=route.duration then return route.goal,Vector3.zero end
- local t=math.clamp(elapsed/route.duration,0,1)
- local m=route.entry
- local distance=t*(m+t*((3-2*m)+t*(m-2)))*route.length
- local speed=(m+t*(2*(3-2*m)+3*t*(m-2)))*route.length/route.duration
- local first,last=1,NOMAD_SEGMENTS
- while first<last do
-  local i=math.floor((first+last)/2)
-  if route.distances[i]<distance then first=i+1 else last=i end
- end
- local start=route.distances[first-1]
- local length=route.distances[first]-start
- local q=(first-1+(distance-start)/length)/NOMAD_SEGMENTS
- return nomadCurve(route,q),nomadTangent(route,q)*(speed/(length*NOMAD_SEGMENTS))
-end
+
 function F.nomadYaw(yaw,target,dt)
  local delta=(target-yaw+math.pi)%(2*math.pi)-math.pi
  local limit=math.rad(9)*math.max(0,dt)

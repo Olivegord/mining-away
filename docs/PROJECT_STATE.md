@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `5fd0bfedaf187afd7b8454f1163cbb168978f01104513b3a4cfe3dcaae065416` | Ramiel's wider beam, synchronized shockwave and heavy-impact rubble. |
-| Shared Studio Sources | Verified Team Create save **213** | All seven managed Sources match the canonical file and Script Sync export. |
+| Native-file SHA-256 | `99c612d76fdb54f794bfda3ce611d4a8df9db1f3e556173acc3a3d376b227a15` | Nomad's high patrol, field-wide strike and scanner cues. |
+| Shared Studio Sources | Verified Team Create save **214** | All seven managed Sources match the canonical file and Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the wider Ramiel beam and heavy-impact rubble in save **213**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's high patrol, wide scanner and field strike in save **214**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — move Nomad above the world and give it a field strike
+
+Nomad remains a permanent reward and circles the quarry 420 studs up, outside the follow formation. A mining pin dispatches it to the near side of that field. The wide blue rake, staggered curtains, diagonal pass and two final filaments switch on hard cuts. The lights cut to darkness before a warm release point and a 1.44-second drop. The scanner rumble, short cuts, cutoff, release and descending whine use spatial Roblox audio keyed to those same phases. Roblox's audio import requires rights to the source audio. [Film sound design interview](https://www.asoundeffect.com/the-creator-film-sound/) · [Roblox audio requirements](https://create.roblox.com/docs/audio/assets)
+
+At impact, all eligible exposed crystals in the selected field blacken and then shatter together 0.50 seconds later. This includes crystals being worked by the owner's crew. It preserves foreign reservations, growing nodes, geode shells, rocks under cover and adjacent fields. The next sortie waits at least 42 seconds from impact. The Quartz through Emerald decks are 108 by 64 studs with 48 slots each. Native ray queries in the owner's existing Play session verified all five deck approaches and clear sky above their live crystals. The production field test broke 44 of 48 nodes and preserved the four ineligible nodes and an adjacent-field rock. All six audio assets returned successful fetch status. A detached native Edit check measured a broad curtain at 25.92 studs wide and 419.91 studs tall, and exercised the two-filament cutoff, release and descent cue timing. Audio mix, full gameplay and multiplayer have not been playtested. The broader gadget and audio suites still hit their existing client-inertia and sell-trip fixture failures.
+
+After Play ended, Script Sync installed the new Sources in shared Edit. All seven managed Sources matched the canonical file after Team Create save **214** at place **124078027733625**, universe **10774898335**. Reproduce from the prior snapshot with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 2b45daa`. This revision is unpublished.
 
 ## November 11 — widen Ramiel's beam and ground the heavy impacts
 

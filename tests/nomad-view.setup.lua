@@ -3,7 +3,7 @@ local BeamVFX={near=function() return true end,reduced=function() return false e
 local RoleVisuals={pulses=0,craters=0,setTime=function() end}
 function RoleVisuals.Pulse() RoleVisuals.pulses+=1 end
 function RoleVisuals.Crater(_,radius,style,at)
- assert(radius>12 and style=='Nomad' and at==5.50)
+ assert(radius>30 and style=='Nomad' and math.abs(at-8.34)<.00001)
  RoleVisuals.craters+=1
 end
 local NumberSequenceKeypoint={new=function(t,value) return {Time=t,Value=value} end}

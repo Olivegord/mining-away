@@ -487,7 +487,7 @@ function View.new(audio,onPrism,onNomadImpact)
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
-     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact,nomadFlash)
+     NomadView.step(r,node,now,from,to,age,windup,progress,audio,onNomadImpact,nomadFlash)
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then

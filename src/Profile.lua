@@ -613,7 +613,7 @@ local function prestigeChoices(p)
   local owned={}
   for _,d in ipairs(p.fleet) do owned[d.role]=true end
   if not owned.Nomad then
-   choices[2]={kind='Nomad',name='Nomad',tier=4,job='Scans from high above and shatters up to five clustered crystals'}
+   choices[2]={kind='Nomad',name='Nomad',tier=4,job='Sweeps in from the sky and shatters exposed crystals across the field'}
   end
   local first=p.run.index%2==0 and 'Ramiel' or 'Orbiter'
   local second=first=='Ramiel' and 'Orbiter' or 'Ramiel'

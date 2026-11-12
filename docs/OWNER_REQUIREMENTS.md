@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — put Nomad on a high world patrol
+
+Keep Nomad out of sight high over the world. It should circle the map and sweep in from the side to strike essentially a whole field. Restore the broad scanner shapes from before the middle-teeth pass. Sync the scanner audio to the changes in the lights, including the cutoff and release.
+
 ## November 11 follow-up — slow the ore hover and start effects at touchdown
 
 Slow the dropped ore's bobbing. Start its effects seamlessly as the ore hits the ground.

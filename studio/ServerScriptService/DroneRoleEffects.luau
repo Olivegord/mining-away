@@ -31,10 +31,14 @@ end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
-function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery,ground)
+function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery)
  -- Pending records are owned by the job. Pause can outlast a fixed TTL;
  -- release destroys a canceled shot and contact starts the short cleanup.
- return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery,ScanGround=ground})
+ return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery})
+end
+function Effects.NomadPass(actor,job,windup,flight)
+ return record('MiningShot',{Shape='Nomad',Actor=actor,From=job.from,Position=job.contact,ScanFrom=job.scanFrom,
+  BlastRadius=job.radius,StartedAt=job.startedAt,Windup=windup,Duration=flight})
 end
 local function contact(node,point,normal,fractured,broken,powered,at)
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
@@ -57,9 +61,9 @@ function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNor
  node:SetAttribute('PrismHits',#contacts)
  contact(node,primary.point,primary.normal,false,false,false,at)
 end
-function Effects.NomadContact(node,point,ground,radius,at)
+function Effects.NomadContact(node,point,at)
  if not node or not node.Parent then return end
- node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',ground);node:SetAttribute('BlastRadius',radius)
+ node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',point)
  node:SetAttribute('ContactAt',at)
 end
 function Effects.ClusterShatter(node,at)

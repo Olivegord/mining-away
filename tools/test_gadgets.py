@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         '\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'prism-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/prism-server.integration.lua').read_text(),
-        'nomad-view': mock + '\n' + (ROOT / 'tests/nomad-view.setup.lua').read_text() + '\n' + module_bundle(('EnergyDisc','NomadView')) + '\n' + (ROOT / 'tests/nomad-view.integration.lua').read_text(),
+        'nomad-view': mock + '\n' + (ROOT / 'tests/nomad-view.setup.lua').read_text() + '\n' + module_bundle(('Feel','EnergyDisc','NomadView')) + '\n' + (ROOT / 'tests/nomad-view.integration.lua').read_text(),
         'nomad-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/nomad-server.integration.lua').read_text(),
         'swarm': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/swarm-motion.integration.lua').read_text(),
         'client-inertia': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/motion-setup.lua').read_text() + '\n' + render + '\n' + (ROOT / 'tests/client-inertia.integration.lua').read_text(),
