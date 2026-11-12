@@ -23,6 +23,7 @@ local function checkPrism()
  local wall,wallNormal
  local function distance(i) return 35+(i-1)*4 end
  function workspace:Raycast(from,delta,params)
+  if math.abs(delta.X)+math.abs(delta.Z)<.001 then return nil end
   assert(delta.Magnitude<=64+.001,'Prism cast beyond its range')
   for i,rock in ipairs(entries) do
    if not table.find(params.FilterDescendantsInstances,rock.part) and distance(i)<=delta.Magnitude then
@@ -30,17 +31,43 @@ local function checkPrism()
    end
   end
  end
- assert(not hitResource(drone,second,300,false,nil,nil,'PrismPass'),'pass without a ray contact was accepted')
+ assert(not hitResource(drone,second,300,false,nil,nil,'PrismFinish'),'a finish without a confirmed shot was accepted')
+ local fireAt=now
+ local spec=DroneCatalog.Types.Ramiel
+ local beforePickup=pickupSerial
  assert(scene.firePrism(drone,target,drone.specialJob),'valid path did not fire')
- local damage={800-target.hp,800-second.hp,800-third.hp}
- assert(damage[1]>damage[2] and damage[2]>damage[3] and damage[3]>0,'piercing falloff was lost')
- assert(guarded.hp==800 and behind.hp==800 and offRay.hp==800,'shot damaged reserved or off-axis rock')
  assert(receipt:GetAttribute('ContactAt')==now and receipt:GetAttribute('PrismHits')==2)
  local origin,endpoint=receipt:GetAttribute('PrismFrom'),receipt:GetAttribute('PrismEnd')
  assert(math.abs((endpoint-origin).Magnitude-distance(4))<.001,'path did not stop at the reserved rock')
  assert(receipt:GetAttribute('PrismHit1') and receipt:GetAttribute('PrismHit2') and not receipt:GetAttribute('PrismHit3'))
  assert(not scene.firePrism(drone,target,drone.specialJob),'a confirmed job fired a second time')
+ for _,t in ipairs({.01,spec.BeamHold,spec.BeamHold+spec.BlackPause-.01}) do
+  now=fireAt+t
+  scene.stepPrismShots()
+  for _,rock in ipairs({target,second,third}) do
+   assert(rock.hp==800 and rock.stage==0 and not rock.extractedOre,'health or rewards changed before the explosion')
+   assert(rock.part:GetAttribute('PrismBlackAt')==fireAt+spec.BeamHold)
+  end
+  assert(not hitResource(drone,target,30,false,nil,nil,'Special'),'a competing cut landed during the shot')
+ end
+ now=fireAt+spec.BeamHold+spec.BlackPause+.001
+ p.busy=true
+ scene.stepPrismShots()
+ assert(target.hp==800 and target.prismShot,'a temporary save canceled or awarded a pending shot')
+ p.busy=false
+ scene.stepPrismShots()
+ local rewardSerial=pickupSerial
+ assert(rewardSerial>beforePickup,'the blast did not award ore')
+ for _,rock in ipairs({target,second,third}) do
+  assert(rock.hp==0 and rock.paid and rock.extractedOre==rock.ore and not rock.prismShot,'the explosion did not finish the hit rock')
+  assert(rock.part:GetAttribute('CrystalSplitAt')==now and rock.part:GetAttribute('CutProjectile')=='Prism')
+ end
+ scene.stepPrismShots()
+ assert(pickupSerial==rewardSerial,'a delayed shot awarded cargo twice')
+ assert(guarded.hp==800 and behind.hp==800 and offRay.hp==800,'shot damaged reserved or off-axis rock')
  guarded.slots[worker.id]=nil
+ local target,second,third=make(25),make(27),make(29)
+ entries={target,second,third,guarded,behind}
  local clear=assert(scene.prismTrace(drone,target,drone.pos,false))
  assert(#clear.hits==4 and math.abs((clear.endpoint-clear.origin).Magnitude-distance(5))<.001,'target limit failed to stop the path')
  wall=Instance.new('Part');wall.CanCollide=true;wall.Parent=workspace
@@ -51,6 +78,6 @@ local function checkPrism()
  wallNormal=Vector3.yAxis
  local ground=assert(scene.prismTrace(drone,target,drone.pos,false))
  assert(ground.groundNormal==wallNormal,'the renderer cannot identify the real ground contact')
- print('PASS Ramiel server ray applies ordered falloff, respects occupancy and scenery, and publishes one full shot')
+ print('PASS Ramiel preserves rock health through the beam and black pause, then finishes its valid ray contacts once')
 end
 checkPrism()

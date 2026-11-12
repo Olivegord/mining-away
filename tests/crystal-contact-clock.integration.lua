@@ -71,6 +71,36 @@ for frame=1,60 do crystalFrame(resources,103.23+frame/60) end
 assert(#audio==14 and audio[12]=='crystal_fall_tink' and audio[14]=='crystal_fall_tink'
  and #rockDamage.feedback.pieces==0,'falling shards did not play one tink per selected contact and clean up')
 
+local prismParticles=0
+local impactParticles=RoleVisuals.ImpactParticles
+RoleVisuals.ImpactParticles=function(point,color,strength,kind)
+ if kind=='PrismBlast' then prismParticles+=1 end
+ impactParticles(point,color,strength,kind)
+end
+local charred=source:Clone();charred.Parent=workspace
+for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,PrismBlackAt=106.55}) do charred:SetAttribute(key,value) end
+local target={source=charred,view=charred:Clone(),baseColor=charred.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,104,3)}
+target.view.Parent=fx
+crystalFrame({target},104)
+local beforeChar,size=target.view.Color,target.view.Size
+crystalFrame({target},106.54)
+assert(target.view.Color==beforeChar and #audio==14,'the target reacted before the beam stopped')
+crystalFrame({target},106.57)
+rockDamage.feedback:applyTints(106.57)
+assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==14,'black pause changed the rock shape or emitted feedback')
+for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=106.89,CrystalBreakAt=106.89,CrystalSplitAt=106.89,CutProjectile='Prism'}) do
+ charred:SetAttribute(key,value)
+end
+target.dirty=true
+crystalFrame({target},106.90)
+assert(target.view.Transparency==0 and not target.breakSize and #audio==14,'the prism break compressed or popped early')
+crystalFrame({target},107.00)
+assert(target.view.Transparency==1 and audio[15]=='prism_blast' and #audio==17 and prismParticles==1,'the charred target did not explode once')
+crystalFrame({target},107.01)
+assert(#audio==17,'the prism explosion replayed')
+charred:Destroy();target.view:Destroy()
+
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()
 local roleFolder=Instance.new('Folder');roleFolder.Name='DroneRoleState';roleFolder.ChildAdded=signal();roleFolder.Parent=workspace
@@ -158,9 +188,19 @@ assert(before:Dot(after)<-.60,'the star rays did not swing through the flash')
 assert(chargeField.wake.rays[1].beam.Enabled,'release pressure wave did not separate from the core flare')
 RoleEffectView.ramielCharge(prism,1,-.37,false)
 assert(chargeField.rays[1].core.Transparency[1].Value<.85 and not chargeField.lamp.Enabled,'the star did not outlast its light')
+local launchSize=chargeField.gui.Size[1]
+local launchOpacity=chargeField.rays[1].core.Transparency[1].Value
+RoleEffectView.ramielCharge(prism,1,-.40,false)
+assert(chargeField.gui.Size[1]==launchSize and chargeField.rays[1].core.Transparency[1].Value~=launchOpacity,
+ 'the launch star changed size or failed to flicker')
 RoleEffectView.ramielCharge(prism,1,-1.90,false,2.55)
-assert(chargeField.rays[1].core.Transparency[1].Value<.40 and chargeField.gui.Size[1]<ignition*.5,
- 'a smaller four-point star did not remain visible during the shot')
+local secondStar=assert(chargeField.sustainRays)[1].core
+local width,opacity=secondStar.Width0,secondStar.Transparency[1].Value
+assert(chargeField.rays[1].core.Transparency[1].Value==1 and opacity<.55 and width<chargeField.rays[1].core.Width0*.6,
+ 'the small firing star did not remain after the launch star faded')
+RoleEffectView.ramielCharge(prism,1,-1.92,false,2.55)
+assert(math.abs(secondStar.Width0-width)>.001 and math.abs(secondStar.Transparency[1].Value-opacity)>.01,
+ 'the firing star did not flicker in size and opacity')
 RoleEffectView.ramielCharge(prism,1,-2.60,false,2.55)
 assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
 local beamCalls,kicks={},0

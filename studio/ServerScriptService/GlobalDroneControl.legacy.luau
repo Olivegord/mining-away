@@ -731,7 +731,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=2.55,BeamRange=64,BeamStation=32,BeamTargets=4,BeamFalloff=.72,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a thin lance through up to four crystals. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,CorePower=1,Color={93,203,255},Description='Fires a thin lance through up to four crystals. Each hit crystal goes black after the beam, then bursts in one hit for 35% extra ore.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -4941,7 +4941,7 @@ function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at
  node:SetAttribute('ContactAt',at)
  Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
-function Effects.PrismContact(node,origin,endpoint,primary,contacts,fractured,broken,at,groundNormal)
+function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNormal)
  if not node or not node.Parent then return end
  node:SetAttribute('PrismFrom',origin);node:SetAttribute('PrismEnd',endpoint)
  node:SetAttribute('PrismGroundNormal',groundNormal)
@@ -4949,7 +4949,7 @@ function Effects.PrismContact(node,origin,endpoint,primary,contacts,fractured,br
   node:SetAttribute('PrismHit'..i,hit.point);node:SetAttribute('PrismNormal'..i,hit.normal)
  end
  node:SetAttribute('PrismHits',#contacts)
- Effects.ProjectileContact(node,primary.point,primary.normal,fractured,broken,false,at)
+ Effects.ProjectileContact(node,primary.point,primary.normal,false,false,false,at)
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)
@@ -8443,7 +8443,11 @@ function scene.pickupFloorBelow(position)
 end
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
- local launchAt=now+(drop.finishing and OreDrops.REWARD_DELAY or 0)
+ local launchAt=now
+ if drop.finishing then
+  local splitAt=template:GetAttribute('CrystalSplitAt') or now+OreDrops.BREAK_DELAY
+  launchAt=splitAt+(OreDrops.REWARD_DELAY-OreDrops.BREAK_DELAY)
+ end
  drop.launchAt=launchAt
  if drop.oreArc and not drop.compacted then
   template=scene.crystalCuts and scene.crystalCuts.Gem or template
@@ -8983,7 +8987,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
   local part=hit.Instance
   local rock=resources[part:GetAttribute('ResourceId') or '']
   if rock and rock.part==part then
-   if #hits>=spec.BeamTargets or rock.field~=primary.field or rock.paid or rock.hp<=0
+   if #hits>=spec.BeamTargets or rock.field~=primary.field or rock.paid or rock.hp<=0 or rock.prismShot
     or now<rock.readyAt or rock.kind=='Geode' or not playerCanMine(p,rock.field) or not sameRockType(d,rock) then
     endpoint=hit.Position;break
    end
@@ -9006,7 +9010,10 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
  local prism=fractureContext and fractureContext.prism
- local piercing=contactKind=='PrismPass' and d.role=='Ramiel' and prism and prism.rock==r
+ local shot=fractureContext and fractureContext.prismShot
+ local piercing=contactKind=='PrismFinish' and d.role=='Ramiel' and prism and prism.rock==r
+  and shot and shot==r.prismShot and shot.drone==d and now>=shot.blastAt
+ if r.prismShot and not piercing then return false end
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not piercing and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
  local recipient=d
@@ -9059,7 +9066,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if pinnedWork and (startShift or (d.squareJob==p.shiftSquare and now<(p.shiftUntil or 0))) then amount*=1.5 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
- if special or piercing then
+ if piercing then
+  amount=r.hp
+ elseif special then
   amount=DroneCatalog.capDamage(d.role,r.maxHP,amount)
   -- Quarter-work subtraction can leave a floating-point residue on minerals
   -- such as Ruby. Resolve only arithmetic dust, never another real chunk.
@@ -9146,12 +9155,14 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=nextStage
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
-  r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
-  r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
+  if not piercing then
+   local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
+   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
+   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
+  end
  end
  r.part:SetAttribute('HP',actual)
- if r.field.cfg.SelectionOnly and hitSurface then
+ if (r.field.cfg.SelectionOnly or piercing) and hitSurface then
   if cutStart then d.lastCutFX=d.beamSince end
   r.part:SetAttribute('CutContactPoint',hitSurface.point);r.part:SetAttribute('CutContactNormal',hitSurface.normal)
   local projectile=prism and fractureContext.projectile or shotKind and job.projectile
@@ -9161,7 +9172,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
    r.part:SetAttribute('CrystalBreakOwner',recipient.owner)
-   r.part:SetAttribute('CrystalSplitAt',now+OreDrops.BREAK_DELAY)
+   r.part:SetAttribute('CrystalSplitAt',now+(piercing and 0 or OreDrops.BREAK_DELAY))
    r.part:SetAttribute('CrystalBreakAt',now)
   end
  end
@@ -9280,28 +9291,51 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  return true,broken,r.stage>previous
 end
+scene.prismShots={}
 function scene.firePrism(d,primary,job)
+ if job~=d.specialJob or job.impacted or not primary.slots[d.id] then return false end
  local path=scene.prismTrace(d,primary,d.pos,false)
  if not path then return false end
- local context={prism=path.selected,projectile=job.projectile}
- local accepted,broken,fractured=hitResource(d,primary,job.damage,false,nil,nil,'Special',context)
- if not accepted then return false end
  local spec=DroneCatalog.Types.Ramiel
- -- A final blow retires its reservation immediately. The beam and recovery
- -- still own this firing window even if the drone finds another rock.
- d.prismReadyAt=now+spec.BeamHold+RoleConfig.RamielCloseTime
+ local beamEnd=now+spec.BeamHold
+ local shot={drone=d,profile=profiles[d.owner],runId=data(profiles[d.owner]).run.id,
+  hits=path.hits,projectile=job.projectile,blastAt=beamEnd+spec.BlackPause}
+ scene.prismShots[shot]=true
+ job.impacted=true
+ job.prismFired=true
+ d.prismReadyAt=beamEnd+RoleConfig.RamielCloseTime
  local contacts={}
- local power=spec.BeamFalloff
  for _,hit in ipairs(path.hits) do
-  if hit==path.selected then continue end
-  context.prism=hit
-  if hitResource(d,hit.rock,job.damage*power,false,nil,nil,'PrismPass',context) then
-   table.insert(contacts,hit)
-   power*=spec.BeamFalloff
+  hit.rock.prismShot=shot
+  hit.rock.part:SetAttribute('PrismBlackAt',beamEnd)
+  if hit~=path.selected then table.insert(contacts,hit) end
+ end
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal)
+ return true
+end
+function scene.stepPrismShots()
+ for shot in pairs(scene.prismShots) do
+  if now<shot.blastAt then continue end
+  local drone=shot.drone
+  local profile=profiles[drone.owner]
+  if profile==shot.profile and profile.busy and not profile.leaving then continue end
+  scene.prismShots[shot]=nil
+  local valid=profile==shot.profile and healthy(profile) and data(profile).run.id==shot.runId
+   and drones[drone.id]==drone and drone.hp>0
+  for _,hit in ipairs(shot.hits) do
+   local rock=hit.rock
+   if rock.prismShot~=shot then continue end
+   local broken=false
+   if valid and resources[rock.id]==rock then
+    local accepted
+    accepted,broken=hitResource(drone,rock,rock.hp,false,nil,nil,'PrismFinish',
+     {prism=hit,projectile=shot.projectile,prismShot=shot})
+    broken=accepted and broken
+   end
+   rock.prismShot=nil
+   if not broken and rock.part.Parent then rock.part:SetAttribute('PrismBlackAt',nil) end
   end
  end
- RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now,path.groundNormal)
- return true
 end
 local function chooseResource(d: any,field: any,square: any?)
  local best,score,bestPriority=nil,math.huge,-math.huge
@@ -9484,7 +9518,7 @@ function scene.squareStep(p,d)
  end
 end
 function scene.regrow(r,dt)
- if not r.field.cfg.SelectionOnly or r.paid or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
+ if not r.field.cfg.SelectionOnly or r.paid or r.prismShot or not r.lastHitAt or now-r.lastHitAt<.8 or next(r.slots) then return end
  local owner=r.lastPinOwner and profiles[r.lastPinOwner]
  if owner and not owner.leaving and owner.miningSquare==r.lastPin then return end
  local maxWork=r.maxHP-10
@@ -9811,6 +9845,10 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
+ if d.specialJob and d.specialJob.prismFired and now<d.prismReadyAt then
+  d.state='SpecialMine';d.mining=false
+  return
+ end
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
  if not field.junk and not d.target and d.autoField==field.id then chooseResource(d,field) end
  local r=d.target
@@ -11531,6 +11569,7 @@ Players.PlayerRemoving:Connect(removePlayer)
 for _,pl in ipairs(Players:GetPlayers()) do task.spawn(addPlayer,pl) end
 RunService.Heartbeat:Connect(function(dt: number)
  now=workspace:GetServerTimeNow()
+ scene.stepPrismShots()
  discoveries:Step()
  elapsed=math.min(elapsed+math.max(0,dt),C.Tick*(C.MaxCatchup or 6))
  local steps=0

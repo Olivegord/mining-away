@@ -1028,9 +1028,10 @@ local function renderResource(r,now)
  local authoritativeStage=math.clamp(s:GetAttribute('Stage') or 0,0,stageCount)
  local health=s:GetAttribute('HP') or 1
  local broken=(s:GetAttribute('BreakSerial') or 0)>0 or health<=0
- if r.cutFeedback and not r.visual.broken then
+ if (r.cutFeedback or s:GetAttribute('PrismBlackAt')) and not r.visual.broken then
   if broken then
    local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
+   if breakAt<=0 and s:GetAttribute('PrismBlackAt') then r.dirty=true;return end
    if breakAt>0 and CrystalImpactView.releaseAt(s,breakAt)>now then r.dirty=true;return end
   elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
    local contact=s:GetAttribute('CutContactAt') or 0

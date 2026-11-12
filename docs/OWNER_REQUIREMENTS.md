@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's delayed one-shot break and two stars
+
+Keep every crystal hit by Ramiel at its current health throughout the beam. When the beam ends, leave each rock black for a brief silent beat, then destroy it in one hit with a distinct explosion. Keep the launch star at peak size while its opacity flickers and fades. Give the separate firing star its own fast flicker in size and opacity.
+
 ## November 11 follow-up — Ramiel's glass motion and firing star
 
 Rewatch the first attack and match the motion of the glass. Keep the camera shake level with a faster, denser tremor while the beam fires. Keep the star visible into the shot so its source still reads.

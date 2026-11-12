@@ -5,6 +5,8 @@ function V.releaseAt(source,breakAt)
 end
 local WARM=Color3.fromRGB(255,218,139)
 local HOT=Color3.fromRGB(255,249,216)
+local CHAR=Color3.fromRGB(12,9,10)
+local EMBER=Color3.fromRGB(255,79,54)
 local Players=game:GetService('Players')
 local GuiService=game:GetService('GuiService')
 function V.reducedMotion()
@@ -18,7 +20,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio,onSplit)
- local self={pieces={},tints={},parent=parent,audio=audio}
+ local self={pieces={},tints={},prismTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
  end
@@ -77,11 +79,11 @@ function V.new(parent,audio,onSplit)
    end
   end
  end
- local function split(self,r,now)
+ local function split(self,r,now,prism)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)
+  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -89,14 +91,15 @@ function V.new(parent,audio,onSplit)
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
   if audio then
    local volume=owned and 1 or .62
-   audio:play('crystal_split',point,{level=volume})
+   audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume})
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
   if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
    if #self.pieces>=46 then break end
-   local wing=part(parent,'WedgePart','CrystalSplitFace',r.baseColor:Lerp(WARM,side==1 and .58 or .27))
+   local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
+   local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
    wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
@@ -106,20 +109,22 @@ function V.new(parent,audio,onSplit)
   if not reduced then
    if RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,r.baseColor:Lerp(WARM,.68),strength*.55,strength*6.6,.58)
-    RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(WARM,.59),strength*.83,'CrystalBreak')
+    RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
+    if prism then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,HOT,strength*.23,strength*5.8,.29) end
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
-   for i=1,8 do
+   for i=1,prism and 14 or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chip=part(parent,'WedgePart','CrystalBreakPiece',r.baseColor:Lerp(HOT,.60+.055*(i%4)))
+    local chipColor=prism and (i%3==0 and EMBER:Lerp(HOT,.52) or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(.11+.052*(i%4))
     chip.Size=Vector3.new(size*.55,size*2.1,size)
     chip.Material=i%3==0 and Enum.Material.Neon or Enum.Material.Glass
     local origin=point+direction*.22
     chip.Position=origin
-    track(chip,now,origin,direction*(7+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
+    track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
      .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
@@ -165,11 +170,17 @@ function V.new(parent,audio,onSplit)
     if initial<=0 and afterglow<=0 and not r.finalLoad then self:forget(r) end
    end
   end
+  for r,blackAt in pairs(self.prismTargets) do
+   if not r.view.Parent or r.view.Transparency>=1 then self.prismTargets[r]=nil
+   elseif now>=blackAt then r.view.Color=CHAR end
+  end
  end
  function self:react(r,now)
   local s,v=r.source,r.view
+  self.prismTargets[r]=s:GetAttribute('PrismBlackAt')
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
+  local prism=s:GetAttribute('CutProjectile')=='Prism'
   local breakAt=s:GetAttribute('CrystalBreakAt') or 0
   if impact>now and impact>r.lastContactAt then
    r.nextContactAt=impact
@@ -179,7 +190,7 @@ function V.new(parent,audio,onSplit)
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
+   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
     local projectile=s:GetAttribute('CutProjectile')
     local heavy=projectile=='Ball'
     r.flashAt=now;r.flashDuration=heavy and .095 or shot and .07 or fractured and .13 or .30;r.flashGate=now+.12
@@ -212,7 +223,7 @@ function V.new(parent,audio,onSplit)
     -- The server can already dispatch the crew's next target during this beat.
     local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
     load=1-(1-load)^3
-    if nearby and now>=breakAt then
+    if nearby and not prism and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
      if not BeamVFX.reduced() and not V.reducedMotion() then
       r.breakSize=r.breakSize or v.Size
@@ -223,7 +234,7 @@ function V.new(parent,audio,onSplit)
    else
     r.lastBreakAt=breakAt
     if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
-    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now) end
+    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism) end
     v.Transparency=1;self:forget(r)
    end
    return
@@ -240,7 +251,7 @@ function V.new(parent,audio,onSplit)
   end
  end
  function self:destroy()
-  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints)
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints);table.clear(self.prismTargets)
  end
  return self
 end

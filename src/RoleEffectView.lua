@@ -153,7 +153,7 @@ end
 -- bloom; the actual frame is clipped by white at the upper end.
 local RAMIEL_FLARE={
  {-2.70,0}, {-2.30,.033}, {-1.78,.072}, {-1.22,.13}, {-.74,.21}, {-.42,.31},
- {-.25,.47}, {-.105,.86}, {0,1.56},
+ {-.25,.47}, {-.105,.86}, {0,1.98},
 }
 local RAMIEL_STAR_ANGLE={
  {-2.70,-21}, {-1.78,2}, {-.82,25}, {-.36,40}, {-.17,61}, {-.065,99}, {0,143},
@@ -196,6 +196,22 @@ local function starRays(root)
  return rays
 end
 
+local function drawStar(rays,position,right,up,angle,radius,scale,alpha)
+ local function rayAlpha(opacity)
+  return NumberSequence.new({NumberSequenceKeypoint.new(0,1-opacity),
+   NumberSequenceKeypoint.new(.56,1-opacity*.57),NumberSequenceKeypoint.new(1,1)})
+ end
+ local coreAlpha,haloAlpha=rayAlpha(alpha),rayAlpha(alpha*.46)
+ local length=(.047+radius*2.45)*scale
+ for i,ray in ipairs(rays) do
+  local theta=math.rad(angle)+(i-1)*math.pi*.5
+  ray.tip.WorldPosition=position+(right*math.cos(theta)+up*math.sin(theta))*length*(i%2==1 and 1.18 or .78)
+  ray.core.Width0=(.025+radius*.094)*scale
+  ray.halo.Width0=ray.core.Width0*3.6
+  ray.core.Transparency=coreAlpha;ray.halo.Transparency=haloAlpha
+ end
+end
+
 function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  local field=rig.chargeField
  beamHold=beamHold or DroneCatalog.Types.Ramiel.BeamHold
@@ -230,26 +246,32 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
   rig.chargeField=field
  end
  local elapsed=-untilContact
- local release=1-(1-math.clamp(elapsed/.35,0,1))^5
  local launchFade=1-smooth((elapsed-.13)/.72)
  local firing=1-smooth((elapsed-(beamHold-.24))/.24)
- local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or .60+(.96+.42*release)*launchFade
+ local radius=sampleCurve(RAMIEL_FLARE,elapsed)
  local bloom=1-smooth((elapsed-.055)/.31)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
  local width=(.06+radius*3.9)*scale
- local alpha=(.34+.66*smooth(radius/.32))*(.68+.32*launchFade)*firing*smooth(radius/.05)
+ local flashFlicker=elapsed>=0 and (.72+.28*math.cos(elapsed*135+1.2*math.sin(elapsed*83))) or 1
+ local alpha=(.34+.66*smooth(radius/.32))*launchFade*firing*flashFlicker*smooth(radius/.05)
  local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)+20*smooth((elapsed-.58)/1.7)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
  field.inner.ImageTransparency=1-alpha*bloom
  field.outer.ImageTransparency=1-.73*alpha*bloom
- local halo=.52*bloom+.16*smooth(elapsed/.36)
- EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),halo*alpha*smooth(radius/.32))
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.52*alpha*bloom*smooth(radius/.32))
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.xAxis
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
- local length=(.047+radius*2.45)*scale
+ drawStar(field.rays,field.root.Position,right,up,angle,radius,scale,alpha)
+ local sustain=smooth((elapsed-.12)/.27)*firing
+ if sustain>0 or field.sustainRays then
+  if not field.sustainRays then field.sustainRays=starRays(field.root) end
+  local size=.61+.10*math.sin(elapsed*109+.8*math.sin(elapsed*63))
+  local opacity=(.70+.25*math.sin(elapsed*97+1.6))*sustain
+  drawStar(field.sustainRays,field.root.Position,right,up,angle+13,size,scale,opacity)
+ end
  for i,mote in ipairs(field.motes) do
   local delay=(i-1)*.17
   local q=math.clamp((elapsed+2.60-delay)/(2.48-delay),0,1)
@@ -260,19 +282,7 @@ function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
   local visible=smooth(q/.23)*(1-smooth((q-.78)/.22))
   EnergyDisc.place(mote,field.root.Position+offset,(.12+.17*q)*scale,Color3.fromRGB(255,141,218),visible*.69)
  end
- local function rayAlpha(opacity)
-  return NumberSequence.new({NumberSequenceKeypoint.new(0,1-opacity),
-   NumberSequenceKeypoint.new(.56,1-opacity*.57),NumberSequenceKeypoint.new(1,1)})
- end
- local coreAlpha,haloAlpha=rayAlpha(alpha),rayAlpha(alpha*.46)
- for i,ray in ipairs(field.rays) do
-  local theta=math.rad(angle)+(i-1)*math.pi*.5
-  ray.tip.WorldPosition=field.root.Position+(right*math.cos(theta)+up*math.sin(theta))*length*(i%2==1 and 1.18 or .78)
-  ray.core.Width0=(.025+radius*.094)*scale
-  ray.halo.Width0=ray.core.Width0*3.6
-  ray.core.Transparency=coreAlpha;ray.halo.Transparency=haloAlpha
- end
- local white=smooth((radius-.13)/1.43)*bloom
+ local white=smooth((radius-.13)/1.85)*bloom
  field.lamp.Enabled=white>.01
  field.lamp.Brightness=white*9
  local rim=smooth((radius-.10)/.30)*launchFade
@@ -485,7 +495,7 @@ function View.new(audio,onPrism)
       elseif not landed and age>=0 and age<windup+duration+.22 and paused<=0 and q>.30 then
        local rise=smooth((q-.30)/.70)
        audio:setLoop(node,'prism_charge',aperture,.13+.95*rise,.65+.63*rise^3)
-      else audio:stopLoop(node) end
+      else audio:stopLoop(node,landed==true) end
      end
      if landed and not r.impacted then
       r.impacted=true

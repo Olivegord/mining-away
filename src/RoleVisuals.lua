@@ -55,7 +55,7 @@ local function prismSpill(parent,from,to,color,normal)
 end
 local function stepPrismSpill(spill,age,duration)
  local rise=1-(1-math.clamp(age/.12,0,1))^4
- local fade=rise*(1-math.clamp((age-duration)/.42,0,1))^2
+ local fade=rise*math.clamp((duration-age)/.13,0,1)
  local reduced=BeamVFX.reduced()
  if reduced then fade=0 end
  local player=Players.LocalPlayer
@@ -113,14 +113,15 @@ function Effects.step(now)
  end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
-  if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,age,t.duration) end
-  if not rig.root.Parent or age>t.duration+rig.profile.tail then
+  local prism=rig.style=='Prism'
+  if not rig.root.Parent or (prism and age>=t.duration) or age>t.duration+rig.profile.tail then
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
   elseif age<t.duration then
+   if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,age,t.duration) end
    local expansion=math.min(1,age/.035)
    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
-   if rig.style=='Prism' then
+   if prism then
     expansion=1-(1-math.clamp(age/.105,0,1))^4
     local cutoff=math.clamp((age-(t.duration-.22))/.22,0,1)
     collapse=1-cutoff^4
@@ -274,6 +275,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
+ local prism=kind=='PrismBlast'
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
@@ -281,18 +283,18 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  sparks.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,248,216),.44),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
- sparks.Speed=residual and NumberRange.new(2,5) or NumberRange.new(8,16)
+ sparks.Speed=prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
  sparks.Acceleration=Vector3.new(0,residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
- sparks.Parent=root;sparks:Emit(residual and 9 or orbital and 10 or 8)
+ sparks.Parent=root;sparks:Emit(prism and 20 or residual and 9 or orbital and 10 or 8)
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
- dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(206,183,183),.36))
+ dust.Color=ColorSequence.new(prism and Color3.fromRGB(45,34,38) or color:Lerp(Color3.fromRGB(206,183,183),.36))
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
  dust.Acceleration=Vector3.new(0,1.1,0)
- dust.Parent=root;dust:Emit(orbital and 5 or 4)
+ dust.Parent=root;dust:Emit(prism and 9 or orbital and 5 or 4)
  Debris:AddItem(root,residual and 2.7 or 1.4)
 end
 

@@ -434,7 +434,7 @@ test('flagship prestige choices unlock one drone and keep both on later runs',fu
  eq(p.fleet[#p.fleet-1].role,'Ramiel')
  assert(Roles.isWorker('Ramiel') and Roles.ability('Orbiter')=='Orbital')
  assert(DroneCatalog.cycle('Ramiel',30,30).damage>300)
- eq(DroneCatalog.capDamage('Ramiel',110,400),68)
+ eq(DroneCatalog.capDamage('Ramiel',110,400),100)
 end)
 test('pacing model quantifies first-level tradeoffs including selling travel',function()
  local p=P.new(44);local d=p.fleet[1]

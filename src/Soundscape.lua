@@ -20,6 +20,7 @@ local CUES = {
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
  prism_fire={id='9118612324',volume=.65,duration=1.05,pitch=.72,attack=.012,cooldown=.14,range=110,maxVoices=2,reserved=true,fallback='action_jump_land.mp3'},
+ prism_blast={id='9125871199',volume=.73,duration=1.1,pitch=.57,attack=.009,cooldown=.055,range=110,maxVoices=4,reserved=true,fallback='impact_explosion_03.mp3'},
  prism_sustain={id='9118614717',loopFallback='139131445232833',volume=.43,pitch=.72,range=118,nearDistance=23,priority=7,reserved=true,softLaser=true},
  prism_charge={id='9119816710',volume=.33,duration=2.1,pitch=.83,cooldown=.1,range=80,priority=4,fallback='volume_slider.ogg'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
