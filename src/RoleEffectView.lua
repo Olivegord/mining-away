@@ -161,7 +161,7 @@ local function flareVelocity(a,b,c)
 end
 local function flareRadius(elapsed)
  if elapsed<=RAMIEL_FLARE[1][1] then return 0 end
- if elapsed>=0 then return 1+.27*smooth(elapsed/.24) end
+ if elapsed>=0 then return 1+.27*(1-math.exp(-elapsed*18)) end
  local i=1
  while elapsed>RAMIEL_FLARE[i+1][1] do i+=1 end
  local a,b=RAMIEL_FLARE[i],RAMIEL_FLARE[i+1]
@@ -176,7 +176,7 @@ end
 
 function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.28 then
+ if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.36 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -196,24 +196,28 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
   local outer=star('PinkFlare',Color3.fromRGB(255,82,185));outer.Size=UDim2.fromScale(1,1)
   local inner=star('WhiteFlare',Color3.fromRGB(255,244,250));inner.Size=UDim2.fromScale(.77,.77)
   local ring=PlaneBurst.create(root,Color3.fromRGB(255,161,221))
-  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring}
+  local wake=PlaneBurst.create(root,Color3.fromRGB(123,189,255))
+  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring,wake=wake}
   rig.chargeField=field
  end
  local elapsed=-untilContact
  local radius=flareRadius(elapsed)
- local after=1-smooth(math.max(0,elapsed)/.28)
+ local after=1-smooth((elapsed-.055)/.205)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
- local width=(.06+radius*2.32)*scale
+ local width=(.06+radius*2.90)*scale
  local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
  local angle=12+19*smooth((elapsed+.89)/.76)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
  field.inner.ImageTransparency=1-alpha
  field.outer.ImageTransparency=1-.73*alpha
- EnergyDisc.place(field.halo,field.root.Position,width*.77,Color3.fromRGB(255,102,197),.24*alpha*smooth(radius/.32))
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.34*alpha*smooth(radius/.32))
  local rim=smooth((radius-.10)/.30)*after
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
+ local pressure=smooth(elapsed/.033)*(1-smooth((elapsed-.084)/.265))
+ local expansion=1-math.exp(-math.max(0,elapsed)*17)
+ PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(1.22+1.60*expansion),pressure*.61,scale*(.025+.045*pressure))
 end
 
 local function clearLoad(self,r)

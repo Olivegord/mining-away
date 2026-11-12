@@ -3160,7 +3160,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=5.82,Impact=.543,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=3.10,Flight=.06,BeamHold=1.80,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=7.75,Impact=.645,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=1.80,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5816,7 +5816,7 @@ local function flareVelocity(a,b,c)
 end
 local function flareRadius(elapsed)
  if elapsed<=RAMIEL_FLARE[1][1] then return 0 end
- if elapsed>=0 then return 1+.27*smooth(elapsed/.24) end
+ if elapsed>=0 then return 1+.27*(1-math.exp(-elapsed*18)) end
  local i=1
  while elapsed>RAMIEL_FLARE[i+1][1] do i+=1 end
  local a,b=RAMIEL_FLARE[i],RAMIEL_FLARE[i+1]
@@ -5831,7 +5831,7 @@ end
 
 function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.28 then
+ if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.36 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -5851,24 +5851,28 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
   local outer=star('PinkFlare',Color3.fromRGB(255,82,185));outer.Size=UDim2.fromScale(1,1)
   local inner=star('WhiteFlare',Color3.fromRGB(255,244,250));inner.Size=UDim2.fromScale(.77,.77)
   local ring=PlaneBurst.create(root,Color3.fromRGB(255,161,221))
-  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring}
+  local wake=PlaneBurst.create(root,Color3.fromRGB(123,189,255))
+  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring,wake=wake}
   rig.chargeField=field
  end
  local elapsed=-untilContact
  local radius=flareRadius(elapsed)
- local after=1-smooth(math.max(0,elapsed)/.28)
+ local after=1-smooth((elapsed-.055)/.205)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
- local width=(.06+radius*2.32)*scale
+ local width=(.06+radius*2.90)*scale
  local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
  local angle=12+19*smooth((elapsed+.89)/.76)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
  field.inner.ImageTransparency=1-alpha
  field.outer.ImageTransparency=1-.73*alpha
- EnergyDisc.place(field.halo,field.root.Position,width*.77,Color3.fromRGB(255,102,197),.24*alpha*smooth(radius/.32))
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.34*alpha*smooth(radius/.32))
  local rim=smooth((radius-.10)/.30)*after
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
+ local pressure=smooth(elapsed/.033)*(1-smooth((elapsed-.084)/.265))
+ local expansion=1-math.exp(-math.max(0,elapsed)*17)
+ PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(1.22+1.60*expansion),pressure*.61,scale*(.025+.045*pressure))
 end
 
 local function clearLoad(self,r)
@@ -12913,7 +12917,7 @@ local function renderDrone(d,dt,now)
    local paused=shot:GetAttribute('PausedAt') or 0
    local effectNow=paused>0 and math.min(now,paused) or now
    local age=effectNow-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 3.10)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or DroneCatalog.Types.Ramiel.Windup)
    local impact=windup+(shot:GetAttribute('Duration') or .06)
    local contactAt=shot:GetAttribute('ContactAt')
    local fireAge=contactAt and effectNow-contactAt

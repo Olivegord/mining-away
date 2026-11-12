@@ -2098,8 +2098,9 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local chargeWindow=projectile=='Prism' and math.max(2.20,cycle.duration*.71) or cycle.duration*.38
-   local windup=math.min(definition.Windup,chargeWindow)
+   -- Keep Ramiel's filmed beats on their original clock. Mining rate can
+   -- shorten downtime but cannot speed up the transformation.
+   local windup=projectile=='Prism' and definition.Windup or math.min(definition.Windup,cycle.duration*.38)
    local flight=definition.Flight
    local visualRecovery=definition.BeamHold and definition.BeamHold+RoleConfig.RamielCloseTime
    local recovery=visualRecovery and visualRecovery+.075 or .10

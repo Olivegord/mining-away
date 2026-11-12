@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `d3aca6d640e7a818f5e23c73f122129b164d4e2142bda572ef0c2f321ae01a49` | Includes the rebuilt first Ramiel attack and the large translucent circle effects. |
-| Shared Studio Sources | `373e5f2` verified in Play | All seven Sources matched that revision in the owner's active session. The combined update is in the canonical snapshot and the disk Script Sync roots. Verification and save in shared Edit are pending. |
+| Native-file SHA-256 | `be14dc5d1ed2cff1ea25f419ea914e821fe38081ded66ddc7c681cbbe856e5b9` | Includes the sampled Ramiel morph and release. |
+| Shared Studio Sources | Team Create save **194** | All seven Sources and the three Script Sync roots matched the canonical snapshot in shared Edit at the exact place and universe. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `373e5f2`** | Left the owner's playtest running. The last documented Team Create save is 190 (`621b75c`). |
+| Shared Studio entry point | **DRONEREVOLUTION Studio Edit has the sampled Ramiel morph** | The owner ended Play before installation. Studio save **194** succeeded in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — sample Ramiel's morph layer by layer
+
+Stepped through the first attack at 30 steps per second. The outer tips barely move as the central shell narrows between 19.44 and 20.04. The smaller glass pieces unfold into a chain and pack back toward the core from 20.24 to 20.84. The wider squared shoulders move on separate paths, with the upper and lower width peaks landing around 21.51 and 21.67. The core gap reopens and steadies before the flare around 23.84–24.04. The new tracks interpolate each ring edge and angle separately. The game preserves the roughly five-second reference lead-in, so Ramiel takes longer between shots. The 1.80-second beam follows one confirmed hit. A short recoil and a separate expanding rim carry the release. The video gives screen-space evidence; the unexposed source curves and camera are unavailable. [First Ramiel attack reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19)
+
+A detached Studio Edit fixture ran the installed module and measured the upper cut face narrowing from 7.95 studs to 1.51, widening to 3.98 as the core gap closed to 0.13, then reopening to a 3.52-stud gap at the held shot. The gap reached 4.28 studs at the release impulse. The same 96 parts held their transparency, and the shell returned to its idle dimensions. The targeted beam, motion, workshop and contact clock checks passed. The broad gadget suite still stops at the existing client inertia fixture. Full gameplay appearance remains unverified.
+
+Verified all seven managed Sources and three Script Sync roots in shared Studio Edit at place **124078027733625**, universe **10774898335**. Team Create save **194** succeeded. Reproduce from `1484fbb` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 1484fbb`. The canonical refresh preserved non-Source chunks and unrelated Sources. The revision is unpublished.
 
 ## November 11 — rebuild Ramiel around the first attack
 

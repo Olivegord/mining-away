@@ -1207,7 +1207,7 @@ local function renderDrone(d,dt,now)
    local paused=shot:GetAttribute('PausedAt') or 0
    local effectNow=paused>0 and math.min(now,paused) or now
    local age=effectNow-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 3.10)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or DroneCatalog.Types.Ramiel.Windup)
    local impact=windup+(shot:GetAttribute('Duration') or .06)
    local contactAt=shot:GetAttribute('ContactAt')
    local fireAge=contactAt and effectNow-contactAt
