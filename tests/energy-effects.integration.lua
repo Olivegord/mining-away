@@ -157,27 +157,36 @@ check('nearby character feels the impact at far camera zoom and reduced motion o
  renderer:kick(Vector3.zero,.14,100.01);assert(renderer.shakeStrength==before)
  renderer:destroy();players.LocalPlayer=oldPlayer;character:Destroy();player:Destroy();camera.CFrame=CFrame.new(0,20,0)
 end)
-check('Prism holds a level camera tremor during the beam',function()
+check('Prism fires a brief level tremor and a much stronger rock blast',function()
  local renderer=Presentation.new({parent=root})
- renderer:prismPressure(Vector3.new(-25,20,0),Vector3.new(25,20,0),100,2.55)
- for _,time in ipairs({100.90,101.70,102.30}) do
+ renderer:prismPressure(Vector3.new(-25,20,0),Vector3.new(25,20,0),100,.42)
+ for _,time in ipairs({100.08,100.17,100.24}) do
   local offset=renderer:cameraOffset(time)
   assert(offset.Position.Magnitude>.012 and offset.Position.Magnitude<.14 and offset.yaw==0)
  end
  local crossings,previous=0,0
- for i=0,120 do
-  local x=renderer:cameraOffset(100.8+i/120).Position.X
+ for i=0,36 do
+  local x=renderer:cameraOffset(100.04+i/120).Position.X
   if x*previous<0 then crossings+=1 end
   previous=x
  end
- assert(crossings>=24,'Prism camera motion did not maintain the faster firing tremor')
- assert(renderer:cameraOffset(102.56).Position.Magnitude==0)
+ assert(crossings>=7,'Prism camera motion lost the fast firing tremor')
+ assert(renderer:cameraOffset(100.43).Position.Magnitude==0)
+ renderer:crystalKick(Vector3.new(0,20,0),2,100.50,true)
+ local peak=0
+ for i=1,55 do
+  local offset=renderer:cameraOffset(100.50+i/120)
+  assert(offset.yaw==0,'the blast tilted the camera')
+  peak=math.max(peak,offset.Position.Magnitude)
+ end
+ assert(peak>.48 and renderer:cameraOffset(100.97).Position.Magnitude==0,
+  'the rock blast lacked a strong, finite camera impulse')
  renderer:destroy()
 end)
-check('Prism holds a clear beam, lights and contact sparks before leaving char',function()
+check('Prism is visible at contact and fades immediately before leaving char',function()
  RoleVisuals.setTime(realTime)
  local from,to=Vector3.new(0,20,0),Vector3.new(0,0,-36)
- RoleVisuals.Beam(from,to,Color3.new(1,.08,.12),.49,2.55,'Prism',Vector3.yAxis)
+ RoleVisuals.Beam(from,to,Color3.new(1,.08,.12),.49,.42,'Prism',Vector3.yAxis)
  local at=realTime
  local group=assert(workspace:FindFirstChild('DroneRoleClientEffects'))
  local impact=assert(group:FindFirstChild('PrismImpactLight',true))
@@ -186,14 +195,20 @@ check('Prism holds a clear beam, lights and contact sparks before leaving char',
  local scorch=assert(group:FindFirstChild('PrismScorch'))
  local char=assert(scorch:FindFirstChild('CharredGround'))
  assert(not group:FindFirstChild('PrismHeat',true) and impact.Transparency==1 and char.Transparency==1)
- RoleVisuals.step(at+2.22)
  local beamRoot=impact.Parent
  local main=beamRoot:FindFirstChild('TaperedBody')
- assert(main.Enabled and main.Width0>.18 and main.Width0<.21,'Prism faded early or grew into a wide laser')
- assert(char.Transparency<.61 and not char.CanCollide and not char.CanQuery)
+ RoleVisuals.step(at)
+ assert(main.Enabled and main.Width0>.18 and main.Width0<.23,'Prism was not bright and thin at release')
  assert(lamp.Enabled and lamp.Brightness>2 and sparks.Enabled and sparks.Rate>18)
- RoleVisuals.step(at+2.66)
+ local first=main.Transparency[2].Value
+ RoleVisuals.step(at+.05)
+ local nextAlpha=main.Transparency[2].Value
+ assert(nextAlpha>first+.10,'the red beam held its full opacity after release')
+ RoleVisuals.step(at+.25)
+ assert(main.Transparency[2].Value>nextAlpha and lamp.Brightness<2 and sparks.Rate<18)
+ RoleVisuals.step(at+.43)
  assert(not beamRoot.Parent and not impact.Parent and scorch.Parent,'the beam or contact effects lingered into the pause')
+ assert(char.Transparency<.61 and not char.CanCollide and not char.CanQuery)
  RoleVisuals.step(at+17.1)
  assert(not scorch.Parent,'ground mark leaked after cooling')
  RoleVisuals.setTime(nil)

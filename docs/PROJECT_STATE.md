@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `79e84878f0d93d712a307de6b4088f14d0b3f48a243b48fb69072f0fdaa537b8` | Includes Ramiel's outward slab growth, eight small pyramids and hard metallic latch. |
-| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The owner's current Play session matches `7f71ce5`. The new revision needs root verification, Script Sync and save in shared Edit. |
+| Native-file SHA-256 | `c0941e79d24df4ac64f8d44388eda0099f0bf96954b6239ca1936597194d0cdd` | Includes Ramiel's one-way slab motion, short beam and stronger blast, plus the dropped gem correction. |
+| Shared Studio Sources | Last documented Team Create save **197**, `e1fe3a5` | The current Play session's client and drone configuration match `c54c84a`'s tracked bundles. The new revision needs root verification, Script Sync and save in shared Edit. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session on `7f71ce5`** | The running client and drone configuration hashes matched the previous revision. |
+| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session** | Running client and drone configuration fingerprints match the tracked `c54c84a` bundles, which differ from the new canonical snapshot. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — one-way Ramiel slabs and a quicker rock blast
+
+Ten outgoing slabs appear near the aperture, grow as they travel away, then disappear. Two crossed stacks and eight small pyramids emerge at the end. The departing glass continues outward until the hull snaps shut with the metallic latch. The red beam is brightest at contact and fades immediately over 0.42 seconds. The rock cluster explodes at 0.50 seconds after contact, down from 2.89 seconds, with a stronger level camera shake. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
+The integrated pickup change gives cut gems stronger reflections and seventeen bright glint dots. Gems fall faster, stop at the floor, play one deeper spatial clink and stay planted for 0.16 seconds before pickup.
+
+The focused geometry, beam, camera, cluster timing, pickup and workshop checks passed. Detached native Studio checks confirmed that slabs grow and move outward before disappearing, and that gems show their dots and emit one loaded landing cue. Full gameplay appearance and sound balance remain unverified. The broad gadget and audio suites stop at the same client inertia and sell-trip fixtures as the baseline. Studio was already open at place **124078027733625**, universe **10774898335**, and the owner's Play session was left running. Verify the shared Edit roots, then run `python3 tools/script_sync.py` and confirm native arrival and save. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit c54c84a`. The refresh preserved the authored map and unrelated or backup Sources. This revision is unpublished.
 
 ## November 11 — stagger Ramiel's slabs and give them a hard latch
 

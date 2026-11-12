@@ -5,7 +5,8 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
-local GLINT_LIMIT=12
+local GLINT_LIMIT,SHEEN_LIMIT=12,12
+local REFLECTION_LIGHT=Vector3.new(-.42,.86,.28).Unit
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -27,19 +28,20 @@ end
 local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
  local halo=Instance.new('BillboardGui');halo.Name='DottedStar';halo.Adornee=anchor
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=58;halo.Parent=anchor
+ halo.AlwaysOnTop=true;halo.LightInfluence=0;halo.MaxDistance=96;halo.Parent=anchor
  local dots={}
- local function dot(x,y,radius,brightness)
+ local function dot(x,y,width,brightness)
   local frame=Instance.new('Frame');frame.Name='GlintDot';frame.BorderSizePixel=0
   frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5+x,.5+y)
-  frame.Size=UDim2.new(.012, radius, .012, radius)
+  local pixels=math.max(1,math.round(width))
+  frame.Size=UDim2.new(.012,pixels,.012,pixels)
   local round=Instance.new('UICorner');round.CornerRadius=UDim.new(.5,0);round.Parent=frame
   frame.Parent=halo;dots[#dots+1]={frame=frame,brightness=brightness}
  end
- dot(0,0,1.65,1)
+ dot(0,0,2.1,1)
  for _,side in ipairs({-1,1}) do
-  for i=1,4 do dot(side*i*.015,side*i*.097,1.26-i*.13,1-i*.16) end
-  for i=1,2 do dot(side*i*.103,-side*i*.016,1.28-i*.19,1-i*.23) end
+  for i=1,5 do dot(side*i*.013,side*i*.085,1.62-i*.14,1-i*.12) end
+  for i=1,3 do dot(side*i*.088,-side*i*.013,1.55-i*.16,1-i*.18) end
  end
  return {anchor=anchor,halo=halo,dots=dots}
 end
@@ -52,24 +54,79 @@ local function removeIdle(self,r)
  r.idle.anchor.Parent=nil;table.insert(self.idlePool,r.idle);r.idle=nil
  self.idleCount-=1
 end
-local function updateGlint(self,r,age,strength)
- local clock=math.max(0,age-.67)+r.seed*.61
- local cycle=age<.67 and -1 or math.floor(clock/3.2)
- local pulse=cycle==-1 and twinkle(age,.11,.30) or twinkle(clock%3.2,0,.30)
+local function updateGlint(self,r,age,strength,eye,now)
+ local sinceContact=age-r.arc.contact
+ local clock=math.max(0,sinceContact-.55)+r.seed*.53
+ local cycle=sinceContact<.55 and -1 or math.floor(clock/2.15)
+ local pulse=sinceContact<0 and twinkle(age,.13,.35)
+  or cycle==-1 and twinkle(sinceContact,-.035,.39) or twinkle(clock%2.15,0,.42)
  if pulse*strength<.015 then removeIdle(self,r);return end
+ -- The fine dots use screen-space depth override only while the gem itself is visible.
+ if now>=(r.glintQueryAt or 0) then
+  r.glintQueryAt=now+.085
+  local ignore={self.parent};if self.player.Character then table.insert(ignore,self.player.Character) end
+  self.glintRay.FilterDescendantsInstances=ignore
+  local target=r.drawPosition+Vector3.yAxis*r.view.Size.Y*.55
+  r.glintBlocked=workspace:Raycast(eye,target-eye,self.glintRay)~=nil
+ end
+ if r.glintBlocked then removeIdle(self,r);return end
  if not r.idle then
   if self.idleCount>=GLINT_LIMIT then return end
   r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
   local side=(r.seed+cycle)%2==0 and 1 or -1
   local size=r.view.Size
-  r.idle.anchor.Position=Vector3.new(side*size.X*.33,size.Y*.47,-side*size.Z*.23)
+  r.idle.anchor.Position=Vector3.new(side*size.X*.18,size.Y*.52,-side*size.Z*.12)
   r.idle.anchor.Parent=r.view
   local tint=r.color:Lerp(PICKUP_HIGHLIGHT,.88)
   for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundColor3=tint end
  end
- local width=(r.physical and 2.22 or 1.58)*(.77+pulse*.23)
- r.idle.halo.Size=UDim2.fromScale(width,width)
+ local width=(r.physical and 3.35 or 2.45)*(.74+pulse*.26)
+ r.idle.halo.Size=UDim2.new(width,16,width,16)
  for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundTransparency=1-pulse*strength*dot.brightness end
+end
+local function removeSheen(self,r)
+ if not r.sheen then return end
+ for _,patch in ipairs(r.sheen) do patch:Destroy() end
+ r.sheen=nil;self.sheenCount-=1
+end
+local function updateSheen(self,r,eye,opacity)
+ if not r.sheen then
+  if self.sheenCount>=SHEEN_LIMIT then return end
+  r.sheen={};self.sheenCount+=1
+  for i=1,3 do
+   local patch=Instance.new('Part');patch.Name='FacetReflection';patch.Anchored=true
+   patch.CanCollide=false;patch.CanTouch=false;patch.CanQuery=false;patch.CastShadow=false
+   patch.Material=Enum.Material.Neon;patch.Transparency=1
+   patch.Color=r.color:Lerp(PICKUP_HIGHLIGHT,i==1 and .91 or .68);patch.Parent=r.view
+   r.sheen[i]=patch
+  end
+ end
+ local pose,size=r.view.CFrame,r.view.Size
+ local localEye=pose:PointToObjectSpace(eye)
+ local direction=eye-pose.Position
+ if direction.Magnitude<.001 then return end
+ local halfway=direction.Unit+REFLECTION_LIGHT
+ local halfNormal=halfway.Magnitude>.001 and halfway.Unit or REFLECTION_LIGHT
+ local tableNormal=pose:PointToWorldSpace(Vector3.yAxis)-pose.Position
+ local polished=math.max(0,tableNormal:Dot(halfNormal))^14
+ local span=math.min(size.X,size.Z)
+ local main,edge,crown=table.unpack(r.sheen)
+ main.Size=Vector3.new(span*.42,.003,span*.10)
+ edge.Size=Vector3.new(span*.26,.003,span*.026)
+ local angle=CFrame.Angles(0,.57,0)
+ main.CFrame=pose*CFrame.new(size.X*.012,size.Y*.501,-size.Z*.025)*angle
+ edge.CFrame=pose*CFrame.new(size.X*.028,size.Y*.501,size.Z*.058)*angle
+ main.Transparency=1-opacity*(.49+.46*polished)
+ edge.Transparency=1-opacity*(.34+.54*polished)
+ -- Keep the broad accent on the crown face turned toward the viewer.
+ local side=math.abs(localEye.X/size.X)>math.abs(localEye.Z/size.Z)
+ local yaw=side and (localEye.X>=0 and 0 or math.pi) or (localEye.Z<0 and math.pi*.5 or -math.pi*.5)
+ local run=side and size.X or size.Z
+ crown.Size=Vector3.new(span*.21,.003,span*.16)
+ crown.CFrame=pose*CFrame.Angles(0,yaw,0)*CFrame.new(run*.322,size.Y*.352,span*.04)
+  *CFrame.Angles(0,0,-math.atan2(size.Y*.33,run*.20))
+ local crownNormal=crown.CFrame:PointToWorldSpace(Vector3.yAxis)-crown.Position
+ crown.Transparency=1-opacity*(.38+.54*math.max(0,crownNormal:Dot(halfNormal))^9)
 end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
@@ -110,7 +167,8 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},sheenCount=0,glintRay=RaycastParams.new(),lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+ self.glintRay.FilterType=Enum.RaycastFilterType.Exclude;self.glintRay.RespectCanCollide=true
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -132,6 +190,7 @@ function V.new(root,parent,audio,reducedMotion)
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
     r.landAge=r.arc.contact
+    view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='';view.Reflectance=.62;view.CastShadow=true
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
    r.arcTimeout=(velocity.Y+math.sqrt(velocity.Y^2+2*PickupMotion.GRAVITY*height))/PickupMotion.GRAVITY+.18
@@ -250,7 +309,7 @@ function V:update(dt,now)
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then
-   removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
+   removeTrail(self,r);removeIdle(self,r);removeSheen(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
@@ -262,7 +321,7 @@ function V:update(dt,now)
    local socketScale=seated and .48 or 1
    -- Regular ore fragments and large workshop cargo both land. Wait for the
    -- contact position/speed to replicate before consuming this one-shot cue.
-   if live and r.hasArc and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
+   if r.hasArc and r.landAge and age>=r.landAge and not r.landCue and (live or r.arc) then
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
     if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor-.22,r.arc.landZ);speed=r.arc.speed end
@@ -270,8 +329,8 @@ function V:update(dt,now)
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/32,.77,1.22)*(r.physical and 1.1 or 1),
-       pitch=(r.physical and .86 or 1.07)+(r.seed%4)*.045})
+      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.physical and 1 or .82),
+       pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end
     end
    end
@@ -298,8 +357,8 @@ function V:update(dt,now)
     glow=math.max(glow,.34*r.pull)
     local rx,ry,rz
     if r.arc then
-     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact),0,1)^1.25
-     rx=remaining*2*math.pi;ry=(r.seed*.92)%6.283+.78*remaining;rz=.14*math.sin(remaining*math.pi)
+     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact*.87),0,1)
+     rx=remaining^1.2*math.pi*.63;ry=(r.seed*.92)%6.283+.45*remaining;rz=.14*math.sin(remaining*math.pi)
     else
      local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
      rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
@@ -321,10 +380,14 @@ function V:update(dt,now)
     r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.arc and live and age>=r.landAge and not pulling and not seated and not reducedEffects and cameraPosition then
-    local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/10,0,1)
-    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
-   else removeIdle(self,r) end
+   if r.arc and live and displayAt>=r.born and not seated and cameraPosition then
+    local distance=(r.drawPosition-cameraPosition).Magnitude
+    if opacity>.02 and distance<(r.sheen and 88 or 82) then updateSheen(self,r,cameraPosition,opacity) else removeSheen(self,r) end
+    if not reducedEffects and (not pulling or age<r.landAge+OreDrops.GEM_CONTACT_HOLD) then
+     local distanceFade=math.clamp((94-distance)/17,0,1)
+     updateGlint(self,r,age,glintStrength*distanceFade*opacity,cameraPosition,now)
+    else removeIdle(self,r) end
+   else removeIdle(self,r);removeSheen(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)

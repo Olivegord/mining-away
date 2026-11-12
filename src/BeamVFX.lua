@@ -21,7 +21,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
- Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=.57},
+ Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=0},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -39,7 +39,11 @@ local EDGE=sequence(.85,.4,.72,1)
 local INK=sequence(1,.42,.65,1)
 local ARC=sequence(1,.3,.45,1)
 local STAR=NumberSequence.new(.18)
-local PRISM_CORONA=sequence(1,.85,.90,1)
+function B.fadePrism(r,opacity)
+ r.body.Transparency=sequence(1,1-.90*opacity,1-.84*opacity,1-.61*opacity)
+ r.core.Transparency=sequence(1,1-.98*opacity,1-.965*opacity,1-.88*opacity)
+ r.corona.Transparency=sequence(1,1-.15*opacity,1-.10*opacity,1)
+end
 local function clamp(v) return math.clamp(v,0,1) end
 local function smooth(v) v=clamp(v);return v*v*(3-2*v) end
 function B.charge(q)
@@ -85,11 +89,10 @@ function B.new(parent,style,color,detail,chargeLens)
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
  if style=='Prism' then
   r.body.Segments=20;r.core.Segments=20
-  r.body.Transparency=sequence(1,.10,.16,.39)
-  r.core.Transparency=sequence(1,.02,.035,.12)
   r.core.Color=ColorSequence.new(color:Lerp(WHITE,.86))
   r.core.Brightness=2
-  r.corona=ribbon(root,'PrismCorona',r.a,r.b,color,PRISM_CORONA);r.corona.Segments=20
+  r.corona=ribbon(root,'PrismCorona',r.a,r.b,color,EDGE);r.corona.Segments=20
+  B.fadePrism(r,1)
   r.all[#r.all+1]=r.corona
  else r.body.Segments=1;r.core.Segments=1 end
  live+=1

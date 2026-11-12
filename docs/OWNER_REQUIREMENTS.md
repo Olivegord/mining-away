@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's one-way slab sweep and short beam
+
+Generate new glass layers near the core. Each layer grows and moves outward continuously until it disappears, with no return trip. Start fading the red beam as soon as it appears. Explode the blackened rocks sooner and give their blast a stronger camera shake. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
+## November 11 follow-up — make the cut gems read in play
+
+Give the gems visible reflections and bright dotted glints. Make their fall faster and their landing feel planted, with a deeper and more audible clink.
+
 ## November 11 follow-up — Ramiel's layered slab motion and hard close
 
 Closely follow the first transformation at 0:19. Stagger the outward growth through many layers and finish the open pose with small pyramids. When the shell closes, keep it moving up to a hard stop and put one metallic thud on that beat. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)

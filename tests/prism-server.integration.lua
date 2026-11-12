@@ -38,6 +38,7 @@ local function checkPrism()
  assert(not hitResource(drone,second,300,false,nil,nil,'PrismFinish'),'a finish without a confirmed shot was accepted')
  local fireAt=now
  local spec=DroneCatalog.Types.Ramiel
+ assert(spec.BeamHold<=.45 and spec.BeamHold+spec.BlackPause<=.55,'the beam or the black pause lasts too long')
  local beforePickup=pickupSerial
  assert(scene.firePrism(drone,target,drone.specialJob),'valid path did not fire')
  assert(receipt:GetAttribute('ContactAt')==now and receipt:GetAttribute('PrismHits')==2)

@@ -37,11 +37,11 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
     local reached=O.step(s,{x=s.x,y=2,z=s.z},1/fps,true)
     peak=math.max(peak,s.y)
     if s.landed then landing=landing or s.firstLandedAge end
-    if not landing or s.age-landing<.075 then assert(not s.homing and not reached) end
+    if not landing or s.age-landing<(block and .075 or O.GEM_CONTACT_HOLD) then assert(not s.homing and not reached) end
     if reached then break end
    end
    assert(peak>=3+(block and 1.7 or 8.2),'cargo did not reach the intended apex')
-   assert(landing and landing>(block and .50 or .74) and landing<(block and .70 or .86) and s.homing,
+   assert(landing and landing>(block and .50 or .62) and landing<(block and .70 or .71) and s.homing,
     'cargo never returned to collection in the intended window')
   end
  end

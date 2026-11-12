@@ -82,8 +82,8 @@ local CUES = {
  coil_load={id='9119816710',volume=.18,duration=.57,pitch=1.12,attack=.035,cooldown=.16,range=51,maxVoices=2,fallback='volume_slider.ogg'},
  coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
  coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
- ore_land={ids={'9125869138','9125869504'},volume=.39,duration=.34,pitch=1.30,attack=.004,cooldown=.045,
-  nearDistance=22,range=62,maxVoices=4,reserved=true,fallback='volume_slider.ogg'},
+ ore_land={id='9125869495',volume=.86,duration=.47,pitch=1.08,instant=true,cooldown=.025,
+  nearDistance=34,range=92,maxVoices=5,reserved=true,fallback='action_jump_land.mp3'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
  reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
  resonance={id='91735091370012',volume=.12,duration=.8,pitch=.65,cooldown=.14,fallback='volume_slider.ogg'},
@@ -251,7 +251,9 @@ function Soundscape:play(name,position,options)
  local volume=cue.volume/math.sqrt(1+self.voices*.07)*(options and options.level or 1)
  if options and options.pitch then sound.PlaybackSpeed*=options.pitch end
  sound.Ended:Once(function() if anchor then anchor:Destroy() else sound:Destroy() end end)
- sound:Play();fade(sound,cue.attack or .025,volume)
+ if cue.instant then sound.Volume=volume end
+ sound:Play()
+ if not cue.instant then fade(sound,cue.attack or .025,volume) end
  task.delay(math.max(.05,cue.duration-.22),function() if sound.Parent then fade(sound,.18,0) end end)
  Debris:AddItem(anchor or sound,cue.duration+.05)
 end

@@ -1037,7 +1037,7 @@ function P:crystalKick(position,strength,now,prism)
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  if not prism then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
- local amount=prism and math.clamp((72-distance)/55,0,1)*1.4
+ local amount=prism and math.clamp((82-distance)/64,0,1)*2.65
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
  if prism and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
@@ -1070,7 +1070,7 @@ function P:cameraOffset(now)
   if t>=prism.duration then self.prismShake=nil
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
-   local cutoff=math.clamp((prism.duration-t)/.18,0,1)
+   local cutoff=math.clamp((prism.duration-t)/math.min(.18,prism.duration*.40),0,1)
    local pressure=.091+.010*math.sin(t*11)+.055*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
    local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
@@ -1078,9 +1078,14 @@ function P:cameraOffset(now)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
- local impactDuration=self.crystalShakePrism and .34 or .22
+ local impactDuration=self.crystalShakePrism and .46 or .22
  if impactAge<0 or impactAge>=impactDuration then return ordinary end
  local t=impactAge/impactDuration
+ if self.crystalShakePrism then
+  local strength=self.crystalShakeAmount*math.min(t*22,1)*(1-t)^2
+  return ordinary*CFrame.new(self.crystalShakeSide*.24*strength*math.sin(t*35),
+   -.17*strength*math.sin(t*29+.6),.12*strength*math.sin(t*24+.2))
+ end
  local recoil=self.crystalShakeAmount*math.min(t*10,1)*(1-t)^2*math.cos(t*4.8)
  local side=self.crystalShakeSide
  return ordinary*CFrame.new(side*.17*recoil,-.075*recoil,.075*recoil)

@@ -85,19 +85,19 @@ target.view.Parent=fx
 crystalFrame({target},104)
 local beforeChar,size=target.view.Color,target.view.Size
 crystalFrame({target},104.33)
-assert(target.view.Color==beforeChar and #audio==14,'the target reacted before the beam stopped')
+assert(target.view.Color==beforeChar and #audio==14,'the target reacted before beam contact')
 crystalFrame({target},104.35)
 rockDamage.feedback:applyTints(104.35)
 assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==14,'beam contact did not blacken the rock in place')
-for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=107.23,CrystalBreakAt=107.23,CrystalSplitAt=107.23,CutProjectile='Prism'}) do
+for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=104.84,CrystalBreakAt=104.84,CrystalSplitAt=104.84,CutProjectile='Prism'}) do
  charred:SetAttribute(key,value)
 end
 target.dirty=true
-crystalFrame({target},107.24)
+crystalFrame({target},104.85)
 assert(target.view.Transparency==0 and not target.breakSize and #audio==14,'the prism break compressed or popped early')
-crystalFrame({target},107.34)
+crystalFrame({target},104.951)
 assert(target.view.Transparency==1 and audio[15]=='prism_blast' and #audio==17 and prismParticles==1,'the charred target did not explode once')
-crystalFrame({target},107.35)
+crystalFrame({target},104.96)
 assert(#audio==17,'the prism explosion replayed')
 charred:Destroy();target.view:Destroy()
 
@@ -186,22 +186,21 @@ RoleEffectView.ramielCharge(prism,1,-.055,false)
 local after=(chargeField.rays[1].tip.WorldPosition-chargeField.root.Position).Unit
 assert(before:Dot(after)<-.60,'the star rays did not swing through the flash')
 assert(chargeField.wake.rays[1].beam.Enabled,'release pressure wave did not separate from the core flare')
-RoleEffectView.ramielCharge(prism,1,-.37,false)
-assert(chargeField.rays[1].core.Transparency[1].Value<.85 and not chargeField.lamp.Enabled,'the star did not outlast its light')
+RoleEffectView.ramielCharge(prism,1,-.30,false)
+assert(chargeField.rays[1].core.Transparency[1].Value<1,'the launch star disappeared during the shot')
 local launchSize=chargeField.gui.Size[1]
 local launchOpacity=chargeField.rays[1].core.Transparency[1].Value
-RoleEffectView.ramielCharge(prism,1,-.40,false)
+RoleEffectView.ramielCharge(prism,1,-.32,false)
 assert(chargeField.gui.Size[1]==launchSize and chargeField.rays[1].core.Transparency[1].Value~=launchOpacity,
  'the launch star changed size or failed to flicker')
-RoleEffectView.ramielCharge(prism,1,-1.90,false,2.55)
+RoleEffectView.ramielCharge(prism,1,-.22,false)
 local secondStar=assert(chargeField.sustainRays)[1].core
 local width,opacity=secondStar.Width0,secondStar.Transparency[1].Value
-assert(chargeField.rays[1].core.Transparency[1].Value==1 and opacity<.55 and width<chargeField.rays[1].core.Width0*.6,
- 'the small firing star did not remain after the launch star faded')
-RoleEffectView.ramielCharge(prism,1,-1.92,false,2.55)
+assert(opacity<1 and width<chargeField.rays[1].core.Width0*.6,'the smaller firing star was missing during the beam')
+RoleEffectView.ramielCharge(prism,1,-.28,false)
 assert(math.abs(secondStar.Width0-width)>.001 and math.abs(secondStar.Transparency[1].Value-opacity)>.01,
  'the firing star did not flicker in size and opacity')
-RoleEffectView.ramielCharge(prism,1,-2.60,false,2.55)
+RoleEffectView.ramielCharge(prism,1,-.43,false)
 assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
 local beamCalls,kicks={},0
 RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
@@ -213,7 +212,8 @@ local audio={
 }
 local discharge=RoleEffectView.new(audio,function() kicks+=1 end)
 local cast=receipt('ramiel',115,'Prism',4.94)
-cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',2.55)
+local beamDuration=DroneCatalog.Types.Ramiel.BeamHold
+cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',beamDuration)
 roleFolder.ChildAdded:Fire(cast)
 local prismDrones={ramiel={ramiel=prism}}
 discharge:step(119.95,prismDrones,targets)
@@ -227,27 +227,26 @@ cast:SetAttribute('ContactPoint',Vector3.new(0,2,8))
 discharge:step(120.01,prismDrones,targets)
 assert(#beamCalls==1 and kicks==1)
 local beam=beamCalls[1]
-assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]<=.49 and beam[5]==2.55 and beam[6]=='Prism')
+assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]<=.49 and beam[5]==beamDuration and beam[6]=='Prism')
 assert(beam[7]==Vector3.yAxis,'ground normal did not reach the renderer')
 local lighting=game:GetService('Lighting')
 local exposure=assert(lighting:FindFirstChild('RamielReleaseExposure'))
 local bloom=assert(lighting:FindFirstChild('RamielReleaseBloom'))
 assert(exposure.Enabled and exposure.Brightness>.9 and bloom.Enabled,'fresh shot did not wash the scene white')
 assert(#discharge.bursts==3,'the extra server contact had no impact effect')
-discharge:step(120.42,prismDrones,targets)
-assert(#beamCalls==1 and kicks==1 and launches==1,'Ramiel discharge replayed')
-assert(exposure.Brightness>.10 and exposure.Brightness<.25,'release did not fade through the firing pose')
-discharge:step(120.83,prismDrones,targets)
-assert(not exposure.Parent and not bloom.Parent,'lighting did not recover during the beam')
-cast:SetAttribute('PausedAt',120.9)
-discharge:step(122.22,prismDrones,targets)
+cast:SetAttribute('PausedAt',120.03)
+discharge:step(120.12,prismDrones,targets)
 assert(loop.name=='prism_sustain' and loop.level>1,'a work pause cut off the audible beam')
-discharge:step(122.56,prismDrones,targets)
+assert(exposure.Brightness>.10 and exposure.Brightness<.50,'release did not clear quickly enough to show the shot')
+discharge:step(120.43,prismDrones,targets)
+assert(#beamCalls==1 and kicks==1 and launches==1,'Ramiel discharge replayed')
 assert(not loop,'the firing loop outlived the beam')
+discharge:step(120.45,prismDrones,targets)
+assert(not exposure.Parent and not bloom.Parent,'lighting did not recover after the shot')
 local latePrism=RoleEffectView.new(nil,function() kicks+=1 end)
 local lateDrones={ramiel={ramiel=prism}}
-latePrism:step(121.02,lateDrones,targets)
-assert(#beamCalls==2 and kicks==2 and lateDrones.ramiel.shotReceipt==cast,'late observer lost the held beam or its sustained shake')
+latePrism:step(120.23,lateDrones,targets)
+assert(#beamCalls==2 and kicks==2 and lateDrones.ramiel.shotReceipt==cast,'late observer lost the remaining beam or its shake')
 assert(not lighting:FindFirstChild('RamielReleaseExposure'),'late observer replayed the white flash')
 latePrism:destroy()
 discharge:destroy();cast:Destroy()

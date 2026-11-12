@@ -310,11 +310,11 @@ local function stepReleaseLighting(self,now)
  local flash=self.prismFlash
  if not flash then return end
  local age=now-flash.at
- if age>=.82 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
+ if age>=.44 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
   flash.correction:Destroy();flash.bloom:Destroy();self.prismFlash=nil
   return
  end
- local strength=(1-.78*smooth((age-.055)/.20))*(1-smooth((age-.21)/.61))*flash.weight
+ local strength=(1-.82*smooth((age-.025)/.14))*(1-smooth((age-.12)/.32))*flash.weight
  flash.correction.Brightness=.94*strength
  flash.correction.Contrast=-.19*strength
  flash.correction.Saturation=-.94*strength

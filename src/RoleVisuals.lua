@@ -53,21 +53,17 @@ local function prismSpill(parent,from,to,color,normal)
  end
  return {impact=impact,glow=glow,sparks=sparks,lights=lights}
 end
-local function stepPrismSpill(spill,age,duration)
- local rise=1-(1-math.clamp(age/.12,0,1))^4
- local fade=rise*math.clamp((duration-age)/.13,0,1)
- local reduced=BeamVFX.reduced()
- if reduced then fade=0 end
+local function stepPrismSpill(spill,fade)
+ if BeamVFX.reduced() then fade=0 end
  local player=Players.LocalPlayer
  local flashScale=player and player:GetAttribute('ReducedFlashing')==true and .36 or 1
- local onset=math.exp(-math.max(0,age)*4.2)
  for i,lamp in ipairs(spill.lights) do
   lamp.Enabled=fade>.01
-  lamp.Brightness=fade*(i==1 and 2.0 or 3.1)*(1+1.30*onset)*flashScale
+  lamp.Brightness=fade*(i==1 and 4.6 or 7.13)*flashScale
  end
- EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,133,155),fade*(.29+.24*onset)*flashScale)
- spill.sparks.Enabled=not reduced and age>=0 and age<duration
- spill.sparks.Rate=spill.sparks.Enabled and (21+onset*26)*rise or 0
+ EnergyDisc.place(spill.glow,spill.impact.Position,1.08+fade*.82,Color3.fromRGB(255,133,155),fade*.53*flashScale)
+ spill.sparks.Enabled=fade>.02
+ spill.sparks.Rate=47*fade
 end
 local function prismScorch(parent,point,normal,travel,at)
  if scorchCount>=16 or not BeamVFX.near(point,115) then return end
@@ -118,15 +114,16 @@ function Effects.step(now)
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
   elseif age<t.duration then
-   if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,age,t.duration) end
-   local expansion=math.min(1,age/.035)
-   local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
    if prism then
-    expansion=1-(1-math.clamp(age/.105,0,1))^4
-    local cutoff=math.clamp((age-(t.duration-.22))/.22,0,1)
-    collapse=1-cutoff^4
+    local opacity=(1-age/t.duration)^1.55
+    BeamVFX.draw(rig,t.from,t.to,now,.64+.36*opacity,nil,age,t.scale)
+    BeamVFX.fadePrism(rig,opacity)
+    if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,opacity) end
+   else
+    local expansion=math.min(1,age/.035)
+    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
+    BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
    end
-   BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
   else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
  end
  for group,t in pairs(chargeTimelines) do
@@ -248,8 +245,9 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
 	 value.Color=color;value.Size=Vector3.new(thickness*.35,thickness*.35,delta.Magnitude)
-	 value.CFrame=CFrame.lookAt(from:Lerp(to,.5),to);value.Transparency=.45
-	 animate(value,math.max(.01,duration-(now-at)),Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=1})
+	 value.CFrame=CFrame.lookAt(from:Lerp(to,.5),to);value.Transparency=style=='Prism' and .20 or .45
+	 local fadeTime=style=='Prism' and duration or math.max(.01,duration-(now-at))
+	 animate(value,fadeTime,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=1})
 	 Debris:AddItem(value,math.max(.01,duration-(now-at))+.05)
 	end
 end

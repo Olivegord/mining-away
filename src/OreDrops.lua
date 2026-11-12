@@ -1,7 +1,7 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
- GEM_GRAVITY=122,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -14,7 +14,7 @@ function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
  -- Keep fragments in their usual pickup area with a higher, steeper arc.
  local speed=6.2+(serial%5)*.4
- return math.cos(angle)*speed,29+index*1.35,math.sin(angle)*speed
+ return math.cos(angle)*speed,35+index*1.55,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -28,7 +28,7 @@ end
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
  local speed=block and 5.3 or 7.3+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 45+(serial%4)*.8,math.sin(angle)*speed
+ return math.cos(angle)*speed,block and 16 or 55+(serial%4)*.8,math.sin(angle)*speed
 end
 -- The server and observer sample the same flight and exact point of contact.
 function O.rawArc(x,y,z,vx,vy,vz,floor)
@@ -98,7 +98,10 @@ function O.step(s,target,dt,attract,magnetRange)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local collectAt=s.raw and math.max(.40,(s.firstLandedAge or 0)+.075) or O.SCATTER_TIME
+ local collectAt=s.raw and .40 or O.SCATTER_TIME
+ if s.arc or s.raw then
+  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
+ end
  local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
