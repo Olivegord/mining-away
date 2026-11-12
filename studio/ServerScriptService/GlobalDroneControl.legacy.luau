@@ -1773,9 +1773,17 @@ function F.nomadPatrol(center,altitude,slot,owner,now)
 end
 
 local NOMAD_SCAN_END=.72
+local NOMAD_BLACKOUT_SECONDS=1.8
+F.NomadBeamCutoff=.773
 function F.nomadWindup(distance,maxScanSpeed,minimum)
  -- Smoothstep peaks at 1.5 times the average speed during the moving phase.
- return math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ local scanClock=math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ return scanClock*F.NomadBeamCutoff+NOMAD_BLACKOUT_SECONDS
+end
+
+function F.nomadScanProgress(age,windup)
+ local untilCutoff=windup-NOMAD_BLACKOUT_SECONDS
+ return age/untilCutoff*F.NomadBeamCutoff,untilCutoff/F.NomadBeamCutoff
 end
 
 function F.nomadPass(from,to,q)
@@ -10205,8 +10213,11 @@ function scene.nomadStep(d,p,dt)
    local contact=deck.CFrame:PointToWorldSpace(Vector3.new(0,deck.Size.Y*.5,0))
    local radius=math.max(15,Vector3.new(deck.Size.X,0,deck.Size.Z).Magnitude*.5)
    local center=contact+Vector3.yAxis*spec.StationHeight
-   local side=Vector3.new(d.pos.X-center.X,0,d.pos.Z-center.Z)
-   side=side.Magnitude>1 and side.Unit or Vector3.xAxis
+   local approach=deck.CFrame:PointToObjectSpace(d.pos)
+   local face=math.abs(approach.X)/deck.Size.X>=math.abs(approach.Z)/deck.Size.Z
+    and Vector3.xAxis*(approach.X<0 and -1 or 1) or Vector3.zAxis*(approach.Z<0 and -1 or 1)
+   local side=deck.CFrame:PointToWorldSpace(face)-deck.Position
+   side=Vector3.new(side.X,0,side.Z).Unit
    release(d)
    local distance=radius+14
    job={field=field,contact=contact,radius=radius,from=center,scanFrom=center+side*distance,
@@ -10232,7 +10243,8 @@ function scene.nomadStep(d,p,dt)
  end
  local age=now-job.startedAt
  d.state='SpecialMine'
- d.pos=Feel.nomadPass(job.scanFrom,job.from,age/job.windup)
+ local scanProgress=Feel.nomadScanProgress(age,job.windup)
+ d.pos=Feel.nomadPass(job.scanFrom,job.from,scanProgress)
  d.goal=d.pos;d.intentGoal=d.pos;d.velocity=Vector3.zero
  if age>=job.windup+spec.Flight then
   if scene.fireNomad(d,field,job) then job.contactAt=now

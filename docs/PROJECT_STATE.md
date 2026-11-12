@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8e81231c69f8d5dcb3d1ff212c1c6d7056c0ab1079fc2e24f39a9b6afe3b7008` | Attack feedback, compact backpack count and contextual pack hold hint. |
-| Shared Studio Sources | Team Create save **219** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `e275fe1ee8bc0deb05214ca6282ffdc96ba420b848a6ba74f9c28a9fc7be2f2e` | Mirrored Nomad scanner and fixed 1.8-second blackout before the visible drop. |
+| Shared Studio Sources | Team Create save **221** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the attack feedback and HUD fixes in save **219**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's symmetrical scan and fixed drop timing in save **221**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — balance Nomad's scanner and bring the drop into view sooner
+
+The scanner now mirrors the paired banks, return rails, edge highlights and bridge joins. Its pass starts square to the field edge. The last filaments cut out exactly 1.8 seconds before the payload appears 34 studs above the strike point and plays the release cue. The descent lasts 1.44 seconds, and the rocks shatter 0.50 seconds after contact.
+
+Detached Roblox attachment checks confirmed vertical edges, paired positions and the drop height across three approach bearings. Focused client and server timing checks and the beam suite passed. The broader gadget suite still hits the existing client-inertia fixture failure. Full gameplay and multiplayer remain unverified. After the owner ended Play, all seven managed Sources matched the canonical file after Team Create save **221**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit d85e5eb`. This revision is unpublished.
 
 ## November 12 — native starter-loop playtest and HUD fixes
 

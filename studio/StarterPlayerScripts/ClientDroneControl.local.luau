@@ -585,9 +585,17 @@ function F.nomadPatrol(center,altitude,slot,owner,now)
 end
 
 local NOMAD_SCAN_END=.72
+local NOMAD_BLACKOUT_SECONDS=1.8
+F.NomadBeamCutoff=.773
 function F.nomadWindup(distance,maxScanSpeed,minimum)
  -- Smoothstep peaks at 1.5 times the average speed during the moving phase.
- return math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ local scanClock=math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ return scanClock*F.NomadBeamCutoff+NOMAD_BLACKOUT_SECONDS
+end
+
+function F.nomadScanProgress(age,windup)
+ local untilCutoff=windup-NOMAD_BLACKOUT_SECONDS
+ return age/untilCutoff*F.NomadBeamCutoff,untilCutoff/F.NomadBeamCutoff
 end
 
 function F.nomadPass(from,to,q)
@@ -6132,14 +6140,12 @@ local function newScanner(parent)
  if not folder then return nil end
  local root=part(folder,'TrackerAnchor',BLUE,Vector3.one*.05)
  local scan={folder=folder,panes={},seams={rail(folder,'Join'),rail(folder,'Join')}}
- scan.glint=part(folder,'ReleaseGlint',GOLD,Vector3.one*.8,Enum.PartType.Ball)
  for i=1,3 do
   local pane={sheet=scanLine(root,true),edges={},feet={},ends={}}
-  for j=1,3 do pane.edges[j]=scanLine(root,false) end
-  for j=1,2 do
-   pane.feet[j]=rail(folder,'FootRail')
-   pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball)
-  end
+  local returns=i==2 and 2 or 1 -- The middle bank can carry a return at each end.
+  for j=1,2+returns do pane.edges[j]=scanLine(root,false) end
+  for j=1,1+returns do pane.feet[j]=rail(folder,'FootRail') end
+  for j=1,2 do pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball) end
   scan.panes[i]=pane
  end
  return scan
@@ -6149,24 +6155,26 @@ end
 -- The patrol only renders their lower, visible section above the quarry.
 local PROJECTOR_SCALE=3.725
 local SCAN_HEIGHT=48
+local ROCKET_REVEAL_HEIGHT=34
 local KEEL_OFFSET=3.575
 local projectors={}
-local function projector(name,ax,ay,az,bx,bz,returnDepth)
+local function mirror(point)
+ return point and Vector3.new(-point.X,point.Y,point.Z)
+end
+local function projector(name,right,ax,ay,az,bx,bz,returnDepth)
  local a=Vector3.new(ax,ay-.048,az)*PROJECTOR_SCALE
  local b=Vector3.new(bx,ay-.048,bz)*PROJECTOR_SCALE
  local delta=b-a
  local c=returnDepth and b+delta.Unit:Cross(VERTICAL)*(returnDepth*PROJECTOR_SCALE)
- projectors[name]={a=a,b=b,c=c,width=delta.Magnitude}
+ local width=delta.Magnitude
+ projectors[name]={a=a,b=b,c=c,d=not right and mirror(c) or nil,width=width,center=not right}
+ if right then projectors[right]={a=mirror(a),b=mirror(b),c=mirror(c),width=width} end
 end
-projector('OuterLeft',-.38,-.37,-.57,-1.34,-.38,-.20)
-projector('OuterRight',.38,-.37,-.57,1.34,-.38,-.20)
-projector('MidLeft',-1.18,-.39,-.62,-.43,-.71,.22)
-projector('Bridge',-.67,-.42,-.31,.67,-.31,.16)
-projector('MidRight',.43,-.39,-.71,1.18,-.62,-.22)
-projector('RearLeft',-1.18,-.34,-.14,-.43,-.23,.22)
-projector('RearRight',.43,-.34,-.23,1.18,-.14,-.22)
-projector('KeelLeft',-.76,-.43,-.47,-.19,-.96)
-projector('KeelRight',.76,-.43,-.47,.19,-.96)
+projector('OuterLeft','OuterRight',-.38,-.37,-.57,-1.34,-.38,-.20)
+projector('MidLeft','MidRight',-1.18,-.39,-.62,-.43,-.71,.22)
+projector('Bridge',nil,-.67,-.42,-.31,.67,-.31,.16)
+projector('RearLeft','RearRight',-1.18,-.34,-.14,-.43,-.23,.22)
+projector('KeelLeft','KeelRight',-.76,-.43,-.47,-.19,-.96)
 
 local OUTER={'OuterLeft','OuterRight'}
 local MIDDLE={'MidLeft','Bridge','MidRight'}
@@ -6180,11 +6188,11 @@ local SCAN_STAGES={
  {at=.470,banks=JOINED,pitch=1.04,gain=.90},
  {at=.592,banks=KEEL,pitch=1.21,gain=1},
  {at=.729,banks=KEEL,pitch=1.34,gain=.31,pins=true},
- {at=.773},
- {at=.916,release=true},
 }
 
+local BLACKOUT={}
 local function scanStage(q)
+ if q>=Feel.NomadBeamCutoff then return BLACKOUT,#SCAN_STAGES+1 end
  for i=#SCAN_STAGES,1,-1 do
   if q>=SCAN_STAGES[i].at then return SCAN_STAGES[i],i end
  end
@@ -6210,29 +6218,36 @@ local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
  local gain=lowFlash and .68 or 1
  local previous
  for i,pane in ipairs(scan.panes) do
-  local mount=stage.banks and projectors[stage.banks[i]]
-  local a,b,c,topA,topB,topC,across
+  local mount=projectors[stage.banks[i]]
+  local a,b,topA,topB,across
   if mount then
    topA,topB=frame:PointToWorldSpace(mount.a),frame:PointToWorldSpace(mount.b)
    a,b=groundPoint(topA,floor),groundPoint(topB,floor)
    across=(b-a).Unit
-   if mount.c then topC=frame:PointToWorldSpace(mount.c);c=groundPoint(topC,floor) end
   end
   if mount and not stage.pins then
    if reduced then hideLine(pane.sheet)
    else paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84) end
-   paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
-   paintLine(pane.edges[2],b,topB,across,.069,gain)
-   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
-   else hideLine(pane.edges[3]) end
+   paintLine(pane.edges[1],a,topA,across,mount.center and .060 or .052,mount.center and gain or gain*.9)
+   paintLine(pane.edges[2],b,topB,across,mount.center and .060 or .069,gain)
    paintRail(pane.feet[1],a,b,.062,gain*.87)
-   if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
+   for j=3,#pane.edges do
+    local finish=j==3 and mount.c or mount.d
+    local edge,foot=pane.edges[j],pane.feet[j-1]
+    if finish then
+     local top=frame:PointToWorldSpace(finish)
+     local bottom=groundPoint(top,floor)
+     if reduced then hideLine(edge) else paintLine(edge,bottom,top,across,.035,gain*.70) end
+     paintRail(foot,j==3 and b or a,bottom,.048,gain*.72)
+    else hideLine(edge);hideRail(foot) end
+   end
    pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
-   pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*.86
+   pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*(mount.center and .65 or .86)
   else
-   hideLine(pane.sheet);hideLine(pane.edges[1]);hideLine(pane.edges[3])
+   hideLine(pane.sheet)
+   for _,edge in ipairs(pane.edges) do hideLine(edge) end
    if b and stage.pins then paintLine(pane.edges[2],b,topB,across,.043,gain*.67)
-   else hideLine(pane.edges[2]) end
+   end
    for _,foot in ipairs(pane.feet) do hideRail(foot) end
    for _,glint in ipairs(pane.ends) do glint.Transparency=1 end
   end
@@ -6418,23 +6433,20 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
  local airborne=not landed and progress>=0 and progress<1.12
  local paused=(node:GetAttribute('PausedAt') or 0)>0
  if scanning and near then
-  local q=age/windup
+  local q,scanClock=Feel.nomadScanProgress(age,windup)
   local stage,index=scanStage(q)
   local shift=from-scanFrom
   local flat=Vector3.new(shift.X,0,shift.Z)
   local bearing=flat.Magnitude>1 and flat.Unit or Vector3.zAxis
   local center=Feel.nomadPass(scanFrom,from,q)
   local soundPoint=Vector3.new(center.X,to.Y+5,center.Z)
-  r.scan=r.scan or newScanner(camera)
-  if r.scan then
-   drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash)
-   r.scan.glint.Position=from
-   local rise=stage.release and smooth((q-stage.at)/.026) or 0
-   r.scan.glint.Transparency=1-(lowFlash and .35 or .82)*rise
-  end
-  if audio and index~=r.stage and not paused and (q-stage.at)*windup<.16 then
+  if stage.banks then
+   r.scan=r.scan or newScanner(camera)
+   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash) end
+  elseif r.scan then r.scan.folder:Destroy();r.scan=nil end
+  local stageAge=age-(stage.at or Feel.NomadBeamCutoff)*scanClock
+  if audio and index~=r.stage and not paused and stageAge<.16 then
    if stage.banks then audio:play('nomad_scan_cut',soundPoint,{level=index==1 and 1.1 or .83,pitch=stage.pitch})
-   elseif stage.release then audio:play('nomad_release',to+VERTICAL*18)
    else audio:play('nomad_scan_off',soundPoint) end
   end
   r.stage=index
@@ -6448,16 +6460,21 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
  end
  if airborne and near and not (r.rocket and r.rocket.tailAt) then
   local t=math.clamp(progress,0,1)
+  local start=to:Lerp(from,math.min(1,ROCKET_REVEAL_HEIGHT/(from-to).Magnitude))
   if not r.fired then
    r.fired=true
-   if not paused and audio and progress<.12 then audio:play('nomad_screech',to+VERTICAL*40) end
+   if not paused and audio and progress<.12 then audio:play('nomad_release',start) end
+  end
+  if not r.screeched and progress>=.10 then
+   r.screeched=true
+   if not paused and audio and progress<.24 then audio:play('nomad_screech',start) end
   end
   if not paused and audio and audio.setLoop then
-   local audible=to+VERTICAL*(63*(1-t)^1.25+3)
+   local audible=start:Lerp(to,t*(.28+.72*t))+VERTICAL*3
    audio:setLoop(node,'nomad_descent',audible,.34+.94*t,1.34-.46*t)
   end
   r.rocket=r.rocket or newRocket(camera,reduced)
-  if r.rocket then drawRocket(r.rocket,from,to,t,steady) end
+  if r.rocket then drawRocket(r.rocket,start,to,t,steady) end
  elseif r.rocket then
   stopRocket(r.rocket,now)
   if now-r.rocket.tailAt>=.25 then r.rocket.root:Destroy();r.rocket=nil end

@@ -147,9 +147,17 @@ function F.nomadPatrol(center,altitude,slot,owner,now)
 end
 
 local NOMAD_SCAN_END=.72
+local NOMAD_BLACKOUT_SECONDS=1.8
+F.NomadBeamCutoff=.773
 function F.nomadWindup(distance,maxScanSpeed,minimum)
  -- Smoothstep peaks at 1.5 times the average speed during the moving phase.
- return math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ local scanClock=math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+ return scanClock*F.NomadBeamCutoff+NOMAD_BLACKOUT_SECONDS
+end
+
+function F.nomadScanProgress(age,windup)
+ local untilCutoff=windup-NOMAD_BLACKOUT_SECONDS
+ return age/untilCutoff*F.NomadBeamCutoff,untilCutoff/F.NomadBeamCutoff
 end
 
 function F.nomadPass(from,to,q)

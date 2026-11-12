@@ -3,6 +3,8 @@ local function checkNomadView()
  local from,target=Vector3.new(0,420,0),Vector3.zero
  local side=from+Vector3.new(53,0,0)
  local windup,flight=Feel.nomadWindup((side-from).Magnitude,9,6.4),1.44
+ local beamOff=windup-1.8
+ local _,scanClock=Feel.nomadScanProgress(0,windup)
  node:SetAttribute('ScanFrom',side)
  node:SetAttribute('BlastRadius',32)
  local record={}
@@ -28,6 +30,25 @@ local function checkNomadView()
   local top,bottom=line.b.WorldCFrame.Position,line.a.WorldCFrame.Position
   assert(top.Y>45 and top.Y<48 and bottom.Y<.10 and top.X==bottom.X and top.Z==bottom.Z)
  end
+ local forward=(from-side).Unit
+ local lateral=forward:Cross(Vector3.yAxis)
+ local function mirrored(a,b,age)
+  local center=Feel.nomadPass(side,from,Feel.nomadScanProgress(age,windup))
+  assert(math.abs(((a+b)*.5-center):Dot(lateral))<.001,'scanner pair is offset from the sweep axis')
+  assert(math.abs((a-b):Dot(forward))<.001 and math.abs(a.Y-b.Y)<.001,'scanner pair is staggered along the sweep')
+ end
+ local function balanced(scan,right,age)
+  for i,line in ipairs(scan.panes[1].edges) do
+   local other=scan.panes[right].edges[i]
+   assert(line.main.Enabled==other.main.Enabled)
+   if line.main.Enabled then
+    straight(line);straight(other)
+    assert(line.main.Width0==other.main.Width0 and line.main.Transparency==other.main.Transparency)
+    mirrored(line.a.WorldCFrame.Position,other.a.WorldCFrame.Position,age)
+    mirrored(line.b.WorldCFrame.Position,other.b.WorldCFrame.Position,age)
+   end
+  end
+ end
  at(.01)
  local scan=assert(record.scan)
  local first=scan.panes[1]
@@ -36,26 +57,36 @@ local function checkNomadView()
  assert(first.sheet.main.Enabled and math.abs(width-originalWidth)<.001 and width==first.sheet.main.Width1)
  assert(filaments(scan)==6 and not scan.panes[3].sheet.main.Enabled)
  assert(played[1]=='nomad_scan_cut' and loop.name=='nomad_scan' and loop.point.X>52)
- straight(first.edges[1])
- at(.268*windup);assert(first.sheet.main.Width0==width)
+ balanced(scan,2,.01)
+ at(.268*scanClock);assert(first.sheet.main.Width0==width)
  local before=first.edges[1].b.WorldCFrame.Position
- at(.270*windup)
+ at(.270*scanClock)
  assert((first.edges[1].b.WorldCFrame.Position-before).Magnitude>2.5 and played[2]=='nomad_scan_cut' and loop.pitch>.78)
- straight(first.edges[1])
- assert(filaments(scan)==9 and scan.seams[1].core.Transparency==1)
+ balanced(scan,3,.270*scanClock)
+ local bridge=scan.panes[2]
+ mirrored(bridge.edges[1].a.WorldCFrame.Position,bridge.edges[2].a.WorldCFrame.Position,.270*scanClock)
+ mirrored(bridge.edges[3].a.WorldCFrame.Position,bridge.edges[4].a.WorldCFrame.Position,.270*scanClock)
+ assert(filaments(scan)==10 and scan.seams[1].core.Transparency==1)
  before=first.edges[1].b.WorldCFrame.Position
- at(.336*windup)
+ at(.336*scanClock)
  assert((first.edges[1].b.WorldCFrame.Position-before).Magnitude>1.6 and first.sheet.main.Width0<width and played[3]=='nomad_scan_cut')
- at(.471*windup);assert(scan.seams[1].core.Transparency<1 and played[4]=='nomad_scan_cut')
- at(.593*windup);assert(filaments(scan)==4 and not scan.panes[3].sheet.main.Enabled and played[5]=='nomad_scan_cut')
- at(.728*windup);assert(first.sheet.main.Enabled and first.feet[1].core.Transparency<1)
- at(.730*windup);assert(not first.sheet.main.Enabled and filaments(scan)==2 and first.feet[1].core.Transparency==1)
+ balanced(scan,3,.336*scanClock)
+ at(.471*scanClock);assert(scan.seams[1].core.Transparency<1 and played[4]=='nomad_scan_cut')
+ balanced(scan,3,.471*scanClock)
+ mirrored(scan.seams[1].core.CFrame.Position,scan.seams[2].core.CFrame.Position,.471*scanClock)
+ at(.593*scanClock);assert(filaments(scan)==4 and not scan.panes[3].sheet.main.Enabled and played[5]=='nomad_scan_cut')
+ balanced(scan,2,.593*scanClock)
+ at(.728*scanClock);assert(first.sheet.main.Enabled and first.feet[1].core.Transparency<1)
+ at(.730*scanClock);assert(not first.sheet.main.Enabled and filaments(scan)==2 and first.feet[1].core.Transparency==1)
+ balanced(scan,2,.730*scanClock)
  assert(played[6]=='nomad_scan_cut')
- at(.774*windup);assert(filaments(scan)==0 and scan.glint.Transparency==1 and not loop and played[7]=='nomad_scan_off')
- at(.900*windup);assert(filaments(scan)==0 and scan.glint.Transparency==1 and not record.rocket and #played==7)
- at(.925*windup);assert(scan.glint.Position==from and scan.glint.Transparency<1 and played[8]=='nomad_release')
- at(windup);assert(not record.scan and record.rocket and loop.name=='nomad_descent' and played[9]=='nomad_screech')
+ at(beamOff-.001);assert(record.scan and filaments(scan)==2)
+ at(beamOff);assert(not record.scan and not loop and played[7]=='nomad_scan_off')
+ at(windup-.001);assert(not record.scan and not record.rocket and #played==7)
+ at(windup);assert(not record.scan and record.rocket and loop.name=='nomad_descent' and played[8]=='nomad_release')
+ assert(record.rocket.body.CFrame.Position.Y==34,'the payload started out of sight at patrol altitude')
  local altitude=loop.point.Y
+ at(windup+.16);assert(played[9]=='nomad_screech')
  at(windup+.8);assert(loop.point.Y<altitude and #played==9)
  local impactAt=windup+flight
  node:SetAttribute('ContactAt',impactAt);node:SetAttribute('BlastGround',target)
@@ -77,6 +108,6 @@ local function checkNomadView()
  assert(RoleVisuals.craterAt==impactAt+.50)
  assert(NomadView.detach(record,impactAt+5) and not blast.root.Parent)
  NomadView.clear(record)
- print('PASS Nomad broad vertical banks, stage-synced audio, blackout, drop and field blast timing')
+ print('PASS Nomad mirrored vertical banks, stage-synced audio, 1.8-second blackout and visible drop')
 end
 checkNomadView()
