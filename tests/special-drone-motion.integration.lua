@@ -173,9 +173,16 @@ local wide,wideGap=sample(23.98)
 assert(narrow<idleWidth*.23 and narrowGap>1.25,'first separation did not pinch into a column')
 assert(tucked>narrow*2 and tuckedGap<.12,'bands did not race inward to pack around the core')
 assert(wide>tucked*1.30 and wideGap>.75,'wide shooting shape did not reopen around the core')
+for _,half in ipairs(rig.halves) do
+ for j=1,2 do
+  local slab=half.bands[j].near
+  assert(slab.Size.X>slab.Size.Z*1.28,'firing shell did not resolve into elongated slabs')
+ end
+ assert(#half.mirrors==4 and half.mirrors[4][2]:IsA('WedgePart'),'central jagged glass was lost')
+end
 local fired,firedGap=sample(23.98,0)
 assert(math.abs(wide-fired)<1e-6 and math.abs(wideGap-firedGap)<1e-6,'discharge skipped a pose')
-local _,kickGap=sample(23.98,.028)
+local _,kickGap=sample(23.98,.038)
 assert(kickGap>wideGap+.14,'discharge lost its short outward kick')
 local held,heldGap=sample(23.98,1.79)
 assert(math.abs(held-wide)<1e-6 and math.abs(heldGap-wideGap)<1e-6,'shape drifted during the beam')

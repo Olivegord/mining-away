@@ -20,12 +20,13 @@ local function checkPrism()
  local receipt=RoleEffects.Projectile('Prism',drone.pos,target.position,Color3.new(1,0,0),now-5,4.94,.06,drone.id,target.id)
  drone.specialJob={targetId=target.id,startedAt=now-6,duration=7.75,impact=.645,damage=300,serial=1,projectile=receipt}
  local entries={target,second,third,guarded,behind}
+ local wall,wallNormal
  local function distance(i) return 35+(i-1)*4 end
  function workspace:Raycast(from,delta,params)
   assert(delta.Magnitude<=64+.001,'Prism cast beyond its range')
   for i,rock in ipairs(entries) do
    if not table.find(params.FilterDescendantsInstances,rock.part) and distance(i)<=delta.Magnitude then
-    return {Instance=rock.part,Position=from+delta.Unit*distance(i),Normal=-delta.Unit}
+    return {Instance=rock.part,Position=from+delta.Unit*distance(i),Normal=rock.part==wall and wallNormal or -delta.Unit}
    end
   end
  end
@@ -42,10 +43,14 @@ local function checkPrism()
  guarded.slots[worker.id]=nil
  local clear=assert(scene.prismTrace(drone,target,drone.pos,false))
  assert(#clear.hits==4 and math.abs((clear.endpoint-clear.origin).Magnitude-distance(5))<.001,'target limit failed to stop the path')
- local wall=Instance.new('Part');wall.CanCollide=true;wall.Parent=workspace
+ wall=Instance.new('Part');wall.CanCollide=true;wall.Parent=workspace
  entries={target,{part=wall},third}
  local blocked=assert(scene.prismTrace(drone,target,drone.pos,false))
  assert(#blocked.hits==1 and math.abs((blocked.endpoint-blocked.origin).Magnitude-distance(2))<.001,'solid scenery did not stop the path')
+ assert(not blocked.groundNormal,'a side wall was treated as ground')
+ wallNormal=Vector3.yAxis
+ local ground=assert(scene.prismTrace(drone,target,drone.pos,false))
+ assert(ground.groundNormal==wallNormal,'the renderer cannot identify the real ground contact')
  print('PASS Ramiel server ray applies ordered falloff, respects occupancy and scenery, and publishes one full shot')
 end
 checkPrism()

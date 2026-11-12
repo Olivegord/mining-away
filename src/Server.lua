@@ -1295,7 +1295,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
  local endpoint=origin+direction
  local ignored={droneFolder,pickupFolder,p.player.Character}
  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Exclude
- local hits,selected={},nil
+ local hits,selected,groundNormal={},nil,nil
  for _=1,12 do
   query.FilterDescendantsInstances=ignored
   local hit=workspace:Raycast(origin,direction,query)
@@ -1314,11 +1314,13 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
     if stopAtPrimary then return {origin=origin,endpoint=endpoint,hits=hits,selected=selected} end
    end
   elseif part==workspace.Terrain or not part:IsA('BasePart') or part.CanCollide then
-   endpoint=hit.Position;break
+   endpoint=hit.Position
+   if hit.Normal.Y>=.55 then groundNormal=hit.Normal end
+   break
   end
   table.insert(ignored,part)
  end
- return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected} or nil
+ return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected,groundNormal=groundNormal} or nil
 end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
@@ -1618,7 +1620,7 @@ function scene.firePrism(d,primary,job)
    power*=spec.BeamFalloff
   end
  end
- RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now)
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now,path.groundNormal)
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)

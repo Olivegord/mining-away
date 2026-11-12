@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's crossed glass and white release
+
+Make the three waves deliberate and let the glass settle into two opposing stacks of intersecting rectangular slabs, with smaller jagged prisms in the gap. Watch the first attack's star spin and release. Use lighting for its brief white flash. Keep the camera level and moving gently throughout the beam. Show heat with one large transparent cylinder that fades in and extends below a ground hit. Leave char at the contact. Leave the owner's active Studio Play session running.
+
 ## November 11 follow-up — three rolling waves and a piercing Ramiel beam
 
 Run the first Ramiel transformation in three rolling waves. Give the release more weight and let one thin beam strike multiple rocks along its path. Show its reach with heat distortion and lighting around the line.

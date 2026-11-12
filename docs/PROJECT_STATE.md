@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `4ab01c85f2ede127a475697bae5d160dc69df5f0cab417cbfcd33b7c680dad7a` | Includes Ramiel's three waves, piercing path and heat wake. |
-| Shared Studio Sources | Team Create save **194**, `50ad5ae` | The latest Sources are staged on disk. The active Play client matched `50ad5ae`. Shared Edit arrival and save are pending. |
+| Native-file SHA-256 | `b093cd7181cedd62a3de374f97f043c04b004889775046dea49bf22bb66dc0e8` | Includes Ramiel's crossed glass, spinning star, white release and ground scorch. |
+| Shared Studio Sources | Last verified Team Create save **194**, `50ad5ae` | The active Play client has since loaded `525d899`. The new Sources are staged on disk. Shared Edit arrival and save are pending. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `50ad5ae`** | The active client and shared drone configuration matched the saved sampled morph revision. |
+| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `525d899`** | The active client and shared drone configuration hashes matched the three-wave and piercing-heat revision. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — settle Ramiel's glass and light the star release
+
+The three waves settle into crossed rectangular glass slabs above and below eight small jagged prisms. Frame steps around 23.57–24.57 show a small tilted cross, faster growth into white, and a tapered cross turning as the pink ring moves away. The release uses separately timed spin, ray length, scene bloom and color correction. The nearby camera shakes gently without rotation through the 1.80-second shot. A single 7.4-stud glass cylinder fades in, extends 32 studs beyond a confirmed ground hit, and leaves a temporary scorch. The ground mark follows the surface normal and fades over 17 seconds. [First Ramiel attack reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=23)
+
+The focused contact, server ray, hardware, energy, beam and workshop checks passed. The gadget suite still stops at the existing client inertia fixture. The owner's existing Play session at place **124078027733625**, universe **10774898335**, ran `525d899` and was left running. The new revision's shared Edit arrival, save and live appearance remain unverified. Reproduce the canonical refresh from `525d899` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 525d899`. All non-Source chunks and unrelated or backup Sources were preserved. This revision is unpublished.
 
 ## November 11 — give Ramiel three rolling waves and a piercing shot
 

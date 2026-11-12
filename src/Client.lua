@@ -18,8 +18,8 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
-local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
- if not CrystalImpactView.reducedMotion() then presentation:kick(position,.145,now) end
+local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
+ if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)
@@ -1217,6 +1217,9 @@ local function renderDrone(d,dt,now)
     charge=math.clamp(age/windup,0,1)
     recovery=fireAge and fireAge>=0 and fireAge or nil
     untilContact=recovery and -recovery or math.max(.034,impact-age)
+    local settle=math.clamp((charge-.61)/.18,0,1)
+    local steadyPose=CFrame.new(d.pos+Vector3.yAxis*d.visualLift)*CFrame.Angles(0,d.yaw,0)
+    visiblePose=visiblePose:Lerp(steadyPose,settle*settle*(3-2*settle))
     if recovery then
      if d.ramielFiringShot~=shot then
       d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose

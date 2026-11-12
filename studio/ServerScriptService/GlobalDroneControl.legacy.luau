@@ -4316,13 +4316,16 @@ local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readabl
    shell:PivotTo(pose*CFrame.new(0,center*sign*radius,0))
    shell.Parent=glass
   end
-  for i=1,3 do
-   local mirror=Instance.new('Part');mirror.Name=prefix..'Mirror'..i
-   local width=radius*(.46-(i-1)*.105)
-   mirror.Size=Vector3.new(width,radius*(.10-i*.016),width)
-   mirror.Anchored=true;mirror.CanCollide=false;mirror.CanTouch=false;mirror.CanQuery=false;mirror.CastShadow=false
-   mirror.Material=Enum.Material.Glass;mirror.Transparency=.12;mirror.Reflectance=.16
-   mirror.Color=RAMIEL_TINTS[1+i%3];mirror.CFrame=pose;mirror.Parent=glass
+  for i=1,4 do
+   for j,suffix in ipairs({'A','B'}) do
+    local prism=Instance.new('WedgePart')
+    prism.Name=prefix..'Prism'..i..suffix
+    prism.Size=Vector3.one*.05
+    prism.Anchored=true;prism.CanCollide=false;prism.CanTouch=false;prism.CanQuery=false;prism.CastShadow=false
+    prism.Material=Enum.Material.Glass;prism.Transparency=.10;prism.Reflectance=.15
+    prism.Color=j==1 and RAMIEL_TINTS[1+i%3] or Color3.fromRGB(116,85,233)
+    prism.CFrame=pose;prism.Parent=glass
+   end
   end
  end
 end
@@ -4342,7 +4345,10 @@ function DroneConfig.ramielRig(model: Model)
    end
    half.bands[j]={faces=faces,near=slice:FindFirstChild('NearFace'),far=slice:FindFirstChild('FarFace')}
   end
-  for j=1,3 do half.mirrors[j]=glass:FindFirstChild(prefix..'Mirror'..j) :: BasePart end
+  for j=1,4 do
+   half.mirrors[j]={glass:FindFirstChild(prefix..'Prism'..j..'A') :: BasePart,
+    glass:FindFirstChild(prefix..'Prism'..j..'B') :: BasePart}
+  end
   rig.halves[i]=half
  end
  return rig
@@ -4424,7 +4430,8 @@ local RAMIEL_MIRRORS={
  {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
  {22.55,.062,.088,.225,421}, {23.98,.074,.096,.25,486},
 }
-local RAMIEL_RECOIL={{0,0},{.028,1},{.056,.78},{.106,.14},{.152,-.17},{.27,0}}
+local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
+local RAMIEL_FIRE_YAW={{304,214,270},{-283,-373,-244}}
 -- The first and third waves move out from the core. The middle wave packs
 -- the outside glass inward. Each travels through the stack one layer at a time.
 local RAMIEL_WAVES={
@@ -4441,9 +4448,7 @@ local function ramielWave(clock: number,half: number,band: number): number
   local order=wave.inward and 3-band or band-1
   local phase=(clock-wave.start-order*wave.step-(half-1)*.055)/wave.span
   if phase>0 and phase<1 then
-   local squeeze=smoothstep(phase/.19)*(1-smoothstep((phase-.19)/.29))
-   local release=smoothstep((phase-.26)/.25)*(1-smoothstep((phase-.51)/.49))
-   motion+=wave.strength*(release-.65*squeeze)
+   motion+=wave.strength*smoothstep(phase/.43)*(1-smoothstep((phase-.43)/.57))
   end
  end
  return motion
@@ -4469,14 +4474,21 @@ local function ramielSample(track: {{number}},clock: number,channel: number): nu
   +(-2*t3+3*t2)*b[channel]+(t3-t2)*finish,math.min(a[channel],b[channel]),math.max(a[channel],b[channel]))
 end
 
-local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerRadius,yaw,recoil)
+local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerRadius,yaw,recoil,aspect)
  local transform=frame*CFrame.new(0,0,.54*recoil)*CFrame.Angles(0,math.rad(yaw),0)
  local base=Vector3.yAxis*(near*sign*radius)
  local endPoint=Vector3.yAxis*(far*sign*radius)
  local inner=innerRadius*radius
  local outer=outerRadius*radius
+ -- Stretch along a diagonal of the diamond. The two rotated square sections
+ -- become interlocking rectangular slabs without swapping any glass faces.
+ local function cornerOf(corner)
+  local change=(corner.X+corner.Z)*(aspect-1)*.5
+  return corner+Vector3.new(change,0,change)
+ end
  for k,corner in ipairs(RAMIEL_SQUARE) do
-  local nextCorner=RAMIEL_SQUARE[k%4+1]
+  local nextCorner=cornerOf(RAMIEL_SQUARE[k%4+1])
+  corner=cornerOf(corner)
   local a=transform:PointToWorldSpace(base+corner*inner)
   local b=transform:PointToWorldSpace(base+nextCorner*inner)
   local c=transform:PointToWorldSpace(endPoint+corner*outer)
@@ -4490,7 +4502,7 @@ local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerR
  local function cut(part,height,width,inward)
   if not part then return end
   local side=width*math.sqrt(2)
-  part.Size=Vector3.new(side,.025,side)
+  part.Size=Vector3.new(side,.025,side*aspect)
   part.CFrame=transform*CFrame.new(0,(height*radius+inward*.014)*sign,0)*CFrame.Angles(0,math.pi/4,0)
  end
  cut(band.near,near,inner,1)
@@ -4515,6 +4527,8 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
  end
  local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
+ local poseClock=math.min(clock,22.70)
+ local lockedSlabs=smoothstep((clock-21.58)/1.10)
  local simple=smoothstep((time-.12)/.53)
  local gap=1
  local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
@@ -4525,31 +4539,46 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
    local track=RAMIEL_TRACKS[j]
    local function value(channel)
     local idle=track[1][channel]
-    local sampled=reduced and idle+(track[#track][channel]-idle)*simple or ramielSample(track,clock,channel)
+    local sampled=reduced and idle+(ramielSample(track,22.70,channel)-idle)*simple or ramielSample(track,poseClock,channel)
     return sampled+(idle-sampled)*close
    end
    local n,f=value(column),value(column+1)
    if j==1 then gap=math.min(gap,n) end
    if rebuild then
     local wave=not reduced and not recovery and ramielWave(clock,i,j) or 0
-    local push=kick*(.068-(j-1)*.014)+wave*.045
-    poseRamielBand(band,frame,sign,radius,n+push,f+push+wave*.020,
-     value(column+2)*(1+wave*.16),value(column+3)*(1+wave*.12),value(column+4)+wave*14*sign,kick)
+    local push=kick*(.058-(j-1)*.012)+wave*.027
+    local slab=j<3 and lockedSlabs*(1-close) or 0
+    local inner=value(column+2)*(1+wave*.085)
+    local outer=value(column+3)*(1+wave*.075)
+    outer+=(inner-outer)*slab
+    local yaw=ramielSample(track,poseClock,column+4)
+    yaw+=(RAMIEL_FIRE_YAW[i][j]-yaw)*lockedSlabs
+    if reduced then yaw=((RAMIEL_FIRE_YAW[i][j]+180)%360-180)*simple end
+    if recovery then yaw=((yaw+180)%360-180)*(1-close) end
+    poseRamielBand(band,frame,sign,radius,n+push,f+push+wave*.009,
+     inner,outer,yaw+wave*7*sign,kick,1-slab*(j==1 and .27 or .34))
    end
   end
   if rebuild then
-   for j,mirror in ipairs(half.mirrors) do
-    local mirrorClock=clock-(j-1)*.042-(i-1)*.047
+   for j,prism in ipairs(half.mirrors) do
+    local mirrorClock=math.min(clock,22.83)-(j-1)*.039-(i-1)*.047
     local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
-    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.19)
+    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
     local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)*(j%2==0 and -.82 or 1)
-    local wave=not reduced and not recovery and ramielWave(clock-.045,i,j) or 0
-    if reduced then near=.07*simple;spacing=.10*simple;yaw=23*simple end
-    local offset=(near+(j-1)*spacing)*(1-close)+kick*.022+wave*.055
+    local wave=not reduced and not recovery and ramielWave(clock-.06,i,math.min(j,3)) or 0
+    if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
+    if recovery then yaw=((yaw+180)%360-180)*(1-close) end
+    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016+wave*.026
     local side=math.max(.03,width*radius*(1-close))
-    mirror.Size=Vector3.new(side,math.max(.023,side*(.25+j*.035)),side)
-    mirror.CFrame=frame*CFrame.new(0,offset*sign*radius,kick*.42)*CFrame.Angles(0,math.rad(yaw*sign*(1-close)),0)
+    local tilt=lockedSlabs*(1-close)
+    local x=(j%2==0 and -.09 or .085)*radius*tilt
+    local pose=frame*CFrame.new(x,offset*sign*radius,kick*.38)
+     *CFrame.Angles(math.rad((j%2==0 and -14 or 17)*tilt),math.rad(yaw*sign),math.rad((j-2)*8*tilt))
+    prism[1].Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
+    prism[2].Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
+    prism[1].CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
+    prism[2].CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
    end
   end
  end
@@ -4930,9 +4959,10 @@ function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at
  node:SetAttribute('ContactAt',at)
  Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
-function Effects.PrismContact(node,origin,endpoint,primary,contacts,fractured,broken,at)
+function Effects.PrismContact(node,origin,endpoint,primary,contacts,fractured,broken,at,groundNormal)
  if not node or not node.Parent then return end
  node:SetAttribute('PrismFrom',origin);node:SetAttribute('PrismEnd',endpoint)
+ node:SetAttribute('PrismGroundNormal',groundNormal)
  for i,hit in ipairs(contacts) do
   node:SetAttribute('PrismHit'..i,hit.point);node:SetAttribute('PrismNormal'..i,hit.normal)
  end
@@ -8945,7 +8975,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
  local endpoint=origin+direction
  local ignored={droneFolder,pickupFolder,p.player.Character}
  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Exclude
- local hits,selected={},nil
+ local hits,selected,groundNormal={},nil,nil
  for _=1,12 do
   query.FilterDescendantsInstances=ignored
   local hit=workspace:Raycast(origin,direction,query)
@@ -8964,11 +8994,13 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
     if stopAtPrimary then return {origin=origin,endpoint=endpoint,hits=hits,selected=selected} end
    end
   elseif part==workspace.Terrain or not part:IsA('BasePart') or part.CanCollide then
-   endpoint=hit.Position;break
+   endpoint=hit.Position
+   if hit.Normal.Y>=.55 then groundNormal=hit.Normal end
+   break
   end
   table.insert(ignored,part)
  end
- return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected} or nil
+ return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected,groundNormal=groundNormal} or nil
 end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
@@ -9268,7 +9300,7 @@ function scene.firePrism(d,primary,job)
    power*=spec.BeamFalloff
   end
  end
- RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now)
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now,path.groundNormal)
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)

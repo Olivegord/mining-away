@@ -19,82 +19,84 @@ local function animate(value,duration,style,direction,properties)
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
 end
 local heatBeds=0
-local HEAT_EDGE=NumberSequence.new({
- NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.36,.88),
- NumberSequenceKeypoint.new(.66,.93),NumberSequenceKeypoint.new(1,1),
-})
-local function heatPart(parent,name)
+local scorchTimelines={}
+local scorchCount=0
+local function prismPart(parent,name)
  local part=Instance.new('Part')
  part.Name=name;part.Size=Vector3.one*.025;part.Anchored=true;part.CanCollide=false
  part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Transparency=1;part.Parent=parent
  return part
 end
-local function prismHeat(parent,from,to,color)
+local function prismHeat(parent,from,to,color,groundNormal)
  if heatBeds>=4 or BeamVFX.reduced() then return nil end
  local delta=to-from
  if delta.Magnitude<.5 then return nil end
  local axis=delta.Unit
- local across=axis:Cross(math.abs(axis.Y)>.9 and Vector3.zAxis or Vector3.yAxis).Unit
- local vertical=across:Cross(axis).Unit
- local root=heatPart(parent,'PrismHeat')
- root.CFrame=CFrame.new(from);heatBeds+=1
- root.Destroying:Connect(function() heatBeds-=1 end)
- local beds={}
- local count=math.clamp(math.ceil(delta.Magnitude/7),2,6)
- for i=1,count do
-  local lens=heatPart(root,'RefractedAir')
-  lens.Shape=Enum.PartType.Ball;lens.Material=Enum.Material.Glass
-  lens.Color=color:Lerp(Color3.fromRGB(255,238,221),.86)
+ -- Only a confirmed upward-facing ground hit gets the long buried end.
+ local reach=delta.Magnitude+(groundNormal and 32 or .85)
+ local center=from+axis*(reach*.5)
+ local cylinder=prismPart(parent,'PrismHeat')
+ cylinder.Shape=Enum.PartType.Cylinder;cylinder.Material=Enum.Material.Glass
+ cylinder.Size=Vector3.new(reach,7.4,7.4)
+ cylinder.Color=Color3.fromRGB(251,235,242)
+ cylinder.CFrame=CFrame.lookAt(center,center+axis)*CFrame.Angles(0,math.pi*.5,0)
+ heatBeds+=1
+ cylinder.Destroying:Connect(function() heatBeds-=1 end)
+ local lights={}
+ for _,fraction in ipairs({.18,.79}) do
+  local mount=prismPart(cylinder,'PrismLight')
+  mount.Position=from:Lerp(to,fraction)
+  if groundNormal and fraction>.5 then mount.Position=to+groundNormal*.75 end
   local lamp=Instance.new('PointLight')
-  lamp.Color=color:Lerp(Color3.fromRGB(255,174,106),i%2==0 and .67 or .40)
-  lamp.Range=9;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=lens
-  local a=Instance.new('Attachment');a.Parent=root
-  local b=Instance.new('Attachment');b.Parent=root
-  local wisp=Instance.new('Beam');wisp.Name='HeatRipple'
-  wisp.Attachment0=a;wisp.Attachment1=b;wisp.FaceCamera=true;wisp.Segments=10
-  wisp.Width0=0;wisp.Width1=0;wisp.Color=ColorSequence.new(lamp.Color)
-  wisp.Transparency=HEAT_EDGE;wisp.LightEmission=.54;wisp.LightInfluence=0
-  wisp.Brightness=.8;wisp.Enabled=false;wisp.Parent=root
-  beds[i]={lens=lens,lamp=lamp,a=a,b=b,wisp=wisp,fraction=(i-.5)/count}
+  lamp.Color=color:Lerp(Color3.fromRGB(255,186,131),.68)
+  lamp.Range=fraction>.5 and 16 or 12;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
+  lights[#lights+1]=lamp
  end
- return {root=root,beds=beds,axis=axis,across=across,vertical=vertical,delta=delta,length=delta.Magnitude}
+ return {cylinder=cylinder,lights=lights}
 end
-
 local function stepPrismHeat(heat,age,duration)
- local reduced=BeamVFX.reduced()
+ local t=math.clamp(age/.23,0,1)
+ local fade=t*t*(3-2*t)*(1-math.clamp((age-duration)/.49,0,1))
+ if BeamVFX.reduced() then fade=0 end
  local player=Players.LocalPlayer
  local flashScale=player and player:GetAttribute('ReducedFlashing')==true and .36 or 1
- local length=heat.length
- for i,bed in ipairs(heat.beds) do
-  local time=age-bed.fraction*length/220
-  local fade=time>=0 and math.clamp(time/.06,0,1)*(1-math.clamp((age-duration+.07)/.56,0,1)) or 0
-  if reduced then fade=0 end
-  local active=fade>.01
-  bed.wisp.Enabled=active;bed.lamp.Enabled=active
-  if active then
-   local wave=time*10.7+i*1.77
-   local hot=math.exp(-time*7)*.84+.35
-   local polarity=i%2==0 and 1 or -1
-   local drift=heat.across*((.86+.20*math.sin(wave))*polarity)+heat.vertical*(.19+.33*math.sin(wave*.70))
-   local center=heat.delta*bed.fraction+drift
-   local span=math.min(6.8,length/#heat.beds*.80)
-   bed.lens.Size=Vector3.new(.92+.26*hot,.65+.16*math.sin(wave),span)
-   local world=heat.root.Position+center
-   bed.lens.CFrame=CFrame.lookAt(world,world+heat.axis+heat.across*(.17*math.sin(wave)))
-   bed.lens.Transparency=1-fade*(.054+.053*hot)
-   bed.lamp.Brightness=fade*(.68+2.45*hot)*(.87+.13*math.sin(wave*.71))*flashScale
-   local u=heat.axis*(span*.46)
-   local a=center-u+heat.vertical*(.32*math.sin(wave))
-   local b=center+u+heat.vertical*(.32*math.sin(wave+1.7))
-   bed.a.CFrame=CFrame.fromMatrix(a,heat.axis,heat.vertical,heat.across)
-   bed.b.CFrame=CFrame.fromMatrix(b,heat.axis,heat.vertical,heat.across)
-   bed.wisp.CurveSize0=math.sin(wave)*1.05
-   bed.wisp.CurveSize1=math.sin(wave+1.38)*.85
-   bed.wisp.Width0=.38*fade;bed.wisp.Width1=.21*fade
-  else bed.lens.Transparency=1 end
+ heat.cylinder.Transparency=1-.076*fade
+ for i,lamp in ipairs(heat.lights) do
+  local arrive=math.clamp((age-(i-1)*.045)/.075,0,1)
+  lamp.Enabled=fade>.01
+  lamp.Brightness=fade*arrive*(.82+2.80*math.exp(-math.max(0,age)*5.2))*flashScale
  end
 end
+local function prismScorch(parent,point,normal,travel,at)
+ if scorchCount>=16 or not BeamVFX.near(point,115) then return end
+ local projected=travel-normal*travel:Dot(normal)
+ local tangent=projected.Magnitude>.01 and projected.Unit or normal:Cross(Vector3.zAxis).Unit
+ local across=normal:Cross(tangent).Unit
+ local root=prismPart(parent,'PrismScorch')
+ local layers={}
+ for i=1,3 do
+  local mark=prismPart(root,'CharredGround')
+  mark.Shape=Enum.PartType.Cylinder;mark.Material=Enum.Material.Basalt
+  mark.Color=i==1 and Color3.fromRGB(43,29,26) or Color3.fromRGB(25,20,20)
+  local offset=i==1 and 0 or (i==2 and .76 or -1.05)
+  local center=point+normal*(.024+i*.009)+tangent*offset+across*(i==3 and .28 or 0)
+  mark.CFrame=CFrame.fromMatrix(center,normal,tangent,across)*CFrame.Angles(i==2 and .15 or -.08,0,0)
+  mark.Size=i==1 and Vector3.new(.016,5.8,3.7) or Vector3.new(.016,3.30-i*.24,2.55-i*.16)
+  layers[i]=mark
+ end
+ scorchCount+=1
+ scorchTimelines[root]={at=at,layers=layers}
+end
 function Effects.step(now)
+ for root,mark in pairs(scorchTimelines) do
+  local age=now-mark.at
+  if not root.Parent or age>=17 then
+   root:Destroy();scorchTimelines[root]=nil;scorchCount-=1
+  else
+   local darken=math.clamp(age/.26,0,1)*(1-math.clamp((age-11)/6,0,1))
+   for i,layer in ipairs(mark.layers) do layer.Transparency=1-darken*(i==1 and .40 or .71) end
+  end
+ end
  for root,t in pairs(pulseTimelines) do
   local q=(now-t.at)/t.duration
   if not root.Parent or q>=1 then root:Destroy();pulseTimelines[root]=nil;pulseCount-=1
@@ -109,7 +111,7 @@ function Effects.step(now)
  end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
-  if t.heat and t.heat.root.Parent then stepPrismHeat(t.heat,age,t.duration) end
+  if t.heat and t.heat.cylinder.Parent then stepPrismHeat(t.heat,age,t.duration) end
   if not rig.root.Parent or age>t.duration+rig.profile.tail then
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
@@ -224,7 +226,7 @@ local function part(): Part?
 	return value
 end
 
-function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?, style: string?)
+function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?, style: string?, groundNormal: Vector3?)
 	local delta = to - from
 	if delta.Magnitude < 0.05 then
 		return
@@ -234,10 +236,11 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	local at=clock();local now=workspace:GetServerTimeNow()
 	local profile=BeamVFX.styles[style or 'Lance'] or BeamVFX.styles.Lance
 	if now-at>duration+profile.tail then return end
+	if style=='Prism' and groundNormal then prismScorch(folder(),to,groundNormal,delta.Unit,at) end
 	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
-	  heat=style=='Prism' and prismHeat(rig.root,from,to,color) or nil}
+	  heat=style=='Prism' and prismHeat(rig.root,from,to,color,groundNormal) or nil}
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
@@ -573,6 +576,8 @@ end
 function Effects.destroy()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
  table.clear(beamTimelines);table.clear(chargeTimelines);table.clear(orbitalTimelines)
+ for root in pairs(scorchTimelines) do root:Destroy() end
+ table.clear(scorchTimelines);scorchCount=0
  table.clear(animations)
  for root in pairs(pulseTimelines) do root:Destroy() end;table.clear(pulseTimelines);pulseCount=0;table.clear(markers);table.clear(burns);table.clear(swarms)
  eventAt=nil

@@ -5169,82 +5169,84 @@ local function animate(value,duration,style,direction,properties)
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
 end
 local heatBeds=0
-local HEAT_EDGE=NumberSequence.new({
- NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.36,.88),
- NumberSequenceKeypoint.new(.66,.93),NumberSequenceKeypoint.new(1,1),
-})
-local function heatPart(parent,name)
+local scorchTimelines={}
+local scorchCount=0
+local function prismPart(parent,name)
  local part=Instance.new('Part')
  part.Name=name;part.Size=Vector3.one*.025;part.Anchored=true;part.CanCollide=false
  part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Transparency=1;part.Parent=parent
  return part
 end
-local function prismHeat(parent,from,to,color)
+local function prismHeat(parent,from,to,color,groundNormal)
  if heatBeds>=4 or BeamVFX.reduced() then return nil end
  local delta=to-from
  if delta.Magnitude<.5 then return nil end
  local axis=delta.Unit
- local across=axis:Cross(math.abs(axis.Y)>.9 and Vector3.zAxis or Vector3.yAxis).Unit
- local vertical=across:Cross(axis).Unit
- local root=heatPart(parent,'PrismHeat')
- root.CFrame=CFrame.new(from);heatBeds+=1
- root.Destroying:Connect(function() heatBeds-=1 end)
- local beds={}
- local count=math.clamp(math.ceil(delta.Magnitude/7),2,6)
- for i=1,count do
-  local lens=heatPart(root,'RefractedAir')
-  lens.Shape=Enum.PartType.Ball;lens.Material=Enum.Material.Glass
-  lens.Color=color:Lerp(Color3.fromRGB(255,238,221),.86)
+ -- Only a confirmed upward-facing ground hit gets the long buried end.
+ local reach=delta.Magnitude+(groundNormal and 32 or .85)
+ local center=from+axis*(reach*.5)
+ local cylinder=prismPart(parent,'PrismHeat')
+ cylinder.Shape=Enum.PartType.Cylinder;cylinder.Material=Enum.Material.Glass
+ cylinder.Size=Vector3.new(reach,7.4,7.4)
+ cylinder.Color=Color3.fromRGB(251,235,242)
+ cylinder.CFrame=CFrame.lookAt(center,center+axis)*CFrame.Angles(0,math.pi*.5,0)
+ heatBeds+=1
+ cylinder.Destroying:Connect(function() heatBeds-=1 end)
+ local lights={}
+ for _,fraction in ipairs({.18,.79}) do
+  local mount=prismPart(cylinder,'PrismLight')
+  mount.Position=from:Lerp(to,fraction)
+  if groundNormal and fraction>.5 then mount.Position=to+groundNormal*.75 end
   local lamp=Instance.new('PointLight')
-  lamp.Color=color:Lerp(Color3.fromRGB(255,174,106),i%2==0 and .67 or .40)
-  lamp.Range=9;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=lens
-  local a=Instance.new('Attachment');a.Parent=root
-  local b=Instance.new('Attachment');b.Parent=root
-  local wisp=Instance.new('Beam');wisp.Name='HeatRipple'
-  wisp.Attachment0=a;wisp.Attachment1=b;wisp.FaceCamera=true;wisp.Segments=10
-  wisp.Width0=0;wisp.Width1=0;wisp.Color=ColorSequence.new(lamp.Color)
-  wisp.Transparency=HEAT_EDGE;wisp.LightEmission=.54;wisp.LightInfluence=0
-  wisp.Brightness=.8;wisp.Enabled=false;wisp.Parent=root
-  beds[i]={lens=lens,lamp=lamp,a=a,b=b,wisp=wisp,fraction=(i-.5)/count}
+  lamp.Color=color:Lerp(Color3.fromRGB(255,186,131),.68)
+  lamp.Range=fraction>.5 and 16 or 12;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
+  lights[#lights+1]=lamp
  end
- return {root=root,beds=beds,axis=axis,across=across,vertical=vertical,delta=delta,length=delta.Magnitude}
+ return {cylinder=cylinder,lights=lights}
 end
-
 local function stepPrismHeat(heat,age,duration)
- local reduced=BeamVFX.reduced()
+ local t=math.clamp(age/.23,0,1)
+ local fade=t*t*(3-2*t)*(1-math.clamp((age-duration)/.49,0,1))
+ if BeamVFX.reduced() then fade=0 end
  local player=Players.LocalPlayer
  local flashScale=player and player:GetAttribute('ReducedFlashing')==true and .36 or 1
- local length=heat.length
- for i,bed in ipairs(heat.beds) do
-  local time=age-bed.fraction*length/220
-  local fade=time>=0 and math.clamp(time/.06,0,1)*(1-math.clamp((age-duration+.07)/.56,0,1)) or 0
-  if reduced then fade=0 end
-  local active=fade>.01
-  bed.wisp.Enabled=active;bed.lamp.Enabled=active
-  if active then
-   local wave=time*10.7+i*1.77
-   local hot=math.exp(-time*7)*.84+.35
-   local polarity=i%2==0 and 1 or -1
-   local drift=heat.across*((.86+.20*math.sin(wave))*polarity)+heat.vertical*(.19+.33*math.sin(wave*.70))
-   local center=heat.delta*bed.fraction+drift
-   local span=math.min(6.8,length/#heat.beds*.80)
-   bed.lens.Size=Vector3.new(.92+.26*hot,.65+.16*math.sin(wave),span)
-   local world=heat.root.Position+center
-   bed.lens.CFrame=CFrame.lookAt(world,world+heat.axis+heat.across*(.17*math.sin(wave)))
-   bed.lens.Transparency=1-fade*(.054+.053*hot)
-   bed.lamp.Brightness=fade*(.68+2.45*hot)*(.87+.13*math.sin(wave*.71))*flashScale
-   local u=heat.axis*(span*.46)
-   local a=center-u+heat.vertical*(.32*math.sin(wave))
-   local b=center+u+heat.vertical*(.32*math.sin(wave+1.7))
-   bed.a.CFrame=CFrame.fromMatrix(a,heat.axis,heat.vertical,heat.across)
-   bed.b.CFrame=CFrame.fromMatrix(b,heat.axis,heat.vertical,heat.across)
-   bed.wisp.CurveSize0=math.sin(wave)*1.05
-   bed.wisp.CurveSize1=math.sin(wave+1.38)*.85
-   bed.wisp.Width0=.38*fade;bed.wisp.Width1=.21*fade
-  else bed.lens.Transparency=1 end
+ heat.cylinder.Transparency=1-.076*fade
+ for i,lamp in ipairs(heat.lights) do
+  local arrive=math.clamp((age-(i-1)*.045)/.075,0,1)
+  lamp.Enabled=fade>.01
+  lamp.Brightness=fade*arrive*(.82+2.80*math.exp(-math.max(0,age)*5.2))*flashScale
  end
 end
+local function prismScorch(parent,point,normal,travel,at)
+ if scorchCount>=16 or not BeamVFX.near(point,115) then return end
+ local projected=travel-normal*travel:Dot(normal)
+ local tangent=projected.Magnitude>.01 and projected.Unit or normal:Cross(Vector3.zAxis).Unit
+ local across=normal:Cross(tangent).Unit
+ local root=prismPart(parent,'PrismScorch')
+ local layers={}
+ for i=1,3 do
+  local mark=prismPart(root,'CharredGround')
+  mark.Shape=Enum.PartType.Cylinder;mark.Material=Enum.Material.Basalt
+  mark.Color=i==1 and Color3.fromRGB(43,29,26) or Color3.fromRGB(25,20,20)
+  local offset=i==1 and 0 or (i==2 and .76 or -1.05)
+  local center=point+normal*(.024+i*.009)+tangent*offset+across*(i==3 and .28 or 0)
+  mark.CFrame=CFrame.fromMatrix(center,normal,tangent,across)*CFrame.Angles(i==2 and .15 or -.08,0,0)
+  mark.Size=i==1 and Vector3.new(.016,5.8,3.7) or Vector3.new(.016,3.30-i*.24,2.55-i*.16)
+  layers[i]=mark
+ end
+ scorchCount+=1
+ scorchTimelines[root]={at=at,layers=layers}
+end
 function Effects.step(now)
+ for root,mark in pairs(scorchTimelines) do
+  local age=now-mark.at
+  if not root.Parent or age>=17 then
+   root:Destroy();scorchTimelines[root]=nil;scorchCount-=1
+  else
+   local darken=math.clamp(age/.26,0,1)*(1-math.clamp((age-11)/6,0,1))
+   for i,layer in ipairs(mark.layers) do layer.Transparency=1-darken*(i==1 and .40 or .71) end
+  end
+ end
  for root,t in pairs(pulseTimelines) do
   local q=(now-t.at)/t.duration
   if not root.Parent or q>=1 then root:Destroy();pulseTimelines[root]=nil;pulseCount-=1
@@ -5259,7 +5261,7 @@ function Effects.step(now)
  end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
-  if t.heat and t.heat.root.Parent then stepPrismHeat(t.heat,age,t.duration) end
+  if t.heat and t.heat.cylinder.Parent then stepPrismHeat(t.heat,age,t.duration) end
   if not rig.root.Parent or age>t.duration+rig.profile.tail then
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
@@ -5374,7 +5376,7 @@ local function part(): Part?
 	return value
 end
 
-function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?, style: string?)
+function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?, lifetime: number?, style: string?, groundNormal: Vector3?)
 	local delta = to - from
 	if delta.Magnitude < 0.05 then
 		return
@@ -5384,10 +5386,11 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	local at=clock();local now=workspace:GetServerTimeNow()
 	local profile=BeamVFX.styles[style or 'Lance'] or BeamVFX.styles.Lance
 	if now-at>duration+profile.tail then return end
+	if style=='Prism' and groundNormal then prismScorch(folder(),to,groundNormal,delta.Unit,at) end
 	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
-	  heat=style=='Prism' and prismHeat(rig.root,from,to,color) or nil}
+	  heat=style=='Prism' and prismHeat(rig.root,from,to,color,groundNormal) or nil}
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
@@ -5723,6 +5726,8 @@ end
 function Effects.destroy()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
  table.clear(beamTimelines);table.clear(chargeTimelines);table.clear(orbitalTimelines)
+ for root in pairs(scorchTimelines) do root:Destroy() end
+ table.clear(scorchTimelines);scorchCount=0
  table.clear(animations)
  for root in pairs(pulseTimelines) do root:Destroy() end;table.clear(pulseTimelines);pulseCount=0;table.clear(markers);table.clear(burns);table.clear(swarms)
  eventAt=nil
@@ -5737,6 +5742,7 @@ local RoleEffectView = (function()
 -- of ownership. State records also cover late joins and canceled abilities.
 local View={}
 local Players=game:GetService('Players')
+local Lighting=game:GetService('Lighting')
 local WHITE=Color3.fromRGB(255,248,231)
 local PRISM_RED=Color3.fromRGB(249,22,60)
 local SIGHT_RED=Color3.fromRGB(255,56,72)
@@ -5889,29 +5895,50 @@ local RAMIEL_FLARE={
  {-1.20,0}, {-1.03,.012}, {-.77,.021}, {-.60,.032}, {-.30,.050},
  {-.20,.085}, {-.10,.35}, {0,1.00},
 }
-local function flareVelocity(a,b,c)
+local RAMIEL_STAR_ANGLE={
+ {-1.20,18}, {-.62,22}, {-.30,27}, {-.17,43}, {-.065,88}, {0,143},
+ {.075,206}, {.165,248}, {.263,273}, {.369,304}, {.469,317},
+}
+local function curveVelocity(a,b,c)
  local left=(b[2]-a[2])/(b[1]-a[1])
  local right=(c[2]-b[2])/(c[1]-b[1])
  return 2*left*right/(left+right)
 end
-local function flareRadius(elapsed)
- if elapsed<=RAMIEL_FLARE[1][1] then return 0 end
- if elapsed>=0 then return 1+.27*(1-math.exp(-elapsed*18)) end
+local function sampleCurve(keys,elapsed)
+ if elapsed<=keys[1][1] then return keys[1][2] end
+ if elapsed>=keys[#keys][1] then return keys[#keys][2] end
  local i=1
- while elapsed>RAMIEL_FLARE[i+1][1] do i+=1 end
- local a,b=RAMIEL_FLARE[i],RAMIEL_FLARE[i+1]
+ while elapsed>keys[i+1][1] do i+=1 end
+ local a,b=keys[i],keys[i+1]
  local span=b[1]-a[1]
  local q=(elapsed-a[1])/span
- local start=i>1 and flareVelocity(RAMIEL_FLARE[i-1],a,b)*span or 0
- local finish=i+2<=#RAMIEL_FLARE and flareVelocity(a,b,RAMIEL_FLARE[i+2])*span or 0
+ local start=i>1 and curveVelocity(keys[i-1],a,b)*span or 0
+ local finish=i+2<=#keys and curveVelocity(a,b,keys[i+2])*span or 0
  local q2,q3=q*q,q*q*q
  return math.clamp((2*q3-3*q2+1)*a[2]+(q3-2*q2+q)*start
   +(3*q2-2*q3)*b[2]+(q3-q2)*finish,a[2],b[2])
 end
 
+local function starRays(root)
+ local center=Instance.new('Attachment');center.Parent=root
+ local rays={}
+ local function spoke(tip,color)
+  local beam=Instance.new('Beam')
+  beam.Attachment0=center;beam.Attachment1=tip;beam.FaceCamera=true;beam.Segments=4
+  beam.Width1=0;beam.LightEmission=1;beam.LightInfluence=0
+  beam.Color=ColorSequence.new(color);beam.Parent=root
+  return beam
+ end
+ for i=1,4 do
+  local tip=Instance.new('Attachment');tip.Parent=root
+  rays[i]={tip=tip,halo=spoke(tip,Color3.fromRGB(255,116,208)),core=spoke(tip,Color3.fromRGB(255,249,255))}
+ end
+ return rays
+end
+
 function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.36 then
+ if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.51 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -5931,28 +5958,83 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
   local outer=star('PinkFlare',Color3.fromRGB(255,82,185));outer.Size=UDim2.fromScale(1,1)
   local inner=star('WhiteFlare',Color3.fromRGB(255,244,250));inner.Size=UDim2.fromScale(.77,.77)
   local ring=PlaneBurst.create(root,Color3.fromRGB(255,161,221))
-  local wake=PlaneBurst.create(root,Color3.fromRGB(123,189,255))
-  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring,wake=wake}
+  local wake=PlaneBurst.create(root,Color3.fromRGB(255,132,213))
+  local lamp=Instance.new('PointLight')
+  lamp.Name='RamielStarLight';lamp.Range=23;lamp.Color=Color3.fromRGB(255,241,252)
+  lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=root
+  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring,wake=wake,
+   rays=starRays(root),lamp=lamp}
   rig.chargeField=field
  end
  local elapsed=-untilContact
- local radius=flareRadius(elapsed)
- local after=1-smooth((elapsed-.055)/.205)
+ local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or 1+.27*(1-math.exp(-elapsed*18))
+ local after=1-smooth((elapsed-.115)/.365)
+ local bloom=1-smooth((elapsed-.045)/.15)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
  local width=(.06+radius*2.90)*scale
  local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
- local angle=12+19*smooth((elapsed+.89)/.76)
+ local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
- field.inner.ImageTransparency=1-alpha
- field.outer.ImageTransparency=1-.73*alpha
- EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.34*alpha*smooth(radius/.32))
+ field.inner.ImageTransparency=1-alpha*bloom
+ field.outer.ImageTransparency=1-.73*alpha*bloom
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.52*alpha*bloom*smooth(radius/.32))
+ local camera=workspace.CurrentCamera
+ local right=camera and camera.CFrame.RightVector or Vector3.xAxis
+ local up=camera and camera.CFrame.UpVector or Vector3.yAxis
+ local length=(.047+radius*1.43)*scale
+ local function rayAlpha(opacity)
+  return NumberSequence.new({NumberSequenceKeypoint.new(0,1-opacity),
+   NumberSequenceKeypoint.new(.56,1-opacity*.57),NumberSequenceKeypoint.new(1,1)})
+ end
+ local coreAlpha,haloAlpha=rayAlpha(alpha),rayAlpha(alpha*.46)
+ for i,ray in ipairs(field.rays) do
+  local theta=math.rad(angle)+(i-1)*math.pi*.5
+  ray.tip.WorldPosition=field.root.Position+(right*math.cos(theta)+up*math.sin(theta))*length*(i%2==1 and 1.18 or .78)
+  ray.core.Width0=(.025+radius*.082)*scale
+  ray.halo.Width0=ray.core.Width0*3.6
+  ray.core.Transparency=coreAlpha;ray.halo.Transparency=haloAlpha
+ end
+ local white=smooth((radius-.13)/.87)*bloom
+ field.lamp.Enabled=white>.01
+ field.lamp.Brightness=white*7.5
  local rim=smooth((radius-.10)/.30)*after
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
- local pressure=smooth(elapsed/.033)*(1-smooth((elapsed-.084)/.265))
- local expansion=1-math.exp(-math.max(0,elapsed)*17)
- PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(1.22+1.60*expansion),pressure*.61,scale*(.025+.045*pressure))
+ local pressure=smooth((elapsed+.075)/.105)*(1-smooth((elapsed-.11)/.37))
+ local expansion=1-math.exp(-math.max(0,elapsed+.075)*6.8)
+ PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(.62+3.30*expansion),pressure*.70,scale*(.025+.045*pressure))
+end
+
+local function releaseLighting(self,at,weight)
+ local flash=self.prismFlash
+ if flash and math.abs(at-flash.at)<.22 then
+  flash.weight=math.max(weight,flash.weight)
+  return
+ end
+ if not flash then
+  local correction=Instance.new('ColorCorrectionEffect');correction.Name='RamielReleaseExposure';correction.Enabled=false;correction.Parent=Lighting
+  local bloom=Instance.new('BloomEffect');bloom.Name='RamielReleaseBloom';bloom.Enabled=false;bloom.Parent=Lighting
+  flash={correction=correction,bloom=bloom};self.prismFlash=flash
+ end
+ flash.at=at;flash.weight=weight
+end
+
+local function stepReleaseLighting(self,now)
+ local flash=self.prismFlash
+ if not flash then return end
+ local age=now-flash.at
+ if age>=.19 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
+  flash.correction:Destroy();flash.bloom:Destroy();self.prismFlash=nil
+  return
+ end
+ local strength=(1-smooth((age-.035)/.155))*flash.weight
+ flash.correction.Brightness=.94*strength
+ flash.correction.Contrast=-.19*strength
+ flash.correction.Saturation=-.94*strength
+ flash.bloom.Threshold=.69-.45*strength
+ flash.bloom.Intensity=2.2*strength;flash.bloom.Size=48
+ flash.correction.Enabled=true;flash.bloom.Enabled=true
 end
 
 local function clearLoad(self,r)
@@ -6127,10 +6209,14 @@ function View.new(audio,onPrism)
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .42,hold,'Prism')
+       local groundNormal=node:GetAttribute('PrismGroundNormal')
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .42,hold,'Prism',groundNormal)
        if now-contactAt>=.18 then continue end
-       if onPrism then onPrism(point,now) end
+       if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if not reduced then
+        local camera=workspace.CurrentCamera
+        local distance=camera and (camera.CFrame.Position-origin).Magnitude or math.huge
+        if distance<75 and now-contactAt<.10 then releaseLighting(self,contactAt,1-smooth((distance-24)/51)) end
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
         local normal=node:GetAttribute('ContactNormal') or -travel.Unit
         burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)
@@ -6258,9 +6344,11 @@ function View.new(audio,onPrism)
    end
   end
   stepBursts(self,now)
+  stepReleaseLighting(self,now)
   RoleVisuals.setTime(nil);RoleVisuals.step(now)
  end
  function self:destroy()
+  stepReleaseLighting(self,math.huge)
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for node,r in pairs(self.records) do
    clearProjectile(self,r,0,false);clearLoad(self,r)
@@ -7643,10 +7731,36 @@ function P:crystalKick(position,strength,now)
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
+function P:prismPressure(from,to,at,duration)
+ local camera=workspace.CurrentCamera
+ if not camera then return end
+ local player=game:GetService('Players').LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local listener=root and root.Position or camera.CFrame.Position
+ local travel=to-from
+ local along=math.clamp((listener-from):Dot(travel)/math.max(.001,travel:Dot(travel)),0,1)
+ local distance=(listener-(from+travel*along)).Magnitude
+ local weight=math.clamp(1-distance/52,0,1)^2
+ local previous=self.prismShake
+ if weight>.01 and (not previous or at>=previous.at+previous.duration or weight>=previous.weight) then
+  self.prismShake={at=at,duration=duration,weight=weight}
+ end
+end
 function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
  local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local prism=self.prismShake
+ if prism then
+  local t=now-prism.at
+  if t>=prism.duration then self.prismShake=nil
+  elseif t>=0 then
+   local attack=math.clamp(t/.035,0,1)
+   local decay=math.clamp((prism.duration-t)/.20,0,1)
+   local amount=attack*decay*prism.weight*(.046+.068*math.exp(-t*9))
+   ordinary*=CFrame.new(math.sin(t*45)*amount,math.sin(t*33+.4)*amount*.48,math.sin(t*24)*amount*.20)
+  end
+ end
  local impactAge=now-(self.crystalShakeAt or -100)
  if impactAge<0 or impactAge>=.22 then return ordinary end
  local t=impactAge/.22
@@ -11818,8 +11932,8 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
-local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
- if not CrystalImpactView.reducedMotion() then presentation:kick(position,.145,now) end
+local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
+ if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)
@@ -13017,6 +13131,9 @@ local function renderDrone(d,dt,now)
     charge=math.clamp(age/windup,0,1)
     recovery=fireAge and fireAge>=0 and fireAge or nil
     untilContact=recovery and -recovery or math.max(.034,impact-age)
+    local settle=math.clamp((charge-.61)/.18,0,1)
+    local steadyPose=CFrame.new(d.pos+Vector3.yAxis*d.visualLift)*CFrame.Angles(0,d.yaw,0)
+    visiblePose=visiblePose:Lerp(steadyPose,settle*settle*(3-2*settle))
     if recovery then
      if d.ramielFiringShot~=shot then
       d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose

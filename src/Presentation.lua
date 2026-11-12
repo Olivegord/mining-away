@@ -1041,10 +1041,36 @@ function P:crystalKick(position,strength,now)
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
+function P:prismPressure(from,to,at,duration)
+ local camera=workspace.CurrentCamera
+ if not camera then return end
+ local player=game:GetService('Players').LocalPlayer
+ local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local listener=root and root.Position or camera.CFrame.Position
+ local travel=to-from
+ local along=math.clamp((listener-from):Dot(travel)/math.max(.001,travel:Dot(travel)),0,1)
+ local distance=(listener-(from+travel*along)).Magnitude
+ local weight=math.clamp(1-distance/52,0,1)^2
+ local previous=self.prismShake
+ if weight>.01 and (not previous or at>=previous.at+previous.duration or weight>=previous.weight) then
+  self.prismShake={at=at,duration=duration,weight=weight}
+ end
+end
 function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
  local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local prism=self.prismShake
+ if prism then
+  local t=now-prism.at
+  if t>=prism.duration then self.prismShake=nil
+  elseif t>=0 then
+   local attack=math.clamp(t/.035,0,1)
+   local decay=math.clamp((prism.duration-t)/.20,0,1)
+   local amount=attack*decay*prism.weight*(.046+.068*math.exp(-t*9))
+   ordinary*=CFrame.new(math.sin(t*45)*amount,math.sin(t*33+.4)*amount*.48,math.sin(t*24)*amount*.20)
+  end
+ end
  local impactAge=now-(self.crystalShakeAt or -100)
  if impactAge<0 or impactAge>=.22 then return ordinary end
  local t=impactAge/.22
