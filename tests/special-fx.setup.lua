@@ -39,7 +39,7 @@ function VM:Dot(b) return self.X*b.X+self.Y*b.Y+self.Z*b.Z end
 function VM:Cross(b) return setmetatable({X=self.Y*b.Z-self.Z*b.Y,Y=self.Z*b.X-self.X*b.Z,Z=self.X*b.Y-self.Y*b.X},VM) end
 local Vector3={new=function(x,y,z) return setmetatable({X=x or 0,Y=y or 0,Z=z or 0},VM) end}
 Vector3.zero=Vector3.new();Vector3.one=Vector3.new(1,1,1);Vector3.yAxis=Vector3.new(0,1,0)
-Vector3.zAxis=Vector3.new(0,0,1)
+Vector3.xAxis=Vector3.new(1,0,0);Vector3.zAxis=Vector3.new(0,0,1)
 local Vector2={new=function(x,y) return {X=x,Y=y} end}
 local CF={};CF.__index=CF
 local CFrame={}

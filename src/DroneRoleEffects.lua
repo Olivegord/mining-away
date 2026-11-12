@@ -41,7 +41,7 @@ function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
  node:SetAttribute('ContactFracture',fractured);node:SetAttribute('ContactBroken',broken);node:SetAttribute('ContactPowered',powered)
  node:SetAttribute('ContactAt',at)
- Debris:AddItem(node,.9)
+ Debris:AddItem(node,node:GetAttribute('Shape')=='Prism' and 1.03 or .9)
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)

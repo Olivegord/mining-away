@@ -24,8 +24,8 @@ local CUES = {
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
- crystal_release_tink={id='9125869138',volume=.19,duration=.21,pitch=1.62,cooldown=.09,range=53,maxVoices=2,fallback='volume_slider.ogg'},
- crystal_fall_tink={id='9125869138',volume=.19,duration=.24,pitch=1.46,cooldown=.065,range=49,maxVoices=3,fallback='volume_slider.ogg'},
+ crystal_release_tink={id='9125869138',volume=.30,duration=.29,pitch=1.56,attack=.004,cooldown=.09,range=58,maxVoices=2,fallback='volume_slider.ogg'},
+ crystal_fall_tink={id='9125869138',volume=.26,duration=.31,pitch=1.41,attack=.004,cooldown=.065,range=56,maxVoices=3,fallback='volume_slider.ogg'},
  gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
@@ -80,7 +80,8 @@ local CUES = {
  coil_load={id='9119816710',volume=.18,duration=.57,pitch=1.12,attack=.035,cooldown=.16,range=51,maxVoices=2,fallback='volume_slider.ogg'},
  coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
  coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
- ore_land={id='9125869138',volume=.13,duration=.29,pitch=1.22,attack=.009,cooldown=.11,range=35,maxVoices=2,fallback='action_jump_land.mp3'},
+ ore_land={ids={'9125869138','9125869504'},volume=.34,duration=.34,pitch=1.30,attack=.004,cooldown=.045,
+  nearDistance=22,range=62,maxVoices=4,reserved=true,fallback='volume_slider.ogg'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
  reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
  resonance={id='91735091370012',volume=.12,duration=.8,pitch=.65,cooldown=.14,fallback='volume_slider.ogg'},
@@ -225,7 +226,7 @@ function Soundscape:_voice(name,position,looped)
   anchor=Instance.new('Part');anchor.Name='ActionAudio';anchor.Size=Vector3.one*.05
   anchor.Anchored=true;anchor.Transparency=1;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Position=position;anchor.Parent=self.effectParent
-  sound.RollOffMode=Enum.RollOffMode.Linear;sound.RollOffMinDistance=14;sound.RollOffMaxDistance=cue.range or 80
+  sound.RollOffMode=Enum.RollOffMode.Linear;sound.RollOffMinDistance=cue.nearDistance or 14;sound.RollOffMaxDistance=cue.range or 80
  end
  sound.Parent=anchor or self.folder;self.voices+=1
  self.cueVoices[name]=(self.cueVoices[name] or 0)+1
@@ -238,7 +239,7 @@ function Soundscape:_voice(name,position,looped)
 end
 function Soundscape:play(name,position,options)
  local cue=CUES[name];local now=os.clock()
- if self.closed or self.effectsMuted or not cue or self.voices>=22 or now<(self.cooldowns[name] or 0) then return end
+ if self.closed or self.effectsMuted or not cue or self.voices>=(cue.reserved and 25 or 22) or now<(self.cooldowns[name] or 0) then return end
  if (self.cueVoices[name] or 0)>=(cue.maxVoices or 5) then return end
  if position and self:_distance(position)>(cue.range or 80) then return end
  self.cooldowns[name]=now+cue.cooldown

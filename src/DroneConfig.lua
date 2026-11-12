@@ -212,8 +212,7 @@ DroneConfig.PressSockets = {Vector3.new(0,-1.05,.96),Vector3.new(-1.02,-1.05,.27
 -- Quarry machines share painted stone-gray panels and worn metal at working
 -- surfaces. The old Mesh, weld and emitter stay in every clone as the rig.
 -- This only builds the visible hull; flight, reach and articulation are unchanged.
--- A native solid pyramid supplies Ramiel's rigid glass forms. The same
--- octahedral silhouette can be drawn with triangles if that solid is absent.
+-- Each triangular face shares its rim vertices with both neighbors.
 local function ramielWedges(a: Vector3,b: Vector3,c: Vector3,left: BasePart,right: BasePart)
  local ab,ac,bc=b-a,c-a,c-b
  if ab:Dot(ab)>ac:Dot(ac) and ab:Dot(ab)>bc:Dot(bc) then a,c=c,a
@@ -222,7 +221,7 @@ local function ramielWedges(a: Vector3,b: Vector3,c: Vector3,left: BasePart,righ
  local normal=ac:Cross(ab).Unit
  local depth=bc.Unit
  local up=bc:Cross(normal).Unit
- local height=math.abs(ab:Dot(up));local thickness=.045
+ local height=math.abs(ab:Dot(up));local thickness=.026
  left.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ab:Dot(depth))))
  left.CFrame=CFrame.fromMatrix((a+b)*.5,normal,up,depth)
  right.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ac:Dot(depth))))
@@ -231,33 +230,29 @@ end
 local RAMIEL_GLASS=Color3.fromRGB(44,126,235)
 local RAMIEL_RED=Color3.fromRGB(255,37,59)
 function DroneConfig.ramielRig(model: Model)
- local folder=model:FindFirstChild('RamielGlass');if not folder then return nil end
- local rig={faces={},solids={},core=folder:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
- for _,part in ipairs(folder:GetChildren()) do
-  if part:IsA('BasePart') then rig.solids[part.Name]=part end
- end
- for i=1,8 do
-  local left=rig.solids['Pane'..i..'A'];local right=rig.solids['Pane'..i..'B']
-  if left and right then rig.faces[i]={left,right} end
+ local folder=model:FindFirstChild('RamielGlass')
+ if not folder or not folder:FindFirstChild('Pane20A') then return nil end
+ local rig={faces={},rim={},tips={},core=folder:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
+ for i=1,20 do
+  rig.faces[i]={folder:FindFirstChild('Pane'..i..'A') :: BasePart,folder:FindFirstChild('Pane'..i..'B') :: BasePart}
  end
  return rig
 end
--- Main Yashima shot, blocked for the gameplay camera. The facets first pull
--- in, then sweep past the locked silhouette. The aperture catches up and
--- keeps gathering light after the large glass shapes have settled.
+-- Wind back, open in two beats, then hold the shape while the aperture loads.
+-- The track changes the geometry itself; the same faces carry every pose.
 local RAMIEL_POSE={
- -- phase, reach, outer roll, fold, aperture roll, aperture reach, energy
- {0,    0,     0,  71,   0,   0,    0},
- {.12,  0,   -23,  72,  -9,   0,    .025},
- {.22, .13,  -27,  63,   3,  .12,   .07},
- {.37, .69,   27,  29,  31,  .40,   .13},
- {.47, .54,   21,  44,  58,  .53,   .16},
- {.60,1.08,   71,   9, 113,  .83,   .24},
- {.69,1.00,   75,   0, 151, 1.06,   .33},
- {.79,1.00,   72,   0, 147, 1.00,   .47},
- {.89,1.00,   72,   0, 148, 1.01,   .73},
- {.95, .975,  72,   4, 149,  .94,   .92},
- {1,   1.00,  72,   0, 150, 1.00,  1.00},
+ -- phase, opening, twist, belt tilt, aperture, energy
+ {0,    0,    0,   0,  0,    0},
+ {.14,  0,  -25,  -6,  0,    .03},
+ {.23, .13, -21,  13, .08,   .07},
+ {.39, .69,  25,  56, .40,   .13},
+ {.49, .54,  18,  46, .53,   .17},
+ {.63,1.08,  52,  93, .88,   .27},
+ {.72,1.00,  48,  90, 1.04,  .39},
+ {.81,1.00,  48,  90, 1.00,  .58},
+ {.91,1.00,  48,  90, 1.00,  .83},
+ {.96, .98,  47,  88, .94,   .96},
+ {1,   1.00, 48,  90, 1.00,  1.00},
 }
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -277,87 +272,74 @@ local function ramielTrack(index: number,t: number,channel: number): number
  return math.clamp((2*t3-3*t2+1)*a[channel]+(t3-2*t2+t)*start
   +(-2*t3+3*t2)*b[channel]+(t3-t2)*finish,math.min(a[channel],b[channel]),math.max(a[channel],b[channel]))
 end
-local function pyramid(part: BasePart,frame: CFrame,axis: Vector3,base: Vector3,height: number,width: number,visibility: number,roll: number)
- local center=frame:PointToWorldSpace(base+axis*(height*.5))
- local up=frame:VectorToWorldSpace(axis)
- local right=frame.LookVector:Cross(up).Unit
- part.Size=Vector3.new(width,height,width)
- part.CFrame=CFrame.fromMatrix(center,right,up,right:Cross(up))*CFrame.Angles(0,roll,0)
- part.Transparency=1-.86*visibility
-end
-DroneConfig.RamielRecovery=.69
+-- Four of the five tips start at the corners of the original octahedron.
+-- The last starts midway along a straight edge and becomes the fifth arm.
+local IDLE_ANGLES={0,math.pi/2,math.pi,3*math.pi/2,7*math.pi/4}
+local TAU=2*math.pi
+DroneConfig.RamielRecovery=.96
 function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?): number
  local time=math.clamp(charge,0,1)
  local index=1
  while index<#RAMIEL_POSE-1 and time>RAMIEL_POSE[index+1][1] do index+=1 end
  local t=(time-RAMIEL_POSE[index][1])/(RAMIEL_POSE[index+1][1]-RAMIEL_POSE[index][1])
- local reach,outerRoll,fold,frontRoll,frontReach,energy=ramielTrack(index,t,2),ramielTrack(index,t,3),ramielTrack(index,t,4),
-  ramielTrack(index,t,5),ramielTrack(index,t,6),ramielTrack(index,t,7)
- local closing=recovery and smoothstep((recovery-.29)/(DroneConfig.RamielRecovery-.29)) or 0
- local gather=smoothstep(time/.19)*(1-.68*smoothstep((time-.18)/.48))
+ local opening,twist,tilt,aperture,energy=ramielTrack(index,t,2),ramielTrack(index,t,3),
+  ramielTrack(index,t,4),ramielTrack(index,t,5),ramielTrack(index,t,6)
+ local gather=smoothstep(time/.23)*(1-smoothstep((time-.19)/.49))
+ local lock=smoothstep(time/.54)
  local recoil=0
  if recovery then
-  local follow=smoothstep(recovery/.073)*(1-smoothstep((recovery-.073)/.33))
-  reach=(1+.072*follow)*(1-closing);frontReach=1-closing
-  fold=closing*62;outerRoll=72+5*follow-21*closing;frontRoll=150+34*closing
-  energy=1-smoothstep((recovery-.045)/.32)
-  gather=.32*(1-closing);recoil=follow
+  local close=smoothstep((recovery-.53)/(DroneConfig.RamielRecovery-.53))
+  recoil=smoothstep(recovery/.055)*(1-smoothstep((recovery-.055)/.30))
+  opening=(1+.055*recoil)*(1-close);aperture=1-close
+  twist=(48+3*recoil)*(1-close);tilt=90*(1-close)
+  energy=1-smoothstep((recovery-.075)/.38);gather=0;lock=1-close
  end
- local reveal=smoothstep((time-.15)/.39)*(1-closing)
  if reduced then
-  reach=reveal;outerRoll=72;fold=0;frontRoll=150;frontReach=reveal;energy*=.38
-  gather=0;recoil=0
+  local eased=recovery and math.min(opening,1) or smoothstep((time-.13)/.61)
+  opening=eased;twist=48*eased;tilt=90*eased;aperture=eased
+  energy*=.40;gather=0;recoil=0
  end
  local frame=pivot*CFrame.Angles(0,roll,0)
  if aim and (aim-pivot.Position).Magnitude>.01 then
   local forward=(aim-pivot.Position).Unit
   local up=math.abs(forward.Y)>.94 and Vector3.zAxis or Vector3.yAxis
-  local lock=smoothstep(time/.48)*(1-closing)
   frame=frame:Lerp(CFrame.lookAt(pivot.Position,aim,up),lock)
-  local squeeze=smoothstep(time/.18)*(1-smoothstep((time-.20)/.31))*(recovery and 0 or 1)
-  frame*=CFrame.new(0,.16*gather,.45*gather+.28*recoil)*CFrame.Angles(-squeeze*.14,0,math.rad(-20)*squeeze)
+  frame*=CFrame.new(0,.10*gather,.32*gather+.22*recoil)*CFrame.Angles(-gather*.12,0,-gather*.18)
  end
  local radius=rig.scale*1.35
- local solids=rig.solids
- if solids.Upper then
-  local size=radius*(1-.18*gather-.58*reveal)
-  pyramid(solids.Upper,frame,Vector3.yAxis,Vector3.zero,size,size*1.43,1-reveal,math.pi*.25)
-  pyramid(solids.Lower,frame,-Vector3.yAxis,Vector3.zero,size,size*1.43,1-reveal,math.pi*.25)
-  for i=1,5 do
-   local angle=math.pi*.5+(i-.5)*math.pi*2/5+math.rad(outerRoll-72)
-   local drag=math.sin(i*2.4)*math.min(13,fold*.37)
-   local hinge=math.rad(fold+drag)
-   local axis=Vector3.new(math.cos(angle)*math.cos(hinge),math.sin(angle)*math.cos(hinge),math.sin(hinge))
-   local root=Vector3.new(math.cos(angle),math.sin(angle),0)*radius*(.10+.18*reach)
-   local length=radius*(.50+(i==3 and .84 or 1.40)*reach)
-   local ray=solids['Star'..i]
-   local fan=smoothstep((time-.17-(i-1)*.014)/.34)*(1-closing)
-   pyramid(ray,frame,axis,root,length,radius*(.38+.55*reach),reduced and reveal or fan,.30+math.rad(fold)*.66)
-   local blue=RAMIEL_GLASS:Lerp(Color3.fromRGB(18,39,135),i%2==0 and .54 or .28)
-   ray.Color=blue:Lerp(Color3.fromRGB(249,177,240),energy^1.6*.70)
-   local front=solids['Aperture'..i]
-   if front then
-    local turn=math.pi*.5+(i-.5)*math.pi*2/5+math.rad(frontRoll)
-    local inner=Vector3.new(math.cos(turn),math.sin(turn),-.08).Unit
-    pyramid(front,frame,inner,Vector3.new(0,0,-.31*radius),radius*(.14+.59*frontReach),
-     radius*(.12+.33*frontReach),reveal*smoothstep((time-.27)/.34),.58)
-    front.Color=Color3.fromRGB(147,201,255):Lerp(Color3.fromRGB(255,224,241),energy*.88)
-   end
-  end
- else
-  for i,panes in ipairs(rig.faces) do
-   local sign=i<=4 and 1 or -1
-   local angle=(i-1)%4*math.pi*.5
-   local size=radius*(1-reveal*.28)
-   local a=Vector3.new(math.cos(angle),0,math.sin(angle))*size
-   local b=Vector3.new(math.cos(angle+math.pi*.5),0,math.sin(angle+math.pi*.5))*size
-   local c=Vector3.yAxis*sign*size
-   ramielWedges(frame:PointToWorldSpace(c),frame:PointToWorldSpace(a),frame:PointToWorldSpace(b),panes[1],panes[2])
-  end
+ local radians=math.rad(tilt)
+ local across=Vector3.new(0,math.sin(radians),math.cos(radians))
+ local axis=Vector3.xAxis:Cross(across)
+ local belt=rig.rim
+ local tips=rig.tips
+ local unfold=math.clamp(opening,0,1)
+ local squeeze=1-.19*gather
+ local bladeLag=not reduced and not recovery and math.sin(math.pi*unfold)^2 or 0
+ for i=1,5 do
+  local angle=IDLE_ANGLES[i]+((i-1)*TAU/5-IDLE_ANGLES[i])*unfold+math.rad(twist)
+  local start=i==5 and math.sqrt(.5) or 1
+  local reach=radius*(start*squeeze+(2.08-start)*opening)
+  local drag=radius*bladeLag*math.sin(i*2.7)*.36
+  tips[i]=Vector3.xAxis*(math.cos(angle)*reach)+across*(math.sin(angle)*reach)+axis*drag
  end
- rig.core.CFrame=frame*CFrame.new(0,0,-(.17+.23*reveal)*radius)
- rig.core.Size=Vector3.one*radius*(.17+.64*energy^1.55)
- rig.core.Transparency=1-math.max(reveal,smoothstep((time-.13)/.24)*.66*(1-closing))*(.76+.24*energy)
+ for i=1,5 do
+  local a,b=tips[i],tips[i%5+1]
+  -- Midpoints keep the resting shell a sealed diamond. Drawing the midpoints
+  -- inward during the roll separates the five tips without opening seams.
+  belt[i*2-1]=frame:PointToWorldSpace(a)
+  belt[i*2]=frame:PointToWorldSpace((a+b)*(.5*(1-.70*unfold)))
+ end
+ local hubDepth=radius*(squeeze-.69*unfold)
+ local front=frame:PointToWorldSpace(-axis*hubDepth)
+ local back=frame:PointToWorldSpace(axis*hubDepth)
+ for i=1,10 do
+  local a,b=belt[i],belt[i%10+1]
+  local face=rig.faces[i];ramielWedges(front,a,b,face[1],face[2])
+  face=rig.faces[i+10];ramielWedges(back,b,a,face[1],face[2])
+ end
+ rig.core.CFrame=frame*CFrame.new(0,0,-radius*(.08+.39*aperture))
+ rig.core.Size=Vector3.one*radius*(.12+.50*energy^1.55)
+ rig.core.Transparency=1-smoothstep(aperture/.40)*(.70+.30*energy)
  rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,215,229),energy^1.6*.93)
  local light=rig.core:FindFirstChild('ApertureLight')
  if light and light:IsA('PointLight') then
@@ -367,11 +349,21 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
  return energy
 end
 
+DroneConfig.Prominent={
+ Ramiel={span=3.75,lift=2.4},Orbiter={span=3.30,lift=1.5},
+ Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
+}
+
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
 function DroneConfig.fitBody(model: Model)
  local pivot=model:GetPivot()
  local originalScale=model:GetScale()
+ local role=model:GetAttribute('RoleGeometry')
+ local prominent=DroneConfig.Prominent[role]
+ if role=='Ramiel' then
+  model:ScaleTo(prominent.span/2.70);return
+ end
  local low=Vector3.one*math.huge;local high=-low
  for _,part in ipairs(model:GetDescendants()) do
   if part:IsA('BasePart') and part.Transparency<.95 then
@@ -388,7 +380,7 @@ function DroneConfig.fitBody(model: Model)
  local size=high-low
  local span=math.max(size.X,size.Y,size.Z)
  if span<=.01 then return end
- model:ScaleTo(originalScale*2.65/span)
+ model:ScaleTo(originalScale*(prominent and prominent.span or 2.65)/span)
  if model:GetAttribute('RoleGeometry')=='Compactor' then
   -- The authoritative ore flight still ends at the original input sockets.
   for i,position in ipairs(DroneConfig.PressSockets) do
@@ -546,31 +538,33 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
  end
  if role=='Ramiel' then
   local glass=Instance.new('Folder');glass.Name='RamielGlass';glass.Parent=model
-  local net=game:GetService('ReplicatedStorage'):FindFirstChild('MiningAway')
-  local template=net and net:FindFirstChild('RamielPyramid')
-  if template and template:IsA('BasePart') then
-   for i,name in ipairs({'Upper','Lower','Star1','Star2','Star3','Star4','Star5',
-    'Aperture1','Aperture2','Aperture3','Aperture4','Aperture5'}) do
-    local solid=template:Clone();solid.Name=name
-    solid.Anchored=true;solid.CanCollide=false;solid.CanTouch=false;solid.CanQuery=false;solid.CastShadow=false
-    solid.Material=Enum.Material.Glass;solid.Reflectance=.16
-    solid.Color=RAMIEL_GLASS:Lerp(i%2==0 and Color3.fromRGB(25,48,158) or Color3.fromRGB(127,211,255),.28)
-    solid.Parent=glass
+  local half=readable and 10 or 4
+  for i=1,half*2 do
+   local tint=RAMIEL_GLASS:Lerp(i<=half and Color3.fromRGB(179,235,255) or Color3.fromRGB(22,42,141),.26+((i-1)%half)*.037)
+   local pair={}
+   for _,suffix in ipairs({'A','B'}) do
+    local pane=hardware('Pane'..i..suffix,Vector3.one*.04,CFrame.new(),tint,Enum.Material.Glass,nil,nil,nil,true)
+    pane.Transparency=.17;pane.Reflectance=.12;pane.CastShadow=false;pane.Parent=glass
+    pair[#pair+1]=pane
    end
-  else
-   for i=1,8 do
-    local tint=RAMIEL_GLASS:Lerp(i<=4 and Color3.fromRGB(179,235,255) or Color3.fromRGB(23,62,176),.24+((i-1)%4)*.085)
-    for _,suffix in ipairs({'A','B'}) do
-     local pane=hardware('Pane'..i..suffix,Vector3.one*.04,CFrame.new(),tint,Enum.Material.Glass,nil,nil,nil,true)
-     pane.Transparency=.18;pane.Reflectance=.12;pane.CastShadow=false;pane.Parent=glass
-    end
+   if not readable then
+    -- The replicated fallback is a compact, closed octahedron. Only the
+    -- local renderer needs the extra split vertices for the deformation.
+    local angle=((i-1)%4)*math.pi/2
+    local radius=scale*1.35
+    local a=pose:PointToWorldSpace(Vector3.new(math.cos(angle),0,math.sin(angle))*radius)
+    local b=pose:PointToWorldSpace(Vector3.new(-math.sin(angle),0,math.cos(angle))*radius)
+    local c=pose:PointToWorldSpace(Vector3.yAxis*(i<=4 and radius or -radius))
+    ramielWedges(c,a,b,pair[1],pair[2])
    end
   end
-  local core=hardware('Core',Vector3.one*.6,CFrame.new(),RAMIEL_RED,Enum.Material.Neon,Enum.PartType.Ball)
-  core.Parent=glass
-  local light=Instance.new('PointLight');light.Name='ApertureLight';light.Color=Color3.fromRGB(255,58,108)
-  light.Range=8;light.Enabled=false;light.Parent=core
-  DroneConfig.poseRamiel(DroneConfig.ramielRig(model),pose,nil,0,nil,0)
+  if readable then
+   local core=hardware('Core',Vector3.one*.6,CFrame.new(),RAMIEL_RED,Enum.Material.Neon,Enum.PartType.Ball)
+   core.Parent=glass
+   local light=Instance.new('PointLight');light.Name='ApertureLight';light.Color=Color3.fromRGB(255,58,108)
+   light.Range=8;light.Enabled=false;light.Parent=core
+   DroneConfig.poseRamiel(DroneConfig.ramielRig(model),pose,nil,0,nil,0)
+  end
  elseif role=='Needler' then
   local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
   shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)

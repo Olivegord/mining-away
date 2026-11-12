@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's glass rig, moving sights and audible stone landings
+
+Make Ramiel larger and fly higher, with the other flagship drones given a smaller lift. Give Ramiel a longer charge and a single fine red beam that holds briefly, fades in along its length after a small gap at the aperture, and kicks the camera without tilting it. The glass shell must transform by folding the same facets. Reveal more of the gun sights as they extend and move their bright dashes instead of stretching a fixed pattern. Make the clinks from the rocks that fall audible in normal mining.
+
 ## November 11 follow-up — animation timing, effect size and owner play sessions
 
 Study animation tutorials and give Ramiel and the gun drones clear anticipation, a readable hold, and overlapping follow-through. Make their charge effects, rock chips and contact particles large enough to see from the usual camera. While the owner is playing in Studio, leave their session running and continue work that does not require Edit.

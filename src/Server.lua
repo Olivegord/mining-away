@@ -413,9 +413,6 @@ if scene.runStart and scene.classicCrystal then
   local shape=CrystalCuts.build(name)
   if shape then scene.crystalCuts[name]=shape end
  end
- -- Ramiel reuses one solid across all glass forms and drone instances.
- local pyramid=CrystalCuts.build('RamielPyramid')
- if pyramid then pyramid.Parent=net end
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
@@ -2097,7 +2094,8 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local aim=contact and contact.Position or r.part.Position
    local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .71 or .38))
    local flight=definition.Flight
-   d.specialJob.duration=math.max(cycle.duration,windup+flight+.10);d.specialJob.impact=(windup+flight)/d.specialJob.duration
+   local recovery=projectile=='Prism' and .99 or .10
+   d.specialJob.duration=math.max(cycle.duration,windup+flight+recovery);d.specialJob.impact=(windup+flight)/d.specialJob.duration
    d.specialJob.from=from;d.specialJob.contact=aim
    d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
   else

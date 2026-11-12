@@ -158,7 +158,7 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	local at=clock();local now=workspace:GetServerTimeNow()
 	local profile=BeamVFX.styles[style or 'Lance'] or BeamVFX.styles.Lance
 	if now-at>duration+profile.tail then return end
-	local rig=BeamVFX.new(folder(),style or 'Lance',color)
+	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body}
 	elseif now-at<duration then

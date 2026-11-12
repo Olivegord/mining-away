@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `86901dbfb151439dfe13be6b3b1cbe0f03f85af604deb4f5c63208bfd97dc147` | Includes the animation timing and larger effect pass. |
-| Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
+| Native-file SHA-256 | `a8fbccec860df2e73a1b7c61a6ebefdfdf36b5d5465e0220c8b69a3222426657` | Includes the connected Ramiel rig, moving sights and ore clinks. |
+| Last verified installed Edit revision | `becceee` | The new Sources are staged in the connected disk roots. Arrival and save in shared Edit are pending verification. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio runs the animation timing and larger effect pass** | All seven Sources and three roots matched in Edit. The owner's active Play session has the matching server, client and shared drone Sources. The latest verified Team Create save is 190, before this pass. The new save is waiting for Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `becceee`** | Left the owner's playtest running. The latest verified Team Create save remains 190 (`621b75c`). |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — fold the glass, animate the sights and restore stone clinks
+
+Ramiel folds one connected shell from its resting octahedron into a five-point aperture and back. Its usual charge is 2.48 seconds. At confirmed contact it fires one fine red lance for a 0.67-second envelope, with a gradient near the aperture and a brief camera translation. Each pulse keeps its previous damage cap and budget; the cycle has room for the longer charge and fold. Ramiel, Orbital, Singularity and Halver render larger and higher. Singularity and Halver retain their working heights. Needler and Ballcaster reveal more irregular red dashes as their sights extend. The bright dashes drift and disappear after release. Ordinary loose ore now shares the larger cargo's landing cue. The clink waits for the actual impact data, plays once, and has more range and presence in the mix.
+
+Pickup, beam, workshop, contact clock and specialist hardware checks passed offline. These exercised delayed landing data, sight reveal and dash spacing, the same glass parts throughout the transition, and one beam and camera cue at confirmed contact. The broad gadget suite still stops at the client inertia fixture; the same failure was reproduced on `becceee`. The owner’s active Play session was not stopped. Native appearance, listening, multiplayer, and durable shared installation of this revision are not yet verified. The four changed bundles were exported to the three Script Sync roots, and the canonical file was refreshed without changing other native content. Reproduce from `becceee` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit becceee`. No Roblox publication was requested or performed.
 
 ## November 11 — give attacks anticipation, holds and follow-through
 

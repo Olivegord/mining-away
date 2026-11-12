@@ -1261,8 +1261,8 @@ local CUES = {
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
- crystal_release_tink={id='9125869138',volume=.19,duration=.21,pitch=1.62,cooldown=.09,range=53,maxVoices=2,fallback='volume_slider.ogg'},
- crystal_fall_tink={id='9125869138',volume=.19,duration=.24,pitch=1.46,cooldown=.065,range=49,maxVoices=3,fallback='volume_slider.ogg'},
+ crystal_release_tink={id='9125869138',volume=.30,duration=.29,pitch=1.56,attack=.004,cooldown=.09,range=58,maxVoices=2,fallback='volume_slider.ogg'},
+ crystal_fall_tink={id='9125869138',volume=.26,duration=.31,pitch=1.41,attack=.004,cooldown=.065,range=56,maxVoices=3,fallback='volume_slider.ogg'},
  gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
@@ -1317,7 +1317,8 @@ local CUES = {
  coil_load={id='9119816710',volume=.18,duration=.57,pitch=1.12,attack=.035,cooldown=.16,range=51,maxVoices=2,fallback='volume_slider.ogg'},
  coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
  coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
- ore_land={id='9125869138',volume=.13,duration=.29,pitch=1.22,attack=.009,cooldown=.11,range=35,maxVoices=2,fallback='action_jump_land.mp3'},
+ ore_land={ids={'9125869138','9125869504'},volume=.34,duration=.34,pitch=1.30,attack=.004,cooldown=.045,
+  nearDistance=22,range=62,maxVoices=4,reserved=true,fallback='volume_slider.ogg'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
  reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
  resonance={id='91735091370012',volume=.12,duration=.8,pitch=.65,cooldown=.14,fallback='volume_slider.ogg'},
@@ -1462,7 +1463,7 @@ function Soundscape:_voice(name,position,looped)
   anchor=Instance.new('Part');anchor.Name='ActionAudio';anchor.Size=Vector3.one*.05
   anchor.Anchored=true;anchor.Transparency=1;anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Position=position;anchor.Parent=self.effectParent
-  sound.RollOffMode=Enum.RollOffMode.Linear;sound.RollOffMinDistance=14;sound.RollOffMaxDistance=cue.range or 80
+  sound.RollOffMode=Enum.RollOffMode.Linear;sound.RollOffMinDistance=cue.nearDistance or 14;sound.RollOffMaxDistance=cue.range or 80
  end
  sound.Parent=anchor or self.folder;self.voices+=1
  self.cueVoices[name]=(self.cueVoices[name] or 0)+1
@@ -1475,7 +1476,7 @@ function Soundscape:_voice(name,position,looped)
 end
 function Soundscape:play(name,position,options)
  local cue=CUES[name];local now=os.clock()
- if self.closed or self.effectsMuted or not cue or self.voices>=22 or now<(self.cooldowns[name] or 0) then return end
+ if self.closed or self.effectsMuted or not cue or self.voices>=(cue.reserved and 25 or 22) or now<(self.cooldowns[name] or 0) then return end
  if (self.cueVoices[name] or 0)>=(cue.maxVoices or 5) then return end
  if position and self:_distance(position)>(cue.range or 80) then return end
  self.cooldowns[name]=now+cue.cooldown
@@ -1996,7 +1997,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
- Prism={body=1.1,core=.08,taper=.84,orbit=.23,spin=1.8,star=.32,tail=.45},
+ Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=.16},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -2047,7 +2048,7 @@ local function pair(root,name,color,opacity)
  return {a=a,b=b,beam=ribbon(root,name,a,b,color,opacity)}
 end
 function B.new(parent,style,color,detail,chargeLens)
- local priority=style=='Orbital' or style=='Singularity'
+ local priority=style=='Orbital' or style=='Singularity' or style=='Prism'
  local limit=B.limits.rigs-(priority and 0 or B.limits.reservedRigs)
  if live>=limit or not parent then return nil end
  local root=Instance.new('Part');root.Name='BeamVFX';root.Transparency=1;root.Size=Vector3.one*.025
@@ -2057,7 +2058,11 @@ function B.new(parent,style,color,detail,chargeLens)
  r.a=attachment(root,'Source');r.b=attachment(root,'Contact')
  r.body=ribbon(root,'TaperedBody',r.a,r.b,color,BODY);r.all[#r.all+1]=r.body
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
- r.body.Segments=1;r.core.Segments=1
+ if style=='Prism' then
+  r.body.Segments=20;r.core.Segments=20
+  r.body.Transparency=sequence(1,.18,.24,.66)
+  r.core.Transparency=sequence(1,.07,.10,.40)
+ else r.body.Segments=1;r.core.Segments=1 end
  live+=1
  local counted=true
  root.Destroying:Connect(function()
@@ -3112,7 +3117,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.71,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=1.94,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=3.56,Impact=.714,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=2.48,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -3170,7 +3175,7 @@ function Catalog.cycle(kind,baseDPS,effectiveDPS)
  if not definition or definition.Duration<=0 or not finite(baseDPS) or baseDPS<=0 or not finite(effectiveDPS) or effectiveDPS<=0 then return nil end
  -- Mining cards improve cycle rate once, rather than multiplying both damage
  -- and rate. A hard field still requires its full finite amount of work.
- local duration=definition.Duration/math.clamp(effectiveDPS/baseDPS,.25,4)
+ local duration=(definition.CycleDuration or definition.Duration)/math.clamp(effectiveDPS/baseDPS,.25,4)
  return {duration=duration,impact=definition.Impact,damage=baseDPS*definition.Duration*definition.Power}
 end
 function Catalog.capDamage(kind,maxHP,damage)
@@ -5259,7 +5264,7 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	local at=clock();local now=workspace:GetServerTimeNow()
 	local profile=BeamVFX.styles[style or 'Lance'] or BeamVFX.styles.Lance
 	if now-at>duration+profile.tail then return end
-	local rig=BeamVFX.new(folder(),style or 'Lance',color)
+	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body}
 	elseif now-at<duration then
@@ -5652,22 +5657,55 @@ local function shotPart(parent,name,size,color,ball,transparency)
  return part
 end
 
+local SIGHT_SECTION=12
 local function sightPattern(seed)
  local function nextValue()
   seed=(seed*48271)%2147483647
   return seed/2147483647
  end
- local keys={NumberSequenceKeypoint.new(0,.68)}
- for i=0,3 do
-  local from=i*.25+.018+nextValue()*.055
-  local to=from+.082+nextValue()*.059
-  local opacity=.11+nextValue()*.35
-  table.insert(keys,NumberSequenceKeypoint.new(from,1))
-  table.insert(keys,NumberSequenceKeypoint.new(from+.019,opacity))
-  table.insert(keys,NumberSequenceKeypoint.new(to,opacity))
-  table.insert(keys,NumberSequenceKeypoint.new(to+.018,1))
+ local sections={}
+ for section=1,4 do
+  local keys={{0,.91,0}}
+  for i=0,3 do
+   local from=i*3+.21+nextValue()*.62
+   local to=from+.82+nextValue()*1.13
+   local opacity=.16+nextValue()*.29
+   local phase=nextValue()*math.pi*2
+   keys[#keys+1]={from,.94,phase}
+   keys[#keys+1]={from+.14,opacity,phase}
+   keys[#keys+1]={to,opacity,phase}
+   keys[#keys+1]={to+.12,.94,phase}
+  end
+  keys[#keys+1]={SIGHT_SECTION,.91,0}
+  sections[section]=keys
  end
- table.insert(keys,NumberSequenceKeypoint.new(1,.37))
+ return sections
+end
+
+local function revealPattern(points,length,now,section)
+ -- Key positions are studs from this section's origin. Clipping at the tip
+ -- changes their normalized coordinates, never their world-space spacing.
+ local function alpha(point)
+  local contrast=.54+.46*(.5+.5*math.sin(now*9.3+point[3]+section*1.7))
+  local drift=.5+.5*math.sin(now*4.7-point[1]*.71+section*2.2)
+  return 1-(1-point[2])*contrast*(.56+.44*drift)
+ end
+ local function position(point)
+  if point[1]==0 or point[1]==SIGHT_SECTION then return point[1] end
+  return point[1]+.14*math.sin(now*5.6+point[3]+section*.37)
+ end
+ local keys={NumberSequenceKeypoint.new(0,alpha(points[1]))}
+ for i=2,#points do
+  local before,point=points[i-1],points[i]
+  local x=position(point)
+  if x>=length then
+   local prior=position(before)
+   local t=math.clamp((length-prior)/(x-prior),0,1)
+   keys[#keys+1]=NumberSequenceKeypoint.new(1,alpha(before)+(alpha(point)-alpha(before))*t)
+   break
+  end
+  keys[#keys+1]=NumberSequenceKeypoint.new(x/length,alpha(point))
+ end
  return NumberSequence.new(keys)
 end
 
@@ -5676,14 +5714,19 @@ local function newSight(drone)
  local seed=1
  for i=1,#id do seed=(seed*31+string.byte(id,i))%2147483646+1 end
  local dot=shotPart(drone.beam.holder,'ProjectileAimDot',Vector3.one*.135,SIGHT_RED,true,1)
- local tip=Instance.new('Attachment');tip.Parent=dot
- local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'
- line.Attachment0=drone.shotMuzzle;line.Attachment1=tip;line.FaceCamera=true;line.Segments=64
- line.Width0=.052;line.Width1=.078
- line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
- line.Transparency=sightPattern(seed);line.LightEmission=.88;line.LightInfluence=0
- line.Enabled=false;line.Parent=dot
- return {dot=dot,line=line}
+ local lines={}
+ for i=1,4 do
+  local from=drone.shotMuzzle
+  if i>1 then from=Instance.new('Attachment');from.Parent=dot end
+  local tip=Instance.new('Attachment');tip.Parent=dot
+  local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'..i
+  line.Attachment0=from;line.Attachment1=tip;line.FaceCamera=true;line.Segments=48
+  line.Width0=.052;line.Width1=.065
+  line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
+  line.LightEmission=.88;line.LightInfluence=0
+  line.Enabled=false;line.Parent=dot;lines[i]=line
+ end
+ return {dot=dot,line=lines[1],lines=lines,patterns=sightPattern(seed)}
 end
 
 local function aimPoint(origin,part,anchor)
@@ -5695,22 +5738,49 @@ local function aimPoint(origin,part,anchor)
  return part.CFrame:PointToWorldSpace(localOrigin*(.44/math.max(.5,edge)))
 end
 
-function View.aim(drone,target)
+function View.aim(drone,target,now)
+ now=now or workspace:GetServerTimeNow()
  local sight=drone.sight
  local part=target and target.view
  local origin=drone.shotMuzzle.WorldPosition
  local visible=part and part.Parent and part.Transparency<1 and target.source:GetAttribute('Kind')~='Geode'
   and (target.source:GetAttribute('HP') or 0)>0 and BeamVFX.near(origin,85) and (part.Position-origin).Magnitude<45
+ local receipt=drone.shotReceipt
+ local matched=receipt and receipt.Parent and target and receipt:GetAttribute('TargetId')==target.id
+ local started=matched and receipt:GetAttribute('StartedAt')
+ local firing=started and started+(receipt:GetAttribute('Windup') or 0)
+ if firing and now>=firing+.085 then visible=false end
  if not visible then
-  if sight then sight.line.Enabled=false;sight.dot.Transparency=1 end
+  if sight then
+   for _,line in ipairs(sight.lines) do line.Enabled=false end
+   sight.dot.Transparency=1;sight.target=nil
+  end
   return
  end
- local receipt=drone.shotReceipt
- local anchor=receipt and receipt.Parent and receipt:GetAttribute('TargetId')==target.id and receipt:GetAttribute('TargetAnchor')
- local point=aimPoint(origin,part,anchor)
+ local point=aimPoint(origin,part,matched and receipt:GetAttribute('TargetAnchor'))
  if not sight then sight=newSight(drone);drone.sight=sight end
- sight.dot.Position=point:Lerp(origin,.006);sight.dot.Transparency=.16
- sight.line.Enabled=true
+ if sight.target~=target or started and sight.receipt and sight.receipt~=receipt then
+  sight.target=target;sight.lockAt=now
+ end
+ if matched then sight.receipt=receipt end
+ local delta=point-origin;local distance=delta.Magnitude
+ if distance<=.01 then return end
+ local length=math.min(distance,math.max(.035,now-sight.lockAt)*64)
+ local direction=delta.Unit
+ sight.dot.Position=point:Lerp(origin,.006)
+ sight.dot.Transparency=length>=distance-.1 and .16 or 1
+ local refresh=now>=(sight.nextPattern or 0) or math.abs(length-(sight.length or 0))>.025
+ for i,line in ipairs(sight.lines) do
+  local offset=(i-1)*SIGHT_SECTION
+  local span=math.min(SIGHT_SECTION,length-offset)
+  line.Enabled=span>.02
+  if line.Enabled then
+   if i>1 then line.Attachment0.WorldPosition=origin+direction*offset end
+   line.Attachment1.WorldPosition=origin+direction*(offset+span)
+   if refresh then line.Transparency=revealPattern(sight.patterns[i],span,now,i) end
+  end
+ end
+ if refresh then sight.nextPattern=now+.045;sight.length=length end
 end
 
 function View.ramielCharge(rig,charge,energy,recovery,reduced)
@@ -5857,7 +5927,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio)
+function View.new(audio,onPrism)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -5920,7 +5990,9 @@ function View.new(audio)
       if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
+       local gap=math.min(travel.Magnitude*.14,.85)
+       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,.67,'Prism')
+       if onPrism then onPrism(origin,now) end
        if not reduced then
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
@@ -10707,13 +10779,19 @@ function V:update(dt,now)
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
-   if live and r.hasArc and r.physical and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
-    r.landCue=true
+   -- Regular ore fragments and large workshop cargo both land. Wait for the
+   -- contact position/speed to replicate before consuming this one-shot cue.
+   if live and r.hasArc and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
     if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ);speed=r.arc.speed end
-    if self.audio and age-r.landAge<.14 and typeof(point)=='Vector3' and speed>0 then
-     self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
+    if age-r.landAge>=.28 then r.landCue=true
+    elseif typeof(point)=='Vector3' and speed>0 then
+     r.landCue=true
+     if self.audio then
+      self.audio:play('ore_land',point,{level=math.clamp(speed/24,.77,1.15)*(r.physical and 1.1 or 1),
+       pitch=(r.physical and .88 or 1.13)+(r.seed%4)*.055})
+     end
     end
    end
    if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then
@@ -11598,7 +11676,9 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
-local roleEffectView=RoleEffectView.new(soundscape)
+local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
+ if not CrystalImpactView.reducedMotion() then presentation:kick(position,.10,now) end
+end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)
 end)
@@ -12764,8 +12844,16 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank))
+ local prominent=DroneConfig.Prominent[s:GetAttribute('Role')]
+ local lift=0
+ if prominent and state~='Destroyed' and state~='Reprinting' then
+  local distantRole=s:GetAttribute('Role')=='Ramiel' or s:GetAttribute('Role')=='Orbiter'
+  lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
+ end
+ d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
+ local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
@@ -12780,7 +12868,7 @@ local function renderDrone(d,dt,now)
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
    local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.94)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 2.48)
    local contactAt=shot:GetAttribute('ContactAt')
    local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
    local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
@@ -12790,8 +12878,12 @@ local function renderDrone(d,dt,now)
     recovery=fireAge and fireAge>=0 and fireAge or nil
    end
   end
-  local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,reduced and 0 or now*.38%6.283,reduced)
-  RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+  local resting=charge<=0 and not recovery
+  if not resting or not d.ramielResting then
+   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,0,reduced)
+   RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+  end
+  d.ramielResting=resting
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
@@ -12810,7 +12902,7 @@ local function renderDrone(d,dt,now)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
-  elseif not (d.ramiel and part.Parent and part.Parent.Name=='RamielGlass') then part.Transparency=original end
+  elseif not (d.ramiel and part==d.ramiel.core) then part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
@@ -12825,7 +12917,7 @@ local function renderDrone(d,dt,now)
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
-   and (state=='Warmup' or state=='SpecialMine') and resource or nil)
+   and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)
  end
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')

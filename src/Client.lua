@@ -18,7 +18,9 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
-local roleEffectView=RoleEffectView.new(soundscape)
+local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
+ if not CrystalImpactView.reducedMotion() then presentation:kick(position,.10,now) end
+end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)
 end)
@@ -1184,8 +1186,16 @@ local function renderDrone(d,dt,now)
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank))
+ local prominent=DroneConfig.Prominent[s:GetAttribute('Role')]
+ local lift=0
+ if prominent and state~='Destroyed' and state~='Reprinting' then
+  local distantRole=s:GetAttribute('Role')=='Ramiel' or s:GetAttribute('Role')=='Orbiter'
+  lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
+ end
+ d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
+ local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
+ d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0))
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
@@ -1200,7 +1210,7 @@ local function renderDrone(d,dt,now)
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
    local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.94)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 2.48)
    local contactAt=shot:GetAttribute('ContactAt')
    local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
    local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
@@ -1210,8 +1220,12 @@ local function renderDrone(d,dt,now)
     recovery=fireAge and fireAge>=0 and fireAge or nil
    end
   end
-  local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,reduced and 0 or now*.38%6.283,reduced)
-  RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+  local resting=charge<=0 and not recovery
+  if not resting or not d.ramielResting then
+   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,0,reduced)
+   RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+  end
+  d.ramielResting=resting
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0
@@ -1230,7 +1244,7 @@ local function renderDrone(d,dt,now)
  for part,original in pairs(d.parts) do
   if state=='Destroyed' then part.Transparency=1
   elseif state=='Reprinting' then part.Transparency=math.max(original,math.clamp((reprintAt-now)/2,0,1))
-  elseif not (d.ramiel and part.Parent and part.Parent.Name=='RamielGlass') then part.Transparency=original end
+  elseif not (d.ramiel and part==d.ramiel.core) then part.Transparency=original end
  end
  presentation:renderDrone(d,dt,now)
  local mining=s:GetAttribute('Mining')==true and s:GetAttribute('WorkPaused')~=true
@@ -1245,7 +1259,7 @@ local function renderDrone(d,dt,now)
  local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
  if d.shotMuzzle then
   RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
-   and (state=='Warmup' or state=='SpecialMine') and resource or nil)
+   and (state=='Warmup' or state=='SpecialMine') and resource or nil,now)
  end
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')

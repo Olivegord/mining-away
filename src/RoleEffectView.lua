@@ -21,22 +21,55 @@ local function shotPart(parent,name,size,color,ball,transparency)
  return part
 end
 
+local SIGHT_SECTION=12
 local function sightPattern(seed)
  local function nextValue()
   seed=(seed*48271)%2147483647
   return seed/2147483647
  end
- local keys={NumberSequenceKeypoint.new(0,.68)}
- for i=0,3 do
-  local from=i*.25+.018+nextValue()*.055
-  local to=from+.082+nextValue()*.059
-  local opacity=.11+nextValue()*.35
-  table.insert(keys,NumberSequenceKeypoint.new(from,1))
-  table.insert(keys,NumberSequenceKeypoint.new(from+.019,opacity))
-  table.insert(keys,NumberSequenceKeypoint.new(to,opacity))
-  table.insert(keys,NumberSequenceKeypoint.new(to+.018,1))
+ local sections={}
+ for section=1,4 do
+  local keys={{0,.91,0}}
+  for i=0,3 do
+   local from=i*3+.21+nextValue()*.62
+   local to=from+.82+nextValue()*1.13
+   local opacity=.16+nextValue()*.29
+   local phase=nextValue()*math.pi*2
+   keys[#keys+1]={from,.94,phase}
+   keys[#keys+1]={from+.14,opacity,phase}
+   keys[#keys+1]={to,opacity,phase}
+   keys[#keys+1]={to+.12,.94,phase}
+  end
+  keys[#keys+1]={SIGHT_SECTION,.91,0}
+  sections[section]=keys
  end
- table.insert(keys,NumberSequenceKeypoint.new(1,.37))
+ return sections
+end
+
+local function revealPattern(points,length,now,section)
+ -- Key positions are studs from this section's origin. Clipping at the tip
+ -- changes their normalized coordinates, never their world-space spacing.
+ local function alpha(point)
+  local contrast=.54+.46*(.5+.5*math.sin(now*9.3+point[3]+section*1.7))
+  local drift=.5+.5*math.sin(now*4.7-point[1]*.71+section*2.2)
+  return 1-(1-point[2])*contrast*(.56+.44*drift)
+ end
+ local function position(point)
+  if point[1]==0 or point[1]==SIGHT_SECTION then return point[1] end
+  return point[1]+.14*math.sin(now*5.6+point[3]+section*.37)
+ end
+ local keys={NumberSequenceKeypoint.new(0,alpha(points[1]))}
+ for i=2,#points do
+  local before,point=points[i-1],points[i]
+  local x=position(point)
+  if x>=length then
+   local prior=position(before)
+   local t=math.clamp((length-prior)/(x-prior),0,1)
+   keys[#keys+1]=NumberSequenceKeypoint.new(1,alpha(before)+(alpha(point)-alpha(before))*t)
+   break
+  end
+  keys[#keys+1]=NumberSequenceKeypoint.new(x/length,alpha(point))
+ end
  return NumberSequence.new(keys)
 end
 
@@ -45,14 +78,19 @@ local function newSight(drone)
  local seed=1
  for i=1,#id do seed=(seed*31+string.byte(id,i))%2147483646+1 end
  local dot=shotPart(drone.beam.holder,'ProjectileAimDot',Vector3.one*.135,SIGHT_RED,true,1)
- local tip=Instance.new('Attachment');tip.Parent=dot
- local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'
- line.Attachment0=drone.shotMuzzle;line.Attachment1=tip;line.FaceCamera=true;line.Segments=64
- line.Width0=.052;line.Width1=.078
- line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
- line.Transparency=sightPattern(seed);line.LightEmission=.88;line.LightInfluence=0
- line.Enabled=false;line.Parent=dot
- return {dot=dot,line=line}
+ local lines={}
+ for i=1,4 do
+  local from=drone.shotMuzzle
+  if i>1 then from=Instance.new('Attachment');from.Parent=dot end
+  local tip=Instance.new('Attachment');tip.Parent=dot
+  local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'..i
+  line.Attachment0=from;line.Attachment1=tip;line.FaceCamera=true;line.Segments=48
+  line.Width0=.052;line.Width1=.065
+  line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
+  line.LightEmission=.88;line.LightInfluence=0
+  line.Enabled=false;line.Parent=dot;lines[i]=line
+ end
+ return {dot=dot,line=lines[1],lines=lines,patterns=sightPattern(seed)}
 end
 
 local function aimPoint(origin,part,anchor)
@@ -64,22 +102,49 @@ local function aimPoint(origin,part,anchor)
  return part.CFrame:PointToWorldSpace(localOrigin*(.44/math.max(.5,edge)))
 end
 
-function View.aim(drone,target)
+function View.aim(drone,target,now)
+ now=now or workspace:GetServerTimeNow()
  local sight=drone.sight
  local part=target and target.view
  local origin=drone.shotMuzzle.WorldPosition
  local visible=part and part.Parent and part.Transparency<1 and target.source:GetAttribute('Kind')~='Geode'
   and (target.source:GetAttribute('HP') or 0)>0 and BeamVFX.near(origin,85) and (part.Position-origin).Magnitude<45
+ local receipt=drone.shotReceipt
+ local matched=receipt and receipt.Parent and target and receipt:GetAttribute('TargetId')==target.id
+ local started=matched and receipt:GetAttribute('StartedAt')
+ local firing=started and started+(receipt:GetAttribute('Windup') or 0)
+ if firing and now>=firing+.085 then visible=false end
  if not visible then
-  if sight then sight.line.Enabled=false;sight.dot.Transparency=1 end
+  if sight then
+   for _,line in ipairs(sight.lines) do line.Enabled=false end
+   sight.dot.Transparency=1;sight.target=nil
+  end
   return
  end
- local receipt=drone.shotReceipt
- local anchor=receipt and receipt.Parent and receipt:GetAttribute('TargetId')==target.id and receipt:GetAttribute('TargetAnchor')
- local point=aimPoint(origin,part,anchor)
+ local point=aimPoint(origin,part,matched and receipt:GetAttribute('TargetAnchor'))
  if not sight then sight=newSight(drone);drone.sight=sight end
- sight.dot.Position=point:Lerp(origin,.006);sight.dot.Transparency=.16
- sight.line.Enabled=true
+ if sight.target~=target or started and sight.receipt and sight.receipt~=receipt then
+  sight.target=target;sight.lockAt=now
+ end
+ if matched then sight.receipt=receipt end
+ local delta=point-origin;local distance=delta.Magnitude
+ if distance<=.01 then return end
+ local length=math.min(distance,math.max(.035,now-sight.lockAt)*64)
+ local direction=delta.Unit
+ sight.dot.Position=point:Lerp(origin,.006)
+ sight.dot.Transparency=length>=distance-.1 and .16 or 1
+ local refresh=now>=(sight.nextPattern or 0) or math.abs(length-(sight.length or 0))>.025
+ for i,line in ipairs(sight.lines) do
+  local offset=(i-1)*SIGHT_SECTION
+  local span=math.min(SIGHT_SECTION,length-offset)
+  line.Enabled=span>.02
+  if line.Enabled then
+   if i>1 then line.Attachment0.WorldPosition=origin+direction*offset end
+   line.Attachment1.WorldPosition=origin+direction*(offset+span)
+   if refresh then line.Transparency=revealPattern(sight.patterns[i],span,now,i) end
+  end
+ end
+ if refresh then sight.nextPattern=now+.045;sight.length=length end
 end
 
 function View.ramielCharge(rig,charge,energy,recovery,reduced)
@@ -226,7 +291,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio)
+function View.new(audio,onPrism)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -289,7 +354,9 @@ function View.new(audio)
       if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
+       local gap=math.min(travel.Magnitude*.14,.85)
+       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,.67,'Prism')
+       if onPrism then onPrism(origin,now) end
        if not reduced then
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,

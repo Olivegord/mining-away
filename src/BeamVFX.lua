@@ -21,7 +21,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
- Prism={body=1.1,core=.08,taper=.84,orbit=.23,spin=1.8,star=.32,tail=.45},
+ Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=.16},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -72,7 +72,7 @@ local function pair(root,name,color,opacity)
  return {a=a,b=b,beam=ribbon(root,name,a,b,color,opacity)}
 end
 function B.new(parent,style,color,detail,chargeLens)
- local priority=style=='Orbital' or style=='Singularity'
+ local priority=style=='Orbital' or style=='Singularity' or style=='Prism'
  local limit=B.limits.rigs-(priority and 0 or B.limits.reservedRigs)
  if live>=limit or not parent then return nil end
  local root=Instance.new('Part');root.Name='BeamVFX';root.Transparency=1;root.Size=Vector3.one*.025
@@ -82,7 +82,11 @@ function B.new(parent,style,color,detail,chargeLens)
  r.a=attachment(root,'Source');r.b=attachment(root,'Contact')
  r.body=ribbon(root,'TaperedBody',r.a,r.b,color,BODY);r.all[#r.all+1]=r.body
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
- r.body.Segments=1;r.core.Segments=1
+ if style=='Prism' then
+  r.body.Segments=20;r.core.Segments=20
+  r.body.Transparency=sequence(1,.18,.24,.66)
+  r.core.Transparency=sequence(1,.07,.10,.40)
+ else r.body.Segments=1;r.core.Segments=1 end
  live+=1
  local counted=true
  root.Destroying:Connect(function()

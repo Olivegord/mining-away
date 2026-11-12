@@ -248,13 +248,19 @@ function V:update(dt,now)
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
    local socketScale=seated and .48 or 1
-   if live and r.hasArc and r.physical and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
-    r.landCue=true
+   -- Regular ore fragments and large workshop cargo both land. Wait for the
+   -- contact position/speed to replicate before consuming this one-shot cue.
+   if live and r.hasArc and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
     if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ);speed=r.arc.speed end
-    if self.audio and age-r.landAge<.14 and typeof(point)=='Vector3' and speed>0 then
-     self.audio:play('ore_land',point,{level=math.clamp(speed/22,.6,1.2)})
+    if age-r.landAge>=.28 then r.landCue=true
+    elseif typeof(point)=='Vector3' and speed>0 then
+     r.landCue=true
+     if self.audio then
+      self.audio:play('ore_land',point,{level=math.clamp(speed/24,.77,1.15)*(r.physical and 1.1 or 1),
+       pitch=(r.physical and .88 or 1.13)+(r.seed%4)*.055})
+     end
     end
    end
    if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then

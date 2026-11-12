@@ -32,11 +32,11 @@ function IM:GetScale() return 1 end
 
 local roles={'Bubbler','Halver','Gridcutter','Singularity','Starforge','Frostbite','Resonator'}
 local dominant={Bubbler='PressureBulb',Halver='ShearBlade',Gridcutter='GantryRail',Singularity='ContainmentSegment',Starforge='ChimneyCap',Frostbite='CryoTank',Resonator='TuningProng'}
-local function newModel(role)
+local function newModel(role,readable)
  local model=Instance.new('Model');model.Parent=workspace
  local shell=Instance.new('Part');shell.Name='Mesh';shell.Size=Vector3.new(2,1,2);shell.Parent=model;model.PrimaryPart=shell
  local emitter=Instance.new('Part');emitter.Name='Emmiter';emitter.Parent=shell
- DroneConfig.decorate(model,role)
+ DroneConfig.decorate(model,role,nil,readable)
  return model,shell
 end
 local function newResource(id)
@@ -141,3 +141,40 @@ for _,test in ipairs({
  model:Destroy();source:Destroy()
 end
 print('PASS local dart and ball launch hardware, vacuum intake and seeders move and settle')
+
+local model=newModel('Ramiel',true)
+local rig=assert(DroneConfig.ramielRig(model))
+local glass=assert(model:FindFirstChild('RamielGlass'))
+local panes={}
+for _,face in ipairs(rig.faces) do for _,pane in ipairs(face) do panes[pane]=pane.Transparency end end
+local frame,aim=CFrame.new(1,4,2),Vector3.new(1,4,-13)
+local function sampleRig(charge,recovery)
+ DroneConfig.poseRamiel(rig,frame,aim,charge,recovery,0,false)
+ local points=table.clone(rig.rim)
+ for _,face in ipairs(rig.faces) do for _,pane in ipairs(face) do
+  assert(panes[pane]==pane.Transparency and pane.Parent==glass,'facet was replaced or faded')
+  assert(pane.Size.Y>.02 and pane.Size.Z>=.02 and pane.Position.Magnitude<20,'invalid wedge dimensions')
+ end end
+ return points
+end
+local idle=sampleRig(0,nil)
+local previous=idle
+local largest=0
+for i=1,240 do
+ local posed=sampleRig(i/240,nil)
+ for j,point in ipairs(posed) do
+  largest=math.max(largest,(point-previous[j]).Magnitude)
+ end
+ previous=posed
+end
+assert(largest<.22,'charge jumped between successive poses')
+local fired=previous
+assert((fired[1]-frame.Position).Magnitude>(idle[1]-frame.Position).Magnitude*1.9,'firing shape never opened')
+local release=sampleRig(1,0)
+local settled=sampleRig(1,DroneConfig.RamielRecovery)
+for i,point in ipairs(fired) do
+ assert((point-release[i]).Magnitude<1e-6,'charge snapped at discharge')
+ assert((idle[i]-settled[i]).Magnitude<1e-6,'recovery snapped to idle')
+end
+model:Destroy()
+print('PASS Ramiel continuously deforms the same 40 visible wedges through idle, discharge and recovery')

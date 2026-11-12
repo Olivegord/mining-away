@@ -86,14 +86,23 @@ local aiming={source=Instance.new('Model'),shotMuzzle=muzzle,beam={holder=fx}}
 local aimView=Instance.new('Part');aimView.Parent=fx;aimView.Position=Vector3.new(0,2,8)
 local aimSource=Instance.new('Part');aimSource:SetAttribute('HP',80)
 local aimTarget={id='live',view=aimView,source=aimSource}
-RoleEffectView.aim(aiming,aimTarget)
+RoleEffectView.aim(aiming,aimTarget,110)
 local sight=assert(aiming.sight)
-assert(sight.line.Enabled and #sight.line.Transparency==18 and sight.dot.Position.Z<8)
+local initial=sight.line.Attachment1.WorldPosition.Z
+assert(sight.line.Enabled and initial>1 and initial<3 and sight.dot.Transparency==1)
 node:SetAttribute('TargetAnchor',Vector3.new(.30,0,-.48));aiming.shotReceipt=node
 aimView.Position=Vector3.new(1,2,7)
-RoleEffectView.aim(aiming,aimTarget)
+RoleEffectView.aim(aiming,aimTarget,110.16)
 assert(sight.dot.Position.X>1.2 and sight.line.Attachment0==muzzle,'sight missed the moving receipt anchor')
-RoleEffectView.aim(aiming,nil)
+assert(sight.dot.Transparency<1 and sight.line.Attachment1.WorldPosition.Z>initial+3)
+local dash=sight.line.Transparency[2].Time*sight.length
+local alpha=sight.line.Transparency[3].Value
+aimView.Position=Vector3.new(1,2,5)
+RoleEffectView.aim(aiming,aimTarget,110.16)
+assert(math.abs(sight.line.Transparency[2].Time*sight.length-dash)<1e-6,'dash stretched with target range')
+RoleEffectView.aim(aiming,aimTarget,110.23)
+assert(math.abs(sight.line.Transparency[3].Value-alpha)>.005,'dash pattern did not move in a hold')
+RoleEffectView.aim(aiming,aimTarget,110.39)
 assert(not sight.line.Enabled and sight.dot.Transparency==1)
 aimSource:Destroy();aimView:Destroy();muzzle:Destroy();aiming.source:Destroy()
 local shotAudio={}
@@ -137,6 +146,24 @@ assert(chargeField.light[2].Position.Magnitude<early*.55 and chargeField.rings[1
  'Ramiel charge did not visibly converge before firing')
 RoleEffectView.ramielCharge(prism,1,.4,.23,false)
 assert(not prism.chargeField and not chargeField.root.Parent,'Ramiel charge leaked past release')
+local beamCalls,kicks={},0
+RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
+local discharge=RoleEffectView.new(nil,function() kicks+=1 end)
+local cast=receipt('ramiel',115,'Prism',2.48)
+cast:SetAttribute('Duration',.06)
+roleFolder.ChildAdded:Fire(cast)
+local prismDrones={ramiel={ramiel=prism}}
+discharge:step(117.52,prismDrones,targets)
+assert(#beamCalls==0 and kicks==0,'Ramiel fired before contact')
+cast:SetAttribute('ContactAt',117.54)
+cast:SetAttribute('ContactPoint',Vector3.new(0,2,8))
+discharge:step(117.55,prismDrones,targets)
+assert(#beamCalls==1 and kicks==1)
+local beam=beamCalls[1]
+assert(math.abs((beam[1]-prismCore.Position).Magnitude-.85)<1e-6 and beam[4]<=.60 and beam[5]>=.65 and beam[6]=='Prism')
+discharge:step(117.60,prismDrones,targets)
+assert(#beamCalls==1 and kicks==1,'Ramiel discharge replayed')
+discharge:destroy();cast:Destroy()
 prismCore:Destroy()
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

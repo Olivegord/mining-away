@@ -59,7 +59,8 @@ check('destroy disconnects observers without granting or changing units',functio
 end)
 check('stale landing state received after registration settles without replaying audio',function()
  local late=fixturePart(root,'OreFragment',Vector3.new(2,.22,0),Vector3.new(.48,.58,.44))
- for k,v in pairs({PickupId=2,Owner=pl.UserId,SpawnAt=realTime-4,SnapshotAt=realTime,FloorY=.22,Position=late.Position,Velocity=Vector3.zero,GroundImpactSerial=0}) do late:SetAttribute(k,v) end
+ for k,v in pairs({PickupId=2,Owner=pl.UserId,SpawnAt=realTime-4,SnapshotAt=realTime,FloorY=.22,Position=late.Position,
+  Velocity=Vector3.zero,OreLaunchOrigin=late.Position,OreLaunchVelocity=Vector3.new(6,20,0),GroundImpactSerial=0}) do late:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[late])
  assert(record.landAge==nil)
  local sounds=#audio.calls
@@ -72,6 +73,27 @@ check('stale landing state received after registration settles without replaying
  assert(math.abs(record.view.CFrame.yaw-angle)<1e-8,'settled fragment keeps spinning')
  assert(#audio.calls==sounds,'late observer replayed old contact audio')
  renderer:destroy()
+end)
+check('ordinary ore clinks once when its buffered landing data arrives',function()
+ local loose=fixturePart(root,'OreFragment',Vector3.new(2,3,0),Vector3.new(.6,.7,.5))
+ local launch=Vector3.new(6,20,0)
+ for k,v in pairs({PickupId=70,Owner=pl.UserId,SpawnAt=realTime,SnapshotAt=realTime,FloorY=.22,
+  Position=loose.Position,Velocity=launch,OreLaunchOrigin=loose.Position,OreLaunchVelocity=launch}) do loose:SetAttribute(k,v) end
+ local renderer=PickupView.new(root,fx,audio)
+ local sounds=#audio.calls
+ local contact=Vector3.new(5,.22,0)
+ loose:SetAttribute('GroundImpactAt',realTime+.82)
+ renderer:update(1/60,realTime+.85)
+ assert(#audio.calls==sounds,'played before the displayed landing')
+ renderer:update(1/60,realTime+.94)
+ assert(#audio.calls==sounds and not renderer.records[loose].landCue,'missing packet consumed the landing')
+ loose:SetAttribute('GroundImpactPosition',contact);loose:SetAttribute('GroundImpactSpeed',28)
+ renderer:update(1/60,realTime+.96)
+ assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land'
+  and (audio.calls[#audio.calls].position-contact).Magnitude<1e-6)
+ renderer:update(1/60,realTime+1.06)
+ assert(#audio.calls==sounds+1,'landing cue replayed')
+ renderer:destroy();loose:Destroy()
 end)
 check('physical launch trail fades on the displayed landing and never reappears during collection',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
