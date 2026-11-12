@@ -20,17 +20,17 @@ local function create()
  local f={root=root,smoke={},chips={},plane=PlaneBurst.create(root,BLUE)}
  for i=1,6 do
   local a=Instance.new('Attachment');a.Name='SmokeSector';a.Parent=root
-  local e=Instance.new('ParticleEmitter');e.Name='PersistentBeamSmoke';e.Texture='rbxasset://textures/particles/smoke_main.dds'
+  local e=Instance.new('ParticleEmitter');e.Name='PersistentBeamSmoke'
+  EnergyDisc.configure(e,1.46,.71,.52,1.26)
   e.Enabled=false;e.Rate=0;e.LockedToPart=false;e.VelocityInheritance=0;e.WindAffectsDrag=false
   e.Lifetime=NumberRange.new(1.25,1.8);e.Speed=NumberRange.new(.15,.4);e.Drag=3
   e.SpreadAngle=Vector2.new(40,40);e.Color=ColorSequence.new(BLUE)
   e.LightEmission=.25;e.LightInfluence=0;e.Brightness=1.1
-  e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.32,1.25),NumberSequenceKeypoint.new(1,2.2)})
-  e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(.12,.68),NumberSequenceKeypoint.new(.55,.8),NumberSequenceKeypoint.new(1,1)})
   e.Rotation=NumberRange.new(-180,180);e.RotSpeed=NumberRange.new(-18,18);e.Parent=a
   f.smoke[i]={a=a,e=e}
  end
- for i=1,18 do
+ -- Six small chromatic accents preserve the distinct flash colors.
+ for i=1,6 do
   local p=part(root,'ElectricColorFragment');p.Material=Enum.Material.Neon;p.Color=A.palette(BLUE,i)
   p.Size=Vector3.new(.035+(i%3)*.009,.035,.075+(i%4)*.025);f.chips[i]=p
  end
@@ -82,7 +82,7 @@ function A.step(now)
      if direction.Magnitude>.0001 then
       p.CFrame=CFrame.lookAt(position,position+direction, f.direction)*CFrame.Angles(0,0,n*2.399963)
      else p.CFrame=CFrame.new(position) end
-     p.Transparency=math.clamp((t-.45)/(life-.45),0,1)
+     p.Transparency=.40+.60*math.clamp((t-.45)/(life-.45),0,1)
     else p.Transparency=1 end
    end
   end
@@ -114,12 +114,12 @@ function A.charge(owner,origin,direction,now,q,scale)
  for i,s in ipairs(f.smoke) do
   local angle=i*math.pi/3
   s.radial=f.right*math.cos(angle)+f.up*math.sin(angle)
-  s.a.Position=s.radial*(.12+.45*q)*f.scale
-  s.e.Acceleration=s.radial*.15
+  s.a.Position=s.radial*(.54-.32*q)*f.scale
+  s.e.Acceleration=-s.radial*.25
  end
- if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.24) then
-  for i=1,3 do f.smoke[((f.emissionSector or 0)+i-1)%6+1].e:Emit(1) end
-  f.emissionSector=((f.emissionSector or 0)+3)%6
+ if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.28) then
+  for i=1,2 do f.smoke[((f.emissionSector or 0)+i-1)%6+1].e:Emit(1) end
+  f.emissionSector=((f.emissionSector or 0)+2)%6
   f.lastEmission=now
  end
 end
@@ -130,7 +130,7 @@ function A.fire(owner,origin,direction,now,age)
  f.root.CFrame=CFrame.new(origin);f.direction=direction;f.phase='release';f.firedAt=now-age
  -- The launched tail no longer belongs to a charge lease or moving drone.
  f.owner=nil;owner.aftermath=nil
- for _,s in ipairs(f.smoke) do s.e:Emit(2) end
+ for _,s in ipairs(f.smoke) do s.e:Emit(1) end
  A.step(now)
 end
 function A.counts() return #active,#pool end

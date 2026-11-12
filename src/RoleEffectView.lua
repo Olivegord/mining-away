@@ -164,7 +164,7 @@ function View.ramielCharge(rig,charge,energy,recovery,reduced)
    local plate=shotPart(root,'ConvergingAperture',Vector3.one*.025,WHITE,false,1)
    rings[i]={plate=plate,plane=PlaneBurst.create(plate,i==3 and Color3.fromRGB(255,123,207) or Color3.fromRGB(106,157,255))}
   end
-  for i=1,5 do light[i]=shotPart(root,'RamielInflow',Vector3.one*.10,Color3.fromRGB(144,197,255),true,1) end
+  for i=1,5 do light[i]=EnergyDisc.sprite(root,'RamielInflow') end
   field={root=root,rings=rings,light=light};rig.chargeField=field
  end
  local frame=rig.core.CFrame
@@ -181,10 +181,9 @@ function View.ramielCharge(rig,charge,energy,recovery,reduced)
   local angle=i*math.pi*.4+(2.35*p+.72*p*p)*(i%2==0 and 1 or -1)
   local reach=(2.28-2.05*p)*rig.scale
   local axial=(.60+(.55+i*.075)*(1-p))*(1-p)
-  light.CFrame=frame*CFrame.new(math.cos(angle)*reach,math.sin(angle)*reach,-axial)
-  light.Size=Vector3.one*(.13+.15*p)*rig.scale
-  light.Color=Color3.fromRGB(126,185,255):Lerp(WHITE,p)
-  light.Transparency=1-smooth(p/.18)*(1-smooth((p-.88)/.12))*(1-release)*.85
+  local point=frame:PointToWorldSpace(Vector3.new(math.cos(angle)*reach,math.sin(angle)*reach,-axial))
+  EnergyDisc.place(light,point,(.62+.40*p)*rig.scale,Color3.fromRGB(126,185,255):Lerp(WHITE,p*.72),
+   smooth(p/.18)*(1-smooth((p-.88)/.12))*(1-release)*.61)
  end
 end
 
@@ -201,9 +200,7 @@ local function gunCharge(self,r,origin,target,color,ball,q)
   local core=shotPart(root,'ChargedRound',Vector3.one*.04,color,true,1)
   local ring=ball and PlaneBurst.create(root,color) or nil
   local motes={}
-  if ball then
-   for i=1,3 do motes[i]=shotPart(root,'CoilInflow',Vector3.one*.18,color,true,1) end
-  end
+  for i=1,ball and 3 or 2 do motes[i]=EnergyDisc.sprite(root,ball and 'CoilInflow' or 'NeedleInflow') end
   r.load={root=root,core=core,ring=ring,motes=motes};self.loads+=1
  end
  local load=r.load
@@ -223,10 +220,10 @@ local function gunCharge(self,r,origin,target,color,ball,q)
  for i,mote in ipairs(load.motes) do
   local time=smooth((q-.12-i*.10)/.55)
   local angle=i*math.pi*2/3+time*1.45
-  local radius=1.27-.97*time
-  mote.CFrame=load.root.CFrame*CFrame.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time))
-  mote.Color=color:Lerp(WHITE,.36+.58*time)
-  mote.Transparency=1-smooth(time/.20)*(1-smooth((time-.72)/.28))
+  local radius=(1.27-.97*time)*(ball and 1 or .68)
+  local point=load.root.CFrame:PointToWorldSpace(Vector3.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time)))
+  EnergyDisc.place(mote,point,(ball and .78 or .52)*(.7+.3*time),color:Lerp(WHITE,.25+.43*time),
+   smooth(time/.20)*(1-smooth((time-.72)/.28))*.58)
  end
 end
 
@@ -248,15 +245,15 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
  local sparks=Instance.new('ParticleEmitter')
- sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Enabled=false
+ EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64)
+ sparks.Enabled=false;sparks.Rate=0
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
- sparks.Color=ColorSequence.new(WHITE,color);sparks.LightInfluence=0;sparks.LightEmission=.8
- sparks.Lifetime=NumberRange.new(.12,ball and .56 or .34)
- sparks.Speed=NumberRange.new(impact and 9 or 6,(ball and 19 or 24)*grade);sparks.Drag=ball and 3.8 or 5.6
+ sparks.Color=ColorSequence.new(color:Lerp(WHITE,.38),color)
+ sparks.Lifetime=NumberRange.new(.23,ball and .56 or .41)
+ sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
- sparks.Size=NumberSequence.new((ball and .40 or .26)*grade,0);sparks.Transparency=NumberSequence.new(.04,1)
- sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 14 or 7)*grade) or (impact and 8 or 4))
+ sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
  local ring=ball and PlaneBurst.create(node,color) or nil

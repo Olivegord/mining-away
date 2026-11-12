@@ -3,6 +3,12 @@
 local checks=0
 local function check(name,fn) fn();checks+=1;print('PASS energy effects '..name) end
 local function near(a,b) assert(math.abs(a-b)<1e-7,tostring(a)..' ~= '..tostring(b)) end
+local function round(emitter,min,max)
+ assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png')
+ assert(emitter.Orientation==Enum.ParticleOrientation.FacingCamera and not emitter.WindAffectsDrag and not emitter.LockedToPart)
+ assert(emitter.Size[2].Value>=min and emitter.Size[2].Value+emitter.Size[2].Envelope<=max)
+ assert(emitter.Transparency[2].Value>=.4 and emitter.Transparency[#emitter.Transparency].Value==1)
+end
 local root=Instance.new('Folder');root.Parent=workspace
 local camera=Instance.new('Camera');camera.CFrame=CFrame.new(0,20,0);workspace.CurrentCamera=camera
 check('moving monochrome transparency stays ordered and bounded at every frame rate',function()
@@ -17,17 +23,17 @@ check('moving monochrome transparency stays ordered and bounded at every frame r
  local first=WorkEffects.orbitalTransparency(0);local moved=WorkEffects.orbitalTransparency(.025)
  assert(math.abs(first[2].Time-moved[2].Time)>.001,'ramp did not move')
 end)
-check('small utility sparks preserve bounded burst cleanup',function()
+check('large translucent utility discs preserve bounded burst cleanup',function()
  local work=WorkEffects.new(root)
  for n=1,30 do work:burst(Vector3.zero,Vector3.yAxis,Color3.new(1,1,0),38,100) end
  assert(#work.bursts==work.maxBursts)
  local emitter=work.bursts[1].part:FindFirstChildWhichIsA('ParticleEmitter')
- assert(emitter.Texture=='rbxasset://textures/particles/sparkles_main.dds' and emitter.LightEmission>=.5 and emitter.LightEmission<1)
+ round(emitter,.8,1.2)
+ assert(emitter.LightEmission<.5)
  assert(emitter.Brightness>=1 and emitter.Brightness<=2,'common burst became an overbright white mass')
  assert(emitter.TimeScale==1 and emitter.FlipbookLayout==Enum.ParticleFlipbookLayout.None and not emitter.LockedToPart)
- assert(emitter.Size[2].Value+emitter.Size[2].Envelope<=.4 and not emitter.WindAffectsDrag)
- assert(emitter.Emitted==38 and emitter.Rate==0 and emitter.Lifetime.Min>=1 and emitter.Lifetime.Max==1.6)
- assert(emitter.Speed.Min>=8 and emitter.Speed.Max<=15 and emitter.Drag>=10,'break particles spread too far')
+ assert(emitter.Emitted<=12 and emitter.Rate==0 and not emitter.Enabled and emitter.Lifetime.Max<=1.6)
+ assert(emitter.Speed.Max<=12 and emitter.Drag>=6,'break particles spread too far')
  assert(work.bursts[1].untilAt>=100+emitter.Lifetime.Max)
  local bloom=game:GetService('Lighting'):FindFirstChild('MiningEnergyBloom')
  assert(bloom and bloom.Enabled and bloom.Intensity>0 and bloom.Intensity<=.6 and bloom.Size<=22 and bloom.Threshold>=1.2)
@@ -61,15 +67,16 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  work:mining(beam,sample,Vector3.zero,Vector3.yAxis,1,0,100)
  local impact=assert(beam.work and beam.work.impact,'zoom swallowed nearby work effects')
  assert(impact.Enabled and impact.TimeScale==1 and impact.FlipbookLayout==Enum.ParticleFlipbookLayout.None)
- assert(impact.Size[2].Value+impact.Size[2].Envelope<=.25 and not impact.WindAffectsDrag and impact.Acceleration.X==0 and impact.Acceleration.Z==0)
- assert(impact.Brightness>=1 and impact.Brightness<=2 and impact.LightInfluence==0 and impact.LightEmission>=.5 and impact.LightEmission<1)
+ round(impact,.8,1.25)
+ assert(impact.Acceleration.X==0 and impact.Acceleration.Z==0)
+ assert(impact.Brightness>=1 and impact.Brightness<=2 and impact.LightInfluence==0 and impact.LightEmission<.5)
  assert(#beam.work.spheres==3 and beam.work.spheres[1].part.Transparency>=.5)
  local coreColor=beam.work.spheres[1].part.Color
  assert((coreColor.B or coreColor.Z)<.6,'sphere core lost its actual job color')
  assert(beam.work.sparks.Brightness<=1 and beam.work.glow.Brightness<=1,'origin stacks overpower the body')
  assert(beam.work.contact.Transparency>=.6 and beam.work.inner.Transparency>=.4,'contact balls form an opaque white lump')
- assert(impact.Lifetime.Min==.85 and impact.Lifetime.Max==1.35 and impact.Rate<=24)
- assert(impact.Speed.Min>=6 and impact.Speed.Max<=12 and impact.Drag>=9,'ordinary particles travel too far')
+ assert(impact.Lifetime.Max<=1 and impact.Rate<=6)
+ assert(impact.Speed.Max<=12 and impact.Drag>=4,'ordinary particles travel too far')
  impact.Cleared=false;sample.key='next-rock'
  work:mining(beam,sample,Vector3.new(3,0,0),Vector3.yAxis,1,0,100.1)
  assert(not impact.Cleared,'target switch destroyed the previous world-space tail')
@@ -84,17 +91,19 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  local source=assert(workspace:FindFirstChild('DroneRoleClientEffects'))
  local grow=assert(source:FindFirstChild('CrystalSeedBloom'))
  local dust=grow:FindFirstChildWhichIsA('ParticleEmitter',true)
+ round(dust,.75,1.2)
  assert(dust.Lifetime.Max==1.6 and dust.Speed.Max<=5 and dust.Drag>=8 and grow.EnergyCleanup>dust.Lifetime.Max)
  RoleVisuals.BreakerPhase(Vector3.new(0,5,0),Vector3.zero,'Impact')
  local shock=assert(source:FindFirstChild('BreakerPressureWave'))
  local sparks=shock:FindFirstChildWhichIsA('ParticleEmitter',true)
+ round(sparks,1,1.5)
  assert(sparks.Lifetime.Min==1 and sparks.Lifetime.Max==1.6 and sparks.Speed.Max<=7 and sparks.Drag>=10 and shock.EnergyCleanup>sparks.Lifetime.Max)
  RoleVisuals.Ability(991,{kind='orbital',target={x=0,y=2,z=0}},nil)
  local group=assert(source:FindFirstChild('OrbitalMelt'));local tick=delayedEnergy[#delayedEnergy]
  assert(group.EnergyCleanup==nil,'creation timer can truncate a later final tail')
- for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
-  assert(emitter.Lifetime.Min==2 and emitter.Lifetime.Max<=3.5 and emitter.Speed.Max<=5 and emitter.Rate<=18)
- end end
+ local active=assert(group:FindFirstChildWhichIsA('ParticleEmitter',true))
+ round(active,1,2.8)
+ assert(active.Name=='MoltenSparks' and active.Rate<=8 and active.Lifetime.Max<=1.4)
  realTime=tick.at-.5;group:SetAttribute('ContactAt',realTime);realTime=tick.at;tick.fn()
  assert(group:GetAttribute('EndedAt')==nil and delayedEnergy[#delayedEnergy].at>realTime,'fresh strike expired')
  RoleVisuals.Ability(991,{kind='orbitalEnd'},nil)
@@ -103,11 +112,12 @@ check('role burst and orbital cleanup retain their longest particle lifetimes',f
  for _,emitter in ipairs(group:GetDescendants()) do if emitter:IsA('ParticleEmitter') then
   assert(not emitter.WindAffectsDrag and emitter.Acceleration.X==0 and emitter.Acceleration.Z==0,'shared wind in orbital cloud')
   if emitter.Name=='OrbitalAfterglow' then
-   afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted>=260 and emitter.Emitted<=360)
+   afterglow+=1;assert(emitter.Lifetime.Max==4 and emitter.Emitted>=18 and emitter.Emitted<=30)
+   round(emitter,1.3,2)
    assert(emitter.Shape==Enum.ParticleEmitterShape.Cylinder and emitter.ShapeStyle==Enum.ParticleEmitterShapeStyle.Volume)
-   assert(emitter.Parent:IsA('BasePart') and emitter.Parent.Size.X==260 and emitter.Parent.Size.Y==emitter.Parent.Size.Z)
+   assert(emitter.Parent:IsA('BasePart') and emitter.Parent.Size.X==26 and emitter.Parent.Size.Y==emitter.Parent.Size.Z)
    assert(emitter.Parent.EnergyTween==nil,'afterglow carrier collapses before its particles finish')
-   assert(emitter.Rate==0 and not emitter.Enabled and not emitter.LockedToPart and emitter.Speed.Max<.5)
+   assert(emitter.Rate==0 and not emitter.Enabled and emitter.Speed.Max<=2.5)
   end
   assert(group.EnergyCleanup>emitter.Lifetime.Max)
  end end

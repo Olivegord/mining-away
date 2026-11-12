@@ -104,9 +104,6 @@ function Effects.step(now)
 end
 local MAX_LIVE = 256
 local live = 0
-local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SMOKE='rbxasset://textures/particles/smoke_main.dds'
-local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local ORBITAL_HEIGHT=260
 local ORBITAL_COLOR=Color3.fromRGB(248,241,255)
 local ORBITAL_VIOLET=Color3.fromRGB(170,102,255)
@@ -192,31 +189,25 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
- local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks';sparks.Texture=SPARK
- sparks.Rate=0;sparks.LightEmission=.86;sparks.LightInfluence=.12;sparks.Brightness=1.6
- sparks.Color=ColorSequence.new(Color3.fromRGB(255,248,216),color)
+ local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
+ local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
+ EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
+ sparks.Enabled=false;sparks.Rate=0
+ sparks.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,248,216),.44),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
- sparks.Speed=residual and NumberRange.new(2,6) or NumberRange.new(12,22)
- sparks.Acceleration=Vector3.new(0,residual and .8 or -24,0);sparks.Drag=residual and 2.8 or 1.4
- sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-95,95)
- sparks.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,.20*scale,.055*scale),
-  NumberSequenceKeypoint.new(.19,(orbital and .38 or .32)*scale,.07*scale),
-  NumberSequenceKeypoint.new(1,0),
- })
- sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.04),NumberSequenceKeypoint.new(.53,.22),NumberSequenceKeypoint.new(1,1)})
- sparks.Parent=root;sparks:Emit(residual and 30 or orbital and 28 or 22)
- local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust';dust.Texture=SMOKE
- dust.Rate=0;dust.LightEmission=orbital and .32 or .06;dust.LightInfluence=.35
- dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(206,183,183),.56))
+ sparks.Speed=residual and NumberRange.new(2,5) or NumberRange.new(8,16)
+ sparks.Acceleration=Vector3.new(0,residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ sparks.Parent=root;sparks:Emit(residual and 9 or orbital and 10 or 8)
+ local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
+ EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
+ dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
+ dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(206,183,183),.36))
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
- dust.Speed=NumberRange.new(residual and 1 or 5,residual and 4 or 11);dust.Drag=3.2
- dust.Acceleration=Vector3.new(0,1.1,0);dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-40,40)
- dust.Size=NumberSequence.new(.38*scale,1.8*scale)
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.72),NumberSequenceKeypoint.new(.18,.49),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=root;dust:Emit(orbital and 12 or 9)
+ dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
+ dust.Acceleration=Vector3.new(0,1.1,0)
+ dust.Parent=root;dust:Emit(orbital and 5 or 4)
  Debris:AddItem(root,residual and 2.7 or 1.4)
 end
 
@@ -245,15 +236,12 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  if planted then value:SetAttribute('AudioCue','plant');value:SetAttribute('AudioAt',clock()) end
  value.Position=planted and target or from
  local tip=Instance.new('Attachment');tip.Parent=value
- local dust=Instance.new('ParticleEmitter');dust.Texture=SPARK
- dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=.95;dust.LightInfluence=0
+ local dust=Instance.new('ParticleEmitter');EnergyDisc.configure(dust,planted and .84 or .65,.60)
+ dust.Enabled=false;dust.Rate=0;dust.Color=ColorSequence.new(green)
  dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(planted and 3 or 1,planted and 5 or 2)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
  dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=planted and 8 or 3;dust.WindAffectsDrag=false
- dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.02),NumberSequenceKeypoint.new(.2,.24,.03),NumberSequenceKeypoint.new(1,0)})
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.45,.55),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=tip;dust:Emit(planted and 14 or 9);Debris:AddItem(value,1.8)
+ dust.Parent=tip;dust:Emit(planted and 7 or 4);Debris:AddItem(value,1.8)
  if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,1.6,.45) end
 end
 
@@ -274,14 +262,12 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
    shock.Transparency=1;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
    local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
-   local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';dust.Texture=SMOKE
+   local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';EnergyDisc.configure(dust,1.18,.69,.60,1.22)
    dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
-   dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
+   dust.Enabled=false;dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
    dust.Speed=NumberRange.new(4,7);dust.Drag=10;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
-   dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-50,50)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
-   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
+   dust.Parent=attachment;dust:Emit(7)
    Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
@@ -331,7 +317,7 @@ local function clearBurn(owner: any)
   local floor=old:GetAttribute('Ground') or position.Y
   Effects.ImpactParticles(Vector3.new(position.X,floor+.68,position.Z),ORBITAL_PINK,1.35,'OrbitalFallout')
  end
- if core and core:IsA('BasePart') and not BeamVFX.reduced() then
+ if core and core:IsA('BasePart') and not BeamVFX.reduced() and typeof(position)=='Vector3' and BeamVFX.near(position,120) then
   -- A full volume leaves a continuous vertical trail, rather than twelve
   -- isolated pairs of dots. Its fixed carrier must not shrink with the laser.
   local trail=part()
@@ -340,17 +326,15 @@ local function clearBurn(owner: any)
    -- Concentrate the loose light in the part of the column players can see.
    trail.Size=Vector3.new(26,2,2);trail.CFrame=core.CFrame*CFrame.new(13-ORBITAL_HEIGHT*.5,0,0);trail.Parent=old
    local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
-   embers.Texture=ENERGY;embers.Enabled=false;embers.Rate=0;embers.LightEmission=.8;embers.LightInfluence=0;embers.Brightness=1.1
-   embers.Color=ColorSequence.new(ORBITAL_COLOR)
+   EnergyDisc.configure(embers,1.45,.59,.62,.74);embers.Enabled=false;embers.Rate=0
+   embers.Color=ColorSequence.new(ORBITAL_COLOR,ORBITAL_VIOLET)
    embers.Shape=Enum.ParticleEmitterShape.Cylinder;embers.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
    embers.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;embers.ShapePartial=1;embers.EmissionDirection=Enum.NormalId.Right
    embers.Lifetime=NumberRange.new(2,4);embers.Speed=NumberRange.new(.65,2.3);embers.Drag=1.8;embers.WindAffectsDrag=false
    embers.LockedToPart=false;embers.VelocityInheritance=0
-   embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-45,45)
+   embers.SpreadAngle=Vector2.new(180,180)
    embers.Acceleration=Vector3.new(0,.08,0)
-   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.28,.08),NumberSequenceKeypoint.new(.2,.52,.12),NumberSequenceKeypoint.new(1,0)})
-   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.55,.55),NumberSequenceKeypoint.new(1,1)})
-   embers.Parent=trail;embers:Emit(56)
+   embers.Parent=trail;embers:Emit(25)
   end
  end
  for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalResidualColumn' then
@@ -433,15 +417,6 @@ local function sustainedStrike(owner: any,event: any)
    value.Transparency=core and .10 or index==1 and .86 or .59
    value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group;columns[index]=value
    value:SetAttribute('BurnTransparency',value.Transparency)
-   if core and not reduced then
-    local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
-    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=1.25
-    energy.Rate=12;energy.Lifetime=NumberRange.new(.7,1.8);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
-    energy.Shape=Enum.ParticleEmitterShape.Cylinder;energy.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume;energy.EmissionDirection=Enum.NormalId.Right
-    energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(0,-.1,0);energy.WindAffectsDrag=false
-    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.32,.06),NumberSequenceKeypoint.new(1,0)})
-    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.5,.6),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
-   end
   end
   local rings={}
   if not reduced and BeamVFX.near(floor,100) then
@@ -458,12 +433,12 @@ local function sustainedStrike(owner: any,event: any)
    contact.Transparency=.28;contact.Size=Vector3.one*(.83*scale);contact.Parent=group;contact:SetAttribute('BurnTransparency',.28)
    light=Instance.new('PointLight');light.Color=ORBITAL_PINK;light.Range=13;light.Parent=contact
    local tip=Instance.new('Attachment');tip.Parent=contact
-   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=SPARK;sparks.Squash=NumberSequence.new(.65);sparks.Rotation=NumberRange.new(-180,180)
-   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
-   sparks.Lifetime=NumberRange.new(.8,1.9);sparks.Speed=NumberRange.new(6,12);sparks.Drag=3.1;sparks.WindAffectsDrag=false
+   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks'
+   EnergyDisc.configure(sparks,1.27*scale,.58,.56,.72)
+   sparks.Color=ColorSequence.new(ORBITAL_COLOR,ORBITAL_PINK)
+   sparks.Lifetime=NumberRange.new(.65,1.26);sparks.Speed=NumberRange.new(4,9);sparks.Drag=4.1
    sparks.Acceleration=Vector3.new(0,-.4,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(60,60)
-   sparks.Rate=25;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.23,.07),NumberSequenceKeypoint.new(.12,.4,.07),NumberSequenceKeypoint.new(1,0)})
-   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.48),NumberSequenceKeypoint.new(.5,.68),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
+   sparks.Rate=8;sparks.Parent=tip
   end
   orbitalTimelines[group]={at=event.startedAt or clock(),columns=columns,widths=widths,rings=rings,radius=radius,floor=floor.Y,light=light}
   group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',clock())

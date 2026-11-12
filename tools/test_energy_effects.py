@@ -26,7 +26,8 @@ with tempfile.TemporaryDirectory(prefix='mining-energy-checks-') as directory:
 # A native fetch gate complements API doubles, which cannot load images.
 textures = sorted(set(re.findall(r"(?:local ENERGY=|\.Texture=)['\"]([^'\"]+)['\"]", '\n'.join(
     (ROOT / 'src' / (name + '.lua')).read_text()
-    for name in ('WorkEffects', 'RoleVisuals', 'AbilityView', 'PickupView')))))
+    for name in ('WorkEffects', 'RoleVisuals', 'AbilityView', 'PickupView')))
+    + re.findall(r"texture='([^']+)'", (ROOT / 'src/EnergyDisc.lua').read_text())))
 native = 'local energyTextures={' + ','.join(repr(value) for value in textures) + '}\n'
 native += (ROOT / 'tests/energy-assets.studio.lua').read_text()
 (ROOT / 'build/energy-asset-check.lua').write_text(native)

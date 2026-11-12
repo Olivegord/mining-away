@@ -140,9 +140,11 @@ local prismCore=Instance.new('Part');prismCore.Parent=fx
 local prism={core=prismCore,scale=1}
 RoleEffectView.ramielCharge(prism,.45,.19,nil,false)
 local chargeField=assert(prism.chargeField)
-local early=chargeField.light[2].Position.Magnitude
+local mote=chargeField.light[2]
+local early=(mote.anchor.WorldPosition-prismCore.Position).Magnitude
+assert(mote.gui.Enabled and mote.image.Image=='rbxasset://textures/ui/VR/circleWhite.png')
 RoleEffectView.ramielCharge(prism,.85,.68,nil,false)
-assert(chargeField.light[2].Position.Magnitude<early*.55 and chargeField.rings[1].plane.rays[1].beam.Enabled,
+assert((mote.anchor.WorldPosition-prismCore.Position).Magnitude<early*.55 and chargeField.rings[1].plane.rays[1].beam.Enabled,
  'Ramiel charge did not visibly converge before firing')
 RoleEffectView.ramielCharge(prism,1,.4,.23,false)
 assert(not prism.chargeField and not chargeField.root.Parent,'Ramiel charge leaked past release')

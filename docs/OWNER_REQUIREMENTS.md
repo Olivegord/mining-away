@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — large translucent circle particles
+
+Apply the layered attack research. Make plain, larger, partly transparent circles the main particle shape for drone charge, shots, cutting contact, and fallout. Keep the silhouettes and timing of each attack distinct. Rings, physical breakup pieces, and the reward's four-point glints have separate jobs and remain.
+
 ## November 11 follow-up — Ramiel's glass rig, moving sights and audible stone landings
 
 Make Ramiel larger and fly higher, with the other flagship drones given a smaller lift. Give Ramiel a longer charge and a single fine red beam that holds briefly, fades in along its length after a small gap at the aperture, and kicks the camera without tilting it. The glass shell must transform by folding the same facets. Reveal more of the gun sights as they extend and move their bright dashes instead of stretching a fixed pattern. Make the clinks from the rocks that fall audible in normal mining.

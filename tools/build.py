@@ -83,6 +83,8 @@ def module_bundle(names):
   names=tuple(n for name in names for n in (('StartupFX','BeamVFX') if name=='BeamVFX' else (name,)))
  if 'StartupFX' in names:
   names=tuple(n for name in names for n in (tuple(dep for dep in ('PullMotion','PlaneBurst','LaunchAftermath') if dep not in names)+(name,) if name=='StartupFX' else (name,)))
+ if 'EnergyDisc' not in names and any(n in names for n in ('LaunchAftermath','BeamVFX','StartupFX','WorkEffects','RoleVisuals','RoleEffectView')):
+  names=('EnergyDisc',)+tuple(names)
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')

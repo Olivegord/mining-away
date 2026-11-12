@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a8fbccec860df2e73a1b7c61a6ebefdfdf36b5d5465e0220c8b69a3222426657` | Includes the connected Ramiel rig, moving sights and ore clinks. |
-| Last verified installed Edit revision | `becceee` | The new Sources are staged in the connected disk roots. Arrival and save in shared Edit are pending verification. |
+| Native-file SHA-256 | `cab27e81a813f181e2061d744126340f6355c9c422fd7ddfd11b6a9094641580` | Includes the large translucent circle particle pass. |
+| Shared Studio Sources | `373e5f2` verified in Play | All seven Sources matched the pre-particle revision in the owner's active session. The circle update is saved in the canonical snapshot and is waiting for Edit and Script Sync. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `becceee`** | Left the owner's playtest running. The latest verified Team Create save remains 190 (`621b75c`). |
+| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `373e5f2`** | Left the owner's playtest running. The last documented Team Create save is 190 (`621b75c`). |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — layer attacks with bigger translucent circles
+
+Laser and specialist charge motes travel inward along their existing paths. A few larger discs peel away on release; the pressure ring and low opacity tail keep moving after the core shuts off. Ordinary cutter contact peaks around 0.94 studs, with fewer discs per second and a lower rate when nine or more detailed mining rigs are active. Needler has the smaller, faster impact; Ballcaster and Ramiel carry wider impact circles. Crystal breaks keep their physical shards and glints, with a short burst and a softer, slower round layer behind them. Orbital concentrates its particles around ground contact and the lower 26 studs of its column. No gameplay, damage, audio, or attack clocks changed.
+
+Beam, energy, pickup, and crystal contact checks passed. The broader gadget suite still stops at the previously documented client inertia fixture. A detached native check in the existing owner Play session verified the built-in circle texture was loaded and the new sprite placement, size, transparency, and hide behavior work on native instances. The fixture did not add any objects to the running game. In-game appearance, busy view readability, and multiplayer remain unverified.
+
+The canonical refresh changed one managed Source and preserved every non-Source chunk and unrelated or backup Source. Reproduce from `373e5f2` with the new sources and `python3 tools/build.py --previous-commit 373e5f2`. The existing Play session at place **124078027733625**, universe **10774898335**, still has the previous Sources and was left running. Verify the three roots and exact Sources in shared Edit before running `python3 tools/script_sync.py`; confirm arrival and save there before a fresh owner playtest. No Roblox publication.
 
 ## November 11 — fold the glass, animate the sights and restore stone clinks
 

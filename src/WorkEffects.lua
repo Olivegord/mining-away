@@ -5,8 +5,6 @@ local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
-local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local YELLOW=Color3.fromRGB(255,208,69)
 local ENERGY_TAIL=1.8
 local function part(parent,name,template)
@@ -45,16 +43,12 @@ local function particle(parent,name,color)
  -- TimeScale .2 and must not silently slow newly authored work effects.
  local p=Instance.new('ParticleEmitter')
  p.Name=name;p.Enabled=false;p.Rate=0
- -- Small discs are the neutral energy cue; contacts use fine sparks and
- -- fractures use matte smoke. Keep the original asset templates intact.
- p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
- p.Color=ColorSequence.new(color);p.LightEmission=.8;p.LightInfluence=0;p.Brightness=1.8
- p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
- p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
+ EnergyDisc.configure(p,.36,.58)
+ p.Color=ColorSequence.new(color)
+ p.TimeScale=1;p.VelocityInheritance=0
+ p.EmissionDirection=Enum.NormalId.Front
  p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
  p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.zero;p.WindAffectsDrag=false
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.26),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.55,.42),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
@@ -110,12 +104,11 @@ function W:burst(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
- local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(9,14)
- sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=11;sparks.Acceleration=Vector3.zero
- sparks.Texture=SPARK;sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-40,40)
- sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.06,.19,.02),NumberSequenceKeypoint.new(1,0)})
+ local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(6,11)
+ sparks.Lifetime=NumberRange.new(.72,1.34);sparks.Drag=7;sparks.Acceleration=Vector3.zero
+ EnergyDisc.configure(sparks,.90,.58,.53,.72)
  sparks.SpreadAngle=Vector2.new(65,65)
- sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
+ sparks:Emit(math.min(12,math.ceil(count*.6)));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -147,15 +140,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.sparks.Brightness=1;fx.sparks.LightEmission=.55
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Brightness=.8;fx.glow.LightEmission=.4
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.13)
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  fx.impact.Texture=SPARK;fx.impact.Squash=NumberSequence.new(.55)
-  fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
-  fx.impact.Lifetime=NumberRange.new(.45,.85);fx.impact.Speed=NumberRange.new(8,15)
+  EnergyDisc.configure(fx.impact,.94,.47,.56,.63)
+  fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.06),NumberSequenceKeypoint.new(.15,.37,.07),NumberSequenceKeypoint.new(1,0)})
-  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.58,.35),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -203,12 +193,15 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  -- shared lateral force pushing the whole cloud like wind.
  fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
  fx.impact.Drag=resonance and 5 or 4
- fx.impact.Rate=continuous and (resonance and 9 or 12) or 0;fx.impact.Enabled=working and continuous
+ -- Keep the large discs readable when an entire pinned field lights up.
+ local crowded=self.miningCount>8
+ fx.impact.Rate=continuous and (crowded and 3 or resonance and 4 or 6) or 0
+ fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.impact:Emit(15);fx.sparks:Emit(5)
+   fx.impact:Emit(crowded and 3 or 6);fx.sparks:Emit(crowded and 1 or 3)
   end
  end
  if point and normal then
@@ -223,7 +216,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(16);fx.sparks:Emit(5) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(crowded and 4 or 7);fx.sparks:Emit(crowded and 1 or 3) end
   fx.pulseSerial=sample.pulseSerial
  end
 end

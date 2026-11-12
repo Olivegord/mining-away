@@ -23,15 +23,18 @@ function FX.create(parent,style,seed)
  local root=Instance.new('Part');root.Name='LaserStartup_'..style
  root.Anchored=true;root.Transparency=1;root.Size=Vector3.one*.025
  root.CanCollide=false;root.CanTouch=false;root.CanQuery=false;root.CastShadow=false;root.Parent=parent
- local f={root=root,style=style,seed=seed or 1,arcs={},rays={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
- for i=1,8 do f.arcs[i]=line(root,color);f.rays[i]=line(root,Color3.new(1,1,1));f.rays[i].beam.Segments=1 end
+ local f={root=root,style=style,color=color,seed=seed or 1,arcs={},motes={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
+ for i=1,8 do
+  f.arcs[i]=line(root,color)
+  if i<=5 then f.motes[i]=EnergyDisc.sprite(root,'StartupInflow') end
+ end
  for i=1,4 do f.glints[1].rays[i]=line(root,Color3.new(1,1,1));f.glints[1].rays[i].beam.Segments=1 end
  return f
 end
 function FX.hide(f)
  f.root.Transparency=1;PlaneBurst.hide(f.plane)
  for _,l in ipairs(f.arcs) do l.beam.Enabled=false end
- for _,l in ipairs(f.rays) do l.beam.Enabled=false end
+ for _,mote in ipairs(f.motes) do mote.gui.Enabled=false end
  for _,g in ipairs(f.glints) do for _,l in ipairs(g.rays) do l.beam.Enabled=false end end
 end
 function FX.destroy(f) f.root:Destroy() end
@@ -45,14 +48,13 @@ function FX.update(f,origin,q)
   local span=(b-a).Magnitude
   local breadth=f.style=='Coil' and .075 or f.style=='Ignition' and .045 or .035
   l.beam.Enabled=alpha>.01 and span>.002 and va.Magnitude>.01 and vb.Magnitude>.01
-  local head=f.rays[i];head.beam.Enabled=l.beam.Enabled
+  local mote=f.motes[i]
   if l.beam.Enabled then
    pose(l.a,a*.62,-va.Unit);pose(l.b,b*.62,-vb.Unit)
    l.beam.CurveSize0=span*.62/3;l.beam.CurveSize1=span*.62/3
    l.beam.Width0=breadth*alpha;l.beam.Width1=0;l.beam.Transparency=fades[math.floor(alpha*32+.5)]
-   head.a.Position=a*.62;head.b.Position=(a-va.Unit*.075)*.62
-   head.beam.Width0=.09*alpha;head.beam.Width1=0;head.beam.Transparency=fades[math.floor(alpha*32+.5)]
   end
+  if mote then EnergyDisc.place(mote,origin.Position+a*.62,.54+.18*timing,f.color,l.beam.Enabled and alpha*.52 or 0) end
  end
  -- Stars have distinct short flashes with quiet gaps. Ignition forms one
  -- compressed hot slit; Coil stays dark between its inward strands. These

@@ -232,7 +232,7 @@ acquireRich=function(r)
  h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.Neon,CYAN,Enum.PartType.Ball)
  for i=1,8 do
   h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
-   head=visualPart(folder,'InwardSpark',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
+   head=EnergyDisc.sprite(h.glass,'InwardSpark')}
  end
  for i=1,3 do
   local edge=richPath(r,'InwardTendrilEdge'..i,VIOLET,ARC)
@@ -240,20 +240,19 @@ acquireRich=function(r)
   ink.beam.LightEmission=0
   h.sweeps[i]={edge=edge,ink=ink}
  end
- h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor';h.vapor.Texture='rbxasset://textures/particles/smoke_main.dds'
+ h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor'
+ EnergyDisc.configure(h.vapor,1.35,.74,.58,1.12)
  h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
  h.vapor.LightEmission=.35;h.vapor.LightInfluence=0;h.vapor.Brightness=1
  h.vapor.Lifetime=NumberRange.new(.5,1.3);h.vapor.Speed=NumberRange.new(1,3.5);h.vapor.Drag=3
  h.vapor.SpreadAngle=Vector2.new(180,180);h.vapor.Acceleration=Vector3.new(0,.7,0);h.vapor.WindAffectsDrag=false
- h.vapor.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.35,1.9),NumberSequenceKeypoint.new(1,2.8)})
- h.vapor.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.18,.62),NumberSequenceKeypoint.new(1,1)})
  h.vapor.Rotation=NumberRange.new(-180,180);h.vapor.RotSpeed=NumberRange.new(-55,55)
  h.particleSource=attachment(r.root,'LensParticleSource');h.vapor.Parent=h.particleSource
- h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks';h.sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
- h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN);h.sparks.LightEmission=.8;h.sparks.LightInfluence=0;h.sparks.Brightness=1.5
- h.sparks.Lifetime=NumberRange.new(.25,.65);h.sparks.Speed=NumberRange.new(4,11);h.sparks.Drag=4;h.sparks.SpreadAngle=Vector2.new(180,180)
- h.sparks.Acceleration=Vector3.new(0,-2,0);h.sparks.WindAffectsDrag=false;h.sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.11),NumberSequenceKeypoint.new(.15,.24),NumberSequenceKeypoint.new(1,0)})
- h.sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(1,1)});h.sparks.Parent=h.particleSource
+ h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks'
+ EnergyDisc.configure(h.sparks,.67,.57,.60,.42)
+ h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN)
+ h.sparks.Lifetime=NumberRange.new(.26,.52);h.sparks.Speed=NumberRange.new(2,5);h.sparks.Drag=5;h.sparks.SpreadAngle=Vector2.new(180,180)
+ h.sparks.Acceleration=Vector3.new(0,-1,0);h.sparks.Parent=h.particleSource
  -- Emitters are outside the detail Folder because their parent is an Attachment.
  folder.Destroying:Connect(function() h.particleSource:Destroy() end)
 end
@@ -264,7 +263,7 @@ hideRich=function(r)
  for _,vane in ipairs(h.collars) do vane.beam.Enabled=false end
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
- for _,p in ipairs(h.comets) do p.head.Transparency=1 end
+ for _,p in ipairs(h.comets) do p.head.gui.Enabled=false end
  h.vapor.Enabled=false;h.sparks.Enabled=false
 end
 local function curve(path,a,b,ta,tb,bend,width)
@@ -320,7 +319,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
   for i,item in ipairs(h.comets) do
    local color=r.color:Lerp(WHITE,i%2==0 and .64 or .26)
-   item.path.beam.Color=ColorSequence.new(color);item.head.Color=color
+   item.path.beam.Color=ColorSequence.new(color);item.color=color
   end
  end
  local delta=to-from
@@ -360,9 +359,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   if va.Magnitude>.01 and vb.Magnitude>.01 and span>.002 then
    curve(item.path,head,tail,-va.Unit,-vb.Unit,span*.27,(i%2==0 and .24 or .16)*s*visible)
   else item.path.beam.Enabled=false end
-  item.head.CFrame=CFrame.new(from+head)
-  item.head.Size=Vector3.one*math.max(.01,.25*s*visible)
-  item.head.Transparency=1-visible
+  EnergyDisc.place(item.head,from+head,s*(.49+.24*visible),item.color,visible*.57)
  end
  -- Small ink curls have separate arrivals and deform along attracted paths.
  -- No shared orbit angle or reset: each short ribbon is drawn into the mouth.
@@ -389,7 +386,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
   if h.lastEmission and now>=h.lastEmission+.08 then
-   h.sparks:Emit(2);h.lastEmission=now
+   h.sparks:Emit(1);h.lastEmission=now
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
  else h.lastEmission=nil end
 end
