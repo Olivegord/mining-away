@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b029fb51dc53b8d2479939122727a7e0ef9d8c857ffe74e964c3c6d7d9de1c67` | Slower rock regrowth and two blinks before ore expiry. |
-| Shared Studio Sources | Last verified Team Create save **206** | The regrowth and ore blink changes still need to reach shared Edit. |
+| Native-file SHA-256 | `96b231e459d7d8180e6c69b319f8745d5524ca5a89fa7558445441c6e2d9b436` | Hovering ore with pickup effects, expiry blinks and slower rock regrowth. |
+| Shared Studio Sources | Verified Team Create save **207** | All seven managed Sources match the canonical file and Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION** | The open Play session runs the prior revision, `ed475aa`. Check shared Edit after the owner stops Play. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | A new Play loads both the ore effects and the slower rock regrowth from save **207**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give ore the Risk of Rain pickup effects and catch Studio up
+
+Dropped ore touches down, then rises into a tilted hover. One tapered strand swirls underneath, five motes drift upward, a soft pool of mineral-colored light marks the landing spot, and an occluded outline traces the gem. The 12 closest eligible drops get the full effect. The ore and its effects blink together before expiry. Reduced motion holds a steady hover and strand, and reduced effects keeps the outline and a softer ground glow.
+
+The owner ended the older Play session. Script Sync installed both controllers in shared Edit at place **124078027733625**, universe **10774898335**. All seven managed Sources and three roots matched again after Team Create save **207**. The same save includes the 73–77-second natural Crystal Run regrowth. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit fb628a2`. Pickup and Crystal Run checks passed with API doubles. A detached Studio check exercised the strand, motes, glow and outline and loaded both built-in textures. Appearance during gameplay remains unverified. This revision is unpublished.
 
 ## November 11 — slow rock regrowth and blink expired ore
 

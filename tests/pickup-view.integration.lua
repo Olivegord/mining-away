@@ -68,9 +68,10 @@ check('stale landing state received after registration settles without replaying
  late:SetAttribute('GroundImpactSpeed',12);late:SetAttribute('GroundImpactSerial',1)
  renderer:update(1/60,realTime)
  assert(record.landAge==1 and #audio.calls==sounds and record.contact==nil)
- local angle=record.view.CFrame.yaw
+ local pose=record.motionPose
  renderer:update(1/60,realTime+10)
- assert(math.abs(record.view.CFrame.yaw-angle)<1e-8,'settled fragment keeps spinning')
+ assert((record.motionPose.Position-pose.Position).Magnitude<1e-8 and record.motionPose.yaw==pose.yaw
+  and record.view.Position.Y>pose.Position.Y+.9,'hover altered the settled source pose')
  assert(#audio.calls==sounds,'late observer replayed old contact audio')
  renderer:destroy()
 end)
@@ -151,16 +152,18 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
  local landed=r.view.CFrame
  assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
+ cargo:SetAttribute('Position',Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ))
+ cargo:SetAttribute('Velocity',Vector3.zero);cargo:SetAttribute('SnapshotAt',contact-.07)
  renderer:update(1/60,contact+.045)
  assert(r.idle and r.idle.sprite.Image=='rbxassetid://6997866340' and r.idle.sprite.ImageTransparency<.12)
  assert(not r.idle.halo.AlwaysOnTop and #r.idle.halo:GetChildren()==1)
  renderer:update(1/60,contact+.27)
  assert(not r.idle,'landing twinkle did not fade')
- assert(#audio.calls==sounds+1 and (r.view.Position-landed.Position).Magnitude<1e-8 and r.view.CFrame.yaw==landed.yaw,
-  'gem moved or chimed again after touchdown')
+ assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
+  'gem should lift from its real contact point without a second landing cue')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
-check('grounded gems use one sourced sprite and share one price label',function()
+check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -178,7 +181,7 @@ check('grounded gems use one sourced sprite and share one price label',function(
  renderer:update(1/60,realTime+.2)
  local poses,sizes={},{}
  for i,source in ipairs(sources) do
-  local record=renderer.records[source];poses[i]=record.view.CFrame;sizes[i]=record.view.Size
+  local record=renderer.records[source];poses[i]=record.motionPose;sizes[i]=record.view.Size
  end
  local mostLit=0
  for i=1,240 do
@@ -193,15 +196,31 @@ check('grounded gems use one sourced sprite and share one price label',function(
    assert(record.idle.anchor.Parent==record.view and record.idle.halo.Adornee==record.idle.anchor)
    assert(record.idle.sprite.Image=='rbxassetid://6997866340' and record.idle.sprite.ImageTransparency<1)
   end
-  assert(math.abs(record.view.Position.Y-record.view.Size.Y*.5)<1e-8,'gem failed to sit on the ground')
-  assert(record.view.Position==poses[i].Position and record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],
-   'idle ore moved, rotated or changed size')
+  assert(record.view.Position.Y>record.view.Size.Y*.5+1.3,'gem did not hover above its landing spot')
+  assert(record.motionPose==poses[i] and record.view.Size==sizes[i],'hover changed the physical pose or item size')
  end
  assert(mostLit>0 and mostLit<=12 and renderer.idleCount==lit)
  assert(renderer.idleCount+#renderer.idlePool<=12,'glint pool exceeded the visual budget')
  local gui=renderer.valueGui
  assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
- assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')
+ assert(#renderer.displays==12 and #visuals:GetChildren()==93,'the display pool or shared label exceeded its budget')
+ local rig=renderer.displays[1]
+ assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and rig.outline.Enabled
+  and rig.outline.DepthMode==Enum.HighlightDepthMode.Occluded and rig.outline.FillTransparency==1)
+ assert(rig.surface.Enabled and rig.light.Enabled and math.abs(rig.base.Position.Y-.01)<1e-8)
+ assert(rig.core.ImageTransparency<rig.halo.ImageTransparency and rig.core.Image==rig.halo.Image)
+ for i,beam in ipairs(rig.curves) do
+  assert(beam.Enabled and beam.Attachment0==rig.points[i] and beam.Attachment1==rig.points[i+1])
+  assert(beam.CurveSize0>0 and beam.CurveSize1>0)
+ end
+ local startPoint=rig.points[1].Position
+ local moteY={};for i,mote in ipairs(rig.motes) do moteY[i]=mote.anchor.WorldPosition and mote.anchor.WorldPosition.Y or 0 end
+ renderer:update(1/60,realTime+4.24)
+ local rising=false
+ for i,mote in ipairs(rig.motes) do
+  if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then rising=true end
+ end
+ assert(rising and rig.points[1].Position~=startPoint,'strand or rising motes were static')
  workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
  renderer:update(1/60,realTime+5)
  assert(renderer.valueGui==gui and math.abs(gui.Adornee.CFrame.Position.X-15)<.7)
@@ -211,11 +230,16 @@ check('grounded gems use one sourced sprite and share one price label',function(
  assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
  reducedMotion=true
  renderer:update(1/60,realTime+6.1)
- assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5)<1e-8,'reduced motion moved the resting ore')
+ assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5-1.52)<1e-8,'reduced motion did not hold a steady hover')
  local pose=first.view.CFrame
+ workspace.CurrentCamera.CFrame=CFrame.new(0,2,0)
  for _,phase in ipairs({{14.05,1},{14.25,0},{14.55,1},{14.75,0}}) do
   renderer:update(1/60,realTime+phase[1])
-  assert(first.view.CFrame==pose and first.view.Transparency==phase[2],'expiry blink changed the resting pose or used partial opacity')
+  rig=renderer.displays[2]
+  assert(rig.record==first and rig.outline.Enabled==(phase[2]==0) and rig.surface.Enabled==(phase[2]==0)
+   and rig.light.Enabled==(phase[2]==0) and rig.curves[1].Enabled==(phase[2]==0),'the display did not blink with the ore')
+  assert((first.view.Position-pose.Position).Magnitude<1e-8 and first.view.Transparency==phase[2],'expiry blink moved the hover or used partial opacity')
+  for _,mote in ipairs(rig.motes) do assert(not mote.gui.Enabled,'reduced motion left a rising mote active') end
  end
  pl:SetAttribute('ReducedFlashing',true);renderer:update(1/60,realTime+14.59)
  assert(first.view.Transparency==0,'reduced flashing left an ore blink active')
@@ -223,10 +247,15 @@ check('grounded gems use one sourced sprite and share one price label',function(
  assert(first.view.Transparency==1,'expired ore remained visible')
  sources[2]:SetAttribute('ExpiresAt',realTime+25)
  renderer:update(1/60,realTime+15.1)
- assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to restore visibility')
+ assert(first.view.Transparency==0 and (first.view.Position-pose.Position).Magnitude<1e-8,'renewing a static pile failed to restore visibility')
  pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+15.2)
- assert(renderer.idleCount==0,'reduced effects left sparkles on screen')
+ rig=renderer.displays[1]
+ assert(renderer.idleCount==0 and rig.record==first and rig.outline.Enabled and rig.surface.Enabled
+  and not rig.light.Enabled and not rig.curves[1].Enabled,'reduced effects did not simplify the ore display')
+ sources[2]:SetAttribute('Homing',true);sources[2]:SetAttribute('SnapshotAt',realTime+15.21)
+ renderer:update(1/60,realTime+15.23)
+ assert(not rig.record and not rig.outline.Enabled and not rig.surface.Enabled,'the display stayed behind during homing')
  pl:SetAttribute('ReducedEffects',false)
- renderer:destroy();visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
+ renderer:destroy();assert(not rig.base.Parent);visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

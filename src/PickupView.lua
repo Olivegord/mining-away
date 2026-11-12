@@ -6,6 +6,7 @@ local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
+local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 -- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
 local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
@@ -58,6 +59,25 @@ local function updateGlint(self,r,age,strength)
  end
  r.idle.sprite.ImageTransparency=1-alpha
 end
+local function displayOrder(a,b)
+ if a.displayDistance==b.displayDistance then return a.seed<b.seed end
+ return a.displayDistance<b.displayDistance
+end
+local function updateDisplays(self,now,reducedMotion,reducedEffects)
+ local candidates=self.displayCandidates
+ table.sort(candidates,displayOrder)
+ local count=math.min(#candidates,DISPLAY_LIMIT)
+ for i=1,count do
+  local r=candidates[i]
+  local rig=self.displays[i]
+  if not rig then rig=PickupDisplay.new(self.parent);self.displays[i]=rig end
+  PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
+ end
+ for i=count+1,#self.displays do
+  local rig=self.displays[i]
+  if rig.record then PickupDisplay.hide(rig);rig.record=nil;rig.outline.Adornee=nil end
+ end
+end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -97,7 +117,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},displays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -191,6 +211,7 @@ function V:update(dt,now)
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
+ table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
    local processed=source:GetAttribute('ProcessedAt')
@@ -303,8 +324,37 @@ function V:update(dt,now)
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
    end
-   if newPose then
-    r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
+   local hoverAge=r.landAge and age-r.landAge-(r.arc and OreDrops.GEM_CONTACT_HOLD or PickupMotion.SETTLE_TIME)
+   local onDisplay=resting and not seated and hoverAge>0
+   local wasHovering=r.hoverAlpha~=nil
+   if onDisplay then
+    local t=math.clamp(hoverAge/.38,0,1)
+    r.hoverAlpha=t*t*(3-2*t)
+    r.hoverTime=reducedMotion and 0 or hoverAge
+   elseif wasHovering then
+    -- Carry the displayed lift into homing, then hand off to its real trajectory.
+    r.hoverAlpha*=math.exp(-math.min(dt,.1)*18)
+    if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
+   end
+   if newPose or onDisplay or wasHovering then
+    local pose=r.motionPose
+    if r.hoverAlpha then
+     local t=r.hoverTime
+     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .12*math.sin(t*2.8+r.seed))
+     local yaw=(t*1.15+math.pi)%(2*math.pi)-math.pi
+     pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(.22*r.hoverAlpha,yaw*r.hoverAlpha,-.32*r.hoverAlpha)
+    end
+    r.drawPosition=pose.Position;r.view.CFrame=pose
+   end
+   if onDisplay and cameraPosition and (not r.expiresAt or now<r.expiresAt) then
+    local offset=r.drawPosition-cameraPosition
+    local distance=offset:Dot(offset)
+    if distance<DISPLAY_RANGE^2 then
+     r.displayGround=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
+     r.displayDistance=distance
+     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-math.sqrt(distance))/10,0,1)*opacity
+     table.insert(self.displayCandidates,r)
+    end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
    if r.arc and live and age>=r.landAge and not seated and not reducedEffects and cameraPosition
@@ -336,6 +386,7 @@ function V:update(dt,now)
    end
   end
  end
+ updateDisplays(self,now,reducedMotion,reducedEffects)
  if closest~=self.valueTarget then
   self.valueTarget=closest
   if closest then
@@ -349,6 +400,7 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
+ for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}

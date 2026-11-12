@@ -10870,6 +10870,113 @@ end
 return O
 
 end)()
+local PickupDisplay = (function()
+-- The resting ore display is local and borrows its position from the pickup view.
+local Display={}
+local WHITE=Color3.new(1,1,1)
+local SOFT_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
+local SWEEP,SEGMENTS=math.pi*2.16,4
+local widths={.008,.044,.050,.030,.004}
+local transparencies={1,.34,.05,.29,1}
+
+local function glowImage(parent,name,size)
+ local image=Instance.new('ImageLabel');image.Name=name;image.Image=SOFT_GLOW
+ image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5)
+ image.Size=UDim2.fromScale(size,size);image.BackgroundTransparency=1;image.Parent=parent
+ return image
+end
+
+function Display.new(parent)
+ local base=Instance.new('Part');base.Name='OreDisplay';base.Anchored=true
+ base.Transparency=1;base.CastShadow=false;base.CanCollide=false;base.CanTouch=false;base.CanQuery=false
+ local surface=Instance.new('SurfaceGui');surface.Name='GroundGlow';surface.Face=Enum.NormalId.Top
+ surface.CanvasSize=Vector2.new(160,160);surface.LightInfluence=0;surface.Brightness=1.8
+ surface.Enabled=false;surface.Parent=base
+ local halo=glowImage(surface,'Halo',1)
+ local core=glowImage(surface,'Hotspot',.47)
+ local lightAnchor=Instance.new('Attachment');lightAnchor.Position=Vector3.new(0,.52,0);lightAnchor.Parent=base
+ local light=Instance.new('PointLight');light.Name='OreLight';light.Enabled=false;light.Shadows=false;light.Parent=lightAnchor
+ local outline=Instance.new('Highlight');outline.Name='OreOutline';outline.DepthMode=Enum.HighlightDepthMode.Occluded
+ outline.FillTransparency=1;outline.Enabled=false;outline.Parent=base
+ local points,curves,motes={},{},{}
+ for i=1,SEGMENTS+1 do
+  local point=Instance.new('Attachment');point.Name='OreStrandPoint';point.Parent=base;points[i]=point
+ end
+ for i=1,SEGMENTS do
+  local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
+  beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
+  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,transparencies[i]),NumberSequenceKeypoint.new(1,transparencies[i+1])})
+  beam.Enabled=false;beam.Parent=base;curves[i]=beam
+ end
+ for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
+ base.Parent=parent
+ return {base=base,surface=surface,halo=halo,core=core,light=light,outline=outline,points=points,curves=curves,motes=motes}
+end
+
+function Display.hide(rig)
+ rig.outline.Enabled=false;rig.surface.Enabled=false;rig.light.Enabled=false
+ for _,beam in ipairs(rig.curves) do beam.Enabled=false end
+ for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
+end
+
+function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
+ if rig.record~=record then
+  rig.record=record
+  rig.scale=record.physical and 1 or .73
+  rig.base.Size=Vector3.new(5.7,.02,5.7)*rig.scale
+  rig.outline.Adornee=record.view
+  rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
+  rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
+  rig.light.Color=record.color:Lerp(WHITE,.23);rig.light.Range=4.5*rig.scale
+  rig.moteColor=record.color:Lerp(WHITE,.71)
+  local strand=ColorSequence.new(record.color:Lerp(WHITE,.72))
+  for i,beam in ipairs(rig.curves) do
+   beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
+  end
+ end
+ if strength<=.03 then Display.hide(rig);return end
+ local scale=rig.scale
+ if rig.base.Position~=ground then rig.base.Position=ground end
+ rig.outline.OutlineTransparency=1-strength*.94;rig.outline.Enabled=true
+ rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
+ rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
+ rig.surface.Enabled=true
+ rig.light.Enabled=not reducedEffects;rig.light.Brightness=strength*1.5
+
+ local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
+ if not reducedEffects then
+  -- Adjacent cubic segments share the helix's tangent and width at each join.
+  local radius=1.57;local taper=-.84;local rise=1.52
+  for i,point in ipairs(rig.points) do
+   local t=(i-1)/SEGMENTS;local angle=phase+t*SWEEP
+   local c,s=math.cos(angle),math.sin(angle);local reach=radius+taper*t
+   local derivative=Vector3.new(taper*c-SWEEP*reach*s,rise,taper*s+SWEEP*reach*c)*scale
+   local right=derivative.Unit;local back=right:Cross(Vector3.yAxis).Unit
+   point.CFrame=CFrame.fromMatrix(Vector3.new(c*reach,.17+rise*t,s*reach)*scale,right,back:Cross(right),back)
+   local handle=derivative.Magnitude/(SEGMENTS*3)
+   if i<=SEGMENTS then rig.curves[i].CurveSize0=handle end
+   if i>1 then rig.curves[i-1].CurveSize1=handle end
+  end
+  for _,beam in ipairs(rig.curves) do beam.Enabled=strength>.34 end
+ else
+  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
+ end
+ for i,mote in ipairs(rig.motes) do
+  if reducedEffects or reducedMotion then mote.gui.Enabled=false
+  else
+   local t=(now*(.53+i*.039)+i*.191+record.seed*.137)%1
+   local angle=record.seed*.97+i*2.399963+t*1.05
+   local reach=(.40+(i%3)*.31)*(1-.30*t)
+   local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
+   local envelope=math.min(t/.16,1,(1-t)/.28)
+   EnergyDisc.place(mote,position,(.12+(i%3)*.033)*scale,rig.moteColor,envelope*strength*.92)
+  end
+ end
+end
+
+return Display
+
+end)()
 local PickupView = (function()
 -- Owner/run-bound ore. Smooth visuals observe server snapshots and receipts;
 -- neither a magnet animation nor a disappearing view can grant backpack units.
@@ -10879,6 +10986,7 @@ local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
+local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 -- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
 local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
@@ -10931,6 +11039,25 @@ local function updateGlint(self,r,age,strength)
  end
  r.idle.sprite.ImageTransparency=1-alpha
 end
+local function displayOrder(a,b)
+ if a.displayDistance==b.displayDistance then return a.seed<b.seed end
+ return a.displayDistance<b.displayDistance
+end
+local function updateDisplays(self,now,reducedMotion,reducedEffects)
+ local candidates=self.displayCandidates
+ table.sort(candidates,displayOrder)
+ local count=math.min(#candidates,DISPLAY_LIMIT)
+ for i=1,count do
+  local r=candidates[i]
+  local rig=self.displays[i]
+  if not rig then rig=PickupDisplay.new(self.parent);self.displays[i]=rig end
+  PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
+ end
+ for i=count+1,#self.displays do
+  local rig=self.displays[i]
+  if rig.record then PickupDisplay.hide(rig);rig.record=nil;rig.outline.Adornee=nil end
+ end
+end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
  local torso=character and (character:FindFirstChild('UpperTorso') or character:FindFirstChild('Torso'))
@@ -10970,7 +11097,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},displays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -11064,6 +11191,7 @@ function V:update(dt,now)
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
+ table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
    local processed=source:GetAttribute('ProcessedAt')
@@ -11176,8 +11304,37 @@ function V:update(dt,now)
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
    end
-   if newPose then
-    r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
+   local hoverAge=r.landAge and age-r.landAge-(r.arc and OreDrops.GEM_CONTACT_HOLD or PickupMotion.SETTLE_TIME)
+   local onDisplay=resting and not seated and hoverAge>0
+   local wasHovering=r.hoverAlpha~=nil
+   if onDisplay then
+    local t=math.clamp(hoverAge/.38,0,1)
+    r.hoverAlpha=t*t*(3-2*t)
+    r.hoverTime=reducedMotion and 0 or hoverAge
+   elseif wasHovering then
+    -- Carry the displayed lift into homing, then hand off to its real trajectory.
+    r.hoverAlpha*=math.exp(-math.min(dt,.1)*18)
+    if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
+   end
+   if newPose or onDisplay or wasHovering then
+    local pose=r.motionPose
+    if r.hoverAlpha then
+     local t=r.hoverTime
+     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .12*math.sin(t*2.8+r.seed))
+     local yaw=(t*1.15+math.pi)%(2*math.pi)-math.pi
+     pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(.22*r.hoverAlpha,yaw*r.hoverAlpha,-.32*r.hoverAlpha)
+    end
+    r.drawPosition=pose.Position;r.view.CFrame=pose
+   end
+   if onDisplay and cameraPosition and (not r.expiresAt or now<r.expiresAt) then
+    local offset=r.drawPosition-cameraPosition
+    local distance=offset:Dot(offset)
+    if distance<DISPLAY_RANGE^2 then
+     r.displayGround=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
+     r.displayDistance=distance
+     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-math.sqrt(distance))/10,0,1)*opacity
+     table.insert(self.displayCandidates,r)
+    end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
    if r.arc and live and age>=r.landAge and not seated and not reducedEffects and cameraPosition
@@ -11209,6 +11366,7 @@ function V:update(dt,now)
    end
   end
  end
+ updateDisplays(self,now,reducedMotion,reducedEffects)
  if closest~=self.valueTarget then
   self.valueTarget=closest
   if closest then
@@ -11222,6 +11380,7 @@ function V:destroy()
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
+ for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
