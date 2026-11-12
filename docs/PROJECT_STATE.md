@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,14 +11,14 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e275fe1ee8bc0deb05214ca6282ffdc96ba420b848a6ba74f9c28a9fc7be2f2e` | Mirrored Nomad scanner and fixed 1.8-second blackout before the visible drop. |
-| Shared Studio Sources | Team Create save **221** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `5bf3a2db83dcffcc28ae6062a60ba25cc2cdfc0fa705fa7a08d9196225f9e402` | Mirrored Nomad scanner, fixed drop timing and the progression overhaul. |
+| Shared Studio Sources | Team Create save **222** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's symmetrical scan and fixed drop timing in save **221**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's symmetrical scan, fixed drop timing and the progression overhaul in save **222**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
@@ -28,7 +28,17 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 
 The scanner now mirrors the paired banks, return rails, edge highlights and bridge joins. Its pass starts square to the field edge. The last filaments cut out exactly 1.8 seconds before the payload appears 34 studs above the strike point and plays the release cue. The descent lasts 1.44 seconds, and the rocks shatter 0.50 seconds after contact.
 
-Detached Roblox attachment checks confirmed vertical edges, paired positions and the drop height across three approach bearings. Focused client and server timing checks and the beam suite passed. The broader gadget suite still hits the existing client-inertia fixture failure. Full gameplay and multiplayer remain unverified. After the owner ended Play, all seven managed Sources matched the canonical file after Team Create save **221**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit d85e5eb`. This revision is unpublished.
+Detached Roblox attachment checks confirmed vertical edges, paired positions and the drop height across three approach bearings. Focused client and server timing checks and the beam suite passed. The broader gadget suite still hits the existing client-inertia fixture failure. Full gameplay and multiplayer remain unverified. The owner ended Play before save **221** installed Nomad. Save **222** integrates `a0071d8` and matches all seven managed Sources in the canonical file. Reproduce the combined refresh from save 221 with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit cf80b37`. This revision is unpublished.
+
+## November 12 — progression and collection overhaul
+
+The opening prestige goals change from 360 / 917 / 1,586 to 160 / 400 / 1,000 verified Quartz sold. Spending still leaves that progress intact. Existing later goals never increase. Each of the first three prestiges adds 50 percentage points of permanent mining power, then 25 points per later prestige. Saved fleet identities, base traits, pending card payloads, currency and earned progress are preserved. The beacon previews all three permanent reward choices before eligibility; unowned roles have priority while choices remain distinct and stable for a run.
+
+Raw cargo now homes from nine studs after landing, up from five. Loose ore receives the existing bounded sale-trip grace during a depot visit with a partial bag. Route checks are cached once per player per second. The HUD adds one readonly `Next drone` progress row. A one-time initial camera pose faces Crystal Run after the standard camera update. Hulls between the camera and avatar fade locally; inspection restores their normal opacity. No attack choreography, map geometry, restock timing or starter ownership changed.
+
+The [review and reproducible checks](review/PROGRESSION_OVERHAUL.md) distinguish production controller tests with API doubles from engine evidence. The focused runner covers real worker mining and earned purchases/prestige, normal landing and collection, bounded depot grace, reconnect, pending-offer protection and permanent rewards. The legacy broad runners still have their recorded fixture failures. A prior production-controller model required 82.25 seconds of worker ticks for the opening loop; the updated model requires 40.05 seconds. Both supply station travel and are not player-time or enjoyment measurements.
+
+The progression sources from `a0071d8` were integrated with the Nomad fix and verified in shared Edit after Team Create save **222**. Focused progression and Nomad checks passed on the combined sources. Live DataStore, final motion, mobile layout and multiplayer remain unverified.
 
 ## November 12 — native starter-loop playtest and HUD fixes
 

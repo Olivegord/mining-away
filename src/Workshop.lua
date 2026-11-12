@@ -1,6 +1,6 @@
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
  {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
@@ -12,6 +12,16 @@ W.CRYSTAL_TIERS={
 W.CRYSTAL_BY_MATERIAL={}
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
+end
+-- Reach the first permanent gain while the first few cards still feel new.
+-- Later goals ask the player to exploit the increasingly valuable deep route.
+W.PRESTIGE_GOALS={160,400,1000}
+function W.prestigeGoal(completed)
+ -- Existing deeper runs never lose earned eligibility during this tuning pass.
+ return W.PRESTIGE_GOALS[completed+1] or math.min(1e12,math.floor(360*(1+completed)^1.35))
+end
+function W.permanentMiningBonus(completed)
+ return .5*math.min(completed,3)+.25*math.max(0,completed-3)
 end
 W.EMPTIERS=2
 W.VACUUM_ENABLED=false

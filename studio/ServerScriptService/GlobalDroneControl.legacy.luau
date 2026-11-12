@@ -3,7 +3,7 @@
 local Workshop = (function()
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
  {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
@@ -15,6 +15,16 @@ W.CRYSTAL_TIERS={
 W.CRYSTAL_BY_MATERIAL={}
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
+end
+-- Reach the first permanent gain while the first few cards still feel new.
+-- Later goals ask the player to exploit the increasingly valuable deep route.
+W.PRESTIGE_GOALS={160,400,1000}
+function W.prestigeGoal(completed)
+ -- Existing deeper runs never lose earned eligibility during this tuning pass.
+ return W.PRESTIGE_GOALS[completed+1] or math.min(1e12,math.floor(360*(1+completed)^1.35))
+end
+function W.permanentMiningBonus(completed)
+ return .5*math.min(completed,3)+.25*math.max(0,completed-3)
 end
 W.EMPTIERS=2
 W.VACUUM_ENABLED=false
@@ -758,17 +768,22 @@ function Catalog.prestigeReward(seed,index)
  error('Prestige reward weights must total 100')
 end
 -- Three distinct weighted choices, stable for a run across reconnects.
-function Catalog.prestigeChoices(seed,index)
+function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime
  local pool=table.clone(Catalog.PrestigeRewards)
  local choices={}
  for _=1,3 do
+  -- A new mining behavior is a stronger early reward than a fourth identical
+  -- chassis. Exhaust unowned roles first, then retain useful duplicate choices.
+  local novel=false
+  if owned then for _,entry in ipairs(pool) do if not owned[entry.kind] then novel=true;break end end end
   local total=0
-  for _,entry in ipairs(pool) do total+=entry.weight end
+  for _,entry in ipairs(pool) do if not novel or not owned[entry.kind] then total+=entry.weight end end
   state=(math.max(1,state)*48271)%prime
   local ticket=state%total+1
   for i,entry in ipairs(pool) do
+   if novel and owned[entry.kind] then continue end
    ticket-=entry.weight
    if ticket<=0 then
     choices[#choices+1]={kind=entry.kind,name=entry.name,tier=entry.tier,job=entry.job}
@@ -2004,6 +2019,19 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
 end
+-- Only fade a hull between the camera and avatar, without moving the crew or
+-- querying the world. The author-owned opacity and gameplay model stay intact.
+function F.cameraObstruction(camera,focus,point,radius)
+ local x,y,z=focus.X-camera.X,focus.Y-camera.Y,focus.Z-camera.Z
+ local length=x*x+y*y+z*z
+ if length<1e-6 then return 0 end
+ local px,py,pz=point.X-camera.X,point.Y-camera.Y,point.Z-camera.Z
+ local t=(px*x+py*y+pz*z)/length
+ if t<=0 or t>=.96 then return 0 end
+ local dx,dy,dz=px-x*t,py-y*t,pz-z*t
+ local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
+ return .86*math.clamp(1-distance/math.max(.5,radius),0,1)
+end
 return F
 
 end)()
@@ -2367,7 +2395,7 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
@@ -3181,19 +3209,19 @@ function P.sell(p,prices,tx,expectedRun)
  local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
 function P.milestone(p)
- return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}
+ return {earnings=Workshop.prestigeGoal(p.prestiges),field='Quartz',wins=0}
 end
 local function prestigeDrone(p,kind)
  return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
   or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
 end
 local function prestigeChoices(p)
- local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index)
+ local owned={}
+ for _,d in ipairs(p.fleet) do owned[d.role or d.type]=true;owned[d.type]=true end
+ local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index,owned)
  -- Keep the opening choices, then give each missing flagship a clear route
  -- through the ordinary one-of-three permanent selection.
  if p.run.index>1 then
-  local owned={}
-  for _,d in ipairs(p.fleet) do owned[d.role]=true end
   if not owned.Nomad then
    choices[2]={kind='Nomad',name='Nomad',tier=4,job='Sweeps in from the sky and shatters exposed crystals across the field'}
   end
@@ -3211,9 +3239,9 @@ function P.prestigePreview(p)
  local m=P.milestone(p);local earned=p.run.quartzEarnings
  local eligible=earned>=m.earnings and p.run.pendingOffer==nil
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the Prestige beacon')
- return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
+ return {eligible=eligible,reason=reason,miningBonusBefore=Workshop.permanentMiningBonus(p.prestiges),miningBonusAfter=Workshop.permanentMiningBonus(p.prestiges+1),
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and prestigeChoices(p) or nil}
+  cards=#p.run.cards,runId=p.run.id,droneChoices=prestigeChoices(p)}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)
@@ -3447,7 +3475,7 @@ function C.stats(p,d,extra)
  local damage=b.combatDPS*b.shotInterval*clamp(1+(s.combat or 0),.1,4)
  -- Cap the combined damage/rate product, rather than independently allowing 16×.
  local dps=math.min(b.combatDPS*4,damage/interval);damage=dps*interval
- return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+(p.prestiges or 0)*.25)*(1+doubleBeam) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
+ return {miningDPS=not support(d) and b.miningDPS*clamp(1+(s.mining or 0),.1,4)*(1+Workshop.permanentMiningBonus(p.prestiges or 0))*(1+doubleBeam) or 0,combatDPS=not support(d) and dps or 0,shotDamage=not support(d) and damage or 0,shotInterval=interval,
   doubleBeam=doubleBeam,twinThrusters=twinThrusters,oreDuplicator=oreDuplicator,
   maxHealth=b.maxHealth*clamp(1+(s.health or 0),.1,4),maxStep60=b.maxStep60*speed,speedMultiplier=speed,
   warmup=math.max(cutter and .05 or .08,b.warmup*(cutter and .5 or C.LASER_CHARGE_SCALE)/math.max(.1,1+(s.startup or 0))),range=b.range*clamp(1+(s.range or 0),.1,1.6),
@@ -7827,6 +7855,7 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
+if scene.runStart then root:SetAttribute('StarterLookAt',scene.runStart) end
 if scene.runStart then
  root:SetAttribute('PackCounterPosition',scene.packStation.Position)
  local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
@@ -8978,7 +9007,19 @@ local function pickupStep(dt)
    local hr=characterRoot(p);local target=hr and hr.Position or from
    local naturalReach=(drop.raw and (p.cargoReach or OreDrops.CARGO_REACH) or p.magnetRange)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
-   if drop.raw and drop.landed and hr and not hasSpace and now>=(drop.returnCheckAt or 0) then
+   -- Protect an earned drop during a real depot visit, including buying a
+   -- pack with a partially full bag. The same 180-second cap still applies.
+   local depotVisit=false
+   if drop.raw and drop.landed and hr and p.miningSquare and scene.runStart and scene.packStation then
+    if now>=(p.pickupVisitCheckAt or 0) or p.pickupVisitSquare~=p.miningSquare then
+     local floor=scene.depotFloor
+     p.pickupVisitCheckAt=now+1;p.pickupVisitSquare=p.miningSquare
+     p.pickupDepotVisit=(hr.Position-p.miningSquare.center).Magnitude>28
+      and Mining.onSelectorDepotRoute(hr.Position,p.miningSquare.center,scene.packStation.Position,floor and floor.CFrame,floor and floor.Size)
+    end
+    depotVisit=p.pickupDepotVisit
+   end
+   if drop.raw and drop.landed and hr and (not hasSpace or depotVisit) and now>=(drop.returnCheckAt or 0) then
     drop.returnCheckAt=now+1
     local counter=scene.packStation.Position
     local walkingDistance=(target-counter).Magnitude+(from-counter).Magnitude

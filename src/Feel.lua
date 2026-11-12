@@ -378,4 +378,17 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
 end
+-- Only fade a hull between the camera and avatar, without moving the crew or
+-- querying the world. The author-owned opacity and gameplay model stay intact.
+function F.cameraObstruction(camera,focus,point,radius)
+ local x,y,z=focus.X-camera.X,focus.Y-camera.Y,focus.Z-camera.Z
+ local length=x*x+y*y+z*z
+ if length<1e-6 then return 0 end
+ local px,py,pz=point.X-camera.X,point.Y-camera.Y,point.Z-camera.Z
+ local t=(px*x+py*y+pz*z)/length
+ if t<=0 or t>=.96 then return 0 end
+ local dx,dy,dz=px-x*t,py-y*t,pz-z*t
+ local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
+ return .86*math.clamp(1-distance/math.max(.5,radius),0,1)
+end
 return F

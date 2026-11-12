@@ -54,7 +54,7 @@ end)()
 local Workshop = (function()
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
-local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=360}
+local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
  {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
@@ -66,6 +66,16 @@ W.CRYSTAL_TIERS={
 W.CRYSTAL_BY_MATERIAL={}
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
+end
+-- Reach the first permanent gain while the first few cards still feel new.
+-- Later goals ask the player to exploit the increasingly valuable deep route.
+W.PRESTIGE_GOALS={160,400,1000}
+function W.prestigeGoal(completed)
+ -- Existing deeper runs never lose earned eligibility during this tuning pass.
+ return W.PRESTIGE_GOALS[completed+1] or math.min(1e12,math.floor(360*(1+completed)^1.35))
+end
+function W.permanentMiningBonus(completed)
+ return .5*math.min(completed,3)+.25*math.max(0,completed-3)
 end
 W.EMPTIERS=2
 W.VACUUM_ENABLED=false
@@ -815,6 +825,19 @@ function F.updateStagePresentation(p,authoritativeStage,broken,now,count)
  if target<=p.knownStage then return nil end
  p.stage=target;p.knownStage=target;p.scorched=false;p.queue={};p.nextAt=now
  return 'stage'
+end
+-- Only fade a hull between the camera and avatar, without moving the crew or
+-- querying the world. The author-owned opacity and gameplay model stay intact.
+function F.cameraObstruction(camera,focus,point,radius)
+ local x,y,z=focus.X-camera.X,focus.Y-camera.Y,focus.Z-camera.Z
+ local length=x*x+y*y+z*z
+ if length<1e-6 then return 0 end
+ local px,py,pz=point.X-camera.X,point.Y-camera.Y,point.Z-camera.Z
+ local t=(px*x+py*y+pz*z)/length
+ if t<=0 or t>=.96 then return 0 end
+ local dx,dy,dz=px-x*t,py-y*t,pz-z*t
+ local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
+ return .86*math.clamp(1-distance/math.max(.5,radius),0,1)
 end
 return F
 
@@ -3246,17 +3269,22 @@ function Catalog.prestigeReward(seed,index)
  error('Prestige reward weights must total 100')
 end
 -- Three distinct weighted choices, stable for a run across reconnects.
-function Catalog.prestigeChoices(seed,index)
+function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime
  local pool=table.clone(Catalog.PrestigeRewards)
  local choices={}
  for _=1,3 do
+  -- A new mining behavior is a stronger early reward than a fourth identical
+  -- chassis. Exhaust unowned roles first, then retain useful duplicate choices.
+  local novel=false
+  if owned then for _,entry in ipairs(pool) do if not owned[entry.kind] then novel=true;break end end end
   local total=0
-  for _,entry in ipairs(pool) do total+=entry.weight end
+  for _,entry in ipairs(pool) do if not novel or not owned[entry.kind] then total+=entry.weight end end
   state=(math.max(1,state)*48271)%prime
   local ticket=state%total+1
   for i,entry in ipairs(pool) do
+   if novel and owned[entry.kind] then continue end
    ticket-=entry.weight
    if ticket<=0 then
     choices[#choices+1]={kind=entry.kind,name=entry.name,tier=entry.tier,job=entry.job}
@@ -11706,7 +11734,7 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
@@ -13265,7 +13293,26 @@ local function connect(signal,callback) local c=signal:Connect(callback);table.i
 connect(gui.Parent.ChildAdded,isolate)
 local function restoreCamera(ch)
  local hum=ch:WaitForChild('Humanoid',10)
- if hum and workspace.CurrentCamera then workspace.CurrentCamera.CameraType=Enum.CameraType.Custom;workspace.CurrentCamera.CameraSubject=hum end
+ if hum and workspace.CurrentCamera then
+  local camera=workspace.CurrentCamera;camera.CameraType=Enum.CameraType.Custom;camera.CameraSubject=hum
+  local hr=ch:WaitForChild('HumanoidRootPart',10)
+  -- Choose the initial view once per character. Normal camera input owns it afterward.
+  local frames=0
+  RunService:BindToRenderStep('MiningAwayInitialView',Enum.RenderPriority.Camera.Value+2,function()
+   frames+=1
+   local first=world:GetAttribute('StarterLookAt')
+   local spawn=world:GetAttribute('StarterSpawn')
+   if player.Character~=ch or not ch.Parent or frames>30 then RunService:UnbindFromRenderStep('MiningAwayInitialView');return end
+   if not hr or typeof(first)~='Vector3' then RunService:UnbindFromRenderStep('MiningAwayInitialView');return end
+   if typeof(spawn)=='Vector3' and (hr.Position-spawn).Magnitude>24 then return end
+   local delta=Vector3.new(first.X-hr.Position.X,0,first.Z-hr.Position.Z)
+   if delta.Magnitude>1 then
+    local focus=hr.Position+Vector3.yAxis*2
+    camera.CFrame=CFrame.lookAt(focus-delta.Unit*19+Vector3.yAxis*10,focus+delta.Unit*8)
+   end
+   RunService:UnbindFromRenderStep('MiningAwayInitialView')
+  end)
+ end
 end
 connect(player.CharacterAdded,restoreCamera);if player.Character then task.spawn(restoreCamera,player.Character) end
 local frame,label,corner=U.frame,U.text,U.corner
@@ -13742,6 +13789,11 @@ openPrestige=function()
   return math.ceil(textService:GetTextSize(text,size,font,Vector2.new(math.max(1,availableWidth),1000)).Y)+4
  end
  local y=4
+ label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,28),'Quartz sold this run',20,palette.text,true)
+ label(body,UDim2.fromOffset(4,y+30),UDim2.fromOffset(width,25),comma(earnings)..' / '..comma(required),18,palette.muted,true)
+ local track=frame(body,UDim2.fromOffset(4,y+58),UDim2.fromOffset(width,6),palette.paper)
+ frame(track,UDim2.fromOffset(0,0),UDim2.fromScale(math.clamp(earnings/math.max(1,required),0,1),1),palette.mineral)
+ y+=76
  if #choices>0 then
   local heading='Choose one permanent drone'
   local headingHeight=math.max(28,heightFor(heading,20,true,width))
@@ -13784,15 +13836,9 @@ openPrestige=function()
    for _,edge in pairs(marks) do edge.Parent.Size=UDim2.fromOffset(rowWidth,tallest) end
    y+=tallest+6
   end
- else
-  label(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,28),'Quartz sold this run',20,palette.text,true)
-  label(body,UDim2.fromOffset(4,y+30),UDim2.fromOffset(width,25),comma(earnings)..' / '..comma(required),18,palette.muted,true)
-  local track=frame(body,UDim2.fromOffset(4,y+58),UDim2.fromOffset(width,6),palette.paper)
-  frame(track,UDim2.fromOffset(0,0),UDim2.fromScale(math.clamp(earnings/math.max(1,required),0,1),1),palette.mineral)
-  y+=76
  end
  local bonusBefore=math.floor((pre.miningBonusBefore or 0)*100)
- local bonusAfter=math.floor((pre.miningBonusAfter or .25)*100)
+ local bonusAfter=math.floor((pre.miningBonusAfter or .5)*100)
  local bonus=('+%d%% → +%d%% base mining power'):format(bonusBefore,bonusAfter)
  if #choices==0 then bonus='+1 permanent drone · '..bonus end
  local bonusHeight=math.max(25,heightFor(bonus,17,true,width))
@@ -13806,7 +13852,7 @@ openPrestige=function()
   y+=height+4
  end
  terms('PrestigeKeep','Keep all '..tostring(pre.fleetBefore or #profile.fleet)..' permanent drones, their traits, stored tools, transport and cleared plots.',palette.text)
- terms('PrestigeReset','Reset balances, all cargo, cards, Stars, run upgrades, field access, pack prices and sale progress.',palette.muted)
+ terms('PrestigeReset','Reset balances, all cargo, cards, Stars, run upgrades, pack prices and sale progress.',palette.muted)
  y+=3
  if #choices==0 then
   local reason=paid and 'Choose your paid pack card first.' or ('Sell '..comma(math.max(0,required-earnings))..' more Quartz.')
@@ -13814,7 +13860,7 @@ openPrestige=function()
   return
  end
  local waiting=actionPending and actionPending.kind=='Prestige'
- local reason=waiting and 'Starting new run…' or (not allowed and blocked or (selectedName and 'Prestige with '..selectedName or 'Select a drone'))
+ local reason=waiting and 'Starting new run…' or (not pre.eligible and pre.reason) or (not allowed and blocked or (selectedName and 'Prestige with '..selectedName or 'Select a drone'))
  confirm=button(body,UDim2.fromOffset(4,y),UDim2.fromOffset(width,46),reason,function()
   if selected and can and canAct('Prestige') and send('Prestige',{confirm=true,droneType=selected}) then
    confirm.Text='Starting new run…';enableAction(confirm,false)
@@ -14605,7 +14651,18 @@ connect(RunService.RenderStepped,function(dt)
    presentation:renderTurret(t,dt,now)
   end
  end
- for _,d in pairs(drones) do renderDrone(d,dt,now) end
+ local camera=workspace.CurrentCamera
+ local avatar=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+ local focus=avatar and avatar.Position+Vector3.yAxis
+ local cameraPosition=camera and camera.CFrame.Position
+ local reveal=cameraPosition and focus and not inspectingFleet()
+ for _,d in pairs(drones) do
+  renderDrone(d,dt,now)
+  for part in pairs(d.parts) do
+   if part.Parent then part.LocalTransparencyModifier=reveal
+    and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
+  end
+ end
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()
@@ -14910,7 +14967,7 @@ connect(gui.Destroying,function()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
  for source in pairs(roleAudio) do soundscape:stopLoop(source) end;roleAudio={}
- RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
+ RunService:UnbindFromRenderStep('MiningAwayInitialView');RunService:UnbindFromRenderStep('MiningAwayCameraRestore');RunService:UnbindFromRenderStep('MiningAwayCameraFeedback')
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  abilityView.destroy()
  if toolView then toolView:destroy() end

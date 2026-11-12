@@ -119,6 +119,9 @@ function HUD.new(refs: any)
  self.battery=frame(refs.resources,'BatteryCounter',C.panel);plain(self.battery);self.battery.Visible=false
  text(self.battery,'Caption',0,0,78,24,18,C.muted).Text='Battery'
  self.batteryValue=text(self.battery,'Charge',78,0,82,24,18,C.text);self.batteryValue.TextXAlignment=Enum.TextXAlignment.Right
+ self.growth=frame(refs.resources,'PrestigeProgress',C.panel);plain(self.growth)
+ text(self.growth,'Caption',0,0,98,24,18,C.muted).Text='Next drone'
+ self.growthValue=text(self.growth,'Progress',98,0,62,24,18,C.text);self.growthValue.TextXAlignment=Enum.TextXAlignment.Right
  self.dock=frame(refs.root,'CommandDock',C.panel);plain(self.dock)
  self.selectorStatus=text(self.dock,'SelectorStatus',0,0,0,0,16,C.muted)
  self.selectorStatus.Visible=false;self.selectorStatus.TextStrokeTransparency=.45
@@ -223,12 +226,21 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  end
  local activity=HUD.activity(world:FindFirstChild('Drones'),Players.LocalPlayer.UserId)
  local batteryVisible=activity.maxBattery>0
- local height=(shown+1+(batteryVisible and 1 or 0))*rowHeight
+ local growth=p and p.prestigePreview
+ local growthVisible=growth~=nil and type(growth.saleRequired)=='number'
+ local height=(shown+1+(batteryVisible and 1 or 0)+(growthVisible and 1 or 0))*rowHeight
  local sideY=8 -- Keep the flat list above the mobile movement controls.
  r.resources.Position=UDim2.fromOffset(0,sideY);r.resources.Size=UDim2.fromOffset(width,height);r.resources.Visible=not hidden
  self.cargo.Position=UDim2.fromOffset(0,shown*rowHeight);self.cargo.Size=UDim2.fromOffset(width,rowHeight)
  self.battery.Visible=batteryVisible
  self.battery.Position=UDim2.fromOffset(0,(shown+1)*rowHeight);self.battery.Size=UDim2.fromOffset(width,rowHeight)
+ self.growth.Visible=growthVisible
+ self.growth.Position=UDim2.fromOffset(0,(shown+1+(batteryVisible and 1 or 0))*rowHeight);self.growth.Size=UDim2.fromOffset(width,rowHeight)
+ if growthVisible then
+  local fraction=math.clamp((growth.earnings or 0)/math.max(1,growth.saleRequired),0,1)
+  self.growthValue.Text=growth.eligible and 'Ready' or tostring(math.floor(fraction*100))..'%'
+  self.growthValue.TextColor3=growth.eligible and C.gold or C.text
+ end
  local charge=math.floor(100*activity.battery/math.max(1,activity.maxBattery)+.5)
  self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or activity.docking>0 and 'Docking' or charge..'%'
  self.batteryValue.TextColor3=activity.charging>0 and C.green or charge<25 and C.gold or C.text

@@ -363,10 +363,10 @@ do
  local receipt=Http:JSONDecode(runner:GetAttribute('MA_DroneReward'))
  local worker=assert(drones[receipt.droneId])
  assert(after.prestiges==1 and after.run.id~=run.id and #after.fleet==#before.fleet+1 and worker.role==picked.kind)
- assert(after.fleet[1].id==before.fleet[1].id and worker.stats.miningDPS==worker.owned.base.miningDPS*1.25)
+ assert(after.fleet[1].id==before.fleet[1].id and worker.stats.miningDPS==worker.owned.base.miningDPS*1.5)
  assert(#after.run.cards==0 and after.run.wallet.Quartz==0 and after.run.stars==0)
  assert(not crew.shiftReadyRun,'prestige carried a ready surge into the new run')
- assert(crew.drones[1].stats.doubleBeam==0 and crew.drones[1].stats.miningDPS==37.5)
+ assert(crew.drones[1].stats.doubleBeam==0 and crew.drones[1].stats.miningDPS==45)
 
  local small=makeResource(ruby,rubyBed.Position-Vector3.xAxis*7,'Crystal',108,8,2.15,3)
  local rich=makeResource(ruby,rubyBed.Position+Vector3.xAxis*13,'Crystal',270,14,3.8,3)

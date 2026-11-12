@@ -37,17 +37,22 @@ function Catalog.prestigeReward(seed,index)
  error('Prestige reward weights must total 100')
 end
 -- Three distinct weighted choices, stable for a run across reconnects.
-function Catalog.prestigeChoices(seed,index)
+function Catalog.prestigeChoices(seed,index,owned)
  local prime=2147483647
  local state=(seed%prime*48271+index%prime*69621)%prime
  local pool=table.clone(Catalog.PrestigeRewards)
  local choices={}
  for _=1,3 do
+  -- A new mining behavior is a stronger early reward than a fourth identical
+  -- chassis. Exhaust unowned roles first, then retain useful duplicate choices.
+  local novel=false
+  if owned then for _,entry in ipairs(pool) do if not owned[entry.kind] then novel=true;break end end end
   local total=0
-  for _,entry in ipairs(pool) do total+=entry.weight end
+  for _,entry in ipairs(pool) do if not novel or not owned[entry.kind] then total+=entry.weight end end
   state=(math.max(1,state)*48271)%prime
   local ticket=state%total+1
   for i,entry in ipairs(pool) do
+   if novel and owned[entry.kind] then continue end
    ticket-=entry.weight
    if ticket<=0 then
     choices[#choices+1]={kind=entry.kind,name=entry.name,tier=entry.tier,job=entry.job}

@@ -599,19 +599,19 @@ function P.sell(p,prices,tx,expectedRun)
  local result={credits=amount,earnings=amount,units=units,cargo=manifest,quartz=quartz,runId=p.run.id};P.record(p,'Sell',tx,result);return true,result
 end
 function P.milestone(p)
- return {earnings=math.min(1000000000000,math.floor(Workshop.PRESTIGE_BASE*(1+p.prestiges)^1.35)),field='Quartz',wins=0}
+ return {earnings=Workshop.prestigeGoal(p.prestiges),field='Quartz',wins=0}
 end
 local function prestigeDrone(p,kind)
  return specialTypes[kind] and specialDrone(p.userId,p.nextDroneSerial,kind,p.seed)
   or drone(p.userId,p.nextDroneSerial,kind,p.seed,kind=='Red' and 2 or 1)
 end
 local function prestigeChoices(p)
- local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index)
+ local owned={}
+ for _,d in ipairs(p.fleet) do owned[d.role or d.type]=true;owned[d.type]=true end
+ local choices=DroneCatalog.prestigeChoices(p.seed,p.run.index,owned)
  -- Keep the opening choices, then give each missing flagship a clear route
  -- through the ordinary one-of-three permanent selection.
  if p.run.index>1 then
-  local owned={}
-  for _,d in ipairs(p.fleet) do owned[d.role]=true end
   if not owned.Nomad then
    choices[2]={kind='Nomad',name='Nomad',tier=4,job='Sweeps in from the sky and shatters exposed crystals across the field'}
   end
@@ -629,9 +629,9 @@ function P.prestigePreview(p)
  local m=P.milestone(p);local earned=p.run.quartzEarnings
  local eligible=earned>=m.earnings and p.run.pendingOffer==nil
  local reason=p.run.pendingOffer and 'Choose your purchased card before prestige' or (earned<m.earnings and 'Sell more Quartz this run' or 'Ready at the Prestige beacon')
- return {eligible=eligible,reason=reason,miningBonusBefore=p.prestiges*.25,miningBonusAfter=(p.prestiges+1)*.25,
+ return {eligible=eligible,reason=reason,miningBonusBefore=Workshop.permanentMiningBonus(p.prestiges),miningBonusAfter=Workshop.permanentMiningBonus(p.prestiges+1),
   saleRequired=m.earnings,field='Quartz',winsRequired=0,wins=0,earnings=earned,fleetBefore=#p.fleet,fleetAfter=#p.fleet+1,
-  cards=#p.run.cards,runId=p.run.id,droneChoices=eligible and prestigeChoices(p) or nil}
+  cards=#p.run.cards,runId=p.run.id,droneChoices=prestigeChoices(p)}
 end
 P.prestigeEligibility=P.prestigePreview
 function P.prestige(p,tx,expectedRun,context)

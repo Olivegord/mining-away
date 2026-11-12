@@ -13,6 +13,7 @@ World.placeStart(scene)
 World.applyQuarryTextures(scene)
 local root,home=scene.root,scene.home
 root:SetAttribute('FieldToolsEnabled',scene.runStart==nil)
+if scene.runStart then root:SetAttribute('StarterLookAt',scene.runStart) end
 if scene.runStart then
  root:SetAttribute('PackCounterPosition',scene.packStation.Position)
  local depot=scene.map:FindFirstChild('SimpleFlatTestMap')
@@ -1164,7 +1165,19 @@ local function pickupStep(dt)
    local hr=characterRoot(p);local target=hr and hr.Position or from
    local naturalReach=(drop.raw and (p.cargoReach or OreDrops.CARGO_REACH) or p.magnetRange)+(drop.reachBonus or 0)*Workshop.ORE_REACH_SCALE
    local hasSpace=hr~=nil and Pro.cargoUnits(data(p))<Ca.capacity(data(p),previewPerks(p))
-   if drop.raw and drop.landed and hr and not hasSpace and now>=(drop.returnCheckAt or 0) then
+   -- Protect an earned drop during a real depot visit, including buying a
+   -- pack with a partially full bag. The same 180-second cap still applies.
+   local depotVisit=false
+   if drop.raw and drop.landed and hr and p.miningSquare and scene.runStart and scene.packStation then
+    if now>=(p.pickupVisitCheckAt or 0) or p.pickupVisitSquare~=p.miningSquare then
+     local floor=scene.depotFloor
+     p.pickupVisitCheckAt=now+1;p.pickupVisitSquare=p.miningSquare
+     p.pickupDepotVisit=(hr.Position-p.miningSquare.center).Magnitude>28
+      and Mining.onSelectorDepotRoute(hr.Position,p.miningSquare.center,scene.packStation.Position,floor and floor.CFrame,floor and floor.Size)
+    end
+    depotVisit=p.pickupDepotVisit
+   end
+   if drop.raw and drop.landed and hr and (not hasSpace or depotVisit) and now>=(drop.returnCheckAt or 0) then
     drop.returnCheckAt=now+1
     local counter=scene.packStation.Position
     local walkingDistance=(target-counter).Magnitude+(from-counter).Magnitude

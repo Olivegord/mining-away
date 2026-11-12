@@ -380,7 +380,7 @@ test('Quartz alone advances prestige, upgrades do not subtract progress, resets 
  local ok,o=buy(p,'buy');assert(ok);eq(P.prestigePreview(p).eligible,false);assert(choose(p,o,1,'pick'))
  assert(P.prestigePreview(p).eligible);eq(p.run.quartzEarnings,360)
  local oldRun=p.run.id;assert(prestige(p,'prestige',oldRun));eq(#p.fleet,4);eq(p.fleet[1].id,id);assert(same(p.fleet[1].base,base))
- eq(#p.run.cards,0);eq(p.run.wallet.Quartz,0);eq(p.run.quartzEarnings,0);eq(C.price(p),20);assert(Roles.isWorker(p.fleet[4].role));eq(C.stats(p,p.fleet[1]).miningDPS,37.5)
+ eq(#p.run.cards,0);eq(p.run.wallet.Quartz,0);eq(p.run.quartzEarnings,0);eq(C.price(p),20);assert(Roles.isWorker(p.fleet[4].role));eq(C.stats(p,p.fleet[1]).miningDPS,45)
  assert(P.validate(p,44));local restored=assert(P.migrate(p,44));assert(same(p,restored))
  eq(C.upgrade(p,o.choices[1].cardId,1,'stale',oldRun,{atDepot=true}),false)
  for i=2,12 do

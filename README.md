@@ -2,7 +2,7 @@
 
 **One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The current integration branch is **`codex/restore-feel-prestige`**.
 
-**Normal test entry:** the existing shared **DRONEREVOLUTION** Studio Edit session. Its seven managed Sources match the saved [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the sole canonical map/recovery snapshot. See project state before testing: the latest short Play was stopped at about 4.3 GB RAM.
+**Normal test entry** is the existing shared **DRONEREVOLUTION** Studio Edit session. The latest verified Team Create save is 222. Its seven managed Sources match `studio/` and [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the canonical map and recovery snapshot. See [project state](docs/PROJECT_STATE.md) for verification and publication status.
 
 **Existing shared Roblox game:** [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625), place **124078027733625**, universe **10774898335**. MideDibber has Playtest and Edit access, verified November 6, 2026. Publication of the latest local file to that game is **not yet verified**. GitHub updates do not publish Roblox.
 
@@ -20,16 +20,15 @@ Open this same repository in Codex and start with:
 
 The current candidate connects **mine Quartz → sell → buy a pack with one pick included → stack upgrades → prestige → grow your permanent fleet**:
 
-- A new player starts with one permanent drone and a 40-ore backpack.
-- Sell at the existing Converter pays spendable mineral currency immediately.
-- Both workshop counters open the same shop. Packs cost 20, 27, 36, 49, 66… Quartz. Their price includes one of three saved choices, with no payment at selection.
-- Rarity guarantees at least one upgrade of that tier. Legendary upgrades combine stronger effects; they still grant exactly one copy. Duplicates merge into 2×, 3×… with individual caps and no three-upgrade ownership restriction.
-- Buy another copy of any owned upgrade for 20, 34, 58, 98, 167… Quartz as its count rises. The shared pool has 13 upgrades covering power, ignition, capacity, yield, flight, automatic routing and nearby Prism damage.
-- First prestige requires 360 Quartz sold; spending keeps progress. Prestige clears the run build, adds a permanent mining drone and +25% base mining power, and keeps the existing fleet. New direct drone purchases are retired.
-- Rocks are cubic, snap smaller without spinning, and eject drops upward and outward. One drone type may work on a rock at a time.
-- Orbital Beacons and Scrap Capsules are stored consumables, placed deliberately through backpack pockets.
+- Crystal Run starts with three Laser Miners, Needler, Ballcaster, Vacuum and Compactor as permanent units, plus two run Emptiers. Existing saved fleets remain intact. The backpack starts with ten physical cargo slots.
+- Pin a square over crystals. Miners finish their cuts, release physical ore, and preserve the current deep-field hardness and distinct attacks. Raw cargo homes from nine studs after landing; Emptiers sell real parcels at the counter.
+- Buy a pack at the physical Pack Counter for 20, 27, 36, 49, 66… Quartz. Open the delivered crate and choose one of three saved upgrades; selection is included in the pack price. Repeat purchases stack eligible owned upgrades at increasing prices.
+- The first three prestige goals are **160, 400 and 1,000 Quartz sold**. Buying packs never reduces that progress. Later existing thresholds are retained. The beacon previews three distinct permanent choices before eligibility and favors unowned roles when available.
+- Prestige preserves the owned fleet, adds exactly one chosen permanent drone, and resets run cards, Stars, cargo and balances. The first three prestiges each add 50 percentage points of permanent base mining power; later prestiges add 25 points. Existing drone base traits and profile records are preserved.
+- A compact `Next drone` readout shows sale progress. The initial view faces Crystal Run, and hulls fade locally when they obscure the avatar. The existing map, attack effects, pack reveal and original drone movement remain in place.
+- Loose earned cargo receives bounded return-trip grace during depot visits, even with a partially filled bag. This uses the existing 180-second maximum rather than an unlimited stash.
 
-See [Quartz design and actual test evidence](docs/review/QUARTZ_POOL.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
+See [this progression pass and verification limits](docs/review/PROGRESSION_OVERHAUL.md), [historical Quartz design and test evidence](docs/review/QUARTZ_POOL.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
 
 ## Work on the same file
 
