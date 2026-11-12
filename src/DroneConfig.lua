@@ -335,6 +335,13 @@ local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readabl
    shell.Parent=glass
   end
   for i=1,4 do
+   if prototype and prototype:IsA('BasePart') then
+    local pyramid=prototype:Clone()
+    pyramid.Name=prefix..'Prism'..i
+    pyramid.Size=Vector3.one*.05;pyramid.CFrame=pose
+    pyramid.Color=RAMIEL_TINTS[1+i%3];pyramid.Parent=glass
+    continue
+   end
    for j,suffix in ipairs({'A','B'}) do
     local prism=Instance.new('WedgePart')
     prism.Name=prefix..'Prism'..i..suffix
@@ -372,8 +379,9 @@ function DroneConfig.ramielRig(model: Model)
    half.bands[j]={faces=faces,near=slice:FindFirstChild('NearFace'),far=slice:FindFirstChild('FarFace')}
   end
   for j=1,4 do
-   half.mirrors[j]={glass:FindFirstChild(prefix..'Prism'..j..'A') :: BasePart,
-    glass:FindFirstChild(prefix..'Prism'..j..'B') :: BasePart}
+   local name=prefix..'Prism'..j
+   half.mirrors[j]={glass:FindFirstChild(name..'A') :: BasePart,
+    glass:FindFirstChild(name..'B') :: BasePart,pyramid=glass:FindFirstChild(name)}
   end
   rig.halves[i]=half
  end
@@ -400,12 +408,12 @@ local RAMIEL_TRACKS={
   {20.67, .032,.47,.46,.43,181, .038,.45,.45,.43,-154},
   {20.89, .012,.48,.54,.50,198, .019,.46,.51,.48,-174},
   {21.18, .020,.48,.58,.54,213, .024,.47,.56,.52,-189},
-  {21.34, .030,.47,.64,.59,222, .027,.46,.61,.58,-200},
-  {21.55, .068,.52,.80,.75,244, .048,.49,.73,.69,-220},
-  {21.74, .14,.59,.81,.80,269, .11,.54,.83,.78,-242},
-  {22.05, .25,.71,.77,.77,288, .21,.66,.81,.81,-263},
-  {22.51, .33,.80,.75,.75,304, .29,.72,.79,.79,-280},
-  {22.95, .35,.81,.75,.75,304, .30,.73,.79,.79,-283},
+  {21.34, .031,.44,.63,.57,222, .025,.44,.59,.54,-200},
+  {21.55, .070,.40,.77,.72,244, .045,.44,.68,.62,-220},
+  {21.74, .13,.38,.85,.82,269, .098,.40,.81,.73,-242},
+  {22.05, .20,.43,.87,.87,288, .16,.42,.88,.86,-263},
+  {22.51, .25,.49,.85,.85,303, .22,.45,.90,.90,-280},
+  {22.95, .26,.50,.85,.85,304, .23,.46,.90,.90,-283},
  },
  { -- Shoulder
   {19.04, .24,.57,.76,.43,0, .24,.57,.76,.43,0},
@@ -420,11 +428,11 @@ local RAMIEL_TRACKS={
   {20.88, .33,.78,.54,.50,174, .34,.72,.50,.45,-156},
   {21.11, .34,.80,.53,.51,182, .35,.71,.50,.46,-163},
   {21.37, .38,.83,.49,.52,187, .31,.70,.54,.50,-179},
-  {21.54, .44,.86,.58,.55,222, .36,.76,.61,.57,-217},
-  {21.74, .52,.89,.67,.64,257, .45,.79,.69,.65,-253},
-  {22.05, .62,.95,.72,.72,314, .51,.84,.73,.73,-310},
-  {22.51, .66,.98,.76,.76,378, .55,.87,.76,.76,-358},
-  {22.95, .67,.99,.76,.76,394, .56,.88,.76,.76,-373},
+  {21.54, .44,.84,.58,.55,222, .34,.73,.57,.52,-208},
+  {21.74, .46,.80,.70,.65,257, .36,.72,.66,.60,-245},
+  {22.05, .45,.74,.78,.78,314, .39,.68,.75,.72,-303},
+  {22.51, .46,.72,.82,.82,378, .40,.66,.85,.85,-358},
+  {22.95, .46,.72,.82,.82,394, .41,.67,.85,.85,-373},
  },
  { -- End caps keep the far tips nearly fixed through the narrowest pose.
   {19.04, .57,1,.43,0,0, .57,1,.43,0,0},
@@ -436,10 +444,10 @@ local RAMIEL_TRACKS={
   {20.71, .85,1,.27,0,120, .84,1,.21,0,-115},
   {21.04, .87,1.05,.36,0,145, .86,1,.19,0,-145},
   {21.38, .93,1.08,.41,0,177, .88,1,.17,0,-171},
-  {21.68, .90,1.06,.35,0,205, .90,1,.15,0,-186},
-  {22.18, .92,1.16,.32,0,235, .90,1,.13,0,-212},
-  {22.51, .94,1.15,.33,0,256, .90,1.01,.19,0,-231},
-  {22.95, .95,1.16,.34,0,269, .90,1.02,.19,0,-242},
+  {21.68, .77,1.08,.35,0,205, .79,1,.27,0,-186},
+  {22.18, .68,1.16,.37,0,235, .62,1,.27,0,-212},
+  {22.51, .69,1.16,.38,0,256, .61,1,.28,0,-231},
+  {22.95, .69,1.16,.38,0,269, .61,1,.28,0,-242},
  },
 }
 
@@ -449,11 +457,12 @@ local RAMIEL_MIRRORS={
  -- clock, nearest, spacing, width, yaw
  {19.04, .015,0,.05,0}, {19.55,.023,.041,.09,10},
  {19.78,.052,.11,.15,56}, {20.00,.070,.20,.25,108},
- {20.27,.051,.18,.29,156}, {20.64,.023,.063,.16,218},
- {20.88,.018,.020,.095,250}, {21.45,.019,.021,.10,278},
- {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
- {22.55,.062,.088,.225,402}, {22.95,.074,.096,.25,432},
+ {20.27,.045,.16,.27,156}, {20.64,.018,.052,.13,218},
+ {20.88,.010,.016,.065,250}, {21.45,.013,.019,.075,278},
+ {21.73,.022,.034,.10,315}, {22.13,.045,.056,.165,370},
+ {22.55,.057,.068,.23,402}, {22.95,.061,.068,.24,432},
 }
+local RAMIEL_MIRROR_SIZES={.54,.79,1,.73}
 local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -518,18 +527,22 @@ local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerR
 end
 
 DroneConfig.RamielCloseTime=.76
+function DroneConfig.ramielCloseProgress(elapsed: number): number
+ local t=math.clamp(elapsed/DroneConfig.RamielCloseTime,0,1)
+ return t*t
+end
 function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?,hold: number?)
  local time=math.clamp(charge,0,1)
  local close=0
  local kick=0
  if recovery then
-  close=smootherstep((recovery-(hold or 2.55))/DroneConfig.RamielCloseTime)
+  close=DroneConfig.ramielCloseProgress(recovery-(hold or 2.55))
   if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
   time=1
  end
  local locked=smootherstep(time/.19)*(1-close)
  local radius=rig.scale*1.35
- local assembled=time<=.018 or close>=.998
+ local assembled=time<=.018 or close>=1
  local frame=pivot*CFrame.Angles(0,roll,0)
  if rig.closed and assembled~=rig.closedShown then
   rig.closedShown=assembled
@@ -586,20 +599,25 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
     local mirrorClock=clock-(j-1)*.039-(i-1)*.047
     local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
-    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
+    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*RAMIEL_MIRROR_SIZES[j]
     local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)-(j-1)*22*smoothstep((time-.07)/.23)
-    if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
+    if reduced then near=.061*simple;spacing=.068*simple;yaw=23*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
     local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016
     local side=math.max(.03,width*radius*(1-close))
     local tilt=lockedSlabs*(1-close)
-    local x=(j%2==0 and -.09 or .085)*radius*tilt
+    local x=(j%2==0 and -.035 or .032)*radius*tilt
     local pose=frame*CFrame.new(x,offset*sign*radius,kick*.38)
      *CFrame.Angles(math.rad((j%2==0 and -14 or 17)*tilt),math.rad(yaw*sign),math.rad((j-2)*8*tilt))
-    prism[1].Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
-    prism[2].Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
-    prism[1].CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
-    prism[2].CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
+    if prism.pyramid then
+     prism.pyramid.Size=Vector3.new(side,math.max(.023,side*.52),side)
+     prism.pyramid.CFrame=pose
+    else
+     prism[1].Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
+     prism[2].Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
+     prism[1].CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
+     prism[2].CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
+    end
    end
   end
  end

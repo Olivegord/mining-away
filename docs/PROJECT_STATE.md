@@ -11,8 +11,8 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `a5e0b03aa209e32016f0786770a63002ae0fc1e48c491535319da17f4873f44b` | Restores Ramiel's earlier slab animation and retains the solid flight hull and red cluster blast. |
-| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The owner has since loaded `7f71ce5` in Play. The new revision is staged on disk. Arrival and save in shared Edit remain pending. |
+| Native-file SHA-256 | `79e84878f0d93d712a307de6b4088f14d0b3f48a243b48fb69072f0fdaa537b8` | Includes Ramiel's outward slab growth, eight small pyramids and hard metallic latch. |
+| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The owner's current Play session matches `7f71ce5`. The new revision needs root verification, Script Sync and save in shared Edit. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,12 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — stagger Ramiel's slabs and give them a hard latch
+
+Frame steps from 19.17 through 23.83 showed an opening seam, a pinched column, a compact inward stack, then separate upper and lower sweeps into crossed slabs. The final separation reveals small pyramids above and below the flare. The first shot cuts to its impact, so the recovery follows the owner's direction. It accelerates across 0.76 seconds and stops at the solid hull with one spatial metallic thud. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
+The focused motion, beam, energy and workshop checks passed. Detached Studio geometry confirmed crossed slabs, eight native glass pyramids and the hull swap at the latch. The full gadget, special logistics and smooth animation suites stop at the same fixtures as the baseline. Gameplay appearance and sound balance remain unverified. Studio was already open on the owner's Play session at place **124078027733625**, universe **10774898335**. Source fingerprints matched `7f71ce5`, and the session was left running. Verify the three roots in shared Edit, export with `python3 tools/script_sync.py`, then confirm Source arrival and save. Reproduce the canonical refresh from `b4360f4` with `python3 tools/build.py --previous-commit b4360f4`. The refresh preserved the authored map and unrelated or backup Sources. This revision is unpublished.
 
 ## November 11 — restore Ramiel's earlier slab animation
 

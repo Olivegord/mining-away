@@ -182,7 +182,7 @@ local expanding,_,_,cornerAfter=sample(21.74)
 local wide,wideGap=sample(23.98)
 assert(narrow<idleWidth*.23 and narrowGap>1.25,'first separation did not pinch into a column')
 assert(tucked>narrow*2 and tuckedGap<.12,'bands did not race inward to pack around the core')
-assert(wide>tucked*1.30 and wideGap>.75,'wide shooting shape did not reopen around the core')
+assert(wide>tucked*1.30 and wideGap>.40*rig.scale*1.35,'wide shooting shape did not reopen around the core')
 assert(expanding>before*1.32 and cornerBefore.Unit:Dot(cornerAfter.Unit)<.75,
  'the final wave did not widen and sweep its corners around the axis')
 for _,half in ipairs(rig.halves) do
@@ -190,6 +190,9 @@ for _,half in ipairs(rig.halves) do
   local slab=half.bands[j].near
   assert(slab.Size.X>slab.Size.Z*1.28,'firing shell did not resolve into elongated slabs')
  end
+ local equator,shoulder=half.bands[1],half.bands[2]
+ assert(math.abs(rotate(equator.near.CFrame,Vector3.xAxis):Dot(rotate(shoulder.near.CFrame,Vector3.xAxis)))<.02,
+  'the slabs did not cross in the held pose')
  assert(#half.mirrors==4 and half.mirrors[4][2]:IsA('WedgePart'),'central jagged glass was lost')
 end
 local fired,firedGap=sample(23.98,0)
@@ -198,7 +201,11 @@ local _,kickGap=sample(23.98,.038)
 assert(kickGap>wideGap+.14,'discharge lost its short outward kick')
 local held,heldGap=sample(23.98,2.54)
 assert(math.abs(held-wide)<1e-6 and math.abs(heldGap-wideGap)<1e-6,'shape drifted during the beam')
-local returned,returnedGap=sample(23.98,2.55+DroneConfig.RamielCloseTime)
+local closeAt=2.55+DroneConfig.RamielCloseTime
+local _,firstGap=sample(23.98,2.55+1/60)
+local _,lastGap=sample(23.98,closeAt-1/60)
+assert(wideGap-firstGap<lastGap*.1 and lastGap>wideGap*.04,'the close must keep speed into the final frame')
+local returned,returnedGap=sample(23.98,closeAt)
 assert(math.abs(returned-idleWidth)<1e-6 and math.abs(returnedGap-idleGap)<1e-6,'recovery did not repack the octahedron')
 model:Destroy()
 print('PASS Ramiel pinches, packs inward, reopens, recoils, and holds the firing shape without swapping facets')
@@ -209,6 +216,16 @@ local shellRig=assert(DroneConfig.ramielRig(shellModel))
 assert(shellRig.closed.LocalTransparencyModifier==0 and shellRig.slices[1].LocalTransparencyModifier==1,'the closed travel hull shows panel seams')
 DroneConfig.poseRamiel(shellRig,pivot,aim,.6,nil,0,false)
 assert(shellRig.closed.LocalTransparencyModifier==1 and shellRig.slices[1].LocalTransparencyModifier==0,'the closed hull blocked the attack')
+DroneConfig.poseRamiel(shellRig,pivot,aim,1,nil,0,false)
+for _,half in ipairs(shellRig.halves) do
+ for _,mirror in ipairs(half.mirrors) do
+  local pyramid=mirror.pyramid
+  assert(pyramid and pyramid:IsA('BasePart') and pyramid.Size.X>pyramid.Size.Y
+   and pyramid.LocalTransparencyModifier==0,'the firing gap lost a faceted pyramid')
+ end
+end
+DroneConfig.poseRamiel(shellRig,pivot,aim,1,closeAt-1/144,0,false)
+assert(shellRig.closed.LocalTransparencyModifier==1,'the travel hull appeared before the latch')
 DroneConfig.poseRamiel(shellRig,pivot,nil,0,nil,0,false)
 assert(shellRig.closed.LocalTransparencyModifier==0 and shellRig.slices[1].LocalTransparencyModifier==1,'the travel hull did not close again')
 shellModel:Destroy();prototype:Destroy()

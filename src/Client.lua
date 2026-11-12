@@ -1209,6 +1209,7 @@ local function renderDrone(d,dt,now)
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
   *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
+ local ramielLatched=false
  local showRamiel=d.ramiel and (BeamVFX.near(visiblePose.Position,140) or not d.ramielNeutral)
  if showRamiel then
   local near=BeamVFX.near(visiblePose.Position,140)
@@ -1224,21 +1225,25 @@ local function renderDrone(d,dt,now)
    local contactAt=shot:GetAttribute('ContactAt')
    local fireAge=contactAt and now-contactAt
    hold=shot:GetAttribute('BeamHold') or DroneCatalog.Types.Ramiel.BeamHold
-   if age>=0 and (fireAge and fireAge<hold+DroneConfig.RamielCloseTime or not fireAge and age<impact+.29) then
+   local closeAt=contactAt and contactAt+hold+DroneConfig.RamielCloseTime
+   if age>=0 and (closeAt and now<closeAt or not closeAt and age<impact+.29) then
     aim=shot:GetAttribute('ContactPoint') or shot:GetAttribute('Position')
     charge=math.clamp(age/windup,0,1)
     recovery=fireAge and fireAge>=0 and fireAge or nil
     untilContact=recovery and -recovery or math.max(.034,impact-age)
     local settle=math.clamp((charge-.61)/.18,0,1)
     local steadyPose=CFrame.new(d.pos+Vector3.yAxis*d.visualLift)*CFrame.Angles(0,d.yaw,0)
-    visiblePose=visiblePose:Lerp(steadyPose,settle*settle*(3-2*settle))
+    steadyPose=visiblePose:Lerp(steadyPose,settle*settle*(3-2*settle))
     if recovery then
      if d.ramielFiringShot~=shot then
-      d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose
+      d.ramielFiringShot=shot;d.ramielFiringPose=steadyPose
      end
-     local close=math.clamp((recovery-hold)/DroneConfig.RamielCloseTime,0,1)
-     visiblePose=d.ramielFiringPose:Lerp(visiblePose,close^3*(10+close*(-15+6*close)))
+     visiblePose=d.ramielFiringPose:Lerp(visiblePose,DroneConfig.ramielCloseProgress(recovery-hold))
+    else
+     visiblePose=steadyPose
     end
+   elseif closeAt and now>=closeAt and now-closeAt<.16 and d.ramielFiringShot==shot then
+    ramielLatched=true
    end
   end
  end
@@ -1254,6 +1259,7 @@ local function renderDrone(d,dt,now)
    DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
    RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true,hold)
   end
+  if ramielLatched then soundscape:play('ramiel_latch',visiblePose.Position) end
   if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting
  end
