@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `5bf3a2db83dcffcc28ae6062a60ba25cc2cdfc0fa705fa7a08d9196225f9e402` | Mirrored Nomad scanner, fixed drop timing and the progression overhaul. |
-| Shared Studio Sources | Team Create save **222** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `e0ea836870c8ef6dbfbe7d0f60e7f45969682ab262ac144b1d2646bf692bf9c3` | Restored pre-teeth Nomad scanner, fixed drop timing and the progression overhaul. |
+| Shared Studio Sources | Team Create save **223** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's symmetrical scan, fixed drop timing and the progression overhaul in save **222**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's pre-teeth scan and fixed drop timing in save **223**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — restore Nomad's pre-teeth scanner
+
+The scanner uses the wing, ring and keel apertures from `44f061c`, at their original fitted scale and 38-stud projection height. The outer curtain measures 4.807 studs. Its aperture positions, foot rails, return rails, widths, stage changes and glow match the pre-teeth renderer. The patrol carries that layout through the field, and the payload still appears 1.8 seconds after the final filaments cut out.
+
+Detached Studio geometry matched 37 active aperture positions across the five full-curtain stages against the historical fitted model. The largest error was under 0.000004 studs. The geometry check and focused client and server tests verified the cutoff, drop and delayed shatter timing. A full gameplay session was not run. All seven managed Sources matched the canonical file after Team Create save **223**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit c6757ca`. This revision is unpublished.
 
 ## November 12 — balance Nomad's scanner and bring the drop into view sooner
 

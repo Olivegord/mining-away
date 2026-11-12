@@ -41,7 +41,7 @@ local function beam(parent,name,a,b,colors,alpha,faceCamera)
 end
 
 local function falloff(foot,middle,sky)
- return NumberSequence.new({NumberSequenceKeypoint.new(0,foot),NumberSequenceKeypoint.new(.34,middle),NumberSequenceKeypoint.new(.81,sky),NumberSequenceKeypoint.new(1,1)})
+ return NumberSequence.new({NumberSequenceKeypoint.new(0,foot),NumberSequenceKeypoint.new(.42,middle),NumberSequenceKeypoint.new(1,sky)})
 end
 local function fadeCurves(foot,middle,sky)
  local curves={}
@@ -106,39 +106,39 @@ local function newScanner(parent)
  local scan={folder=folder,panes={},seams={rail(folder,'Join'),rail(folder,'Join')}}
  for i=1,3 do
   local pane={sheet=scanLine(root,true),edges={},feet={},ends={}}
-  local returns=i==2 and 2 or 1 -- The middle bank can carry a return at each end.
-  for j=1,2+returns do pane.edges[j]=scanLine(root,false) end
-  for j=1,1+returns do pane.feet[j]=rail(folder,'FootRail') end
-  for j=1,2 do pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball) end
+  for j=1,3 do pane.edges[j]=scanLine(root,false) end
+  for j=1,2 do
+   pane.feet[j]=rail(folder,'FootRail')
+   pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball)
+  end
   scan.panes[i]=pane
  end
  return scan
 end
 
--- Fixed projector coordinates from the visible hull's last scanner rig.
--- The patrol only renders their lower, visible section above the quarry.
-local PROJECTOR_SCALE=3.725
-local SCAN_HEIGHT=48
+-- Original wing, ring and keel slits from 44f061c, measured at the fitted hull scale.
+-- The off-screen patrol carries this same layout over the field at its old visible height.
+local PROJECTOR_SCALE=1.4885967
+local SCAN_HEIGHT=38
 local ROCKET_REVEAL_HEIGHT=34
-local KEEL_OFFSET=3.575
+local KEEL_OFFSET=.96*PROJECTOR_SCALE
 local projectors={}
-local function mirror(point)
- return point and Vector3.new(-point.X,point.Y,point.Z)
-end
-local function projector(name,right,ax,ay,az,bx,bz,returnDepth)
+local function projector(name,ax,ay,az,bx,bz,returnDepth)
  local a=Vector3.new(ax,ay-.048,az)*PROJECTOR_SCALE
  local b=Vector3.new(bx,ay-.048,bz)*PROJECTOR_SCALE
  local delta=b-a
  local c=returnDepth and b+delta.Unit:Cross(VERTICAL)*(returnDepth*PROJECTOR_SCALE)
- local width=delta.Magnitude
- projectors[name]={a=a,b=b,c=c,d=not right and mirror(c) or nil,width=width,center=not right}
- if right then projectors[right]={a=mirror(a),b=mirror(b),c=mirror(c),width=width} end
+ projectors[name]={a=a,b=b,c=c,width=delta.Magnitude}
 end
-projector('OuterLeft','OuterRight',-.38,-.37,-.57,-1.34,-.38,-.20)
-projector('MidLeft','MidRight',-1.18,-.39,-.62,-.43,-.71,.22)
-projector('Bridge',nil,-.67,-.42,-.31,.67,-.31,.16)
-projector('RearLeft','RearRight',-1.18,-.34,-.14,-.43,-.23,.22)
-projector('KeelLeft','KeelRight',-.76,-.43,-.47,-.19,-.96)
+projector('OuterLeft',-1.23,-.14,.11,-4.42,.61,-.35)
+projector('OuterRight',1.23,-.14,.11,4.42,.61,-.35)
+projector('MidLeft',-3.85,-.17,.24,-1.17,-.12,.48)
+projector('Bridge',-1.22,-.18,.48,1.22,.48,.42)
+projector('MidRight',1.17,-.17,-.12,3.85,.24,-.48)
+projector('RearLeft',-3.85,-.17,.70,-1.17,.34,.48)
+projector('RearRight',1.17,-.17,.34,3.85,.70,-.48)
+projector('KeelLeft',-.76,-.43,-.47,-.19,-.96)
+projector('KeelRight',.76,-.43,-.47,.19,-.96)
 
 local OUTER={'OuterLeft','OuterRight'}
 local MIDDLE={'MidLeft','Bridge','MidRight'}
@@ -192,26 +192,21 @@ local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
   if mount and not stage.pins then
    if reduced then hideLine(pane.sheet)
    else paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84) end
-   paintLine(pane.edges[1],a,topA,across,mount.center and .060 or .052,mount.center and gain or gain*.9)
-   paintLine(pane.edges[2],b,topB,across,mount.center and .060 or .069,gain)
+   paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
+   paintLine(pane.edges[2],b,topB,across,.069,gain)
    paintRail(pane.feet[1],a,b,.062,gain*.87)
-   for j=3,#pane.edges do
-    local finish=j==3 and mount.c or mount.d
-    local edge,foot=pane.edges[j],pane.feet[j-1]
-    if finish then
-     local top=frame:PointToWorldSpace(finish)
-     local bottom=groundPoint(top,floor)
-     if reduced then hideLine(edge) else paintLine(edge,bottom,top,across,.035,gain*.70) end
-     paintRail(foot,j==3 and b or a,bottom,.048,gain*.72)
-    else hideLine(edge);hideRail(foot) end
-   end
+   local topC=mount.c and frame:PointToWorldSpace(mount.c)
+   local c=topC and groundPoint(topC,floor)
+   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
+   else hideLine(pane.edges[3]) end
+   if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
    pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
-   pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*(mount.center and .65 or .86)
+   pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*.86
   else
    hideLine(pane.sheet)
-   for _,edge in ipairs(pane.edges) do hideLine(edge) end
+   hideLine(pane.edges[1]);hideLine(pane.edges[3])
    if b and stage.pins then paintLine(pane.edges[2],b,topB,across,.043,gain*.67)
-   end
+   else hideLine(pane.edges[2]) end
    for _,foot in ipairs(pane.feet) do hideRail(foot) end
    for _,glint in ipairs(pane.ends) do glint.Transparency=1 end
   end
