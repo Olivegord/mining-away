@@ -237,7 +237,7 @@ function PackView:update(now)
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
  local camera=workspace.CurrentCamera
- local crateInReach=false
+ local crateInReach,openReady=false,false
  if folder then for _,source in ipairs(folder:GetChildren()) do
   local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier') or 1
   local owner=source:GetAttribute('Owner')==player.UserId
@@ -251,6 +251,7 @@ function PackView:update(now)
    if not record then record=createCrate(o.parent);self.records[source]=record end
    if prompt and not record.prompt then self:bindPrompt(record,source) end
    local enabled=eligible==true and not o.busy()
+   if prompt and enabled then openReady=true end
    if prompt and prompt.Enabled~=enabled then prompt.Enabled=enabled end
    if enabled and source:GetAttribute('HoldAt')==nil and record.completed and record.releaseAt and now-record.releaseAt>.3 then
     record.holdAt=nil;record.completed=false
@@ -278,6 +279,7 @@ function PackView:update(now)
    self:render(record,source,now,now-stamp,tier,progress,stage,holding)
   elseif prompt and prompt.Enabled then prompt.Enabled=false end
  end end
+ self.openReady=openReady
  local map=o.world:FindFirstChild('Map')
  if map and not self.counter then
   local station=map:FindFirstChild('PackStation',true)

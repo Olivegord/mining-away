@@ -114,7 +114,7 @@ function HUD.new(refs: any)
  self.cargo=frame(refs.resources,'CargoCounter',C.panel);plain(self.cargo)
  local name=text(self.cargo,'Caption',0,0,78,24,18,C.muted);name.Text='Backpack'
  refs.cargoText.Parent=self.cargo;refs.cargoText.TextColor3=C.text;refs.cargoText.TextWrapped=false;refs.cargoText.Font=Enum.Font.SourceSansBold
- refs.cargoText.TextXAlignment=Enum.TextXAlignment.Right
+ refs.cargoText.TextXAlignment=Enum.TextXAlignment.Right;refs.cargoText.TextTruncate=Enum.TextTruncate.AtEnd
  refs.cargoTrack.Visible=false
  self.battery=frame(refs.resources,'BatteryCounter',C.panel);plain(self.battery);self.battery.Visible=false
  text(self.battery,'Caption',0,0,78,24,18,C.muted).Text='Battery'
@@ -198,6 +198,11 @@ function HUD.firstCutHint(input: Enum.UserInputType, reachable: boolean): string
  if input.Name:match('^Gamepad') then return 'Pin crystals [RB]' end
  return 'Click crystals to pin'
 end
+function HUD.packHoldHint(input: Enum.UserInputType): string
+ if input==Enum.UserInputType.Touch then return 'Hold to open pack' end
+ if input.Name:match('^Gamepad') then return 'Hold X to open pack' end
+ return 'Hold E to open pack'
+end
 function HUD.needsFirstCutHint(profile: any, pinned: boolean): boolean
  local run=profile and profile.run
  if not run then return false end
@@ -228,7 +233,6 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  self.batteryValue.Text=activity.charging>0 and activity.charging..' charging' or activity.docking>0 and 'Docking' or charge..'%'
  self.batteryValue.TextColor3=activity.charging>0 and C.green or charge<25 and C.gold or C.text
  r.cargoText.Position=UDim2.fromOffset(78,0);r.cargoText.Size=UDim2.fromOffset(width-78,rowHeight);r.cargoText.TextSize=18
- r.cargoText.Text=r.cargoText.Text:gsub('^Backpack ',''):gsub(' / ','/')
  local backpack=Players.LocalPlayer:GetAttribute('BackpackUnits') or 0
  local capacity=Players.LocalPlayer:GetAttribute('BackpackCapacity') or 100
  local full=backpack>=capacity
@@ -239,7 +243,8 @@ function HUD:update(view: Vector2, world: Instance, fighting: boolean)
  local status=Players.LocalPlayer:GetAttribute('MA_SelectorStatus')
  local guidance
  if not fighting and status~='Paused' and world:GetAttribute('FieldToolsEnabled')==false then
-  guidance=HUD.nextStationHint(p,pinned,pinned and r.depotApproach(pin))
+  guidance=r.packReadyToOpen and r.packReadyToOpen() and HUD.packHoldHint(self.input)
+   or HUD.nextStationHint(p,pinned,pinned and r.depotApproach(pin))
   if not guidance and HUD.needsFirstCutHint(p,pinned) then
    guidance=HUD.firstCutHint(self.input,r.starterReachable())
   end

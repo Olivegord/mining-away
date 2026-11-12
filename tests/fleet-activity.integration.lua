@@ -31,6 +31,9 @@ assert(HUD.firstCutHint({Name='MouseMovement'},false)=='Follow the Crystal Run s
 assert(HUD.firstCutHint({Name='MouseMovement'},true)=='Click crystals to pin')
 assert(HUD.firstCutHint(Enum.UserInputType.Touch,true)=='Tap crystals to pin')
 assert(HUD.firstCutHint({Name='Gamepad1'},true)=='Pin crystals [RB]')
+assert(HUD.packHoldHint({Name='MouseMovement'})=='Hold E to open pack')
+assert(HUD.packHoldHint(Enum.UserInputType.Touch)=='Hold to open pack')
+assert(HUD.packHoldHint({Name='Gamepad1'})=='Hold X to open pack')
 profile.run.wallet.Quartz=9;profile.deliveryQuartz=10
 assert(HUD.nextStationHint(profile,true)==nil,'an insufficient shipment sent the player to the counter')
 profile.deliveryQuartz=11

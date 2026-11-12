@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `c0a6bec64355e40c918cba225d3b9875335fb298ce521408de4e5dddfeb3eb74` | Mining, gadget, field-tool and combat impact feedback. |
-| Shared Studio Sources | Team Create save **218** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `8e81231c69f8d5dcb3d1ff212c1c6d7056c0ab1079fc2e24f39a9b6afe3b7008` | Attack feedback, compact backpack count and contextual pack hold hint. |
+| Shared Studio Sources | Team Create save **219** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the attack feedback pass in save **218**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the attack feedback and HUD fixes in save **219**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — native starter-loop playtest and HUD fixes
+
+One fresh isolated Studio Play session used save **218**, revision `911c0a5`, a 1052 × 653 viewport, the normal nine-drone Quartz crew and zero initial upgrades. Using keyboard and mouse, the tester walked to Quartz, pinned two clusters, collected ore, received Emptier sales, bought the first earned pack at the counter, held E on the delivery, and installed Loose Seams for +2 Stars. On the first pin the first accepted hit arrived after 1.68 seconds, first break after 3.08 seconds, first pickup after 4.13 seconds, and first sale of one cargo after 19.51 seconds. A closer position at the second pin picked up three drops and funded the pack. The first-pin timing excludes the walk to Quartz. Studio returned to Edit after the run.
+
+The opening camera faced away from the Crystal Run approach, and nearby drone hulls obscured the avatar and some mining contacts at default zoom. At the first pin, loose ore accumulated outside pickup reach before the first shipment. The local instrumented client averaged about 16 render frames per second over 277 seconds and reported 5,956 MB near the end. This is a single Studio measurement. The original RockCrack asset `9119050085` reported an asset-type mismatch. Follow-up should prioritize the starting view, reading the ground contact through the crew, and getting the first visible cargo to the player or Emptier.
+
+The follow-up shortens the overlapping backpack value to a slot count and names the hold input when the pack crate is ready and in reach. Focused HUD checks and the bundled client compile passed. Studio Edit font measurements confirmed all three hold hints and the starter backpack count fit. No second Play session was started. All seven managed Sources matched the canonical file after Team Create save **219**. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 911c0a5`. This revision is unpublished. Late-game attacks, the installed card's effect on the next expedition, audio balance, and multiplayer remain unverified in this run.
 
 ## November 12 — give attacks distinct contact and finish cues
 

@@ -10818,7 +10818,7 @@ function PackView:update(now)
  local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local hum=player.Character and player.Character:FindFirstChildOfClass('Humanoid')
  local camera=workspace.CurrentCamera
- local crateInReach=false
+ local crateInReach,openReady=false,false
  if folder then for _,source in ipairs(folder:GetChildren()) do
   local stamp,tier=source:GetAttribute('DeliveryAt'),source:GetAttribute('Tier') or 1
   local owner=source:GetAttribute('Owner')==player.UserId
@@ -10832,6 +10832,7 @@ function PackView:update(now)
    if not record then record=createCrate(o.parent);self.records[source]=record end
    if prompt and not record.prompt then self:bindPrompt(record,source) end
    local enabled=eligible==true and not o.busy()
+   if prompt and enabled then openReady=true end
    if prompt and prompt.Enabled~=enabled then prompt.Enabled=enabled end
    if enabled and source:GetAttribute('HoldAt')==nil and record.completed and record.releaseAt and now-record.releaseAt>.3 then
     record.holdAt=nil;record.completed=false
@@ -10859,6 +10860,7 @@ function PackView:update(now)
    self:render(record,source,now,now-stamp,tier,progress,stage,holding)
   elseif prompt and prompt.Enabled then prompt.Enabled=false end
  end end
+ self.openReady=openReady
  local map=o.world:FindFirstChild('Map')
  if map and not self.counter then
   local station=map:FindFirstChild('PackStation',true)
@@ -13260,7 +13262,7 @@ local noticeUntil=0
 local menuStation=nil
 local hud=U.panel(safeRoot,UDim2.fromOffset(16,12),UDim2.fromOffset(290,64));hud.Name='Resources';hud.Active=true
 local saveLabel=label(safeRoot,UDim2.new(1,-188,0,12),UDim2.fromOffset(172,22),'',16,palette.muted,true);saveLabel.Name='SaveStatus';saveLabel.Visible=false;saveLabel.TextXAlignment=Enum.TextXAlignment.Right
-local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'Cargo 0 / 10 slots',11,palette.muted,true)
+local cargoText=label(hud,UDim2.fromOffset(50,34),UDim2.new(1,-158,0,18),'0/10',11,palette.muted,true)
 local cargoTrack=frame(hud,UDim2.fromOffset(50,53),UDim2.new(1,-164,0,4),palette.paper);corner(cargoTrack,2)
 local cargoFill=frame(cargoTrack,UDim2.fromScale(0,0),UDim2.fromScale(0,1),palette.mineral);corner(cargoFill,3)
 local toast=U.panel(safeRoot,UDim2.fromOffset(0,170),UDim2.fromOffset(420,50),palette.panel,12);toast.Name='Feedback';toast.ZIndex=80;toast.Visible=false
@@ -14612,6 +14614,7 @@ local enemyFill=frame(enemyHealth,UDim2.fromScale(0,0),UDim2.fromScale(1,1),pale
 enemyTitle.ZIndex=enemyFill.ZIndex+2
 local tacticalHUD=TacticalHUD.new({interface=U,root=safeRoot,gui=gui,modal=modal,recall=recall,unload=unload,test=testLoadout,evade=evade,resources=hud,context=context,enemy=enemyHUD,toast=toast,
  cargoText=cargoText,cargoTrack=cargoTrack,profile=function() return profile end,hidden=menusVisible,
+ packReadyToOpen=function() return packView.openReady end,
  starterReachable=function() return selectorView:canReachStarterPlot() end,
  depotApproach=function(pin)
   local character=player.Character
@@ -14833,7 +14836,7 @@ connect(RunService.Heartbeat,function(dt)
  saveLabel.TextColor3=status:find('preview') and Color3.fromRGB(255,211,96) or palette.muted
  if profile and profile.run then
   local amount=cargoUnits(profile);local capacity=profile.capacity or 10
-  cargoText.Text=string.format('Cargo %s / %s slots',comma(amount),comma(capacity))
+  cargoText.Text=string.format('%s/%s',comma(amount),comma(capacity))
   cargoFill.Size=UDim2.fromScale(math.clamp(amount/math.max(1,capacity),0,1),1)
   cargoFill.BackgroundColor3=amount>=capacity and palette.accent or palette.mineral
 
