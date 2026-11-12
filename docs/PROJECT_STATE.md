@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8e81231c69f8d5dcb3d1ff212c1c6d7056c0ab1079fc2e24f39a9b6afe3b7008` | Attack feedback, compact backpack count and contextual pack hold hint. |
-| Shared Studio Sources | Team Create save **219** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `f65fbb07db696e75e39ae85e16e3fd882342e497c85d85a9450beeeede1a296a` | Current offline progression candidate; authored map and unrelated Sources preserved. |
+| Shared Studio Sources | Last verified: Team Create save **219**, `d85e5eb` | This cloud candidate has **not** been verified in shared Edit; disk export is not native sync. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the attack feedback and HUD fixes in save **219**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | Last verified session loads save **219**. New candidate installation and seven-Source equality must be checked in shared Edit before owner testing. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — progression and collection overhaul, cloud candidate
+
+The opening prestige goals change from 360 / 917 / 1,586 to 160 / 400 / 1,000 verified Quartz sold. Spending still leaves that progress intact. Existing later goals never increase. Each of the first three prestiges adds 50 percentage points of permanent mining power, then 25 points per later prestige. Saved fleet identities, base traits, pending card payloads, currency and earned progress are preserved. The beacon previews all three permanent reward choices before eligibility; unowned roles have priority while choices remain distinct and stable for a run.
+
+Raw cargo now homes from nine studs after landing, up from five. Loose ore receives the existing bounded sale-trip grace during a depot visit with a partial bag. Route checks are cached once per player per second. The HUD adds one readonly `Next drone` progress row. A one-time initial camera pose faces Crystal Run after the standard camera update. Hulls between the camera and avatar fade locally; inspection restores their normal opacity. No attack choreography, map geometry, restock timing or starter ownership changed.
+
+The [review and reproducible checks](review/PROGRESSION_OVERHAUL.md) distinguish production controller tests with API doubles from engine evidence. The focused runner covers real worker mining and earned purchases/prestige, normal landing and collection, bounded depot grace, reconnect, pending-offer protection and permanent rewards. The legacy broad runners still have their recorded fixture failures. A prior production-controller model required 82.25 seconds of worker ticks for the opening loop; the updated model requires 40.05 seconds. Both supply station travel and are not player-time or enjoyment measurements.
+
+Canonical file: `build/DRONE_GAME.rbxl`, SHA-256 `f65fbb07db696e75e39ae85e16e3fd882342e497c85d85a9450beeeede1a296a`. All seven canonical Sources match the current disk export. The native refresh changes only managed Source values and preserves every non-Source chunk and unrelated/backup Source. Exact Git revision is stamped in `build/revision.json` by release packaging. Shared destination remains **DRONEREVOLUTION**, place **124078027733625**, universe **10774898335**. **Unpublished; shared Edit installation, live DataStore and final motion/mobile/multiplayer verification remain pending.** No Studio process or Studio tools were available in this cloud executor, and no native session was started or stopped. Other game chats were idle and were not woken. Save 219 is historical evidence, not proof that the next shared Play session contains this candidate.
 
 ## November 12 — native starter-loop playtest and HUD fixes
 
