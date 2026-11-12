@@ -731,7 +731,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.08,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -2334,7 +2334,7 @@ local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
- GEM_GRAVITY=122,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -2347,7 +2347,7 @@ function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
  -- Keep fragments in their usual pickup area with a higher, steeper arc.
  local speed=6.2+(serial%5)*.4
- return math.cos(angle)*speed,29+index*1.35,math.sin(angle)*speed
+ return math.cos(angle)*speed,35+index*1.55,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -2361,7 +2361,7 @@ end
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
  local speed=block and 5.3 or 7.3+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 45+(serial%4)*.8,math.sin(angle)*speed
+ return math.cos(angle)*speed,block and 16 or 55+(serial%4)*.8,math.sin(angle)*speed
 end
 -- The server and observer sample the same flight and exact point of contact.
 function O.rawArc(x,y,z,vx,vy,vz,floor)
@@ -2431,7 +2431,10 @@ function O.step(s,target,dt,attract,magnetRange)
  dt=math.min(dt,.05);s.age+=dt
  local dx,dy,dz=target.x-s.x,target.y-s.y,target.z-s.z
  local distance=math.sqrt(dx*dx+dy*dy+dz*dz)
- local collectAt=s.raw and math.max(.40,(s.firstLandedAge or 0)+.075) or O.SCATTER_TIME
+ local collectAt=s.raw and .40 or O.SCATTER_TIME
+ if s.arc or s.raw then
+  collectAt=math.max(collectAt,(s.firstLandedAge or 0)+(s.arc and O.GEM_CONTACT_HOLD or .075))
+ end
  local pulling=attract and s.landed==true and s.age>=collectAt and distance<=(magnetRange or O.MAGNET_RANGE)
  local oldX,oldY,oldZ=s.x,s.y,s.z
  local impactSpeed=0
@@ -4254,15 +4257,16 @@ end
 local RAMIEL_GLASS=Color3.fromRGB(24,78,200)
 local RAMIEL_RED=Color3.fromRGB(255,35,72)
 local RAMIEL_BANDS={
- {name='Equator',bottom=0,top=.24},
- {name='Shoulder',bottom=.24,top=.57},
- {name='Cap',bottom=.57,top=1},
+ {name='Equator',bottom=0,top=.24,near=.29,far=.51,width=.88,aspect=.73,delay=.50,yaw=56},
+ {name='Shoulder',bottom=.24,top=.57,near=.46,far=.73,width=.85,aspect=.66,delay=.39,yaw=146},
+ {name='Cap',bottom=.57,top=1,near=.72,far=1.12,width=.36,aspect=1,delay=.28,yaw=107},
 }
 local RAMIEL_TINTS={
  Color3.fromRGB(85,181,255),Color3.fromRGB(33,100,230),
  Color3.fromRGB(17,45,151),Color3.fromRGB(26,64,198),
 }
 local RAMIEL_SQUARE={Vector3.xAxis,Vector3.zAxis,-Vector3.xAxis,-Vector3.zAxis}
+local RAMIEL_SWEEPS=5
 
 local function ramielGlass(part)
  part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
@@ -4300,12 +4304,11 @@ function DroneConfig.prepareRamielHull(parent: Instance)
  hull.Name='RamielHull';hull.PivotOffset=CFrame.new();hull.Parent=parent
 end
 
--- Every slice uses the same facets at rest and throughout its morph.
--- Flat hidden end faces become visible when the diamond separates.
 local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readable: boolean)
  local radius=scale*1.35
- local prototype=game:GetService('ReplicatedStorage'):FindFirstChild('RamielHull')
- if prototype and prototype:IsA('BasePart') then
+ local asset=game:GetService('ReplicatedStorage'):FindFirstChild('RamielHull')
+ local prototype=asset and asset:IsA('BasePart') and asset or nil
+ if prototype then
   local hull=prototype:Clone()
   hull.Name='ClosedHull';hull.Size=prototype.Size*scale;hull.CFrame=pose;hull.Parent=glass
   if not readable then return end
@@ -4319,13 +4322,23 @@ local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readabl
   ramielWedges(pose:PointToWorldSpace(a*radius),pose:PointToWorldSpace(b*radius),pose:PointToWorldSpace(c*radius),left,right)
   left.Parent=parent;right.Parent=parent
  end
+ local closedFacets=nil
+ if not prototype then
+  closedFacets=Instance.new('Model');closedFacets.Name='ClosedFacets'
+  closedFacets.WorldPivot=pose;closedFacets.Parent=glass
+ end
  for _,sign in ipairs({1,-1}) do
   local prefix=sign==1 and 'Upper' or 'Lower'
-  if not readable then
+  if closedFacets then
    for i,edge in ipairs(RAMIEL_SQUARE) do
-    facet(glass,prefix..i,Vector3.yAxis*sign,edge,RAMIEL_SQUARE[i%4+1],RAMIEL_TINTS[i])
+    facet(closedFacets,prefix..i,Vector3.yAxis*sign,edge,RAMIEL_SQUARE[i%4+1],RAMIEL_TINTS[i])
    end
-   continue
+  end
+  if not readable then continue end
+  for i=1,RAMIEL_SWEEPS do
+   local slab=Instance.new('Part');slab.Name=prefix..'Sweep'..i
+   ramielGlass(slab);slab.Color=RAMIEL_TINTS[(i-1)%#RAMIEL_TINTS+1]
+   slab.Size=Vector3.one*.05;slab.CFrame=pose;slab.LocalTransparencyModifier=1;slab.Parent=glass
   end
   for _,band in ipairs(RAMIEL_BANDS) do
    local shell=Instance.new('Model');shell.Name=prefix..band.name;shell.WorldPivot=pose
@@ -4359,6 +4372,13 @@ local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readabl
    shell.Parent=glass
   end
   for i=1,4 do
+   if prototype then
+    local pyramid=prototype:Clone()
+    pyramid.Name=prefix..'Prism'..i
+    pyramid.Size=Vector3.one*.05;pyramid.CFrame=pose
+    pyramid.Color=RAMIEL_TINTS[1+i%3];pyramid.Parent=glass
+    continue
+   end
    for j,suffix in ipairs({'A','B'}) do
     local prism=Instance.new('WedgePart')
     prism.Name=prefix..'Prism'..i..suffix
@@ -4375,17 +4395,13 @@ end
 function DroneConfig.ramielRig(model: Model)
  local glass=model:FindFirstChild('RamielGlass')
  if not glass or not glass:FindFirstChild('UpperEquator') then return nil end
+ local closed=glass:FindFirstChild('ClosedHull')
+ local closedFacets=glass:FindFirstChild('ClosedFacets')
  local rig={halves={},core=glass:FindFirstChild('Core') :: BasePart,scale=model:GetScale(),
-  closed=glass:FindFirstChild('ClosedHull'),slices={}}
- if rig.closed then
-  for _,part in ipairs(glass:GetDescendants()) do
-   if part:IsA('BasePart') and part~=rig.closed and part~=rig.core then
-    rig.slices[#rig.slices+1]=part
-   end
-  end
- end
+  closed=closed,closedFacets=closedFacets,closedParts=closed and {closed} or closedFacets:GetChildren()}
  for i,prefix in ipairs({'Upper','Lower'}) do
-  local half={bands={},mirrors={}}
+  local half={bands={},mirrors={},sweeps={}}
+  for j=1,RAMIEL_SWEEPS do half.sweeps[j]=glass:FindFirstChild(prefix..'Sweep'..j) end
   for j,band in ipairs(RAMIEL_BANDS) do
    local slice=glass:FindFirstChild(prefix..band.name) :: Model
    local faces={}
@@ -4393,121 +4409,29 @@ function DroneConfig.ramielRig(model: Model)
     faces[k]={slice:FindFirstChild('Face'..k..'A'),slice:FindFirstChild('Face'..k..'B'),
      slice:FindFirstChild('Edge'..k..'A'),slice:FindFirstChild('Edge'..k..'B')}
    end
-   half.bands[j]={faces=faces,near=slice:FindFirstChild('NearFace'),far=slice:FindFirstChild('FarFace')}
+   half.bands[j]={faces=faces,near=slice:FindFirstChild('NearFace'),far=slice:FindFirstChild('FarFace'),parts=slice:GetChildren()}
   end
   for j=1,4 do
-   half.mirrors[j]={glass:FindFirstChild(prefix..'Prism'..j..'A') :: BasePart,
-    glass:FindFirstChild(prefix..'Prism'..j..'B') :: BasePart}
+   local name=prefix..'Prism'..j
+   local pyramid=glass:FindFirstChild(name)
+   local parts=pyramid and {pyramid} or {glass:FindFirstChild(name..'A'),glass:FindFirstChild(name..'B')}
+   half.mirrors[j]={pyramid=pyramid,parts=parts}
   end
   rig.halves[i]=half
  end
  return rig
 end
 
--- First attack in US5yoHbv-6Q. Time is the reference player's clock.
--- Each row gives the near edge, far edge, their radii, and unwrapped yaw
--- for the upper band followed by the lower band. Lengths use idle radius.
--- The widths pinch while the caps stay out, the inside bands run back
--- towards the core, then the shoulders expand on their own timing.
-local RAMIEL_START,RAMIEL_LOCK=19.04,23.98
-local RAMIEL_TRACKS={
- { -- Equator
-  {19.04, 0,.24,1,.76,0, 0,.24,1,.76,0},
-  {19.24, .025,.265,.986,.74,1, .012,.25,.99,.75,0},
-  {19.44, .10,.35,.90,.65,5, .075,.34,.94,.69,-4},
-  {19.57, .18,.42,.86,.59,15, .14,.39,.89,.60,-12},
-  {19.74, .41,.58,.45,.38,35, .32,.51,.55,.42,-31},
-  {19.94, .63,.72,.23,.22,67, .55,.66,.26,.24,-52},
-  {20.04, .56,.66,.19,.22,95, .48,.61,.21,.23,-69},
-  {20.24, .34,.52,.29,.32,127, .27,.48,.27,.33,-105},
-  {20.44, .13,.46,.37,.40,159, .10,.42,.35,.36,-132},
-  {20.67, .032,.47,.46,.43,181, .038,.45,.45,.43,-154},
-  {20.89, .012,.48,.54,.50,198, .019,.46,.51,.48,-174},
-  {21.18, .020,.48,.58,.54,213, .024,.47,.56,.52,-189},
-  {21.34, .030,.47,.64,.59,222, .027,.46,.61,.58,-200},
-  {21.55, .068,.52,.80,.75,244, .048,.49,.73,.69,-220},
-  {21.74, .14,.59,.81,.80,269, .11,.54,.83,.78,-242},
-  {22.05, .25,.71,.77,.77,288, .21,.66,.81,.81,-263},
-  {22.51, .33,.80,.75,.75,304, .29,.72,.79,.79,-280},
-  {22.95, .35,.81,.75,.75,304, .30,.73,.79,.79,-283},
- },
- { -- Shoulder
-  {19.04, .24,.57,.76,.43,0, .24,.57,.76,.43,0},
-  {19.40, .34,.62,.70,.41,4, .31,.61,.73,.42,-3},
-  {19.59, .48,.69,.59,.37,15, .42,.65,.66,.40,-12},
-  {19.74, .62,.78,.37,.31,31, .52,.70,.45,.34,-23},
-  {19.94, .70,.84,.23,.19,50, .67,.82,.26,.20,-43},
-  {20.08, .73,.88,.23,.20,77, .72,.85,.22,.20,-70},
-  {20.27, .63,.82,.29,.23,103, .62,.84,.29,.24,-92},
-  {20.47, .52,.75,.34,.33,137, .49,.77,.36,.32,-111},
-  {20.68, .38,.70,.47,.43,155, .35,.71,.45,.45,-138},
-  {20.88, .33,.78,.54,.50,174, .34,.72,.50,.45,-156},
-  {21.11, .34,.80,.53,.51,182, .35,.71,.50,.46,-163},
-  {21.37, .38,.83,.49,.52,187, .31,.70,.54,.50,-179},
-  {21.54, .44,.86,.58,.55,222, .36,.76,.61,.57,-217},
-  {21.74, .52,.89,.67,.64,257, .45,.79,.69,.65,-253},
-  {22.05, .62,.95,.72,.72,314, .51,.84,.73,.73,-310},
-  {22.51, .66,.98,.76,.76,378, .55,.87,.76,.76,-358},
-  {22.95, .67,.99,.76,.76,394, .56,.88,.76,.76,-373},
- },
- { -- End caps keep the far tips nearly fixed through the narrowest pose.
-  {19.04, .57,1,.43,0,0, .57,1,.43,0,0},
-  {19.44, .61,1,.39,0,4, .60,1,.42,0,-4},
-  {19.74, .73,1,.32,0,16, .67,1,.37,0,-19},
-  {20.00, .80,1,.26,0,43, .78,1,.25,0,-47},
-  {20.21, .80,1,.24,0,70, .80,1,.23,0,-70},
-  {20.44, .81,1,.26,0,93, .82,1,.23,0,-91},
-  {20.71, .85,1,.27,0,120, .84,1,.21,0,-115},
-  {21.04, .87,1.05,.36,0,145, .86,1,.19,0,-145},
-  {21.38, .93,1.08,.41,0,177, .88,1,.17,0,-171},
-  {21.68, .90,1.06,.35,0,205, .90,1,.15,0,-186},
-  {22.18, .92,1.16,.32,0,235, .90,1,.13,0,-212},
-  {22.51, .94,1.15,.33,0,256, .90,1.01,.19,0,-231},
-  {22.95, .95,1.16,.34,0,269, .90,1.02,.19,0,-242},
- },
-}
-
--- The tiny diamonds fan into a chain while the hull pinches, get packed
--- back into the bands, and reappear as the bands open for the shot.
-local RAMIEL_MIRRORS={
- -- clock, nearest, spacing, width, yaw
- {19.04, .015,0,.05,0}, {19.55,.023,.041,.09,10},
- {19.78,.052,.11,.15,56}, {20.00,.070,.20,.25,108},
- {20.27,.051,.18,.29,156}, {20.64,.023,.063,.16,218},
- {20.88,.018,.020,.095,250}, {21.45,.019,.021,.10,278},
- {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
- {22.55,.062,.088,.225,402}, {22.95,.074,.096,.25,432},
-}
-local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
+local RAMIEL_MIRROR_SIZES={.54,.79,1,.73}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
 local function smootherstep(t: number): number
  t=math.clamp(t,0,1);return t^3*(10+t*(-15+6*t))
 end
-local function ramielSlope(left: number,right: number): number
- if left*right<=0 then return 0 end
- return 2*left*right/(left+right)
-end
-local function ramielSample(track: {{number}},clock: number,channel: number): number
- if clock<=track[1][1] then return track[1][channel] end
- if clock>=track[#track][1] then return track[#track][channel] end
- local index=1
- while clock>track[index+1][1] do index+=1 end
- local a,b=track[index],track[index+1]
- local span=b[1]-a[1]
- local t=(clock-a[1])/span
- local delta=(b[channel]-a[channel])/span
- local before,after=track[index-1],track[index+2]
- local start=before and ramielSlope((a[channel]-before[channel])/(a[1]-before[1]),delta)*span or 0
- local finish=after and ramielSlope(delta,(after[channel]-b[channel])/(after[1]-b[1]))*span or 0
- local t2,t3=t*t,t*t*t
- return math.clamp((2*t3-3*t2+1)*a[channel]+(t3-2*t2+t)*start
-  +(-2*t3+3*t2)*b[channel]+(t3-t2)*finish,math.min(a[channel],b[channel]),math.max(a[channel],b[channel]))
-end
 
-local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerRadius,yaw,recoil,aspect)
- local transform=frame*CFrame.new(0,0,.54*recoil)*CFrame.Angles(0,math.rad(yaw),0)
+local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerRadius,yaw,aspect)
+ local transform=frame*CFrame.Angles(0,math.rad(yaw),0)
  local base=Vector3.yAxis*(near*sign*radius)
  local endPoint=Vector3.yAxis*(far*sign*radius)
  local inner=innerRadius*radius
@@ -4542,103 +4466,109 @@ local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerR
 end
 
 DroneConfig.RamielCloseTime=.76
+function DroneConfig.ramielCloseProgress(elapsed: number): number
+ local t=math.clamp(elapsed/DroneConfig.RamielCloseTime,0,1)
+ return t*t
+end
+local function fadeRamielPieces(group,opacity)
+ if group.opacity==opacity then return end
+ group.opacity=opacity
+ for _,part in ipairs(group.parts) do part.LocalTransparencyModifier=1-opacity end
+end
+
+local function poseRamielSweep(slab,frame,sign,radius,layer,progress)
+ -- Slabs are born near the aperture, move outward once, and vanish at full size.
+ local travel=progress^1.65
+ local angle=math.rad((layer-1)*43)
+ local offset=Vector3.new(math.cos(angle),0,math.sin(angle))*radius*.18*travel
+ local height=radius*(.035+(.93+(layer-1)*.055)*travel)
+ local width=radius*(.17+(1.03+(layer-1)*.095)*travel)
+ slab.Size=Vector3.new(width,radius*(.025+.11*travel),width*.72)
+ slab.CFrame=frame*CFrame.new(offset+Vector3.yAxis*(height*sign))
+  *CFrame.Angles(0,sign*(angle+1.85*travel),0)
+ slab.LocalTransparencyModifier=1-smoothstep(progress/.11)*(1-smoothstep((progress-.95)/.05))
+end
+
 function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?,hold: number?)
- local time=math.clamp(charge,0,1)
- local close=0
- local kick=0
- if recovery then
-  close=smootherstep((recovery-(hold or 2.55))/DroneConfig.RamielCloseTime)
-  if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
-  time=1
- end
- local locked=smootherstep(time/.19)*(1-close)
+ local time=recovery and 1 or math.clamp(charge,0,1)
+ local close=recovery and DroneConfig.ramielCloseProgress(recovery-(hold or 0)) or 0
  local radius=rig.scale*1.35
- local assembled=time<=.018 or close>=.998
  local frame=pivot*CFrame.Angles(0,roll,0)
- if rig.closed and assembled~=rig.closedShown then
-  rig.closedShown=assembled
-  rig.closed.LocalTransparencyModifier=assembled and 0 or 1
-  for _,part in ipairs(rig.slices) do part.LocalTransparencyModifier=assembled and 1 or 0 end
+ local assembled=time<=.025 or close>=1
+ local hullOpacity=assembled and 1 or 1-smoothstep((time-.025)/.085)
+ if rig.hullOpacity~=hullOpacity then
+  rig.hullOpacity=hullOpacity
+  for _,part in ipairs(rig.closedParts) do part.LocalTransparencyModifier=1-hullOpacity end
  end
- if assembled and rig.closed then
-  rig.closed.CFrame=frame
-  rig.core.Transparency=1
-  local light=rig.core:FindFirstChild('ApertureLight')
-  if light then light.Enabled=false end
-  rig.holding=false
-  return
- end
- if aim then
+ if rig.closed then rig.closed.CFrame=frame
+ elseif rig.closedFacets and hullOpacity>0 then rig.closedFacets:PivotTo(frame) end
+ if not assembled and aim then
   local heading=Vector3.new(aim.X,pivot.Position.Y,aim.Z)
-  if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
+  if (heading-pivot.Position).Magnitude>.01 then
+   local lock=smootherstep(time/.18)*(1-close)
+   frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),lock)
+  end
  end
- local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
- local lockedSlabs=smootherstep((clock-21.14)/1.34)
- local simple=smoothstep((time-.12)/.53)
- local gap=1
- local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
+ local shellOpacity=assembled and 0 or 1-smoothstep((close-.76)/.24)
  for i,half in ipairs(rig.halves) do
   local sign=i==1 and 1 or -1
-  local column=2+(i-1)*5
+  local lag=(i-1)*.024
+  for j,slab in ipairs(half.sweeps) do
+   local progress=(time-(.034+(j-1)*.112+lag))/.30
+   if not reduced and progress>0 and progress<1 then poseRamielSweep(slab,frame,sign,radius,j,progress)
+   elseif slab.LocalTransparencyModifier~=1 then slab.LocalTransparencyModifier=1 end
+  end
   for j,band in ipairs(half.bands) do
-   local track=RAMIEL_TRACKS[j]
-   local final=track[#track]
-   local function value(channel)
-    local idle=track[1][channel]
-    local sampled=reduced and idle+(final[channel]-idle)*simple or ramielSample(track,clock,channel)
-    return sampled+(idle-sampled)*close
-   end
-   local n,f=value(column),value(column+1)
-   if j==1 then gap=math.min(gap,n) end
-   if rebuild then
-    local push=kick*(.058-(j-1)*.012)
-    local slabStart=21.14+(j-1)*.14+(i-1)*.08
-    local slab=j<3 and smootherstep((clock-slabStart)/1.18)*(1-close) or 0
-    local inner=value(column+2)
-    local outer=value(column+3)
-    outer+=(inner-outer)*slab
-    local yaw=ramielSample(track,clock,column+4)
-    if reduced then yaw=((final[column+4]+180)%360-180)*simple end
-    if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    -- The corners sweep around the centerline as the horizontal radius grows.
-    poseRamielBand(band,frame,sign,radius,n+push,f+push,
-     inner,outer,yaw,kick,1-slab*(j==1 and .27 or .34))
+   local shape=RAMIEL_BANDS[j]
+   local phase=math.clamp((time-shape.delay-lag)/.35,0,1)
+   local opacity=smoothstep(phase/.23)*shellOpacity
+   fadeRamielPieces(band,opacity)
+   if opacity>0 then
+    local grow=smootherstep(phase)
+    local offset=close*.34
+    local near=.035+(shape.near-.035)*grow+offset
+    local far=.078+(shape.far-.078)*grow+offset
+    local width=(.10+(shape.width-.10)*grow)*(1+close*.13)
+    local yaw=shape.yaw-(reduced and 0 or 104*(1-grow))
+    poseRamielBand(band,frame,sign,radius,near,far,width,j==3 and 0 or width,sign*yaw,shape.aspect)
    end
   end
-  if rebuild then
-   for j,prism in ipairs(half.mirrors) do
-    local mirrorClock=clock-(j-1)*.039-(i-1)*.047
-    local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
-    local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
-    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
-    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)-(j-1)*22*smoothstep((time-.07)/.23)
-    if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
-    if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016
-    local side=math.max(.03,width*radius*(1-close))
-    local tilt=lockedSlabs*(1-close)
-    local x=(j%2==0 and -.09 or .085)*radius*tilt
-    local pose=frame*CFrame.new(x,offset*sign*radius,kick*.38)
-     *CFrame.Angles(math.rad((j%2==0 and -14 or 17)*tilt),math.rad(yaw*sign),math.rad((j-2)*8*tilt))
-    prism[1].Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
-    prism[2].Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
-    prism[1].CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
-    prism[2].CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
+  for j,prism in ipairs(half.mirrors) do
+   local phase=math.clamp((time-(.66+(j-1)*.035+lag))/.19,0,1)
+   local opacity=smoothstep(phase/.27)*shellOpacity
+   fadeRamielPieces(prism,opacity)
+   if opacity>0 then
+    local grow=smootherstep(phase)
+    local offset=(.026+(.044+(j-1)*.066)*grow+close*.24)*radius*sign
+    local side=math.max(.03,radius*.24*RAMIEL_MIRROR_SIZES[j]*(.15+.85*grow)*(1+close*.12))
+    local x=(j%2==0 and -.035 or .032)*radius*grow
+    local yaw=math.rad(sign*(50+j*23+(reduced and 0 or 84*grow)))
+    local pose=frame*CFrame.new(x,offset,0)*CFrame.Angles(0,yaw,math.rad((j-2)*8*grow))
+    if prism.pyramid then
+     prism.pyramid.Size=Vector3.new(side,math.max(.023,side*.52),side)
+     prism.pyramid.CFrame=pose
+    else
+     local top,bottom=prism.parts[1],prism.parts[2]
+     top.Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
+     bottom.Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
+     top.CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
+     bottom.CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
+    end
    end
   end
  end
- rig.holding=recovery~=nil and recovery>.29 and close<=0
  local energy=smootherstep((time-.45)/.55)
  if recovery then energy=(1-.65*smoothstep(recovery/.54))*(1-close) end
  if reduced then energy*=.45 end
- local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.12*smoothstep(gap/.26)+kick*.16))
+ local coreOpacity=(assembled and 0 or smoothstep((time-.085)/.16))*shellOpacity
+ local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.12*coreOpacity))
  rig.core.CFrame=aim and (aim-center).Magnitude>.01 and CFrame.lookAt(center,aim) or CFrame.new(center)
  rig.core.Size=Vector3.one*radius*(.062+.105*energy)
- rig.core.Transparency=1-smoothstep((gap-.013)/.14)*(.85+.15*energy)
+ rig.core.Transparency=1-coreOpacity*(.85+.15*energy)
  rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,218,240),energy^3*.86)
  local light=rig.core:FindFirstChild('ApertureLight')
  if light and light:IsA('PointLight') then
-  light.Enabled=energy>.15;light.Brightness=2.3*energy^2
+  light.Enabled=coreOpacity>0 and energy>.15;light.Brightness=2.3*energy^2
  end
 end
 

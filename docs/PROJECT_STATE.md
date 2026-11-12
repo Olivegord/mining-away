@@ -12,13 +12,13 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
 | Native-file SHA-256 | `c0941e79d24df4ac64f8d44388eda0099f0bf96954b6239ca1936597194d0cdd` | Includes Ramiel's one-way slab motion, short beam and stronger blast, plus the dropped gem correction. |
-| Shared Studio Sources | Last documented Team Create save **197**, `e1fe3a5` | The current Play session's client and drone configuration match `c54c84a`'s tracked bundles. The new revision needs root verification, Script Sync and save in shared Edit. |
+| Shared Studio Sources | Team Create save **202**, gameplay revision `a4d0bf2` | All seven managed Source fingerprints matched the canonical payload in shared Edit after the save. All three Script Sync roots reported `SyncedAsRoot`. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session** | Running client and drone configuration fingerprints match the tracked `c54c84a` bundles, which differ from the new canonical snapshot. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | The open shared document has the current Sources and is ready for a fresh Play session. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
@@ -30,7 +30,9 @@ Ten outgoing slabs appear near the aperture, grow as they travel away, then disa
 
 The integrated pickup change gives cut gems stronger reflections and seventeen bright glint dots. Gems fall faster, stop at the floor, play one deeper spatial clink and stay planted for 0.16 seconds before pickup.
 
-The focused geometry, beam, camera, cluster timing, pickup and workshop checks passed. Detached native Studio checks confirmed that slabs grow and move outward before disappearing, and that gems show their dots and emit one loaded landing cue. Full gameplay appearance and sound balance remain unverified. The broad gadget and audio suites stop at the same client inertia and sell-trip fixtures as the baseline. Studio was already open at place **124078027733625**, universe **10774898335**, and the owner's Play session was left running. Verify the shared Edit roots, then run `python3 tools/script_sync.py` and confirm native arrival and save. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit c54c84a`. The refresh preserved the authored map and unrelated or backup Sources. This revision is unpublished.
+The focused geometry, beam, camera, cluster timing, pickup and workshop checks passed. Detached native Studio checks confirmed that slabs grow and move outward before disappearing, and that gems show their dots and emit one loaded landing cue. Full gameplay appearance and sound balance remain unverified. The broad gadget and audio suites stop at the same client inertia and sell-trip fixtures as the baseline.
+
+The owner's earlier Play session used the prior scripts. After Studio returned to Edit at place **124078027733625**, universe **10774898335**, the three Script Sync roots and seven pre-install Source fingerprints matched the tracked export. Running `python3 tools/script_sync.py` updated the server controller, client controller and drone configuration in shared Edit. Studio returned a successful Team Create save at version **202**. A post-save check matched all seven Sources to the canonical payload and confirmed Edit mode. Reproduce the canonical refresh with `python3 tools/build.py --previous-commit c54c84a`. The refresh preserved the authored map and unrelated or backup Sources. This revision is unpublished.
 
 ## November 11 — stagger Ramiel's slabs and give them a hard latch
 
