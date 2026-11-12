@@ -150,12 +150,15 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  local sounds=#audio.calls
  local contact=born+r.arc.contact+PickupMotion.DELAY
  renderer:update(1/60,contact-.015)
- assert(#audio.calls==sounds and r.view.Position.Y>r.view.Size.Y*.5)
+ assert(#audio.calls==sounds and r.view.Position.Y>r.view.Size.Y*.5 and not r.displayRig)
  renderer:update(1/60,contact+.001)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
+ local display=assert(r.displayRig,'touchdown waited for a stationary packet before starting its effects')
+ assert(display.surface.Enabled and display.outline.Enabled and display.curves[1].Enabled)
+ assert(display.base.Position.X==r.arc.landX and display.base.Position.Z==r.arc.landZ)
  local ribbon=assert(r.ribbon)
  assert(not ribbon.trail.Enabled and ribbon.trail.Parent==r.view,'a clean gem arc deleted its trail on contact')
- local landed=r.view.CFrame
+ local landed=r.motionPose
  assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
  cargo:SetAttribute('Position',Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ))
  cargo:SetAttribute('Velocity',Vector3.zero);cargo:SetAttribute('SnapshotAt',contact-.07)
@@ -169,6 +172,10 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(r.ribbon==ribbon and ribbon.trail.Parent==r.view)
  renderer:update(1/60,contact+.31)
  assert(not r.ribbon and not ribbon.trail.Parent,'landing trail outlived its fade')
+ renderer:update(1/60,contact+.5)
+ local hoverHeight=r.view.Position.Y
+ renderer:update(1/60,contact+7)
+ assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one slow bob in 6.5 seconds')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
 check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()

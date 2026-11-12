@@ -11005,6 +11005,7 @@ local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 local DISPLAY_TAIL=.28
+local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/6.5,2*math.pi/14
 -- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
 local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
@@ -11351,10 +11352,12 @@ function V:update(dt,now)
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
     r.restUnits=r.units
    end
-   local hoverAge=r.landAge and age-r.landAge-(r.arc and OreDrops.GEM_CONTACT_HOLD or PickupMotion.SETTLE_TIME)
-   local onDisplay=resting and not seated and hoverAge>0
+   local landingAge=r.landAge and age-r.landAge
+   local hoverAge=landingAge and landingAge-(r.arc and 0 or PickupMotion.SETTLE_TIME)
+   local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
+   local hovering=(resting or arcLanded) and not seated and hoverAge>=0
    local wasHovering=r.hoverAlpha~=nil
-   if onDisplay then
+   if hovering then
     local t=math.clamp(hoverAge/.38,0,1)
     r.hoverAlpha=t*t*(3-2*t)
     r.hoverTime=reducedMotion and 0 or hoverAge
@@ -11363,32 +11366,35 @@ function V:update(dt,now)
     r.hoverAlpha*=math.exp(-math.min(dt,.1)*18)
     if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
    end
-   if newPose or onDisplay or wasHovering then
+   if newPose or hovering or wasHovering then
     local pose=r.motionPose
     if r.hoverAlpha then
      local t=r.hoverTime
-     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .12*math.sin(t*2.8+r.seed))
-     local yaw=(t*1.15+math.pi)%(2*math.pi)-math.pi
+     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .065*math.sin(t*HOVER_BOB_RATE+r.seed))
+     local yaw=(t*HOVER_TURN_RATE+math.pi)%(2*math.pi)-math.pi
      pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(.22*r.hoverAlpha,yaw*r.hoverAlpha,-.32*r.hoverAlpha)
     end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
-   if onDisplay and cameraPosition and (not r.expiresAt or now<r.expiresAt) then
-    local ground=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
+   local floor=arcLanded and r.arc.floor or latest.floor
+   if live and not seated and not pulling and landingAge and landingAge>=0 and floor and cameraPosition
+    and (not r.expiresAt or now<r.expiresAt) then
+    local ground=Vector3.new(r.pos.X,floor-.21,r.pos.Z)
     local distance=(ground-cameraPosition).Magnitude
     if distance<DISPLAY_RANGE then
      r.displayGround=ground
      -- Use the landing point to rank displays. A hovering pose must never
      -- move its glow and outline to another gem across adjacent render frames.
      r.displayDistance=distance-(r.displayRig and 2.5 or 0)
-     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-distance)/10,0,1)*opacity
+     -- Start the display on the same buffered contact frame as the clink.
+     local contactStrength=1-.8*math.exp(-landingAge*11)
+     r.displayStrength=contactStrength*math.clamp((DISPLAY_RANGE-distance)/10,0,1)*opacity
      table.insert(self.displayCandidates,r)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   local landingAge=r.arc and age-r.landAge
    local landingGlint=landingAge and landingAge<.24 and (live or r.collectAt)
-   if landingAge and landingAge>=0 and not reducedEffects and cameraPosition
+   if r.arc and landingAge>=0 and not reducedEffects and cameraPosition
     and (landingGlint or live and not seated and not pulling) then
     local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,glintStrength*distanceFade*opacity)

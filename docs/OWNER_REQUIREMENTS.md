@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — slow the ore hover and start effects at touchdown
+
+Slow the dropped ore's bobbing. Start its effects seamlessly as the ore hits the ground.
+
 ## November 11 follow-up — steady rocks, larger circles and complete effects
 
 Fix the rapid rock flicker. Make the ore's rising particles larger and keep them round. Let the drop's trail finish when it lands. Check nearby mining and pickup effects for abrupt cutoffs and let their visible tails finish.
