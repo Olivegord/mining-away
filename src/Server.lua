@@ -1709,7 +1709,7 @@ function scene.fireNomad(d,field,job)
  local spec=DroneCatalog.Types.Nomad
  local p=profiles[d.owner]
  if job~=d.nomadJob or job.field~=field or job.impacted or d.hp<=0
-  or not healthy(p) or now<job.startedAt+spec.Windup+spec.Flight or not playerCanMine(p,field) then return false end
+  or not healthy(p) or now-job.startedAt<job.windup+spec.Flight or not playerCanMine(p,field) then return false end
  local ignore={droneFolder,pickupFolder,p.player.Character}
  for _,rock in ipairs(field.resources) do ignore[#ignore+1]=rock.part end
  if not los(job.from,job.contact,field.part,ignore) then return false end
@@ -2399,7 +2399,9 @@ function scene.nomadStep(d,p,dt)
    local side=Vector3.new(d.pos.X-center.X,0,d.pos.Z-center.Z)
    side=side.Magnitude>1 and side.Unit or Vector3.xAxis
    release(d)
-   job={field=field,contact=contact,radius=radius,from=center,scanFrom=center+side*(radius+14)}
+   local distance=radius+14
+   job={field=field,contact=contact,radius=radius,from=center,scanFrom=center+side*distance,
+    windup=Feel.nomadWindup(distance,spec.ScanSpeed,spec.Windup)}
    d.nomadJob=job
    break
   end
@@ -2416,14 +2418,14 @@ function scene.nomadStep(d,p,dt)
   d.state='Travel';nomadTransit(d,job.scanFrom,dt)
   if (d.pos-job.scanFrom).Magnitude>1 then return end
   job.startedAt=now
-  job.projectile=RoleEffects.NomadPass(d.id,job,spec.Windup,spec.Flight)
+  job.projectile=RoleEffects.NomadPass(d.id,job,job.windup,spec.Flight)
   if not job.projectile then release(d);return end
  end
  local age=now-job.startedAt
  d.state='SpecialMine'
- d.pos=Feel.nomadPass(job.scanFrom,job.from,age/spec.Windup)
+ d.pos=Feel.nomadPass(job.scanFrom,job.from,age/job.windup)
  d.goal=d.pos;d.intentGoal=d.pos;d.velocity=Vector3.zero
- if age>=spec.Windup+spec.Flight then
+ if age>=job.windup+spec.Flight then
   if scene.fireNomad(d,field,job) then job.contactAt=now
   else d.nomadSearchAt=now+3;release(d) end
  end

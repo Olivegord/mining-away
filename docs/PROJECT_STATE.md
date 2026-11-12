@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `85c7f0fd18b77e86d485949e132a9efd09ab108c4da2b94678f3f5a7099dea80` | Instant rubble and Ramiel's charge aim and camera feedback. |
-| Shared Studio Sources | Team Create save **215** | All seven managed Sources matched the canonical file immediately before the confirmed save. |
+| Native-file SHA-256 | `ad6d83e448f2ef7ee2d3951d49d85e359a1017b40a4a3942f22069b8d383da99` | Nomad's restored scanner and slower visible approach. |
+| Shared Studio Sources | Team Create save **217** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load instant rubble and Ramiel's charge aim in save **215**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's restored scanner and slower approach in save **217**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — restore Nomad's fixed beam patterns and slow the sweep
+
+Nomad projects the old drone's outer, middle, rear, joined and keel banks from fixed offsets. Each curtain keeps its original width and vertical edges. The visible section fades out above the quarry. The visible sweep peaks at 9 studs per second, down from about 25 on a standard field. The server shares the longer timing with the scanner audio, final hold and strike.
+
+The Nomad client and server checks passed. A detached Studio Edit check measured a 3.65-stud outer curtain and verified vertical edges, bank counts and blackout. The broader gadget suite still hits its existing client-inertia fixture failure. Live gameplay and multiplayer remain untested. All seven managed Sources matched the canonical file after Team Create save **217** at place **124078027733625**, universe **10774898335**. Reproduce from the prior snapshot with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ed7e0ff`. This revision is unpublished.
 
 ## November 12 — snap the rubble into place and show Ramiel's aim
 

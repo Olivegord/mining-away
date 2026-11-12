@@ -733,7 +733,7 @@ local Catalog = {
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
   Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=.42,BlackPause=.08,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
-  Nomad = {Name='Nomad',Duration=0,Yield=1,Projectile='Nomad',Windup=6.40,Flight=1.44,StationHeight=420,BlastPause=.50,Cooldown=42,Color={101,194,255},Description='Patrols out of sight, sweeps blue curtains across your field and shatters its exposed crystals in one strike.'},
+  Nomad = {Name='Nomad',Duration=0,Yield=1,Projectile='Nomad',Windup=6.40,ScanSpeed=9,Flight=1.44,StationHeight=420,BlastPause=.50,Cooldown=42,Color={101,194,255},Description='Patrols out of sight, sweeps blue curtains across your field and shatters its exposed crystals in one strike.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -1772,9 +1772,15 @@ function F.nomadPatrol(center,altitude,slot,owner,now)
  return center+Vector3.new(680*math.cos(angle),altitude,565*math.sin(angle))
 end
 
+local NOMAD_SCAN_END=.72
+function F.nomadWindup(distance,maxScanSpeed,minimum)
+ -- Smoothstep peaks at 1.5 times the average speed during the moving phase.
+ return math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+end
+
 function F.nomadPass(from,to,q)
- if q>=.72 then return to end
- local t=math.clamp(q/.72,0,1)
+ if q>=NOMAD_SCAN_END then return to end
+ local t=math.clamp(q/NOMAD_SCAN_END,0,1)
  return from:Lerp(to,t*t*(3-2*t))
 end
 
@@ -9508,7 +9514,7 @@ function scene.fireNomad(d,field,job)
  local spec=DroneCatalog.Types.Nomad
  local p=profiles[d.owner]
  if job~=d.nomadJob or job.field~=field or job.impacted or d.hp<=0
-  or not healthy(p) or now<job.startedAt+spec.Windup+spec.Flight or not playerCanMine(p,field) then return false end
+  or not healthy(p) or now-job.startedAt<job.windup+spec.Flight or not playerCanMine(p,field) then return false end
  local ignore={droneFolder,pickupFolder,p.player.Character}
  for _,rock in ipairs(field.resources) do ignore[#ignore+1]=rock.part end
  if not los(job.from,job.contact,field.part,ignore) then return false end
@@ -10198,7 +10204,9 @@ function scene.nomadStep(d,p,dt)
    local side=Vector3.new(d.pos.X-center.X,0,d.pos.Z-center.Z)
    side=side.Magnitude>1 and side.Unit or Vector3.xAxis
    release(d)
-   job={field=field,contact=contact,radius=radius,from=center,scanFrom=center+side*(radius+14)}
+   local distance=radius+14
+   job={field=field,contact=contact,radius=radius,from=center,scanFrom=center+side*distance,
+    windup=Feel.nomadWindup(distance,spec.ScanSpeed,spec.Windup)}
    d.nomadJob=job
    break
   end
@@ -10215,14 +10223,14 @@ function scene.nomadStep(d,p,dt)
   d.state='Travel';nomadTransit(d,job.scanFrom,dt)
   if (d.pos-job.scanFrom).Magnitude>1 then return end
   job.startedAt=now
-  job.projectile=RoleEffects.NomadPass(d.id,job,spec.Windup,spec.Flight)
+  job.projectile=RoleEffects.NomadPass(d.id,job,job.windup,spec.Flight)
   if not job.projectile then release(d);return end
  end
  local age=now-job.startedAt
  d.state='SpecialMine'
- d.pos=Feel.nomadPass(job.scanFrom,job.from,age/spec.Windup)
+ d.pos=Feel.nomadPass(job.scanFrom,job.from,age/job.windup)
  d.goal=d.pos;d.intentGoal=d.pos;d.velocity=Vector3.zero
- if age>=spec.Windup+spec.Flight then
+ if age>=job.windup+spec.Flight then
   if scene.fireNomad(d,field,job) then job.contactAt=now
   else d.nomadSearchAt=now+3;release(d) end
  end

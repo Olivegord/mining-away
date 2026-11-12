@@ -146,9 +146,15 @@ function F.nomadPatrol(center,altitude,slot,owner,now)
  return center+Vector3.new(680*math.cos(angle),altitude,565*math.sin(angle))
 end
 
+local NOMAD_SCAN_END=.72
+function F.nomadWindup(distance,maxScanSpeed,minimum)
+ -- Smoothstep peaks at 1.5 times the average speed during the moving phase.
+ return math.max(minimum,1.5*distance/(NOMAD_SCAN_END*maxScanSpeed))
+end
+
 function F.nomadPass(from,to,q)
- if q>=.72 then return to end
- local t=math.clamp(q/.72,0,1)
+ if q>=NOMAD_SCAN_END then return to end
+ local t=math.clamp(q/NOMAD_SCAN_END,0,1)
  return from:Lerp(to,t*t*(3-2*t))
 end
 

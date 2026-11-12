@@ -55,6 +55,14 @@ local function checkNomad()
  assert((job.scanFrom-job.from).Magnitude>job.radius and receipt:GetAttribute('ScanFrom')==job.scanFrom)
  assert((Feel.nomadPass(job.scanFrom,job.from,.36)-job.from).Magnitude>10)
  assert(Feel.nomadPass(job.scanFrom,job.from,.72)==job.from)
+ assert(job.windup>17 and receipt:GetAttribute('Windup')==job.windup)
+ local step=1/60
+ local previous=job.scanFrom
+ for i=1,math.ceil(job.windup/step) do
+  local point=Feel.nomadPass(job.scanFrom,job.from,i*step/job.windup)
+  assert((point-previous).Magnitude/step<=spec.ScanSpeed+.01,'Nomad passed the field too fast')
+  previous=point
+ end
  local barrier=Instance.new('Part');barrier.Parent=workspace
  local pathBlocked=true
  function workspace:Raycast(from,delta)
@@ -74,6 +82,8 @@ local function checkNomad()
  setMotionPaused(p,false)
  assert(receipt:GetAttribute('PausedAt')==0 and receipt:GetAttribute('StartedAt')==job.startedAt)
  now=job.startedAt+spec.Windup+spec.Flight+.01
+ assert(not scene.fireNomad(d,field,job),'Nomad struck before the slower approach finished')
+ now=job.startedAt+job.windup+spec.Flight+.01
  assert(not scene.fireNomad(d,field,job) and not exposed[1].paid,'obstruction did not stop the strike')
  pathBlocked=false
  p.busy=true

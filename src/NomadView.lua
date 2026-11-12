@@ -41,7 +41,7 @@ local function beam(parent,name,a,b,colors,alpha,faceCamera)
 end
 
 local function falloff(foot,middle,sky)
- return NumberSequence.new({NumberSequenceKeypoint.new(0,foot),NumberSequenceKeypoint.new(.09,middle),NumberSequenceKeypoint.new(.38,sky),NumberSequenceKeypoint.new(1,1)})
+ return NumberSequence.new({NumberSequenceKeypoint.new(0,foot),NumberSequenceKeypoint.new(.34,middle),NumberSequenceKeypoint.new(.81,sky),NumberSequenceKeypoint.new(1,1)})
 end
 local function fadeCurves(foot,middle,sky)
  local curves={}
@@ -107,25 +107,51 @@ local function newScanner(parent)
  scan.glint=part(folder,'ReleaseGlint',GOLD,Vector3.one*.8,Enum.PartType.Ball)
  for i=1,3 do
   local pane={sheet=scanLine(root,true),edges={},feet={},ends={}}
-  for j=1,3 do
-   pane.edges[j]=scanLine(root,false)
+  for j=1,3 do pane.edges[j]=scanLine(root,false) end
+  for j=1,2 do
    pane.feet[j]=rail(folder,'FootRail')
+   pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball)
   end
-  for j=1,2 do pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.24,Enum.PartType.Ball) end
   scan.panes[i]=pane
  end
  return scan
 end
 
--- The original broad rake, stagger and diagonal silhouettes. Each row is a
--- separate arrangement with fixed widths. Only the whole pass moves.
+-- Fixed projector coordinates from the visible hull's last scanner rig.
+-- The patrol only renders their lower, visible section above the quarry.
+local PROJECTOR_SCALE=3.725
+local SCAN_HEIGHT=48
+local KEEL_OFFSET=3.575
+local projectors={}
+local function projector(name,ax,ay,az,bx,bz,returnDepth)
+ local a=Vector3.new(ax,ay-.048,az)*PROJECTOR_SCALE
+ local b=Vector3.new(bx,ay-.048,bz)*PROJECTOR_SCALE
+ local delta=b-a
+ local c=returnDepth and b+delta.Unit:Cross(VERTICAL)*(returnDepth*PROJECTOR_SCALE)
+ projectors[name]={a=a,b=b,c=c,width=delta.Magnitude}
+end
+projector('OuterLeft',-.38,-.37,-.57,-1.34,-.38,-.20)
+projector('OuterRight',.38,-.37,-.57,1.34,-.38,-.20)
+projector('MidLeft',-1.18,-.39,-.62,-.43,-.71,.22)
+projector('Bridge',-.67,-.42,-.31,.67,-.31,.16)
+projector('MidRight',.43,-.39,-.71,1.18,-.62,-.22)
+projector('RearLeft',-1.18,-.34,-.14,-.43,-.23,.22)
+projector('RearRight',.43,-.34,-.23,1.18,-.14,-.22)
+projector('KeelLeft',-.76,-.43,-.47,-.19,-.96)
+projector('KeelRight',.76,-.43,-.47,.19,-.96)
+
+local OUTER={'OuterLeft','OuterRight'}
+local MIDDLE={'MidLeft','Bridge','MidRight'}
+local REAR={'RearLeft','Bridge','RearRight'}
+local JOINED={'OuterLeft','Bridge','OuterRight'}
+local KEEL={'KeelLeft','KeelRight'}
 local SCAN_STAGES={
- {at=0,angle=-.47,width=8.1,stagger=2.2,pitch=.64,gain=.64},
- {at=.269,angle=.16,width=8.1,stagger=2.1,pitch=.82,gain=.82},
- {at=.335,angle=.46,width=7.5,stagger=1.9,pitch=.70,gain=.70},
- {at=.470,angle=.94,width=6.7,stagger=1.55,pitch=1.04,gain=.90},
- {at=.592,angle=1.38,width=3.0,stagger=.81,pitch=1.21,gain=1},
- {at=.729,angle=1.38,width=3.0,stagger=.81,pitch=1.34,gain=.31,pins=true},
+ {at=0,banks=OUTER,pitch=.64,gain=.64},
+ {at=.269,banks=MIDDLE,pitch=.82,gain=.82},
+ {at=.335,banks=REAR,pitch=.70,gain=.70},
+ {at=.470,banks=JOINED,pitch=1.04,gain=.90},
+ {at=.592,banks=KEEL,pitch=1.21,gain=1},
+ {at=.729,banks=KEEL,pitch=1.34,gain=.31,pins=true},
  {at=.773},
  {at=.916,release=true},
 }
@@ -145,51 +171,49 @@ local function hideRail(line)
  line.core.Transparency=1;line.halo.Transparency=1
 end
 
-local function drawScanner(scan,stage,center,bearing,ground,radius,reduced,lowFlash)
- local scale=math.clamp(radius/19,1,3.2)
- local across=VERTICAL:Cross(bearing)
- local along=stage.width and across*math.cos(stage.angle)+bearing*math.sin(stage.angle) or across
- local normal=VERTICAL:Cross(along)
- local width=(stage.width or 0)*scale
- local gain=lowFlash and .72 or 1
+local function groundPoint(top,height)
+ return Vector3.new(top.X,height,top.Z)
+end
+
+local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
+ local virtualHull=groundPoint(center,ground+SCAN_HEIGHT)-bearing*KEEL_OFFSET
+ local frame=CFrame.lookAt(virtualHull,virtualHull+bearing)
+ local floor=ground+.065
+ local gain=lowFlash and .68 or 1
  local previous
  for i,pane in ipairs(scan.panes) do
-  local index=i-2
-  local active=stage.width and (not stage.pins or i~=2)
-  local top=center+along*(index*(width+.4*scale))+normal*(index*(stage.stagger or 0)*scale)
-  local topA=top-along*(width*.5)
-  local topB=top+along*(width*.5)
-  local footA=Vector3.new(topA.X,ground+.09,topA.Z)
-  local footB=Vector3.new(topB.X,ground+.09,topB.Z)
-  local edgeScale=math.sqrt(scale)
-  if active and not stage.pins then
-   local foot=(footA+footB)*.5
-   local returnOffset=normal*math.min(2.7,width*.28)
+  local mount=stage.banks and projectors[stage.banks[i]]
+  local a,b,c,topA,topB,topC,across
+  if mount then
+   topA,topB=frame:PointToWorldSpace(mount.a),frame:PointToWorldSpace(mount.b)
+   a,b=groundPoint(topA,floor),groundPoint(topB,floor)
+   across=(b-a).Unit
+   if mount.c then topC=frame:PointToWorldSpace(mount.c);c=groundPoint(topC,floor) end
+  end
+  if mount and not stage.pins then
    if reduced then hideLine(pane.sheet)
-   else paintLine(pane.sheet,foot,top,along,width,gain*.88) end
-   paintLine(pane.edges[1],footA,topA,along,.088*edgeScale,gain*.93)
-   paintLine(pane.edges[2],footB,topB,along,.133*edgeScale,gain)
-   if reduced then hideLine(pane.edges[3])
-   else paintLine(pane.edges[3],footB-returnOffset,topB-returnOffset,along,.055*edgeScale,gain*.72) end
-   paintRail(pane.feet[1],footA,footB,.09*edgeScale,gain*.91)
-   paintRail(pane.feet[2],footA,footA+returnOffset,.06*edgeScale,gain*.65)
-   paintRail(pane.feet[3],footB,footB-returnOffset,.074*edgeScale,gain*.79)
-   pane.ends[1].Position=footA;pane.ends[1].Transparency=1-gain*.65
-   pane.ends[2].Position=footB;pane.ends[2].Transparency=1-gain*.87
+   else paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84) end
+   paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
+   paintLine(pane.edges[2],b,topB,across,.069,gain)
+   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
+   else hideLine(pane.edges[3]) end
+   paintRail(pane.feet[1],a,b,.062,gain*.87)
+   if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
+   pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
+   pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*.86
   else
    hideLine(pane.sheet);hideLine(pane.edges[1]);hideLine(pane.edges[3])
-   if active then
-    local foot,sky=i==1 and footB or footA,i==1 and topB or topA
-    paintLine(pane.edges[2],foot,sky,along,.080*edgeScale,gain*.75)
+   if b and stage.pins then paintLine(pane.edges[2],b,topB,across,.043,gain*.67)
    else hideLine(pane.edges[2]) end
-   for _,line in ipairs(pane.feet) do hideRail(line) end
+   for _,foot in ipairs(pane.feet) do hideRail(foot) end
    for _,glint in ipairs(pane.ends) do glint.Transparency=1 end
   end
   if i>1 then
-   if active and previous and not stage.pins then paintRail(scan.seams[i-1],previous,footA,.071*edgeScale,gain*.62)
-   else hideRail(scan.seams[i-1]) end
+   local seam=scan.seams[i-1]
+   if a and previous and stage.banks==JOINED then paintRail(seam,previous,a,.046,gain*.60)
+   else hideRail(seam) end
   end
-  previous=footB
+  previous=i==1 and a or b
  end
 end
 
@@ -373,18 +397,18 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   local soundPoint=Vector3.new(center.X,to.Y+5,center.Z)
   r.scan=r.scan or newScanner(camera)
   if r.scan then
-   drawScanner(r.scan,stage,center,bearing,to.Y,radius,reduced,lowFlash)
+   drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash)
    r.scan.glint.Position=from
    local rise=stage.release and smooth((q-stage.at)/.026) or 0
    r.scan.glint.Transparency=1-(lowFlash and .35 or .82)*rise
   end
   if audio and index~=r.stage and not paused and (q-stage.at)*windup<.16 then
-   if stage.width then audio:play('nomad_scan_cut',soundPoint,{level=index==1 and 1.1 or .83,pitch=stage.pitch})
+   if stage.banks then audio:play('nomad_scan_cut',soundPoint,{level=index==1 and 1.1 or .83,pitch=stage.pitch})
    elseif stage.release then audio:play('nomad_release',to+VERTICAL*18)
    else audio:play('nomad_scan_off',soundPoint) end
   end
   r.stage=index
-  if audio and audio.setLoop and stage.width and not paused then
+  if audio and audio.setLoop and stage.banks and not paused then
    local pulse=math.sin(age*math.pi*2*6)
    audio:setLoop(node,'nomad_scan',soundPoint,stage.gain*(.86+.14*pulse),stage.pitch*(1+.045*pulse))
   elseif audio and audio.stopLoop then audio:stopLoop(node,true) end
