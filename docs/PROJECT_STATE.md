@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b093cd7181cedd62a3de374f97f043c04b004889775046dea49bf22bb66dc0e8` | Includes Ramiel's crossed glass, spinning star, white release and ground scorch. |
-| Shared Studio Sources | Last verified Team Create save **194**, `50ad5ae` | The active Play client has since loaded `525d899`. The new Sources are staged on disk. Shared Edit arrival and save are pending. |
+| Native-file SHA-256 | `4bc35cfff7fc217ca87195cffe143a87cb8096f305c8818b2d8ba10626f03ad0` | Includes Ramiel's outward sweep, overlapping charge and sustained clear shot. |
+| Shared Studio Sources | Team Create save **197** | All seven Sources matched the canonical file at the three connected Script Sync roots before the save. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `525d899`** | The active client and shared drone configuration hashes matched the three-wave and piercing-heat revision. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | Starting a fresh Play session uses the updated Sources. No new Play session was started for this pass. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — sweep Ramiel's glass outward and sustain the clear beam
+
+Frame steps from 19.3–22.8 showed the layers tightening, then sweeping out and widening before the crossed slabs settled. The production rig now gives each layer a staggered horizontal arc and a separately eased swell. The charge star and inward motes appear while the glass is still moving. The larger four-point flare triggers a lighting wash that falls off over 0.82 seconds. The 2.55-second shot keeps an unobstructed thin red core, level camera shake, rumble, contact light and sparks. The glass cylinder was removed and confirmed ground hits still leave scorch marks. Each volley still applies its damage at one confirmed contact. [First attack reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=20)
+
+A detached native fixture measured the upper slab at 8.02 studs during the sweep and 5.41 after settling, with travel on both horizontal axes and a stable firing pose through 2.54 seconds. Focused contact-clock, energy, beam and server-path checks passed. Broader gadget and audio suites still stop at the existing client inertia and foreign-pickup fixtures. The updated source hashes matched all three roots in shared Edit at place **124078027733625**, universe **10774898335**. Team Create save **197** succeeded. Full in-game appearance and sound balance remain unverified. Reproduce the canonical refresh from `7287320` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 7287320`. The refresh preserved all non-Source chunks and unrelated or backup Sources. This revision is unpublished.
 
 ## November 11 — settle Ramiel's glass and light the star release
 

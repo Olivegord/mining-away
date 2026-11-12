@@ -1050,7 +1050,7 @@ function P:prismPressure(from,to,at,duration)
  local travel=to-from
  local along=math.clamp((listener-from):Dot(travel)/math.max(.001,travel:Dot(travel)),0,1)
  local distance=(listener-(from+travel*along)).Magnitude
- local weight=math.clamp(1-distance/52,0,1)^2
+ local weight=math.clamp((68-distance)/55,0,1)^1.3
  local previous=self.prismShake
  if weight>.01 and (not previous or at>=previous.at+previous.duration or weight>=previous.weight) then
   self.prismShake={at=at,duration=duration,weight=weight}
@@ -1065,10 +1065,11 @@ function P:cameraOffset(now)
   local t=now-prism.at
   if t>=prism.duration then self.prismShake=nil
   elseif t>=0 then
-   local attack=math.clamp(t/.035,0,1)
-   local decay=math.clamp((prism.duration-t)/.20,0,1)
-   local amount=attack*decay*prism.weight*(.046+.068*math.exp(-t*9))
-   ordinary*=CFrame.new(math.sin(t*45)*amount,math.sin(t*33+.4)*amount*.48,math.sin(t*24)*amount*.20)
+   local attack=1-(1-math.clamp(t/.072,0,1))^3
+   local cutoff=math.clamp((prism.duration-t)/.18,0,1)
+   local pressure=.083+.015*math.sin(t*7)+.063*math.exp(-t*5)
+   local amount=attack*cutoff*prism.weight*pressure
+   ordinary*=CFrame.new(math.sin(t*37)*amount,math.sin(t*29+.4)*amount*.52,math.sin(t*21)*amount*.22)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)

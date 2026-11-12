@@ -18,7 +18,7 @@ local function animate(value,duration,style,direction,properties)
  local initial={};for key in pairs(properties) do initial[key]=value[key] end
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
 end
-local heatBeds=0
+local prismSpills=0
 local scorchTimelines={}
 local scorchCount=0
 local function prismPart(parent,name)
@@ -27,45 +27,47 @@ local function prismPart(parent,name)
  part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Transparency=1;part.Parent=parent
  return part
 end
-local function prismHeat(parent,from,to,color,groundNormal)
- if heatBeds>=4 or BeamVFX.reduced() then return nil end
- local delta=to-from
- if delta.Magnitude<.5 then return nil end
- local axis=delta.Unit
- -- Only a confirmed upward-facing ground hit gets the long buried end.
- local reach=delta.Magnitude+(groundNormal and 32 or .85)
- local center=from+axis*(reach*.5)
- local cylinder=prismPart(parent,'PrismHeat')
- cylinder.Shape=Enum.PartType.Cylinder;cylinder.Material=Enum.Material.Glass
- cylinder.Size=Vector3.new(reach,7.4,7.4)
- cylinder.Color=Color3.fromRGB(251,235,242)
- cylinder.CFrame=CFrame.lookAt(center,center+axis)*CFrame.Angles(0,math.pi*.5,0)
- heatBeds+=1
- cylinder.Destroying:Connect(function() heatBeds-=1 end)
+local function prismSpill(parent,from,to,color,normal)
+ if prismSpills>=4 or BeamVFX.reduced() then return nil end
+ prismSpills+=1
+ parent.Destroying:Connect(function() prismSpills-=1 end)
+ local outgoing=normal or (from-to).Unit
+ local impact=prismPart(parent,'PrismImpactLight')
+ impact.CFrame=CFrame.lookAt(to+outgoing*.17,to+outgoing)
+ local glow=EnergyDisc.sprite(impact,'PrismContactGlow')
+ local sparks=Instance.new('ParticleEmitter');sparks.Name='PrismContactSparks'
+ EnergyDisc.configure(sparks,.34,.29,.80,.24)
+ sparks.Color=ColorSequence.new(Color3.fromRGB(255,242,221),Color3.fromRGB(255,76,109))
+ sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(56,56)
+ sparks.Lifetime=NumberRange.new(.24,.51);sparks.Speed=NumberRange.new(6,15)
+ sparks.Drag=2.2;sparks.Acceleration=Vector3.new(0,-14,0)
+ sparks.Rate=0;sparks.Enabled=false;sparks.Parent=impact
  local lights={}
- for _,fraction in ipairs({.18,.79}) do
-  local mount=prismPart(cylinder,'PrismLight')
-  mount.Position=from:Lerp(to,fraction)
-  if groundNormal and fraction>.5 then mount.Position=to+groundNormal*.75 end
+ for i=1,2 do
+  local mount=i==1 and prismPart(parent,'PrismSourceLight') or impact
+  if i==1 then mount.Position=from:Lerp(to,.22) end
   local lamp=Instance.new('PointLight')
-  lamp.Color=color:Lerp(Color3.fromRGB(255,186,131),.68)
-  lamp.Range=fraction>.5 and 16 or 12;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
-  lights[#lights+1]=lamp
+  lamp.Color=color:Lerp(Color3.fromRGB(255,200,169),.70)
+  lamp.Range=i==1 and 15 or 22;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
+  lights[i]=lamp
  end
- return {cylinder=cylinder,lights=lights}
+ return {impact=impact,glow=glow,sparks=sparks,lights=lights}
 end
-local function stepPrismHeat(heat,age,duration)
- local t=math.clamp(age/.23,0,1)
- local fade=t*t*(3-2*t)*(1-math.clamp((age-duration)/.49,0,1))
- if BeamVFX.reduced() then fade=0 end
+local function stepPrismSpill(spill,age,duration)
+ local rise=1-(1-math.clamp(age/.12,0,1))^4
+ local fade=rise*(1-math.clamp((age-duration)/.42,0,1))^2
+ local reduced=BeamVFX.reduced()
+ if reduced then fade=0 end
  local player=Players.LocalPlayer
  local flashScale=player and player:GetAttribute('ReducedFlashing')==true and .36 or 1
- heat.cylinder.Transparency=1-.076*fade
- for i,lamp in ipairs(heat.lights) do
-  local arrive=math.clamp((age-(i-1)*.045)/.075,0,1)
+ local onset=math.exp(-math.max(0,age)*4.2)
+ for i,lamp in ipairs(spill.lights) do
   lamp.Enabled=fade>.01
-  lamp.Brightness=fade*arrive*(.82+2.80*math.exp(-math.max(0,age)*5.2))*flashScale
+  lamp.Brightness=fade*(i==1 and 2.0 or 3.1)*(1+1.30*onset)*flashScale
  end
+ EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,217,204),fade*(.29+.24*onset)*flashScale)
+ spill.sparks.Enabled=not reduced and age>=0 and age<duration
+ spill.sparks.Rate=spill.sparks.Enabled and (21+onset*26)*rise or 0
 end
 local function prismScorch(parent,point,normal,travel,at)
  if scorchCount>=16 or not BeamVFX.near(point,115) then return end
@@ -111,7 +113,7 @@ function Effects.step(now)
  end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
-  if t.heat and t.heat.cylinder.Parent then stepPrismHeat(t.heat,age,t.duration) end
+  if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,age,t.duration) end
   if not rig.root.Parent or age>t.duration+rig.profile.tail then
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
@@ -119,9 +121,9 @@ function Effects.step(now)
    local expansion=math.min(1,age/.035)
    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
    if rig.style=='Prism' then
-    expansion=1-(1-expansion)^3
-    collapse=1-math.clamp((age/t.duration-.82)/.18,0,1)
-    collapse=collapse*collapse*(3-2*collapse)
+    expansion=1-(1-math.clamp(age/.105,0,1))^4
+    local cutoff=math.clamp((age-(t.duration-.22))/.22,0,1)
+    collapse=1-cutoff^4
    end
    BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
   else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
@@ -240,7 +242,7 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
-	  heat=style=='Prism' and prismHeat(rig.root,from,to,color,groundNormal) or nil}
+	  spill=style=='Prism' and prismSpill(rig.root,from,to,color,groundNormal) or nil}
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end

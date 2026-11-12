@@ -152,12 +152,12 @@ end
 -- first white frame at 24.0356. The radius is normalized to the final local
 -- bloom; the actual frame is clipped by white at the upper end.
 local RAMIEL_FLARE={
- {-1.20,0}, {-1.03,.012}, {-.77,.021}, {-.60,.032}, {-.30,.050},
- {-.20,.085}, {-.10,.35}, {0,1.00},
+ {-2.70,0}, {-2.30,.033}, {-1.78,.072}, {-1.22,.13}, {-.74,.21}, {-.42,.31},
+ {-.25,.47}, {-.105,.86}, {0,1.56},
 }
 local RAMIEL_STAR_ANGLE={
- {-1.20,18}, {-.62,22}, {-.30,27}, {-.17,43}, {-.065,88}, {0,143},
- {.075,206}, {.165,248}, {.263,273}, {.369,304}, {.469,317},
+ {-2.70,-21}, {-1.78,2}, {-.82,25}, {-.36,40}, {-.17,61}, {-.065,99}, {0,143},
+ {.09,219}, {.21,273}, {.35,311}, {.55,336}, {.79,348},
 }
 local function curveVelocity(a,b,c)
  local left=(b[2]-a[2])/(b[1]-a[1])
@@ -198,7 +198,7 @@ end
 
 function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.51 then
+ if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<-.88 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -222,18 +222,21 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
   local lamp=Instance.new('PointLight')
   lamp.Name='RamielStarLight';lamp.Range=23;lamp.Color=Color3.fromRGB(255,241,252)
   lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=root
+  local motes={}
+  for i=1,6 do motes[i]=EnergyDisc.sprite(root,'RamielInflow') end
   field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring,wake=wake,
-   rays=starRays(root),lamp=lamp}
+   rays=starRays(root),lamp=lamp,motes=motes}
   rig.chargeField=field
  end
  local elapsed=-untilContact
- local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or 1+.27*(1-math.exp(-elapsed*18))
- local after=1-smooth((elapsed-.115)/.365)
- local bloom=1-smooth((elapsed-.045)/.15)
+ local release=1-(1-math.clamp(elapsed/.35,0,1))^5
+ local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or 1.56+.42*release
+ local after=1-smooth((elapsed-.13)/.72)
+ local bloom=1-smooth((elapsed-.055)/.31)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
- local width=(.06+radius*2.90)*scale
- local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
+ local width=(.06+radius*3.9)*scale
+ local alpha=(.34+.66*smooth(radius/.32))*after*smooth(radius/.05)
  local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
@@ -243,7 +246,17 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.xAxis
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
- local length=(.047+radius*1.43)*scale
+ local length=(.047+radius*2.45)*scale
+ for i,mote in ipairs(field.motes) do
+  local delay=(i-1)*.17
+  local q=math.clamp((elapsed+2.60-delay)/(2.48-delay),0,1)
+  local spiral=q^3
+  local theta=i*math.pi/3+spiral*2.4
+  local span=(2.45-2.13*spiral)*scale
+  local offset=(right*math.cos(theta)+up*math.sin(theta))*span
+  local visible=smooth(q/.23)*(1-smooth((q-.78)/.22))
+  EnergyDisc.place(mote,field.root.Position+offset,(.12+.17*q)*scale,Color3.fromRGB(255,141,218),visible*.69)
+ end
  local function rayAlpha(opacity)
   return NumberSequence.new({NumberSequenceKeypoint.new(0,1-opacity),
    NumberSequenceKeypoint.new(.56,1-opacity*.57),NumberSequenceKeypoint.new(1,1)})
@@ -252,18 +265,18 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  for i,ray in ipairs(field.rays) do
   local theta=math.rad(angle)+(i-1)*math.pi*.5
   ray.tip.WorldPosition=field.root.Position+(right*math.cos(theta)+up*math.sin(theta))*length*(i%2==1 and 1.18 or .78)
-  ray.core.Width0=(.025+radius*.082)*scale
+  ray.core.Width0=(.025+radius*.094)*scale
   ray.halo.Width0=ray.core.Width0*3.6
   ray.core.Transparency=coreAlpha;ray.halo.Transparency=haloAlpha
  end
- local white=smooth((radius-.13)/.87)*bloom
+ local white=smooth((radius-.13)/1.43)*bloom
  field.lamp.Enabled=white>.01
- field.lamp.Brightness=white*7.5
+ field.lamp.Brightness=white*9
  local rim=smooth((radius-.10)/.30)*after
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
- local pressure=smooth((elapsed+.075)/.105)*(1-smooth((elapsed-.11)/.37))
- local expansion=1-math.exp(-math.max(0,elapsed+.075)*6.8)
- PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(.62+3.30*expansion),pressure*.70,scale*(.025+.045*pressure))
+ local pressure=smooth((elapsed+.09)/.13)*(1-smooth((elapsed-.15)/.64))
+ local expansion=1-(1-math.clamp((elapsed+.09)/.94,0,1))^4
+ PlaneBurst.pose(field.wake,Vector3.zAxis,scale*(.62+6.2*expansion),pressure*.70,scale*(.025+.045*pressure))
 end
 
 local function releaseLighting(self,at,weight)
@@ -284,16 +297,16 @@ local function stepReleaseLighting(self,now)
  local flash=self.prismFlash
  if not flash then return end
  local age=now-flash.at
- if age>=.19 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
+ if age>=.82 or BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true then
   flash.correction:Destroy();flash.bloom:Destroy();self.prismFlash=nil
   return
  end
- local strength=(1-smooth((age-.035)/.155))*flash.weight
+ local strength=(1-.78*smooth((age-.055)/.20))*(1-smooth((age-.21)/.61))*flash.weight
  flash.correction.Brightness=.94*strength
  flash.correction.Contrast=-.19*strength
  flash.correction.Saturation=-.94*strength
  flash.bloom.Threshold=.69-.45*strength
- flash.bloom.Intensity=2.2*strength;flash.bloom.Size=48
+ flash.bloom.Intensity=3.1*strength;flash.bloom.Size=54
  flash.correction.Enabled=true;flash.bloom.Enabled=true
 end
 
@@ -433,7 +446,7 @@ function View.new(audio,onPrism)
     local contactAt=node:GetAttribute('ContactAt')
     local landed=contactAt and now>=contactAt
     local shape=node:GetAttribute('Shape')
-    local hold=shape=='Prism' and (node:GetAttribute('BeamHold') or 1.80) or 0
+    local hold=shape=='Prism' and (node:GetAttribute('BeamHold') or DroneCatalog.Types.Ramiel.BeamHold) or 0
     local activePrism=shape=='Prism' and (landed and now-contactAt<hold or not landed and age<windup+.35)
     if drone and not r.bound and age>=0 and (progress<1 and not landed or activePrism) then
      r.bound=true
@@ -453,30 +466,38 @@ function View.new(audio,onPrism)
      local point=node:GetAttribute('ContactPoint') or to
      local origin=node:GetAttribute('PrismFrom') or aperture
      local endpoint=node:GetAttribute('PrismEnd') or point
+     local travel=endpoint-origin
+     local firingAge=landed and now-contactAt
      if audio and audio.setLoop then
       local q=windup>0 and math.clamp(age/windup,0,1) or 0
-      if landed and now-contactAt<hold and paused<=0 then
-       local remaining=hold-(now-contactAt)
-       audio:setLoop(node,'prism_sustain',origin:Lerp(endpoint,.52),.50+.38*smooth(remaining/.27),.70)
-      elseif age>=0 and age<windup and paused<=0 and q>.15 then
-       audio:setLoop(node,'prism_charge',aperture,.12+.98*q^2,.62+.64*q^2)
+      if firingAge and firingAge<hold then
+       local camera=workspace.CurrentCamera
+       local player=Players.LocalPlayer
+       local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
+       local listener=root and root.Position or (camera and camera.CFrame.Position) or origin
+       local along=math.clamp((listener-origin):Dot(travel)/math.max(.01,travel:Dot(travel)),.08,.94)
+       local settle=smooth(firingAge/.31)
+       local fade=smooth((hold-firingAge)/.26)
+       audio:setLoop(node,'prism_sustain',origin+travel*along,(1.34-.19*settle)*fade,.93-.16*settle)
+      elseif not landed and age>=0 and age<windup+duration+.22 and paused<=0 and q>.30 then
+       local rise=smooth((q-.30)/.70)
+       audio:setLoop(node,'prism_charge',aperture,.13+.95*rise,.65+.63*rise^3)
       else audio:stopLoop(node) end
      end
      if landed and not r.impacted then
       r.impacted=true
-      local travel=endpoint-origin
       if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
        local groundNormal=node:GetAttribute('PrismGroundNormal')
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .42,hold,'Prism',groundNormal)
-       if now-contactAt>=.18 then continue end
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .49,hold,'Prism',groundNormal)
        if onPrism then onPrism(origin,endpoint,contactAt,hold) end
+       if now-contactAt>=.18 then continue end
        if not reduced then
         local camera=workspace.CurrentCamera
         local distance=camera and (camera.CFrame.Position-origin).Magnitude or math.huge
-        if distance<75 and now-contactAt<.10 then releaseLighting(self,contactAt,1-smooth((distance-24)/51)) end
+        if distance<90 and now-contactAt<.14 then releaseLighting(self,contactAt,1-smooth((distance-31)/59)) end
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
         local normal=node:GetAttribute('ContactNormal') or -travel.Unit
         burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)

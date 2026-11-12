@@ -412,23 +412,31 @@ local RAMIEL_FIRE_YAW={{304,214,270},{-283,-373,-244}}
 -- The first and third waves move out from the core. The middle wave packs
 -- the outside glass inward. Each travels through the stack one layer at a time.
 local RAMIEL_WAVES={
- {start=19.34,step=.081,span=.66,strength=.66},
- {start=20.14,step=.092,span=.59,strength=.85,inward=true},
- {start=21.28,step=.112,span=.76,strength=1},
+ {start=19.33,step=.094,span=.67,strength=.63,heading=.55},
+ {start=20.17,step=.116,span=.84,strength=.69,heading=2.05,inward=true},
+ {start=21.19,step=.16,span=1.28,strength=1,heading=-.32},
 }
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
-local function ramielWave(clock: number,half: number,band: number): number
- local motion=0
+local function smootherstep(t: number): number
+ t=math.clamp(t,0,1);return t^3*(10+t*(-15+6*t))
+end
+local function ramielWave(clock: number,half: number,band: number): (number,number,number)
+ local growth,x,z=0,0,0
+ local turn=half==1 and 1 or -1
  for _,wave in ipairs(RAMIEL_WAVES) do
   local order=wave.inward and 3-band or band-1
-  local phase=(clock-wave.start-order*wave.step-(half-1)*.055)/wave.span
+  local phase=(clock-wave.start-order*wave.step-(half-1)*.075)/wave.span
   if phase>0 and phase<1 then
-   motion+=wave.strength*smoothstep(phase/.43)*(1-smoothstep((phase-.43)/.57))
+   local swell=wave.strength*smootherstep(phase/.48)*(1-smootherstep((phase-.48)/.52))
+   local angle=(wave.heading+(band-1)*.57+phase*math.pi*2)*turn
+   growth+=swell*(wave.inward and -.62 or 1)
+   x+=math.cos(angle)*swell
+   z+=math.sin(angle)*swell
   end
  end
- return motion
+ return growth,x,z
 end
 local function ramielSlope(left: number,right: number): number
  if left*right<=0 then return 0 end
@@ -492,7 +500,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
  local close=0
  local kick=0
  if recovery then
-  close=smoothstep((recovery-(hold or 1.80))/DroneConfig.RamielCloseTime)
+  close=smootherstep((recovery-(hold or 2.55))/DroneConfig.RamielCloseTime)
   if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
   time=1
  end
@@ -504,8 +512,8 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
  end
  local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
- local poseClock=math.min(clock,22.70)
- local lockedSlabs=smoothstep((clock-21.58)/1.10)
+ local poseClock=math.min(clock,23.22)
+ local lockedSlabs=smootherstep((clock-21.69)/1.53)
  local simple=smoothstep((time-.12)/.53)
  local gap=1
  local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
@@ -516,29 +524,35 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
    local track=RAMIEL_TRACKS[j]
    local function value(channel)
     local idle=track[1][channel]
-    local sampled=reduced and idle+(ramielSample(track,22.70,channel)-idle)*simple or ramielSample(track,poseClock,channel)
+    local sampled=reduced and idle+(ramielSample(track,23.22,channel)-idle)*simple or ramielSample(track,poseClock,channel)
     return sampled+(idle-sampled)*close
    end
    local n,f=value(column),value(column+1)
    if j==1 then gap=math.min(gap,n) end
    if rebuild then
-    local wave=not reduced and not recovery and ramielWave(clock,i,j) or 0
+    local wave,x,z=0,0,0
+    if not reduced and not recovery then wave,x,z=ramielWave(clock,i,j) end
     local push=kick*(.058-(j-1)*.012)+wave*.027
     local slab=j<3 and lockedSlabs*(1-close) or 0
-    local inner=value(column+2)*(1+wave*.085)
-    local outer=value(column+3)*(1+wave*.075)
+    local inner=value(column+2)*(1+wave*.32)
+    local outer=value(column+3)*(1+wave*.27)
     outer+=(inner-outer)*slab
     local yaw=ramielSample(track,poseClock,column+4)
     yaw+=(RAMIEL_FIRE_YAW[i][j]-yaw)*lockedSlabs
     if reduced then yaw=((RAMIEL_FIRE_YAW[i][j]+180)%360-180)*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    poseRamielBand(band,frame,sign,radius,n+push,f+push+wave*.009,
+    -- Each layer makes one outward loop as its width swells. The outer
+    -- tips travel less, so the large center slabs lead the silhouette.
+    local reach=j==3 and .065 or .26
+    local sweep=frame*CFrame.new(x*radius*reach,0,z*radius*reach)
+     *CFrame.Angles(z*reach*.69,0,-x*reach*.69)
+    poseRamielBand(band,sweep,sign,radius,n+push,f+push+wave*.009,
      inner,outer,yaw+wave*7*sign,kick,1-slab*(j==1 and .27 or .34))
    end
   end
   if rebuild then
    for j,prism in ipairs(half.mirrors) do
-    local mirrorClock=math.min(clock,22.83)-(j-1)*.039-(i-1)*.047
+    local mirrorClock=math.min(clock,23.27)-(j-1)*.039-(i-1)*.047
     local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
     local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
@@ -560,8 +574,8 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   end
  end
  rig.holding=recovery~=nil and recovery>.29 and close<=0
- local energy=smoothstep((time-.69)/.31)
- if recovery then energy=(1-.68*smoothstep(recovery/.27))*(1-close) end
+ local energy=smootherstep((time-.45)/.55)
+ if recovery then energy=(1-.65*smoothstep(recovery/.54))*(1-close) end
  if reduced then energy*=.45 end
  local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.12*smoothstep(gap/.26)+kick*.16))
  rig.core.CFrame=aim and (aim-center).Magnitude>.01 and CFrame.lookAt(center,aim) or CFrame.new(center)

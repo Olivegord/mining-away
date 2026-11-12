@@ -1210,8 +1210,8 @@ local function renderDrone(d,dt,now)
    local windup=math.max(.01,shot:GetAttribute('Windup') or DroneCatalog.Types.Ramiel.Windup)
    local impact=windup+(shot:GetAttribute('Duration') or .06)
    local contactAt=shot:GetAttribute('ContactAt')
-   local fireAge=contactAt and effectNow-contactAt
-   hold=shot:GetAttribute('BeamHold') or 1.80
+   local fireAge=contactAt and now-contactAt
+   hold=shot:GetAttribute('BeamHold') or DroneCatalog.Types.Ramiel.BeamHold
    if age>=0 and (fireAge and fireAge<hold+DroneConfig.RamielCloseTime or not fireAge and age<impact+.29) then
     aim=shot:GetAttribute('ContactPoint') or shot:GetAttribute('Position')
     charge=math.clamp(age/windup,0,1)
@@ -1225,7 +1225,7 @@ local function renderDrone(d,dt,now)
       d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose
      end
      local close=math.clamp((recovery-hold)/DroneConfig.RamielCloseTime,0,1)
-     visiblePose=d.ramielFiringPose:Lerp(visiblePose,close*close*(3-2*close))
+     visiblePose=d.ramielFiringPose:Lerp(visiblePose,close^3*(10+close*(-15+6*close)))
     end
    end
   end

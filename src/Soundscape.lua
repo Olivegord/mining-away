@@ -19,8 +19,8 @@ local CUES = {
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
- prism_fire={id='9118612324',volume=.54,duration=.85,pitch=.83,cooldown=.14,range=110,maxVoices=2,fallback='action_jump_land.mp3'},
- prism_sustain={id='9118614717',volume=.24,duration=2,pitch=.68,cooldown=.1,range=105,priority=4,softLaser=true},
+ prism_fire={id='9118612324',volume=.65,duration=1.05,pitch=.72,attack=.012,cooldown=.14,range=110,maxVoices=2,reserved=true,fallback='action_jump_land.mp3'},
+ prism_sustain={id='9118614717',loopFallback='139131445232833',volume=.43,pitch=.72,range=118,nearDistance=23,priority=7,reserved=true,softLaser=true},
  prism_charge={id='9119816710',volume=.33,duration=2.1,pitch=.83,cooldown=.1,range=80,priority=4,fallback='volume_slider.ogg'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
@@ -207,7 +207,9 @@ function Soundscape:_listenerStep()
 end
 function Soundscape:_voice(name,position,looped)
  local cue=CUES[name];local id=cue.ids and cue.ids[self.random:NextInteger(1,#cue.ids)] or cue.id
- local template=self.bank[id];local ready=template and template.IsLoaded
+ local template=self.bank[id]
+ if looped and cue.loopFallback and not (template and template.IsLoaded) then template=self.bank[cue.loopFallback] end
+ local ready=template and template.IsLoaded
  -- A missing sustained clip stays silent; never loop a generic fallback beep.
  if looped and not ready then return nil end
  local sound=ready and template:Clone() or Instance.new('Sound')
@@ -275,7 +277,7 @@ function Soundscape:setLoop(key,name,position,level,pitch)
    if not worstScore or score<=worstScore+5 then return end
    self:stopLoop(worstKey)
   end
-  if self.voices>=22 then return end
+  if self.voices>=(cue.reserved and 25 or 22) then return end
   local sound,anchor=self:_voice(name,position,true);if not sound then return end
   loop={sound=sound,anchor=anchor,name=name,seen=now,step=now};self.loops[key]=loop;self.loopCount+=1
   sound:Play()
@@ -283,7 +285,7 @@ function Soundscape:setLoop(key,name,position,level,pitch)
  local dt=math.clamp(now-loop.step,1/240,.1);loop.step=now;loop.seen=now
  if loop.anchor then loop.anchor.Position=position end
  local volume=cue.volume*(level or 1)/math.sqrt(1+self.loopCount*.12)
- loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*(cue.softLaser and 8 or 14)))
+ loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*(cue.reserved and 21 or cue.softLaser and 8 or 14)))
  loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)
 end
 function Soundscape:update()

@@ -39,6 +39,7 @@ local EDGE=sequence(.85,.4,.72,1)
 local INK=sequence(1,.42,.65,1)
 local ARC=sequence(1,.3,.45,1)
 local STAR=NumberSequence.new(.18)
+local PRISM_CORONA=sequence(1,.85,.90,1)
 local function clamp(v) return math.clamp(v,0,1) end
 local function smooth(v) v=clamp(v);return v*v*(3-2*v) end
 function B.charge(q)
@@ -84,8 +85,12 @@ function B.new(parent,style,color,detail,chargeLens)
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
  if style=='Prism' then
   r.body.Segments=20;r.core.Segments=20
-  r.body.Transparency=sequence(1,.18,.24,.66)
-  r.core.Transparency=sequence(1,.07,.10,.40)
+  r.body.Transparency=sequence(1,.10,.16,.39)
+  r.core.Transparency=sequence(1,.02,.035,.12)
+  r.core.Color=ColorSequence.new(color:Lerp(WHITE,.86))
+  r.core.Brightness=2
+  r.corona=ribbon(root,'PrismCorona',r.a,r.b,color,PRISM_CORONA);r.corona.Segments=20
+  r.all[#r.all+1]=r.corona
  else r.body.Segments=1;r.core.Segments=1 end
  live+=1
  local counted=true
@@ -409,9 +414,13 @@ function B.draw(r,from,to,now,width,charge,releaseAge,scale,chargeDuration)
  local p=r.profile
  -- Keep body opacity stable; release pressure carries the width motion.
  local launchPressure=releaseAge and releaseAge>=0 and (1-clamp(releaseAge/.14))^2 or 0
- local thickness=p.body*width*scale*B.WidthScale*(1+launchPressure*.35)
+ local thickness=p.body*width*scale*B.WidthScale*(1+launchPressure*(r.style=='Prism' and .10 or .35))
  r.body.Width0=thickness;r.body.Width1=thickness*p.taper;r.body.Enabled=width>.002
  r.core.Width0=p.core*width*scale*B.WidthScale;r.core.Width1=p.core*width*scale*.6*B.WidthScale;r.core.Enabled=width>.002
+ if r.corona then
+  r.corona.Width0=thickness*(3.4+launchPressure*1.5);r.corona.Width1=thickness*2.3
+  r.corona.Enabled=not reduced and width>.08
+ end
  if not r.detail then return end
  if charge~=nil and charge>=0 and charge<1 then
   acquireRich(r);drawRich(r,from,to,now,width,charge,releaseAge,scale,nil,chargeDuration)

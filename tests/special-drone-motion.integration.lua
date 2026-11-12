@@ -152,20 +152,25 @@ end
 local pivot,aim=CFrame.new(1,16,2),Vector3.new(1,4,-13)
 local function sample(referenceTime,recovery)
  local charge=math.clamp((referenceTime-19.04)/4.94,0,1)
- DroneConfig.poseRamiel(rig,pivot,aim,charge,recovery,0,false,1.80)
+ DroneConfig.poseRamiel(rig,pivot,aim,charge,recovery,0,false,2.55)
  local upper,lower=rig.halves[1].bands[1].near,rig.halves[2].bands[1].near
  for facet,original in pairs(facets) do
   assert(facet.Transparency==original[1] and facet.Parent==original[2],'facet was replaced or faded')
   assert(facet.Size.Magnitude>.02 and facet.Position.Magnitude<24,'invalid glass deformation')
  end
- return upper.Size.X,upper.Position.Y-lower.Position.Y
+ return upper.Size.X,upper.Position.Y-lower.Position.Y,upper.Position-pivot.Position
 end
 local idleWidth,idleGap=sample(19.04)
 local previousWidth,previousGap=idleWidth,idleGap
+local loopStart,loopEnd,largest
 for i=1,300 do
- local width,gap=sample(19.04+i*4.94/300)
+ local time=19.04+i*4.94/300
+ local width,gap,offset=sample(time)
  assert(math.abs(width-previousWidth)<.16 and math.abs(gap-previousGap)<.20,'shape jumped between sampled frames')
  previousWidth,previousGap=width,gap
+ if time>=21.46 and not loopStart then loopStart=offset end
+ if time>=21.98 and not loopEnd then loopEnd=offset end
+ if time>21.56 and time<22 then largest=math.max(largest or 0,width) end
 end
 local narrow,narrowGap=sample(20.04)
 local tucked,tuckedGap=sample(20.84)
@@ -173,6 +178,8 @@ local wide,wideGap=sample(23.98)
 assert(narrow<idleWidth*.23 and narrowGap>1.25,'first separation did not pinch into a column')
 assert(tucked>narrow*2 and tuckedGap<.12,'bands did not race inward to pack around the core')
 assert(wide>tucked*1.30 and wideGap>.75,'wide shooting shape did not reopen around the core')
+assert(loopStart.Z*loopEnd.Z<0 and math.abs(loopStart.X-loopEnd.X)>.18 and largest>wide*1.2,
+ 'the final wave did not loop sideways and swell before it settled')
 for _,half in ipairs(rig.halves) do
  for j=1,2 do
   local slab=half.bands[j].near
@@ -184,9 +191,9 @@ local fired,firedGap=sample(23.98,0)
 assert(math.abs(wide-fired)<1e-6 and math.abs(wideGap-firedGap)<1e-6,'discharge skipped a pose')
 local _,kickGap=sample(23.98,.038)
 assert(kickGap>wideGap+.14,'discharge lost its short outward kick')
-local held,heldGap=sample(23.98,1.79)
+local held,heldGap=sample(23.98,2.54)
 assert(math.abs(held-wide)<1e-6 and math.abs(heldGap-wideGap)<1e-6,'shape drifted during the beam')
-local returned,returnedGap=sample(23.98,1.80+DroneConfig.RamielCloseTime)
+local returned,returnedGap=sample(23.98,2.55+DroneConfig.RamielCloseTime)
 assert(math.abs(returned-idleWidth)<1e-6 and math.abs(returnedGap-idleGap)<1e-6,'recovery did not repack the octahedron')
 model:Destroy()
 print('PASS Ramiel pinches, packs inward, reopens, recoils, and holds the firing shape without swapping facets')
