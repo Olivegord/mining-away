@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — restore Ramiel's earlier slab animation
+
+Restore the slab animation from before the fixed-height pass. The solid flight hull, heavier flight and red cluster blast still apply. [Reference video at 0:19](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
+
 ## November 11 follow-up — Ramiel's weight, solid hull and cluster blast
 
 Keep the glass pieces at fixed heights as they turn and widen. Show a seamless diamond in flight, and make Ramiel accelerate, turn and travel more slowly. Blacken the rocks near the beam impacts as soon as it hits. Let the cluster shatter together with red particles, a blast sound and a camera shake.

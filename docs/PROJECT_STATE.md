@@ -11,18 +11,22 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `55e2b6836f6dff73a855d7c651d887778b4e02c06f7b138eb488c36e4e0d18b3` | Includes Ramiel's solid flight hull, fixed-height motion and red cluster blast. |
-| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The owner has since loaded `8f654ae` in Play. The new revision is staged on disk. Arrival and save in shared Edit remain pending. |
+| Native-file SHA-256 | `a5e0b03aa209e32016f0786770a63002ae0fc1e48c491535319da17f4873f44b` | Restores Ramiel's earlier slab animation and retains the solid flight hull and red cluster blast. |
+| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The owner has since loaded `7f71ce5` in Play. The new revision is staged on disk. Arrival and save in shared Edit remain pending. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session on `8f654ae`** | The running client and drone configuration hashes matched the previous revision. |
+| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session on `7f71ce5`** | The running client and drone configuration hashes matched the previous revision. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — restore Ramiel's earlier slab animation
+
+Restore the slab shapes, motion, recoil and timing from `8f654ae`, with the newer solid travel hull used between attacks. The heavier flight and red cluster blast remain in this revision. The focused motion, hull, beam and ray checks passed. The owner's Play session remains on `7f71ce5`. Shared Edit arrival, its save and live visuals remain unverified. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 7f71ce5`. This revision is unpublished. [Reference video at 0:19](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)
 
 ## November 11 — give Ramiel a solid flight hull and a red cluster blast
 
