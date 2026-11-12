@@ -128,14 +128,14 @@ end)
 check('a finished gem stays hidden until release, then hits the ground with one clink',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,6,35)}
  local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
- cargo.Material=Enum.Material.Metal;cargo.Reflectance=.62
+ cargo.Material=Enum.Material.SmoothPlastic;cargo.Reflectance=.85
  local born=realTime+.135
  local launch=Vector3.new(7,55,0)
  for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
   FloorY=.22,Position=cargo.Position,Velocity=launch,OreLaunchOrigin=cargo.Position,OreLaunchVelocity=launch}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio)
  local r=assert(renderer.records[cargo])
- assert(r.view.Material==Enum.Material.Metal and r.view.Reflectance==.62 and r.view.CastShadow)
+ assert(r.view.Material==Enum.Material.SmoothPlastic and r.view.Reflectance==.85 and r.view.CastShadow)
  renderer:update(1/60,born+.099)
  assert(r.view.Transparency==1 and not r.ribbon)
  renderer:update(1/60,born+.101)

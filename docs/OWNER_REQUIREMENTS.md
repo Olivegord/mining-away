@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — restore the earlier Ramiel animation and polish cut gems
+
+Restore the earlier Ramiel slab animation. Dropped cut gems need clearly visible reflections on their faces and the small four-point glint.
+
 ## November 11 follow-up — keep the working Ramiel rig and latest rock effects
 
 Keep the split diamond and crossed slabs. Slabs travel outward once and disappear before the solid hull latches. Keep their axis fixed throughout the attack so steering cannot make them turn back. Include the latest rock and cut-gem changes in the shared Studio build.
