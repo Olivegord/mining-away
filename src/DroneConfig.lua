@@ -628,6 +628,21 @@ DroneConfig.Prominent={
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 
+-- Each slit is cut into a fixed part of Nomad's underside. The endpoints
+-- also serve as projector apertures on the visible model.
+local nomadSlits={
+ OuterLeft={a=Vector3.new(-1.23,-.14,.11),b=Vector3.new(-4.42,-.14,.61),returnDepth=-.35},
+ OuterRight={a=Vector3.new(1.23,-.14,.11),b=Vector3.new(4.42,-.14,.61),returnDepth=-.35},
+ MidLeft={a=Vector3.new(-3.85,-.17,.24),b=Vector3.new(-1.17,-.17,-.12),returnDepth=.48},
+ Bridge={a=Vector3.new(-1.22,-.18,.48),b=Vector3.new(1.22,-.18,.48),returnDepth=.42},
+ MidRight={a=Vector3.new(1.17,-.17,-.12),b=Vector3.new(3.85,-.17,.24),returnDepth=-.48},
+ RearLeft={a=Vector3.new(-3.85,-.17,.70),b=Vector3.new(-1.17,-.17,.34),returnDepth=.48},
+ RearRight={a=Vector3.new(1.17,-.17,.34),b=Vector3.new(3.85,-.17,.70),returnDepth=-.48},
+ KeelLeft={a=Vector3.new(-.76,-.43,-.47),b=Vector3.new(-.19,-.43,-.96),returnDepth=0},
+ KeelRight={a=Vector3.new(.76,-.43,-.47),b=Vector3.new(.19,-.43,-.96),returnDepth=0},
+}
+DroneConfig.NomadDropOffset=Vector3.new(2.65,-.85,.17)
+
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
 function DroneConfig.fitBody(model: Model)
@@ -840,9 +855,29 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
    end
    hardware('KeelStrut',Vector3.new(.18,.25,1.05),CFrame.new(side*.39,-.34,-.70)*CFrame.Angles(-.52,side*.37,0),dark,metal)
   end
-  local bay=hardware('DropBay',Vector3.new(.39,.40,.56),CFrame.new(0,-.49,-.49),dark,metal)
-  shotMuzzle(bay,Vector3.new(0,-.24,0)*scale)
-  hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(0,-.715,-.49),ice,Enum.Material.Neon)
+  local projectors=Instance.new('Folder');projectors.Name='NomadProjectors';projectors.Parent=model
+  for name,slit in pairs(nomadSlits) do
+   local a,b,returnDepth=slit.a,slit.b,slit.returnDepth
+   local length=(b-a).Magnitude
+   local frame=CFrame.lookAt((a+b)*.5,b)
+   local mount=hardware(name,Vector3.new(.10,.085,length),frame,dark,metal)
+   mount.Parent=projectors
+   for _,endpoint in ipairs({'A','B'}) do
+    local port=Instance.new('Attachment');port.Name=endpoint
+    port.Position=Vector3.new(0,-.048,length*(endpoint=='A' and .5 or -.5))*scale
+    port.Parent=mount
+   end
+   if returnDepth~=0 then
+    local offset=Vector3.new(returnDepth,0,-length*.5)
+    local lens=hardware('ReturnLens',Vector3.new(.12,.085,.12),frame*CFrame.new(offset),dark,metal)
+    lens.Parent=mount
+    local port=Instance.new('Attachment');port.Name='C'
+    port.Position=(offset-Vector3.yAxis*.048)*scale;port.Parent=mount
+   end
+  end
+  local bay=hardware('DropBay',Vector3.new(.39,.40,.56),CFrame.new(1.78,-.39,.115),dark,metal)
+  shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)
+  hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(1.78,-.58,.115),Color3.fromRGB(52,72,88),smooth)
  elseif role=='Needler' then
   local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
   shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)

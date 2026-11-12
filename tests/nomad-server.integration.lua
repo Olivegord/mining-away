@@ -22,10 +22,16 @@ local function checkNomad()
  reserved.slots[other.id]=1
  release(d);d.target=primary;d.targetSlot=1;d.field=field.id;primary.slots[d.id]=1
  local spec=DroneCatalog.Types.Nomad
- d.pos=primary.position+Vector3.new(4,spec.StationHeight,0)
- local receipt=RoleEffects.Projectile('Nomad',d.pos,primary.position,Color3.new(1,1,1),now,spec.Windup,spec.Flight,d.id,primary.id)
+ d.pos=primary.position+Vector3.new(9,spec.StationHeight,0)
+ d.pos=committedStation(d,primary)
+ local ground=primary.part:GetAttribute('GroundY')
+ local frame=CFrame.new(d.pos)*CFrame.Angles(0,d.workYaw,0)
+ local from=frame:PointToWorldSpace(RoleConfig.NomadDropOffset)
+ assert(math.abs(d.pos.Y-ground-spec.StationHeight)<1e-4)
+ assert((frame:PointToWorldSpace(Vector3.new(0,ground-d.pos.Y,-1.43))-Vector3.new(primary.position.X,ground,primary.position.Z)).Magnitude<1e-4)
+ local receipt=RoleEffects.Projectile('Nomad',from,primary.position,Color3.new(1,1,1),now,spec.Windup,spec.Flight,d.id,primary.id)
  local job={startedAt=now,duration=spec.CycleDuration,impact=spec.Impact,projectile=receipt,serial=1,
-  from=d.pos,contact=primary.position,targetId=primary.id}
+  from=from,contact=primary.position,targetId=primary.id}
  d.specialJob=job
  local barrier=Instance.new('Part');barrier.Parent=workspace
  local pathBlocked=true

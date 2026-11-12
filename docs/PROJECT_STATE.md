@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `f12eca02b84a99a6258675ba4d40e4da0fd589b2e4b6cf748adf9bfe3a01275f` | Nomad high-altitude cluster miner and staged tracker. |
-| Shared Studio Sources | Verified Team Create save **210** | All seven managed Sources match the canonical file and Script Sync export. |
+| Native-file SHA-256 | `202a4095200e883208c86eb3e1248bab37565f81ed32df919352b8fa217ac5f8` | Nomad's fixed hull projectors and stepped shutdown. |
+| Shared Studio Sources | Verified Team Create save **211** | All seven managed Sources match the canonical file and Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad and the Studio crew panel's **+ Nomad** button in save **210**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's revised tracker in save **211**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — anchor Nomad's scanner to the hull
+
+Nine fixed projector slits under the wings, ring and keel project vertically. The outer, staggered, rear and joined arrangements switch on hard cuts. Two sheets under the keel struts take over, their fill and outer edges cut together, and two inner filaments hold briefly before blackout. The starboard release light appears after 0.58 seconds of darkness and the rocket drops from that same bay. Nomad stations itself so the keel pair brackets the selected rock. [Reference sequence](https://www.youtube.com/watch?v=S1Zffn_XO08&t=29s)
+
+The production renderer fixture passed across the pattern and cutoff boundaries. The Nomad server and Ramiel regression checks passed with API doubles. The broader gadget suite stops at the existing client inertia fixture. A detached native Studio check confirmed vertical projection from the scaled hull, fixed widths, twin-line cutoff, darkness and release from the starboard attachment. Full gameplay and multiplayer presentation remain unverified. The owner ended the initial Play session and Studio returned to shared Edit. Team Create save **211** at place **124078027733625**, universe **10774898335** matched all seven managed Sources afterward. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit c2e8b5a`. This revision is unpublished.
 
 ## November 11 — Nomad cluster miner
 
