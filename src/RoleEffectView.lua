@@ -147,44 +147,73 @@ function View.aim(drone,target,now)
  if refresh then sight.nextPattern=now+.045;sight.length=length end
 end
 
-function View.ramielCharge(rig,charge,energy,recovery,reduced)
+-- Observed at 30 fps in the first shot of US5yoHbv-6Q. Time zero is the
+-- first white frame at 24.0356. The radius is normalized to the final local
+-- bloom; the actual frame is clipped by white at the upper end.
+local RAMIEL_FLARE={
+ {-1.20,0}, {-1.03,.012}, {-.77,.021}, {-.60,.032}, {-.30,.050},
+ {-.20,.085}, {-.10,.35}, {0,1.00},
+}
+local function flareVelocity(a,b,c)
+ local left=(b[2]-a[2])/(b[1]-a[1])
+ local right=(c[2]-b[2])/(c[1]-b[1])
+ return 2*left*right/(left+right)
+end
+local function flareRadius(elapsed)
+ if elapsed<=RAMIEL_FLARE[1][1] then return 0 end
+ if elapsed>=0 then return 1+.27*smooth(elapsed/.24) end
+ local i=1
+ while elapsed>RAMIEL_FLARE[i+1][1] do i+=1 end
+ local a,b=RAMIEL_FLARE[i],RAMIEL_FLARE[i+1]
+ local span=b[1]-a[1]
+ local q=(elapsed-a[1])/span
+ local start=i>1 and flareVelocity(RAMIEL_FLARE[i-1],a,b)*span or 0
+ local finish=i+2<=#RAMIEL_FLARE and flareVelocity(a,b,RAMIEL_FLARE[i+2])*span or 0
+ local q2,q3=q*q,q*q*q
+ return math.clamp((2*q3-3*q2+1)*a[2]+(q3-2*q2+q)*start
+  +(3*q2-2*q3)*b[2]+(q3-q2)*finish,a[2],b[2])
+end
+
+function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=.22 or (recovery and recovery>=.21) then
+ if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.28 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
  if not field then
   if liveRamielFields>=6 then return end
-  local parent=rig.core
-  local root=shotPart(parent,'RamielChargeField',Vector3.one*.025,WHITE,false,1)
+  local root=shotPart(rig.core,'RamielFlare',Vector3.one*.025,WHITE,false,1)
   liveRamielFields+=1
   root.Destroying:Connect(function() liveRamielFields-=1 end)
-  local rings,light={},{}
-  for i=1,3 do
-   local plate=shotPart(root,'ConvergingAperture',Vector3.one*.025,WHITE,false,1)
-   rings[i]={plate=plate,plane=PlaneBurst.create(plate,i==3 and Color3.fromRGB(255,123,207) or Color3.fromRGB(106,157,255))}
+  local gui=Instance.new('BillboardGui');gui.Name='Flare';gui.Adornee=root
+  gui.AlwaysOnTop=false;gui.LightInfluence=0;gui.MaxDistance=150;gui.Parent=root
+  local function star(name,color)
+   local image=Instance.new('ImageLabel');image.Name=name;image.Image='rbxasset://textures/sparkle.png'
+   image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5)
+   image.BackgroundTransparency=1;image.ImageColor3=color;image.Parent=gui
+   return image
   end
-  for i=1,5 do light[i]=EnergyDisc.sprite(root,'RamielInflow') end
-  field={root=root,rings=rings,light=light};rig.chargeField=field
+  local outer=star('PinkFlare',Color3.fromRGB(255,82,185));outer.Size=UDim2.fromScale(1,1)
+  local inner=star('WhiteFlare',Color3.fromRGB(255,244,250));inner.Size=UDim2.fromScale(.77,.77)
+  local ring=PlaneBurst.create(root,Color3.fromRGB(255,161,221))
+  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring}
+  rig.chargeField=field
  end
- local frame=rig.core.CFrame
- local release=recovery and smooth(recovery/.21) or 0
- for i,ring in ipairs(field.rings) do
-  local p=smooth((charge-.24-(i-1)*.14)/(.68-(i-1)*.12))
-  local radius=(2.12-(i-1)*.35-1.18*p+1.85*release)*rig.scale
-  local alpha=smooth((charge-.27-(i-1)*.13)/.15)*(.35+.62*energy)*(1-release)
-  ring.plate.CFrame=frame*CFrame.new(0,0,-(.16+(i-1)*.62)*(1-p*.80))
-  PlaneBurst.pose(ring.plane,Vector3.zAxis,radius,alpha,.13+.055*energy)
- end
- for i,light in ipairs(field.light) do
-  local p=smooth((charge-.25-(i-1)*.058)/(.71-(i-1)*.060))
-  local angle=i*math.pi*.4+(2.35*p+.72*p*p)*(i%2==0 and 1 or -1)
-  local reach=(2.28-2.05*p)*rig.scale
-  local axial=(.60+(.55+i*.075)*(1-p))*(1-p)
-  local point=frame:PointToWorldSpace(Vector3.new(math.cos(angle)*reach,math.sin(angle)*reach,-axial))
-  EnergyDisc.place(light,point,(.62+.40*p)*rig.scale,Color3.fromRGB(126,185,255):Lerp(WHITE,p*.72),
-   smooth(p/.18)*(1-smooth((p-.88)/.12))*(1-release)*.61)
- end
+ local elapsed=-untilContact
+ local radius=flareRadius(elapsed)
+ local after=1-smooth(math.max(0,elapsed)/.28)
+ local scale=rig.scale
+ field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
+ local width=(.06+radius*2.32)*scale
+ local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
+ local angle=12+19*smooth((elapsed+.89)/.76)
+ field.gui.Size=UDim2.fromScale(width,width)
+ field.inner.Rotation=angle;field.outer.Rotation=angle
+ field.inner.ImageTransparency=1-alpha
+ field.outer.ImageTransparency=1-.73*alpha
+ EnergyDisc.place(field.halo,field.root.Position,width*.77,Color3.fromRGB(255,102,197),.24*alpha*smooth(radius/.32))
+ local rim=smooth((radius-.10)/.30)*after
+ PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
 end
 
 local function clearLoad(self,r)
@@ -322,7 +351,10 @@ function View.new(audio,onPrism)
     local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
     local contactAt=node:GetAttribute('ContactAt')
     local landed=contactAt and now>=contactAt
-    if drone and not r.bound and age>=0 and (progress<1 and not landed or node:GetAttribute('Shape')=='Prism' and age<windup+.35) then
+    local shape=node:GetAttribute('Shape')
+    local hold=shape=='Prism' and (node:GetAttribute('BeamHold') or 1.80) or 0
+    local activePrism=shape=='Prism' and (landed and now-contactAt<hold or not landed and age<windup+.35)
+    if drone and not r.bound and age>=0 and (progress<1 and not landed or activePrism) then
      r.bound=true
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
@@ -332,7 +364,6 @@ function View.new(audio,onPrism)
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    local shape=node:GetAttribute('Shape')
     local ball=shape=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
@@ -348,11 +379,12 @@ function View.new(audio,onPrism)
       local point=node:GetAttribute('ContactPoint') or to
       local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
       local travel=point-origin
-      if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
+      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       local gap=math.min(travel.Magnitude*.14,.85)
-       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,.67,'Prism')
+       local gap=math.min(travel.Magnitude*.14,1.22)
+       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,hold,'Prism')
+       if now-contactAt>=.18 then continue end
        if onPrism then onPrism(origin,now) end
        if not reduced then
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)

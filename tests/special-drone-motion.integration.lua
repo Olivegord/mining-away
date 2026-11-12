@@ -146,15 +146,20 @@ local model=newModel('Ramiel',true)
 local rig=assert(DroneConfig.ramielRig(model))
 local glass=assert(model:FindFirstChild('RamielGlass'))
 local panes={}
-for _,face in ipairs(rig.faces) do for _,pane in ipairs(face) do panes[pane]=pane.Transparency end end
-local frame,aim=CFrame.new(1,4,2),Vector3.new(1,4,-13)
+for _,part in ipairs(glass:GetDescendants()) do
+ if part:IsA('BasePart') and part~=rig.core then panes[part]={part.Transparency,part.Size,part.Parent} end
+end
+local frame,aim=CFrame.new(1,16,2),Vector3.new(1,4,-13)
 local function sampleRig(charge,recovery)
- DroneConfig.poseRamiel(rig,frame,aim,charge,recovery,0,false)
- local points=table.clone(rig.rim)
- for _,face in ipairs(rig.faces) do for _,pane in ipairs(face) do
-  assert(panes[pane]==pane.Transparency and pane.Parent==glass,'facet was replaced or faded')
-  assert(pane.Size.Y>.02 and pane.Size.Z>=.02 and pane.Position.Magnitude<20,'invalid wedge dimensions')
- end end
+ DroneConfig.poseRamiel(rig,frame,aim,charge,recovery,0,false,1.80)
+ local points={}
+ for _,half in ipairs(rig.halves) do
+  for _,band in ipairs(half.bands) do points[#points+1]=band:GetPivot().Position end
+ end
+ for pane,original in pairs(panes) do
+  assert(original[1]==pane.Transparency and pane.Parent==original[3],'facet was replaced or faded')
+  assert((original[2]-pane.Size).Magnitude<1e-7 and pane.Size.Magnitude>.02,'rigid glass changed dimensions')
+ end
  return points
 end
 local idle=sampleRig(0,nil)
@@ -162,19 +167,20 @@ local previous=idle
 local largest=0
 for i=1,240 do
  local posed=sampleRig(i/240,nil)
- for j,point in ipairs(posed) do
-  largest=math.max(largest,(point-previous[j]).Magnitude)
- end
+ for j,point in ipairs(posed) do largest=math.max(largest,(point-previous[j]).Magnitude) end
  previous=posed
 end
-assert(largest<.22,'charge jumped between successive poses')
+assert(largest<.12,'charge jumped between successive poses')
 local fired=previous
-assert((fired[1]-frame.Position).Magnitude>(idle[1]-frame.Position).Magnitude*1.9,'firing shape never opened')
+assert(fired[1].Y-idle[1].Y>1 and idle[4].Y-fired[4].Y>1,'glass did not separate above and below the core')
 local release=sampleRig(1,0)
-local settled=sampleRig(1,DroneConfig.RamielRecovery)
+local held=sampleRig(1,1.79)
+local settled=sampleRig(1,1.80+DroneConfig.RamielCloseTime)
 for i,point in ipairs(fired) do
  assert((point-release[i]).Magnitude<1e-6,'charge snapped at discharge')
+ assert((point-held[i]).Magnitude<1e-6,'the glass closed during the beam')
  assert((idle[i]-settled[i]).Magnitude<1e-6,'recovery snapped to idle')
 end
+assert(DroneConfig.Prominent.Ramiel.span==11.25 and DroneConfig.Prominent.Ramiel.lift>=15)
 model:Destroy()
-print('PASS Ramiel continuously deforms the same 40 visible wedges through idle, discharge and recovery')
+print('PASS Ramiel keeps six rigid glass slices and holds two separated stacks through the beam')

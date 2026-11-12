@@ -731,7 +731,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=3.56,Impact=.714,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=2.48,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=5.82,Impact=.543,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=3.10,Flight=.06,BeamHold=1.80,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -4250,32 +4250,109 @@ local function ramielWedges(a: Vector3,b: Vector3,c: Vector3,left: BasePart,righ
  right.Size=Vector3.new(thickness,height,math.max(.02,math.abs(ac:Dot(depth))))
  right.CFrame=CFrame.fromMatrix((a+c)*.5,-normal,up,-depth)
 end
-local RAMIEL_GLASS=Color3.fromRGB(44,126,235)
-local RAMIEL_RED=Color3.fromRGB(255,37,59)
+local RAMIEL_GLASS=Color3.fromRGB(24,78,200)
+local RAMIEL_RED=Color3.fromRGB(255,35,72)
+local RAMIEL_BANDS={
+ {name='Equator',bottom=0,top=.24,spread=1.0,turn=38},
+ {name='Shoulder',bottom=.24,top=.57,spread=.78,turn=-31},
+ {name='Cap',bottom=.57,top=1,spread=.73,turn=48},
+}
+local RAMIEL_TINTS={
+ Color3.fromRGB(85,181,255),Color3.fromRGB(33,100,230),
+ Color3.fromRGB(17,45,151),Color3.fromRGB(26,64,198),
+}
+local RAMIEL_SQUARE={Vector3.xAxis,Vector3.zAxis,-Vector3.xAxis,-Vector3.zAxis}
+
+-- Every slice owns the same baked facets at rest and during the shot.
+-- Flat hidden end faces become visible when the diamond separates.
+local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readable: boolean)
+ local radius=scale*1.35
+ local function facet(parent: Instance,a: Vector3,b: Vector3,c: Vector3,color: Color3)
+  local left=Instance.new('WedgePart');local right=Instance.new('WedgePart')
+  for _,pane in ipairs({left,right}) do
+   pane.Name='GlassFacet';pane.Anchored=true;pane.CanCollide=false;pane.CanTouch=false;pane.CanQuery=false
+   pane.Material=Enum.Material.Glass;pane.Transparency=.13;pane.Reflectance=.11;pane.Color=color;pane.CastShadow=false
+  end
+  ramielWedges(pose:PointToWorldSpace(a*radius),pose:PointToWorldSpace(b*radius),pose:PointToWorldSpace(c*radius),left,right)
+  left.Parent=parent;right.Parent=parent
+ end
+ for _,sign in ipairs({1,-1}) do
+  local prefix=sign==1 and 'Upper' or 'Lower'
+  if not readable then
+   for i,edge in ipairs(RAMIEL_SQUARE) do
+    facet(glass,Vector3.yAxis*sign,edge,RAMIEL_SQUARE[i%4+1],RAMIEL_TINTS[i])
+   end
+   continue
+  end
+  for _,band in ipairs(RAMIEL_BANDS) do
+   local shell=Instance.new('Model');shell.Name=prefix..band.name;shell.WorldPivot=pose
+   local center=(band.bottom+band.top)*.5
+   local function ringPoint(axis: Vector3,height: number): Vector3
+    return axis*(1-height)+Vector3.yAxis*((height-center)*sign)
+   end
+   -- Author in slice-local coordinates, then put the slice back into the diamond.
+   for i,edge in ipairs(RAMIEL_SQUARE) do
+    local nextEdge=RAMIEL_SQUARE[i%4+1]
+    local a,b=ringPoint(edge,band.bottom),ringPoint(nextEdge,band.bottom)
+    local c,d=ringPoint(edge,band.top),ringPoint(nextEdge,band.top)
+    local color=RAMIEL_TINTS[(i+(sign<0 and 1 or 0)-1)%4+1]
+    facet(shell,a,b,c,color)
+    if band.top<1 then facet(shell,c,b,d,color:Lerp(RAMIEL_GLASS,.18)) end
+   end
+   for _,height in ipairs({band.bottom,band.top}) do
+    if height<1 then
+     local plate=Instance.new('Part');plate.Name='CutFace';plate.Anchored=true
+     plate.CanCollide=false;plate.CanQuery=false;plate.CanTouch=false;plate.CastShadow=false
+     plate.Material=Enum.Material.Glass;plate.Transparency=.15;plate.Reflectance=.13
+     plate.Color=height==band.bottom and Color3.fromRGB(19,48,153) or Color3.fromRGB(52,139,249)
+     local width=math.sqrt(2)*(1-height)*radius
+     local inward=height==band.bottom and 1 or -1
+     plate.Size=Vector3.new(width,.025,width)
+     plate.CFrame=pose*CFrame.new(0,((height-center)*radius+inward*.014)*sign,0)*CFrame.Angles(0,math.pi/4,0)
+     plate.Parent=shell
+    end
+   end
+   shell:PivotTo(pose*CFrame.new(0,center*sign*radius,0))
+   shell.Parent=glass
+  end
+  for i=1,3 do
+   local mirror=Instance.new('Part');mirror.Name=prefix..'Mirror'..i
+   local width=radius*(.46-(i-1)*.105)
+   mirror.Size=Vector3.new(width,radius*(.10-i*.016),width)
+   mirror.Anchored=true;mirror.CanCollide=false;mirror.CanTouch=false;mirror.CanQuery=false;mirror.CastShadow=false
+   mirror.Material=Enum.Material.Glass;mirror.Transparency=.12;mirror.Reflectance=.16
+   mirror.Color=RAMIEL_TINTS[1+i%3];mirror.CFrame=pose;mirror.Parent=glass
+  end
+ end
+end
+
 function DroneConfig.ramielRig(model: Model)
- local folder=model:FindFirstChild('RamielGlass')
- if not folder or not folder:FindFirstChild('Pane20A') then return nil end
- local rig={faces={},rim={},tips={},core=folder:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
- for i=1,20 do
-  rig.faces[i]={folder:FindFirstChild('Pane'..i..'A') :: BasePart,folder:FindFirstChild('Pane'..i..'B') :: BasePart}
+ local glass=model:FindFirstChild('RamielGlass')
+ if not glass or not glass:FindFirstChild('UpperEquator') then return nil end
+ local rig={halves={},core=glass:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
+ for i,prefix in ipairs({'Upper','Lower'}) do
+  local half={bands={},mirrors={}}
+  for j,band in ipairs(RAMIEL_BANDS) do half.bands[j]=glass:FindFirstChild(prefix..band.name) :: Model end
+  for j=1,3 do half.mirrors[j]=glass:FindFirstChild(prefix..'Mirror'..j) :: BasePart end
+  rig.halves[i]=half
  end
  return rig
 end
--- Wind back, open in two beats, then hold the shape while the aperture loads.
--- The track changes the geometry itself; the same faces carry every pose.
+
+-- First attack in US5yoHbv-6Q. The equator cracks near 0:19, the layers
+-- run apart, then the wide bands pull in and settle before the core flares.
 local RAMIEL_POSE={
- -- phase, opening, twist, belt tilt, aperture, energy
- {0,    0,    0,   0,  0,    0},
- {.14,  0,  -25,  -6,  0,    .03},
- {.23, .13, -21,  13, .08,   .07},
- {.39, .69,  25,  56, .40,   .13},
- {.49, .54,  18,  46, .53,   .17},
- {.63,1.08,  52,  93, .88,   .27},
- {.72,1.00,  48,  90, 1.04,  .39},
- {.81,1.00,  48,  90, 1.00,  .58},
- {.91,1.00,  48,  90, 1.00,  .83},
- {.96, .98,  47,  88, .94,   .96},
- {1,   1.00, 48,  90, 1.00,  1.00},
+ -- time, axial separation, relative twist, layered offset, light at core
+ {0,     0,    0,    0,    0},
+ {.10,   0,   -5,    0,    0},
+ {.18, .15,    9,   .38,  .10},
+ {.31, .92,   36,   .94,  .22},
+ {.41, .76,   27,   .61,  .32},
+ {.54,1.00,   49,  1.00,  .43},
+ {.65, .87,   43,   .81,  .52},
+ {.74, .89,   49,   .84,  .58},
+ {.91, .90,   56,   .82,  .66},
+ {1,   .90,   57,   .82,  1.00},
 }
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -4295,85 +4372,72 @@ local function ramielTrack(index: number,t: number,channel: number): number
  return math.clamp((2*t3-3*t2+1)*a[channel]+(t3-2*t2+t)*start
   +(-2*t3+3*t2)*b[channel]+(t3-t2)*finish,math.min(a[channel],b[channel]),math.max(a[channel],b[channel]))
 end
--- Four of the five tips start at the corners of the original octahedron.
--- The last starts midway along a straight edge and becomes the fifth arm.
-local IDLE_ANGLES={0,math.pi/2,math.pi,3*math.pi/2,7*math.pi/4}
-local TAU=2*math.pi
-DroneConfig.RamielRecovery=.96
-function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?): number
+DroneConfig.RamielCloseTime=.76
+function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?,hold: number?): number
  local time=math.clamp(charge,0,1)
  local index=1
  while index<#RAMIEL_POSE-1 and time>RAMIEL_POSE[index+1][1] do index+=1 end
  local t=(time-RAMIEL_POSE[index][1])/(RAMIEL_POSE[index+1][1]-RAMIEL_POSE[index][1])
- local opening,twist,tilt,aperture,energy=ramielTrack(index,t,2),ramielTrack(index,t,3),
-  ramielTrack(index,t,4),ramielTrack(index,t,5),ramielTrack(index,t,6)
- local gather=smoothstep(time/.23)*(1-smoothstep((time-.19)/.49))
- local lock=smoothstep(time/.54)
- local recoil=0
+ local spread=ramielTrack(index,t,2)
+ local twist=ramielTrack(index,t,3)
+ local layer=ramielTrack(index,t,4)
+ local energy=ramielTrack(index,t,5)
+ local settle=0
+ local lock=smoothstep(time/.53)
+ local kick=0
  if recovery then
-  local close=smoothstep((recovery-.53)/(DroneConfig.RamielRecovery-.53))
-  recoil=smoothstep(recovery/.055)*(1-smoothstep((recovery-.055)/.30))
-  opening=(1+.055*recoil)*(1-close);aperture=1-close
-  twist=(48+3*recoil)*(1-close);tilt=90*(1-close)
-  energy=1-smoothstep((recovery-.075)/.38);gather=0;lock=1-close
+  settle=smoothstep((recovery-(hold or 1.80))/DroneConfig.RamielCloseTime)
+  kick=smoothstep(recovery/.075)*(1-smoothstep((recovery-.075)/.28))
+  spread=(.90+.055*kick)*(1-settle)
+  twist=(57+2*kick)*(1-settle)
+  layer=.82*(1-settle)
+  energy=(.32+.68*(1-smoothstep(recovery/.27)))*(1-settle)
+  lock=1-settle
  end
  if reduced then
-  local eased=recovery and math.min(opening,1) or smoothstep((time-.13)/.61)
-  opening=eased;twist=48*eased;tilt=90*eased;aperture=eased
-  energy*=.40;gather=0;recoil=0
- end
- local frame=pivot*CFrame.Angles(0,roll,0)
- if aim and (aim-pivot.Position).Magnitude>.01 then
-  local forward=(aim-pivot.Position).Unit
-  local up=math.abs(forward.Y)>.94 and Vector3.zAxis or Vector3.yAxis
-  frame=frame:Lerp(CFrame.lookAt(pivot.Position,aim,up),lock)
-  frame*=CFrame.new(0,.10*gather,.32*gather+.22*recoil)*CFrame.Angles(-gather*.12,0,-gather*.18)
+  local opening=recovery and 1-settle or smoothstep((time-.12)/.52)
+  spread=.90*opening;twist=16*opening;layer=.54*opening;kick=0
+  energy*=.45
  end
  local radius=rig.scale*1.35
- local radians=math.rad(tilt)
- local across=Vector3.new(0,math.sin(radians),math.cos(radians))
- local axis=Vector3.xAxis:Cross(across)
- local belt=rig.rim
- local tips=rig.tips
- local unfold=math.clamp(opening,0,1)
- local squeeze=1-.19*gather
- local bladeLag=not reduced and not recovery and math.sin(math.pi*unfold)^2 or 0
- for i=1,5 do
-  local angle=IDLE_ANGLES[i]+((i-1)*TAU/5-IDLE_ANGLES[i])*unfold+math.rad(twist)
-  local start=i==5 and math.sqrt(.5) or 1
-  local reach=radius*(start*squeeze+(2.08-start)*opening)
-  local drag=radius*bladeLag*math.sin(i*2.7)*.36
-  tips[i]=Vector3.xAxis*(math.cos(angle)*reach)+across*(math.sin(angle)*reach)+axis*drag
+ local frame=pivot*CFrame.Angles(0,roll,0)
+ if aim then
+  local heading=Vector3.new(aim.X,pivot.Position.Y,aim.Z)
+  if (heading-pivot.Position).Magnitude>.01 then
+   frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),lock)
+  end
  end
- for i=1,5 do
-  local a,b=tips[i],tips[i%5+1]
-  -- Midpoints keep the resting shell a sealed diamond. Drawing the midpoints
-  -- inward during the roll separates the five tips without opening seams.
-  belt[i*2-1]=frame:PointToWorldSpace(a)
-  belt[i*2]=frame:PointToWorldSpace((a+b)*(.5*(1-.70*unfold)))
+ local anticipation=not reduced and not recovery and math.sin(math.pi*smoothstep(time/.19))*.085 or 0
+ for i,half in ipairs(rig.halves) do
+  local sign=i==1 and 1 or -1
+  for j,band in ipairs(RAMIEL_BANDS) do
+   local center=(band.bottom+band.top)*.5
+   local y=(center+spread*band.spread+(j-1)*layer*.095-anticipation)*sign*radius
+   local yaw=sign*math.rad(twist*(j==2 and -.62 or .54)+band.turn*layer)
+   local shift=radius*layer*(j==2 and -.14 or .08)*sign
+   half.bands[j]:PivotTo(frame*CFrame.new(shift,y,kick*.25)*CFrame.Angles(0,yaw,0))
+  end
+  for j,mirror in ipairs(half.mirrors) do
+   local y=(.59-(j-1)*.145)*spread*sign*radius
+   local angle=sign*math.rad(twist*(j%2==0 and -1.8 or 2.6)+j*22*layer)
+   mirror.CFrame=frame*CFrame.new(0,y,.04*j*layer*radius)*CFrame.Angles(math.rad(sign*layer*8),angle,0)
+  end
  end
- local hubDepth=radius*(squeeze-.69*unfold)
- local front=frame:PointToWorldSpace(-axis*hubDepth)
- local back=frame:PointToWorldSpace(axis*hubDepth)
- for i=1,10 do
-  local a,b=belt[i],belt[i%10+1]
-  local face=rig.faces[i];ramielWedges(front,a,b,face[1],face[2])
-  face=rig.faces[i+10];ramielWedges(back,b,a,face[1],face[2])
- end
- rig.core.CFrame=frame*CFrame.new(0,0,-radius*(.08+.39*aperture))
- rig.core.Size=Vector3.one*radius*(.12+.50*energy^1.55)
- rig.core.Transparency=1-smoothstep(aperture/.40)*(.70+.30*energy)
- rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,215,229),energy^1.6*.93)
+ local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.095*spread+kick*.11))
+ local muzzle=aim and (aim-center).Magnitude>.01 and CFrame.lookAt(center,aim) or CFrame.new(center)
+ rig.core.CFrame=muzzle
+ rig.core.Size=Vector3.one*radius*(.075+.10*energy)
+ rig.core.Transparency=1-smoothstep(spread/.40)*(.85+.15*energy)
+ rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,218,240),energy^3*.86)
  local light=rig.core:FindFirstChild('ApertureLight')
  if light and light:IsA('PointLight') then
-  light.Enabled=energy>.15
-  light.Brightness=3.8*energy^1.6
+  light.Enabled=energy>.15;light.Brightness=2.3*energy^2
  end
  return energy
 end
 
 DroneConfig.Prominent={
- Ramiel={span=3.75,lift=2.4},Orbiter={span=3.30,lift=1.5},
+ Ramiel={span=11.25,lift=15.0},Orbiter={span=3.30,lift=1.5},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 
@@ -4561,26 +4625,7 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
  end
  if role=='Ramiel' then
   local glass=Instance.new('Folder');glass.Name='RamielGlass';glass.Parent=model
-  local half=readable and 10 or 4
-  for i=1,half*2 do
-   local tint=RAMIEL_GLASS:Lerp(i<=half and Color3.fromRGB(179,235,255) or Color3.fromRGB(22,42,141),.26+((i-1)%half)*.037)
-   local pair={}
-   for _,suffix in ipairs({'A','B'}) do
-    local pane=hardware('Pane'..i..suffix,Vector3.one*.04,CFrame.new(),tint,Enum.Material.Glass,nil,nil,nil,true)
-    pane.Transparency=.17;pane.Reflectance=.12;pane.CastShadow=false;pane.Parent=glass
-    pair[#pair+1]=pane
-   end
-   if not readable then
-    -- The replicated fallback is a compact, closed octahedron. Only the
-    -- local renderer needs the extra split vertices for the deformation.
-    local angle=((i-1)%4)*math.pi/2
-    local radius=scale*1.35
-    local a=pose:PointToWorldSpace(Vector3.new(math.cos(angle),0,math.sin(angle))*radius)
-    local b=pose:PointToWorldSpace(Vector3.new(-math.sin(angle),0,math.cos(angle))*radius)
-    local c=pose:PointToWorldSpace(Vector3.yAxis*(i<=4 and radius or -radius))
-    ramielWedges(c,a,b,pair[1],pair[2])
-   end
-  end
+  buildRamielShell(glass,pose,scale,readable==true)
   if readable then
    local core=hardware('Core',Vector3.one*.6,CFrame.new(),RAMIEL_RED,Enum.Material.Neon,Enum.PartType.Ball)
    core.Parent=glass
@@ -4741,17 +4786,17 @@ end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
-function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor)
+function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery)
  -- Pending records are owned by the job. Pause can outlast a fixed TTL;
  -- release destroys a canceled shot and contact starts the short cleanup.
- return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor})
+ return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery})
 end
 function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
  if not node or not node.Parent then return end
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
  node:SetAttribute('ContactFracture',fractured);node:SetAttribute('ContactBroken',broken);node:SetAttribute('ContactPowered',powered)
  node:SetAttribute('ContactAt',at)
- Debris:AddItem(node,node:GetAttribute('Shape')=='Prism' and 1.03 or .9)
+ Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)
@@ -8904,6 +8949,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
  end
  if shotKind and hitSurface then
+  if shotKind=='Prism' then
+   -- A final blow releases its rock reservation immediately. Keep Ramiel's
+   -- recovery clock so a new target cannot start another shot mid-discharge.
+   d.prismReadyAt=now+DroneCatalog.Types.Ramiel.BeamHold+RoleConfig.RamielCloseTime
+  end
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
  end
  -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
@@ -9545,6 +9595,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.warmAt=d.warmAt or now;d.state='Warmup'
  if now-d.warmAt<warmup then return end
  if not d.specialJob then
+  if projectile=='Prism' and now<(d.prismReadyAt or 0) then return end
   d.workShotStarted=true
   local cycle=DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
   if not cycle then return end
@@ -9556,12 +9607,14 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .71 or .38))
+   local chargeWindow=projectile=='Prism' and math.max(2.20,cycle.duration*.71) or cycle.duration*.38
+   local windup=math.min(definition.Windup,chargeWindow)
    local flight=definition.Flight
-   local recovery=projectile=='Prism' and .99 or .10
+   local visualRecovery=definition.BeamHold and definition.BeamHold+RoleConfig.RamielCloseTime
+   local recovery=visualRecovery and visualRecovery+.075 or .10
    d.specialJob.duration=math.max(cycle.duration,windup+flight+recovery);d.specialJob.impact=(windup+flight)/d.specialJob.duration
    d.specialJob.from=from;d.specialJob.contact=aim
-   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
+   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size,definition.BeamHold,visualRecovery)
   else
    for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
    r.part:SetAttribute('EffectSerial',r.specialSerial)

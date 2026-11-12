@@ -1194,37 +1194,52 @@ local function renderDrone(d,dt,now)
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
  local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0))
+ local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
+ local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
+ local showRamiel=d.ramiel and (BeamVFX.near(visiblePose.Position,140) or not d.ramielNeutral)
+ if showRamiel then
+  local near=BeamVFX.near(visiblePose.Position,140)
+  d.ramielNeutral=not near
+  local shot=near and d.shotReceipt
+  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
+   local started=shot:GetAttribute('StartedAt') or now
+   local paused=shot:GetAttribute('PausedAt') or 0
+   local effectNow=paused>0 and math.min(now,paused) or now
+   local age=effectNow-started
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 3.10)
+   local impact=windup+(shot:GetAttribute('Duration') or .06)
+   local contactAt=shot:GetAttribute('ContactAt')
+   local fireAge=contactAt and effectNow-contactAt
+   hold=shot:GetAttribute('BeamHold') or 1.80
+   if age>=0 and (fireAge and fireAge<hold+DroneConfig.RamielCloseTime or not fireAge and age<impact+.29) then
+    aim=shot:GetAttribute('ContactPoint') or shot:GetAttribute('Position')
+    charge=math.clamp(age/windup,0,1)
+    recovery=fireAge and fireAge>=0 and fireAge or nil
+    untilContact=recovery and -recovery or math.max(.034,impact-age)
+    if recovery then
+     if d.ramielFiringShot~=shot then
+      d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose
+     end
+     local close=math.clamp((recovery-hold)/DroneConfig.RamielCloseTime,0,1)
+     visiblePose=d.ramielFiringPose:Lerp(visiblePose,close*close*(3-2*close))
+    end
+   end
+  end
+ end
+ d.view:PivotTo(visiblePose)
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
- if d.ramiel and (BeamVFX.near(d.pos,120) or not d.ramielNeutral) then
-  local near=BeamVFX.near(d.pos,120)
-  d.ramielNeutral=not near
-  local shot=near and d.shotReceipt
-  local charge,recovery,aim=0,nil,nil
-  local reduced=CrystalImpactView.reducedMotion()
-  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
-   local started=shot:GetAttribute('StartedAt') or now
-   local paused=shot:GetAttribute('PausedAt') or 0
-   local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 2.48)
-   local contactAt=shot:GetAttribute('ContactAt')
-   local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
-   local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
-   if age>=0 and (fireAge and fireAge<DroneConfig.RamielRecovery or not fireAge and waiting) then
-    aim=shot:GetAttribute('Position')
-    charge=math.clamp(age/windup,0,1)
-    recovery=fireAge and fireAge>=0 and fireAge or nil
-   end
-  end
+ if showRamiel then
   local resting=charge<=0 and not recovery
   if not resting or not d.ramielResting then
-   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,0,reduced)
-   RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+   local reduced=CrystalImpactView.reducedMotion()
+   DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
+   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
   end
+  if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting
  end
  if s:GetAttribute('Role')=='Compactor' then

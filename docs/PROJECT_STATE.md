@@ -11,8 +11,8 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `cab27e81a813f181e2061d744126340f6355c9c422fd7ddfd11b6a9094641580` | Includes the large translucent circle particle pass. |
-| Shared Studio Sources | `373e5f2` verified in Play | All seven Sources matched the pre-particle revision in the owner's active session. The circle update is saved in the canonical snapshot and is waiting for Edit and Script Sync. |
+| Native-file SHA-256 | `d3aca6d640e7a818f5e23c73f122129b164d4e2142bda572ef0c2f321ae01a49` | Includes the rebuilt first Ramiel attack and the large translucent circle effects. |
+| Shared Studio Sources | `373e5f2` verified in Play | All seven Sources matched that revision in the owner's active session. The combined update is in the canonical snapshot and the disk Script Sync roots. Verification and save in shared Edit are pending. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,14 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — rebuild Ramiel around the first attack
+
+The resting diamond spans 11.25 studs, three times its previous size, and the visible flight path is raised 15 studs. Six rigid glass slices leave the diamond and settle into two counter-rotating stacks. Smaller glass mirrors turn on each side of the central core. At full charge the fine red beam runs for 1.80 seconds. The pose stays open throughout that window and closes over 0.76 seconds. The damage budget per shot remains the same and a finishing blow respects the recovery before another charge begins.
+
+The first attack splits around 0:19, reaches the stacked pose around 0:22, and keeps the core flare small until about 0:23.84. Consecutive video frames show the flare widening around 0:23.94 and reaching a white frame around 0:24.04. The game samples that growth with a monotone curve and keeps the bloom local to the aperture. The timing and radius are estimated from the visible frames. [First Ramiel attack reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=18)
+
+Focused rig, beam, energy, workshop and contact timing checks passed. The existing client inertia fixture still stops the broader gadget suite. The owner's Play session remained on `373e5f2`. The newest motion, scale and flare still need native visual verification. Reproduce the combined canonical refresh from `a362265` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit a362265`. The authored map and unrelated native Sources were preserved. The combined revision is unpublished.
 
 ## November 11 — layer attacks with bigger translucent circles
 

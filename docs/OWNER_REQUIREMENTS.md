@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's first attack and flare
+
+Use the first attack in the [short Ramiel clip](https://www.youtube.com/watch?v=US5yoHbv-6Q), around 0:19–0:24. The diamond separates into counter-rotating stacks around the exposed core. Follow the timing of the small held flare and its rapid expansion. Make Ramiel about three times wider, raise it substantially across flight states, and hold its fine red beam longer.
+
 ## November 11 follow-up — large translucent circle particles
 
 Apply the layered attack research. Make plain, larger, partly transparent circles the main particle shape for drone charge, shots, cutting contact, and fallout. Keep the silhouettes and timing of each attack distinct. Rings, physical breakup pieces, and the reward's four-point glints have separate jobs and remain.

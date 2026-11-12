@@ -1,5 +1,56 @@
 --!strict
 -- Drone Blower revolution • Olivegord/mining-away • generated from editable source.
+local EnergyDisc = (function()
+-- The built-in antialiased disc has been verified in a real Studio client.
+-- Shape and opacity read without relying on bloom or additive saturation.
+local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
+
+function Disc.configure(emitter,diameter,transparency,startScale,endScale)
+ emitter.Texture=Disc.texture
+ emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+ emitter.Squash=NumberSequence.new(0)
+ emitter.FlipbookLayout=Enum.ParticleFlipbookLayout.None
+ emitter.LightEmission=.36
+ emitter.LightInfluence=0
+ emitter.Brightness=1.05
+ emitter.WindAffectsDrag=false
+ emitter.LockedToPart=false
+ emitter.Size=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,diameter*(startScale or .52)),
+  NumberSequenceKeypoint.new(.18,diameter,diameter*.13),
+  NumberSequenceKeypoint.new(1,diameter*(endScale or .28)),
+ })
+ emitter.Transparency=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
+  NumberSequenceKeypoint.new(.12,transparency),
+  NumberSequenceKeypoint.new(.52,math.min(.97,transparency+.11)),
+  NumberSequenceKeypoint.new(1,1),
+ })
+end
+
+-- An attachment sprite lets a handful of motes follow the existing
+-- phase-sampled inward trajectories instead of orbiting or drifting at random.
+function Disc.sprite(parent,name)
+ local anchor=Instance.new('Attachment');anchor.Name=name;anchor.Parent=parent
+ local gui=Instance.new('BillboardGui');gui.Name='EnergyDisc';gui.Adornee=anchor
+ gui.AlwaysOnTop=false;gui.LightInfluence=0;gui.MaxDistance=110;gui.Enabled=false;gui.Parent=anchor
+ local image=Instance.new('ImageLabel');image.Name='Disc';image.BackgroundTransparency=1
+ image.Image=Disc.texture;image.Size=UDim2.fromScale(1,1);image.Parent=gui
+ return {anchor=anchor,gui=gui,image=image}
+end
+
+function Disc.place(sprite,position,diameter,color,opacity)
+ sprite.gui.Enabled=opacity>.012
+ if not sprite.gui.Enabled then return end
+ sprite.anchor.WorldPosition=position
+ sprite.gui.Size=UDim2.fromScale(diameter,diameter)
+ sprite.image.ImageColor3=color
+ sprite.image.ImageTransparency=1-opacity
+end
+
+return Disc
+
+end)()
 local Workshop = (function()
 -- One shared upgrade pool. Repeated picks merge into the same stack.
 -- These local tuning values travel with the saved offer, so reconnects never reroll.
@@ -1772,17 +1823,17 @@ local function create()
  local f={root=root,smoke={},chips={},plane=PlaneBurst.create(root,BLUE)}
  for i=1,6 do
   local a=Instance.new('Attachment');a.Name='SmokeSector';a.Parent=root
-  local e=Instance.new('ParticleEmitter');e.Name='PersistentBeamSmoke';e.Texture='rbxasset://textures/particles/smoke_main.dds'
+  local e=Instance.new('ParticleEmitter');e.Name='PersistentBeamSmoke'
+  EnergyDisc.configure(e,1.46,.71,.52,1.26)
   e.Enabled=false;e.Rate=0;e.LockedToPart=false;e.VelocityInheritance=0;e.WindAffectsDrag=false
   e.Lifetime=NumberRange.new(1.25,1.8);e.Speed=NumberRange.new(.15,.4);e.Drag=3
   e.SpreadAngle=Vector2.new(40,40);e.Color=ColorSequence.new(BLUE)
   e.LightEmission=.25;e.LightInfluence=0;e.Brightness=1.1
-  e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.32,1.25),NumberSequenceKeypoint.new(1,2.2)})
-  e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.9),NumberSequenceKeypoint.new(.12,.68),NumberSequenceKeypoint.new(.55,.8),NumberSequenceKeypoint.new(1,1)})
   e.Rotation=NumberRange.new(-180,180);e.RotSpeed=NumberRange.new(-18,18);e.Parent=a
   f.smoke[i]={a=a,e=e}
  end
- for i=1,18 do
+ -- Six small chromatic accents preserve the distinct flash colors.
+ for i=1,6 do
   local p=part(root,'ElectricColorFragment');p.Material=Enum.Material.Neon;p.Color=A.palette(BLUE,i)
   p.Size=Vector3.new(.035+(i%3)*.009,.035,.075+(i%4)*.025);f.chips[i]=p
  end
@@ -1834,7 +1885,7 @@ function A.step(now)
      if direction.Magnitude>.0001 then
       p.CFrame=CFrame.lookAt(position,position+direction, f.direction)*CFrame.Angles(0,0,n*2.399963)
      else p.CFrame=CFrame.new(position) end
-     p.Transparency=math.clamp((t-.45)/(life-.45),0,1)
+     p.Transparency=.40+.60*math.clamp((t-.45)/(life-.45),0,1)
     else p.Transparency=1 end
    end
   end
@@ -1866,12 +1917,12 @@ function A.charge(owner,origin,direction,now,q,scale)
  for i,s in ipairs(f.smoke) do
   local angle=i*math.pi/3
   s.radial=f.right*math.cos(angle)+f.up*math.sin(angle)
-  s.a.Position=s.radial*(.12+.45*q)*f.scale
-  s.e.Acceleration=s.radial*.15
+  s.a.Position=s.radial*(.54-.32*q)*f.scale
+  s.e.Acceleration=-s.radial*.25
  end
- if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.24) then
-  for i=1,3 do f.smoke[((f.emissionSector or 0)+i-1)%6+1].e:Emit(1) end
-  f.emissionSector=((f.emissionSector or 0)+3)%6
+ if q>.32 and q<.99 and (not f.lastEmission or now-f.lastEmission>=.28) then
+  for i=1,2 do f.smoke[((f.emissionSector or 0)+i-1)%6+1].e:Emit(1) end
+  f.emissionSector=((f.emissionSector or 0)+2)%6
   f.lastEmission=now
  end
 end
@@ -1882,7 +1933,7 @@ function A.fire(owner,origin,direction,now,age)
  f.root.CFrame=CFrame.new(origin);f.direction=direction;f.phase='release';f.firedAt=now-age
  -- The launched tail no longer belongs to a charge lease or moving drone.
  f.owner=nil;owner.aftermath=nil
- for _,s in ipairs(f.smoke) do s.e:Emit(2) end
+ for _,s in ipairs(f.smoke) do s.e:Emit(1) end
  A.step(now)
 end
 function A.counts() return #active,#pool end
@@ -1915,15 +1966,18 @@ function FX.create(parent,style,seed)
  local root=Instance.new('Part');root.Name='LaserStartup_'..style
  root.Anchored=true;root.Transparency=1;root.Size=Vector3.one*.025
  root.CanCollide=false;root.CanTouch=false;root.CanQuery=false;root.CastShadow=false;root.Parent=parent
- local f={root=root,style=style,seed=seed or 1,arcs={},rays={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
- for i=1,8 do f.arcs[i]=line(root,color);f.rays[i]=line(root,Color3.new(1,1,1));f.rays[i].beam.Segments=1 end
+ local f={root=root,style=style,color=color,seed=seed or 1,arcs={},motes={},glints={{rays={}}},plane=PlaneBurst.create(root,color)}
+ for i=1,8 do
+  f.arcs[i]=line(root,color)
+  if i<=5 then f.motes[i]=EnergyDisc.sprite(root,'StartupInflow') end
+ end
  for i=1,4 do f.glints[1].rays[i]=line(root,Color3.new(1,1,1));f.glints[1].rays[i].beam.Segments=1 end
  return f
 end
 function FX.hide(f)
  f.root.Transparency=1;PlaneBurst.hide(f.plane)
  for _,l in ipairs(f.arcs) do l.beam.Enabled=false end
- for _,l in ipairs(f.rays) do l.beam.Enabled=false end
+ for _,mote in ipairs(f.motes) do mote.gui.Enabled=false end
  for _,g in ipairs(f.glints) do for _,l in ipairs(g.rays) do l.beam.Enabled=false end end
 end
 function FX.destroy(f) f.root:Destroy() end
@@ -1937,14 +1991,13 @@ function FX.update(f,origin,q)
   local span=(b-a).Magnitude
   local breadth=f.style=='Coil' and .075 or f.style=='Ignition' and .045 or .035
   l.beam.Enabled=alpha>.01 and span>.002 and va.Magnitude>.01 and vb.Magnitude>.01
-  local head=f.rays[i];head.beam.Enabled=l.beam.Enabled
+  local mote=f.motes[i]
   if l.beam.Enabled then
    pose(l.a,a*.62,-va.Unit);pose(l.b,b*.62,-vb.Unit)
    l.beam.CurveSize0=span*.62/3;l.beam.CurveSize1=span*.62/3
    l.beam.Width0=breadth*alpha;l.beam.Width1=0;l.beam.Transparency=fades[math.floor(alpha*32+.5)]
-   head.a.Position=a*.62;head.b.Position=(a-va.Unit*.075)*.62
-   head.beam.Width0=.09*alpha;head.beam.Width1=0;head.beam.Transparency=fades[math.floor(alpha*32+.5)]
   end
+  if mote then EnergyDisc.place(mote,origin.Position+a*.62,.54+.18*timing,f.color,l.beam.Enabled and alpha*.52 or 0) end
  end
  -- Stars have distinct short flashes with quiet gaps. Ignition forms one
  -- compressed hot slit; Coil stays dark between its inward strands. These
@@ -2208,7 +2261,7 @@ acquireRich=function(r)
  h.core=visualPart(folder,'ChargeOriginCore',Enum.Material.Neon,CYAN,Enum.PartType.Ball)
  for i=1,8 do
   h.comets[i]={path=richPath(r,'InwardStream'..i,i%2==0 and CYAN or VIOLET),
-   head=visualPart(folder,'InwardSpark',Enum.Material.Neon,i%2==0 and CYAN or WHITE,Enum.PartType.Ball)}
+   head=EnergyDisc.sprite(h.glass,'InwardSpark')}
  end
  for i=1,3 do
   local edge=richPath(r,'InwardTendrilEdge'..i,VIOLET,ARC)
@@ -2216,20 +2269,19 @@ acquireRich=function(r)
   ink.beam.LightEmission=0
   h.sweeps[i]={edge=edge,ink=ink}
  end
- h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor';h.vapor.Texture='rbxasset://textures/particles/smoke_main.dds'
+ h.vapor=Instance.new('ParticleEmitter');h.vapor.Name='VioletDistortionVapor'
+ EnergyDisc.configure(h.vapor,1.35,.74,.58,1.12)
  h.vapor.Enabled=false;h.vapor.Rate=0;h.vapor.Color=ColorSequence.new(VIOLET)
  h.vapor.LightEmission=.35;h.vapor.LightInfluence=0;h.vapor.Brightness=1
  h.vapor.Lifetime=NumberRange.new(.5,1.3);h.vapor.Speed=NumberRange.new(1,3.5);h.vapor.Drag=3
  h.vapor.SpreadAngle=Vector2.new(180,180);h.vapor.Acceleration=Vector3.new(0,.7,0);h.vapor.WindAffectsDrag=false
- h.vapor.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(.35,1.9),NumberSequenceKeypoint.new(1,2.8)})
- h.vapor.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.18,.62),NumberSequenceKeypoint.new(1,1)})
  h.vapor.Rotation=NumberRange.new(-180,180);h.vapor.RotSpeed=NumberRange.new(-55,55)
  h.particleSource=attachment(r.root,'LensParticleSource');h.vapor.Parent=h.particleSource
- h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks';h.sparks.Texture='rbxasset://textures/particles/sparkles_main.dds'
- h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN);h.sparks.LightEmission=.8;h.sparks.LightInfluence=0;h.sparks.Brightness=1.5
- h.sparks.Lifetime=NumberRange.new(.25,.65);h.sparks.Speed=NumberRange.new(4,11);h.sparks.Drag=4;h.sparks.SpreadAngle=Vector2.new(180,180)
- h.sparks.Acceleration=Vector3.new(0,-2,0);h.sparks.WindAffectsDrag=false;h.sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.11),NumberSequenceKeypoint.new(.15,.24),NumberSequenceKeypoint.new(1,0)})
- h.sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.12),NumberSequenceKeypoint.new(1,1)});h.sparks.Parent=h.particleSource
+ h.sparks=Instance.new('ParticleEmitter');h.sparks.Name='LensDischargeSparks'
+ EnergyDisc.configure(h.sparks,.67,.57,.60,.42)
+ h.sparks.Enabled=false;h.sparks.Rate=0;h.sparks.Color=ColorSequence.new(CYAN)
+ h.sparks.Lifetime=NumberRange.new(.26,.52);h.sparks.Speed=NumberRange.new(2,5);h.sparks.Drag=5;h.sparks.SpreadAngle=Vector2.new(180,180)
+ h.sparks.Acceleration=Vector3.new(0,-1,0);h.sparks.Parent=h.particleSource
  -- Emitters are outside the detail Folder because their parent is an Attachment.
  folder.Destroying:Connect(function() h.particleSource:Destroy() end)
 end
@@ -2240,7 +2292,7 @@ hideRich=function(r)
  for _,vane in ipairs(h.collars) do vane.beam.Enabled=false end
  for _,p in ipairs(h.paths) do p.beam.Enabled=false end
  for _,p in ipairs(h.debris) do p.Transparency=1 end
- for _,p in ipairs(h.comets) do p.head.Transparency=1 end
+ for _,p in ipairs(h.comets) do p.head.gui.Enabled=false end
  h.vapor.Enabled=false;h.sparks.Enabled=false
 end
 local function curve(path,a,b,ta,tb,bend,width)
@@ -2296,7 +2348,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   h.vapor.Color=ColorSequence.new(r.color);h.sparks.Color=ColorSequence.new(r.color)
   for i,item in ipairs(h.comets) do
    local color=r.color:Lerp(WHITE,i%2==0 and .64 or .26)
-   item.path.beam.Color=ColorSequence.new(color);item.head.Color=color
+   item.path.beam.Color=ColorSequence.new(color);item.color=color
   end
  end
  local delta=to-from
@@ -2336,9 +2388,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
   if va.Magnitude>.01 and vb.Magnitude>.01 and span>.002 then
    curve(item.path,head,tail,-va.Unit,-vb.Unit,span*.27,(i%2==0 and .24 or .16)*s*visible)
   else item.path.beam.Enabled=false end
-  item.head.CFrame=CFrame.new(from+head)
-  item.head.Size=Vector3.one*math.max(.01,.25*s*visible)
-  item.head.Transparency=1-visible
+  EnergyDisc.place(item.head,from+head,s*(.49+.24*visible),item.color,visible*.57)
  end
  -- Small ink curls have separate arrivals and deform along attracted paths.
  -- No shared orbit angle or reset: each short ribbon is drawn into the mouth.
@@ -2365,7 +2415,7 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Never emit catch-up batches after a late observer or paused render loop.
  if inflow>.05 then
   if h.lastEmission and now>=h.lastEmission+.08 then
-   h.sparks:Emit(2);h.lastEmission=now
+   h.sparks:Emit(1);h.lastEmission=now
   elseif not h.lastEmission or now<h.lastEmission then h.lastEmission=now end
  else h.lastEmission=nil end
 end
@@ -2522,8 +2572,6 @@ local Players=game:GetService('Players')
 local RS=game:GetService('ReplicatedStorage')
 local GOLD=Color3.fromRGB(244,193,89)
 local WHITE=Color3.fromRGB(236,249,255)
-local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local YELLOW=Color3.fromRGB(255,208,69)
 local ENERGY_TAIL=1.8
 local function part(parent,name,template)
@@ -2562,16 +2610,12 @@ local function particle(parent,name,color)
  -- TimeScale .2 and must not silently slow newly authored work effects.
  local p=Instance.new('ParticleEmitter')
  p.Name=name;p.Enabled=false;p.Rate=0
- -- Small discs are the neutral energy cue; contacts use fine sparks and
- -- fractures use matte smoke. Keep the original asset templates intact.
- p.Texture=ENERGY;p.Squash=NumberSequence.new(0)
- p.Color=ColorSequence.new(color);p.LightEmission=.8;p.LightInfluence=0;p.Brightness=1.8
- p.TimeScale=1;p.LockedToPart=false;p.VelocityInheritance=0;p.FlipbookLayout=Enum.ParticleFlipbookLayout.None
- p.EmissionDirection=Enum.NormalId.Front;p.Orientation=Enum.ParticleOrientation.FacingCamera
+ EnergyDisc.configure(p,.36,.58)
+ p.Color=ColorSequence.new(color)
+ p.TimeScale=1;p.VelocityInheritance=0
+ p.EmissionDirection=Enum.NormalId.Front
  p.Lifetime=NumberRange.new(.65,1.2);p.Speed=NumberRange.new(.4,1.2);p.Drag=2.4
  p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.zero;p.WindAffectsDrag=false
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16),NumberSequenceKeypoint.new(.2,.26),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.55,.42),NumberSequenceKeypoint.new(1,1)})
  p.Parent=parent;return p
 end
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
@@ -2627,12 +2671,11 @@ function W:burst(position,normal,color,count,now)
  if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,140) then return end
  self:energyBloom()
  local anchor=part(self.parent,'WorkBurst');anchor.CFrame=facing(position,normal)
- local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(9,14)
- sparks.Lifetime=NumberRange.new(1,1.6);sparks.Drag=11;sparks.Acceleration=Vector3.zero
- sparks.Texture=SPARK;sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-40,40)
- sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.03),NumberSequenceKeypoint.new(.06,.19,.02),NumberSequenceKeypoint.new(1,0)})
+ local sparks=particle(anchor,'WorkSparks',color);sparks.Speed=NumberRange.new(6,11)
+ sparks.Lifetime=NumberRange.new(.72,1.34);sparks.Drag=7;sparks.Acceleration=Vector3.zero
+ EnergyDisc.configure(sparks,.90,.58,.53,.72)
  sparks.SpreadAngle=Vector2.new(65,65)
- sparks:Emit(math.min(42,count));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
+ sparks:Emit(math.min(12,math.ceil(count*.6)));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
 function W:destroyMining(beam)
  local fx=beam.work
@@ -2664,15 +2707,12 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.sparks.Brightness=1;fx.sparks.LightEmission=.55
   fx.glow=particle(anchor,'OriginGlow',beam.tint or WHITE)
   fx.glow.Brightness=.8;fx.glow.LightEmission=.4
-  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.13)
+  fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  fx.impact.Texture=SPARK;fx.impact.Squash=NumberSequence.new(.55)
-  fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
-  fx.impact.Lifetime=NumberRange.new(.45,.85);fx.impact.Speed=NumberRange.new(8,15)
+  EnergyDisc.configure(fx.impact,.94,.47,.56,.63)
+  fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.06),NumberSequenceKeypoint.new(.15,.37,.07),NumberSequenceKeypoint.new(1,0)})
-  fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.58,.35),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
   local template=templates and templates:FindFirstChild('MiningEffect')
@@ -2720,12 +2760,15 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  -- shared lateral force pushing the whole cloud like wind.
  fx.impact.Acceleration=resonance and Vector3.zero or Vector3.new(0,-3,0)
  fx.impact.Drag=resonance and 5 or 4
- fx.impact.Rate=continuous and (resonance and 9 or 12) or 0;fx.impact.Enabled=working and continuous
+ -- Keep the large discs readable when an entire pinned field lights up.
+ local crowded=self.miningCount>8
+ fx.impact.Rate=continuous and (crowded and 3 or resonance and 4 or 6) or 0
+ fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
-   fx.impact:Emit(15);fx.sparks:Emit(5)
+   fx.impact:Emit(crowded and 3 or 6);fx.sparks:Emit(crowded and 1 or 3)
   end
  end
  if point and normal then
@@ -2740,7 +2783,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
-  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(16);fx.sparks:Emit(5) end
+  if working and sample.pulseAt and now-sample.pulseAt<.25 then fx.impact:Emit(crowded and 4 or 7);fx.sparks:Emit(crowded and 1 or 3) end
   fx.pulseSerial=sample.pulseSerial
  end
 end
@@ -3117,7 +3160,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=3.56,Impact=.714,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=2.48,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=5.82,Impact=.543,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=3.10,Flight=.06,BeamHold=1.80,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5146,6 +5189,7 @@ function Effects.step(now)
    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
    if rig.style=='Prism' then
     expansion=1-(1-expansion)^3
+    collapse=1-math.clamp((age/t.duration-.82)/.18,0,1)
     collapse=collapse*collapse*(3-2*collapse)
    end
    BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
@@ -5210,9 +5254,6 @@ function Effects.step(now)
 end
 local MAX_LIVE = 256
 local live = 0
-local ENERGY='rbxasset://textures/ui/VR/circleWhite.png'
-local SMOKE='rbxasset://textures/particles/smoke_main.dds'
-local SPARK='rbxasset://textures/particles/sparkles_main.dds'
 local ORBITAL_HEIGHT=260
 local ORBITAL_COLOR=Color3.fromRGB(248,241,255)
 local ORBITAL_VIOLET=Color3.fromRGB(170,102,255)
@@ -5298,31 +5339,25 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
- local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks';sparks.Texture=SPARK
- sparks.Rate=0;sparks.LightEmission=.86;sparks.LightInfluence=.12;sparks.Brightness=1.6
- sparks.Color=ColorSequence.new(Color3.fromRGB(255,248,216),color)
+ local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
+ local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
+ EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
+ sparks.Enabled=false;sparks.Rate=0
+ sparks.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,248,216),.44),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
- sparks.Speed=residual and NumberRange.new(2,6) or NumberRange.new(12,22)
- sparks.Acceleration=Vector3.new(0,residual and .8 or -24,0);sparks.Drag=residual and 2.8 or 1.4
- sparks.Rotation=NumberRange.new(-180,180);sparks.RotSpeed=NumberRange.new(-95,95)
- sparks.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,.20*scale,.055*scale),
-  NumberSequenceKeypoint.new(.19,(orbital and .38 or .32)*scale,.07*scale),
-  NumberSequenceKeypoint.new(1,0),
- })
- sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.04),NumberSequenceKeypoint.new(.53,.22),NumberSequenceKeypoint.new(1,1)})
- sparks.Parent=root;sparks:Emit(residual and 30 or orbital and 28 or 22)
- local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust';dust.Texture=SMOKE
- dust.Rate=0;dust.LightEmission=orbital and .32 or .06;dust.LightInfluence=.35
- dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(206,183,183),.56))
+ sparks.Speed=residual and NumberRange.new(2,5) or NumberRange.new(8,16)
+ sparks.Acceleration=Vector3.new(0,residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
+ sparks.Parent=root;sparks:Emit(residual and 9 or orbital and 10 or 8)
+ local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
+ EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
+ dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
+ dust.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(206,183,183),.36))
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
- dust.Speed=NumberRange.new(residual and 1 or 5,residual and 4 or 11);dust.Drag=3.2
- dust.Acceleration=Vector3.new(0,1.1,0);dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-40,40)
- dust.Size=NumberSequence.new(.38*scale,1.8*scale)
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.72),NumberSequenceKeypoint.new(.18,.49),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=root;dust:Emit(orbital and 12 or 9)
+ dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
+ dust.Acceleration=Vector3.new(0,1.1,0)
+ dust.Parent=root;dust:Emit(orbital and 5 or 4)
  Debris:AddItem(root,residual and 2.7 or 1.4)
 end
 
@@ -5351,15 +5386,12 @@ function Effects.Grow(from: Vector3,target: Vector3,planted: boolean)
  if planted then value:SetAttribute('AudioCue','plant');value:SetAttribute('AudioAt',clock()) end
  value.Position=planted and target or from
  local tip=Instance.new('Attachment');tip.Parent=value
- local dust=Instance.new('ParticleEmitter');dust.Texture=SPARK
- dust.Rate=0;dust.Color=ColorSequence.new(green);dust.LightEmission=1;dust.Brightness=.95;dust.LightInfluence=0
+ local dust=Instance.new('ParticleEmitter');EnergyDisc.configure(dust,planted and .84 or .65,.60)
+ dust.Enabled=false;dust.Rate=0;dust.Color=ColorSequence.new(green)
  dust.Lifetime=NumberRange.new(1,1.6);dust.Speed=NumberRange.new(planted and 3 or 1,planted and 5 or 2)
  dust.EmissionDirection=planted and Enum.NormalId.Top or Enum.NormalId.Bottom;dust.SpreadAngle=Vector2.new(22,22)
  dust.Acceleration=Vector3.new(0,planted and .1 or -.3,0);dust.Drag=planted and 8 or 3;dust.WindAffectsDrag=false
- dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-65,65)
- dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.14,.02),NumberSequenceKeypoint.new(.2,.24,.03),NumberSequenceKeypoint.new(1,0)})
- dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.3),NumberSequenceKeypoint.new(.45,.55),NumberSequenceKeypoint.new(1,1)})
- dust.Parent=tip;dust:Emit(planted and 14 or 9);Debris:AddItem(value,1.8)
+ dust.Parent=tip;dust:Emit(planted and 7 or 4);Debris:AddItem(value,1.8)
  if planted then Effects.Pulse(target+Vector3.new(0,.25,0),green,.2,1.6,.45) end
 end
 
@@ -5380,14 +5412,12 @@ function Effects.BreakerPhase(position: Vector3,target: Vector3,phase: string,di
    shock.Name='BreakerPressureWave';shock.Shape=Enum.PartType.Cylinder;shock.Color=Color3.fromRGB(221,196,142)
    shock.Transparency=1;shock.Size=Vector3.new(.055,.6,.6);shock.CFrame=CFrame.new(target)*CFrame.Angles(0,0,math.pi/2)
    local attachment=Instance.new('Attachment');attachment.CFrame=CFrame.Angles(0,0,-math.pi/2);attachment.Parent=shock
-   local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';dust.Texture=SMOKE
+   local dust=Instance.new('ParticleEmitter');dust.Name='BreakerDust';EnergyDisc.configure(dust,1.18,.69,.60,1.22)
    dust.Color=ColorSequence.new(Color3.fromRGB(118,108,91));dust.LightEmission=0;dust.LightInfluence=.65;dust.Brightness=1
-   dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
+   dust.Enabled=false;dust.Rate=0;dust.Lifetime=NumberRange.new(1,1.6)
    dust.Speed=NumberRange.new(4,7);dust.Drag=10;dust.Acceleration=Vector3.new(0,.25,0);dust.WindAffectsDrag=false
-   dust.Rotation=NumberRange.new(-180,180);dust.RotSpeed=NumberRange.new(-50,50)
    dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(80,80)
-   dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.2,.04),NumberSequenceKeypoint.new(.3,.5,.08),NumberSequenceKeypoint.new(1,.75,.1)})
-   dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.55),NumberSequenceKeypoint.new(.3,.45),NumberSequenceKeypoint.new(1,1)});dust.Parent=attachment;dust:Emit(16)
+   dust.Parent=attachment;dust:Emit(7)
    Effects.Pulse(target,amber,.6*scale,6.4*scale,.65)
    Debris:AddItem(shock,1.8)
   end
@@ -5437,7 +5467,7 @@ local function clearBurn(owner: any)
   local floor=old:GetAttribute('Ground') or position.Y
   Effects.ImpactParticles(Vector3.new(position.X,floor+.68,position.Z),ORBITAL_PINK,1.35,'OrbitalFallout')
  end
- if core and core:IsA('BasePart') and not BeamVFX.reduced() then
+ if core and core:IsA('BasePart') and not BeamVFX.reduced() and typeof(position)=='Vector3' and BeamVFX.near(position,120) then
   -- A full volume leaves a continuous vertical trail, rather than twelve
   -- isolated pairs of dots. Its fixed carrier must not shrink with the laser.
   local trail=part()
@@ -5446,17 +5476,15 @@ local function clearBurn(owner: any)
    -- Concentrate the loose light in the part of the column players can see.
    trail.Size=Vector3.new(26,2,2);trail.CFrame=core.CFrame*CFrame.new(13-ORBITAL_HEIGHT*.5,0,0);trail.Parent=old
    local embers=Instance.new('ParticleEmitter');embers.Name='OrbitalAfterglow'
-   embers.Texture=ENERGY;embers.Enabled=false;embers.Rate=0;embers.LightEmission=.8;embers.LightInfluence=0;embers.Brightness=1.1
-   embers.Color=ColorSequence.new(ORBITAL_COLOR)
+   EnergyDisc.configure(embers,1.45,.59,.62,.74);embers.Enabled=false;embers.Rate=0
+   embers.Color=ColorSequence.new(ORBITAL_COLOR,ORBITAL_VIOLET)
    embers.Shape=Enum.ParticleEmitterShape.Cylinder;embers.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
    embers.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward;embers.ShapePartial=1;embers.EmissionDirection=Enum.NormalId.Right
    embers.Lifetime=NumberRange.new(2,4);embers.Speed=NumberRange.new(.65,2.3);embers.Drag=1.8;embers.WindAffectsDrag=false
    embers.LockedToPart=false;embers.VelocityInheritance=0
-   embers.SpreadAngle=Vector2.new(180,180);embers.Rotation=NumberRange.new(-180,180);embers.RotSpeed=NumberRange.new(-45,45)
+   embers.SpreadAngle=Vector2.new(180,180)
    embers.Acceleration=Vector3.new(0,.08,0)
-   embers.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.28,.08),NumberSequenceKeypoint.new(.2,.52,.12),NumberSequenceKeypoint.new(1,0)})
-   embers.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(.55,.55),NumberSequenceKeypoint.new(1,1)})
-   embers.Parent=trail;embers:Emit(56)
+   embers.Parent=trail;embers:Emit(25)
   end
  end
  for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalResidualColumn' then
@@ -5539,15 +5567,6 @@ local function sustainedStrike(owner: any,event: any)
    value.Transparency=core and .10 or index==1 and .86 or .59
    value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group;columns[index]=value
    value:SetAttribute('BurnTransparency',value.Transparency)
-   if core and not reduced then
-    local energy=Instance.new('ParticleEmitter');energy.Name='TurbulentColumnEnergy';energy.Texture=ENERGY
-    energy.Color=ColorSequence.new(ORBITAL_COLOR);energy.LightEmission=1;energy.LightInfluence=0;energy.Brightness=1.25
-    energy.Rate=12;energy.Lifetime=NumberRange.new(.7,1.8);energy.Speed=NumberRange.new(.4,1.4);energy.Drag=1.8
-    energy.Shape=Enum.ParticleEmitterShape.Cylinder;energy.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume;energy.EmissionDirection=Enum.NormalId.Right
-    energy.SpreadAngle=Vector2.new(180,180);energy.Acceleration=Vector3.new(0,-.1,0);energy.WindAffectsDrag=false
-    energy.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.32,.06),NumberSequenceKeypoint.new(1,0)})
-    energy.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.5,.6),NumberSequenceKeypoint.new(1,1)});energy.Parent=value
-   end
   end
   local rings={}
   if not reduced and BeamVFX.near(floor,100) then
@@ -5564,12 +5583,12 @@ local function sustainedStrike(owner: any,event: any)
    contact.Transparency=.28;contact.Size=Vector3.one*(.83*scale);contact.Parent=group;contact:SetAttribute('BurnTransparency',.28)
    light=Instance.new('PointLight');light.Color=ORBITAL_PINK;light.Range=13;light.Parent=contact
    local tip=Instance.new('Attachment');tip.Parent=contact
-   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks';sparks.Texture=SPARK;sparks.Squash=NumberSequence.new(.65);sparks.Rotation=NumberRange.new(-180,180)
-   sparks.Color=ColorSequence.new(ORBITAL_COLOR);sparks.LightEmission=1;sparks.LightInfluence=0;sparks.Brightness=1.15
-   sparks.Lifetime=NumberRange.new(.8,1.9);sparks.Speed=NumberRange.new(6,12);sparks.Drag=3.1;sparks.WindAffectsDrag=false
+   local sparks=Instance.new('ParticleEmitter');sparks.Name='MoltenSparks'
+   EnergyDisc.configure(sparks,1.27*scale,.58,.56,.72)
+   sparks.Color=ColorSequence.new(ORBITAL_COLOR,ORBITAL_PINK)
+   sparks.Lifetime=NumberRange.new(.65,1.26);sparks.Speed=NumberRange.new(4,9);sparks.Drag=4.1
    sparks.Acceleration=Vector3.new(0,-.4,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(60,60)
-   sparks.Rate=25;sparks.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.23,.07),NumberSequenceKeypoint.new(.12,.4,.07),NumberSequenceKeypoint.new(1,0)})
-   sparks.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.48),NumberSequenceKeypoint.new(.5,.68),NumberSequenceKeypoint.new(1,1)});sparks.Parent=tip
+   sparks.Rate=8;sparks.Parent=tip
   end
   orbitalTimelines[group]={at=event.startedAt or clock(),columns=columns,widths=widths,rings=rings,radius=radius,floor=floor.Y,light=light}
   group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',clock())
@@ -5783,45 +5802,73 @@ function View.aim(drone,target,now)
  if refresh then sight.nextPattern=now+.045;sight.length=length end
 end
 
-function View.ramielCharge(rig,charge,energy,recovery,reduced)
+-- Observed at 30 fps in the first shot of US5yoHbv-6Q. Time zero is the
+-- first white frame at 24.0356. The radius is normalized to the final local
+-- bloom; the actual frame is clipped by white at the upper end.
+local RAMIEL_FLARE={
+ {-1.20,0}, {-1.03,.012}, {-.77,.021}, {-.60,.032}, {-.30,.050},
+ {-.20,.085}, {-.10,.35}, {0,1.00},
+}
+local function flareVelocity(a,b,c)
+ local left=(b[2]-a[2])/(b[1]-a[1])
+ local right=(c[2]-b[2])/(c[1]-b[1])
+ return 2*left*right/(left+right)
+end
+local function flareRadius(elapsed)
+ if elapsed<=RAMIEL_FLARE[1][1] then return 0 end
+ if elapsed>=0 then return 1+.27*smooth(elapsed/.24) end
+ local i=1
+ while elapsed>RAMIEL_FLARE[i+1][1] do i+=1 end
+ local a,b=RAMIEL_FLARE[i],RAMIEL_FLARE[i+1]
+ local span=b[1]-a[1]
+ local q=(elapsed-a[1])/span
+ local start=i>1 and flareVelocity(RAMIEL_FLARE[i-1],a,b)*span or 0
+ local finish=i+2<=#RAMIEL_FLARE and flareVelocity(a,b,RAMIEL_FLARE[i+2])*span or 0
+ local q2,q3=q*q,q*q*q
+ return math.clamp((2*q3-3*q2+1)*a[2]+(q3-2*q2+q)*start
+  +(3*q2-2*q3)*b[2]+(q3-q2)*finish,a[2],b[2])
+end
+
+function View.ramielCharge(rig,charge,untilContact,reduced)
  local field=rig.chargeField
- if reduced or charge<=.22 or (recovery and recovery>=.21) then
+ if reduced or charge<=0 or not untilContact or untilContact>1.20 or untilContact<-.28 then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
  if not field then
   if liveRamielFields>=6 then return end
-  local parent=rig.core
-  local root=shotPart(parent,'RamielChargeField',Vector3.one*.025,WHITE,false,1)
+  local root=shotPart(rig.core,'RamielFlare',Vector3.one*.025,WHITE,false,1)
   liveRamielFields+=1
   root.Destroying:Connect(function() liveRamielFields-=1 end)
-  local rings,light={},{}
-  for i=1,3 do
-   local plate=shotPart(root,'ConvergingAperture',Vector3.one*.025,WHITE,false,1)
-   rings[i]={plate=plate,plane=PlaneBurst.create(plate,i==3 and Color3.fromRGB(255,123,207) or Color3.fromRGB(106,157,255))}
+  local gui=Instance.new('BillboardGui');gui.Name='Flare';gui.Adornee=root
+  gui.AlwaysOnTop=false;gui.LightInfluence=0;gui.MaxDistance=150;gui.Parent=root
+  local function star(name,color)
+   local image=Instance.new('ImageLabel');image.Name=name;image.Image='rbxasset://textures/sparkle.png'
+   image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5)
+   image.BackgroundTransparency=1;image.ImageColor3=color;image.Parent=gui
+   return image
   end
-  for i=1,5 do light[i]=shotPart(root,'RamielInflow',Vector3.one*.10,Color3.fromRGB(144,197,255),true,1) end
-  field={root=root,rings=rings,light=light};rig.chargeField=field
+  local outer=star('PinkFlare',Color3.fromRGB(255,82,185));outer.Size=UDim2.fromScale(1,1)
+  local inner=star('WhiteFlare',Color3.fromRGB(255,244,250));inner.Size=UDim2.fromScale(.77,.77)
+  local ring=PlaneBurst.create(root,Color3.fromRGB(255,161,221))
+  field={root=root,gui=gui,inner=inner,outer=outer,halo=EnergyDisc.sprite(root,'FlareHalo'),ring=ring}
+  rig.chargeField=field
  end
- local frame=rig.core.CFrame
- local release=recovery and smooth(recovery/.21) or 0
- for i,ring in ipairs(field.rings) do
-  local p=smooth((charge-.24-(i-1)*.14)/(.68-(i-1)*.12))
-  local radius=(2.12-(i-1)*.35-1.18*p+1.85*release)*rig.scale
-  local alpha=smooth((charge-.27-(i-1)*.13)/.15)*(.35+.62*energy)*(1-release)
-  ring.plate.CFrame=frame*CFrame.new(0,0,-(.16+(i-1)*.62)*(1-p*.80))
-  PlaneBurst.pose(ring.plane,Vector3.zAxis,radius,alpha,.13+.055*energy)
- end
- for i,light in ipairs(field.light) do
-  local p=smooth((charge-.25-(i-1)*.058)/(.71-(i-1)*.060))
-  local angle=i*math.pi*.4+(2.35*p+.72*p*p)*(i%2==0 and 1 or -1)
-  local reach=(2.28-2.05*p)*rig.scale
-  local axial=(.60+(.55+i*.075)*(1-p))*(1-p)
-  light.CFrame=frame*CFrame.new(math.cos(angle)*reach,math.sin(angle)*reach,-axial)
-  light.Size=Vector3.one*(.13+.15*p)*rig.scale
-  light.Color=Color3.fromRGB(126,185,255):Lerp(WHITE,p)
-  light.Transparency=1-smooth(p/.18)*(1-smooth((p-.88)/.12))*(1-release)*.85
- end
+ local elapsed=-untilContact
+ local radius=flareRadius(elapsed)
+ local after=1-smooth(math.max(0,elapsed)/.28)
+ local scale=rig.scale
+ field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
+ local width=(.06+radius*2.32)*scale
+ local alpha=(.42+.58*smooth(radius/.09))*after*smooth(radius/.015)
+ local angle=12+19*smooth((elapsed+.89)/.76)
+ field.gui.Size=UDim2.fromScale(width,width)
+ field.inner.Rotation=angle;field.outer.Rotation=angle
+ field.inner.ImageTransparency=1-alpha
+ field.outer.ImageTransparency=1-.73*alpha
+ EnergyDisc.place(field.halo,field.root.Position,width*.77,Color3.fromRGB(255,102,197),.24*alpha*smooth(radius/.32))
+ local rim=smooth((radius-.10)/.30)*after
+ PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
 end
 
 local function clearLoad(self,r)
@@ -5837,9 +5884,7 @@ local function gunCharge(self,r,origin,target,color,ball,q)
   local core=shotPart(root,'ChargedRound',Vector3.one*.04,color,true,1)
   local ring=ball and PlaneBurst.create(root,color) or nil
   local motes={}
-  if ball then
-   for i=1,3 do motes[i]=shotPart(root,'CoilInflow',Vector3.one*.18,color,true,1) end
-  end
+  for i=1,ball and 3 or 2 do motes[i]=EnergyDisc.sprite(root,ball and 'CoilInflow' or 'NeedleInflow') end
   r.load={root=root,core=core,ring=ring,motes=motes};self.loads+=1
  end
  local load=r.load
@@ -5859,10 +5904,10 @@ local function gunCharge(self,r,origin,target,color,ball,q)
  for i,mote in ipairs(load.motes) do
   local time=smooth((q-.12-i*.10)/.55)
   local angle=i*math.pi*2/3+time*1.45
-  local radius=1.27-.97*time
-  mote.CFrame=load.root.CFrame*CFrame.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time))
-  mote.Color=color:Lerp(WHITE,.36+.58*time)
-  mote.Transparency=1-smooth(time/.20)*(1-smooth((time-.72)/.28))
+  local radius=(1.27-.97*time)*(ball and 1 or .68)
+  local point=load.root.CFrame:PointToWorldSpace(Vector3.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time)))
+  EnergyDisc.place(mote,point,(ball and .78 or .52)*(.7+.3*time),color:Lerp(WHITE,.25+.43*time),
+   smooth(time/.20)*(1-smooth((time-.72)/.28))*.58)
  end
 end
 
@@ -5884,15 +5929,15 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
  local sparks=Instance.new('ParticleEmitter')
- sparks.Texture='rbxasset://textures/particles/sparkles_main.dds';sparks.Enabled=false
+ EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64)
+ sparks.Enabled=false;sparks.Rate=0
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
- sparks.Color=ColorSequence.new(WHITE,color);sparks.LightInfluence=0;sparks.LightEmission=.8
- sparks.Lifetime=NumberRange.new(.12,ball and .56 or .34)
- sparks.Speed=NumberRange.new(impact and 9 or 6,(ball and 19 or 24)*grade);sparks.Drag=ball and 3.8 or 5.6
+ sparks.Color=ColorSequence.new(color:Lerp(WHITE,.38),color)
+ sparks.Lifetime=NumberRange.new(.23,ball and .56 or .41)
+ sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
- sparks.Size=NumberSequence.new((ball and .40 or .26)*grade,0);sparks.Transparency=NumberSequence.new(.04,1)
- sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 14 or 7)*grade) or (impact and 8 or 4))
+ sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
  local ring=ball and PlaneBurst.create(node,color) or nil
@@ -5961,7 +6006,10 @@ function View.new(audio,onPrism)
     local drone=droneIndex and droneIndex[node:GetAttribute('Actor')]
     local contactAt=node:GetAttribute('ContactAt')
     local landed=contactAt and now>=contactAt
-    if drone and not r.bound and age>=0 and (progress<1 and not landed or node:GetAttribute('Shape')=='Prism' and age<windup+.35) then
+    local shape=node:GetAttribute('Shape')
+    local hold=shape=='Prism' and (node:GetAttribute('BeamHold') or 1.80) or 0
+    local activePrism=shape=='Prism' and (landed and now-contactAt<hold or not landed and age<windup+.35)
+    if drone and not r.bound and age>=0 and (progress<1 and not landed or activePrism) then
      r.bound=true
      local previous=drone.shotReceipt
      if not previous or at>(previous:GetAttribute('StartedAt') or 0) then drone.shotReceipt=node end
@@ -5971,7 +6019,6 @@ function View.new(audio,onPrism)
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
      to=target.view.CFrame:PointToWorldSpace(anchor*target.view.Size)
     end
-    local shape=node:GetAttribute('Shape')
     local ball=shape=='Ball'
     local color=node:GetAttribute('Color')
     if not color then continue end
@@ -5987,11 +6034,12 @@ function View.new(audio,onPrism)
       local point=node:GetAttribute('ContactPoint') or to
       local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
       local travel=point-origin
-      if now-contactAt<.18 and travel.Magnitude>.1 and BeamVFX.near(point,132) then
+      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(point,132) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
-       local gap=math.min(travel.Magnitude*.14,.85)
-       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,.67,'Prism')
+       local gap=math.min(travel.Magnitude*.14,1.22)
+       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,hold,'Prism')
+       if now-contactAt>=.18 then continue end
        if onPrism then onPrism(origin,now) end
        if not reduced then
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
@@ -12852,37 +12900,52 @@ local function renderDrone(d,dt,now)
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
  local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
- d.view:PivotTo(CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
-  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0))
+ local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
+  *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
+ local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
+ local showRamiel=d.ramiel and (BeamVFX.near(visiblePose.Position,140) or not d.ramielNeutral)
+ if showRamiel then
+  local near=BeamVFX.near(visiblePose.Position,140)
+  d.ramielNeutral=not near
+  local shot=near and d.shotReceipt
+  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
+   local started=shot:GetAttribute('StartedAt') or now
+   local paused=shot:GetAttribute('PausedAt') or 0
+   local effectNow=paused>0 and math.min(now,paused) or now
+   local age=effectNow-started
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 3.10)
+   local impact=windup+(shot:GetAttribute('Duration') or .06)
+   local contactAt=shot:GetAttribute('ContactAt')
+   local fireAge=contactAt and effectNow-contactAt
+   hold=shot:GetAttribute('BeamHold') or 1.80
+   if age>=0 and (fireAge and fireAge<hold+DroneConfig.RamielCloseTime or not fireAge and age<impact+.29) then
+    aim=shot:GetAttribute('ContactPoint') or shot:GetAttribute('Position')
+    charge=math.clamp(age/windup,0,1)
+    recovery=fireAge and fireAge>=0 and fireAge or nil
+    untilContact=recovery and -recovery or math.max(.034,impact-age)
+    if recovery then
+     if d.ramielFiringShot~=shot then
+      d.ramielFiringShot=shot;d.ramielFiringPose=visiblePose
+     end
+     local close=math.clamp((recovery-hold)/DroneConfig.RamielCloseTime,0,1)
+     visiblePose=d.ramielFiringPose:Lerp(visiblePose,close*close*(3-2*close))
+    end
+   end
+  end
+ end
+ d.view:PivotTo(visiblePose)
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)
  end
- if d.ramiel and (BeamVFX.near(d.pos,120) or not d.ramielNeutral) then
-  local near=BeamVFX.near(d.pos,120)
-  d.ramielNeutral=not near
-  local shot=near and d.shotReceipt
-  local charge,recovery,aim=0,nil,nil
-  local reduced=CrystalImpactView.reducedMotion()
-  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
-   local started=shot:GetAttribute('StartedAt') or now
-   local paused=shot:GetAttribute('PausedAt') or 0
-   local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 2.48)
-   local contactAt=shot:GetAttribute('ContactAt')
-   local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
-   local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
-   if age>=0 and (fireAge and fireAge<DroneConfig.RamielRecovery or not fireAge and waiting) then
-    aim=shot:GetAttribute('Position')
-    charge=math.clamp(age/windup,0,1)
-    recovery=fireAge and fireAge>=0 and fireAge or nil
-   end
-  end
+ if showRamiel then
   local resting=charge<=0 and not recovery
   if not resting or not d.ramielResting then
-   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,0,reduced)
-   RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+   local reduced=CrystalImpactView.reducedMotion()
+   DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
+   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
   end
+  if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting
  end
  if s:GetAttribute('Role')=='Compactor' then

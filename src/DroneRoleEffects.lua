@@ -31,17 +31,17 @@ end
 function Effects.Pulse(position,color,first,last,lifetime)
  record('Pulse',{Position=position,Color=color,First=first or .8,Last=last or 5,Duration=lifetime or .3},(lifetime or .3)+.2)
 end
-function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor)
+function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,target,anchor,beamHold,visualRecovery)
  -- Pending records are owned by the job. Pause can outlast a fixed TTL;
  -- release destroys a canceled shot and contact starts the short cleanup.
- return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor})
+ return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery})
 end
 function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
  if not node or not node.Parent then return end
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
  node:SetAttribute('ContactFracture',fractured);node:SetAttribute('ContactBroken',broken);node:SetAttribute('ContactPowered',powered)
  node:SetAttribute('ContactAt',at)
- Debris:AddItem(node,node:GetAttribute('Shape')=='Prism' and 1.03 or .9)
+ Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)

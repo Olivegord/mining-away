@@ -1440,6 +1440,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
  end
  if shotKind and hitSurface then
+  if shotKind=='Prism' then
+   -- A final blow releases its rock reservation immediately. Keep Ramiel's
+   -- recovery clock so a new target cannot start another shot mid-discharge.
+   d.prismReadyAt=now+DroneCatalog.Types.Ramiel.BeamHold+RoleConfig.RamielCloseTime
+  end
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
  end
  -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
@@ -2081,6 +2086,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.warmAt=d.warmAt or now;d.state='Warmup'
  if now-d.warmAt<warmup then return end
  if not d.specialJob then
+  if projectile=='Prism' and now<(d.prismReadyAt or 0) then return end
   d.workShotStarted=true
   local cycle=DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
   if not cycle then return end
@@ -2092,12 +2098,14 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .71 or .38))
+   local chargeWindow=projectile=='Prism' and math.max(2.20,cycle.duration*.71) or cycle.duration*.38
+   local windup=math.min(definition.Windup,chargeWindow)
    local flight=definition.Flight
-   local recovery=projectile=='Prism' and .99 or .10
+   local visualRecovery=definition.BeamHold and definition.BeamHold+RoleConfig.RamielCloseTime
+   local recovery=visualRecovery and visualRecovery+.075 or .10
    d.specialJob.duration=math.max(cycle.duration,windup+flight+recovery);d.specialJob.impact=(windup+flight)/d.specialJob.duration
    d.specialJob.from=from;d.specialJob.contact=aim
-   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size)
+   d.specialJob.projectile=RoleEffects.Projectile(projectile,from,aim,RoleConfig.Types[d.role].Color,now,windup,flight,d.id,r.id,r.part.CFrame:PointToObjectSpace(aim)/r.part.Size,definition.BeamHold,visualRecovery)
   else
    for key,value in pairs({EffectType=d.role,EffectStartedAt=now,EffectDuration=cycle.duration,EffectImpact=cycle.impact,EffectDoneAt=0,EffectDepleted=false,EffectOwner=d.owner,EffectDrone=d.id,EffectPausedAt=0}) do r.part:SetAttribute(key,value) end
    r.part:SetAttribute('EffectSerial',r.specialSerial)

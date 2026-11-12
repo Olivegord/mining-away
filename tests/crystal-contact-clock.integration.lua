@@ -138,33 +138,40 @@ observer:step(111.22,drones,targets)
 assert(#shotAudio==4 and not observer.records[node].after and observer.trails==0 and observer.heads==0 and #observer.bursts==0,'contact replayed or shot visuals leaked')
 local prismCore=Instance.new('Part');prismCore.Parent=fx
 local prism={core=prismCore,scale=1}
-RoleEffectView.ramielCharge(prism,.45,.19,nil,false)
+RoleEffectView.ramielCharge(prism,.65,1.03,false)
 local chargeField=assert(prism.chargeField)
-local mote=chargeField.light[2]
-local early=(mote.anchor.WorldPosition-prismCore.Position).Magnitude
-assert(mote.gui.Enabled and mote.image.Image=='rbxasset://textures/ui/VR/circleWhite.png')
-RoleEffectView.ramielCharge(prism,.85,.68,nil,false)
-assert((mote.anchor.WorldPosition-prismCore.Position).Magnitude<early*.55 and chargeField.rings[1].plane.rays[1].beam.Enabled,
- 'Ramiel charge did not visibly converge before firing')
-RoleEffectView.ramielCharge(prism,1,.4,.23,false)
-assert(not prism.chargeField and not chargeField.root.Parent,'Ramiel charge leaked past release')
+local function widthAt(remaining)
+ RoleEffectView.ramielCharge(prism,.95,remaining,false)
+ return chargeField.gui.Size[1]
+end
+local first,held,growing,ignition=widthAt(1.03),widthAt(.30),widthAt(.10),widthAt(0)
+assert(held<first*2.2 and growing>held*3 and ignition>growing*2.5,'flare lost its small hold or accelerated bloom')
+assert(chargeField.halo.gui.Enabled and chargeField.halo.image.Image=='rbxasset://textures/ui/VR/circleWhite.png')
+assert(chargeField.ring.rays[1].beam.Enabled,'flare ring missing at ignition')
+RoleEffectView.ramielCharge(prism,1,-.29,false)
+assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the release')
 local beamCalls,kicks={},0
 RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
 local discharge=RoleEffectView.new(nil,function() kicks+=1 end)
-local cast=receipt('ramiel',115,'Prism',2.48)
-cast:SetAttribute('Duration',.06)
+local cast=receipt('ramiel',115,'Prism',3.10)
+cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',1.80)
 roleFolder.ChildAdded:Fire(cast)
 local prismDrones={ramiel={ramiel=prism}}
-discharge:step(117.52,prismDrones,targets)
+discharge:step(118.12,prismDrones,targets)
 assert(#beamCalls==0 and kicks==0,'Ramiel fired before contact')
-cast:SetAttribute('ContactAt',117.54)
+cast:SetAttribute('ContactAt',118.16)
 cast:SetAttribute('ContactPoint',Vector3.new(0,2,8))
-discharge:step(117.55,prismDrones,targets)
+discharge:step(118.17,prismDrones,targets)
 assert(#beamCalls==1 and kicks==1)
 local beam=beamCalls[1]
-assert(math.abs((beam[1]-prismCore.Position).Magnitude-.85)<1e-6 and beam[4]<=.60 and beam[5]>=.65 and beam[6]=='Prism')
-discharge:step(117.60,prismDrones,targets)
+assert(math.abs((beam[1]-prismCore.Position).Magnitude-math.sqrt(68)*.14)<1e-6 and beam[4]<=.60 and beam[5]==1.80 and beam[6]=='Prism')
+discharge:step(118.23,prismDrones,targets)
 assert(#beamCalls==1 and kicks==1,'Ramiel discharge replayed')
+local latePrism=RoleEffectView.new(nil,function() kicks+=1 end)
+local lateDrones={ramiel={ramiel=prism}}
+latePrism:step(119.10,lateDrones,targets)
+assert(#beamCalls==2 and kicks==1 and lateDrones.ramiel.shotReceipt==cast,'late observer lost the held beam or replayed ignition')
+latePrism:destroy()
 discharge:destroy();cast:Destroy()
 prismCore:Destroy()
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
