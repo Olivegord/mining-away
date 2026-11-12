@@ -38,6 +38,10 @@ function Effects.step(now)
   elseif age<t.duration then
    local expansion=math.min(1,age/.035)
    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
+   if rig.style=='Prism' then
+    expansion=1-(1-expansion)^3
+    collapse=collapse*collapse*(3-2*collapse)
+   end
    BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
   else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
  end

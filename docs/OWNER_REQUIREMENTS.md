@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — animation timing, effect size and owner play sessions
+
+Study animation tutorials and give Ramiel and the gun drones clear anticipation, a readable hold, and overlapping follow-through. Make their charge effects, rock chips and contact particles large enough to see from the usual camera. While the owner is playing in Studio, leave their session running and continue work that does not require Edit.
+
 ## November 11 follow-up — beam hold, hovering ore and aiming cues
 
 Keep the mining beam visible until the compressed crystal splits. Let the collectible ore finish its arc and hover steadily above the ground with four-point glints. Give Needler and Ballcaster a thin red sight with uneven segments and gaps while they aim. Make breakup debris fall with more weight and add small crystal tinks at the split and as selected fragments touch down.

@@ -1196,35 +1196,22 @@ local function renderDrone(d,dt,now)
   local shot=near and d.shotReceipt
   local charge,recovery,aim=0,nil,nil
   local reduced=CrystalImpactView.reducedMotion()
-  if shot and shot.Parent and not motionPaused and (s:GetAttribute('HP') or 0)>0 then
+  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
    local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.6)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.94)
    local contactAt=shot:GetAttribute('ContactAt')
-   local fireAge=contactAt and now-contactAt or age-windup-(shot:GetAttribute('Duration') or .06)
-   if age>=0 and fireAge<DroneConfig.RamielRecovery then
+   local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
+   local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
+   if age>=0 and (fireAge and fireAge<DroneConfig.RamielRecovery or not fireAge and waiting) then
     aim=shot:GetAttribute('Position')
     charge=math.clamp(age/windup,0,1)
-    recovery=fireAge>=0 and fireAge or nil
+    recovery=fireAge and fireAge>=0 and fireAge or nil
    end
   end
   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,reduced and 0 or now*.38%6.283,reduced)
-  if aim and energy>.10 and not reduced and not BeamVFX.reduced() then
-   local ring=d.ramiel.rings
-   if not ring then
-    ring={PlaneBurst.create(d.ramiel.core,Color3.fromRGB(106,129,255)),
-     PlaneBurst.create(d.ramiel.core,Color3.fromRGB(206,142,255))}
-    d.ramiel.rings=ring
-   end
-   local pulse=(now*2.1)%1
-   local alpha=math.clamp(energy*1.7,0,.82)
-   PlaneBurst.pose(ring[1],Vector3.zAxis,(1.05+.74*pulse)*d.ramiel.scale,alpha*(1-pulse),.095)
-   PlaneBurst.pose(ring[2],Vector3.zAxis,(1.30+.35*pulse)*d.ramiel.scale,alpha*.65,.055)
-  elseif d.ramiel.rings then
-   for _,ring in ipairs(d.ramiel.rings) do PlaneBurst.destroy(ring) end
-   d.ramiel.rings=nil
-  end
+  RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0

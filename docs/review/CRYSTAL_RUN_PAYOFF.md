@@ -52,3 +52,17 @@ Reviewed consecutive timestamped playback samples from roughly 2:54.55 through 3
 The normal game windup is 1.60 seconds inside the existing 2.80-second cycle, with the same damage and reward per shot. The confirmed hit draws one red beam with its own bright center. The firing pose holds through the beam's main body and closes after it. The idle visible hulls fit a longest dimension of about 2.65 studs, including Ramiel's closed diamond. The expanded firing pose still grows during the attack.
 
 The split now throws eight bright faceted shards higher than the two large rock faces. A separate world-space carrier keeps warm sparks and dust alive past the split, and the gem glints are larger and staggered. The hit stop remains 90 ms. Rock feedback uses a 220 ms translation envelope with zero angular recoil and distance falloff. Cutter and projectile particles travel further from the contact point and fade over longer windows. Compactor press and ejection each emit a short burst on their existing cues. Orbital's wider sight and descending pressure rings lead into brighter ground contact. The beam leaves a 26-stud local column of embers and a second ground fallout burst.
+
+## Anticipation and effect size
+
+In the later Studio recording, Ramiel's first few silhouette changes were over before its firing pose became legible. The two gun drones changed between their pre-shot and recoil poses in a handful of frames. Light impacts and regular cutter charges were also difficult to pick out among nearby drones and crystals.
+
+Jason Martinsen's timing and spacing tutorial shows how to block the important poses before shaping the motion between them. Shawn Kelly demonstrates a moving hold that eases out of an overshoot and keeps a smaller detail moving. Riot's character animation lesson applies strong poses and overlapping states to games. The revised sequence uses these techniques to give the viewer time to recognize what the drone is about to do. [Timing and spacing](https://www.animationmentor.com/blog/tutorial-animate-with-timing-and-spacing-in-mind/) · [Moving holds](https://www.animationmentor.com/blog/why-all-animators-need-to-master-the-moving-hold/) · [Riot character animation](https://www.riotgames.com/en/artedu/character-animation)
+
+| Drone | Preparation and hold | Release and follow-through |
+| --- | --- | --- |
+| Ramiel | The diamond pulls backward and counter-turns, then opens and settles past its widest pose. The outer silhouette holds for roughly the final third of the 1.94-second windup. Rings and light travel into the inner aperture as the pitch rises. | The confirmed contact starts the single red beam and a brief aperture expansion. The facets lag behind and fold back after the beam. |
+| Needler | A quick 0.20-second windup draws the rail back and shows a loaded round. | The rail moves forward from that pose, recoils, then settles. A longer tracer and larger strike sparks make the trajectory readable. |
+| Ballcaster | The heavier 0.56-second windup braces the hull and holds a bright orb as light curves inward. | A larger recoil and slower reset distinguish the heavier shot. The orb stretches on release, and its wake survives contact. |
+
+The normal shot cycle lengths, damage and rewards are preserved. Faster upgraded cycles retain the existing windup cap. Larger chips, cutter vanes and contact sparks use the existing visual budgets and fade on their existing cues. The timing changes are staged for gameplay readability. The frame samples in the earlier section describe the film reference.

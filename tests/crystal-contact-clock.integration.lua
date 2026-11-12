@@ -103,8 +103,15 @@ local drones={gunner=gunner,late={}}
 local targets={live={view=r.view}}
 observer:step(110.03,drones,targets)
 assert(not observer.records[node].projectile and gunner.shotReceipt==node and shotAudio[1][1]=='coil_load')
+observer:step(110.16,drones,targets)
+local loaded=assert(observer.records[node].load)
+local gathered=loaded.core.Size.X
+observer:step(110.26,drones,targets)
+assert(loaded.core.Size.X>gathered and loaded.core.Transparency<.35 and loaded.ring.rays[1].beam.Enabled,
+ 'the loading pose did not build a visible charge')
 observer:step(110.32,drones,targets)
 assert(observer.records[node].projectile and gunner.shotReceipt==node)
+assert(not observer.records[node].load and not loaded.root.Parent,'the charge stayed behind when the shot fired')
 assert(shotAudio[2][1]=='coil_fire')
 node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
 observer:step(110.53,drones,targets)
@@ -120,5 +127,16 @@ observer:step(110.60,drones,targets)
 assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
 observer:step(111.22,drones,targets)
 assert(#shotAudio==4 and not observer.records[node].after and observer.trails==0 and observer.heads==0 and #observer.bursts==0,'contact replayed or shot visuals leaked')
+local prismCore=Instance.new('Part');prismCore.Parent=fx
+local prism={core=prismCore,scale=1}
+RoleEffectView.ramielCharge(prism,.45,.19,nil,false)
+local chargeField=assert(prism.chargeField)
+local early=chargeField.light[2].Position.Magnitude
+RoleEffectView.ramielCharge(prism,.85,.68,nil,false)
+assert(chargeField.light[2].Position.Magnitude<early*.55 and chargeField.rings[1].plane.rays[1].beam.Enabled,
+ 'Ramiel charge did not visibly converge before firing')
+RoleEffectView.ramielCharge(prism,1,.4,.23,false)
+assert(not prism.chargeField and not chargeField.root.Parent,'Ramiel charge leaked past release')
+prismCore:Destroy()
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

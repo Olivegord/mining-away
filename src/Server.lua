@@ -2095,7 +2095,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .62 or .38))
+   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .71 or .38))
    local flight=definition.Flight
    d.specialJob.duration=math.max(cycle.duration,windup+flight+.10);d.specialJob.impact=(windup+flight)/d.specialJob.duration
    d.specialJob.from=from;d.specialJob.contact=aim

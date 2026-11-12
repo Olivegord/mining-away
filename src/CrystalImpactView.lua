@@ -32,14 +32,14 @@ function V.new(parent,audio,onSplit)
    if #self.pieces>=48 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*(.42+i*.1) or .10+i*.036
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint)
+   local size=large and scale*(.42+i*.1) or .14+i*.055
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.34+(i%3)*.13))
    p.Size=Vector3.new(size*.72,size*1.45,size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   track(p,at,origin,direction*(large and 8 or 9)+Vector3.yAxis*(large and 4 or 2),
-    large and .5 or .24,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
+   track(p,at,origin,direction*8+Vector3.yAxis*(large and 4 or 4.5),
+    large and .5 or .37,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
   end
  end
  function self:step(now)

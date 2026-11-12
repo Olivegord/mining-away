@@ -115,14 +115,24 @@ for _,test in ipairs({
  local shot
  if test.shot then
   shot=Instance.new('Folder');shot.Parent=workspace;shot:SetAttribute('StartedAt',10)
+  shot:SetAttribute('Windup',test.role=='Ballcaster' and .56 or .20)
  end
- SpecialDroneMotion.step(motion,source,nil,10.09,.09,shot)
+ local posedAt=shot and (10+shot:GetAttribute('Windup')*.68) or 10.09
+ SpecialDroneMotion.step(motion,source,nil,posedAt,.09,shot)
  local working=hardware.Position
  assert((working-initial).Magnitude>.08,test.role..' hardware stayed still while working')
  if shot then
-  shot:SetAttribute('PausedAt',10.09)
+  shot:SetAttribute('PausedAt',posedAt)
   SpecialDroneMotion.step(motion,source,nil,12,.016,shot)
   assert((hardware.Position-working).Magnitude<1e-6,'shot hardware ignored the replicated pause')
+  shot:SetAttribute('PausedAt',0)
+  local fireAt=10+shot:GetAttribute('Windup')
+  SpecialDroneMotion.step(motion,source,nil,fireAt-.001,1/60,shot)
+  local loaded=hardware.Position
+  SpecialDroneMotion.step(motion,source,nil,fireAt+.001,1/60,shot)
+  assert((hardware.Position-loaded).Magnitude<.022,'release snapped away from the loaded pose')
+  SpecialDroneMotion.step(motion,source,nil,fireAt+.070,1/60,shot)
+  assert(hardware.Position.Z>loaded.Z+.03,'recoil never overshot the loaded pose')
   shot:Destroy()
  end
  source:SetAttribute('State','Follow')

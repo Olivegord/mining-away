@@ -330,18 +330,18 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Four narrow vanes close in the firing plane. Their radius and speed
  -- communicate how close the charge is, even with several drones in view.
  local lock=smooth((q-.12)/.73)
- local vaneAlpha=smooth(q/.18)*(1-smooth((q-.78)/.19))
+ local vaneAlpha=smooth(q/.18)*(1-smooth((q-.84)/.15))
  for i,vane in ipairs(h.collars) do
   local angle=(i-1)*math.pi*.5+lock*.63
   local radial=across*math.cos(angle)+upright*math.sin(angle)
   local tangent=across*-math.sin(angle)+upright*math.cos(angle)
-  local center=radial*s*(3.7-2.86*lock)-direction*s*(.87-.87*lock)
-  local span=s*(1.06-.56*lock)
-  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.34*vaneAlpha)
+  local center=radial*s*(5.05-3.85*lock)-direction*s*(1.1-1.1*lock)
+  local span=s*(1.40-.64*lock)
+  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.52*vaneAlpha)
  end
  drawFlash(h,from,direction,flashQ,s)
  local focus=smooth(q/.78)
- h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.26+1.05*focus)
+ h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.34+1.47*focus)
  h.core.Color=r.color:Lerp(WHITE,.26+.63*focus)
  h.core.Transparency=1-alive*.94
  h.particleSource.Position=toward*s*.8

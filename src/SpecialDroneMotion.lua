@@ -6,9 +6,10 @@ local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge
 local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true,Compactor=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
- if t<=.52 then return loaded*smooth((t-.12)/.4) end
- if t<=.68 then local release=math.clamp((t-.52)/.16,0,1)^3;return loaded+(contact-loaded)*release end
- return contact*(1-smooth((t-.68)/.32))
+ if t<=.55 then return loaded*smooth((t-.07)/.34)*(1-.08*smooth((t-.42)/.13)) end
+ if t<=.68 then return loaded*.92+(contact-loaded*.92)*smooth((t-.55)/.13) end
+ local follow=smooth((t-.68)/.055)*(1-smooth((t-.735)/.23))
+ return contact*(1-smooth((t-.68)/.32)+.17*follow)
 end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 
@@ -18,8 +19,9 @@ function Motion.new(model,role)
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
   local kind=part:GetAttribute('SpecialMotion')
-  if part:IsA('BasePart') and kind then
-   record.parts[#record.parts+1]={part=part,kind=kind,side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
+  local gun=role=='Needler' or role=='Ballcaster'
+  if part:IsA('BasePart') and (kind or gun and part.Transparency<1) then
+   record.parts[#record.parts+1]={part=part,kind=kind or 'GunBody',side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
   end
  end
  return record
@@ -80,40 +82,63 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
-local function fieldStep(record,state,now,dt,shot,source)
- local recoil,reload,charge=0,0,0
- local ball=record.role=='Ballcaster'
- local active=state=='SpecialMine' or state=='Warmup' or state=='Recover' or (source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil
- if active and shot and shot.Parent then
-  local started=shot:GetAttribute('StartedAt')
-  local paused=shot:GetAttribute('PausedAt') or 0
-  local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
-  local windup=shot:GetAttribute('Windup') or 0
-  if age>=0 and age<windup then
-   charge=smooth(age/windup)
-   recoil=-.45*charge
-  elseif age>=windup then
-   local fire=age-windup
-   recoil=smooth(fire/(ball and .028 or .018))*(1-smooth(fire/(ball and .36 or .16)))
-   reload=(1-smooth((fire-.065)/.46))
-  end
+-- Read the same clock as the projectile. Each cue stops at the pose that
+-- makes the next action legible, then releases with a fast stroke and drag.
+local function gunPose(ball,now,shot)
+ if not shot or not shot.Parent then return nil end
+ local started=shot:GetAttribute('StartedAt')
+ local windup=shot:GetAttribute('Windup')
+ if not finite(started) or not finite(windup) or windup<=0 then return nil end
+ local paused=shot:GetAttribute('PausedAt') or 0
+ local age=(paused>0 and math.min(now,paused) or now)-started
+ if age<0 then return nil end
+ local pull=ball and .44 or .28
+ local travel=ball and .54 or .32
+ local settle=ball and .48 or .26
+ if age<windup then
+  local q=age/windup
+  local cock=smooth((q-.02)/(ball and .56 or .54))
+  local brace=cock*(1-.10*smooth((q-.62)/.38))
+  return pull*brace,(ball and .20 or .14)*brace,smooth((q-.08)/.80)
  end
- if record.role=='Needler' or record.role=='Ballcaster' then
-  local warmAt=source:GetAttribute('WarmupStart') or 0
-  local untilShot=(source:GetAttribute('WarmupDuration') or 0)-(now-warmAt)
-  if state=='Warmup' and warmAt>0 and untilShot>=0 and untilShot<.10 then recoil=-.22*(1-untilShot/.10) end
+ local t=age-windup
+ if t>=settle then return nil end
+ local reset=1-smooth((t-.065)/(settle-.065))
+ local strike=smooth(t/.026)*(1-smooth((t-.027)/.062))
+ local kick=smooth((t-.021)/.047)*reset
+ local spring=smooth((t-.14)/.08)*(1-smooth((t-.22)/math.max(.04,settle-.22)))
+ local slide=pull*.90*(1-smooth(t/.032))-pull*.50*strike+travel*kick-travel*.16*spring
+ local brace=(ball and .20 or .14)*.90*(1-smooth(t/.04))+.42*travel*kick
+ return slide,brace,1-smooth(t/.052)
+end
+
+local function fieldStep(record,state,now,dt,shot,source)
+ local ball=record.role=='Ballcaster'
+ local gun=ball or record.role=='Needler'
+ local slide,brace,load=0,0,0
+ if gun then
+  local active=state=='SpecialMine' or state=='Warmup' or state=='Recover'
+   or ((source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil)
+  local movement,lean,heat
+  if active then movement,lean,heat=gunPose(ball,now,shot) end
+  local fade=math.exp(-math.min(dt or 0,.1)*19)
+  slide=movement or (record.slide or 0)*fade
+  brace=lean or (record.brace or 0)*fade
+  load=heat or (record.load or 0)*fade
+  record.slide,record.brace,record.load=slide,brace,load
  end
  local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and (state=='Intake' or state=='Press'))
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
  local pivot=record.model:GetPivot()
+ if gun then pivot*=CFrame.new(0,brace*.32,brace*record.scale)*CFrame.Angles(-brace*.29,0,0) end
  for _,item in ipairs(record.parts) do
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' then offset=Vector3.new(0,0,.36*recoil)
-  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.52*recoil)
+  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,0,slide)
+  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,0,slide*.91)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
@@ -126,7 +151,9 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
   if kind=='BallReload' then
-   item.part.Size=item.size*(.78+.46*charge)*(1-.92*reload)
+   item.part.Size=item.size*(.06+1.08*load)
+  elseif kind=='DartLoad' then
+   item.part.Size=item.size*(.06+.94*load)
   end
  end
 end

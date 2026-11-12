@@ -731,10 +731,10 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.59,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=1.60,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.71,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=1.94,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
-  Needler = {Name='Needler',Duration=.66,Impact=.36,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.065,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.28,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
+  Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -4270,32 +4270,22 @@ function DroneConfig.ramielRig(model: Model)
  end
  return rig
 end
--- Screen-space landmarks from the Operation Yashima shot. Time is relative
--- to 174.55 in the reference. Outer reach and front aperture have separate
--- curves because the front keeps turning after the large facets settle.
+-- Main Yashima shot, blocked for the gameplay camera. The facets first pull
+-- in, then sweep past the locked silhouette. The aperture catches up and
+-- keeps gathering light after the large glass shapes have settled.
 local RAMIEL_POSE={
- -- seconds, reach, outer roll, outer fold, front roll, front reach, energy
- {0,    0,    0,   71,   0,   0,    0},
- {.22, .16,  12,   50,   8,  .25,   0},
- {.43, .58,  31,   22,  21,  .61,  .03},
- {.66, .64,  39,   30,  38,  .77,  .04},
- {.87, .56,  30,   46,  54,  .86,  .06},
- {1.12,.43,  10,   58,  73,  .94,  .08},
- {1.23,.40,  -6,   62,  92,  .95,  .08},
- {1.40,.73, -15,   29, 120, 1.02,  .13},
- {1.62,.72,  -9,   21, 147, 1.00,  .15},
- {2.02,.68,  10,   28, 175,  .92,  .10},
- {2.28,.71,  27,   46, 201,  .92,  .11},
- {2.47,1.03, 47,   22, 225,  .96,  .14},
- {2.68,1.06, 57,    9, 244, 1.02,  .15},
- {3.00,1.01, 62,    4, 264, 1.04,  .19},
- {3.28,1.00, 65,    0, 283, 1.04,  .26},
- {3.65,1.00, 68,    0, 288, 1.02,  .36},
- {4.31,1.00, 71,    0, 288, 1.00,  .57},
- {4.75,1.00, 72,    0, 288, 1.00,  .76},
- {5.20,1.00, 72,    0, 288, 1.00,  .92},
- {6.20,1.00, 72,    0, 288, 1.00,  .96},
- {6.55,1.00, 72,    0, 288, 1.00, 1.00},
+ -- phase, reach, outer roll, fold, aperture roll, aperture reach, energy
+ {0,    0,     0,  71,   0,   0,    0},
+ {.12,  0,   -23,  72,  -9,   0,    .025},
+ {.22, .13,  -27,  63,   3,  .12,   .07},
+ {.37, .69,   27,  29,  31,  .40,   .13},
+ {.47, .54,   21,  44,  58,  .53,   .16},
+ {.60,1.08,   71,   9, 113,  .83,   .24},
+ {.69,1.00,   75,   0, 151, 1.06,   .33},
+ {.79,1.00,   72,   0, 147, 1.00,   .47},
+ {.89,1.00,   72,   0, 148, 1.01,   .73},
+ {.95, .975,  72,   4, 149,  .94,   .92},
+ {1,   1.00,  72,   0, 150, 1.00,  1.00},
 }
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -4323,52 +4313,62 @@ local function pyramid(part: BasePart,frame: CFrame,axis: Vector3,base: Vector3,
  part.CFrame=CFrame.fromMatrix(center,right,up,right:Cross(up))*CFrame.Angles(0,roll,0)
  part.Transparency=1-.86*visibility
 end
-DroneConfig.RamielRecovery=.59
+DroneConfig.RamielRecovery=.69
 function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?): number
- local time=math.clamp(charge,0,1)*6.55
+ local time=math.clamp(charge,0,1)
  local index=1
  while index<#RAMIEL_POSE-1 and time>RAMIEL_POSE[index+1][1] do index+=1 end
  local t=(time-RAMIEL_POSE[index][1])/(RAMIEL_POSE[index+1][1]-RAMIEL_POSE[index][1])
  local reach,outerRoll,fold,frontRoll,frontReach,energy=ramielTrack(index,t,2),ramielTrack(index,t,3),ramielTrack(index,t,4),
   ramielTrack(index,t,5),ramielTrack(index,t,6),ramielTrack(index,t,7)
  local closing=recovery and smoothstep((recovery-.29)/(DroneConfig.RamielRecovery-.29)) or 0
+ local gather=smoothstep(time/.19)*(1-.68*smoothstep((time-.18)/.48))
+ local recoil=0
  if recovery then
-  reach=1-closing;frontReach=reach
-  fold=closing*62;outerRoll=72-closing*19;frontRoll=288+closing*30
-  energy=math.exp(-recovery*11)
+  local follow=smoothstep(recovery/.073)*(1-smoothstep((recovery-.073)/.33))
+  reach=(1+.072*follow)*(1-closing);frontReach=1-closing
+  fold=closing*62;outerRoll=72+5*follow-21*closing;frontRoll=150+34*closing
+  energy=1-smoothstep((recovery-.045)/.32)
+  gather=.32*(1-closing);recoil=follow
  end
- local reveal=smoothstep((time-.04)/.48)*(1-closing)
+ local reveal=smoothstep((time-.15)/.39)*(1-closing)
  if reduced then
-  reach=reveal;outerRoll=72;fold=0;frontRoll=288;frontReach=reveal;energy*=.38
+  reach=reveal;outerRoll=72;fold=0;frontRoll=150;frontReach=reveal;energy*=.38
+  gather=0;recoil=0
  end
  local frame=pivot*CFrame.Angles(0,roll,0)
  if aim and (aim-pivot.Position).Magnitude>.01 then
   local forward=(aim-pivot.Position).Unit
   local up=math.abs(forward.Y)>.94 and Vector3.zAxis or Vector3.yAxis
-  frame=frame:Lerp(CFrame.lookAt(pivot.Position,aim,up),smoothstep(time/.62)*(1-closing))
+  local lock=smoothstep(time/.48)*(1-closing)
+  frame=frame:Lerp(CFrame.lookAt(pivot.Position,aim,up),lock)
+  local squeeze=smoothstep(time/.18)*(1-smoothstep((time-.20)/.31))*(recovery and 0 or 1)
+  frame*=CFrame.new(0,.16*gather,.45*gather+.28*recoil)*CFrame.Angles(-squeeze*.14,0,math.rad(-20)*squeeze)
  end
  local radius=rig.scale*1.35
  local solids=rig.solids
  if solids.Upper then
-  local size=radius*(1-.58*reveal)
+  local size=radius*(1-.18*gather-.58*reveal)
   pyramid(solids.Upper,frame,Vector3.yAxis,Vector3.zero,size,size*1.43,1-reveal,math.pi*.25)
   pyramid(solids.Lower,frame,-Vector3.yAxis,Vector3.zero,size,size*1.43,1-reveal,math.pi*.25)
   for i=1,5 do
    local angle=math.pi*.5+(i-.5)*math.pi*2/5+math.rad(outerRoll-72)
-   local hinge=math.rad(fold+math.sin(i*2.4)*math.min(10,fold*.4))
+   local drag=math.sin(i*2.4)*math.min(13,fold*.37)
+   local hinge=math.rad(fold+drag)
    local axis=Vector3.new(math.cos(angle)*math.cos(hinge),math.sin(angle)*math.cos(hinge),math.sin(hinge))
    local root=Vector3.new(math.cos(angle),math.sin(angle),0)*radius*(.10+.18*reach)
    local length=radius*(.50+(i==3 and .84 or 1.40)*reach)
    local ray=solids['Star'..i]
-   pyramid(ray,frame,axis,root,length,radius*(.38+.55*reach),reveal,.30+math.rad(fold)*.66)
+   local fan=smoothstep((time-.17-(i-1)*.014)/.34)*(1-closing)
+   pyramid(ray,frame,axis,root,length,radius*(.38+.55*reach),reduced and reveal or fan,.30+math.rad(fold)*.66)
    local blue=RAMIEL_GLASS:Lerp(Color3.fromRGB(18,39,135),i%2==0 and .54 or .28)
-   ray.Color=blue:Lerp(Color3.fromRGB(255,188,244),energy^1.65*.80)
+   ray.Color=blue:Lerp(Color3.fromRGB(249,177,240),energy^1.6*.70)
    local front=solids['Aperture'..i]
    if front then
     local turn=math.pi*.5+(i-.5)*math.pi*2/5+math.rad(frontRoll)
     local inner=Vector3.new(math.cos(turn),math.sin(turn),-.08).Unit
     pyramid(front,frame,inner,Vector3.new(0,0,-.31*radius),radius*(.14+.59*frontReach),
-     radius*(.12+.33*frontReach),reveal,.58)
+     radius*(.12+.33*frontReach),reveal*smoothstep((time-.27)/.34),.58)
     front.Color=Color3.fromRGB(147,201,255):Lerp(Color3.fromRGB(255,224,241),energy*.88)
    end
   end
@@ -4384,13 +4384,13 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   end
  end
  rig.core.CFrame=frame*CFrame.new(0,0,-(.17+.23*reveal)*radius)
- rig.core.Size=Vector3.one*radius*(.17+.40*energy^2)
- rig.core.Transparency=1-reveal*(.70+.30*energy)
+ rig.core.Size=Vector3.one*radius*(.17+.64*energy^1.55)
+ rig.core.Transparency=1-math.max(reveal,smoothstep((time-.13)/.24)*.66*(1-closing))*(.76+.24*energy)
  rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,215,229),energy^1.6*.93)
  local light=rig.core:FindFirstChild('ApertureLight')
  if light and light:IsA('PointLight') then
   light.Enabled=energy>.15
-  light.Brightness=2.7*energy^2
+  light.Brightness=3.8*energy^1.6
  end
  return energy
 end
@@ -4607,6 +4607,7 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
    hardware('DartTip',Vector3.new(.21,.20,.34),CFrame.new(side*.52,.07,-1.55),pale,smooth,nil,'DartSlide')
   end
   hardware('RailCover',Vector3.new(1.24,.10,.38),CFrame.new(0,.28,.27),pale,smooth)
+  hardware('ChamberedDart',Vector3.new(.23,.24,.80),CFrame.new(0,.19,-1.40),Color3.fromRGB(255,220,138),Enum.Material.Neon,nil,'DartLoad')
  elseif role=='Ballcaster' then
   pod('CoilHull',1.88,.58,0,painted,slate)
   local ring=hardware('LaunchRing',Vector3.new(.24,1.28,1.28),CFrame.new(0,.14,-.96)*foreAft,dark,metal,cylinder,'BallSlide')
@@ -9569,7 +9570,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
-   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .62 or .38))
+   local windup=math.min(definition.Windup,cycle.duration*(projectile=='Prism' and .71 or .38))
    local flight=definition.Flight
    d.specialJob.duration=math.max(cycle.duration,windup+flight+.10);d.specialJob.impact=(windup+flight)/d.specialJob.duration
    d.specialJob.from=from;d.specialJob.contact=aim

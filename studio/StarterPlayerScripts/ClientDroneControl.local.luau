@@ -1256,7 +1256,8 @@ local CUES = {
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
- prism_fire={id='9118612324',volume=.24,duration=.56,pitch=1.21,cooldown=.14,range=70,maxVoices=2,fallback='action_jump_land.mp3'},
+ prism_fire={id='9118612324',volume=.31,duration=.62,pitch=1.12,cooldown=.14,range=78,maxVoices=2,fallback='action_jump_land.mp3'},
+ prism_charge={id='9119816710',volume=.33,duration=2.1,pitch=.83,cooldown=.1,range=80,priority=4,fallback='volume_slider.ogg'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
@@ -1311,8 +1312,9 @@ local CUES = {
  swarm_launch={id='9118941667',volume=.16,duration=.65,pitch=1.3,cooldown=.2,fallback='action_get_up.mp3'},
  shot={id='9126066421',volume=.19,duration=.45,pitch=1.5,cooldown=.065,fallback='action_get_up.mp3'},
  needle_fire={id='9113500510',volume=.21,duration=.20,pitch=1.46,attack=.008,cooldown=.07,range=54,maxVoices=3,fallback='volume_slider.ogg'},
+ needle_cock={id='9126066421',volume=.096,duration=.13,pitch=1.47,attack=.012,cooldown=.14,range=38,maxVoices=2,fallback='volume_slider.ogg'},
  needle_hit={ids={'9125869504','9125869138'},volume=.29,duration=.26,pitch=1.32,attack=.008,cooldown=.075,range=59,maxVoices=3,fallback='action_jump_land.mp3'},
- coil_load={id='9119816710',volume=.12,duration=.30,pitch=1.26,attack=.027,cooldown=.16,range=42,maxVoices=2,fallback='volume_slider.ogg'},
+ coil_load={id='9119816710',volume=.18,duration=.57,pitch=1.12,attack=.035,cooldown=.16,range=51,maxVoices=2,fallback='volume_slider.ogg'},
  coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
  coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
  ore_land={id='9125869138',volume=.13,duration=.29,pitch=1.22,attack=.009,cooldown=.11,range=35,maxVoices=2,fallback='action_jump_land.mp3'},
@@ -2303,18 +2305,18 @@ drawRich=function(r,from,to,now,width,charge,releaseAge,scale,afterAge,chargeDur
  -- Four narrow vanes close in the firing plane. Their radius and speed
  -- communicate how close the charge is, even with several drones in view.
  local lock=smooth((q-.12)/.73)
- local vaneAlpha=smooth(q/.18)*(1-smooth((q-.78)/.19))
+ local vaneAlpha=smooth(q/.18)*(1-smooth((q-.84)/.15))
  for i,vane in ipairs(h.collars) do
   local angle=(i-1)*math.pi*.5+lock*.63
   local radial=across*math.cos(angle)+upright*math.sin(angle)
   local tangent=across*-math.sin(angle)+upright*math.cos(angle)
-  local center=radial*s*(3.7-2.86*lock)-direction*s*(.87-.87*lock)
-  local span=s*(1.06-.56*lock)
-  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.34*vaneAlpha)
+  local center=radial*s*(5.05-3.85*lock)-direction*s*(1.1-1.1*lock)
+  local span=s*(1.40-.64*lock)
+  curve(vane,center-tangent*span,center+tangent*span,tangent,tangent,0,s*.52*vaneAlpha)
  end
  drawFlash(h,from,direction,flashQ,s)
  local focus=smooth(q/.78)
- h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.26+1.05*focus)
+ h.core.CFrame=CFrame.new(from);h.core.Size=Vector3.one*s*(.34+1.47*focus)
  h.core.Color=r.color:Lerp(WHITE,.26+.63*focus)
  h.core.Transparency=1-alive*.94
  h.particleSource.Position=toward*s*.8
@@ -2664,7 +2666,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
   fx.impact.Lifetime=NumberRange.new(.45,.85);fx.impact.Speed=NumberRange.new(8,15)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.25,.04),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.06),NumberSequenceKeypoint.new(.15,.37,.07),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.58,.35),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
@@ -3110,10 +3112,10 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.59,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=1.60,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,Impact=.71,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=1.94,Flight=.06,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
-  Needler = {Name='Needler',Duration=.66,Impact=.36,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.065,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
-  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.35,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.28,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
+  Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
+  Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
  },
 }
 Catalog.PrestigeRewards={
@@ -4881,9 +4883,10 @@ local roles={Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge
 local fieldRoles={Needler=true,Ballcaster=true,Vacuum=true,Dart=true,Compactor=true}
 local function smooth(t) t=math.clamp(t,0,1);return t*t*(3-2*t) end
 local function stroke(t,loaded,contact)
- if t<=.52 then return loaded*smooth((t-.12)/.4) end
- if t<=.68 then local release=math.clamp((t-.52)/.16,0,1)^3;return loaded+(contact-loaded)*release end
- return contact*(1-smooth((t-.68)/.32))
+ if t<=.55 then return loaded*smooth((t-.07)/.34)*(1-.08*smooth((t-.42)/.13)) end
+ if t<=.68 then return loaded*.92+(contact-loaded*.92)*smooth((t-.55)/.13) end
+ local follow=smooth((t-.68)/.055)*(1-smooth((t-.735)/.23))
+ return contact*(1-smooth((t-.68)/.32)+.17*follow)
 end
 local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
 
@@ -4893,8 +4896,9 @@ function Motion.new(model,role)
  local pivot=model:GetPivot()
  for _,part in ipairs(model:GetDescendants()) do
   local kind=part:GetAttribute('SpecialMotion')
-  if part:IsA('BasePart') and kind then
-   record.parts[#record.parts+1]={part=part,kind=kind,side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
+  local gun=role=='Needler' or role=='Ballcaster'
+  if part:IsA('BasePart') and (kind or gun and part.Transparency<1) then
+   record.parts[#record.parts+1]={part=part,kind=kind or 'GunBody',side=part:GetAttribute('MotionSide') or 1,base=pivot:ToObjectSpace(part.CFrame),size=part.Size}
   end
  end
  return record
@@ -4955,40 +4959,63 @@ local function offset(record,item,t)
  return CFrame.new()
 end
 
-local function fieldStep(record,state,now,dt,shot,source)
- local recoil,reload,charge=0,0,0
- local ball=record.role=='Ballcaster'
- local active=state=='SpecialMine' or state=='Warmup' or state=='Recover' or (source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil
- if active and shot and shot.Parent then
-  local started=shot:GetAttribute('StartedAt')
-  local paused=shot:GetAttribute('PausedAt') or 0
-  local age=finite(started) and (paused>0 and math.min(now,paused) or now)-started or -1
-  local windup=shot:GetAttribute('Windup') or 0
-  if age>=0 and age<windup then
-   charge=smooth(age/windup)
-   recoil=-.45*charge
-  elseif age>=windup then
-   local fire=age-windup
-   recoil=smooth(fire/(ball and .028 or .018))*(1-smooth(fire/(ball and .36 or .16)))
-   reload=(1-smooth((fire-.065)/.46))
-  end
+-- Read the same clock as the projectile. Each cue stops at the pose that
+-- makes the next action legible, then releases with a fast stroke and drag.
+local function gunPose(ball,now,shot)
+ if not shot or not shot.Parent then return nil end
+ local started=shot:GetAttribute('StartedAt')
+ local windup=shot:GetAttribute('Windup')
+ if not finite(started) or not finite(windup) or windup<=0 then return nil end
+ local paused=shot:GetAttribute('PausedAt') or 0
+ local age=(paused>0 and math.min(now,paused) or now)-started
+ if age<0 then return nil end
+ local pull=ball and .44 or .28
+ local travel=ball and .54 or .32
+ local settle=ball and .48 or .26
+ if age<windup then
+  local q=age/windup
+  local cock=smooth((q-.02)/(ball and .56 or .54))
+  local brace=cock*(1-.10*smooth((q-.62)/.38))
+  return pull*brace,(ball and .20 or .14)*brace,smooth((q-.08)/.80)
  end
- if record.role=='Needler' or record.role=='Ballcaster' then
-  local warmAt=source:GetAttribute('WarmupStart') or 0
-  local untilShot=(source:GetAttribute('WarmupDuration') or 0)-(now-warmAt)
-  if state=='Warmup' and warmAt>0 and untilShot>=0 and untilShot<.10 then recoil=-.22*(1-untilShot/.10) end
+ local t=age-windup
+ if t>=settle then return nil end
+ local reset=1-smooth((t-.065)/(settle-.065))
+ local strike=smooth(t/.026)*(1-smooth((t-.027)/.062))
+ local kick=smooth((t-.021)/.047)*reset
+ local spring=smooth((t-.14)/.08)*(1-smooth((t-.22)/math.max(.04,settle-.22)))
+ local slide=pull*.90*(1-smooth(t/.032))-pull*.50*strike+travel*kick-travel*.16*spring
+ local brace=(ball and .20 or .14)*.90*(1-smooth(t/.04))+.42*travel*kick
+ return slide,brace,1-smooth(t/.052)
+end
+
+local function fieldStep(record,state,now,dt,shot,source)
+ local ball=record.role=='Ballcaster'
+ local gun=ball or record.role=='Needler'
+ local slide,brace,load=0,0,0
+ if gun then
+  local active=state=='SpecialMine' or state=='Warmup' or state=='Recover'
+   or ((source:GetAttribute('HP') or 1)>0 and shot and shot:GetAttribute('ContactAt')~=nil)
+  local movement,lean,heat
+  if active then movement,lean,heat=gunPose(ball,now,shot) end
+  local fade=math.exp(-math.min(dt or 0,.1)*19)
+  slide=movement or (record.slide or 0)*fade
+  brace=lean or (record.brace or 0)*fade
+  load=heat or (record.load or 0)*fade
+  record.slide,record.brace,record.load=slide,brace,load
  end
  local engaging=(record.role=='Vacuum' and state=='Vacuum') or (record.role=='Dart' and state=='Plant') or (record.role=='Compactor' and (state=='Intake' or state=='Press'))
  local engagement=record.engagement or 0
  engagement+=((engaging and 1 or 0)-engagement)*(1-math.exp(-math.min(dt or 0,.1)*12))
  record.engagement=engagement
  local pivot=record.model:GetPivot()
+ if gun then pivot*=CFrame.new(0,brace*.32,brace*record.scale)*CFrame.Angles(-brace*.29,0,0) end
  for _,item in ipairs(record.parts) do
   if not item.part.Parent then continue end
   local kind=item.kind
   local offset=Vector3.zero
-  if kind=='DartSlide' then offset=Vector3.new(0,0,.36*recoil)
-  elseif kind=='BallSlide' or kind=='BallReload' then offset=Vector3.new(0,0,.52*recoil)
+  if kind=='DartSlide' or kind=='BallSlide' then offset=Vector3.new(0,0,slide)
+  elseif kind=='BallReload' or kind=='DartLoad' then offset=Vector3.new(0,0,slide*.91)
   elseif kind=='Intake' then offset=Vector3.new(0,-.27*engagement,0)
   elseif kind=='PressFoot' then offset=Vector3.new(item.side*.18*engagement,-.80*engagement,0)
   elseif kind=='PressJaw' then
@@ -5001,7 +5028,9 @@ local function fieldStep(record,state,now,dt,shot,source)
   elseif kind=='Seeder' then offset=Vector3.new(item.side*.12*engagement,-.32*engagement,.12*engagement) end
   item.part.CFrame=pivot*CFrame.new(offset*record.scale)*item.base
   if kind=='BallReload' then
-   item.part.Size=item.size*(.78+.46*charge)*(1-.92*reload)
+   item.part.Size=item.size*(.06+1.08*load)
+  elseif kind=='DartLoad' then
+   item.part.Size=item.size*(.06+.94*load)
   end
  end
 end
@@ -5110,6 +5139,10 @@ function Effects.step(now)
   elseif age<t.duration then
    local expansion=math.min(1,age/.035)
    local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
+   if rig.style=='Prism' then
+    expansion=1-(1-expansion)^3
+    collapse=collapse*collapse*(3-2*collapse)
+   end
    BeamVFX.draw(rig,t.from,t.to,now,expansion*collapse,nil,age,t.scale)
   else BeamVFX.after(rig,t.from,t.to,now,age-t.duration,t.scale) end
  end
@@ -5604,6 +5637,11 @@ local WHITE=Color3.fromRGB(255,248,231)
 local PRISM_RED=Color3.fromRGB(249,22,60)
 local SIGHT_RED=Color3.fromRGB(255,56,72)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
+local liveRamielFields=0
+
+local function smooth(t)
+ t=math.clamp(t,0,1);return t*t*(3-2*t)
+end
 
 local function shotPart(parent,name,size,color,ball,transparency)
  local part=Instance.new('Part')
@@ -5675,12 +5713,95 @@ function View.aim(drone,target)
  sight.line.Enabled=true
 end
 
+function View.ramielCharge(rig,charge,energy,recovery,reduced)
+ local field=rig.chargeField
+ if reduced or charge<=.22 or (recovery and recovery>=.21) then
+  if field then field.root:Destroy();rig.chargeField=nil end
+  return
+ end
+ if not field then
+  if liveRamielFields>=6 then return end
+  local parent=rig.core
+  local root=shotPart(parent,'RamielChargeField',Vector3.one*.025,WHITE,false,1)
+  liveRamielFields+=1
+  root.Destroying:Connect(function() liveRamielFields-=1 end)
+  local rings,light={},{}
+  for i=1,3 do
+   local plate=shotPart(root,'ConvergingAperture',Vector3.one*.025,WHITE,false,1)
+   rings[i]={plate=plate,plane=PlaneBurst.create(plate,i==3 and Color3.fromRGB(255,123,207) or Color3.fromRGB(106,157,255))}
+  end
+  for i=1,5 do light[i]=shotPart(root,'RamielInflow',Vector3.one*.10,Color3.fromRGB(144,197,255),true,1) end
+  field={root=root,rings=rings,light=light};rig.chargeField=field
+ end
+ local frame=rig.core.CFrame
+ local release=recovery and smooth(recovery/.21) or 0
+ for i,ring in ipairs(field.rings) do
+  local p=smooth((charge-.24-(i-1)*.14)/(.68-(i-1)*.12))
+  local radius=(2.12-(i-1)*.35-1.18*p+1.85*release)*rig.scale
+  local alpha=smooth((charge-.27-(i-1)*.13)/.15)*(.35+.62*energy)*(1-release)
+  ring.plate.CFrame=frame*CFrame.new(0,0,-(.16+(i-1)*.62)*(1-p*.80))
+  PlaneBurst.pose(ring.plane,Vector3.zAxis,radius,alpha,.13+.055*energy)
+ end
+ for i,light in ipairs(field.light) do
+  local p=smooth((charge-.25-(i-1)*.058)/(.71-(i-1)*.060))
+  local angle=i*math.pi*.4+(2.35*p+.72*p*p)*(i%2==0 and 1 or -1)
+  local reach=(2.28-2.05*p)*rig.scale
+  local axial=(.60+(.55+i*.075)*(1-p))*(1-p)
+  light.CFrame=frame*CFrame.new(math.cos(angle)*reach,math.sin(angle)*reach,-axial)
+  light.Size=Vector3.one*(.13+.15*p)*rig.scale
+  light.Color=Color3.fromRGB(126,185,255):Lerp(WHITE,p)
+  light.Transparency=1-smooth(p/.18)*(1-smooth((p-.88)/.12))*(1-release)*.85
+ end
+end
+
+local function clearLoad(self,r)
+ if not r.load then return end
+ r.load.root:Destroy();r.load=nil;self.loads-=1
+end
+
+local function gunCharge(self,r,origin,target,color,ball,q)
+ if not r.load then
+  if self.loads>=12 then return end
+  local camera=workspace.CurrentCamera;if not camera then return end
+  local root=shotPart(camera,'ProjectileCharge',Vector3.one*.025,color,false,1)
+  local core=shotPart(root,'ChargedRound',Vector3.one*.04,color,true,1)
+  local ring=ball and PlaneBurst.create(root,color) or nil
+  local motes={}
+  if ball then
+   for i=1,3 do motes[i]=shotPart(root,'CoilInflow',Vector3.one*.18,color,true,1) end
+  end
+  r.load={root=root,core=core,ring=ring,motes=motes};self.loads+=1
+ end
+ local load=r.load
+ local frame=CFrame.lookAt(origin,target)
+ local build=smooth((q-.10)/.61)
+ local squeeze=smooth((q-.82)/.18)
+ local focus=build*(1-.14*squeeze)
+ local forward=(ball and .27 or .23)*smooth((q-.53)/.47)
+ load.root.CFrame=frame*CFrame.new(0,0,-forward)
+ load.core.CFrame=load.root.CFrame
+ load.core.Color=color:Lerp(WHITE,.36+.55*build)
+ load.core.Size=ball and Vector3.one*(.22+.62*focus) or Vector3.new(.19,.19,.54)*(.48+.70*focus)
+ load.core.Transparency=1-focus*.92
+ if load.ring then
+  PlaneBurst.pose(load.ring,Vector3.zAxis,1.05-.54*smooth((q-.32)/.68),focus*.92,.13)
+ end
+ for i,mote in ipairs(load.motes) do
+  local time=smooth((q-.12-i*.10)/.55)
+  local angle=i*math.pi*2/3+time*1.45
+  local radius=1.27-.97*time
+  mote.CFrame=load.root.CFrame*CFrame.new(math.cos(angle)*radius,math.sin(angle)*radius,-.72*(1-time))
+  mote.Color=color:Lerp(WHITE,.36+.58*time)
+  mote.Transparency=1-smooth(time/.20)*(1-smooth((time-.72)/.28))
+ end
+end
+
 local function addRibbon(part,color,ball)
  local a=Instance.new('Attachment');a.Position=Vector3.new(0,ball and -.26 or -.085,.08);a.Parent=part
  local b=Instance.new('Attachment');b.Position=Vector3.new(0,ball and .26 or .085,.08);b.Parent=part
  local trail=Instance.new('Trail');trail.Name=ball and 'EnergyWake' or 'NeedleTrace'
  trail.Attachment0=a;trail.Attachment1=b;trail.FaceCamera=true;trail.LightInfluence=0;trail.LightEmission=.88
- trail.Lifetime=ball and .16 or .085;trail.MinLength=.055;trail.MaxLength=ball and 5 or 3.5
+ trail.Lifetime=ball and .26 or .14;trail.MinLength=.055;trail.MaxLength=ball and 7 or 4.8
  trail.Color=ColorSequence.new(color:Lerp(WHITE,.35),color)
  trail.WidthScale=NumberSequence.new(1,0)
  trail.Transparency=NumberSequence.new(.16,1);trail.Parent=part
@@ -5700,7 +5821,7 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  sparks.Lifetime=NumberRange.new(.12,ball and .56 or .34)
  sparks.Speed=NumberRange.new(impact and 9 or 6,(ball and 19 or 24)*grade);sparks.Drag=ball and 3.8 or 5.6
  sparks.Acceleration=Vector3.new(0,-5,0)
- sparks.Size=NumberSequence.new((ball and .28 or .16)*grade,0);sparks.Transparency=NumberSequence.new(.04,1)
+ sparks.Size=NumberSequence.new((ball and .40 or .26)*grade,0);sparks.Transparency=NumberSequence.new(.04,1)
  sparks.Parent=node;sparks:Emit(ball and math.floor((impact and 14 or 7)*grade) or (impact and 8 or 4))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
  flash.CFrame=node.CFrame
@@ -5713,10 +5834,10 @@ local function stepBursts(self,now)
   if age>=.61 or not b.node.Parent or BeamVFX.reduced() then
    b.node:Destroy();table.remove(self.bursts,i)
   else
-   local flash=math.clamp(1-age/(b.ball and .095 or .062),0,1)
+   local flash=1-smooth(age/(b.ball and .13 or .09))
    local player=Players.LocalPlayer
    b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
-   b.flash.Size=(b.ball and Vector3.one or Vector3.new(.36,.36,1.85))*math.max(.04,b.scale*(1.15-.65*flash))
+   b.flash.Size=(b.ball and Vector3.one*1.25 or Vector3.new(.53,.53,1.95))*math.max(.04,b.scale*(1.15-.53*flash))
    if b.ring then PlaneBurst.draw(b.ring,b.direction,age/.24,b.scale*.88) end
   end
  end
@@ -5737,7 +5858,7 @@ local function clearProjectile(self,r,now,carryTail)
 end
 
 function View.new(audio)
- local self={records={},connections={},root=nil,trails=0,heads=0,bursts={}}
+ local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -5754,6 +5875,8 @@ function View.new(audio)
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
     clearProjectile(self,r,now,false)
+    clearLoad(self,r)
+    if audio and audio.stopLoop then audio:stopLoop(node) end
     if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
     if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
     self.records[node]=nil
@@ -5783,6 +5906,12 @@ function View.new(audio)
     local color=node:GetAttribute('Color')
     if not color then continue end
     if shape=='Prism' then
+     if audio and audio.setLoop then
+      local q=windup>0 and math.clamp(age/windup,0,1) or 0
+      if age>=0 and age<windup and paused<=0 and q>.15 then
+       audio:setLoop(node,'prism_charge',drone and drone.ramiel and drone.ramiel.core.Position or from,.12+.98*q^2,.62+.64*q^2)
+      else audio:stopLoop(node) end
+     end
      if landed and not r.impacted then
       r.impacted=true
       local point=node:GetAttribute('ContactPoint') or to
@@ -5793,6 +5922,7 @@ function View.new(audio)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        RoleVisuals.Beam(origin,point,PRISM_RED,reduced and 1.45 or 4.1,.36,'Prism')
        if not reduced then
+        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
         burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
          node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
        end
@@ -5803,9 +5933,17 @@ function View.new(audio)
     end
     local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
     if muzzle and ((muzzle-from).Magnitude>=2.5 or (to-muzzle).Magnitude<=1) then muzzle=nil end
-    if ball and windup>0 and not r.loaded and age>=0 and progress<0 and not landed then
-     r.loaded=true
-     if paused<=0 and age<.11 and audio then audio:play('coil_load',muzzle or from) end
+    if age>=0 and progress<0 and not landed then
+     local q=age/windup
+     if not r.loaded then
+      r.loaded=true
+      if paused<=0 and age<.13 and audio then audio:play(ball and 'coil_load' or 'needle_cock',muzzle or from) end
+     end
+     if not BeamVFX.reduced() and BeamVFX.near(muzzle or from,95) then
+      gunCharge(self,r,muzzle or from,to,color,ball,q)
+     else clearLoad(self,r) end
+    else
+     clearLoad(self,r)
     end
     if landed and not r.impacted then
      r.impacted=true
@@ -5848,9 +5986,13 @@ function View.new(audio)
       end
      end
      if not value then continue end
-     local center=from:Lerp(to,math.min(progress,1))-direction*(value.Size.Z*.5)
+     local t=math.clamp(progress,0,1)
+     local lead=t*(.52+.48*(2*t-t*t))
+     local stretch=1+(ball and .36 or .31)*smooth(t/.21)*(1-smooth((t-.26)/.58))
+     value.Size=ball and Vector3.new(.81,.81,.81*stretch) or Vector3.new(.15,.15,1.48*stretch)
+     local center=from:Lerp(to,lead)-direction*(value.Size.Z*.5)
      value.CFrame=CFrame.lookAt(center,center+direction)
-     if r.shell then r.shell.CFrame=value.CFrame end
+     if r.shell then r.shell.CFrame=value.CFrame;r.shell.Size=Vector3.new(1.06,1.06,1.06*stretch) end
     end
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
@@ -5906,7 +6048,10 @@ function View.new(audio)
  end
  function self:destroy()
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
-  for _,r in pairs(self.records) do clearProjectile(self,r,0,false) end
+  for node,r in pairs(self.records) do
+   clearProjectile(self,r,0,false);clearLoad(self,r)
+   if audio and audio.stopLoop then audio:stopLoop(node) end
+  end
   for _,b in ipairs(self.bursts) do b.node:Destroy() end
   table.clear(self.bursts);table.clear(self.records);RoleVisuals.destroy()
  end
@@ -6025,14 +6170,14 @@ function V.new(parent,audio,onSplit)
    if #self.pieces>=48 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*(.42+i*.1) or .10+i*.036
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint)
+   local size=large and scale*(.42+i*.1) or .14+i*.055
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.34+(i%3)*.13))
    p.Size=Vector3.new(size*.72,size*1.45,size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   track(p,at,origin,direction*(large and 8 or 9)+Vector3.yAxis*(large and 4 or 2),
-    large and .5 or .24,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
+   track(p,at,origin,direction*8+Vector3.yAxis*(large and 4 or 4.5),
+    large and .5 or .37,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
   end
  end
  function self:step(now)
@@ -12631,35 +12776,22 @@ local function renderDrone(d,dt,now)
   local shot=near and d.shotReceipt
   local charge,recovery,aim=0,nil,nil
   local reduced=CrystalImpactView.reducedMotion()
-  if shot and shot.Parent and not motionPaused and (s:GetAttribute('HP') or 0)>0 then
+  if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0
    local age=(paused>0 and math.min(now,paused) or now)-started
-   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.6)
+   local windup=math.max(.01,shot:GetAttribute('Windup') or 1.94)
    local contactAt=shot:GetAttribute('ContactAt')
-   local fireAge=contactAt and now-contactAt or age-windup-(shot:GetAttribute('Duration') or .06)
-   if age>=0 and fireAge<DroneConfig.RamielRecovery then
+   local fireAge=contactAt and (paused>0 and math.min(now,paused) or now)-contactAt
+   local waiting=age<windup+(shot:GetAttribute('Duration') or .06)+.29
+   if age>=0 and (fireAge and fireAge<DroneConfig.RamielRecovery or not fireAge and waiting) then
     aim=shot:GetAttribute('Position')
     charge=math.clamp(age/windup,0,1)
-    recovery=fireAge>=0 and fireAge or nil
+    recovery=fireAge and fireAge>=0 and fireAge or nil
    end
   end
   local energy=DroneConfig.poseRamiel(d.ramiel,d.view:GetPivot(),aim,charge,recovery,reduced and 0 or now*.38%6.283,reduced)
-  if aim and energy>.10 and not reduced and not BeamVFX.reduced() then
-   local ring=d.ramiel.rings
-   if not ring then
-    ring={PlaneBurst.create(d.ramiel.core,Color3.fromRGB(106,129,255)),
-     PlaneBurst.create(d.ramiel.core,Color3.fromRGB(206,142,255))}
-    d.ramiel.rings=ring
-   end
-   local pulse=(now*2.1)%1
-   local alpha=math.clamp(energy*1.7,0,.82)
-   PlaneBurst.pose(ring[1],Vector3.zAxis,(1.05+.74*pulse)*d.ramiel.scale,alpha*(1-pulse),.095)
-   PlaneBurst.pose(ring[2],Vector3.zAxis,(1.30+.35*pulse)*d.ramiel.scale,alpha*.65,.055)
-  elseif d.ramiel.rings then
-   for _,ring in ipairs(d.ramiel.rings) do PlaneBurst.destroy(ring) end
-   d.ramiel.rings=nil
-  end
+  RoleEffectView.ramielCharge(d.ramiel,charge,energy,recovery,reduced or BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
  end
  if s:GetAttribute('Role')=='Compactor' then
   local at=s:GetAttribute('PressAt') or 0

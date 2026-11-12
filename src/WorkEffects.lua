@@ -154,7 +154,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.impact.Rotation=NumberRange.new(-180,180);fx.impact.RotSpeed=NumberRange.new(-30,30)
   fx.impact.Lifetime=NumberRange.new(.45,.85);fx.impact.Speed=NumberRange.new(8,15)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
-  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.16,.04),NumberSequenceKeypoint.new(.15,.25,.04),NumberSequenceKeypoint.new(1,0)})
+  fx.impact.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.22,.06),NumberSequenceKeypoint.new(.15,.37,.07),NumberSequenceKeypoint.new(1,0)})
   fx.impact.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.58,.35),NumberSequenceKeypoint.new(1,1)})
   -- Reuse the preserved original two-ball contact glows, at the real contact.
   local templates=game:GetService('ReplicatedStorage'):FindFirstChild('MiningFX')
