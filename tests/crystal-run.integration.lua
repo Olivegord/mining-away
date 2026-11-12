@@ -212,6 +212,7 @@ do
  local field={id=#patches+1,cfg=table.clone(f.cfg),part=surface,model=refillZone,center=surface.Position,color=f.color,
   clusters={centerPlot,leftPlot,rightPlot},resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
  field.cfg.Count=1;field.e.phase='Safe';patches[field.id]=field
+ local refillDelay=C.MinimumRockRespawn+field.cfg.Respawn
  local tester=player(98689);players.PlayerAdded:Fire(tester)
  local team=profiles[tester.UserId]
  local worker=team.drones[1]
@@ -257,7 +258,7 @@ do
  Pro.addCargo(data(team),cargo,1,Ca.capacity(data(team)))
  command.OnServerEvent:Fire(tester,'Sell')
  assert(data(team).run.quartzEarnings==soldBefore+10 and Pro.cargoUnits(data(team))==0,'the test depot sale did not complete')
- advance(7.65)
+ advance(refillDelay-.35)
  assert(nodeUsage(field)==0,'a pinned vacancy grew before the normal delay')
  local replacement=refillWithCenteredDraw()
  assert(replacement.cluster==centerPlot and Mining.selectorTouches(square.center,square.half,replacement.part.CFrame,replacement.part.Size),
@@ -273,12 +274,12 @@ do
  release(worker);resources[replacement.id]=nil;replacement.part:Destroy();field.resources={}
  breakLastRock()
  command.OnServerEvent:Fire(tester,'Recall')
- advance(7.8)
+ advance(refillDelay-.2)
  local ordinary=refillWithCenteredDraw()
  assert(not team.miningSquare and ordinary.position.Z==centerPlot.Position.Z,'recall kept a cancelled preference')
  resources[ordinary.id]=nil;ordinary.part:Destroy();field.resources={}
  breakLastRock()
- advance(7.8)
+ advance(refillDelay-.2)
  local raycast=workspace.Raycast
  function workspace:Raycast(origin,direction,params)
   if direction.Y<-10 and origin.Z>=157 and table.find(params.FilterDescendantsInstances,refillZone) then return {Instance=surface} end
@@ -288,13 +289,13 @@ do
  workspace.Raycast=raycast
  assert(fallback.position.Z==centerPlot.Position.Z and scene.idleSquareStatus(team,team.miningSquare)=='NoCrystals',
   'blocked local growth must still refill the wider plot')
- print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after an eight-second cooldown',replacement.position.Z,ordinary.position.Z))
+ print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after a %d-second cooldown',replacement.position.Z,ordinary.position.Z,refillDelay))
 
  resources[fallback.id]=nil;fallback.part:Destroy();field.resources={}
  field.cfg.Count=3
  pin();breakRockAt(-6);breakRockAt(0);breakRockAt(6)
  assert(#field.respawnQueue==3 and nodeUsage(field)==0)
- advance(7.7)
+ advance(refillDelay-.3)
  assert(nodeUsage(field)==0,'a second replacement shortened the refill cooldown')
  local originalSeed=seed;seed=Random.new(828)
  advance(.55)
@@ -472,6 +473,11 @@ local planter=buyer.drones[7]
 assert(planter.role=='Dart' and buyer.vacuum and #data(buyer).fleet==3 and Pro.validate(data(buyer),shopper.UserId))
 moveBuyer(f.center)
 local count,queued=nodeUsage(f),#f.respawnQueue
+ local vacancy=assert(f.respawnQueue[1])
+ vacancy.regrowAt=now+C.MinimumRockRespawn
+ growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+ assert(not planter.growPlan and nodeUsage(f)==count,'planter bypassed the minimum cooldown')
+ realTime=vacancy.regrowAt;now=realTime
 growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
 assert(planter.growPlan and planter.growPlan.cluster==f.clusters[1],'planter picked another patch')
 planter.pos=planter.intentGoal

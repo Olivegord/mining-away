@@ -39,10 +39,12 @@ check('snapshot sampling is independent of render frame rate',function()
   assert(math.abs(x-expectedX)<1e-8 and math.abs(y-expectedY)<1e-8)
  end
 end)
-check('expiry fades monotonically to invisibility and collection settles exactly',function()
- local previous=1
- for i=0,100 do local opacity=M.opacity(13+i*.05,13,18);assert(opacity>=0 and opacity<=previous);previous=opacity end
- assert(M.opacity(12,13,18)==1 and M.opacity(19,13,18)==0)
+check('expiry blinks twice, honors reduced flashing, and leaves collection easing intact',function()
+ for _,phase in ipairs({{-1.1,1},{-.95,0},{-.75,1},{-.45,0},{-.25,1},{0,0},{.1,0}}) do
+  assert(M.expiryOpacity(18+phase[1],18)==phase[2])
+  assert(M.expiryOpacity(18+phase[1],18,true)==(phase[1]<0 and 1 or 0))
+ end
+ assert(M.expiryOpacity(17.05,19)==1,'a renewed deadline must restore visibility')
  local start,scale=M.collection(0);assert(start==0 and scale==1)
  local finish,zero=M.collection(1);assert(finish==1 and zero==0)
 end)

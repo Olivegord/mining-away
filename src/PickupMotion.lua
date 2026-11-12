@@ -45,10 +45,13 @@ function M.position(samples,now)
  end
  return x,math.max(s.floor or -math.huge,y),z
 end
-function M.opacity(now,fadeAt,expiresAt)
- if type(expiresAt)~='number' or type(fadeAt)~='number' then return 1 end
- local t=clamp((now-fadeAt)/math.max(.001,expiresAt-fadeAt),0,1)
- return 1-t*t*(3-2*t)
+function M.expiryOpacity(now,expiresAt,reducedFlashing)
+ if type(expiresAt)~='number' then return 1 end
+ local remaining=expiresAt-now
+ if remaining<=0 then return 0 end
+ if reducedFlashing or remaining>1 then return 1 end
+ -- Two short disappearances over the last second, timed from the deadline.
+ return (1-remaining)%.5<.16 and 0 or 1
 end
 function M.tumble(age,landAge)
  age=math.max(0,age)

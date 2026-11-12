@@ -86,7 +86,6 @@ check('a delayed Emerald sell trip leaves physical cargo available on return',fu
  local settled=drop.part.Position
  local snapshot=drop.part:GetAttribute('SnapshotAt')
  assert(drop.part:GetAttribute('ExpiresAt')>born+OreDrops.LIFETIME)
- assert(drop.part:GetAttribute('FadeAt')==drop.part:GetAttribute('ExpiresAt')-OreDrops.FADE_SECONDS)
  local function walk(to)
   local from=characterRoot(p).Position
   local stride=math.ceil((to-from).Magnitude/(16*C.Tick))
@@ -194,11 +193,10 @@ check('full bags keep uncollected ore until its wall-clock expiry',function()
  local born=now;local found=false
  for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then
   found=true;assert(drop.part:GetAttribute('SpawnAt')==born)
-  assert(drop.part:GetAttribute('FadeAt')==born+OreDrops.LIFETIME-OreDrops.FADE_SECONDS)
   assert(drop.part:GetAttribute('ExpiresAt')==born+OreDrops.LIFETIME)
  end end
- assert(found);now=born+OreDrops.LIFETIME-2;realTime=now;pickupStep(C.Tick)
- for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then assert(drop.part.Transparency>.5 and drop.part.Transparency<1) end end
+ assert(found);now=born+OreDrops.LIFETIME-.8;realTime=now;pickupStep(C.Tick)
+ for _,drop in pairs(pickups) do if drop.owner==p.player.UserId then assert(drop.part.Transparency==0) end end
  p.busy=true;now=born+OreDrops.LIFETIME;realTime=now;pickupStep(C.Tick)
  assert(pendingOre(p)==0 and Pro.cargoUnits(data(p))==Ca.capacity(data(p)))
 end)

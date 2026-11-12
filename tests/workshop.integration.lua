@@ -51,7 +51,7 @@ check('the starter field starts with sixteen scattered full-size crystals',funct
  end
  seed=originalRng
 end)
-check('the reference crystal shrinks when cracked and respawns after eight seconds',function()
+check('the reference crystal shrinks when cracked and waits more than a minute before regrowing',function()
  move(field.center)
  local r=field.resources[1]
  r.readyAt=now
@@ -63,17 +63,19 @@ check('the reference crystal shrinks when cracked and respawns after eight secon
  assert(hitResource(miner,r,1000) and r.paid and r.removeAt==brokenAt+2)
  for _,drone in ipairs(p.drones) do drone.field=field.id end
  local rate,count=respawnRate(field);assert(rate==1 and count==#p.drones)
- assert(field.respawnQueue[1].at==brokenAt+8)
+ local delay=C.MinimumRockRespawn+field.cfg.Respawn
+ assert(C.MinimumRockRespawn>60 and field.respawnQueue[1].regrowAt==brokenAt+C.MinimumRockRespawn)
+ assert(field.respawnQueue[1].at==brokenAt+delay)
  local function advance(seconds)
   for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
  end
- advance(7.8)
+ advance(delay-.2)
  assert(nodeUsage(field)==15 and not r.part.Parent,'replacement spawned early or broken crystal lingered')
  advance(.4)
  assert(nodeUsage(field)==16,'replacement was late')
  local replacement
  for _,rock in ipairs(field.resources) do if not before[rock.id] then replacement=rock;break end end
- assert(replacement and replacement.spawnAt>=brokenAt+8 and replacement.readyAt==replacement.spawnAt+2)
+ assert(replacement and replacement.spawnAt>=brokenAt+delay and replacement.readyAt==replacement.spawnAt+2)
  for _,drone in ipairs(p.drones) do leaveDroneField(p,drone) end
  -- Isolate the paid-packs fixture from the ore earned in this timing case.
  data(p).run.cargo={}

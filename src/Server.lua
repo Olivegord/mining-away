@@ -651,6 +651,9 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,onlyCluste
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
+function scene.replacementDue(field,vacancy)
+ return vacancy and now>=(vacancy.regrowAt or 0) and field.respawnClock>=vacancy.at
+end
 function scene.replacementSquare(field,vacancy)
  local owner=vacancy.owner and profiles[vacancy.owner]
  local square=owner and not owner.leaving and owner.miningSquare
@@ -815,7 +818,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
- chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('FadeAt',launchAt+OreDrops.LIFETIME-OreDrops.FADE_SECONDS);chip:SetAttribute('ExpiresAt',launchAt+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
+ chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('ExpiresAt',launchAt+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
  chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',launchAt)
  if drop.oreArc then
   chip:SetAttribute('OreLaunchOrigin',position)
@@ -826,7 +829,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
  drop.vx=velocity.X;drop.vy=velocity.Y;drop.vz=velocity.Z;drop.age=0;drop.spawnAt=launchAt
  drop.publishedPosition=position;drop.publishedVelocity=velocity
- drop.publishedHoming=false;drop.publishedFloor=drop.floor;drop.publishedFade=0
+ drop.publishedHoming=false;drop.publishedFloor=drop.floor
  pickups[pickupSerial]=drop
 end
 function scene.snapshotOrePickup(drop)
@@ -837,8 +840,6 @@ function scene.snapshotOrePickup(drop)
  local moved=not position or position.X~=drop.x or position.Y~=drop.y or position.Z~=drop.z
  local accelerated=not velocity or velocity.X~=drop.vx or velocity.Y~=drop.vy or velocity.Z~=drop.vz
  local homing=drop.homing==true
- local fade=OreDrops.fade(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil)
- if fade~=drop.publishedFade then part.Transparency=fade;drop.publishedFade=fade end
  if not moved and not accelerated and homing==drop.publishedHoming
   and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
  if moved then
@@ -931,7 +932,6 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
    nearest.units+=units;nearest.refreshedAt=now
    nearest.reachBonus=math.max(nearest.reachBonus or 0,reachBonus)
    nearest.part:SetAttribute('Units',nearest.units)
-   nearest.part:SetAttribute('FadeAt',now+OreDrops.LIFETIME-OreDrops.FADE_SECONDS)
    nearest.part:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME)
    p.dirty=true;p.publishDirty=true;return
   end
@@ -1156,7 +1156,6 @@ local function pickupStep(dt)
     local deadline=OreDrops.sellTripDeadline(drop.spawnAt,now,walkingDistance,drop.returnUntil)
     if deadline then
      drop.returnUntil=deadline
-     drop.part:SetAttribute('FadeAt',deadline-OreDrops.FADE_SECONDS)
      drop.part:SetAttribute('ExpiresAt',deadline)
     end
    end
@@ -1555,7 +1554,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
    if not r.field.junk then
     local respawnClock=r.field.cfg.ReferenceCrystals and now or r.field.respawnClock
-    local vacancy={at=respawnClock+r.field.cfg.Respawn}
+    -- The legacy field clock can run faster with more drones. Keep the
+    -- minimum delay on the server clock for both natural and planted rocks.
+    local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn}
     if r.cluster and d.squareJob and d.squareJob==p.miningSquare then
      vacancy.owner=d.owner;vacancy.cluster=r.cluster;vacancy.frame=CFrame.new(r.position);vacancy.size=r.fullSize
     end
@@ -2322,7 +2323,8 @@ local function growerDrone(d,p,hr,dt)
  local square=p.miningSquare
  local field=square and square.field or workingField(p,hr)
  if d.growSquare~=square then d.growSquare=square;d.growPlan=nil;d.growAt=nil end
- if not field or #field.respawnQueue==0 or nodeUsage(field)>=field.cfg.Count then
+ local vacancy=field and field.respawnQueue[1]
+ if not vacancy or now<(vacancy.regrowAt or 0) or nodeUsage(field)>=field.cfg.Count then
   d.growPlan=nil;d.growAt=nil;d.field=nil;followRole(d,p,hr,dt);return
  end
  d.field=field.id
@@ -2349,7 +2351,7 @@ local function growerDrone(d,p,hr,dt)
  -- Multiple growers cannot grow on top of each other or inflate field rewards.
  local ok,_,resource=spawnResource(field,'Crystal',false,d.growPlan,square)
  if ok then
-  table.sort(field.respawnQueue,scene.respawnEarlier);table.remove(field.respawnQueue,1)
+  table.remove(field.respawnQueue,1)
   resource.part:SetAttribute('GrownBy',d.id)
   RoleEffects.Grow(d.pos,ground,true)
  end
@@ -4014,8 +4016,8 @@ RunService.Heartbeat:Connect(function(dt: number)
    end
    table.sort(field.respawnQueue,scene.respawnEarlier)
    local replenished=0
-   while replenishing and #field.respawnQueue>0 and field.respawnClock>=field.respawnQueue[1].at and replenished<field.cfg.Count do
-    local due=0;for _,vacancy in ipairs(field.respawnQueue) do if vacancy.at<=field.respawnClock then due+=1 else break end end
+   while replenishing and replenished<field.cfg.Count and scene.replacementDue(field,field.respawnQueue[1]) do
+    local due=0;for _,vacancy in ipairs(field.respawnQueue) do if scene.replacementDue(field,vacancy) then due+=1 else break end end
     -- A geode reserves five future nodes. Consume five due replenishment tokens,
     -- rather than leaving four immortal retries behind after every shell cycle.
     local spawned,cost=scene.spawnReplacement(field,due<5 and 'Crystal' or nil,field.respawnQueue[1])
@@ -4023,9 +4025,7 @@ RunService.Heartbeat:Connect(function(dt: number)
      -- One failed sample set establishes a field-level backoff for every token
      -- already due, rather than re-running 18 raycasts per snapshot for each
      -- blocked missing slot in turn. Future tokens keep their own due times.
-     for _,vacancy in ipairs(field.respawnQueue) do
-      if vacancy.at<=field.respawnClock then vacancy.at=field.respawnClock+2 end
-     end
+     for i=1,due do field.respawnQueue[i].at=field.respawnClock+2 end
      table.sort(field.respawnQueue,scene.respawnEarlier);break
     end
     for _=1,cost do table.remove(field.respawnQueue,1) end

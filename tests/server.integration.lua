@@ -537,7 +537,7 @@ check('geode replenishment consumes its full five-node budget without growing re
   end
   eq(#f.respawnQueue,5);eq(nodeUsage(f),0);data(profile(a)).run.cargo={}
   -- This fixture advances the pending due instants, without changing production spawn logic.
-  for _,vacancy in ipairs(f.respawnQueue) do vacancy.at=now end
+  for _,vacancy in ipairs(f.respawnQueue) do vacancy.at=now;vacancy.regrowAt=now end
  end
  seed.NextNumber=originalNext;f.cfg.Count=oldCount
 end)

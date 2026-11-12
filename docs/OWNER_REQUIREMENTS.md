@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — slower rock regrowth and blinking ore
+
+Wait more than a minute before mined rocks start to grow back. Dropped ore should blink before it disappears at expiry.
+
 ## November 11 follow-up — maximum drop reflectance and visible twinkles
 
 Set cut gem drops to reflectance 1 and make sure their transparent four-point glint flashes.

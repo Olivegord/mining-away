@@ -1,6 +1,6 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
@@ -48,9 +48,6 @@ function O.rawPose(a,age)
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
-function O.fade(spawnAt,now,returnUntil)
- return math.clamp((now-O.deadline(spawnAt,returnUntil)+O.FADE_SECONDS)/O.FADE_SECONDS,0,1)
-end
 function O.sellTripDeadline(spawnAt,now,walkingDistance,returnUntil)
  -- Default walking is 16 studs/s. Leave time for turns, unloading and the counter.
  local trip=math.min(O.CARGO_MAX_AGE-10,walkingDistance/14+20)

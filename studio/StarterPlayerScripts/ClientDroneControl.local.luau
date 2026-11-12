@@ -6467,10 +6467,13 @@ function M.position(samples,now)
  end
  return x,math.max(s.floor or -math.huge,y),z
 end
-function M.opacity(now,fadeAt,expiresAt)
- if type(expiresAt)~='number' or type(fadeAt)~='number' then return 1 end
- local t=clamp((now-fadeAt)/math.max(.001,expiresAt-fadeAt),0,1)
- return 1-t*t*(3-2*t)
+function M.expiryOpacity(now,expiresAt,reducedFlashing)
+ if type(expiresAt)~='number' then return 1 end
+ local remaining=expiresAt-now
+ if remaining<=0 then return 0 end
+ if reducedFlashing or remaining>1 then return 1 end
+ -- Two short disappearances over the last second, timed from the deadline.
+ return (1-remaining)%.5<.16 and 0 or 1
 end
 function M.tumble(age,landAge)
  age=math.max(0,age)
@@ -10737,7 +10740,7 @@ end)()
 local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
-local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
+local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
@@ -10785,9 +10788,6 @@ function O.rawPose(a,age)
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
-function O.fade(spawnAt,now,returnUntil)
- return math.clamp((now-O.deadline(spawnAt,returnUntil)+O.FADE_SECONDS)/O.FADE_SECONDS,0,1)
-end
 function O.sellTripDeadline(spawnAt,now,walkingDistance,returnUntil)
  -- Default walking is 16 studs/s. Leave time for turns, unloading and the counter.
  local trip=math.min(O.CARGO_MAX_AGE-10,walkingDistance/14+20)
@@ -10957,7 +10957,7 @@ end
 local function sample(r,source,now)
  -- A stationary pile can be combined or renewed without changing pose.
  r.units=source:GetAttribute('Units') or 1
- r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
+ r.expiresAt=source:GetAttribute('ExpiresAt')
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
  local position=source:GetAttribute('Position') or source.Position
@@ -11021,7 +11021,6 @@ function V.new(root,parent,audio,reducedMotion)
   local r=self.byId[receipt.pickupId]
   if r and receipt.exhausted==true then
    r.collectAt=r.collectAt or now;r.collectFrom=r.collectFrom or r.drawPosition or r.pos
-   r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   end
   local target,torso=backpack(player,rootPart.Position)
   if type(units)=='number' and units>0 then
@@ -11060,7 +11059,8 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
- local glintStrength=self.player:GetAttribute('ReducedFlashing')==true and .36 or 1
+ local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
+ local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
@@ -11071,20 +11071,19 @@ function V:update(dt,now)
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
     r.collectAt=r.processed and collectedAt or now
-    r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    r.collectFrom=r.drawPosition or r.pos
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
-  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
-  local scale=1;local glow=0;local done=false
+  local opacity,scale,glow,done=1,1,0,false
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
    local ease,shrink=PickupMotion.collection(close)
    r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
    scale=math.max(.045,(r.pressScale or .48)*shrink)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((close-.82)/.18,0,1))
+   opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
@@ -11092,7 +11091,7 @@ function V:update(dt,now)
    local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
+   opacity=1-math.clamp((t-.7)/.3,0,1)
    scale=math.max(.04,shrink*(1+.24*lift));glow=.55*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
@@ -11102,12 +11101,11 @@ function V:update(dt,now)
     r.landAge=math.max(0,contactAt-r.born)
    end
    sample(r,source,now)
-   opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+   opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing)
   else
    r.removedAt=r.removedAt or now
-   -- Destruction can replicate just before its receipt. Keep a tiny grace
-   -- window, then fade in place for expiry/cleanup without inventing collection.
-   opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
+   -- Keep the record briefly in case its collection receipt arrives late.
+   opacity=0;done=now-r.removedAt>=.28
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then

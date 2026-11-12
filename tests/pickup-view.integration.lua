@@ -168,7 +168,7 @@ check('grounded gems use one sourced sprite and share one price label',function(
  for i=1,80 do
   local drop=fixturePart(pile,'SettledCargo',Vector3.new(i*.75,.22,0),Vector3.new(1.48,1.70,1.42))
   for k,v in pairs({PickupId=10+i,Owner=i==1 and pl.UserId+1 or pl.UserId,PhysicalCargo=true,CargoValue=i,
-   SpawnAt=realTime-4,SnapshotAt=realTime,GroundImpactAt=realTime-3,FadeAt=realTime+10,ExpiresAt=realTime+15,
+   SpawnAt=realTime-4,SnapshotAt=realTime,GroundImpactAt=realTime-3,ExpiresAt=realTime+15,
    FloorY=.22,Position=drop.Position,Velocity=Vector3.zero,
    CleanCargoArc=true,OreLaunchOrigin=drop.Position-Vector3.xAxis*.6,OreLaunchVelocity=Vector3.new(2.3,25,0)}) do drop:SetAttribute(k,v) end
   sources[i]=drop
@@ -213,12 +213,18 @@ check('grounded gems use one sourced sprite and share one price label',function(
  renderer:update(1/60,realTime+6.1)
  assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5)<1e-8,'reduced motion moved the resting ore')
  local pose=first.view.CFrame
- renderer:update(1/60,realTime+13)
- assert(first.view.CFrame==pose and first.view.Transparency>0,'expiry did not fade a static pile in place')
- sources[2]:SetAttribute('FadeAt',realTime+20);sources[2]:SetAttribute('ExpiresAt',realTime+25)
- renderer:update(1/60,realTime+13.1)
- assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to reset the fade')
- pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+13.2)
+ for _,phase in ipairs({{14.05,1},{14.25,0},{14.55,1},{14.75,0}}) do
+  renderer:update(1/60,realTime+phase[1])
+  assert(first.view.CFrame==pose and first.view.Transparency==phase[2],'expiry blink changed the resting pose or used partial opacity')
+ end
+ pl:SetAttribute('ReducedFlashing',true);renderer:update(1/60,realTime+14.59)
+ assert(first.view.Transparency==0,'reduced flashing left an ore blink active')
+ pl:SetAttribute('ReducedFlashing',false);renderer:update(1/60,realTime+15)
+ assert(first.view.Transparency==1,'expired ore remained visible')
+ sources[2]:SetAttribute('ExpiresAt',realTime+25)
+ renderer:update(1/60,realTime+15.1)
+ assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to restore visibility')
+ pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+15.2)
  assert(renderer.idleCount==0,'reduced effects left sparkles on screen')
  pl:SetAttribute('ReducedEffects',false)
  renderer:destroy();visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera

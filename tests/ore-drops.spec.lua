@@ -112,10 +112,9 @@ check('ground friction stops fragments without silently erasing flight momentum'
  local before=s.vx;O.step(s,{x=70,y=1,z=0},.05,false)
  assert(s.vx<before*.51 and s.y==s.floor)
 end)
-check('fade is monotonic and expiry never depends on attraction or bag space',function()
- local born=40;local before=0
- for age=0,O.LIFETIME do local fade=O.fade(born,born+age);assert(fade>=before and fade>=0 and fade<=1);before=fade end
- assert(O.fade(born,born+O.LIFETIME-O.FADE_SECONDS)<.00001 and O.fade(born,born+O.LIFETIME)==1)
+check('expiry follows the server deadline, including a return-trip extension',function()
+ local born=40
  assert(not O.expired(born,born+O.LIFETIME-.001) and O.expired(born,born+O.LIFETIME))
+ assert(not O.expired(born,69,70) and O.expired(born,70,70))
 end)
 print(checks..' production ore trajectory checks; not engine physics')

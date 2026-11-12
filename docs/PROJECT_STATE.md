@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `186c17b3190e3a22da0582d489d29e168c466e1549cff6c52c8178b25036661f` | Cut gems use reflectance 1 and a quicker landing flash. |
-| Shared Studio Sources | Verified Team Create save **206** | All seven Sources match the canonical file and tracked Script Sync export. |
+| Native-file SHA-256 | `b029fb51dc53b8d2479939122727a7e0ef9d8c857ffe74e964c3c6d7d9de1c67` | Slower rock regrowth and two blinks before ore expiry. |
+| Shared Studio Sources | Last verified Team Create save **206** | The regrowth and ore blink changes still need to reach shared Edit. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions use the Sources verified in Team Create save 206. |
+| Shared Studio entry point | **DRONEREVOLUTION** | The open Play session runs the prior revision, `ed475aa`. Check shared Edit after the owner stops Play. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — slow rock regrowth and blink expired ore
+
+Natural Crystal Run replacements start growing 73–77 seconds after a break, depending on the field, and take two seconds to mature. Legacy field boosts and Planters respect a 65-second minimum. Initial field seeding still fills the patches on entry. Dropped ore blinks twice in its last second, then disappears. Reduced flashing and reduced effects keep it visible up to expiry.
+
+Workshop, Crystal Run, pickup motion and pickup renderer checks passed using API doubles. The broader pickup sell-trip fixture and standalone server fixture still stop at the same failures as `ed475aa`. The Source-only refresh from `python3 tools/build.py --previous-commit ed475aa` preserved the authored map and backup Sources. The open DRONEREVOLUTION session at place **124078027733625**, universe **10774898335** was already playing. Its server Source fingerprint matched `ed475aa`, and the session was left running. Shared Edit installation, save and native gameplay verification are pending. This revision is unpublished.
 
 ## November 11 — set drop reflectance to 1 and strengthen the twinkle
 

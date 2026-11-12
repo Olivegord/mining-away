@@ -84,7 +84,7 @@ end
 local function sample(r,source,now)
  -- A stationary pile can be combined or renewed without changing pose.
  r.units=source:GetAttribute('Units') or 1
- r.fadeAt=source:GetAttribute('FadeAt');r.expiresAt=source:GetAttribute('ExpiresAt')
+ r.expiresAt=source:GetAttribute('ExpiresAt')
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
  local position=source:GetAttribute('Position') or source.Position
@@ -148,7 +148,6 @@ function V.new(root,parent,audio,reducedMotion)
   local r=self.byId[receipt.pickupId]
   if r and receipt.exhausted==true then
    r.collectAt=r.collectAt or now;r.collectFrom=r.collectFrom or r.drawPosition or r.pos
-   r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
   end
   local target,torso=backpack(player,rootPart.Position)
   if type(units)=='number' and units>0 then
@@ -187,7 +186,8 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
- local glintStrength=self.player:GetAttribute('ReducedFlashing')==true and .36 or 1
+ local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
+ local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
@@ -198,20 +198,19 @@ function V:update(dt,now)
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
     r.collectAt=r.processed and collectedAt or now
-    r.collectFrom=r.drawPosition or r.pos;r.collectOpacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+    r.collectFrom=r.drawPosition or r.pos
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
-  local opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
-  local scale=1;local glow=0;local done=false
+  local opacity,scale,glow,done=1,1,0,false
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
    local ease,shrink=PickupMotion.collection(close)
    r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
    scale=math.max(.045,(r.pressScale or .48)*shrink)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((close-.82)/.18,0,1))
+   opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
@@ -219,7 +218,7 @@ function V:update(dt,now)
    local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
-   opacity=(r.collectOpacity or 1)*(1-math.clamp((t-.7)/.3,0,1))
+   opacity=1-math.clamp((t-.7)/.3,0,1)
    scale=math.max(.04,shrink*(1+.24*lift));glow=.55*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
@@ -229,12 +228,11 @@ function V:update(dt,now)
     r.landAge=math.max(0,contactAt-r.born)
    end
    sample(r,source,now)
-   opacity=PickupMotion.opacity(now,r.fadeAt,r.expiresAt)
+   opacity=PickupMotion.expiryOpacity(now,r.expiresAt,reducedEffects or reducedFlashing)
   else
    r.removedAt=r.removedAt or now
-   -- Destruction can replicate just before its receipt. Keep a tiny grace
-   -- window, then fade in place for expiry/cleanup without inventing collection.
-   opacity*=1-math.clamp((now-r.removedAt-.06)/.18,0,1);done=now-r.removedAt>=.28
+   -- Keep the record briefly in case its collection receipt arrives late.
+   opacity=0;done=now-r.removedAt>=.28
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then
