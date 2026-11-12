@@ -128,14 +128,14 @@ end)
 check('a finished gem stays hidden until release, then hits the ground with one clink',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,6,35)}
  local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
- cargo.Material=Enum.Material.SmoothPlastic;cargo.Reflectance=.85
+ cargo.Material=Enum.Material.SmoothPlastic;cargo.Reflectance=1
  local born=realTime+.135
  local launch=Vector3.new(7,55,0)
  for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
   FloorY=.22,Position=cargo.Position,Velocity=launch,OreLaunchOrigin=cargo.Position,OreLaunchVelocity=launch}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio)
  local r=assert(renderer.records[cargo])
- assert(r.view.Material==Enum.Material.SmoothPlastic and r.view.Reflectance==.85 and r.view.CastShadow)
+ assert(r.view.Material==Enum.Material.SmoothPlastic and r.view.Reflectance==1 and r.view.CastShadow)
  renderer:update(1/60,born+.099)
  assert(r.view.Transparency==1 and not r.ribbon)
  renderer:update(1/60,born+.101)
@@ -151,10 +151,11 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
  local landed=r.view.CFrame
  assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
- renderer:update(1/60,contact+.11)
- assert(r.idle and r.idle.sprite.Image=='rbxassetid://6997866340' and r.idle.sprite.ImageTransparency<.26)
+ renderer:update(1/60,contact+.045)
+ assert(r.idle and r.idle.sprite.Image=='rbxassetid://6997866340' and r.idle.sprite.ImageTransparency<.12)
  assert(not r.idle.halo.AlwaysOnTop and #r.idle.halo:GetChildren()==1)
  renderer:update(1/60,contact+.27)
+ assert(not r.idle,'landing twinkle did not fade')
  assert(#audio.calls==sounds+1 and (r.view.Position-landed.Position).Magnitude<1e-8 and r.view.CFrame.yaw==landed.yaw,
   'gem moved or chimed again after touchdown')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera

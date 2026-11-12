@@ -8539,7 +8539,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.64,.97,1.47)) or Vector3.new(.71,.54,.65)
  chip.Position=position;chip.Color=color
  -- Use the smooth finish for a strong native sky reflection on the cut faces.
- if drop.arc then chip.Material=Enum.Material.SmoothPlastic;chip.MaterialVariant='';chip.Reflectance=.85 end
+ if drop.arc then chip.Material=Enum.Material.SmoothPlastic;chip.MaterialVariant='';chip.Reflectance=1 end
  if drop.raw then
   if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
   chip:SetAttribute('PhysicalCargo',true)

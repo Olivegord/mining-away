@@ -10914,9 +10914,10 @@ local function removeIdle(self,r)
  self.idleCount-=1
 end
 local function updateGlint(self,r,age,strength)
- local clock=age<.5 and age or (age-.5+r.seed*.61)%3.4
- local t=math.clamp(clock/.22,0,1)
- local alpha=math.sin(math.pi*t)^2*strength*.78
+ local phase=age<.5 and age or (age-.5+r.seed*.61)%2.65
+ -- Reach peak brightness before a nearby player can collect the landed gem.
+ local t=math.clamp(math.min(phase/.045,(.24-phase)/.195),0,1)
+ local alpha=t*t*(3-2*t)*strength*.92
  if alpha<.025 then removeIdle(self,r);return end
  if not r.idle then
   if self.idleCount>=GLINT_LIMIT then return end
@@ -10924,7 +10925,7 @@ local function updateGlint(self,r,age,strength)
   local size=r.view.Size
   local side=r.seed%2==0 and 1 or -1
   r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.56,-side*size.Z*.08)
-  local width=r.physical and 1.14 or .86
+  local width=r.physical and 1.35 or .96
   r.idle.halo.Size=UDim2.fromScale(width,width)
   r.idle.anchor.Parent=r.view
  end

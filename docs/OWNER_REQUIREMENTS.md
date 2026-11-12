@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — maximum drop reflectance and visible twinkles
+
+Set cut gem drops to reflectance 1 and make sure their transparent four-point glint flashes.
+
 ## November 11 follow-up — restore the earlier Ramiel animation and polish cut gems
 
 Restore the earlier Ramiel slab animation. Dropped cut gems need clearly visible reflections on their faces and the small four-point glint.
