@@ -22,6 +22,8 @@ local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end,function(position,strength,at)
  presentation:crystalKick(position,strength,at,false,true)
+end,function(from,to,level,now)
+ if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
  presentation:crystalKick(position,strength,now,prism)

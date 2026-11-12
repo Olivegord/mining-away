@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and +25% base mining power.
 
@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `99c612d76fdb54f794bfda3ce611d4a8df9db1f3e556173acc3a3d376b227a15` | Nomad's high patrol, field-wide strike and scanner cues. |
-| Shared Studio Sources | Verified Team Create save **214** | All seven managed Sources match the canonical file and Script Sync export. |
+| Native-file SHA-256 | `85c7f0fd18b77e86d485949e132a9efd09ab108c4da2b94678f3f5a7099dea80` | Instant rubble and Ramiel's charge aim and camera feedback. |
+| Shared Studio Sources | Team Create save **215** | All seven managed Sources matched the canonical file immediately before the confirmed save. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's high patrol, wide scanner and field strike in save **214**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load instant rubble and Ramiel's charge aim in save **215**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — snap the rubble into place and show Ramiel's aim
+
+The heavy-impact slabs appear fully opaque in their planted pose on the confirmed impact frame. Each slab holds, then sinks and fades on its own clock. Ramiel's pink aim line and contact dot build during the charge and cut on confirmed fire. Nearby players feel a small level tremor in the final second of charge and about 31% more camera displacement while the beam fires. Reduced motion skips the camera shake.
+
+The rubble, contact-clock, beam and energy checks passed with API doubles. The broader gadget and animation suites hit existing client-inertia and Orbital floor assertion failures. Full gameplay and multiplayer remain untested. Script Sync installed the client Source in shared Edit, and all seven managed Sources matched the canonical file before Team Create save **215** at place **124078027733625**, universe **10774898335**. Reproduce from the prior snapshot with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 5cc3eab`. This revision is unpublished.
 
 ## November 11 — move Nomad above the world and give it a field strike
 

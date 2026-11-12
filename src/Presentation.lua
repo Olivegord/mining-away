@@ -1048,16 +1048,27 @@ function P:crystalKick(position,strength,now,prism,nomad)
  self.crystalShakeDuration=nomad and .62 or major and .46 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
-function P:prismPressure(from,to,at,duration)
+local function prismWeight(from,to)
  local camera=workspace.CurrentCamera
- if not camera then return end
+ if not camera then return 0 end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local listener=root and root.Position or camera.CFrame.Position
  local travel=to-from
  local along=math.clamp((listener-from):Dot(travel)/math.max(.001,travel:Dot(travel)),0,1)
  local distance=(listener-(from+travel*along)).Magnitude
- local weight=math.clamp((68-distance)/55,0,1)^1.3
+ return math.clamp((68-distance)/55,0,1)^1.3
+end
+function P:prismChargePressure(from,to,level,now)
+ local amount=prismWeight(from,to)*level*.053
+ local previous=self.prismChargeShake
+ if amount>.001 and (not previous or previous.at<now or amount>previous.amount) then
+  self.prismChargeShake={at=now,amount=amount}
+ end
+end
+function P:prismPressure(from,to,at,duration)
+ self.prismChargeShake=nil
+ local weight=prismWeight(from,to)
  local previous=self.prismShake
  if weight>.01 and (not previous or at>=previous.at+previous.duration or weight>=previous.weight) then
   self.prismShake={at=at,duration=duration,weight=weight}
@@ -1067,6 +1078,15 @@ function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
  local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local charge=self.prismChargeShake
+ if charge then
+  local elapsed=now-charge.at
+  if elapsed>=.09 then self.prismChargeShake=nil
+  elseif elapsed>=0 then
+   local amount=charge.amount*math.clamp((.09-elapsed)/.055,0,1)
+   ordinary*=CFrame.new(math.sin(now*62)*amount,math.sin(now*51+.7)*amount*.50,0)
+  end
+ end
  local prism=self.prismShake
  if prism then
   local t=now-prism.at
@@ -1074,7 +1094,7 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/math.min(.18,prism.duration*.40),0,1)
-   local pressure=.091+.010*math.sin(t*11)+.055*math.exp(-t*5)
+   local pressure=.119+.013*math.sin(t*11)+.072*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
    local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
    ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)

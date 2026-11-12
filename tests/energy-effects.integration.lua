@@ -159,10 +159,15 @@ check('nearby character feels the impact at far camera zoom and reduced motion o
 end)
 check('Prism fires a brief level tremor and a much stronger rock blast',function()
  local renderer=Presentation.new({parent=root})
- renderer:prismPressure(Vector3.new(-25,20,0),Vector3.new(25,20,0),100,.42)
+ local from,to=Vector3.new(-25,20,0),Vector3.new(25,20,0)
+ renderer:prismChargePressure(from,to,.8,99.93)
+ local charge=renderer:cameraOffset(99.95)
+ assert(charge.Position.Magnitude>.012 and charge.Position.Magnitude<.062 and charge.yaw==0)
+ renderer:prismPressure(from,to,100,.42)
+ assert(not renderer.prismChargeShake,'the charge shake overlapped the firing beat')
  for _,time in ipairs({100.08,100.17,100.24}) do
   local offset=renderer:cameraOffset(time)
-  assert(offset.Position.Magnitude>.012 and offset.Position.Magnitude<.14 and offset.yaw==0)
+  assert(offset.Position.Magnitude>.025 and offset.Position.Magnitude<.19 and offset.yaw==0)
  end
  local crossings,previous=0,0
  for i=0,36 do
@@ -216,6 +221,40 @@ check('Prism is visible at contact and fades immediately before leaving char',fu
  assert(not scorch.Parent,'ground mark leaked after cooling')
  RoleVisuals.setTime(nil)
  RoleVisuals.destroy()
+end)
+check('Heavy impact slabs appear at full opacity and stay planted until they sink',function()
+ local map=Instance.new('Folder');map.Name='MiningAway';map.Parent=workspace
+ local scenery=Instance.new('Folder');scenery.Name='Map';scenery.Parent=map
+ local bed=Instance.new('Part');bed.Material=Enum.Material.Slate;bed.Parent=scenery
+ local savedRaycast=workspace.Raycast
+ function workspace:Raycast(from)
+  return {Position=Vector3.new(from.X,0,from.Z),Normal=Vector3.yAxis,Instance=bed,Material=bed.Material}
+ end
+ local fromMatrix=CFrame.fromMatrix
+ function CFrame.fromMatrix(position,right,up,back)
+  return fromMatrix(position,right,up,back or right:Cross(up))
+ end
+ CF.__sub=function(frame,offset) return CFrame.new(frame.Position-offset)*frame.Rotation end
+ assert(ImpactRubble.spawn(root,Vector3.zero,11,'Prism',200,200))
+ local ring=assert(root:FindFirstChild('PrismCrater'))
+ local poses={}
+ for _,slab in ipairs(ring:GetChildren()) do
+  if slab.Name=='BrokenSlab' then
+   assert(slab.Transparency==0 and not slab.CanCollide)
+   poses[slab]=slab.CFrame
+  end
+ end
+ assert(next(poses),'the ring contained no slabs')
+ ImpactRubble.step(200.25)
+ for slab,frame in pairs(poses) do assert(slab.CFrame==frame and slab.Transparency==0) end
+ ImpactRubble.step(203.2)
+ for slab,frame in pairs(poses) do
+  assert(slab.CFrame.Position.Y<frame.Position.Y and slab.Transparency>0)
+ end
+ ImpactRubble.step(204.66)
+ assert(not ring.Parent,'the ring survived its cleanup deadline')
+ workspace.Raycast=savedRaycast;CFrame.fromMatrix=fromMatrix;CF.__sub=nil
+ map:Destroy()
 end)
 root:Destroy();camera:Destroy()
 print(checks..' production energy/fragment behavior checks with API doubles; Studio appearance remains separate')

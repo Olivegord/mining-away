@@ -65,20 +65,12 @@ local function dust(root,point,normal,direction,color,radius,count)
 end
 
 local function pose(slab,age,steady)
- local t=age-slab.delay
  local value=slab.part
- if t<0 then value.Transparency=1;return end
- if slab.settled and t<=slab.hold then return end
- local sink=smooth((t-slab.hold)/slab.sinkTime)
- local reveal=steady and 1 or smooth(t/.06)
- local drift=steady and 1 or 1-(1-math.clamp(t/.38,0,1))^3
- local lift=steady and 0 or slab.lift*(1-(1-math.clamp(t/.16,0,1))^3)*(1-smooth((t-.15)/.37))
- local y=slab.rest+lift-(steady and 0 or slab.sinkDepth*sink)
- local center=slab.position+slab.up*y-slab.out*(1-drift)*slab.travel
- local tilt=slab.pitch+(steady and 0 or .27*(1-drift))
- value.CFrame=CFrame.fromMatrix(center,slab.right,slab.up)*CFrame.Angles(tilt,slab.yaw,slab.roll)
- value.Transparency=1-reveal*(1-smooth((sink-.10)/.90))
- slab.settled=t>=.52 and t<=slab.hold
+ if age<0 or slab.placed and age<=slab.hold then return end
+ local sink=smooth((age-slab.hold)/slab.sinkTime)
+ value.CFrame=steady and slab.frame or slab.frame-slab.up*(slab.sinkDepth*sink)
+ value.Transparency=smooth((sink-.10)/.90)
+ slab.placed=true
 end
 
 local function remove(root,ring)
@@ -125,11 +117,11 @@ function Rubble.spawn(parent,position,radius,style,at,now,direction,steady)
    math.clamp(radius*random:NextNumber(.12,.24),.54,2.8),radius*random:NextNumber(.21,.39))
   piece.CastShadow=not steady and i%4==0
   local height=piece.Size.Y
-  local slab={part=piece,position=hit.Position,up=up,out=out,right=right,rest=height*random:NextNumber(.02,.30),
-   lift=height*random:NextNumber(.54,.96),travel=radius*random:NextNumber(.04,.12),
-   pitch=random:NextNumber(.18,.48),yaw=random:NextNumber(-.42,.42),roll=random:NextNumber(-.24,.24),
-   delay=random:NextNumber(0,.115),hold=random:NextNumber(2.02,2.58),sinkTime=random:NextNumber(1.08,1.64),
-   sinkDepth=height+piece.Size.Z*.44}
+  local center=hit.Position+up*(height*random:NextNumber(.02,.30))
+  local frame=CFrame.fromMatrix(center,right,up)
+   *CFrame.Angles(random:NextNumber(.18,.48),random:NextNumber(-.42,.42),random:NextNumber(-.24,.24))
+  local slab={part=piece,frame=frame,up=up,hold=random:NextNumber(2.02,2.70),
+   sinkTime=random:NextNumber(1.08,1.64),sinkDepth=height+piece.Size.Z*.44}
   ring.slabs[#ring.slabs+1]=slab
   pose(slab,now-at,steady)
   if not steady and i%3==0 and now-at<.26 then dust(root,hit.Position,up,out,raw,radius,style=='Specialist' and 3 or 5) end
@@ -143,7 +135,7 @@ function Rubble.spawn(parent,position,radius,style,at,now,direction,steady)
  stain.Size=Vector3.new(.025,radius*1.59,radius*1.57*spec.stretch)
  stain.CFrame=CFrame.fromMatrix(center+normal*.028,normal,across)
  ring.stain=stain
- stain.Transparency=1-(1-smooth((now-at-2.5)/1.72))*.25*smooth((now-at)/.20)
+ if now>=at then stain.Transparency=.75+.25*smooth((now-at-2.5)/1.72) end
  active[root]=ring;live+=#ring.slabs
  return true
 end
@@ -154,7 +146,7 @@ function Rubble.step(now)
   if not root.Parent or age>=MAX_AGE then remove(root,ring)
   else
    for _,slab in ipairs(ring.slabs) do pose(slab,age,ring.steady) end
-   ring.stain.Transparency=1-(1-smooth((age-2.5)/1.72))*.25*smooth(age/.20)
+   if age>=0 then ring.stain.Transparency=.75+.25*smooth((age-2.5)/1.72) end
   end
  end
 end

@@ -208,6 +208,7 @@ RoleEffectView.ramielCharge(prism,1,-.43,false)
 assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
 local beamCalls,kicks={},0
 local waves,shatters={},{}
+local chargeKicks={}
 RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
 RoleVisuals.PrismWave=function(...) table.insert(waves,{...}) end
 RoleVisuals.PrismShatter=function(...) table.insert(shatters,{...}) end
@@ -217,13 +218,23 @@ local audio={
  stopLoop=function() loop=nil end,
  play=function(_,name) if name=='prism_fire' then launches+=1 elseif name=='prism_blast' then cracks+=1 end end,
 }
-local discharge=RoleEffectView.new(audio,function() kicks+=1 end)
+local discharge=RoleEffectView.new(audio,function() kicks+=1 end,nil,function(_,point,level)
+ chargeKicks[#chargeKicks+1]={point=point,level=level}
+end)
 local cast=receipt('ramiel',115,'Prism',4.94)
 local beamDuration=DroneCatalog.Types.Ramiel.BeamHold
 cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',beamDuration)
 roleFolder.ChildAdded:Fire(cast)
 local prismDrones={ramiel={ramiel=prism}}
+discharge:step(115.2,prismDrones,targets)
+assert(not discharge.records[cast].prismAim)
+discharge:step(116.7,prismDrones,targets)
+local sight=assert(discharge.records[cast].prismAim)
+local aimWidth=sight.core.Width0
+assert(sight.tip.WorldPosition==cast:GetAttribute('Position') and sight.dot.Transparency<1 and #chargeKicks==0)
 discharge:step(119.95,prismDrones,targets)
+assert(sight.core.Width0>aimWidth*1.5 and #chargeKicks==1 and chargeKicks[1].level>.97,
+ 'the aim and camera cue did not build during the charge')
 assert(#beamCalls==0 and #waves==0 and kicks==0 and loop.name=='prism_charge','Ramiel fired before contact or missed its charge sound')
 cast:SetAttribute('PrismFrom',Vector3.zero)
 cast:SetAttribute('PrismEnd',Vector3.new(0,8,32))
@@ -235,6 +246,7 @@ local floor=Vector3.new(0,0,8)
 cast:SetAttribute('BlastGround',floor);cast:SetAttribute('BlastRadius',11)
 discharge:step(120.01,prismDrones,targets)
 assert(#beamCalls==1 and kicks==1 and #waves==1 and #shatters==0)
+assert(not sight.root.Parent and not discharge.records[cast].prismAim,'the charge guide survived the firing beat')
 assert(waves[1][1]==floor and waves[1][2]==11 and waves[1][3]==beamDuration,'the shockwave did not share the beam beat')
 local beam=beamCalls[1]
 assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]>=1.5 and beam[5]==beamDuration and beam[6]=='Prism')
@@ -272,8 +284,12 @@ player:SetAttribute('ReducedFlashing',true)
 local reducedCast=receipt('reduced',125,'Prism',4.94)
 reducedCast:SetAttribute('ContactAt',130)
 local reducedPrism=RoleEffectView.new(nil)
+reducedPrism:step(129.91,{},targets)
+local reducedAim=assert(reducedPrism.records[reducedCast].prismAim)
+assert(reducedAim.core.Enabled and not reducedAim.glow.Enabled,'reduced flashing lost the steady aim line')
 reducedPrism:step(130.01,{},targets)
-assert(#beamCalls==3 and not lighting:FindFirstChild('RamielReleaseExposure'),'reduced flashing suppressed the beam or replayed the flash')
+assert(#beamCalls==3 and not reducedAim.root.Parent and not lighting:FindFirstChild('RamielReleaseExposure'),
+ 'reduced flashing suppressed the beam, left the aim or replayed the flash')
 reducedPrism:destroy();reducedCast:Destroy();player:SetAttribute('ReducedFlashing',nil)
 local bomb=receipt('nomad',125,'Nomad',4.05)
 bomb:SetAttribute('Duration',.95);bomb:SetAttribute('ContactAt',130)

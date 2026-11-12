@@ -8,6 +8,7 @@ local PRISM_RED=Color3.fromRGB(249,22,60)
 local SIGHT_RED=Color3.fromRGB(255,56,72)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 local liveRamielFields=0
+local livePrismAims=0
 
 local function smooth(t)
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -20,6 +21,55 @@ local function shotPart(parent,name,size,color,ball,transparency)
  if ball then part.Shape=Enum.PartType.Ball end
  part.Transparency=transparency or 0;part.Parent=parent
  return part
+end
+
+local PRISM_AIM_CORE=ColorSequence.new(Color3.fromRGB(255,166,202),Color3.fromRGB(255,98,137))
+local PRISM_AIM_GLOW=ColorSequence.new(Color3.fromRGB(241,33,107),PRISM_RED)
+local prismAimAlpha={}
+for i=0,16 do
+ local strength=i/16
+ prismAimAlpha[i]={
+  NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.09,1-strength*.84),
+   NumberSequenceKeypoint.new(.91,1-strength*.74),NumberSequenceKeypoint.new(1,1-strength*.52)}),
+  NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-strength*.28),
+   NumberSequenceKeypoint.new(.89,1-strength*.21),NumberSequenceKeypoint.new(1,1)}),
+ }
+end
+
+local function clearPrismAim(record)
+ if not record.prismAim then return end
+ record.prismAim.root:Destroy();record.prismAim=nil
+end
+
+local function drawPrismAim(record,camera,origin,target,strength,lowEffects)
+ local aim=record.prismAim
+ if aim and aim.root.Parent~=camera then clearPrismAim(record);aim=nil end
+ if not aim then
+  if livePrismAims>=6 then return end
+  local root=shotPart(camera,'RamielChargeAim',Vector3.one*.025,PRISM_RED,false,1)
+  livePrismAims+=1;root.Destroying:Connect(function() livePrismAims-=1 end)
+  local start=Instance.new('Attachment');start.Parent=root
+  local tip=Instance.new('Attachment');tip.Parent=root
+  local function ribbon(name,color)
+   local line=Instance.new('Beam')
+   line.Name=name;line.Attachment0=start;line.Attachment1=tip
+   line.FaceCamera=true;line.LightEmission=1;line.LightInfluence=0;line.Segments=16;line.Color=color
+   line.Parent=root;return line
+  end
+  aim={root=root,start=start,tip=tip,core=ribbon('AimNeedle',PRISM_AIM_CORE),glow=ribbon('AimGlow',PRISM_AIM_GLOW),
+   dot=shotPart(root,'AimContact',Vector3.one*.16,Color3.fromRGB(255,126,163),true,1)}
+  record.prismAim=aim
+ end
+ local alpha=prismAimAlpha[math.clamp(math.round(strength*16),1,16)]
+ local width=.045+.085*strength
+ aim.start.WorldPosition=origin:Lerp(target,.025)
+ aim.tip.WorldPosition=target
+ aim.core.Width0=width;aim.core.Width1=width*.78;aim.core.Transparency=alpha[1]
+ aim.glow.Enabled=not lowEffects
+ aim.glow.Width0=width*4.2;aim.glow.Width1=width*2.6;aim.glow.Transparency=alpha[2]
+ aim.dot.Position=target:Lerp(origin,.006)
+ aim.dot.Size=Vector3.one*(.13+.24*strength)
+ aim.dot.Transparency=1-strength*.78
 end
 
 local SIGHT_SECTION=12
@@ -428,7 +478,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism,onNomadImpact)
+function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function nomadFlash(position,at)
   local camera=workspace.CurrentCamera
@@ -458,6 +508,7 @@ function View.new(audio,onPrism,onNomadImpact)
      r.detached=true
      if r.projectile then clearProjectile(self,r,now,true) end
      clearLoad(self,r)
+     clearPrismAim(r)
      if audio and audio.stopLoop then audio:stopLoop(node) end
      if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
      if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
@@ -503,8 +554,17 @@ function View.new(audio,onPrism,onNomadImpact)
      local endpoint=node:GetAttribute('PrismEnd') or point
      local travel=endpoint-origin
      local firingAge=landed and now-contactAt
+     local q=windup>0 and math.clamp(age/windup,0,1) or 0
+     local charging=not landed and q>.12 and age<windup+duration+.22
+     local camera=workspace.CurrentCamera
+     if charging and camera and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.5),140) then
+      local player=Players.LocalPlayer
+      local lowEffects=BeamVFX.reduced() or (player and player:GetAttribute('ReducedFlashing')==true)
+      local strength=smooth((q-.12)/.16)*(.36+.64*q^2)
+      drawPrismAim(r,camera,origin,endpoint,lowEffects and strength*.66 or strength,lowEffects)
+      if onPrismCharge and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
+     else clearPrismAim(r) end
      if audio and audio.setLoop then
-      local q=windup>0 and math.clamp(age/windup,0,1) or 0
       if firingAge and firingAge<hold then
        local camera=workspace.CurrentCamera
        local player=Players.LocalPlayer
@@ -690,7 +750,7 @@ function View.new(audio,onPrism,onNomadImpact)
   stepReleaseLighting(self,math.huge)
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for node,r in pairs(self.records) do
-   clearProjectile(self,r,0,false);clearLoad(self,r)
+   clearProjectile(self,r,0,false);clearLoad(self,r);clearPrismAim(r)
    NomadView.clear(r)
    if audio and audio.stopLoop then audio:stopLoop(node) end
   end

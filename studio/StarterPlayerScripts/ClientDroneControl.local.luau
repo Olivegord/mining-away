@@ -5265,20 +5265,12 @@ local function dust(root,point,normal,direction,color,radius,count)
 end
 
 local function pose(slab,age,steady)
- local t=age-slab.delay
  local value=slab.part
- if t<0 then value.Transparency=1;return end
- if slab.settled and t<=slab.hold then return end
- local sink=smooth((t-slab.hold)/slab.sinkTime)
- local reveal=steady and 1 or smooth(t/.06)
- local drift=steady and 1 or 1-(1-math.clamp(t/.38,0,1))^3
- local lift=steady and 0 or slab.lift*(1-(1-math.clamp(t/.16,0,1))^3)*(1-smooth((t-.15)/.37))
- local y=slab.rest+lift-(steady and 0 or slab.sinkDepth*sink)
- local center=slab.position+slab.up*y-slab.out*(1-drift)*slab.travel
- local tilt=slab.pitch+(steady and 0 or .27*(1-drift))
- value.CFrame=CFrame.fromMatrix(center,slab.right,slab.up)*CFrame.Angles(tilt,slab.yaw,slab.roll)
- value.Transparency=1-reveal*(1-smooth((sink-.10)/.90))
- slab.settled=t>=.52 and t<=slab.hold
+ if age<0 or slab.placed and age<=slab.hold then return end
+ local sink=smooth((age-slab.hold)/slab.sinkTime)
+ value.CFrame=steady and slab.frame or slab.frame-slab.up*(slab.sinkDepth*sink)
+ value.Transparency=smooth((sink-.10)/.90)
+ slab.placed=true
 end
 
 local function remove(root,ring)
@@ -5325,11 +5317,11 @@ function Rubble.spawn(parent,position,radius,style,at,now,direction,steady)
    math.clamp(radius*random:NextNumber(.12,.24),.54,2.8),radius*random:NextNumber(.21,.39))
   piece.CastShadow=not steady and i%4==0
   local height=piece.Size.Y
-  local slab={part=piece,position=hit.Position,up=up,out=out,right=right,rest=height*random:NextNumber(.02,.30),
-   lift=height*random:NextNumber(.54,.96),travel=radius*random:NextNumber(.04,.12),
-   pitch=random:NextNumber(.18,.48),yaw=random:NextNumber(-.42,.42),roll=random:NextNumber(-.24,.24),
-   delay=random:NextNumber(0,.115),hold=random:NextNumber(2.02,2.58),sinkTime=random:NextNumber(1.08,1.64),
-   sinkDepth=height+piece.Size.Z*.44}
+  local center=hit.Position+up*(height*random:NextNumber(.02,.30))
+  local frame=CFrame.fromMatrix(center,right,up)
+   *CFrame.Angles(random:NextNumber(.18,.48),random:NextNumber(-.42,.42),random:NextNumber(-.24,.24))
+  local slab={part=piece,frame=frame,up=up,hold=random:NextNumber(2.02,2.70),
+   sinkTime=random:NextNumber(1.08,1.64),sinkDepth=height+piece.Size.Z*.44}
   ring.slabs[#ring.slabs+1]=slab
   pose(slab,now-at,steady)
   if not steady and i%3==0 and now-at<.26 then dust(root,hit.Position,up,out,raw,radius,style=='Specialist' and 3 or 5) end
@@ -5343,7 +5335,7 @@ function Rubble.spawn(parent,position,radius,style,at,now,direction,steady)
  stain.Size=Vector3.new(.025,radius*1.59,radius*1.57*spec.stretch)
  stain.CFrame=CFrame.fromMatrix(center+normal*.028,normal,across)
  ring.stain=stain
- stain.Transparency=1-(1-smooth((now-at-2.5)/1.72))*.25*smooth((now-at)/.20)
+ if now>=at then stain.Transparency=.75+.25*smooth((now-at-2.5)/1.72) end
  active[root]=ring;live+=#ring.slabs
  return true
 end
@@ -5354,7 +5346,7 @@ function Rubble.step(now)
   if not root.Parent or age>=MAX_AGE then remove(root,ring)
   else
    for _,slab in ipairs(ring.slabs) do pose(slab,age,ring.steady) end
-   ring.stain.Transparency=1-(1-smooth((age-2.5)/1.72))*.25*smooth(age/.20)
+   if age>=0 then ring.stain.Transparency=.75+.25*smooth((age-2.5)/1.72) end
   end
  end
 end
@@ -6462,6 +6454,7 @@ local PRISM_RED=Color3.fromRGB(249,22,60)
 local SIGHT_RED=Color3.fromRGB(255,56,72)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 local liveRamielFields=0
+local livePrismAims=0
 
 local function smooth(t)
  t=math.clamp(t,0,1);return t*t*(3-2*t)
@@ -6474,6 +6467,55 @@ local function shotPart(parent,name,size,color,ball,transparency)
  if ball then part.Shape=Enum.PartType.Ball end
  part.Transparency=transparency or 0;part.Parent=parent
  return part
+end
+
+local PRISM_AIM_CORE=ColorSequence.new(Color3.fromRGB(255,166,202),Color3.fromRGB(255,98,137))
+local PRISM_AIM_GLOW=ColorSequence.new(Color3.fromRGB(241,33,107),PRISM_RED)
+local prismAimAlpha={}
+for i=0,16 do
+ local strength=i/16
+ prismAimAlpha[i]={
+  NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.09,1-strength*.84),
+   NumberSequenceKeypoint.new(.91,1-strength*.74),NumberSequenceKeypoint.new(1,1-strength*.52)}),
+  NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-strength*.28),
+   NumberSequenceKeypoint.new(.89,1-strength*.21),NumberSequenceKeypoint.new(1,1)}),
+ }
+end
+
+local function clearPrismAim(record)
+ if not record.prismAim then return end
+ record.prismAim.root:Destroy();record.prismAim=nil
+end
+
+local function drawPrismAim(record,camera,origin,target,strength,lowEffects)
+ local aim=record.prismAim
+ if aim and aim.root.Parent~=camera then clearPrismAim(record);aim=nil end
+ if not aim then
+  if livePrismAims>=6 then return end
+  local root=shotPart(camera,'RamielChargeAim',Vector3.one*.025,PRISM_RED,false,1)
+  livePrismAims+=1;root.Destroying:Connect(function() livePrismAims-=1 end)
+  local start=Instance.new('Attachment');start.Parent=root
+  local tip=Instance.new('Attachment');tip.Parent=root
+  local function ribbon(name,color)
+   local line=Instance.new('Beam')
+   line.Name=name;line.Attachment0=start;line.Attachment1=tip
+   line.FaceCamera=true;line.LightEmission=1;line.LightInfluence=0;line.Segments=16;line.Color=color
+   line.Parent=root;return line
+  end
+  aim={root=root,start=start,tip=tip,core=ribbon('AimNeedle',PRISM_AIM_CORE),glow=ribbon('AimGlow',PRISM_AIM_GLOW),
+   dot=shotPart(root,'AimContact',Vector3.one*.16,Color3.fromRGB(255,126,163),true,1)}
+  record.prismAim=aim
+ end
+ local alpha=prismAimAlpha[math.clamp(math.round(strength*16),1,16)]
+ local width=.045+.085*strength
+ aim.start.WorldPosition=origin:Lerp(target,.025)
+ aim.tip.WorldPosition=target
+ aim.core.Width0=width;aim.core.Width1=width*.78;aim.core.Transparency=alpha[1]
+ aim.glow.Enabled=not lowEffects
+ aim.glow.Width0=width*4.2;aim.glow.Width1=width*2.6;aim.glow.Transparency=alpha[2]
+ aim.dot.Position=target:Lerp(origin,.006)
+ aim.dot.Size=Vector3.one*(.13+.24*strength)
+ aim.dot.Transparency=1-strength*.78
 end
 
 local SIGHT_SECTION=12
@@ -6882,7 +6924,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism,onNomadImpact)
+function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function nomadFlash(position,at)
   local camera=workspace.CurrentCamera
@@ -6912,6 +6954,7 @@ function View.new(audio,onPrism,onNomadImpact)
      r.detached=true
      if r.projectile then clearProjectile(self,r,now,true) end
      clearLoad(self,r)
+     clearPrismAim(r)
      if audio and audio.stopLoop then audio:stopLoop(node) end
      if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
      if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
@@ -6957,8 +7000,17 @@ function View.new(audio,onPrism,onNomadImpact)
      local endpoint=node:GetAttribute('PrismEnd') or point
      local travel=endpoint-origin
      local firingAge=landed and now-contactAt
+     local q=windup>0 and math.clamp(age/windup,0,1) or 0
+     local charging=not landed and q>.12 and age<windup+duration+.22
+     local camera=workspace.CurrentCamera
+     if charging and camera and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.5),140) then
+      local player=Players.LocalPlayer
+      local lowEffects=BeamVFX.reduced() or (player and player:GetAttribute('ReducedFlashing')==true)
+      local strength=smooth((q-.12)/.16)*(.36+.64*q^2)
+      drawPrismAim(r,camera,origin,endpoint,lowEffects and strength*.66 or strength,lowEffects)
+      if onPrismCharge and paused<=0 and q>.79 then onPrismCharge(origin,endpoint,smooth((q-.79)/.21),now) end
+     else clearPrismAim(r) end
      if audio and audio.setLoop then
-      local q=windup>0 and math.clamp(age/windup,0,1) or 0
       if firingAge and firingAge<hold then
        local camera=workspace.CurrentCamera
        local player=Players.LocalPlayer
@@ -7144,7 +7196,7 @@ function View.new(audio,onPrism,onNomadImpact)
   stepReleaseLighting(self,math.huge)
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   for node,r in pairs(self.records) do
-   clearProjectile(self,r,0,false);clearLoad(self,r)
+   clearProjectile(self,r,0,false);clearLoad(self,r);clearPrismAim(r)
    NomadView.clear(r)
    if audio and audio.stopLoop then audio:stopLoop(node) end
   end
@@ -8561,16 +8613,27 @@ function P:crystalKick(position,strength,now,prism,nomad)
  self.crystalShakeDuration=nomad and .62 or major and .46 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
-function P:prismPressure(from,to,at,duration)
+local function prismWeight(from,to)
  local camera=workspace.CurrentCamera
- if not camera then return end
+ if not camera then return 0 end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
  local listener=root and root.Position or camera.CFrame.Position
  local travel=to-from
  local along=math.clamp((listener-from):Dot(travel)/math.max(.001,travel:Dot(travel)),0,1)
  local distance=(listener-(from+travel*along)).Magnitude
- local weight=math.clamp((68-distance)/55,0,1)^1.3
+ return math.clamp((68-distance)/55,0,1)^1.3
+end
+function P:prismChargePressure(from,to,level,now)
+ local amount=prismWeight(from,to)*level*.053
+ local previous=self.prismChargeShake
+ if amount>.001 and (not previous or previous.at<now or amount>previous.amount) then
+  self.prismChargeShake={at=now,amount=amount}
+ end
+end
+function P:prismPressure(from,to,at,duration)
+ self.prismChargeShake=nil
+ local weight=prismWeight(from,to)
  local previous=self.prismShake
  if weight>.01 and (not previous or at>=previous.at+previous.duration or weight>=previous.weight) then
   self.prismShake={at=at,duration=duration,weight=weight}
@@ -8580,6 +8643,15 @@ function P:cameraOffset(now)
  local age=now-(self.shakeAt or -100);local envelope=math.max(0,1-age/.4)^2
  local strength=(self.shakeStrength or 0)*envelope
  local ordinary=CFrame.new(math.sin(now*67)*strength,math.sin(now*83+.7)*strength*.65,0)
+ local charge=self.prismChargeShake
+ if charge then
+  local elapsed=now-charge.at
+  if elapsed>=.09 then self.prismChargeShake=nil
+  elseif elapsed>=0 then
+   local amount=charge.amount*math.clamp((.09-elapsed)/.055,0,1)
+   ordinary*=CFrame.new(math.sin(now*62)*amount,math.sin(now*51+.7)*amount*.50,0)
+  end
+ end
  local prism=self.prismShake
  if prism then
   local t=now-prism.at
@@ -8587,7 +8659,7 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/math.min(.18,prism.duration*.40),0,1)
-   local pressure=.091+.010*math.sin(t*11)+.055*math.exp(-t*5)
+   local pressure=.119+.013*math.sin(t*11)+.072*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
    local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
    ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)
@@ -12930,6 +13002,8 @@ local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end,function(position,strength,at)
  presentation:crystalKick(position,strength,at,false,true)
+end,function(from,to,level,now)
+ if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
  presentation:crystalKick(position,strength,now,prism)
