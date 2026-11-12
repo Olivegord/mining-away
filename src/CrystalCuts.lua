@@ -21,13 +21,15 @@ function C.planes(name)
   plane(p,0,1.04,0,-.46,1,-.17);plane(p,0,1.33,0,.48,1,.36)
   plane(p,.79,.44,.19,1,.85,.24);plane(p,-.38,.38,-.61,-.65,.66,-1)
   plane(p,.61,-1.68,0,1,-.68,0);plane(p,0,-1.57,.65,0,-.61,1)
- else -- Cut ore: wide polished table, beveled corners, and a short pavilion.
+ else -- Cut ore: octagonal girdle, smaller table, and a tapered pavilion.
   bevel(p,.73,0,.73,0)
   for _,side in ipairs({-1,1}) do
-   plane(p,side*.49,.90,0,side,.64,0);plane(p,0,.90,side*.47,0,.66,side)
-   plane(p,side*.58,-.85,0,side,-.58,0);plane(p,0,-.85,side*.55,0,-.58,side)
+   plane(p,side*.93,0,0,side,0,0);plane(p,0,0,side*.93,0,0,side)
+   plane(p,side*.45,.80,0,side,.69,0);plane(p,0,.80,side*.45,0,.69,side)
+   plane(p,side*.33,-.87,0,side,-.65,0);plane(p,0,-.87,side*.33,0,-.65,side)
   end
-  plane(p,0,1.07,0,.10,1,-.08)
+  bevel(p,.39,.80,.39,.85);bevel(p,.30,-.87,.30,-.81)
+  plane(p,0,.80,0,0,1,0);plane(p,0,-.87,0,0,-1,0)
  end
  return p
 end

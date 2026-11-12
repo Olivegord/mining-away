@@ -107,7 +107,7 @@ function IM:Play() self.Playing=true end
 function IM:Stop() self.Playing=false end
 function IM:Emit() end
 function IM:IsA(c)
- return c==self.ClassName or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='MeshPart' or self.ClassName=='UnionOperation' or self.ClassName=='SpawnLocation')) or (c=='LuaSourceContainer' and (self.ClassName=='Script' or self.ClassName=='LocalScript' or self.ClassName=='ModuleScript'))
+ return c==self.ClassName or (c=='BasePart' and (self.ClassName=='Part' or self.ClassName=='WedgePart' or self.ClassName=='MeshPart' or self.ClassName=='UnionOperation' or self.ClassName=='SpawnLocation')) or (c=='LuaSourceContainer' and (self.ClassName=='Script' or self.ClassName=='LocalScript' or self.ClassName=='ModuleScript'))
 end
 function IM:GetChildren() return table.clone(self._children) end
 function IM:GetDescendants()

@@ -1193,7 +1193,14 @@ local function renderDrone(d,dt,now)
   lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
- local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
+ local ramielRoll=0
+ if d.ramiel and not CrystalImpactView.reducedMotion() then
+  ramielRoll=d.ramielIdleTurn or 0
+  if d.ramielResting~=false then
+   ramielRoll=(ramielRoll+.38*math.min(dt,.10))%(2*math.pi)
+   d.ramielIdleTurn=ramielRoll
+  end
+ end
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
   *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
@@ -1240,7 +1247,7 @@ local function renderDrone(d,dt,now)
   if not resting or not d.ramielResting then
    local reduced=CrystalImpactView.reducedMotion()
    DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
-   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true,hold)
   end
   if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting

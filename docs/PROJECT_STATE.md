@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `4bc35cfff7fc217ca87195cffe143a87cb8096f305c8818b2d8ba10626f03ad0` | Includes Ramiel's outward sweep, overlapping charge and sustained clear shot. |
-| Shared Studio Sources | Team Create save **197** | All seven Sources matched the canonical file at the three connected Script Sync roots before the save. |
+| Native-file SHA-256 | `4544a898e4392c08bf303b337e7bb4462b802ec3cedb8814c6710fcbe8dcfcb7` | Includes Ramiel's centered glass and firing star plus the cut gem and landing changes. |
+| Shared Studio Sources | Last verified Team Create save **197**, `e1fe3a5` | The combined update is staged on disk. Arrival and save in shared Edit remain pending. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | Starting a fresh Play session uses the updated Sources. No new Play session was started for this pass. |
+| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session on `e1fe3a5`** | The running client and drone configuration hashes matched the previous revision. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — center Ramiel's glass and hold the firing star
+
+Frame steps across 19.08–24.75 show the glass narrowing around a shared axis, stacking near the core, and widening as the corners turn into crossed slabs. The prior rig moved the centers sideways and turned the upper shoulder back against its initial motion. The updated tracks keep the centers aligned and give each slab its own widening and rotation. Idle turn pauses during the attack. The white flare contracts into a smaller four-point star and fades with the end of the 2.55-second beam. The camera translates faster throughout the shot with no tilt. [First attack reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19)
+
+Dropped gems have reflective metal facets, an octagonal table and a tapered base. A dotted four-point glint flashes on one facet at a time. A higher arc with stronger gravity ends at zero velocity with one clink. Edge drops resolve the lower floor before the trajectory replicates. The X clip did not load, so the written description guided the glint.
+
+The focused rig, beam, energy, contact clock, server path and pickup checks passed, along with the workshop and Crystal Run fixtures. The broad gadget suite still stops at the existing client inertia fixture. The owner's Studio Play session was verified on `e1fe3a5` and left running. Arrival and save in shared Edit and live visuals for the new revision remain unverified. Reproduce the combined canonical refresh from `e1fe3a5` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit e1fe3a5`. All non-Source chunks and unrelated or backup Sources were preserved. This revision is unpublished.
 
 ## November 11 — sweep Ramiel's glass outward and sustain the clear beam
 

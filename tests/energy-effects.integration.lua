@@ -162,8 +162,15 @@ check('Prism holds a level camera tremor during the beam',function()
  renderer:prismPressure(Vector3.new(-25,20,0),Vector3.new(25,20,0),100,2.55)
  for _,time in ipairs({100.90,101.70,102.30}) do
   local offset=renderer:cameraOffset(time)
-  assert(offset.Position.Magnitude>.025 and offset.Position.Magnitude<.14 and offset.yaw==0)
+  assert(offset.Position.Magnitude>.012 and offset.Position.Magnitude<.14 and offset.yaw==0)
  end
+ local crossings,previous=0,0
+ for i=0,120 do
+  local x=renderer:cameraOffset(100.8+i/120).Position.X
+  if x*previous<0 then crossings+=1 end
+  previous=x
+ end
+ assert(crossings>=24,'Prism camera motion did not maintain the faster firing tremor')
  assert(renderer:cameraOffset(102.56).Position.Magnitude==0)
  renderer:destroy()
 end)

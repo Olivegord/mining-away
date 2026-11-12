@@ -768,22 +768,43 @@ end)
 local pickupFolder=folder(root,'OrePickups')
 local pickups={}
 local pickupSerial=0
+function scene.outsidePickupBed(field,position)
+ local point=field.CFrame:PointToObjectSpace(position)
+ return math.abs(point.X)>field.Size.X*.5 or math.abs(point.Z)>field.Size.Z*.5
+end
+function scene.pickupFloorBelow(position)
+ local include={scene.map};local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
+ for _,field in ipairs(scene.fields) do table.insert(include,field.part) end
+ local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include;query.RespectCanCollide=true
+ local hit=workspace:Raycast(position+Vector3.yAxis*2,Vector3.new(0,-66,0),query)
+ return hit and hit.Position.Y+.22
+end
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local launchAt=now+(drop.finishing and OreDrops.REWARD_DELAY or 0)
  drop.launchAt=launchAt
- if drop.oreArc and drop.raw and not drop.compacted then
+ if drop.oreArc and not drop.compacted then
   template=scene.crystalCuts and scene.crystalCuts.Gem or template
-  drop.arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+  local arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+  local landing=Vector3.new(arc.landX,arc.floor,arc.landZ)
+  if drop.fieldPart and scene.outsidePickupBed(drop.fieldPart,landing) then
+   local lowerFloor=scene.pickupFloorBelow(landing)
+   if lowerFloor and lowerFloor<drop.floor then
+    drop.floor=lowerFloor
+    arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+   end
+  end
+  drop.arc=arc
  end
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.55,1.16,1.40)) or Vector3.new(.64,.74,.56)
+ chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.64,.97,1.47)) or Vector3.new(.71,.54,.65)
  chip.Position=position;chip.Color=color
+ if drop.arc then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=.28 end
  if drop.raw then
-  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
-  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or .10;chip:SetAttribute('PhysicalCargo',true)
+  if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
+  chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
@@ -794,7 +815,6 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
   if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
-  if drop.finishing then chip:SetAttribute('FinishingCargo',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
@@ -1106,19 +1126,16 @@ local function pickupStep(dt)
   if p and drop.pressCarrier and drop.pressCarrier~=p.compactor then scene.resetPress(drop.pressCarrier) end
   if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
-  elseif healthy(p) and not drop.pressSocket then
+  elseif healthy(p) and not drop.pressSocket and now>=(drop.launchAt or 0) then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
    -- outside its original footprint, at bounded intervals while moving.
-   if drop.fieldPart and now>=(drop.floorQueryAt or 0) then
-    local localPoint=drop.fieldPart.CFrame:PointToObjectSpace(Vector3.new(drop.x,drop.y,drop.z))
-    local outside=math.abs(localPoint.X)>drop.fieldPart.Size.X*.5 or math.abs(localPoint.Z)>drop.fieldPart.Size.Z*.5
+   if drop.fieldPart and (not drop.arc or drop.arcEnded) and now>=(drop.floorQueryAt or 0) then
+    local position=Vector3.new(drop.x,drop.y,drop.z)
+    local outside=scene.outsidePickupBed(drop.fieldPart,position)
     drop.floorQueryAt=now+.25
     if outside and (not drop.floorQueryX or (drop.x-drop.floorQueryX)^2+(drop.z-drop.floorQueryZ)^2>.25) then
-     local include={scene.map};local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
-     for _,field in ipairs(scene.fields) do table.insert(include,field.part) end
-     local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include;query.RespectCanCollide=true
-     local hit=workspace:Raycast(Vector3.new(drop.x,drop.y+2,drop.z),Vector3.new(0,-66,0),query)
-     if hit then drop.floor=hit.Position.Y+.22;drop.part:SetAttribute('FloorY',drop.floor) end
+     local floor=scene.pickupFloorBelow(position)
+     if floor then drop.floor=floor;drop.part:SetAttribute('FloorY',floor) end
      drop.floorQueryX=drop.x;drop.floorQueryZ=drop.z
     end
    end
@@ -1178,10 +1195,11 @@ local function pickupStep(dt)
     and scene.cargoInSquare(square,from) then
     p.pinOreOutOfReach=square
    end
-   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
+   local pickupDt=drop.launchAt and math.min(dt,now-drop.launchAt) or dt
+   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},pickupDt,canCollect,reach)
    if groundSpeed and groundSpeed>1 and not drop.firstImpactPublished then
     drop.firstImpactPublished=true
-    drop.part:SetAttribute('GroundImpactAt',now)
+    drop.part:SetAttribute('GroundImpactAt',drop.arc and drop.launchAt+drop.arc.contact or now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
     drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)

@@ -30,6 +30,7 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
   for _,fps in ipairs({30,60,144}) do
    local s=drop();s.y=3;s.raw=true
    s.vx,s.vy,s.vz=O.cargoLaunch(8,block)
+   if not block then s.arc=O.rawArc(s.x,s.y,s.z,s.vx,s.vy,s.vz,s.floor) end
    local peak=s.y
    local landing=nil
    for _=1,math.ceil(1.2*fps) do
@@ -39,20 +40,27 @@ check('physical cargo rises, falls and settles briefly even with an owner close 
     if not landing or s.age-landing<.075 then assert(not s.homing and not reached) end
     if reached then break end
    end
-   assert(peak>=3+(block and 1.7 or 6.4),'cargo did not reach the intended apex')
-   assert(landing and landing>(block and .50 or .92) and s.homing,'cargo never returned to collection')
+   assert(peak>=3+(block and 1.7 or 8.2),'cargo did not reach the intended apex')
+   assert(landing and landing>(block and .50 or .74) and landing<(block and .70 or .86) and s.homing,
+    'cargo never returned to collection in the intended window')
   end
  end
 end)
-check('raw gems land once and settle to the same pose at all step rates',function()
- local a=O.rawArc(2,3,-4,7.2,30,-1.5,.2)
+check('gems hit once and lose all motion at contact at all step rates',function()
+ local a=O.rawArc(2,3,-4,7.2,45,-1.5,.2)
  local x,y,z=O.rawPose(a,2)
+ local beforeX,beforeY,beforeZ,_,fallSpeed=O.rawPose(a,a.contact-.0001)
+ assert(math.abs(beforeX-x)<.001 and math.abs(beforeZ-z)<.001 and beforeY>y and fallSpeed<-45)
+ local contactX,contactY,contactZ,vx,vy,vz=O.rawPose(a,a.contact)
+ assert(contactX==x and contactY==y and contactZ==z and vx==0 and vy==0 and vz==0)
  for _,fps in ipairs({30,60,144}) do
-  local s={x=2,y=3,z=-4,vx=7.2,vy=30,vz=-1.5,age=0,floor=.2,raw=true,arc=a}
+  local s={x=2,y=3,z=-4,vx=7.2,vy=45,vz=-1.5,age=0,floor=.2,raw=true,arc=a}
   local hits=0
   for _=1,fps*2 do
    local _,speed=O.step(s,{x=70,y=1,z=0},1/fps,false)
-   if speed>0 then hits+=1;assert(speed==a.speed) end
+   if speed>0 then
+    hits+=1;assert(speed==a.speed and s.x==x and s.y==y and s.z==z and s.vx==0 and s.vy==0 and s.vz==0)
+   end
    assert(s.y>=s.floor)
   end
   assert(hits==1 and s.firstLandedAge==a.contact and s.x==x and s.y==y and s.z==z)

@@ -23,6 +23,11 @@ function CFrame.Angles(x,y,z)
  c._rotation={math.cos(z),-math.sin(z),0,math.sin(z),math.cos(z),0,0,0,1}
  return a*b*c
 end
+function CFrame.fromMatrix(position,right,up,back)
+ local cf=CFrame.new(position)
+ cf._rotation={right.X,up.X,back.X,right.Y,up.Y,back.Y,right.Z,up.Z,back.Z}
+ return cf
+end
 function CF:Inverse()
  local m=matrix(self);local cf=CFrame.new();cf._rotation={m[1],m[4],m[7],m[2],m[5],m[8],m[3],m[6],m[9]};cf.Position=rotate(cf,-self.Position);return cf
 end
@@ -158,28 +163,28 @@ local function sample(referenceTime,recovery)
   assert(facet.Transparency==original[1] and facet.Parent==original[2],'facet was replaced or faded')
   assert(facet.Size.Magnitude>.02 and facet.Position.Magnitude<24,'invalid glass deformation')
  end
- return upper.Size.X,upper.Position.Y-lower.Position.Y,upper.Position-pivot.Position
+ local corner=upper.CFrame:PointToWorldSpace(Vector3.new(upper.Size.X*.5,0,upper.Size.Z*.5))-upper.Position
+ return upper.Size.X,upper.Position.Y-lower.Position.Y,upper.Position-pivot.Position,corner
 end
 local idleWidth,idleGap=sample(19.04)
 local previousWidth,previousGap=idleWidth,idleGap
-local loopStart,loopEnd,largest
 for i=1,300 do
  local time=19.04+i*4.94/300
  local width,gap,offset=sample(time)
  assert(math.abs(width-previousWidth)<.16 and math.abs(gap-previousGap)<.20,'shape jumped between sampled frames')
+ assert(math.abs(offset.X)<.001 and math.abs(offset.Z)<.001,'the slab center drifted away from the axis')
  previousWidth,previousGap=width,gap
- if time>=21.46 and not loopStart then loopStart=offset end
- if time>=21.98 and not loopEnd then loopEnd=offset end
- if time>21.56 and time<22 then largest=math.max(largest or 0,width) end
 end
 local narrow,narrowGap=sample(20.04)
 local tucked,tuckedGap=sample(20.84)
+local before,_,_,cornerBefore=sample(21.18)
+local expanding,_,_,cornerAfter=sample(21.74)
 local wide,wideGap=sample(23.98)
 assert(narrow<idleWidth*.23 and narrowGap>1.25,'first separation did not pinch into a column')
 assert(tucked>narrow*2 and tuckedGap<.12,'bands did not race inward to pack around the core')
 assert(wide>tucked*1.30 and wideGap>.75,'wide shooting shape did not reopen around the core')
-assert(loopStart.Z*loopEnd.Z<0 and math.abs(loopStart.X-loopEnd.X)>.18 and largest>wide*1.2,
- 'the final wave did not loop sideways and swell before it settled')
+assert(expanding>before*1.32 and cornerBefore.Unit:Dot(cornerAfter.Unit)<.75,
+ 'the final wave did not widen and sweep its corners around the axis')
 for _,half in ipairs(rig.halves) do
  for j=1,2 do
   local slab=half.bands[j].near

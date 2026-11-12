@@ -5,7 +5,7 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
-local HOVER_HEIGHT=.68
+local GLINT_LIMIT=12
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -24,30 +24,24 @@ local function removeTrail(self,r)
  r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
  r.ribbon=nil;self.trailCount-=1
 end
-local function idleGlow(view,tint)
- local halo=Instance.new('BillboardGui');halo.Name='FacetGleam';halo.Adornee=view
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=56
- halo.Size=UDim2.fromScale(.67,.67);halo.StudsOffsetWorldSpace=Vector3.new(0,.44,0)
- local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
- local stars={}
- for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
-  local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
-  star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
-  star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
-  star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
-  star.Rotation=45+i*9;star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+local function makeGlint()
+ local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
+ local halo=Instance.new('BillboardGui');halo.Name='DottedStar';halo.Adornee=anchor
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=58;halo.Parent=anchor
+ local dots={}
+ local function dot(x,y,radius,brightness)
+  local frame=Instance.new('Frame');frame.Name='GlintDot';frame.BorderSizePixel=0
+  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5+x,.5+y)
+  frame.Size=UDim2.new(.012, radius, .012, radius)
+  local round=Instance.new('UICorner');round.CornerRadius=UDim.new(.5,0);round.Parent=frame
+  frame.Parent=halo;dots[#dots+1]={frame=frame,brightness=brightness}
  end
- halo.Parent=view
- local particles=Instance.new('ParticleEmitter');particles.Name='FloatingFacetSparks'
- particles.Texture='rbxasset://textures/sparkle.png';particles.Enabled=false;particles.Rate=0
- particles.LightEmission=1;particles.LightInfluence=0;particles.Color=ColorSequence.new(PICKUP_HIGHLIGHT,warm)
- particles.EmissionDirection=Enum.NormalId.Top;particles.SpreadAngle=Vector2.new(48,48)
- particles.Lifetime=NumberRange.new(.27,.49);particles.Speed=NumberRange.new(1.8,3.5)
- particles.Rotation=NumberRange.new(36,55);particles.Drag=1.8
- particles.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.24,.60),NumberSequenceKeypoint.new(1,0)})
- particles.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.25,.04),NumberSequenceKeypoint.new(1,1)})
- particles.Parent=view
- return {halo=halo,stars=stars,particles=particles}
+ dot(0,0,1.65,1)
+ for _,side in ipairs({-1,1}) do
+  for i=1,4 do dot(side*i*.015,side*i*.097,1.26-i*.13,1-i*.16) end
+  for i=1,2 do dot(side*i*.103,-side*i*.016,1.28-i*.19,1-i*.23) end
+ end
+ return {anchor=anchor,halo=halo,dots=dots}
 end
 local function twinkle(age,start,duration)
  local t=math.clamp((age-start)/duration,0,1)
@@ -55,8 +49,27 @@ local function twinkle(age,start,duration)
 end
 local function removeIdle(self,r)
  if not r.idle then return end
- r.idle.halo:Destroy();r.idle.particles:Destroy();r.idle=nil
+ r.idle.anchor.Parent=nil;table.insert(self.idlePool,r.idle);r.idle=nil
  self.idleCount-=1
+end
+local function updateGlint(self,r,age,strength)
+ local clock=math.max(0,age-.67)+r.seed*.61
+ local cycle=age<.67 and -1 or math.floor(clock/3.2)
+ local pulse=cycle==-1 and twinkle(age,.11,.30) or twinkle(clock%3.2,0,.30)
+ if pulse*strength<.015 then removeIdle(self,r);return end
+ if not r.idle then
+  if self.idleCount>=GLINT_LIMIT then return end
+  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
+  local side=(r.seed+cycle)%2==0 and 1 or -1
+  local size=r.view.Size
+  r.idle.anchor.Position=Vector3.new(side*size.X*.33,size.Y*.47,-side*size.Z*.23)
+  r.idle.anchor.Parent=r.view
+  local tint=r.color:Lerp(PICKUP_HIGHLIGHT,.88)
+  for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundColor3=tint end
+ end
+ local width=(r.physical and 2.22 or 1.58)*(.77+pulse*.23)
+ r.idle.halo.Size=UDim2.fromScale(width,width)
+ for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundTransparency=1-pulse*strength*dot.brightness end
 end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
@@ -97,7 +110,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -106,7 +119,6 @@ function V.new(root,parent,audio,reducedMotion)
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
-  if source:GetAttribute('CleanCargoArc') and source.Material~=Enum.Material.Metal then view.Reflectance=.19 end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
@@ -119,7 +131,6 @@ function V.new(root,parent,audio,reducedMotion)
    local floor=source:GetAttribute('FloorY')
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
-    r.finishing=source:GetAttribute('FinishingCargo')==true
     r.landAge=r.arc.contact
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
@@ -188,6 +199,7 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
+ local glintStrength=self.player:GetAttribute('ReducedFlashing')==true and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
@@ -253,58 +265,18 @@ function V:update(dt,now)
    if live and r.hasArc and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
-    if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ);speed=r.arc.speed end
+    if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor-.22,r.arc.landZ);speed=r.arc.speed end
     if age-r.landAge>=.28 then r.landCue=true
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/24,.77,1.15)*(r.physical and 1.1 or 1),
-       pitch=(r.physical and .88 or 1.13)+(r.seed%4)*.055})
+      self.audio:play('ore_land',point,{level=math.clamp(speed/32,.77,1.22)*(r.physical and 1.1 or 1),
+       pitch=(r.physical and .86 or 1.07)+(r.seed%4)*.045})
      end
     end
    end
-   if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then
-    r.twinkleCue=true
-    if self.audio and age<.25 then self.audio:play('gem_twinkle',r.drawPosition or r.pos) end
-   end
-   local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
+   local resting=live and r.landAge and age>=r.landAge+(r.arc and 0 or PickupMotion.SETTLE_TIME)
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
-   local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
-   local distanceFade=math.clamp((58-idleDistance)/10,0,1)
-   local atRest=resting and not seated and (r.physical or r.hasArc)
-   local settledAge=age-(r.landAge or 0)
-   local glintClock=math.max(0,settledAge-.55)+r.seed*.61
-   local glintPeriod=glintClock%3.1
-   local gleam=settledAge<.54 and twinkle(settledAge,0,.54)
-    or twinkle(glintPeriod,0,.50)*.85
-   local launched=live and r.finishing and displayAt>=r.born and age<.60
-   local shine=live and (r.physical or r.hasArc) and not pulling and not seated and (atRest or r.arc and settledAge>=0)
-    and gleam*distanceFade*opacity or 0
-   if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
-    r.idle=idleGlow(r.view,r.color);self.idleCount+=1
-   end
-   if r.idle then
-    if reducedEffects or not live or pulling or seated or distanceFade==0 then removeIdle(self,r)
-    else
-     local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
-     local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
-     local width=launched and 3.05 or 2.12
-     r.idle.halo.Size=UDim2.fromScale(width,width)
-     if not reducedFlashing and launched and age>=.10 and not r.launchStars then
-      r.launchStars=true;r.idle.particles:Emit(3)
-     elseif not reducedFlashing and shine>.43 and not launched then
-      local cycle=settledAge<.54 and -1 or math.floor(glintClock/3.1)
-      if r.glintCycle~=cycle then r.glintCycle=cycle;r.idle.particles:Emit(1) end
-     end
-     for i,star in ipairs(r.idle.stars) do
-      local pulse=launched and twinkle(age,.035+(i-1)*.098,.28)
-       or twinkle(settledAge<.54 and settledAge or glintPeriod,.015+(i-1)*.082,.33)*.91
-      local size=(i==1 and .83 or .50)*(.43+pulse*.57)
-      star.Size=UDim2.fromScale(size,size)
-      star.ImageTransparency=1-pulse*sparkleStrength
-     end
-    end
-   end
    local arcMix=r.arc and (not r.arcExit and 1 or 1-math.clamp((displayAt-r.arcExit)/.12,0,1)) or 0
    local newPose=not (resting and r.restSample==latest and r.restUnits==r.units)
    if newPose then
@@ -326,10 +298,8 @@ function V:update(dt,now)
     glow=math.max(glow,.34*r.pull)
     local rx,ry,rz
     if r.arc then
-     local turn=math.clamp(age/math.max(.01,r.arc.contact),0,1)
-     turn=turn*turn*(3-2*turn)
-     local remaining=reducedMotion and 0 or (1-turn)*2*math.pi
-     rx=.10+remaining;ry=(r.seed*.92)%6.283+(reducedMotion and 0 or .78*(1-turn));rz=-.08+.19*math.sin(turn*math.pi)
+     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact),0,1)^1.25
+     rx=remaining*2*math.pi;ry=(r.seed*.92)%6.283+.78*remaining;rz=.14*math.sin(remaining*math.pi)
     else
      local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
      rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
@@ -337,19 +307,8 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-     local restY=latest.floor+support-.22
-     local raised=math.max(restY,position.Y)
-     local hover=HOVER_HEIGHT*(1-r.pull)
-     if r.arc and arcMix>0 then
-      local t=math.clamp((age/r.arc.contact-.69)/.31,0,1)
-      local ease=t*t*(3-2*t)
-      local flightY=position.Y+(support-.22)*ease
-      local hoverY=flightY+(restY+hover-flightY)*ease
-      raised=raised+(hoverY-raised)*arcMix
-     elseif r.landAge and (r.physical or r.hasArc) then
-      local t=math.clamp((age-r.landAge)/.17,0,1)
-      raised+=hover*t*t*(3-2*t)
-     end
+     local raised=math.max(latest.floor+support-.22,position.Y)
+     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -362,16 +321,22 @@ function V:update(dt,now)
     r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if r.arc and live and age>=r.landAge and not pulling and not seated and not reducedEffects and cameraPosition then
+    local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/10,0,1)
+    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
+   else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
     local inFlight=air and live and not pulling and displayAt>=r.born
     if r.ribbon then
-     if not inFlight or reducedEffects then
+     if not inFlight and r.arc then
+      removeTrail(self,r)
+     elseif not inFlight or reducedEffects then
       if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
      end
-     if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+     if r.ribbon and r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
@@ -396,6 +361,7 @@ function V:destroy()
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
+ for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}

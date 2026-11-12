@@ -125,25 +125,34 @@ check('physical launch trail fades on the displayed landing and never reappears 
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
  renderer:destroy();workspace.CurrentCamera=camera
 end)
-check('a finishing gem stays hidden until its synchronized release',function()
+check('a finished gem stays hidden until release, then hits the ground with one clink',function()
  local cargo=fixturePart(root,'QueuedGem',Vector3.new(0,3,0),Vector3.new(1.55,1.16,1.4))
+ cargo.Material=Enum.Material.Metal;cargo.Reflectance=.28
  local born=realTime+.135
- for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,FinishingCargo=true,SpawnAt=born,SnapshotAt=born,
-  FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
+ local launch=Vector3.new(7,45,0)
+ for k,v in pairs({PickupId=4,Owner=pl.UserId,PhysicalCargo=true,CleanCargoArc=true,SpawnAt=born,SnapshotAt=born,
+  FloorY=.22,Position=cargo.Position,Velocity=launch,OreLaunchOrigin=cargo.Position,OreLaunchVelocity=launch}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio)
  local r=assert(renderer.records[cargo])
+ assert(r.view.Material==Enum.Material.Metal and r.view.Reflectance==.28)
  renderer:update(1/60,born+.099)
  assert(r.view.Transparency==1 and not r.ribbon)
  renderer:update(1/60,born+.101)
  assert(r.view.Transparency==0)
  local sounds=#audio.calls
- renderer:update(1/60,born+.23)
- assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='gem_twinkle')
- renderer:update(1/60,born+.27)
- assert(#audio.calls==sounds+1,'gem chimed more than once')
+ local contact=born+r.arc.contact+PickupMotion.DELAY
+ renderer:update(1/60,contact-.015)
+ assert(#audio.calls==sounds and r.view.Position.Y>r.view.Size.Y*.5)
+ renderer:update(1/60,contact+.001)
+ assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
+ local landed=r.view.CFrame
+ assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
+ renderer:update(1/60,contact+.27)
+ assert(#audio.calls==sounds+1 and (r.view.Position-landed.Position).Magnitude<1e-8 and r.view.CFrame.yaw==landed.yaw,
+  'gem moved or chimed again after touchdown')
  renderer:destroy();cargo:Destroy()
 end)
-check('settled gems hover steadily, emit glints and share one price label',function()
+check('grounded gems flash thin dotted stars in place and share one price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -163,20 +172,25 @@ check('settled gems hover steadily, emit glints and share one price label',funct
  for i,source in ipairs(sources) do
   local record=renderer.records[source];poses[i]=record.view.CFrame;sizes[i]=record.view.Size
  end
- for i=1,240 do renderer:update(1/60,realTime+.2+i/60) end
- local lit,emitted=0,0
+ local mostLit=0
+ for i=1,240 do
+  renderer:update(1/60,realTime+.2+i/60)
+  mostLit=math.max(mostLit,renderer.idleCount)
+ end
+ local lit=0
  for i,source in ipairs(sources) do
   local record=renderer.records[source]
   if record.idle then
    lit+=1
-   assert(record.idle.halo.Parent==record.view and record.idle.halo.StudsOffsetWorldSpace.Y==.44)
-   emitted+=record.idle.particles.Emitted or 0
+   assert(record.idle.anchor.Parent==record.view and record.idle.halo.Adornee==record.idle.anchor)
+   assert(#record.idle.dots==13 and record.idle.dots[1].frame.BackgroundTransparency<1)
   end
-  assert(record.view.Position.Y>1.25,'gem settled against the ground instead of hovering')
+  assert(math.abs(record.view.Position.Y-record.view.Size.Y*.5)<1e-8,'gem failed to sit on the ground')
   assert(record.view.Position==poses[i].Position and record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],
    'idle ore moved, rotated or changed size')
  end
- assert(lit>0 and lit<=12 and renderer.idleCount==lit and emitted>0)
+ assert(mostLit>0 and mostLit<=12 and renderer.idleCount==lit)
+ assert(renderer.idleCount+#renderer.idlePool<=12,'glint pool exceeded the visual budget')
  local gui=renderer.valueGui
  assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
  assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')
@@ -189,13 +203,16 @@ check('settled gems hover steadily, emit glints and share one price label',funct
  assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
  reducedMotion=true
  renderer:update(1/60,realTime+6.1)
- assert(first.view.Position.Y>0 and first.lift==nil,'reduced motion must not animate resting ore')
+ assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5)<1e-8,'reduced motion moved the resting ore')
  local pose=first.view.CFrame
  renderer:update(1/60,realTime+13)
  assert(first.view.CFrame==pose and first.view.Transparency>0,'expiry did not fade a static pile in place')
  sources[2]:SetAttribute('FadeAt',realTime+20);sources[2]:SetAttribute('ExpiresAt',realTime+25)
  renderer:update(1/60,realTime+13.1)
  assert(first.view.Transparency==0 and first.view.CFrame==pose,'renewing a static pile failed to reset the fade')
+ pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+13.2)
+ assert(renderer.idleCount==0,'reduced effects left dotted stars on screen')
+ pl:SetAttribute('ReducedEffects',false)
  renderer:destroy();visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

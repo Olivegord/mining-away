@@ -1315,7 +1315,6 @@ local CUES = {
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
  crystal_release_tink={id='9125869138',volume=.30,duration=.29,pitch=1.56,attack=.004,cooldown=.09,range=58,maxVoices=2,fallback='volume_slider.ogg'},
  crystal_fall_tink={id='9125869138',volume=.26,duration=.31,pitch=1.41,attack=.004,cooldown=.065,range=56,maxVoices=3,fallback='volume_slider.ogg'},
- gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
  pack_step={id='9126066421',volume=.16,duration=.38,pitch=1.1,cooldown=.09,range=30,fallback='volume_slider.ogg'},
@@ -1369,7 +1368,7 @@ local CUES = {
  coil_load={id='9119816710',volume=.18,duration=.57,pitch=1.12,attack=.035,cooldown=.16,range=51,maxVoices=2,fallback='volume_slider.ogg'},
  coil_fire={id='9118941667',volume=.28,duration=.36,pitch=.79,attack=.012,cooldown=.13,range=65,maxVoices=3,fallback='action_get_up.mp3'},
  coil_hit={id='9125869495',volume=.47,duration=.49,pitch=.69,attack=.009,cooldown=.13,range=74,maxVoices=3,fallback='impact_explosion_03.mp3'},
- ore_land={ids={'9125869138','9125869504'},volume=.34,duration=.34,pitch=1.30,attack=.004,cooldown=.045,
+ ore_land={ids={'9125869138','9125869504'},volume=.39,duration=.34,pitch=1.30,attack=.004,cooldown=.045,
   nearDistance=22,range=62,maxVoices=4,reserved=true,fallback='volume_slider.ogg'},
  shield={id='9126066421',volume=.13,duration=.55,pitch=.6,cooldown=.12,fallback='action_jump_land.mp3'},
  reprint={id='91735091370012',volume=.15,duration=.9,pitch=.95,cooldown=.2,fallback='volume_slider.ogg'},
@@ -5949,9 +5948,10 @@ local function starRays(root)
  return rays
 end
 
-function View.ramielCharge(rig,charge,untilContact,reduced)
+function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<-.88 then
+ beamHold=beamHold or DroneCatalog.Types.Ramiel.BeamHold
+ if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<=-beamHold then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -5983,19 +5983,21 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  end
  local elapsed=-untilContact
  local release=1-(1-math.clamp(elapsed/.35,0,1))^5
- local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or 1.56+.42*release
- local after=1-smooth((elapsed-.13)/.72)
+ local launchFade=1-smooth((elapsed-.13)/.72)
+ local firing=1-smooth((elapsed-(beamHold-.24))/.24)
+ local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or .60+(.96+.42*release)*launchFade
  local bloom=1-smooth((elapsed-.055)/.31)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
  local width=(.06+radius*3.9)*scale
- local alpha=(.34+.66*smooth(radius/.32))*after*smooth(radius/.05)
- local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)
+ local alpha=(.34+.66*smooth(radius/.32))*(.68+.32*launchFade)*firing*smooth(radius/.05)
+ local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)+20*smooth((elapsed-.58)/1.7)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
  field.inner.ImageTransparency=1-alpha*bloom
  field.outer.ImageTransparency=1-.73*alpha*bloom
- EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.52*alpha*bloom*smooth(radius/.32))
+ local halo=.52*bloom+.16*smooth(elapsed/.36)
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),halo*alpha*smooth(radius/.32))
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.xAxis
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
@@ -6025,7 +6027,7 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  local white=smooth((radius-.13)/1.43)*bloom
  field.lamp.Enabled=white>.01
  field.lamp.Brightness=white*9
- local rim=smooth((radius-.10)/.30)*after
+ local rim=smooth((radius-.10)/.30)*launchFade
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
  local pressure=smooth((elapsed+.09)/.13)*(1-smooth((elapsed-.15)/.64))
  local expansion=1-(1-math.clamp((elapsed+.09)/.94,0,1))^4
@@ -7791,9 +7793,10 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/.18,0,1)
-   local pressure=.083+.015*math.sin(t*7)+.063*math.exp(-t*5)
+   local pressure=.091+.010*math.sin(t*11)+.055*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
-   ordinary*=CFrame.new(math.sin(t*37)*amount,math.sin(t*29+.4)*amount*.52,math.sin(t*21)*amount*.22)
+   local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
+   ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
@@ -10689,7 +10692,7 @@ local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
- AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=122,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -10700,10 +10703,9 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- -- The longer hang time gives the arc room to read without sending small
- -- fragments out of their usual pickup area.
+ -- Keep fragments in their usual pickup area with a higher, steeper arc.
  local speed=6.2+(serial%5)*.4
- return math.cos(angle)*speed,20+index*.9,math.sin(angle)*speed
+ return math.cos(angle)*speed,29+index*1.35,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -10717,26 +10719,23 @@ end
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
  local speed=block and 5.3 or 7.3+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
+ return math.cos(angle)*speed,block and 16 or 45+(serial%4)*.8,math.sin(angle)*speed
 end
--- One analytic flight and one short skid. Server and observer sample the same
--- curve, so neither a packet boundary nor a bounce can change the resting pose.
+-- The server and observer sample the same flight and exact point of contact.
 function O.rawArc(x,y,z,vx,vy,vz,floor)
- local contact=(vy+math.sqrt(vy*vy+2*O.GRAVITY*math.max(0,y-floor)))/O.GRAVITY
- local decay=math.exp(-O.AIR_DRAG*contact)
- local travel=(1-decay)/O.AIR_DRAG
- return {x=x,y=y,z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,skid=.24,
-  landX=x+vx*travel,landZ=z+vz*travel,landVX=vx*decay*.62,landVZ=vz*decay*.62,speed=O.GRAVITY*contact-vy}
+ local speed=math.sqrt(vy*vy+2*O.GEM_GRAVITY*math.max(0,y-floor))
+ local contact=(vy+speed)/O.GEM_GRAVITY
+ local travel=(1-math.exp(-O.AIR_DRAG*contact))/O.AIR_DRAG
+ return {x=x,y=math.max(y,floor),z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,
+  landX=x+vx*travel,landZ=z+vz*travel,speed=speed}
 end
 function O.rawPose(a,age)
  age=math.max(0,age)
  if age<a.contact then
   local decay=math.exp(-O.AIR_DRAG*age);local travel=(1-decay)/O.AIR_DRAG
-  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GRAVITY*age,a.vz*decay
+  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GEM_GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GEM_GRAVITY*age,a.vz*decay
  end
- local left=1-math.clamp((age-a.contact)/a.skid,0,1)
- local travel=a.skid/3*(1-left^3)
- return a.landX+a.landVX*travel,a.floor,a.landZ+a.landVZ*travel,a.landVX*left^2,0,a.landVZ*left^2
+ return a.landX,a.floor,a.landZ,0,0,0
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -10767,6 +10766,7 @@ local function fall(s,dt)
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
    s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0
+   if s.arc then s.vx=0;s.vz=0 end
    if s.vx~=0 or s.vz~=0 then horizontal(s,dt,O.GROUND_DRAG) end
    break
   end
@@ -10777,7 +10777,9 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
+  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor
+  if s.arc then s.vx=0;s.vy=0;s.vz=0;break end
+  s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -10827,7 +10829,7 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
-local HOVER_HEIGHT=.68
+local GLINT_LIMIT=12
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -10846,30 +10848,24 @@ local function removeTrail(self,r)
  r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
  r.ribbon=nil;self.trailCount-=1
 end
-local function idleGlow(view,tint)
- local halo=Instance.new('BillboardGui');halo.Name='FacetGleam';halo.Adornee=view
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=56
- halo.Size=UDim2.fromScale(.67,.67);halo.StudsOffsetWorldSpace=Vector3.new(0,.44,0)
- local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
- local stars={}
- for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
-  local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
-  star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
-  star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
-  star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
-  star.Rotation=45+i*9;star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+local function makeGlint()
+ local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
+ local halo=Instance.new('BillboardGui');halo.Name='DottedStar';halo.Adornee=anchor
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=58;halo.Parent=anchor
+ local dots={}
+ local function dot(x,y,radius,brightness)
+  local frame=Instance.new('Frame');frame.Name='GlintDot';frame.BorderSizePixel=0
+  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5+x,.5+y)
+  frame.Size=UDim2.new(.012, radius, .012, radius)
+  local round=Instance.new('UICorner');round.CornerRadius=UDim.new(.5,0);round.Parent=frame
+  frame.Parent=halo;dots[#dots+1]={frame=frame,brightness=brightness}
  end
- halo.Parent=view
- local particles=Instance.new('ParticleEmitter');particles.Name='FloatingFacetSparks'
- particles.Texture='rbxasset://textures/sparkle.png';particles.Enabled=false;particles.Rate=0
- particles.LightEmission=1;particles.LightInfluence=0;particles.Color=ColorSequence.new(PICKUP_HIGHLIGHT,warm)
- particles.EmissionDirection=Enum.NormalId.Top;particles.SpreadAngle=Vector2.new(48,48)
- particles.Lifetime=NumberRange.new(.27,.49);particles.Speed=NumberRange.new(1.8,3.5)
- particles.Rotation=NumberRange.new(36,55);particles.Drag=1.8
- particles.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.24,.60),NumberSequenceKeypoint.new(1,0)})
- particles.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.25,.04),NumberSequenceKeypoint.new(1,1)})
- particles.Parent=view
- return {halo=halo,stars=stars,particles=particles}
+ dot(0,0,1.65,1)
+ for _,side in ipairs({-1,1}) do
+  for i=1,4 do dot(side*i*.015,side*i*.097,1.26-i*.13,1-i*.16) end
+  for i=1,2 do dot(side*i*.103,-side*i*.016,1.28-i*.19,1-i*.23) end
+ end
+ return {anchor=anchor,halo=halo,dots=dots}
 end
 local function twinkle(age,start,duration)
  local t=math.clamp((age-start)/duration,0,1)
@@ -10877,8 +10873,27 @@ local function twinkle(age,start,duration)
 end
 local function removeIdle(self,r)
  if not r.idle then return end
- r.idle.halo:Destroy();r.idle.particles:Destroy();r.idle=nil
+ r.idle.anchor.Parent=nil;table.insert(self.idlePool,r.idle);r.idle=nil
  self.idleCount-=1
+end
+local function updateGlint(self,r,age,strength)
+ local clock=math.max(0,age-.67)+r.seed*.61
+ local cycle=age<.67 and -1 or math.floor(clock/3.2)
+ local pulse=cycle==-1 and twinkle(age,.11,.30) or twinkle(clock%3.2,0,.30)
+ if pulse*strength<.015 then removeIdle(self,r);return end
+ if not r.idle then
+  if self.idleCount>=GLINT_LIMIT then return end
+  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
+  local side=(r.seed+cycle)%2==0 and 1 or -1
+  local size=r.view.Size
+  r.idle.anchor.Position=Vector3.new(side*size.X*.33,size.Y*.47,-side*size.Z*.23)
+  r.idle.anchor.Parent=r.view
+  local tint=r.color:Lerp(PICKUP_HIGHLIGHT,.88)
+  for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundColor3=tint end
+ end
+ local width=(r.physical and 2.22 or 1.58)*(.77+pulse*.23)
+ r.idle.halo.Size=UDim2.fromScale(width,width)
+ for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundTransparency=1-pulse*strength*dot.brightness end
 end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
@@ -10919,7 +10934,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -10928,7 +10943,6 @@ function V.new(root,parent,audio,reducedMotion)
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
-  if source:GetAttribute('CleanCargoArc') and source.Material~=Enum.Material.Metal then view.Reflectance=.19 end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
@@ -10941,7 +10955,6 @@ function V.new(root,parent,audio,reducedMotion)
    local floor=source:GetAttribute('FloorY')
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
-    r.finishing=source:GetAttribute('FinishingCargo')==true
     r.landAge=r.arc.contact
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
@@ -11010,6 +11023,7 @@ function V:update(dt,now)
  local camera=workspace.CurrentCamera
  local cameraPosition=camera and camera.CFrame.Position
  local reducedEffects=self.player:GetAttribute('ReducedEffects')==true or self.player:GetAttribute('MA_ReducedEffects')==true
+ local glintStrength=self.player:GetAttribute('ReducedFlashing')==true and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
  local closest,bestDistance=nil,math.huge
@@ -11075,58 +11089,18 @@ function V:update(dt,now)
    if live and r.hasArc and r.owner==self.player.UserId and r.landAge and age>=r.landAge and not r.landCue then
     local point=source:GetAttribute('GroundImpactPosition')
     local speed=source:GetAttribute('GroundImpactSpeed') or 0
-    if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ);speed=r.arc.speed end
+    if r.arc then point=Vector3.new(r.arc.landX,r.arc.floor-.22,r.arc.landZ);speed=r.arc.speed end
     if age-r.landAge>=.28 then r.landCue=true
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/24,.77,1.15)*(r.physical and 1.1 or 1),
-       pitch=(r.physical and .88 or 1.13)+(r.seed%4)*.055})
+      self.audio:play('ore_land',point,{level=math.clamp(speed/32,.77,1.22)*(r.physical and 1.1 or 1),
+       pitch=(r.physical and .86 or 1.07)+(r.seed%4)*.045})
      end
     end
    end
-   if live and r.finishing and r.owner==self.player.UserId and age>=.105 and not r.twinkleCue then
-    r.twinkleCue=true
-    if self.audio and age<.25 then self.audio:play('gem_twinkle',r.drawPosition or r.pos) end
-   end
-   local resting=live and r.landAge and age>=r.landAge+PickupMotion.SETTLE_TIME
+   local resting=live and r.landAge and age>=r.landAge+(r.arc and 0 or PickupMotion.SETTLE_TIME)
     and PickupMotion.isResting(latest) and seated==latest.seated and now>=latest.at+PickupMotion.DELAY
-   local idleDistance=cameraPosition and (r.pos-cameraPosition).Magnitude or math.huge
-   local distanceFade=math.clamp((58-idleDistance)/10,0,1)
-   local atRest=resting and not seated and (r.physical or r.hasArc)
-   local settledAge=age-(r.landAge or 0)
-   local glintClock=math.max(0,settledAge-.55)+r.seed*.61
-   local glintPeriod=glintClock%3.1
-   local gleam=settledAge<.54 and twinkle(settledAge,0,.54)
-    or twinkle(glintPeriod,0,.50)*.85
-   local launched=live and r.finishing and displayAt>=r.born and age<.60
-   local shine=live and (r.physical or r.hasArc) and not pulling and not seated and (atRest or r.arc and settledAge>=0)
-    and gleam*distanceFade*opacity or 0
-   if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
-    r.idle=idleGlow(r.view,r.color);self.idleCount+=1
-   end
-   if r.idle then
-    if reducedEffects or not live or pulling or seated or distanceFade==0 then removeIdle(self,r)
-    else
-     local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
-     local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
-     local width=launched and 3.05 or 2.12
-     r.idle.halo.Size=UDim2.fromScale(width,width)
-     if not reducedFlashing and launched and age>=.10 and not r.launchStars then
-      r.launchStars=true;r.idle.particles:Emit(3)
-     elseif not reducedFlashing and shine>.43 and not launched then
-      local cycle=settledAge<.54 and -1 or math.floor(glintClock/3.1)
-      if r.glintCycle~=cycle then r.glintCycle=cycle;r.idle.particles:Emit(1) end
-     end
-     for i,star in ipairs(r.idle.stars) do
-      local pulse=launched and twinkle(age,.035+(i-1)*.098,.28)
-       or twinkle(settledAge<.54 and settledAge or glintPeriod,.015+(i-1)*.082,.33)*.91
-      local size=(i==1 and .83 or .50)*(.43+pulse*.57)
-      star.Size=UDim2.fromScale(size,size)
-      star.ImageTransparency=1-pulse*sparkleStrength
-     end
-    end
-   end
    local arcMix=r.arc and (not r.arcExit and 1 or 1-math.clamp((displayAt-r.arcExit)/.12,0,1)) or 0
    local newPose=not (resting and r.restSample==latest and r.restUnits==r.units)
    if newPose then
@@ -11148,10 +11122,8 @@ function V:update(dt,now)
     glow=math.max(glow,.34*r.pull)
     local rx,ry,rz
     if r.arc then
-     local turn=math.clamp(age/math.max(.01,r.arc.contact),0,1)
-     turn=turn*turn*(3-2*turn)
-     local remaining=reducedMotion and 0 or (1-turn)*2*math.pi
-     rx=.10+remaining;ry=(r.seed*.92)%6.283+(reducedMotion and 0 or .78*(1-turn));rz=-.08+.19*math.sin(turn*math.pi)
+     local remaining=reducedMotion and 0 or 1-math.clamp(age/math.max(.01,r.arc.contact),0,1)^1.25
+     rx=remaining*2*math.pi;ry=(r.seed*.92)%6.283+.78*remaining;rz=.14*math.sin(remaining*math.pi)
     else
      local tumble=reducedMotion and 0 or PickupMotion.tumble(age,r.landAge)
      rx,ry,rz=r.seed*.71+tumble,r.seed*.9+tumble*.28,r.seed*.43+tumble*.21
@@ -11159,19 +11131,8 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-     local restY=latest.floor+support-.22
-     local raised=math.max(restY,position.Y)
-     local hover=HOVER_HEIGHT*(1-r.pull)
-     if r.arc and arcMix>0 then
-      local t=math.clamp((age/r.arc.contact-.69)/.31,0,1)
-      local ease=t*t*(3-2*t)
-      local flightY=position.Y+(support-.22)*ease
-      local hoverY=flightY+(restY+hover-flightY)*ease
-      raised=raised+(hoverY-raised)*arcMix
-     elseif r.landAge and (r.physical or r.hasArc) then
-      local t=math.clamp((age-r.landAge)/.17,0,1)
-      raised+=hover*t*t*(3-2*t)
-     end
+     local raised=math.max(latest.floor+support-.22,position.Y)
+     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
@@ -11184,16 +11145,22 @@ function V:update(dt,now)
     r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if r.arc and live and age>=r.landAge and not pulling and not seated and not reducedEffects and cameraPosition then
+    local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/10,0,1)
+    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
+   else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
     local inFlight=air and live and not pulling and displayAt>=r.born
     if r.ribbon then
-     if not inFlight or reducedEffects then
+     if not inFlight and r.arc then
+      removeTrail(self,r)
+     elseif not inFlight or reducedEffects then
       if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
      end
-     if r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+     if r.ribbon and r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
@@ -11218,6 +11185,7 @@ function V:destroy()
  if self.closed then return end;self.closed=true
  for _,c in ipairs(self.connections) do c:Disconnect() end
  for source,r in pairs(self.records) do if source.Parent then source.LocalTransparencyModifier=0 end;r.view:Destroy() end
+ for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
  if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
@@ -13142,7 +13110,14 @@ local function renderDrone(d,dt,now)
   lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
  d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
- local ramielRoll=d.ramiel and not CrystalImpactView.reducedMotion() and now*.38%6.283 or 0
+ local ramielRoll=0
+ if d.ramiel and not CrystalImpactView.reducedMotion() then
+  ramielRoll=d.ramielIdleTurn or 0
+  if d.ramielResting~=false then
+   ramielRoll=(ramielRoll+.38*math.min(dt,.10))%(2*math.pi)
+   d.ramielIdleTurn=ramielRoll
+  end
+ end
  local visiblePose=CFrame.new(d.pos+Vector3.new(0,drift+hop+d.visualLift,0))*CFrame.Angles(0,d.yaw,0)
   *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
@@ -13189,7 +13164,7 @@ local function renderDrone(d,dt,now)
   if not resting or not d.ramielResting then
    local reduced=CrystalImpactView.reducedMotion()
    DroneConfig.poseRamiel(d.ramiel,visiblePose,aim,charge,recovery,0,reduced,hold)
-   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true)
+   RoleEffectView.ramielCharge(d.ramiel,charge,untilContact,BeamVFX.reduced() or player:GetAttribute('ReducedFlashing')==true,hold)
   end
   if resting then d.ramielFiringShot=nil;d.ramielFiringPose=nil end
   d.ramielResting=resting

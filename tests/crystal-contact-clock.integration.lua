@@ -158,8 +158,11 @@ assert(before:Dot(after)<-.60,'the star rays did not swing through the flash')
 assert(chargeField.wake.rays[1].beam.Enabled,'release pressure wave did not separate from the core flare')
 RoleEffectView.ramielCharge(prism,1,-.37,false)
 assert(chargeField.rays[1].core.Transparency[1].Value<.85 and not chargeField.lamp.Enabled,'the star did not outlast its light')
-RoleEffectView.ramielCharge(prism,1,-.89,false)
-assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the release')
+RoleEffectView.ramielCharge(prism,1,-1.90,false,2.55)
+assert(chargeField.rays[1].core.Transparency[1].Value<.40 and chargeField.gui.Size[1]<ignition*.5,
+ 'a smaller four-point star did not remain visible during the shot')
+RoleEffectView.ramielCharge(prism,1,-2.60,false,2.55)
+assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
 local beamCalls,kicks={},0
 RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
 local loop,launches=nil,0

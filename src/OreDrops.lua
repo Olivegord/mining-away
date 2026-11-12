@@ -1,7 +1,7 @@
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
- AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=122,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -12,10 +12,9 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- -- The longer hang time gives the arc room to read without sending small
- -- fragments out of their usual pickup area.
+ -- Keep fragments in their usual pickup area with a higher, steeper arc.
  local speed=6.2+(serial%5)*.4
- return math.cos(angle)*speed,20+index*.9,math.sin(angle)*speed
+ return math.cos(angle)*speed,29+index*1.35,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -29,26 +28,23 @@ end
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
  local speed=block and 5.3 or 7.3+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
+ return math.cos(angle)*speed,block and 16 or 45+(serial%4)*.8,math.sin(angle)*speed
 end
--- One analytic flight and one short skid. Server and observer sample the same
--- curve, so neither a packet boundary nor a bounce can change the resting pose.
+-- The server and observer sample the same flight and exact point of contact.
 function O.rawArc(x,y,z,vx,vy,vz,floor)
- local contact=(vy+math.sqrt(vy*vy+2*O.GRAVITY*math.max(0,y-floor)))/O.GRAVITY
- local decay=math.exp(-O.AIR_DRAG*contact)
- local travel=(1-decay)/O.AIR_DRAG
- return {x=x,y=y,z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,skid=.24,
-  landX=x+vx*travel,landZ=z+vz*travel,landVX=vx*decay*.62,landVZ=vz*decay*.62,speed=O.GRAVITY*contact-vy}
+ local speed=math.sqrt(vy*vy+2*O.GEM_GRAVITY*math.max(0,y-floor))
+ local contact=(vy+speed)/O.GEM_GRAVITY
+ local travel=(1-math.exp(-O.AIR_DRAG*contact))/O.AIR_DRAG
+ return {x=x,y=math.max(y,floor),z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,
+  landX=x+vx*travel,landZ=z+vz*travel,speed=speed}
 end
 function O.rawPose(a,age)
  age=math.max(0,age)
  if age<a.contact then
   local decay=math.exp(-O.AIR_DRAG*age);local travel=(1-decay)/O.AIR_DRAG
-  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GRAVITY*age,a.vz*decay
+  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GEM_GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GEM_GRAVITY*age,a.vz*decay
  end
- local left=1-math.clamp((age-a.contact)/a.skid,0,1)
- local travel=a.skid/3*(1-left^3)
- return a.landX+a.landVX*travel,a.floor,a.landZ+a.landVZ*travel,a.landVX*left^2,0,a.landVZ*left^2
+ return a.landX,a.floor,a.landZ,0,0,0
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -79,6 +75,7 @@ local function fall(s,dt)
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
    s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0
+   if s.arc then s.vx=0;s.vz=0 end
    if s.vx~=0 or s.vz~=0 then horizontal(s,dt,O.GROUND_DRAG) end
    break
   end
@@ -89,7 +86,9 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
+  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor
+  if s.arc then s.vx=0;s.vy=0;s.vz=0;break end
+  s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact

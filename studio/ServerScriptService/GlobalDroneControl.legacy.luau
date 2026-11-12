@@ -2287,13 +2287,15 @@ function C.planes(name)
   plane(p,0,1.04,0,-.46,1,-.17);plane(p,0,1.33,0,.48,1,.36)
   plane(p,.79,.44,.19,1,.85,.24);plane(p,-.38,.38,-.61,-.65,.66,-1)
   plane(p,.61,-1.68,0,1,-.68,0);plane(p,0,-1.57,.65,0,-.61,1)
- else -- Cut ore: wide polished table, beveled corners, and a short pavilion.
+ else -- Cut ore: octagonal girdle, smaller table, and a tapered pavilion.
   bevel(p,.73,0,.73,0)
   for _,side in ipairs({-1,1}) do
-   plane(p,side*.49,.90,0,side,.64,0);plane(p,0,.90,side*.47,0,.66,side)
-   plane(p,side*.58,-.85,0,side,-.58,0);plane(p,0,-.85,side*.55,0,-.58,side)
+   plane(p,side*.93,0,0,side,0,0);plane(p,0,0,side*.93,0,0,side)
+   plane(p,side*.45,.80,0,side,.69,0);plane(p,0,.80,side*.45,0,.69,side)
+   plane(p,side*.33,-.87,0,side,-.65,0);plane(p,0,-.87,side*.33,0,-.65,side)
   end
-  plane(p,0,1.07,0,.10,1,-.08)
+  bevel(p,.39,.80,.39,.85);bevel(p,.30,-.87,.30,-.81)
+  plane(p,0,.80,0,0,1,0);plane(p,0,-.87,0,0,-1,0)
  end
  return p
 end
@@ -2332,7 +2334,7 @@ local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=5,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,FADE_SECONDS=.9,CARGO_MAX_AGE=180,GRAVITY=70,
- AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=122,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -2343,10 +2345,9 @@ function O.partition(units,limit)
 end
 function O.scatter(index,serial)
  local angle=index*2.399963+serial*.73
- -- The longer hang time gives the arc room to read without sending small
- -- fragments out of their usual pickup area.
+ -- Keep fragments in their usual pickup area with a higher, steeper arc.
  local speed=6.2+(serial%5)*.4
- return math.cos(angle)*speed,20+index*.9,math.sin(angle)*speed
+ return math.cos(angle)*speed,29+index*1.35,math.sin(angle)*speed
 end
 function O.launch(index,serial,sx,sy,sz)
  local vx,vy,vz=O.scatter(index,serial)
@@ -2360,26 +2361,23 @@ end
 function O.cargoLaunch(serial,block)
  local angle=block and .20 or serial*2.399963
  local speed=block and 5.3 or 7.3+(serial%3)*.35
- return math.cos(angle)*speed,block and 16 or 30+(serial%4)*.7,math.sin(angle)*speed
+ return math.cos(angle)*speed,block and 16 or 45+(serial%4)*.8,math.sin(angle)*speed
 end
--- One analytic flight and one short skid. Server and observer sample the same
--- curve, so neither a packet boundary nor a bounce can change the resting pose.
+-- The server and observer sample the same flight and exact point of contact.
 function O.rawArc(x,y,z,vx,vy,vz,floor)
- local contact=(vy+math.sqrt(vy*vy+2*O.GRAVITY*math.max(0,y-floor)))/O.GRAVITY
- local decay=math.exp(-O.AIR_DRAG*contact)
- local travel=(1-decay)/O.AIR_DRAG
- return {x=x,y=y,z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,skid=.24,
-  landX=x+vx*travel,landZ=z+vz*travel,landVX=vx*decay*.62,landVZ=vz*decay*.62,speed=O.GRAVITY*contact-vy}
+ local speed=math.sqrt(vy*vy+2*O.GEM_GRAVITY*math.max(0,y-floor))
+ local contact=(vy+speed)/O.GEM_GRAVITY
+ local travel=(1-math.exp(-O.AIR_DRAG*contact))/O.AIR_DRAG
+ return {x=x,y=math.max(y,floor),z=z,vx=vx,vy=vy,vz=vz,floor=floor,contact=contact,
+  landX=x+vx*travel,landZ=z+vz*travel,speed=speed}
 end
 function O.rawPose(a,age)
  age=math.max(0,age)
  if age<a.contact then
   local decay=math.exp(-O.AIR_DRAG*age);local travel=(1-decay)/O.AIR_DRAG
-  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GRAVITY*age,a.vz*decay
+  return a.x+a.vx*travel,a.y+a.vy*age-.5*O.GEM_GRAVITY*age*age,a.z+a.vz*travel,a.vx*decay,a.vy-O.GEM_GRAVITY*age,a.vz*decay
  end
- local left=1-math.clamp((age-a.contact)/a.skid,0,1)
- local travel=a.skid/3*(1-left^3)
- return a.landX+a.landVX*travel,a.floor,a.landZ+a.landVZ*travel,a.landVX*left^2,0,a.landVZ*left^2
+ return a.landX,a.floor,a.landZ,0,0,0
 end
 function O.deadline(spawnAt,returnUntil) return math.max(spawnAt+O.LIFETIME,returnUntil or 0) end
 function O.expired(spawnAt,now,returnUntil) return now>=O.deadline(spawnAt,returnUntil) end
@@ -2410,6 +2408,7 @@ local function fall(s,dt)
   local height=math.max(0,s.y-s.floor)
   if height<1e-5 and s.vy<=.8 then
    s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=0
+   if s.arc then s.vx=0;s.vz=0 end
    if s.vx~=0 or s.vz~=0 then horizontal(s,dt,O.GROUND_DRAG) end
    break
   end
@@ -2420,7 +2419,9 @@ local function fall(s,dt)
   if contact>span then break end
   local speed=math.max(0,-s.vy)
   if speed>2 then impact=math.max(impact,speed) end
-  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor;s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
+  s.landed=true;s.firstLandedAge=s.firstLandedAge or s.age;s.y=s.floor
+  if s.arc then s.vx=0;s.vy=0;s.vz=0;break end
+  s.vy=speed>2 and speed*(s.raw and .10 or O.RESTITUTION) or 0
   s.vx*=.62;s.vz*=.62
  end
  return impact
@@ -4365,23 +4366,21 @@ local RAMIEL_TRACKS={
   {19.04, 0,.24,1,.76,0, 0,.24,1,.76,0},
   {19.24, .025,.265,.986,.74,1, .012,.25,.99,.75,0},
   {19.44, .10,.35,.90,.65,5, .075,.34,.94,.69,-4},
-  {19.57, .22,.45,.81,.55,15, .16,.42,.85,.57,-12},
+  {19.57, .18,.42,.86,.59,15, .14,.39,.89,.60,-12},
   {19.74, .41,.58,.45,.38,35, .32,.51,.55,.42,-31},
   {19.94, .63,.72,.23,.22,67, .55,.66,.26,.24,-52},
   {20.04, .56,.66,.19,.22,95, .48,.61,.21,.23,-69},
   {20.24, .34,.52,.29,.32,127, .27,.48,.27,.33,-105},
   {20.44, .13,.46,.37,.40,159, .10,.42,.35,.36,-132},
-  {20.67, .014,.47,.47,.44,190, .020,.45,.48,.43,-161},
-  {20.84, .008,.51,.50,.47,209, .010,.47,.49,.50,-178},
-  {21.18, .015,.54,.50,.49,218, .018,.49,.52,.50,-191},
-  {21.34, .024,.51,.55,.50,221, .020,.50,.56,.52,-196},
-  {21.51, .036,.49,.77,.72,239, .037,.48,.67,.67,-213},
-  {21.67, .065,.55,.79,.77,264, .070,.49,.82,.78,-235},
-  {21.84, .14,.64,.76,.73,277, .17,.60,.77,.76,-249},
-  {22.12, .23,.76,.72,.74,289, .24,.68,.78,.80,-264},
-  {22.54, .31,.80,.69,.75,299, .25,.72,.80,.81,-275},
-  {23.32, .34,.84,.68,.74,303, .26,.73,.82,.79,-281},
-  {23.98, .36,.85,.68,.74,304, .26,.74,.82,.79,-283},
+  {20.67, .032,.47,.46,.43,181, .038,.45,.45,.43,-154},
+  {20.89, .012,.48,.54,.50,198, .019,.46,.51,.48,-174},
+  {21.18, .020,.48,.58,.54,213, .024,.47,.56,.52,-189},
+  {21.34, .030,.47,.64,.59,222, .027,.46,.61,.58,-200},
+  {21.55, .068,.52,.80,.75,244, .048,.49,.73,.69,-220},
+  {21.74, .14,.59,.81,.80,269, .11,.54,.83,.78,-242},
+  {22.05, .25,.71,.77,.77,288, .21,.66,.81,.81,-263},
+  {22.51, .33,.80,.75,.75,304, .29,.72,.79,.79,-280},
+  {22.95, .35,.81,.75,.75,304, .30,.73,.79,.79,-283},
  },
  { -- Shoulder
   {19.04, .24,.57,.76,.43,0, .24,.57,.76,.43,0},
@@ -4396,11 +4395,11 @@ local RAMIEL_TRACKS={
   {20.88, .33,.78,.54,.50,174, .34,.72,.50,.45,-156},
   {21.11, .34,.80,.53,.51,182, .35,.71,.50,.46,-163},
   {21.37, .38,.83,.49,.52,187, .31,.70,.54,.50,-179},
-  {21.54, .41,.86,.54,.54,208, .35,.74,.60,.63,-207},
-  {21.72, .50,.87,.66,.65,236, .42,.77,.68,.72,-230},
-  {21.96, .61,.94,.69,.68,258, .47,.80,.74,.74,-251},
-  {22.37, .66,1.02,.74,.70,267, .51,.83,.72,.76,-272},
-  {23.98, .70,1.05,.74,.71,269, .52,.85,.71,.75,-294},
+  {21.54, .44,.86,.58,.55,222, .36,.76,.61,.57,-217},
+  {21.74, .52,.89,.67,.64,257, .45,.79,.69,.65,-253},
+  {22.05, .62,.95,.72,.72,314, .51,.84,.73,.73,-310},
+  {22.51, .66,.98,.76,.76,378, .55,.87,.76,.76,-358},
+  {22.95, .67,.99,.76,.76,394, .56,.88,.76,.76,-373},
  },
  { -- End caps keep the far tips nearly fixed through the narrowest pose.
   {19.04, .57,1,.43,0,0, .57,1,.43,0,0},
@@ -4414,8 +4413,8 @@ local RAMIEL_TRACKS={
   {21.38, .93,1.08,.41,0,177, .88,1,.17,0,-171},
   {21.68, .90,1.06,.35,0,205, .90,1,.15,0,-186},
   {22.18, .92,1.16,.32,0,235, .90,1,.13,0,-212},
-  {22.70, .96,1.23,.35,0,261, .90,1,.13,0,-235},
-  {23.98, .99,1.25,.35,0,270, .90,1,.13,0,-244},
+  {22.51, .94,1.15,.33,0,256, .90,1.01,.19,0,-231},
+  {22.95, .95,1.16,.34,0,269, .90,1.02,.19,0,-242},
  },
 }
 
@@ -4428,38 +4427,14 @@ local RAMIEL_MIRRORS={
  {20.27,.051,.18,.29,156}, {20.64,.023,.063,.16,218},
  {20.88,.018,.020,.095,250}, {21.45,.019,.021,.10,278},
  {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
- {22.55,.062,.088,.225,421}, {23.98,.074,.096,.25,486},
+ {22.55,.062,.088,.225,402}, {22.95,.074,.096,.25,432},
 }
 local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
-local RAMIEL_FIRE_YAW={{304,214,270},{-283,-373,-244}}
--- The first and third waves move out from the core. The middle wave packs
--- the outside glass inward. Each travels through the stack one layer at a time.
-local RAMIEL_WAVES={
- {start=19.33,step=.094,span=.67,strength=.63,heading=.55},
- {start=20.17,step=.116,span=.84,strength=.69,heading=2.05,inward=true},
- {start=21.19,step=.16,span=1.28,strength=1,heading=-.32},
-}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
 local function smootherstep(t: number): number
  t=math.clamp(t,0,1);return t^3*(10+t*(-15+6*t))
-end
-local function ramielWave(clock: number,half: number,band: number): (number,number,number)
- local growth,x,z=0,0,0
- local turn=half==1 and 1 or -1
- for _,wave in ipairs(RAMIEL_WAVES) do
-  local order=wave.inward and 3-band or band-1
-  local phase=(clock-wave.start-order*wave.step-(half-1)*.075)/wave.span
-  if phase>0 and phase<1 then
-   local swell=wave.strength*smootherstep(phase/.48)*(1-smootherstep((phase-.48)/.52))
-   local angle=(wave.heading+(band-1)*.57+phase*math.pi*2)*turn
-   growth+=swell*(wave.inward and -.62 or 1)
-   x+=math.cos(angle)*swell
-   z+=math.sin(angle)*swell
-  end
- end
- return growth,x,z
 end
 local function ramielSlope(left: number,right: number): number
  if left*right<=0 then return 0 end
@@ -4527,7 +4502,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
   time=1
  end
- local locked=smoothstep((time-.43)/.21)*(1-close)
+ local locked=smootherstep(time/.19)*(1-close)
  local radius=rig.scale*1.35
  local frame=pivot*CFrame.Angles(0,roll,0)
  if aim then
@@ -4535,8 +4510,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
  end
  local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
- local poseClock=math.min(clock,23.22)
- local lockedSlabs=smootherstep((clock-21.69)/1.53)
+ local lockedSlabs=smootherstep((clock-21.14)/1.34)
  local simple=smoothstep((time-.12)/.53)
  local gap=1
  local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
@@ -4545,45 +4519,39 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   local column=2+(i-1)*5
   for j,band in ipairs(half.bands) do
    local track=RAMIEL_TRACKS[j]
+   local final=track[#track]
    local function value(channel)
     local idle=track[1][channel]
-    local sampled=reduced and idle+(ramielSample(track,23.22,channel)-idle)*simple or ramielSample(track,poseClock,channel)
+    local sampled=reduced and idle+(final[channel]-idle)*simple or ramielSample(track,clock,channel)
     return sampled+(idle-sampled)*close
    end
    local n,f=value(column),value(column+1)
    if j==1 then gap=math.min(gap,n) end
    if rebuild then
-    local wave,x,z=0,0,0
-    if not reduced and not recovery then wave,x,z=ramielWave(clock,i,j) end
-    local push=kick*(.058-(j-1)*.012)+wave*.027
-    local slab=j<3 and lockedSlabs*(1-close) or 0
-    local inner=value(column+2)*(1+wave*.32)
-    local outer=value(column+3)*(1+wave*.27)
+    local push=kick*(.058-(j-1)*.012)
+    local slabStart=21.14+(j-1)*.14+(i-1)*.08
+    local slab=j<3 and smootherstep((clock-slabStart)/1.18)*(1-close) or 0
+    local inner=value(column+2)
+    local outer=value(column+3)
     outer+=(inner-outer)*slab
-    local yaw=ramielSample(track,poseClock,column+4)
-    yaw+=(RAMIEL_FIRE_YAW[i][j]-yaw)*lockedSlabs
-    if reduced then yaw=((RAMIEL_FIRE_YAW[i][j]+180)%360-180)*simple end
+    local yaw=ramielSample(track,clock,column+4)
+    if reduced then yaw=((final[column+4]+180)%360-180)*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    -- Each layer makes one outward loop as its width swells. The outer
-    -- tips travel less, so the large center slabs lead the silhouette.
-    local reach=j==3 and .065 or .26
-    local sweep=frame*CFrame.new(x*radius*reach,0,z*radius*reach)
-     *CFrame.Angles(z*reach*.69,0,-x*reach*.69)
-    poseRamielBand(band,sweep,sign,radius,n+push,f+push+wave*.009,
-     inner,outer,yaw+wave*7*sign,kick,1-slab*(j==1 and .27 or .34))
+    -- The corners sweep around the centerline as the horizontal radius grows.
+    poseRamielBand(band,frame,sign,radius,n+push,f+push,
+     inner,outer,yaw,kick,1-slab*(j==1 and .27 or .34))
    end
   end
   if rebuild then
    for j,prism in ipairs(half.mirrors) do
-    local mirrorClock=math.min(clock,23.27)-(j-1)*.039-(i-1)*.047
+    local mirrorClock=clock-(j-1)*.039-(i-1)*.047
     local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
     local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
-    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)*(j%2==0 and -.82 or 1)
-    local wave=not reduced and not recovery and ramielWave(clock-.06,i,math.min(j,3)) or 0
+    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)-(j-1)*22*smoothstep((time-.07)/.23)
     if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016+wave*.026
+    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016
     local side=math.max(.03,width*radius*(1-close))
     local tilt=lockedSlabs*(1-close)
     local x=(j%2==0 and -.09 or .085)*radius*tilt
@@ -8462,22 +8430,43 @@ end)
 local pickupFolder=folder(root,'OrePickups')
 local pickups={}
 local pickupSerial=0
+function scene.outsidePickupBed(field,position)
+ local point=field.CFrame:PointToObjectSpace(position)
+ return math.abs(point.X)>field.Size.X*.5 or math.abs(point.Z)>field.Size.Z*.5
+end
+function scene.pickupFloorBelow(position)
+ local include={scene.map};local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
+ for _,field in ipairs(scene.fields) do table.insert(include,field.part) end
+ local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include;query.RespectCanCollide=true
+ local hit=workspace:Raycast(position+Vector3.yAxis*2,Vector3.new(0,-66,0),query)
+ return hit and hit.Position.Y+.22
+end
 function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local launchAt=now+(drop.finishing and OreDrops.REWARD_DELAY or 0)
  drop.launchAt=launchAt
- if drop.oreArc and drop.raw and not drop.compacted then
+ if drop.oreArc and not drop.compacted then
   template=scene.crystalCuts and scene.crystalCuts.Gem or template
-  drop.arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+  local arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+  local landing=Vector3.new(arc.landX,arc.floor,arc.landZ)
+  if drop.fieldPart and scene.outsidePickupBed(drop.fieldPart,landing) then
+   local lowerFloor=scene.pickupFloorBelow(landing)
+   if lowerFloor and lowerFloor<drop.floor then
+    drop.floor=lowerFloor
+    arc=OreDrops.rawArc(position.X,position.Y,position.Z,velocity.X,velocity.Y,velocity.Z,drop.floor)
+   end
+  end
+  drop.arc=arc
  end
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.55,1.16,1.40)) or Vector3.new(.64,.74,.56)
+ chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.64,.97,1.47)) or Vector3.new(.71,.54,.65)
  chip.Position=position;chip.Color=color
+ if drop.arc then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=.28 end
  if drop.raw then
-  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
-  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or .10;chip:SetAttribute('PhysicalCargo',true)
+  if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
+  chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
@@ -8488,7 +8477,6 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
   chip:SetAttribute('OreLaunchOrigin',position)
   chip:SetAttribute('OreLaunchVelocity',velocity)
   if drop.arc then chip:SetAttribute('CleanCargoArc',true) end
-  if drop.finishing then chip:SetAttribute('FinishingCargo',true) end
  end
  chip.Parent=pickupFolder
  drop.part=chip;drop.x=position.X;drop.y=position.Y;drop.z=position.Z
@@ -8800,19 +8788,16 @@ local function pickupStep(dt)
   if p and drop.pressCarrier and drop.pressCarrier~=p.compactor then scene.resetPress(drop.pressCarrier) end
   if not p or p.leaving or data(p).run.id~=drop.runId or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
    drop.part:Destroy();pickups[id]=nil;if p then p.publishDirty=true end
-  elseif healthy(p) and not drop.pressSocket then
+  elseif healthy(p) and not drop.pressSocket and now>=(drop.launchAt or 0) then
    -- A chip can roll off a raised ore bed. Sample the real map floor only
    -- outside its original footprint, at bounded intervals while moving.
-   if drop.fieldPart and now>=(drop.floorQueryAt or 0) then
-    local localPoint=drop.fieldPart.CFrame:PointToObjectSpace(Vector3.new(drop.x,drop.y,drop.z))
-    local outside=math.abs(localPoint.X)>drop.fieldPart.Size.X*.5 or math.abs(localPoint.Z)>drop.fieldPart.Size.Z*.5
+   if drop.fieldPart and (not drop.arc or drop.arcEnded) and now>=(drop.floorQueryAt or 0) then
+    local position=Vector3.new(drop.x,drop.y,drop.z)
+    local outside=scene.outsidePickupBed(drop.fieldPart,position)
     drop.floorQueryAt=now+.25
     if outside and (not drop.floorQueryX or (drop.x-drop.floorQueryX)^2+(drop.z-drop.floorQueryZ)^2>.25) then
-     local include={scene.map};local base=workspace:FindFirstChild('Baseplate');if base then table.insert(include,base) end
-     for _,field in ipairs(scene.fields) do table.insert(include,field.part) end
-     local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances=include;query.RespectCanCollide=true
-     local hit=workspace:Raycast(Vector3.new(drop.x,drop.y+2,drop.z),Vector3.new(0,-66,0),query)
-     if hit then drop.floor=hit.Position.Y+.22;drop.part:SetAttribute('FloorY',drop.floor) end
+     local floor=scene.pickupFloorBelow(position)
+     if floor then drop.floor=floor;drop.part:SetAttribute('FloorY',floor) end
      drop.floorQueryX=drop.x;drop.floorQueryZ=drop.z
     end
    end
@@ -8872,10 +8857,11 @@ local function pickupStep(dt)
     and scene.cargoInSquare(square,from) then
     p.pinOreOutOfReach=square
    end
-   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},dt,canCollect,reach)
+   local pickupDt=drop.launchAt and math.min(dt,now-drop.launchAt) or dt
+   local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},pickupDt,canCollect,reach)
    if groundSpeed and groundSpeed>1 and not drop.firstImpactPublished then
     drop.firstImpactPublished=true
-    drop.part:SetAttribute('GroundImpactAt',now)
+    drop.part:SetAttribute('GroundImpactAt',drop.arc and drop.launchAt+drop.arc.contact or now)
     drop.part:SetAttribute('GroundImpactSpeed',groundSpeed)
     drop.part:SetAttribute('GroundImpactPosition',Vector3.new(drop.arc and drop.arc.landX or drop.x,drop.floor,drop.arc and drop.arc.landZ or drop.z))
     drop.part:SetAttribute('GroundImpactSerial',1)

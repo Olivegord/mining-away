@@ -342,23 +342,21 @@ local RAMIEL_TRACKS={
   {19.04, 0,.24,1,.76,0, 0,.24,1,.76,0},
   {19.24, .025,.265,.986,.74,1, .012,.25,.99,.75,0},
   {19.44, .10,.35,.90,.65,5, .075,.34,.94,.69,-4},
-  {19.57, .22,.45,.81,.55,15, .16,.42,.85,.57,-12},
+  {19.57, .18,.42,.86,.59,15, .14,.39,.89,.60,-12},
   {19.74, .41,.58,.45,.38,35, .32,.51,.55,.42,-31},
   {19.94, .63,.72,.23,.22,67, .55,.66,.26,.24,-52},
   {20.04, .56,.66,.19,.22,95, .48,.61,.21,.23,-69},
   {20.24, .34,.52,.29,.32,127, .27,.48,.27,.33,-105},
   {20.44, .13,.46,.37,.40,159, .10,.42,.35,.36,-132},
-  {20.67, .014,.47,.47,.44,190, .020,.45,.48,.43,-161},
-  {20.84, .008,.51,.50,.47,209, .010,.47,.49,.50,-178},
-  {21.18, .015,.54,.50,.49,218, .018,.49,.52,.50,-191},
-  {21.34, .024,.51,.55,.50,221, .020,.50,.56,.52,-196},
-  {21.51, .036,.49,.77,.72,239, .037,.48,.67,.67,-213},
-  {21.67, .065,.55,.79,.77,264, .070,.49,.82,.78,-235},
-  {21.84, .14,.64,.76,.73,277, .17,.60,.77,.76,-249},
-  {22.12, .23,.76,.72,.74,289, .24,.68,.78,.80,-264},
-  {22.54, .31,.80,.69,.75,299, .25,.72,.80,.81,-275},
-  {23.32, .34,.84,.68,.74,303, .26,.73,.82,.79,-281},
-  {23.98, .36,.85,.68,.74,304, .26,.74,.82,.79,-283},
+  {20.67, .032,.47,.46,.43,181, .038,.45,.45,.43,-154},
+  {20.89, .012,.48,.54,.50,198, .019,.46,.51,.48,-174},
+  {21.18, .020,.48,.58,.54,213, .024,.47,.56,.52,-189},
+  {21.34, .030,.47,.64,.59,222, .027,.46,.61,.58,-200},
+  {21.55, .068,.52,.80,.75,244, .048,.49,.73,.69,-220},
+  {21.74, .14,.59,.81,.80,269, .11,.54,.83,.78,-242},
+  {22.05, .25,.71,.77,.77,288, .21,.66,.81,.81,-263},
+  {22.51, .33,.80,.75,.75,304, .29,.72,.79,.79,-280},
+  {22.95, .35,.81,.75,.75,304, .30,.73,.79,.79,-283},
  },
  { -- Shoulder
   {19.04, .24,.57,.76,.43,0, .24,.57,.76,.43,0},
@@ -373,11 +371,11 @@ local RAMIEL_TRACKS={
   {20.88, .33,.78,.54,.50,174, .34,.72,.50,.45,-156},
   {21.11, .34,.80,.53,.51,182, .35,.71,.50,.46,-163},
   {21.37, .38,.83,.49,.52,187, .31,.70,.54,.50,-179},
-  {21.54, .41,.86,.54,.54,208, .35,.74,.60,.63,-207},
-  {21.72, .50,.87,.66,.65,236, .42,.77,.68,.72,-230},
-  {21.96, .61,.94,.69,.68,258, .47,.80,.74,.74,-251},
-  {22.37, .66,1.02,.74,.70,267, .51,.83,.72,.76,-272},
-  {23.98, .70,1.05,.74,.71,269, .52,.85,.71,.75,-294},
+  {21.54, .44,.86,.58,.55,222, .36,.76,.61,.57,-217},
+  {21.74, .52,.89,.67,.64,257, .45,.79,.69,.65,-253},
+  {22.05, .62,.95,.72,.72,314, .51,.84,.73,.73,-310},
+  {22.51, .66,.98,.76,.76,378, .55,.87,.76,.76,-358},
+  {22.95, .67,.99,.76,.76,394, .56,.88,.76,.76,-373},
  },
  { -- End caps keep the far tips nearly fixed through the narrowest pose.
   {19.04, .57,1,.43,0,0, .57,1,.43,0,0},
@@ -391,8 +389,8 @@ local RAMIEL_TRACKS={
   {21.38, .93,1.08,.41,0,177, .88,1,.17,0,-171},
   {21.68, .90,1.06,.35,0,205, .90,1,.15,0,-186},
   {22.18, .92,1.16,.32,0,235, .90,1,.13,0,-212},
-  {22.70, .96,1.23,.35,0,261, .90,1,.13,0,-235},
-  {23.98, .99,1.25,.35,0,270, .90,1,.13,0,-244},
+  {22.51, .94,1.15,.33,0,256, .90,1.01,.19,0,-231},
+  {22.95, .95,1.16,.34,0,269, .90,1.02,.19,0,-242},
  },
 }
 
@@ -405,38 +403,14 @@ local RAMIEL_MIRRORS={
  {20.27,.051,.18,.29,156}, {20.64,.023,.063,.16,218},
  {20.88,.018,.020,.095,250}, {21.45,.019,.021,.10,278},
  {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
- {22.55,.062,.088,.225,421}, {23.98,.074,.096,.25,486},
+ {22.55,.062,.088,.225,402}, {22.95,.074,.096,.25,432},
 }
 local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
-local RAMIEL_FIRE_YAW={{304,214,270},{-283,-373,-244}}
--- The first and third waves move out from the core. The middle wave packs
--- the outside glass inward. Each travels through the stack one layer at a time.
-local RAMIEL_WAVES={
- {start=19.33,step=.094,span=.67,strength=.63,heading=.55},
- {start=20.17,step=.116,span=.84,strength=.69,heading=2.05,inward=true},
- {start=21.19,step=.16,span=1.28,strength=1,heading=-.32},
-}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
 local function smootherstep(t: number): number
  t=math.clamp(t,0,1);return t^3*(10+t*(-15+6*t))
-end
-local function ramielWave(clock: number,half: number,band: number): (number,number,number)
- local growth,x,z=0,0,0
- local turn=half==1 and 1 or -1
- for _,wave in ipairs(RAMIEL_WAVES) do
-  local order=wave.inward and 3-band or band-1
-  local phase=(clock-wave.start-order*wave.step-(half-1)*.075)/wave.span
-  if phase>0 and phase<1 then
-   local swell=wave.strength*smootherstep(phase/.48)*(1-smootherstep((phase-.48)/.52))
-   local angle=(wave.heading+(band-1)*.57+phase*math.pi*2)*turn
-   growth+=swell*(wave.inward and -.62 or 1)
-   x+=math.cos(angle)*swell
-   z+=math.sin(angle)*swell
-  end
- end
- return growth,x,z
 end
 local function ramielSlope(left: number,right: number): number
  if left*right<=0 then return 0 end
@@ -504,7 +478,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
   time=1
  end
- local locked=smoothstep((time-.43)/.21)*(1-close)
+ local locked=smootherstep(time/.19)*(1-close)
  local radius=rig.scale*1.35
  local frame=pivot*CFrame.Angles(0,roll,0)
  if aim then
@@ -512,8 +486,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
  end
  local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
- local poseClock=math.min(clock,23.22)
- local lockedSlabs=smootherstep((clock-21.69)/1.53)
+ local lockedSlabs=smootherstep((clock-21.14)/1.34)
  local simple=smoothstep((time-.12)/.53)
  local gap=1
  local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
@@ -522,45 +495,39 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
   local column=2+(i-1)*5
   for j,band in ipairs(half.bands) do
    local track=RAMIEL_TRACKS[j]
+   local final=track[#track]
    local function value(channel)
     local idle=track[1][channel]
-    local sampled=reduced and idle+(ramielSample(track,23.22,channel)-idle)*simple or ramielSample(track,poseClock,channel)
+    local sampled=reduced and idle+(final[channel]-idle)*simple or ramielSample(track,clock,channel)
     return sampled+(idle-sampled)*close
    end
    local n,f=value(column),value(column+1)
    if j==1 then gap=math.min(gap,n) end
    if rebuild then
-    local wave,x,z=0,0,0
-    if not reduced and not recovery then wave,x,z=ramielWave(clock,i,j) end
-    local push=kick*(.058-(j-1)*.012)+wave*.027
-    local slab=j<3 and lockedSlabs*(1-close) or 0
-    local inner=value(column+2)*(1+wave*.32)
-    local outer=value(column+3)*(1+wave*.27)
+    local push=kick*(.058-(j-1)*.012)
+    local slabStart=21.14+(j-1)*.14+(i-1)*.08
+    local slab=j<3 and smootherstep((clock-slabStart)/1.18)*(1-close) or 0
+    local inner=value(column+2)
+    local outer=value(column+3)
     outer+=(inner-outer)*slab
-    local yaw=ramielSample(track,poseClock,column+4)
-    yaw+=(RAMIEL_FIRE_YAW[i][j]-yaw)*lockedSlabs
-    if reduced then yaw=((RAMIEL_FIRE_YAW[i][j]+180)%360-180)*simple end
+    local yaw=ramielSample(track,clock,column+4)
+    if reduced then yaw=((final[column+4]+180)%360-180)*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    -- Each layer makes one outward loop as its width swells. The outer
-    -- tips travel less, so the large center slabs lead the silhouette.
-    local reach=j==3 and .065 or .26
-    local sweep=frame*CFrame.new(x*radius*reach,0,z*radius*reach)
-     *CFrame.Angles(z*reach*.69,0,-x*reach*.69)
-    poseRamielBand(band,sweep,sign,radius,n+push,f+push+wave*.009,
-     inner,outer,yaw+wave*7*sign,kick,1-slab*(j==1 and .27 or .34))
+    -- The corners sweep around the centerline as the horizontal radius grows.
+    poseRamielBand(band,frame,sign,radius,n+push,f+push,
+     inner,outer,yaw,kick,1-slab*(j==1 and .27 or .34))
    end
   end
   if rebuild then
    for j,prism in ipairs(half.mirrors) do
-    local mirrorClock=math.min(clock,23.27)-(j-1)*.039-(i-1)*.047
+    local mirrorClock=clock-(j-1)*.039-(i-1)*.047
     local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
     local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
-    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)*(j%2==0 and -.82 or 1)
-    local wave=not reduced and not recovery and ramielWave(clock-.06,i,math.min(j,3)) or 0
+    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)-(j-1)*22*smoothstep((time-.07)/.23)
     if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016+wave*.026
+    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016
     local side=math.max(.03,width*radius*(1-close))
     local tilt=lockedSlabs*(1-close)
     local x=(j%2==0 and -.09 or .085)*radius*tilt

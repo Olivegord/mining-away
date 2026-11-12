@@ -196,9 +196,10 @@ local function starRays(root)
  return rays
 end
 
-function View.ramielCharge(rig,charge,untilContact,reduced)
+function View.ramielCharge(rig,charge,untilContact,reduced,beamHold)
  local field=rig.chargeField
- if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<-.88 then
+ beamHold=beamHold or DroneCatalog.Types.Ramiel.BeamHold
+ if reduced or charge<=0 or not untilContact or untilContact>2.70 or untilContact<=-beamHold then
   if field then field.root:Destroy();rig.chargeField=nil end
   return
  end
@@ -230,19 +231,21 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  end
  local elapsed=-untilContact
  local release=1-(1-math.clamp(elapsed/.35,0,1))^5
- local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or 1.56+.42*release
- local after=1-smooth((elapsed-.13)/.72)
+ local launchFade=1-smooth((elapsed-.13)/.72)
+ local firing=1-smooth((elapsed-(beamHold-.24))/.24)
+ local radius=elapsed<0 and sampleCurve(RAMIEL_FLARE,elapsed) or .60+(.96+.42*release)*launchFade
  local bloom=1-smooth((elapsed-.055)/.31)
  local scale=rig.scale
  field.root.CFrame=rig.core.CFrame*CFrame.new(0,0,-.22)
  local width=(.06+radius*3.9)*scale
- local alpha=(.34+.66*smooth(radius/.32))*after*smooth(radius/.05)
- local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)
+ local alpha=(.34+.66*smooth(radius/.32))*(.68+.32*launchFade)*firing*smooth(radius/.05)
+ local angle=sampleCurve(RAMIEL_STAR_ANGLE,elapsed)+20*smooth((elapsed-.58)/1.7)
  field.gui.Size=UDim2.fromScale(width,width)
  field.inner.Rotation=angle;field.outer.Rotation=angle
  field.inner.ImageTransparency=1-alpha*bloom
  field.outer.ImageTransparency=1-.73*alpha*bloom
- EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),.52*alpha*bloom*smooth(radius/.32))
+ local halo=.52*bloom+.16*smooth(elapsed/.36)
+ EnergyDisc.place(field.halo,field.root.Position,width*.78,Color3.fromRGB(255,102,197),halo*alpha*smooth(radius/.32))
  local camera=workspace.CurrentCamera
  local right=camera and camera.CFrame.RightVector or Vector3.xAxis
  local up=camera and camera.CFrame.UpVector or Vector3.yAxis
@@ -272,7 +275,7 @@ function View.ramielCharge(rig,charge,untilContact,reduced)
  local white=smooth((radius-.13)/1.43)*bloom
  field.lamp.Enabled=white>.01
  field.lamp.Brightness=white*9
- local rim=smooth((radius-.10)/.30)*after
+ local rim=smooth((radius-.10)/.30)*launchFade
  PlaneBurst.pose(field.ring,Vector3.zAxis,scale*(.11+radius*1.27),rim*.76,scale*(.014+rim*.019))
  local pressure=smooth((elapsed+.09)/.13)*(1-smooth((elapsed-.15)/.64))
  local expansion=1-(1-math.clamp((elapsed+.09)/.94,0,1))^4

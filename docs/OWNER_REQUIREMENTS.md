@@ -2,6 +2,14 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's glass motion and firing star
+
+Rewatch the first attack and match the motion of the glass. Keep the camera shake level with a faster, denser tremor while the beam fires. Keep the star visible into the shot so its source still reads.
+
+## November 11 follow-up — cut gems and a hard landing
+
+Give dropped gems a distinct cut and reflective faces with thin dotted four-point shines. Let them take a slightly higher arc, drop hard with one clink, and stop on the ground. Keep the existing pickup behavior.
+
 ## November 11 follow-up — Ramiel's outward sweep and sustained shot
 
 Remove the glass heat cylinder so the beam reads clearly. Make the glass pieces grow and loop outward in sequence like the first attack. Bring the charge up before the last pieces settle. Use stronger easing to give the expansion weight and let a much larger star release into a longer lighting fade. Keep the sound and level camera shake running while the beam fires.

@@ -1067,9 +1067,10 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/.18,0,1)
-   local pressure=.083+.015*math.sin(t*7)+.063*math.exp(-t*5)
+   local pressure=.091+.010*math.sin(t*11)+.055*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
-   ordinary*=CFrame.new(math.sin(t*37)*amount,math.sin(t*29+.4)*amount*.52,math.sin(t*21)*amount*.22)
+   local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
+   ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
