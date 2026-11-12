@@ -1307,7 +1307,8 @@ local CUES = {
  pickup={id='soft-pickup',localSound='rbxasset://sounds/volume_slider.ogg',volume=.11,duration=.3,pitch=1.2,cooldown=.09,fallback='volume_slider.ogg'},
  crystal_electric={id='9126066421',volume=.10,duration=.13,pitch=1.6,cooldown=.08,range=42,maxVoices=2},
  crystal_snap={ids={'9125869504','9125869495','9125869138'},volume=.22,duration=.24,pitch=1.12,cooldown=.07,range=60,maxVoices=3,fallback='action_jump_land.mp3'},
- prism_fire={id='9118612324',volume=.31,duration=.62,pitch=1.12,cooldown=.14,range=78,maxVoices=2,fallback='action_jump_land.mp3'},
+ prism_fire={id='9118612324',volume=.54,duration=.85,pitch=.83,cooldown=.14,range=110,maxVoices=2,fallback='action_jump_land.mp3'},
+ prism_sustain={id='9118614717',volume=.24,duration=2,pitch=.68,cooldown=.1,range=105,priority=4,softLaser=true},
  prism_charge={id='9119816710',volume=.33,duration=2.1,pitch=.83,cooldown=.1,range=80,priority=4,fallback='volume_slider.ogg'},
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
@@ -2050,7 +2051,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
- Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=.16},
+ Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=.57},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -3160,7 +3161,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=7.75,Impact=.645,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=1.80,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a heavy prism lance. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=7.75,Impact=.645,Power=4.4,Chunk=.68,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=1.80,BeamRange=64,BeamStation=32,BeamTargets=4,BeamFalloff=.72,CorePower=1,Color={93,203,255},Description='Unfolds a glass aperture and fires a thin lance through up to four crystals. Each pulse can cut up to 68% of a crystal and pays 35% extra ore on completion.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5151,6 +5152,7 @@ local RoleVisuals = (function()
 -- Client-only role visuals. The server publishes compact effect descriptions.
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
 
 local Effects = {}
 local animations={}
@@ -5165,6 +5167,82 @@ function Effects.setTime(at) eventAt=at end
 local function animate(value,duration,style,direction,properties)
  local initial={};for key in pairs(properties) do initial[key]=value[key] end
  animations[value]={at=clock(),duration=duration,style=style,direction=direction,initial=initial,goal=properties}
+end
+local heatBeds=0
+local HEAT_EDGE=NumberSequence.new({
+ NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.36,.88),
+ NumberSequenceKeypoint.new(.66,.93),NumberSequenceKeypoint.new(1,1),
+})
+local function heatPart(parent,name)
+ local part=Instance.new('Part')
+ part.Name=name;part.Size=Vector3.one*.025;part.Anchored=true;part.CanCollide=false
+ part.CanTouch=false;part.CanQuery=false;part.CastShadow=false;part.Transparency=1;part.Parent=parent
+ return part
+end
+local function prismHeat(parent,from,to,color)
+ if heatBeds>=4 or BeamVFX.reduced() then return nil end
+ local delta=to-from
+ if delta.Magnitude<.5 then return nil end
+ local axis=delta.Unit
+ local across=axis:Cross(math.abs(axis.Y)>.9 and Vector3.zAxis or Vector3.yAxis).Unit
+ local vertical=across:Cross(axis).Unit
+ local root=heatPart(parent,'PrismHeat')
+ root.CFrame=CFrame.new(from);heatBeds+=1
+ root.Destroying:Connect(function() heatBeds-=1 end)
+ local beds={}
+ local count=math.clamp(math.ceil(delta.Magnitude/7),2,6)
+ for i=1,count do
+  local lens=heatPart(root,'RefractedAir')
+  lens.Shape=Enum.PartType.Ball;lens.Material=Enum.Material.Glass
+  lens.Color=color:Lerp(Color3.fromRGB(255,238,221),.86)
+  local lamp=Instance.new('PointLight')
+  lamp.Color=color:Lerp(Color3.fromRGB(255,174,106),i%2==0 and .67 or .40)
+  lamp.Range=9;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=lens
+  local a=Instance.new('Attachment');a.Parent=root
+  local b=Instance.new('Attachment');b.Parent=root
+  local wisp=Instance.new('Beam');wisp.Name='HeatRipple'
+  wisp.Attachment0=a;wisp.Attachment1=b;wisp.FaceCamera=true;wisp.Segments=10
+  wisp.Width0=0;wisp.Width1=0;wisp.Color=ColorSequence.new(lamp.Color)
+  wisp.Transparency=HEAT_EDGE;wisp.LightEmission=.54;wisp.LightInfluence=0
+  wisp.Brightness=.8;wisp.Enabled=false;wisp.Parent=root
+  beds[i]={lens=lens,lamp=lamp,a=a,b=b,wisp=wisp,fraction=(i-.5)/count}
+ end
+ return {root=root,beds=beds,axis=axis,across=across,vertical=vertical,delta=delta,length=delta.Magnitude}
+end
+
+local function stepPrismHeat(heat,age,duration)
+ local reduced=BeamVFX.reduced()
+ local player=Players.LocalPlayer
+ local flashScale=player and player:GetAttribute('ReducedFlashing')==true and .36 or 1
+ local length=heat.length
+ for i,bed in ipairs(heat.beds) do
+  local time=age-bed.fraction*length/220
+  local fade=time>=0 and math.clamp(time/.06,0,1)*(1-math.clamp((age-duration+.07)/.56,0,1)) or 0
+  if reduced then fade=0 end
+  local active=fade>.01
+  bed.wisp.Enabled=active;bed.lamp.Enabled=active
+  if active then
+   local wave=time*10.7+i*1.77
+   local hot=math.exp(-time*7)*.84+.35
+   local polarity=i%2==0 and 1 or -1
+   local drift=heat.across*((.86+.20*math.sin(wave))*polarity)+heat.vertical*(.19+.33*math.sin(wave*.70))
+   local center=heat.delta*bed.fraction+drift
+   local span=math.min(6.8,length/#heat.beds*.80)
+   bed.lens.Size=Vector3.new(.92+.26*hot,.65+.16*math.sin(wave),span)
+   local world=heat.root.Position+center
+   bed.lens.CFrame=CFrame.lookAt(world,world+heat.axis+heat.across*(.17*math.sin(wave)))
+   bed.lens.Transparency=1-fade*(.054+.053*hot)
+   bed.lamp.Brightness=fade*(.68+2.45*hot)*(.87+.13*math.sin(wave*.71))*flashScale
+   local u=heat.axis*(span*.46)
+   local a=center-u+heat.vertical*(.32*math.sin(wave))
+   local b=center+u+heat.vertical*(.32*math.sin(wave+1.7))
+   bed.a.CFrame=CFrame.fromMatrix(a,heat.axis,heat.vertical,heat.across)
+   bed.b.CFrame=CFrame.fromMatrix(b,heat.axis,heat.vertical,heat.across)
+   bed.wisp.CurveSize0=math.sin(wave)*1.05
+   bed.wisp.CurveSize1=math.sin(wave+1.38)*.85
+   bed.wisp.Width0=.38*fade;bed.wisp.Width1=.21*fade
+  else bed.lens.Transparency=1 end
+ end
 end
 function Effects.step(now)
  for root,t in pairs(pulseTimelines) do
@@ -5181,6 +5259,7 @@ function Effects.step(now)
  end
  for rig,t in pairs(beamTimelines) do
   local age=now-t.at
+  if t.heat and t.heat.root.Parent then stepPrismHeat(t.heat,age,t.duration) end
   if not rig.root.Parent or age>t.duration+rig.profile.tail then
    BeamVFX.destroy(rig);beamTimelines[rig]=nil
   elseif age<0 then BeamVFX.hide(rig)
@@ -5307,7 +5386,8 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	if now-at>duration+profile.tail then return end
 	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
-	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body}
+	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
+	  heat=style=='Prism' and prismHeat(rig.root,from,to,color) or nil}
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
@@ -6027,30 +6107,40 @@ function View.new(audio,onPrism)
     local color=node:GetAttribute('Color')
     if not color then continue end
     if shape=='Prism' then
+     local aperture=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
+     local point=node:GetAttribute('ContactPoint') or to
+     local origin=node:GetAttribute('PrismFrom') or aperture
+     local endpoint=node:GetAttribute('PrismEnd') or point
      if audio and audio.setLoop then
       local q=windup>0 and math.clamp(age/windup,0,1) or 0
-      if age>=0 and age<windup and paused<=0 and q>.15 then
-       audio:setLoop(node,'prism_charge',drone and drone.ramiel and drone.ramiel.core.Position or from,.12+.98*q^2,.62+.64*q^2)
+      if landed and now-contactAt<hold and paused<=0 then
+       local remaining=hold-(now-contactAt)
+       audio:setLoop(node,'prism_sustain',origin:Lerp(endpoint,.52),.50+.38*smooth(remaining/.27),.70)
+      elseif age>=0 and age<windup and paused<=0 and q>.15 then
+       audio:setLoop(node,'prism_charge',aperture,.12+.98*q^2,.62+.64*q^2)
       else audio:stopLoop(node) end
      end
      if landed and not r.impacted then
       r.impacted=true
-      local point=node:GetAttribute('ContactPoint') or to
-      local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
-      local travel=point-origin
-      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(point,132) then
+      local travel=endpoint-origin
+      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
-       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,hold,'Prism')
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .42,hold,'Prism')
        if now-contactAt>=.18 then continue end
-       if onPrism then onPrism(origin,now) end
+       if onPrism then onPrism(point,now) end
        if not reduced then
-        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
-        burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
-         node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
+        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
+        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
+        burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)
+        for i=1,math.clamp(node:GetAttribute('PrismHits') or 0,0,3) do
+         local contact=node:GetAttribute('PrismHit'..i)
+         local surface=node:GetAttribute('PrismNormal'..i) or -travel.Unit
+         if contact then burst(self,contact+surface*.18,surface,PRISM_RED,true,true,1.23-(i-1)*.10,now) end
+        end
        end
-       if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.25,pitch=.77}) end
+       if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.35,pitch=.68}) end
       end
      end
      continue
@@ -11729,7 +11819,7 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
- if not CrystalImpactView.reducedMotion() then presentation:kick(position,.10,now) end
+ if not CrystalImpactView.reducedMotion() then presentation:kick(position,.145,now) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)

@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — three rolling waves and a piercing Ramiel beam
+
+Run the first Ramiel transformation in three rolling waves. Give the release more weight and let one thin beam strike multiple rocks along its path. Show its reach with heat distortion and lighting around the line.
+
 ## November 11 follow-up — match the first Ramiel transformation frame by frame
 
 Use the [first attack in the short reference](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19). Match the individual shapes and their spacing through the entire charge. The diamond pinches into a thin column while the outer tips stay nearly fixed. The bands reverse inward around the core, then broaden separately and open again. Match the held pose, the accelerating flare, and the impact beat before the beam.

@@ -42,6 +42,7 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         module_bundle(('Feel', 'Feedback', 'PickupMotion', 'CrystalImpactView', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
         '\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
+        'prism-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/prism-server.integration.lua').read_text(),
         'swarm': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/swarm-motion.integration.lua').read_text(),
         'client-inertia': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/motion-setup.lua').read_text() + '\n' + render + '\n' + (ROOT / 'tests/client-inertia.integration.lua').read_text(),
         'server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/gadget-server.integration.lua').read_text(),

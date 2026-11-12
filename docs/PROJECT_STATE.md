@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `be14dc5d1ed2cff1ea25f419ea914e821fe38081ded66ddc7c681cbbe856e5b9` | Includes the sampled Ramiel morph and release. |
-| Shared Studio Sources | Team Create save **194** | All seven Sources and the three Script Sync roots matched the canonical snapshot in shared Edit at the exact place and universe. |
+| Native-file SHA-256 | `4ab01c85f2ede127a475697bae5d160dc69df5f0cab417cbfcd33b7c680dad7a` | Includes Ramiel's three waves, piercing path and heat wake. |
+| Shared Studio Sources | Team Create save **194**, `50ad5ae` | The latest Sources are staged on disk. The active Play client matched `50ad5ae`. Shared Edit arrival and save are pending. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION Studio Edit has the sampled Ramiel morph** | The owner ended Play before installation. Studio save **194** succeeded in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION Studio remains in the owner's Play session on `50ad5ae`** | The active client and shared drone configuration matched the saved sampled morph revision. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — give Ramiel three rolling waves and a piercing shot
+
+The glass rolls outward, inward, then outward again, with a short delay between the upper and lower layers. Ramiel looks for a firing angle with more rocks in line. A single confirmed path can hit up to four eligible crystals at a maximum reach of 64 studs. The selected crystal receives the full hit. Additional rocks get successively weaker hits. The path stops at solid scenery or a crystal reserved by another crew or type. One thin red beam follows that path. Offset glass refraction, heat ripples and local lights move down the line. A stronger attack sound, sustained hum and separate impact bursts give the release more weight.
+
+The server fixture verified damage falloff, the target cap, obstruction, reservations and one shot receipt. The renderer checks verified that the core stays thin and the heat and lights linger and clean up after the beam. The rig, workshop and contact clock checks passed. The broad gadget suite still stops at the known client inertia fixture. The owner was in Play on `50ad5ae`, and the new version still needs verification and save in shared Edit. Reproduce the canonical refresh from `50ad5ae` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 50ad5ae`. The authored map and unrelated native Sources were preserved. This revision is unpublished.
 
 ## November 11 — sample Ramiel's morph layer by layer
 

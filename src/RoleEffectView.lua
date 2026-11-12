@@ -372,30 +372,40 @@ function View.new(audio,onPrism)
     local color=node:GetAttribute('Color')
     if not color then continue end
     if shape=='Prism' then
+     local aperture=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
+     local point=node:GetAttribute('ContactPoint') or to
+     local origin=node:GetAttribute('PrismFrom') or aperture
+     local endpoint=node:GetAttribute('PrismEnd') or point
      if audio and audio.setLoop then
       local q=windup>0 and math.clamp(age/windup,0,1) or 0
-      if age>=0 and age<windup and paused<=0 and q>.15 then
-       audio:setLoop(node,'prism_charge',drone and drone.ramiel and drone.ramiel.core.Position or from,.12+.98*q^2,.62+.64*q^2)
+      if landed and now-contactAt<hold and paused<=0 then
+       local remaining=hold-(now-contactAt)
+       audio:setLoop(node,'prism_sustain',origin:Lerp(endpoint,.52),.50+.38*smooth(remaining/.27),.70)
+      elseif age>=0 and age<windup and paused<=0 and q>.15 then
+       audio:setLoop(node,'prism_charge',aperture,.12+.98*q^2,.62+.64*q^2)
       else audio:stopLoop(node) end
      end
      if landed and not r.impacted then
       r.impacted=true
-      local point=node:GetAttribute('ContactPoint') or to
-      local origin=drone and (drone.ramiel and drone.ramiel.core.Position or drone.view:GetPivot().Position) or from
-      local travel=point-origin
-      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(point,132) then
+      local travel=endpoint-origin
+      if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
        RoleVisuals.setTime(contactAt)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
-       RoleVisuals.Beam(origin+travel.Unit*gap,point,PRISM_RED,reduced and .42 or .60,hold,'Prism')
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .42,hold,'Prism')
        if now-contactAt>=.18 then continue end
-       if onPrism then onPrism(origin,now) end
+       if onPrism then onPrism(point,now) end
        if not reduced then
-        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.55,now)
-        burst(self,point+(node:GetAttribute('ContactNormal') or -travel.Unit)*.25,
-         node:GetAttribute('ContactNormal') or -travel.Unit,PRISM_RED,true,true,1.35,now)
+        burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
+        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
+        burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)
+        for i=1,math.clamp(node:GetAttribute('PrismHits') or 0,0,3) do
+         local contact=node:GetAttribute('PrismHit'..i)
+         local surface=node:GetAttribute('PrismNormal'..i) or -travel.Unit
+         if contact then burst(self,contact+surface*.18,surface,PRISM_RED,true,true,1.23-(i-1)*.10,now) end
+        end
        end
-       if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.25,pitch=.77}) end
+       if audio then audio:play('prism_fire',origin);audio:play('coil_hit',point,{level=1.35,pitch=.68}) end
       end
      end
      continue

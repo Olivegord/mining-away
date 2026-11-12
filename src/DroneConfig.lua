@@ -402,8 +402,28 @@ local RAMIEL_MIRRORS={
  {22.55,.062,.088,.225,421}, {23.98,.074,.096,.25,486},
 }
 local RAMIEL_RECOIL={{0,0},{.028,1},{.056,.78},{.106,.14},{.152,-.17},{.27,0}}
+-- The first and third waves move out from the core. The middle wave packs
+-- the outside glass inward. Each travels through the stack one layer at a time.
+local RAMIEL_WAVES={
+ {start=19.34,step=.081,span=.66,strength=.66},
+ {start=20.14,step=.092,span=.59,strength=.85,inward=true},
+ {start=21.28,step=.112,span=.76,strength=1},
+}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
+end
+local function ramielWave(clock: number,half: number,band: number): number
+ local motion=0
+ for _,wave in ipairs(RAMIEL_WAVES) do
+  local order=wave.inward and 3-band or band-1
+  local phase=(clock-wave.start-order*wave.step-(half-1)*.055)/wave.span
+  if phase>0 and phase<1 then
+   local squeeze=smoothstep(phase/.19)*(1-smoothstep((phase-.19)/.29))
+   local release=smoothstep((phase-.26)/.25)*(1-smoothstep((phase-.51)/.49))
+   motion+=wave.strength*(release-.65*squeeze)
+  end
+ end
+ return motion
 end
 local function ramielSlope(left: number,right: number): number
  if left*right<=0 then return 0 end
@@ -488,8 +508,10 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
    local n,f=value(column),value(column+1)
    if j==1 then gap=math.min(gap,n) end
    if rebuild then
-    local push=kick*(.068-(j-1)*.014)
-    poseRamielBand(band,frame,sign,radius,n+push,f+push,value(column+2),value(column+3),value(column+4),kick)
+    local wave=not reduced and not recovery and ramielWave(clock,i,j) or 0
+    local push=kick*(.068-(j-1)*.014)+wave*.045
+    poseRamielBand(band,frame,sign,radius,n+push,f+push+wave*.020,
+     value(column+2)*(1+wave*.16),value(column+3)*(1+wave*.12),value(column+4)+wave*14*sign,kick)
    end
   end
   if rebuild then
@@ -499,8 +521,9 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
     local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
     local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.19)
     local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)*(j%2==0 and -.82 or 1)
+    local wave=not reduced and not recovery and ramielWave(clock-.045,i,j) or 0
     if reduced then near=.07*simple;spacing=.10*simple;yaw=23*simple end
-    local offset=(near+(j-1)*spacing)*(1-close)+kick*.022
+    local offset=(near+(j-1)*spacing)*(1-close)+kick*.022+wave*.055
     local side=math.max(.03,width*radius*(1-close))
     mirror.Size=Vector3.new(side,math.max(.023,side*(.25+j*.035)),side)
     mirror.CFrame=frame*CFrame.new(0,offset*sign*radius,kick*.42)*CFrame.Angles(0,math.rad(yaw*sign*(1-close)),0)

@@ -43,6 +43,15 @@ function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at
  node:SetAttribute('ContactAt',at)
  Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
+function Effects.PrismContact(node,origin,endpoint,primary,contacts,fractured,broken,at)
+ if not node or not node.Parent then return end
+ node:SetAttribute('PrismFrom',origin);node:SetAttribute('PrismEnd',endpoint)
+ for i,hit in ipairs(contacts) do
+  node:SetAttribute('PrismHit'..i,hit.point);node:SetAttribute('PrismNormal'..i,hit.normal)
+ end
+ node:SetAttribute('PrismHits',#contacts)
+ Effects.ProjectileContact(node,primary.point,primary.normal,fractured,broken,false,at)
+end
 function Effects.Heal(from,to)
  record('Heal',{From=from,Position=to},.4)
 end

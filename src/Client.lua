@@ -19,7 +19,7 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local roleEffectView=RoleEffectView.new(soundscape,function(position,now)
- if not CrystalImpactView.reducedMotion() then presentation:kick(position,.10,now) end
+ if not CrystalImpactView.reducedMotion() then presentation:kick(position,.145,now) end
 end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
  presentation:crystalKick(position,strength,now)

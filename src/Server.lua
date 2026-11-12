@@ -1280,10 +1280,52 @@ function scene.reclaimBattery(d,r,broken,abilityOrigin,contactKind)
  d.battery=math.min(d.stats.batteryCapacity,before+d.stats.reclaim)
  if d.battery-before>=1 then RoleEffects.Pulse(d.pos,Color3.fromRGB(134,221,129),.4,2.4,.20) end
 end
+-- Resolve the full ray before any crystal shrinks or loses CanQuery.
+-- The same path drives the damage and the client beam endpoints.
+function scene.prismTrace(d,primary,station,stopAtPrimary)
+ local p=profiles[d.owner]
+ if not healthy(p) then return nil end
+ local spec=DroneCatalog.Types.Ramiel
+ local scale=RoleConfig.Prominent.Ramiel
+ local aim=primary.part.CFrame:PointToWorldSpace(Vector3.yAxis*primary.part.Size.Y*.24)
+ local flat=Vector3.new(aim.X-station.X,0,aim.Z-station.Z)
+ local origin=station+Vector3.yAxis*scale.lift
+ if flat.Magnitude>.01 then origin+=flat.Unit*(scale.span*.06) end
+ local direction=(aim-origin).Unit*spec.BeamRange
+ local endpoint=origin+direction
+ local ignored={droneFolder,pickupFolder,p.player.Character}
+ local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Exclude
+ local hits,selected={},nil
+ for _=1,12 do
+  query.FilterDescendantsInstances=ignored
+  local hit=workspace:Raycast(origin,direction,query)
+  if not hit then break end
+  local part=hit.Instance
+  local rock=resources[part:GetAttribute('ResourceId') or '']
+  if rock and rock.part==part then
+   if #hits>=spec.BeamTargets or rock.field~=primary.field or rock.paid or rock.hp<=0
+    or now<rock.readyAt or rock.kind=='Geode' or not playerCanMine(p,rock.field) or not sameRockType(d,rock) then
+    endpoint=hit.Position;break
+   end
+   local item={rock=rock,point=hit.Position,normal=hit.Normal}
+   table.insert(hits,item)
+   if rock==primary then
+    selected=item
+    if stopAtPrimary then return {origin=origin,endpoint=endpoint,hits=hits,selected=selected} end
+   end
+  elseif part==workspace.Terrain or not part:IsA('BasePart') or part.CanCollide then
+   endpoint=hit.Position;break
+  end
+  table.insert(ignored,part)
+ end
+ return selected and {origin=origin,endpoint=endpoint,hits=hits,selected=selected} or nil
+end
 hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryRange: number?,abilityOrigin: any,contactKind: string?,fractureContext: any)
  local p=profiles[d.owner]
  local assist=secondary and not abilityOrigin and contactKind=='Aftershock' and r.field.cfg.SelectionOnly==true
- if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
+ local prism=fractureContext and fractureContext.prism
+ local piercing=contactKind=='PrismPass' and d.role=='Ramiel' and prism and prism.rock==r
+ if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not piercing and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
  local recipient=d
  local job=d.specialJob
@@ -1299,7 +1341,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   end
  end
  if not DroneRoles.isWorker(d.role) and not (abilityOrigin and DroneRoles.ability(d.role)) then return false end
- if not abilityOrigin and not DroneRoles.isMiner(d.role) and not special and not shell then return false end
+ if not abilityOrigin and not DroneRoles.isMiner(d.role) and not special and not shell and not piercing then return false end
  if abilityOrigin then
   local hr=characterRoot(p)
   local carrierImpact=d.deployedCarrier and contactKind=='Breaker'
@@ -1311,7 +1353,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   -- final hit. No saved state/remote can authorize an echo from a retired node.
   if not primary or primary.field~=r.field or not primary.slots[d.id] or (primary.paid and primary.processingPrimary~=d.id) or (r.position-primary.position).Magnitude>(secondaryRange or d.stats.forkRange or 6) or (d.pos-r.position).Magnitude>d.stats.range or (d.pos-(d.workStation or Feel.mineGoal(primary.position,d.targetSlot,primary.limit>1,primary.fullSize,primary.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
   if assist and primary.processingPrimary~=d.id then return false end
- elseif d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1 or not los(d.pos,r.position,r.part,{droneFolder}) then return false end
+ elseif not piercing and (d.target~=r or (d.pos-(d.workStation or Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal))).Magnitude>1
+  or (not prism and not los(d.pos,r.position,r.part,{droneFolder}))) then return false end
  -- A specialist's committed job, never its caller, supplies the finite hit budget.
  if special then amount=job.damage end
  if contactKind=='Consumable' or contactKind=='FieldTool' then r.consumableWorked=true end
@@ -1330,11 +1373,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   and DroneCatalog.projectileLayerPower(d.role,r.stage) or 1
  amount*=shotPower
  local pinnedWork=(not abilityOrigin or contactKind=='Breaker') and d.squareJob and d.squareJob==p.miningSquare
- local startShift=pinnedWork and not secondary and scene.shiftReady(p)
+ local startShift=pinnedWork and not secondary and not piercing and scene.shiftReady(p)
  if pinnedWork and (startShift or (d.squareJob==p.shiftSquare and now<(p.shiftUntil or 0))) then amount*=1.5 end
  amount=amount*(abilityOrigin and contactKind~='Breaker' and 1 or Mining.efficiency(d.role=='Charger' and 'Red' or 'Blue',r.kind))
  if (r.kind=='Geode' or r.kind=='Core') then amount=amount*(d.stats.geodeMultiplier or 1) end
- if special then
+ if special or piercing then
   amount=DroneCatalog.capDamage(d.role,r.maxHP,amount)
   -- Quarter-work subtraction can leave a floating-point residue on minerals
   -- such as Ruby. Resolve only arithmetic dust, never another real chunk.
@@ -1342,9 +1385,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  end
  if secondary then d.forkTarget=r.position;d.forkTargetId=r.id;d.forkUntil=now+.18 end
  if secondary and not r.field.cfg.SelectionOnly then scene.hazards:beam(d.pos,r.part.Position,5,'laser') end
- if not secondary and not abilityOrigin then r.processingPrimary=d.id end
+ if not secondary and not abilityOrigin and not piercing then r.processingPrimary=d.id end
  local previous=r.stage
- local isShot=special==true or contactKind=='Breaker'
+ local isShot=special==true or piercing or contactKind=='Breaker'
  local cutStart=not secondary and not abilityOrigin and not special and d.mining and d.beamSince and d.lastCutFX~=d.beamSince
  local shapeChanged=false
  local revealed=nil
@@ -1357,8 +1400,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   p.shiftReadyRun=nil;p.shiftSquare=d.squareJob;p.shiftUntil=now+p.shiftSeconds
  end
  -- Capture the incoming surface before any fracture changes its size or facing.
- local hitSurface
- if shotKind or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart)) then
+ local hitSurface=prism
+ if not hitSurface and (shotKind or (r.field.cfg.SelectionOnly and (broken or fractured or isShot or cutStart))) then
   local hitFrom=shotKind and (job.from or d.pos) or d.pos
   local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
   local delta=r.part.Position-hitFrom
@@ -1429,8 +1472,9 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if r.field.cfg.SelectionOnly and hitSurface then
   if cutStart then d.lastCutFX=d.beamSince end
   r.part:SetAttribute('CutContactPoint',hitSurface.point);r.part:SetAttribute('CutContactNormal',hitSurface.normal)
-  r.part:SetAttribute('CutProjectile',shotKind or '')
-  r.part:SetAttribute('CutProjectileFX',shotKind~=nil and job.projectile~=nil and job.projectile.Parent~=nil)
+  local projectile=prism and fractureContext.projectile or shotKind and job.projectile
+  r.part:SetAttribute('CutProjectile',piercing and 'Prism' or shotKind or '')
+  r.part:SetAttribute('CutProjectileFX',projectile~=nil and projectile.Parent~=nil)
   r.part:SetAttribute('CutFractured',fractured)
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
@@ -1439,16 +1483,11 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    r.part:SetAttribute('CrystalBreakAt',now)
   end
  end
- if shotKind and hitSurface then
-  if shotKind=='Prism' then
-   -- A final blow releases its rock reservation immediately. Keep Ramiel's
-   -- recovery clock so a new target cannot start another shot mid-discharge.
-   d.prismReadyAt=now+DroneCatalog.Types.Ramiel.BeamHold+RoleConfig.RamielCloseTime
-  end
+ if shotKind and hitSurface and not prism then
   RoleEffects.ProjectileContact(job.projectile,hitSurface.point,hitSurface.normal,r.stage>previous,broken,shotPower>1,now)
  end
  -- An allied specialist keeps its cargo value if a laser's Aftershock finishes a layer for it.
- local specialistCut=special==true or (assist and recipient~=d)
+ local specialistCut=special==true or piercing or (assist and recipient~=d)
  if not broken and r.kind~='Geode' and (r.stage>previous or (r.field.cfg.SelectionOnly and not r.cargoProduced
   and Mining.looseSeamsReady(r.hp,r.maxHP,recipient.stats.earlyDrop))) then
   award(recipient,r,specialistCut,true)
@@ -1456,7 +1495,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  if not secondary and not abilityOrigin and Mining.kind(d.owned.type)=='Red' then
   d.minePulseSerial=d.minePulseSerial+1;d.minePulseAt=now;d.minePulseTargetId=r.id
  end
- scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind)
+ if not piercing then scene.reclaimBattery(assist and recipient or d,r,broken,abilityOrigin,contactKind) end
  if broken then
   r.part:SetAttribute('BreakSerial',1);r.part.CanQuery=false;r.part.CanCollide=false;r.part.CanTouch=false;r.removeAt=now+2
   if r.kind=='Geode' then
@@ -1487,7 +1526,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    end
   end
  end
- if not secondary and not abilityOrigin then
+ if not secondary and not abilityOrigin and not piercing then
   local secondaryId
   if (d.stats.forkFraction or 0)>0 then secondaryId=secondaryMining(d,r,baseAmount*d.stats.forkFraction,d.stats.forkRange or 6) end
   if (d.stats.aftershock or 0)>0 and (broken or r.stage>previous) then
@@ -1557,6 +1596,29 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    d.specialRecovery={part=r.part,serial=job.serial,startedAt=job.startedAt,duration=job.duration,impacted=true}
   end
  end
+ return true,broken,r.stage>previous
+end
+function scene.firePrism(d,primary,job)
+ local path=scene.prismTrace(d,primary,d.pos,false)
+ if not path then return false end
+ local context={prism=path.selected,projectile=job.projectile}
+ local accepted,broken,fractured=hitResource(d,primary,job.damage,false,nil,nil,'Special',context)
+ if not accepted then return false end
+ local spec=DroneCatalog.Types.Ramiel
+ -- A final blow retires its reservation immediately. The beam and recovery
+ -- still own this firing window even if the drone finds another rock.
+ d.prismReadyAt=now+spec.BeamHold+RoleConfig.RamielCloseTime
+ local contacts={}
+ local power=spec.BeamFalloff
+ for _,hit in ipairs(path.hits) do
+  if hit==path.selected then continue end
+  context.prism=hit
+  if hitResource(d,hit.rock,job.damage*power,false,nil,nil,'PrismPass',context) then
+   table.insert(contacts,hit)
+   power*=spec.BeamFalloff
+  end
+ end
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,fractured,broken,now)
  return true
 end
 local function chooseResource(d: any,field: any,square: any?)
@@ -1985,7 +2047,7 @@ local function committedStation(d,r)
   d.workTargetId=r.id
   d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
   local definition=DroneCatalog.Types[d.role]
-  if r.field.cfg.SelectionOnly and d.targetSlot==2 then
+  if r.field.cfg.SelectionOnly and d.targetSlot==2 and not (definition and definition.Projectile=='Prism') then
    local base=d.workStation
    for turn=0,3 do
     local angle=d.slot*2.4+turn*math.pi/2
@@ -1999,11 +2061,20 @@ local function committedStation(d,r)
    if r.field.cfg.SelectionOnly and approach.X^2+approach.Z^2>1 then
     direction=math.atan2(approach.Z,approach.X)
    end
+   local prism=definition.Projectile=='Prism' and r.kind~='Geode'
+   local offset=prism and definition.BeamStation or 9
+   local bestCount=0
    for turn=0,3 do
     local angle=direction+turn*math.pi/2
-    local station=r.position+Vector3.new(math.cos(angle)*9,2.8,math.sin(angle)*9)
+    local station=r.position+Vector3.new(math.cos(angle)*offset,2.8,math.sin(angle)*offset)
     if turn==0 then d.workStation=station end
-    if los(station,r.position,r.part,{droneFolder}) then d.workStation=station;break end
+    if prism then
+     local path=scene.prismTrace(d,r,station,false)
+     if path and #path.hits>bestCount then
+      d.workStation=station;bestCount=#path.hits
+      if bestCount==definition.BeamTargets then break end
+     end
+    elseif los(station,r.position,r.part,{droneFolder}) then d.workStation=station;break end
    end
   end
  end
@@ -2076,7 +2147,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  if arrived and (d.specialClear==nil or now>=(d.specialQueryAt or 0) or starting or contacting) then
   -- Monitor obstruction at snapshot cadence, with fresh checks at startup
   -- and the actual contact. Cosmetic recovery never adds damage.
-  d.specialClear=los(d.pos,r.position,r.part,{droneFolder});d.specialQueryAt=now+C.Snapshot
+  if projectile=='Prism' then
+   d.specialClear=scene.prismTrace(d,r,d.pos,true)~=nil
+  else d.specialClear=los(d.pos,r.position,r.part,{droneFolder}) end
+  d.specialQueryAt=now+C.Snapshot
  end
  if not arrived or not d.specialClear then
   if (d.pos-goal).Magnitude<=1 and now>=r.readyAt then
@@ -2098,6 +2172,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
    local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.FilterDescendantsInstances={r.part}
    local contact=workspace:Raycast(from,r.part.Position-from,query)
    local aim=contact and contact.Position or r.part.Position
+   if projectile=='Prism' then
+    local path=scene.prismTrace(d,r,d.pos,true)
+    if path then from=path.origin;aim=path.selected.point end
+   end
    -- Keep Ramiel's filmed beats on their original clock. Mining rate can
    -- shorten downtime but cannot speed up the transformation.
    local windup=projectile=='Prism' and definition.Windup or math.min(definition.Windup,cycle.duration*.38)
@@ -2115,7 +2193,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  d.state='SpecialMine'
  job=d.specialJob
  if not job.impacted and now>=job.startedAt+job.duration*job.impact then
-  if not hitResource(d,r,job.damage,false,nil,nil,'Special') then
+  local accepted
+  if projectile=='Prism' then accepted=scene.firePrism(d,r,job)
+  else accepted=hitResource(d,r,job.damage,false,nil,nil,'Special') end
+  if not accepted then
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+3;release(d);return
   end
  end
