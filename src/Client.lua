@@ -1441,7 +1441,7 @@ connect(RunService.RenderStepped,function(dt)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.vibrating or (r.cutUntil or 0)>now then
+  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
  end

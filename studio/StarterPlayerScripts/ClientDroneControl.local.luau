@@ -2711,8 +2711,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
-   if not sample.alive then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
-   if not sample.alive or now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
+   if now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
   end
   return
  end
@@ -2989,7 +2988,6 @@ function W:courier(drone,record,now)
  if fx.sparks then
   fx.sparks.Rate=pickup and 4+q*5 or unload and slots==0 and 6 or 0
   fx.sparks.Enabled=not paused and not reduced and (pickup or unload and slots==0)
-  if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
  fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale
@@ -6204,12 +6202,17 @@ function View.new(audio,onPrism)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
-    clearProjectile(self,r,now,false)
-    clearLoad(self,r)
-    if audio and audio.stopLoop then audio:stopLoop(node) end
-    if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
-    if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
-    self.records[node]=nil
+    if not r.detached then
+     r.detached=true
+     if r.projectile then clearProjectile(self,r,now,true) end
+     clearLoad(self,r)
+     if audio and audio.stopLoop then audio:stopLoop(node) end
+     if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
+     if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
+    end
+    if not r.after or now>=r.afterUntil then
+     clearProjectile(self,r,now,false);self.records[node]=nil
+    end
    elseif kind=='MiningShot' then
     if r.after and now>=r.afterUntil then clearProjectile(self,r,now,false) end
     local from=node:GetAttribute('From');local to=node:GetAttribute('Position')
@@ -6641,7 +6644,6 @@ function V.new(parent,audio,onSplit)
   end
  end
  function self:cut(r,now,beat)
-  r.cutUntil=now+.09
   r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
   r.cutPulseAt=now;self.tints[r]=true
   local hp=r.source:GetAttribute('HP') or 10
@@ -6661,17 +6663,19 @@ function V.new(parent,audio,onSplit)
     self:forget(r)
    else
     local age=r.flashAt and now-r.flashAt or math.huge
-    local initial=Feedback.impactWhite(age,r.flashDuration or .28)*(r.flashStrength or 1)
-    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
+    local duration=r.flashDuration or .28
+    local attack=math.clamp(age/.026,0,1)
+    local initial=Feedback.impactWhite(age,duration)*(r.flashStrength or 0)*attack
+    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.18)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
+    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))
     local pressure=(r.pressure or 0)*afterglow
     local load=r.finalLoad or 0
-    if load>=1 then white=reduced and .07 or .22 end
-    local warm=math.max(pressure*(.21+.15*pulse),load*.76)
+    white=math.max(white,load*(reduced and .045 or .14))
+    local warm=math.max(pressure*(.16+.05*pulse),load*.46)
     view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
-    if initial<=0 then r.flashAt=nil end
-    if initial<=0 and afterglow<=0 and not r.finalLoad then self:forget(r) end
+    if age>=duration then r.flashAt=nil end
+    if not r.flashAt and afterglow<=0 and not r.finalLoad then self:forget(r) end
    end
   end
   for r,blackAt in pairs(self.prismTargets) do
@@ -6690,21 +6694,27 @@ function V.new(parent,audio,onSplit)
    r.nextContactAt=impact
   elseif impact>r.lastContactAt then
    r.nextContactAt=nil
+   local previousContact=r.lastContactAt
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
+   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
     local projectile=s:GetAttribute('CutProjectile')
     local heavy=projectile=='Ball'
-    r.flashAt=now;r.flashDuration=heavy and .095 or shot and .07 or fractured and .13 or .30;r.flashGate=now+.12
-    r.flashStrength=fractured and not shot and .57 or 1
-    r.impactAt=now;self.tints[r]=true
+    r.chipGate=now+.12
+    if shot or fractured or impact-previousContact>.30 then
+     r.flashAt=now;r.flashDuration=heavy and .18 or shot and .13 or .23
+     r.flashStrength=heavy and .22 or shot and .16 or fractured and .13 or .10
+     self.tints[r]=true
+    end
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     local tilt=Vector3.new(-normal.Z,0,normal.X)
     if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
-    r.kick=tilt*(heavy and .13 or projectile=='Dart' and .073 or fractured and .065 or .038)
+    if shot or fractured then
+     r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
+    end
     self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
@@ -6743,15 +6753,13 @@ function V.new(parent,audio,onSplit)
    end
    return
   end
-  if r.restPose and (r.kick or r.vibrating or (r.cutUntil or 0)>now) then
+  if r.restPose and r.kick then
    local t=r.impactAt and now-r.impactAt or math.huge
    local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
    if t>=.14 then r.kick=nil end
-   r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
-   local vibration=r.vibrating and math.sin(now*51)*(.004+.009*(r.pressure or 0)) or 0
    local kick=not BeamVFX.reduced() and not V.reducedMotion() and r.kick or Vector3.zero
    local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
-   v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose
+   v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount,0,kick.Z*amount)*CFrame.new(-foot)*r.restPose
   end
  end
  function self:destroy()
@@ -10878,6 +10886,15 @@ local SOFT_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
 local SWEEP,SEGMENTS=math.pi*2.16,4
 local widths={.008,.044,.050,.030,.004}
 local transparencies={1,.34,.05,.29,1}
+local strandAlpha={}
+for i=1,SEGMENTS do
+ strandAlpha[i]={}
+ for level=0,24 do
+  local opacity=level/24
+  strandAlpha[i][level]=NumberSequence.new({NumberSequenceKeypoint.new(0,1-(1-transparencies[i])*opacity),
+   NumberSequenceKeypoint.new(1,1-(1-transparencies[i+1])*opacity)})
+ end
+end
 
 local function glowImage(parent,name,size)
  local image=Instance.new('ImageLabel');image.Name=name;image.Image=SOFT_GLOW
@@ -10886,7 +10903,7 @@ local function glowImage(parent,name,size)
  return image
 end
 
-function Display.new(parent)
+function Display.new(parent,slot)
  local base=Instance.new('Part');base.Name='OreDisplay';base.Anchored=true
  base.Transparency=1;base.CastShadow=false;base.CanCollide=false;base.CanTouch=false;base.CanQuery=false
  local surface=Instance.new('SurfaceGui');surface.Name='GroundGlow';surface.Face=Enum.NormalId.Top
@@ -10894,8 +10911,6 @@ function Display.new(parent)
  surface.Enabled=false;surface.Parent=base
  local halo=glowImage(surface,'Halo',1)
  local core=glowImage(surface,'Hotspot',.47)
- local lightAnchor=Instance.new('Attachment');lightAnchor.Position=Vector3.new(0,.52,0);lightAnchor.Parent=base
- local light=Instance.new('PointLight');light.Name='OreLight';light.Enabled=false;light.Shadows=false;light.Parent=lightAnchor
  local outline=Instance.new('Highlight');outline.Name='OreOutline';outline.DepthMode=Enum.HighlightDepthMode.Occluded
  outline.FillTransparency=1;outline.Enabled=false;outline.Parent=base
  local points,curves,motes={},{},{}
@@ -10905,16 +10920,17 @@ function Display.new(parent)
  for i=1,SEGMENTS do
   local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
   beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
-  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,transparencies[i]),NumberSequenceKeypoint.new(1,transparencies[i+1])})
   beam.Enabled=false;beam.Parent=base;curves[i]=beam
  end
  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
  base.Parent=parent
- return {base=base,surface=surface,halo=halo,core=core,light=light,outline=outline,points=points,curves=curves,motes=motes}
+ -- Separate overlapping translucent ground sprites by a small, stable depth.
+ return {base=base,surface=surface,halo=halo,core=core,outline=outline,points=points,curves=curves,motes=motes,
+  groundOffset=Vector3.yAxis*((slot-1)*.004)}
 end
 
 function Display.hide(rig)
- rig.outline.Enabled=false;rig.surface.Enabled=false;rig.light.Enabled=false
+ rig.outline.Enabled=false;rig.surface.Enabled=false
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
 end
@@ -10927,21 +10943,21 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
   rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.light.Color=record.color:Lerp(WHITE,.23);rig.light.Range=4.5*rig.scale
   rig.moteColor=record.color:Lerp(WHITE,.71)
   local strand=ColorSequence.new(record.color:Lerp(WHITE,.72))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end
  end
- if strength<=.03 then Display.hide(rig);return end
+ if strength<=.02 then Display.hide(rig);return end
  local scale=rig.scale
+ ground+=rig.groundOffset
  if rig.base.Position~=ground then rig.base.Position=ground end
- rig.outline.OutlineTransparency=1-strength*.94;rig.outline.Enabled=true
+ rig.outline.OutlineTransparency=1-strength*.94
+ rig.outline.Enabled=record.view.Parent~=nil and record.view.Transparency<1
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
  rig.surface.Enabled=true
- rig.light.Enabled=not reducedEffects;rig.light.Brightness=strength*1.5
 
  local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
  if not reducedEffects then
@@ -10957,7 +10973,8 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    if i<=SEGMENTS then rig.curves[i].CurveSize0=handle end
    if i>1 then rig.curves[i-1].CurveSize1=handle end
   end
-  for _,beam in ipairs(rig.curves) do beam.Enabled=strength>.34 end
+  local alpha=math.floor(strength*24+.5)
+  for i,beam in ipairs(rig.curves) do beam.Transparency=strandAlpha[i][alpha];beam.Enabled=true end
  else
   for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  end
@@ -10969,7 +10986,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local reach=(.40+(i%3)*.31)*(1-.30*t)
    local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
    local envelope=math.min(t/.16,1,(1-t)/.28)
-   EnergyDisc.place(mote,position,(.12+(i%3)*.033)*scale,rig.moteColor,envelope*strength*.92)
+   EnergyDisc.place(mote,position,(.24+(i%3)*.062)*scale,rig.moteColor,envelope*strength*.82)
   end
  end
 end
@@ -10987,6 +11004,7 @@ local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
+local DISPLAY_TAIL=.28
 -- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
 local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
@@ -11006,6 +11024,13 @@ local function removeTrail(self,r)
  if not r.ribbon then return end
  r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
  r.ribbon=nil;self.trailCount-=1
+end
+local function finishTrail(self,r,now)
+ local ribbon=r.ribbon
+ if not ribbon then return end
+ if not ribbon.untilAt then
+  ribbon.trail.Enabled=false;ribbon.untilAt=now+ribbon.trail.Lifetime
+ elseif now>=ribbon.untilAt then removeTrail(self,r) end
 end
 local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
@@ -11047,15 +11072,34 @@ local function updateDisplays(self,now,reducedMotion,reducedEffects)
  local candidates=self.displayCandidates
  table.sort(candidates,displayOrder)
  local count=math.min(#candidates,DISPLAY_LIMIT)
+ local free=self.freeDisplays;table.clear(free)
+ for i=1,count do candidates[i].displayWanted=true end
+ for _,rig in ipairs(self.displays) do
+  local r=rig.record
+  if r and r.displayWanted then
+   rig.releaseAt=nil
+  elseif r then
+   rig.releaseAt=rig.releaseAt or now
+   local tail=math.clamp(1-(now-rig.releaseAt)/DISPLAY_TAIL,0,1)*r.displayStrength
+   if tail>.02 and (not r.expiresAt or now<r.expiresAt) then
+    PickupDisplay.draw(rig,r,r.displayGround,now,tail,reducedMotion,reducedEffects)
+   else
+    PickupDisplay.hide(rig);r.displayRig=nil;rig.record=nil;rig.outline.Adornee=nil
+   end
+  end
+  if not rig.record then table.insert(free,rig) end
+ end
  for i=1,count do
   local r=candidates[i]
-  local rig=self.displays[i]
-  if not rig then rig=PickupDisplay.new(self.parent);self.displays[i]=rig end
-  PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
- end
- for i=count+1,#self.displays do
-  local rig=self.displays[i]
-  if rig.record then PickupDisplay.hide(rig);rig.record=nil;rig.outline.Adornee=nil end
+  r.displayWanted=nil
+  local rig=r.displayRig or table.remove(free)
+  if not rig and #self.displays<DISPLAY_LIMIT then
+   rig=PickupDisplay.new(self.parent,#self.displays+1);table.insert(self.displays,rig)
+  end
+  if rig then
+   r.displayRig=rig;rig.releaseAt=nil
+   PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
+  end
  end
 end
 local function backpack(owner,fallback)
@@ -11097,7 +11141,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},displays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -11237,8 +11281,11 @@ function V:update(dt,now)
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then
-   removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
-   self.byId[r.seed]=nil;self.records[source]=nil
+   finishTrail(self,r,now);removeIdle(self,r)
+   if r.ribbon then r.view.Transparency=1
+   else
+    r.view:Destroy();self.byId[r.seed]=nil;self.records[source]=nil
+   end
   else
    local latest=r.samples[#r.samples]
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
@@ -11327,20 +11374,24 @@ function V:update(dt,now)
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    if onDisplay and cameraPosition and (not r.expiresAt or now<r.expiresAt) then
-    local offset=r.drawPosition-cameraPosition
-    local distance=offset:Dot(offset)
-    if distance<DISPLAY_RANGE^2 then
-     r.displayGround=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
-     r.displayDistance=distance
-     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-math.sqrt(distance))/10,0,1)*opacity
+    local ground=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
+    local distance=(ground-cameraPosition).Magnitude
+    if distance<DISPLAY_RANGE then
+     r.displayGround=ground
+     -- Use the landing point to rank displays. A hovering pose must never
+     -- move its glow and outline to another gem across adjacent render frames.
+     r.displayDistance=distance-(r.displayRig and 2.5 or 0)
+     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-distance)/10,0,1)*opacity
      table.insert(self.displayCandidates,r)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.arc and live and age>=r.landAge and not seated and not reducedEffects and cameraPosition
-    and (not pulling or age<r.landAge+OreDrops.GEM_CONTACT_HOLD) then
+   local landingAge=r.arc and age-r.landAge
+   local landingGlint=landingAge and landingAge<.24 and (live or r.collectAt)
+   if landingAge and landingAge>=0 and not reducedEffects and cameraPosition
+    and (landingGlint or live and not seated and not pulling) then
     local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
-    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
+    updateGlint(self,r,landingAge,glintStrength*distanceFade*opacity)
    else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
@@ -11348,12 +11399,7 @@ function V:update(dt,now)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
     local inFlight=air and live and not pulling and displayAt>=r.born
     if r.ribbon then
-     if not inFlight and r.arc then
-      removeTrail(self,r)
-     elseif not inFlight or reducedEffects then
-      if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
-     end
-     if r.ribbon and r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+     if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
@@ -11362,7 +11408,7 @@ function V:update(dt,now)
      if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
     end
    elseif r.ribbon then
-    removeTrail(self,r)
+    finishTrail(self,r,now)
    end
   end
  end
@@ -13553,7 +13599,7 @@ connect(RunService.RenderStepped,function(dt)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.vibrating or (r.cutUntil or 0)>now then
+  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
  end

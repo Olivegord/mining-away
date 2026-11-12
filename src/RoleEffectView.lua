@@ -441,12 +441,17 @@ function View.new(audio,onPrism)
   for node,r in pairs(self.records) do
    local kind=node:GetAttribute('Kind');local owner=node -- isolate overlapping old/new effects for the same player
    if not node.Parent then
-    clearProjectile(self,r,now,false)
-    clearLoad(self,r)
-    if audio and audio.stopLoop then audio:stopLoop(node) end
-    if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
-    if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
-    self.records[node]=nil
+    if not r.detached then
+     r.detached=true
+     if r.projectile then clearProjectile(self,r,now,true) end
+     clearLoad(self,r)
+     if audio and audio.stopLoop then audio:stopLoop(node) end
+     if r.started and kind=='AbilityCharge' then RoleVisuals.Ability(owner,{kind='clearCharge'}) end
+     if r.started and kind=='Orbital' and not r.ended then RoleVisuals.Ability(owner,{kind='orbitalEnd'}) end
+    end
+    if not r.after or now>=r.afterUntil then
+     clearProjectile(self,r,now,false);self.records[node]=nil
+    end
    elseif kind=='MiningShot' then
     if r.after and now>=r.afterUntil then clearProjectile(self,r,now,false) end
     local from=node:GetAttribute('From');local to=node:GetAttribute('Position')

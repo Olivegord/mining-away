@@ -126,8 +126,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
    if fx.contact then fx.contact.Transparency=1 end
    if fx.inner then fx.inner.Transparency=1 end
    for _,sphere in ipairs(fx.spheres) do sphere.part.Transparency=1 end
-   if not sample.alive then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
-   if not sample.alive or now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
+   if now-fx.lastAt>ENERGY_TAIL then self:destroyMining(beam) end
   end
   return
  end
@@ -404,7 +403,6 @@ function W:courier(drone,record,now)
  if fx.sparks then
   fx.sparks.Rate=pickup and 4+q*5 or unload and slots==0 and 6 or 0
   fx.sparks.Enabled=not paused and not reduced and (pickup or unload and slots==0)
-  if paused then fx.sparks:Clear() end
  end
  local parcelScale=math.clamp((math.max(1,parcelUnits)/8)^(1/3),1,1.6)
  fx.parcel.Size=Vector3.new(1.05,.66,.83)*parcelScale;fx.band.Size=Vector3.new(1.08,.09,.86)*parcelScale

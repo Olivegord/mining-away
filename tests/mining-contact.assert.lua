@@ -18,6 +18,9 @@ local tip=b.work.tip;local clears=b.work.impact.cleared
 sample.paused=true;w:mining(b,sample,nil,nil,0,0,10.1)
 assert(not b.work.impact.Enabled and b.work.impact.cleared==clears,'pause clipped existing particles instead of stopping emission')
 sample.alive=false;w:mining(b,sample,nil,nil,0,0,10.2)
+assert(b.work and not b.work.impact.Enabled and b.work.impact.cleared==clears and tip.Parent==marker,
+ 'a downed drone clipped particles that had already been emitted')
+w:mining(b,sample,nil,nil,0,0,11.9)
 assert(b.work==nil and tip.Parent==nil and w.miningCount==0)
 w:destroy();root:Destroy()
 print('PASS contact render actual tip sparks, save pause and final cleanup (API doubles; not native rendering)')

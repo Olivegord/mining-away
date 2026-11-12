@@ -158,14 +158,18 @@ assert(observer.records[node].projectile and #shotAudio==2,'projectile vanished 
 observer:step(110.54,drones,targets)
 assert(not observer.records[node].projectile and shotAudio[3][1]=='coil_hit' and shotAudio[3][2].level>1)
 assert(observer.records[node].after and not observer.records[node].trail.Enabled,'shot wake disappeared with the projectile head')
+local wake=observer.records[node].after
+node:Destroy()
 local old=receipt('late',110.01);old:SetAttribute('ContactAt',110.27)
 roleFolder.ChildAdded:Fire(old)
 local fresh=receipt('late',110.33,'Dart');fresh:SetAttribute('ContactAt',110.59)
 roleFolder.ChildAdded:Fire(fresh)
 observer:step(110.60,drones,targets)
+assert(observer.records[node].after==wake and wake.Parent,'receipt removal cut the shot trail before it could fade')
 assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
 observer:step(111.22,drones,targets)
-assert(#shotAudio==4 and not observer.records[node].after and observer.trails==0 and observer.heads==0 and #observer.bursts==0,'contact replayed or shot visuals leaked')
+assert(#shotAudio==4 and not observer.records[node] and not wake.Parent and observer.trails==0 and observer.heads==0 and #observer.bursts==0,
+ 'contact replayed or shot visuals leaked')
 local prismCore=Instance.new('Part');prismCore.Parent=fx
 local prism={core=prismCore,scale=1}
 RoleEffectView.ramielCharge(prism,.55,2.20,false)
@@ -259,5 +263,23 @@ reducedPrism:step(130.01,{},targets)
 assert(#beamCalls==3 and not lighting:FindFirstChild('RamielReleaseExposure'),'reduced flashing suppressed the beam or replayed the flash')
 reducedPrism:destroy();reducedCast:Destroy();player:SetAttribute('ReducedFlashing',nil)
 prismCore:Destroy()
+local sustained=source:Clone();sustained.Color=Color3.fromRGB(205,26,63);sustained.Parent=workspace
+for key,value in pairs({HP=270,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,CutIsShot=false,CutFractured=false}) do
+ sustained:SetAttribute(key,value)
+end
+local cutting={source=sustained,view=sustained:Clone(),baseColor=sustained.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,135,3)}
+cutting.view.Parent=fx
+local priorColor
+for frame=0,45 do
+ local now=135+frame/60
+ sustained:SetAttribute('CutContactAt',now);cutting.dirty=true
+ crystalFrame({cutting},now);rockDamage.feedback:cut(cutting,now,1);rockDamage.feedback:applyTints(now)
+ assert(not cutting.flashAt or cutting.flashAt==135,'steady cutting restarted the rock flash')
+ local color=cutting.view.Color
+ if priorColor then assert(math.abs(color.G-priorColor.G)<.07,'a steady cut produced a visible brightness jump') end
+ priorColor=color
+end
+sustained:Destroy();cutting.view:Destroy()
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

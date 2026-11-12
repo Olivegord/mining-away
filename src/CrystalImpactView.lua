@@ -141,7 +141,6 @@ function V.new(parent,audio,onSplit)
   end
  end
  function self:cut(r,now,beat)
-  r.cutUntil=now+.09
   r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
   r.cutPulseAt=now;self.tints[r]=true
   local hp=r.source:GetAttribute('HP') or 10
@@ -161,17 +160,19 @@ function V.new(parent,audio,onSplit)
     self:forget(r)
    else
     local age=r.flashAt and now-r.flashAt or math.huge
-    local initial=Feedback.impactWhite(age,r.flashDuration or .28)*(r.flashStrength or 1)
-    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.075)
+    local duration=r.flashDuration or .28
+    local attack=math.clamp(age/.026,0,1)
+    local initial=Feedback.impactWhite(age,duration)*(r.flashStrength or 0)*attack
+    local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.18)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .055 or .17))
+    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))
     local pressure=(r.pressure or 0)*afterglow
     local load=r.finalLoad or 0
-    if load>=1 then white=reduced and .07 or .22 end
-    local warm=math.max(pressure*(.21+.15*pulse),load*.76)
+    white=math.max(white,load*(reduced and .045 or .14))
+    local warm=math.max(pressure*(.16+.05*pulse),load*.46)
     view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
-    if initial<=0 then r.flashAt=nil end
-    if initial<=0 and afterglow<=0 and not r.finalLoad then self:forget(r) end
+    if age>=duration then r.flashAt=nil end
+    if not r.flashAt and afterglow<=0 and not r.finalLoad then self:forget(r) end
    end
   end
   for r,blackAt in pairs(self.prismTargets) do
@@ -190,21 +191,27 @@ function V.new(parent,audio,onSplit)
    r.nextContactAt=impact
   elseif impact>r.lastContactAt then
    r.nextContactAt=nil
+   local previousContact=r.lastContactAt
    r.lastContactAt=impact
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.flashGate or 0))) then
+   if not prism and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
     local projectile=s:GetAttribute('CutProjectile')
     local heavy=projectile=='Ball'
-    r.flashAt=now;r.flashDuration=heavy and .095 or shot and .07 or fractured and .13 or .30;r.flashGate=now+.12
-    r.flashStrength=fractured and not shot and .57 or 1
-    r.impactAt=now;self.tints[r]=true
+    r.chipGate=now+.12
+    if shot or fractured or impact-previousContact>.30 then
+     r.flashAt=now;r.flashDuration=heavy and .18 or shot and .13 or .23
+     r.flashStrength=heavy and .22 or shot and .16 or fractured and .13 or .10
+     self.tints[r]=true
+    end
     local point=s:GetAttribute('CutContactPoint') or v.Position
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     local tilt=Vector3.new(-normal.Z,0,normal.X)
     if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
-    r.kick=tilt*(heavy and .13 or projectile=='Dart' and .073 or fractured and .065 or .038)
+    if shot or fractured then
+     r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
+    end
     self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 4 or 3,false,nil,s:GetAttribute('GroundY'))
     if shot and not s:GetAttribute('CutProjectileFX') then
      local health=(s:GetAttribute('HP') or 1)/math.max(1,s:GetAttribute('MaxHP') or 1)
@@ -243,15 +250,13 @@ function V.new(parent,audio,onSplit)
    end
    return
   end
-  if r.restPose and (r.kick or r.vibrating or (r.cutUntil or 0)>now) then
+  if r.restPose and r.kick then
    local t=r.impactAt and now-r.impactAt or math.huge
    local amount=t<.14 and math.sin(math.pi*t/.14)*(1-t/.14) or 0
    if t>=.14 then r.kick=nil end
-   r.vibrating=not broken and not BeamVFX.reduced() and (r.cutUntil or 0)>now
-   local vibration=r.vibrating and math.sin(now*51)*(.004+.009*(r.pressure or 0)) or 0
    local kick=not BeamVFX.reduced() and not V.reducedMotion() and r.kick or Vector3.zero
    local foot=r.restPose.Position-Vector3.yAxis*(v.Size.Y*.5)
-   v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount+vibration,0,kick.Z*amount-vibration)*CFrame.new(-foot)*r.restPose
+   v.CFrame=CFrame.new(foot)*CFrame.Angles(kick.X*amount,0,kick.Z*amount)*CFrame.new(-foot)*r.restPose
   end
  end
  function self:destroy()

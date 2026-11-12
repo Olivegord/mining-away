@@ -7,6 +7,7 @@ local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
+local DISPLAY_TAIL=.28
 -- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
 local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
@@ -26,6 +27,13 @@ local function removeTrail(self,r)
  if not r.ribbon then return end
  r.ribbon.trail:Destroy();r.ribbon.a:Destroy();r.ribbon.b:Destroy()
  r.ribbon=nil;self.trailCount-=1
+end
+local function finishTrail(self,r,now)
+ local ribbon=r.ribbon
+ if not ribbon then return end
+ if not ribbon.untilAt then
+  ribbon.trail.Enabled=false;ribbon.untilAt=now+ribbon.trail.Lifetime
+ elseif now>=ribbon.untilAt then removeTrail(self,r) end
 end
 local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
@@ -67,15 +75,34 @@ local function updateDisplays(self,now,reducedMotion,reducedEffects)
  local candidates=self.displayCandidates
  table.sort(candidates,displayOrder)
  local count=math.min(#candidates,DISPLAY_LIMIT)
+ local free=self.freeDisplays;table.clear(free)
+ for i=1,count do candidates[i].displayWanted=true end
+ for _,rig in ipairs(self.displays) do
+  local r=rig.record
+  if r and r.displayWanted then
+   rig.releaseAt=nil
+  elseif r then
+   rig.releaseAt=rig.releaseAt or now
+   local tail=math.clamp(1-(now-rig.releaseAt)/DISPLAY_TAIL,0,1)*r.displayStrength
+   if tail>.02 and (not r.expiresAt or now<r.expiresAt) then
+    PickupDisplay.draw(rig,r,r.displayGround,now,tail,reducedMotion,reducedEffects)
+   else
+    PickupDisplay.hide(rig);r.displayRig=nil;rig.record=nil;rig.outline.Adornee=nil
+   end
+  end
+  if not rig.record then table.insert(free,rig) end
+ end
  for i=1,count do
   local r=candidates[i]
-  local rig=self.displays[i]
-  if not rig then rig=PickupDisplay.new(self.parent);self.displays[i]=rig end
-  PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
- end
- for i=count+1,#self.displays do
-  local rig=self.displays[i]
-  if rig.record then PickupDisplay.hide(rig);rig.record=nil;rig.outline.Adornee=nil end
+  r.displayWanted=nil
+  local rig=r.displayRig or table.remove(free)
+  if not rig and #self.displays<DISPLAY_LIMIT then
+   rig=PickupDisplay.new(self.parent,#self.displays+1);table.insert(self.displays,rig)
+  end
+  if rig then
+   r.displayRig=rig;rig.releaseAt=nil
+   PickupDisplay.draw(rig,r,r.displayGround,now,r.displayStrength,reducedMotion,reducedEffects)
+  end
  end
 end
 local function backpack(owner,fallback)
@@ -117,7 +144,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},displays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+  player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -257,8 +284,11 @@ function V:update(dt,now)
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then
-   removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
-   self.byId[r.seed]=nil;self.records[source]=nil
+   finishTrail(self,r,now);removeIdle(self,r)
+   if r.ribbon then r.view.Transparency=1
+   else
+    r.view:Destroy();self.byId[r.seed]=nil;self.records[source]=nil
+   end
   else
    local latest=r.samples[#r.samples]
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
@@ -347,20 +377,24 @@ function V:update(dt,now)
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    if onDisplay and cameraPosition and (not r.expiresAt or now<r.expiresAt) then
-    local offset=r.drawPosition-cameraPosition
-    local distance=offset:Dot(offset)
-    if distance<DISPLAY_RANGE^2 then
-     r.displayGround=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
-     r.displayDistance=distance
-     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-math.sqrt(distance))/10,0,1)*opacity
+    local ground=Vector3.new(r.pos.X,latest.floor-.21,r.pos.Z)
+    local distance=(ground-cameraPosition).Magnitude
+    if distance<DISPLAY_RANGE then
+     r.displayGround=ground
+     -- Use the landing point to rank displays. A hovering pose must never
+     -- move its glow and outline to another gem across adjacent render frames.
+     r.displayDistance=distance-(r.displayRig and 2.5 or 0)
+     r.displayStrength=r.hoverAlpha*math.clamp((DISPLAY_RANGE-distance)/10,0,1)*opacity
      table.insert(self.displayCandidates,r)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.arc and live and age>=r.landAge and not seated and not reducedEffects and cameraPosition
-    and (not pulling or age<r.landAge+OreDrops.GEM_CONTACT_HOLD) then
+   local landingAge=r.arc and age-r.landAge
+   local landingGlint=landingAge and landingAge<.24 and (live or r.collectAt)
+   if landingAge and landingAge>=0 and not reducedEffects and cameraPosition
+    and (landingGlint or live and not seated and not pulling) then
     local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
-    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
+    updateGlint(self,r,landingAge,glintStrength*distanceFade*opacity)
    else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
@@ -368,12 +402,7 @@ function V:update(dt,now)
     local air=r.landAge and age<r.landAge or not r.landAge and age<(r.arcTimeout or 1.2)
     local inFlight=air and live and not pulling and displayAt>=r.born
     if r.ribbon then
-     if not inFlight and r.arc then
-      removeTrail(self,r)
-     elseif not inFlight or reducedEffects then
-      if r.ribbon.trail.Enabled then r.ribbon.trail.Enabled=false;r.ribbon.untilAt=now+TRAIL_LIFETIME end
-     end
-     if r.ribbon and r.ribbon.untilAt and now>=r.ribbon.untilAt then removeTrail(self,r) end
+     if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
@@ -382,7 +411,7 @@ function V:update(dt,now)
      if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
     end
    elseif r.ribbon then
-    removeTrail(self,r)
+    finishTrail(self,r,now)
    end
   end
  end

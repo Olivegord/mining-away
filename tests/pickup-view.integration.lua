@@ -121,6 +121,9 @@ check('physical launch trail fades on the displayed landing and never reappears 
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
  renderer:update(1/60,realTime+1.37)
+ assert(renderer.records[cargo]==record and record.view.Transparency==1 and ribbon.trail.Parent==record.view,
+  'a quick collection cut the remaining trail segments')
+ renderer:update(1/60,realTime+1.40)
  assert(renderer.records[cargo]==nil)
  assert(#audio.calls==sounds+1,'landing sound replayed during collection')
  assert(not record.ribbon and renderer.trailCount==0 and not ribbon.trail.Parent)
@@ -150,6 +153,8 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(#audio.calls==sounds and r.view.Position.Y>r.view.Size.Y*.5)
  renderer:update(1/60,contact+.001)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land')
+ local ribbon=assert(r.ribbon)
+ assert(not ribbon.trail.Enabled and ribbon.trail.Parent==r.view,'a clean gem arc deleted its trail on contact')
  local landed=r.view.CFrame
  assert(math.abs(landed.Position.Y-r.view.Size.Y*.5)<1e-8 and landed.Position.X==r.arc.landX)
  cargo:SetAttribute('Position',Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ))
@@ -161,6 +166,9 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(not r.idle,'landing twinkle did not fade')
  assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
   'gem should lift from its real contact point without a second landing cue')
+ assert(r.ribbon==ribbon and ribbon.trail.Parent==r.view)
+ renderer:update(1/60,contact+.31)
+ assert(not r.ribbon and not ribbon.trail.Parent,'landing trail outlived its fade')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
 check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()
@@ -207,7 +215,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  local rig=renderer.displays[1]
  assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and rig.outline.Enabled
   and rig.outline.DepthMode==Enum.HighlightDepthMode.Occluded and rig.outline.FillTransparency==1)
- assert(rig.surface.Enabled and rig.light.Enabled and math.abs(rig.base.Position.Y-.01)<1e-8)
+ assert(rig.surface.Enabled and math.abs(rig.base.Position.Y-.01)<1e-8 and not rig.base:FindFirstChildWhichIsA('PointLight',true))
  assert(rig.core.ImageTransparency<rig.halo.ImageTransparency and rig.core.Image==rig.halo.Image)
  for i,beam in ipairs(rig.curves) do
   assert(beam.Enabled and beam.Attachment0==rig.points[i] and beam.Attachment1==rig.points[i+1])
@@ -218,9 +226,12 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  renderer:update(1/60,realTime+4.24)
  local rising=false
  for i,mote in ipairs(rig.motes) do
-  if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then rising=true end
+  if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then rising=true;assert(mote.gui.Size[1]>=.24) end
  end
  assert(rising and rig.points[1].Position~=startPoint,'strand or rising motes were static')
+ workspace.CurrentCamera.CFrame=CFrame.new(1.45,2,0)
+ renderer:update(1/60,realTime+4.27)
+ assert(rig.outline.Adornee==renderer.records[sources[1]].view,'changing the distance order retargeted an existing outline')
  workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
  renderer:update(1/60,realTime+5)
  assert(renderer.valueGui==gui and math.abs(gui.Adornee.CFrame.Position.X-15)<.7)
@@ -233,11 +244,13 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5-1.52)<1e-8,'reduced motion did not hold a steady hover')
  local pose=first.view.CFrame
  workspace.CurrentCamera.CFrame=CFrame.new(0,2,0)
+ renderer:update(1/60,realTime+13.30)
+ renderer:update(1/60,realTime+13.60)
  for _,phase in ipairs({{14.05,1},{14.25,0},{14.55,1},{14.75,0}}) do
   renderer:update(1/60,realTime+phase[1])
-  rig=renderer.displays[2]
+  rig=assert(first.displayRig)
   assert(rig.record==first and rig.outline.Enabled==(phase[2]==0) and rig.surface.Enabled==(phase[2]==0)
-   and rig.light.Enabled==(phase[2]==0) and rig.curves[1].Enabled==(phase[2]==0),'the display did not blink with the ore')
+   and rig.curves[1].Enabled==(phase[2]==0),'the display did not blink with the ore')
   assert((first.view.Position-pose.Position).Magnitude<1e-8 and first.view.Transparency==phase[2],'expiry blink moved the hover or used partial opacity')
   for _,mote in ipairs(rig.motes) do assert(not mote.gui.Enabled,'reduced motion left a rising mote active') end
  end
@@ -249,13 +262,18 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  renderer:update(1/60,realTime+15.1)
  assert(first.view.Transparency==0 and (first.view.Position-pose.Position).Magnitude<1e-8,'renewing a static pile failed to restore visibility')
  pl:SetAttribute('ReducedEffects',true);renderer:update(1/60,realTime+15.2)
- rig=renderer.displays[1]
+ rig=assert(first.displayRig)
  assert(renderer.idleCount==0 and rig.record==first and rig.outline.Enabled and rig.surface.Enabled
-  and not rig.light.Enabled and not rig.curves[1].Enabled,'reduced effects did not simplify the ore display')
+  and not rig.curves[1].Enabled,'reduced effects did not simplify the ore display')
+ pl:SetAttribute('ReducedEffects',false)
  sources[2]:SetAttribute('Homing',true);sources[2]:SetAttribute('SnapshotAt',realTime+15.21)
  renderer:update(1/60,realTime+15.23)
- assert(not rig.record and not rig.outline.Enabled and not rig.surface.Enabled,'the display stayed behind during homing')
- pl:SetAttribute('ReducedEffects',false)
+ local alpha=rig.core.ImageTransparency
+ renderer:update(1/60,realTime+15.37)
+ assert(rig.record==first and rig.surface.Enabled and rig.curves[1].Enabled and rig.core.ImageTransparency>alpha,
+  'the ground glow and strand did not finish after homing began')
+ renderer:update(1/60,realTime+15.53)
+ assert(not rig.record and not rig.outline.Enabled and not rig.surface.Enabled,'the display lingered after its fade')
  renderer:destroy();assert(not rig.base.Parent);visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

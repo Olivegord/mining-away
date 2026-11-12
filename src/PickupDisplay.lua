@@ -5,6 +5,15 @@ local SOFT_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
 local SWEEP,SEGMENTS=math.pi*2.16,4
 local widths={.008,.044,.050,.030,.004}
 local transparencies={1,.34,.05,.29,1}
+local strandAlpha={}
+for i=1,SEGMENTS do
+ strandAlpha[i]={}
+ for level=0,24 do
+  local opacity=level/24
+  strandAlpha[i][level]=NumberSequence.new({NumberSequenceKeypoint.new(0,1-(1-transparencies[i])*opacity),
+   NumberSequenceKeypoint.new(1,1-(1-transparencies[i+1])*opacity)})
+ end
+end
 
 local function glowImage(parent,name,size)
  local image=Instance.new('ImageLabel');image.Name=name;image.Image=SOFT_GLOW
@@ -13,7 +22,7 @@ local function glowImage(parent,name,size)
  return image
 end
 
-function Display.new(parent)
+function Display.new(parent,slot)
  local base=Instance.new('Part');base.Name='OreDisplay';base.Anchored=true
  base.Transparency=1;base.CastShadow=false;base.CanCollide=false;base.CanTouch=false;base.CanQuery=false
  local surface=Instance.new('SurfaceGui');surface.Name='GroundGlow';surface.Face=Enum.NormalId.Top
@@ -21,8 +30,6 @@ function Display.new(parent)
  surface.Enabled=false;surface.Parent=base
  local halo=glowImage(surface,'Halo',1)
  local core=glowImage(surface,'Hotspot',.47)
- local lightAnchor=Instance.new('Attachment');lightAnchor.Position=Vector3.new(0,.52,0);lightAnchor.Parent=base
- local light=Instance.new('PointLight');light.Name='OreLight';light.Enabled=false;light.Shadows=false;light.Parent=lightAnchor
  local outline=Instance.new('Highlight');outline.Name='OreOutline';outline.DepthMode=Enum.HighlightDepthMode.Occluded
  outline.FillTransparency=1;outline.Enabled=false;outline.Parent=base
  local points,curves,motes={},{},{}
@@ -32,16 +39,17 @@ function Display.new(parent)
  for i=1,SEGMENTS do
   local beam=Instance.new('Beam');beam.Name='OreStrand';beam.Attachment0=points[i];beam.Attachment1=points[i+1]
   beam.FaceCamera=true;beam.Segments=9;beam.LightEmission=.9;beam.LightInfluence=0
-  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,transparencies[i]),NumberSequenceKeypoint.new(1,transparencies[i+1])})
   beam.Enabled=false;beam.Parent=base;curves[i]=beam
  end
  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
  base.Parent=parent
- return {base=base,surface=surface,halo=halo,core=core,light=light,outline=outline,points=points,curves=curves,motes=motes}
+ -- Separate overlapping translucent ground sprites by a small, stable depth.
+ return {base=base,surface=surface,halo=halo,core=core,outline=outline,points=points,curves=curves,motes=motes,
+  groundOffset=Vector3.yAxis*((slot-1)*.004)}
 end
 
 function Display.hide(rig)
- rig.outline.Enabled=false;rig.surface.Enabled=false;rig.light.Enabled=false
+ rig.outline.Enabled=false;rig.surface.Enabled=false
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
 end
@@ -54,21 +62,21 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
   rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.light.Color=record.color:Lerp(WHITE,.23);rig.light.Range=4.5*rig.scale
   rig.moteColor=record.color:Lerp(WHITE,.71)
   local strand=ColorSequence.new(record.color:Lerp(WHITE,.72))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end
  end
- if strength<=.03 then Display.hide(rig);return end
+ if strength<=.02 then Display.hide(rig);return end
  local scale=rig.scale
+ ground+=rig.groundOffset
  if rig.base.Position~=ground then rig.base.Position=ground end
- rig.outline.OutlineTransparency=1-strength*.94;rig.outline.Enabled=true
+ rig.outline.OutlineTransparency=1-strength*.94
+ rig.outline.Enabled=record.view.Parent~=nil and record.view.Transparency<1
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
  rig.surface.Enabled=true
- rig.light.Enabled=not reducedEffects;rig.light.Brightness=strength*1.5
 
  local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
  if not reducedEffects then
@@ -84,7 +92,8 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    if i<=SEGMENTS then rig.curves[i].CurveSize0=handle end
    if i>1 then rig.curves[i-1].CurveSize1=handle end
   end
-  for _,beam in ipairs(rig.curves) do beam.Enabled=strength>.34 end
+  local alpha=math.floor(strength*24+.5)
+  for i,beam in ipairs(rig.curves) do beam.Transparency=strandAlpha[i][alpha];beam.Enabled=true end
  else
   for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  end
@@ -96,7 +105,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local reach=(.40+(i%3)*.31)*(1-.30*t)
    local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
    local envelope=math.min(t/.16,1,(1-t)/.28)
-   EnergyDisc.place(mote,position,(.12+(i%3)*.033)*scale,rig.moteColor,envelope*strength*.92)
+   EnergyDisc.place(mote,position,(.24+(i%3)*.062)*scale,rig.moteColor,envelope*strength*.82)
   end
  end
 end

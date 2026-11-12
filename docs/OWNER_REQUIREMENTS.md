@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — steady rocks, larger circles and complete effects
+
+Fix the rapid rock flicker. Make the ore's rising particles larger and keep them round. Let the drop's trail finish when it lands. Check nearby mining and pickup effects for abrupt cutoffs and let their visible tails finish.
+
 ## November 11 follow-up — Risk of Rain ore and a current Studio build
 
 Use the pickup in the supplied Risk of Rain screenshot as the reference for dropped ore. Give it a swirling strand, rising particles, a glow on the ground, and a visible outline. Include the longer rock regrowth in the same Studio update. From now on, verify that shared Studio is ready to run the newest gameplay changes before handing them back for testing.
