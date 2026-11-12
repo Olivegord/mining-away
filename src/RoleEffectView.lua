@@ -4,6 +4,7 @@ local View={}
 local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
 local PRISM_RED=Color3.fromRGB(249,22,60)
+local SIGHT_RED=Color3.fromRGB(255,56,72)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
@@ -13,6 +14,67 @@ local function shotPart(parent,name,size,color,ball,transparency)
  if ball then part.Shape=Enum.PartType.Ball end
  part.Transparency=transparency or 0;part.Parent=parent
  return part
+end
+
+local function sightPattern(seed)
+ local function nextValue()
+  seed=(seed*48271)%2147483647
+  return seed/2147483647
+ end
+ local keys={NumberSequenceKeypoint.new(0,.68)}
+ for i=0,3 do
+  local from=i*.25+.018+nextValue()*.055
+  local to=from+.082+nextValue()*.059
+  local opacity=.11+nextValue()*.35
+  table.insert(keys,NumberSequenceKeypoint.new(from,1))
+  table.insert(keys,NumberSequenceKeypoint.new(from+.019,opacity))
+  table.insert(keys,NumberSequenceKeypoint.new(to,opacity))
+  table.insert(keys,NumberSequenceKeypoint.new(to+.018,1))
+ end
+ table.insert(keys,NumberSequenceKeypoint.new(1,.37))
+ return NumberSequence.new(keys)
+end
+
+local function newSight(drone)
+ local id=tostring(drone.source:GetAttribute('DroneId') or '')
+ local seed=1
+ for i=1,#id do seed=(seed*31+string.byte(id,i))%2147483646+1 end
+ local dot=shotPart(drone.beam.holder,'ProjectileAimDot',Vector3.one*.135,SIGHT_RED,true,1)
+ local tip=Instance.new('Attachment');tip.Parent=dot
+ local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'
+ line.Attachment0=drone.shotMuzzle;line.Attachment1=tip;line.FaceCamera=true;line.Segments=64
+ line.Width0=.052;line.Width1=.078
+ line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
+ line.Transparency=sightPattern(seed);line.LightEmission=.88;line.LightInfluence=0
+ line.Enabled=false;line.Parent=dot
+ return {dot=dot,line=line}
+end
+
+local function aimPoint(origin,part,anchor)
+ if typeof(anchor)=='Vector3' then return part.CFrame:PointToWorldSpace(anchor*part.Size) end
+ -- Before the first shot receipt, use the visible hull's near face.
+ local localOrigin=part.CFrame:PointToObjectSpace(origin)
+ local extent=localOrigin/part.Size
+ local edge=math.max(math.abs(extent.X),math.abs(extent.Y),math.abs(extent.Z))
+ return part.CFrame:PointToWorldSpace(localOrigin*(.44/math.max(.5,edge)))
+end
+
+function View.aim(drone,target)
+ local sight=drone.sight
+ local part=target and target.view
+ local origin=drone.shotMuzzle.WorldPosition
+ local visible=part and part.Parent and part.Transparency<1 and target.source:GetAttribute('Kind')~='Geode'
+  and (target.source:GetAttribute('HP') or 0)>0 and BeamVFX.near(origin,85) and (part.Position-origin).Magnitude<45
+ if not visible then
+  if sight then sight.line.Enabled=false;sight.dot.Transparency=1 end
+  return
+ end
+ local receipt=drone.shotReceipt
+ local anchor=receipt and receipt.Parent and receipt:GetAttribute('TargetId')==target.id and receipt:GetAttribute('TargetAnchor')
+ local point=aimPoint(origin,part,anchor)
+ if not sight then sight=newSight(drone);drone.sight=sight end
+ sight.dot.Position=point:Lerp(origin,.006);sight.dot.Transparency=.16
+ sight.line.Enabled=true
 end
 
 local function addRibbon(part,color,ball)

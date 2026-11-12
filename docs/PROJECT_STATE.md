@@ -11,18 +11,26 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3d20946bb8496143f681c02cafdb2d911b0e415ea55cdb142b2cff8690980725` | Includes the recording follow-up for mining effects, the camera, Ramiel, Orbital and drone sizes. |
+| Native-file SHA-256 | `a42971ba297c88908a9dfb37cbec2fec5ad5965873c5777148ee96cc28ff1b8b` | Includes the held beam, hovering ore, projectile sights and crystal tinks. |
 | Installed Edit revision | `git log -1 -- build/DRONE_GAME.rbxl` | All seven Sources verified in the shared Edit session. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the recording follow-up** | All seven Sources and three roots verified in Edit. Team Create save returned version 189. Studio was already open and is in Edit. |
+| Shared Studio entry point | **DRONEREVOLUTION shared Edit includes the held beam, hovering ore, sights and tinks** | All seven Sources and three roots verified in Edit. Team Create save returned version 190. Studio was already open and is in Edit. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — hold the cut, float the ore and show the projectile aim
+
+The server retires the rock's reservation as soon as it breaks and keeps a short visual receipt for every cutter already on it. The client holds that beam on the compressed rock through the split. Loose cargo follows its original arc, brakes into a stable hover 0.68 studs above its previous resting pose, and emits four-point glints. The hover affects rendering only. The ore's collection, ownership and Compactor inputs retain their original authority. Large split pieces rotate more slowly, fall faster, and settle after a short skid. The split gets a bright crystal tick and selected pieces get spatial tinks at first touchdown. Needler and Ballcaster draw a thin red sight from the muzzle to their assigned crystal with uneven segments, gaps and a small aim dot.
+
+A single Studio Play recording with game audio showed the projectile sights, crystal split, glint particles, Ramiel's windup and strike, and Orbital's lingering fallout. The client error log was empty. The production server and beam fixtures checked ordinary final-cut receipts, beam visibility through the held pose and release when the mesh hides. The pickup and workshop suites passed. The gadget and audio suites still stop at the existing client-inertia and foreign-pickup fixtures after the focused contact and audio checks pass. Multiplayer appearance and the final sound balance remain unverified.
+
+All seven Sources matched the three connected Script Sync roots at shared place **124078027733625**, universe **10774898335**. Team Create save **190** succeeded, and Studio was returned to Edit. No player release was published. Reproduce from `b021a13` by applying the Source changes, running `python3 tools/script_sync.py`, then running `python3 tools/build.py --previous-commit b021a13` against the baseline canonical file. The native refresh preserved every non-Source chunk and unrelated or backup Source.
 
 ## November 11 — revise the effects after the gameplay recording
 

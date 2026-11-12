@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — beam hold, hovering ore and aiming cues
+
+Keep the mining beam visible until the compressed crystal splits. Let the collectible ore finish its arc and hover steadily above the ground with four-point glints. Give Needler and Ballcaster a thin red sight with uneven segments and gaps while they aim. Make breakup debris fall with more weight and add small crystal tinks at the split and as selected fragments touch down.
+
 ## November 11 follow-up — review the recorded gameplay
 
 Keep the camera level and reduce the break shake. Make final rock particles visible during ordinary gameplay and strengthen the effects on charge, contact and reward. Give Orbital visible fallout after the beam ends. Bring the regular and specialist drone bodies to roughly the same size. Compare Ramiel's main attack against timestamped frames of the moving reference and reproduce the changes in speed and direction through the full windup.

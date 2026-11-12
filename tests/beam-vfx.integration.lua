@@ -420,7 +420,15 @@ check('crystal beam follows a turned and shrunk contact between ray checks',func
  local tip=b.endpoint.Position
  assert((tip-target.CFrame:PointToWorldSpace(anchor*target.Size)).Magnitude<1e-6)
  assert(math.abs(tip.X-before.X)>.2 and math.abs(tip.Z-before.Z)>.2)
- blocked=true;frame(300.1);assert(p.beamRays==2 and not b.reference[1].Enabled,'occluded contact stayed visible')
+ s.breakContactAt=300.02;s.breakContactUntil=300.32;target:SetAttribute('HP',0)
+ for _,at in ipairs({300.02,300.06,300.12,300.20,300.229}) do
+  frame(at)
+  assert(b.reference[1].Enabled and b.reference[2].Enabled,'confirmed cut went dark during the held fracture')
+ end
+ target.Transparency=1;frame(300.23)
+ assert(not b.reference[1].Enabled and not b.reference[2].Enabled,'the beam outlived the visible fracture')
+ target.Transparency=0;target:SetAttribute('HP',50);s.breakContactAt=nil;s.breakContactUntil=nil
+ blocked=true;frame(300.34);assert(p.beamRays==2 and not b.reference[1].Enabled,'occluded contact stayed visible')
  workspace.Raycast=previousRaycast
  p:destroyMiningBeam(b);p:destroy();target:Destroy();view:Destroy()
 end)

@@ -1255,7 +1255,11 @@ local function renderDrone(d,dt,now)
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
- local part,source,resource=resolveRenderedTarget(kind,id)
+ local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
+ if d.shotMuzzle then
+  RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
+   and (state=='Warmup' or state=='SpecialMine') and resource or nil)
+ end
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
@@ -1270,15 +1274,16 @@ local function renderDrone(d,dt,now)
  local breakAt,breakUntil
  -- A final hit retires the gameplay reservation immediately. Its short saved
  -- contact may finish the local fracture sequence while the drone moves on.
- -- A new active job wins, and no contact outlives either visible crystal.
+ -- Hold the previous visible contact through the split before showing a new
+ -- assignment. A save pause, recall, death or hidden mesh clears the contact.
  local finalAt=s:GetAttribute('MineBreakAt') or 0
  local finalUntil=s:GetAttribute('MineBreakUntil') or 0
- if alive and not active and not motionPaused and (s:GetAttribute('MineBreakSerial') or 0)>0
+ if alive and not motionPaused and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('MineBreakSerial') or 0)>0
   and now>=finalAt and now<math.min(finalUntil,finalAt+.3) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
   if finalPart then
-   part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true
+   part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true;charging=false
    procId=s:GetAttribute('MineBreakSecondaryId')
    extra,extraSource=resolveRenderedTarget('resource',procId,true)
    beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil

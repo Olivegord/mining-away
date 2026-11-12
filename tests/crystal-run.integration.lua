@@ -429,7 +429,13 @@ assert(not miner.model:GetAttribute('DoubleBeam') and otherMiner.stats.twinThrus
 fitLegacyPart('Q_ORE_DUPLICATOR');snapshotDrone(miner);isolate()
 local oreBefore=pendingOre(buyer)
 local rich=rock(0,100)
-hit(rich,40);assert(hitResource(miner,rich,200))
+hit(rich,40)
+miner.state='Mine';miner.mining=true;miner.beamSince=now-.8
+assert(hitResource(miner,rich,200))
+snapshotDrone(miner)
+assert(miner.target==nil and next(rich.slots)==nil and miner.model:GetAttribute('MineBreakPrimaryId')==rich.id
+ and miner.model:GetAttribute('MineBreakUntil')>rich.part:GetAttribute('CrystalSplitAt')+.10,
+ 'a plain cutter stopped drawing before the impact pause ended')
 assert(miner.model:GetAttribute('OreDuplicator')==true and otherMiner.stats.oreDuplicator==0)
 assert(pendingOre(buyer)-oreBefore==1,'one crystal created more than one reward object')
 local reward=assert(pickups[pickupSerial])

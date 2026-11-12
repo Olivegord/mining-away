@@ -58,14 +58,18 @@ assert(r.view.Transparency==0 and held.Y<height*.8 and (r.view.Size-held).Magnit
  'the compressed rock moved during the hold')
 assert(#audio==8 and #cameraKicks==0 and splitParticles==0,'release cues ran during the hold')
 crystalFrame(resources,103.23)
-assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==10 and #cues==1,
- 'split failed to play its two layers once')
-assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and #cameraKicks==1 and cameraKicks[1]==103.23 and splitParticles==1)
+assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==11 and #cues==1,
+ 'split failed to play its impact and crystal tink once')
+assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and audio[11]=='crystal_release_tink'
+ and #cameraKicks==1 and cameraKicks[1]==103.23 and splitParticles==1)
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}
 late.view.Parent=fx
 crystalFrame({late},103.08)
-assert(late.view.Transparency==1 and #audio==10 and #cues==1 and #cameraKicks==1 and splitParticles==1,'a late observer replayed a prior hit')
+assert(late.view.Transparency==1 and #audio==11 and #cues==1 and #cameraKicks==1 and splitParticles==1,'a late observer replayed a prior hit')
+for frame=1,60 do crystalFrame(resources,103.23+frame/60) end
+assert(#audio==14 and audio[12]=='crystal_fall_tink' and audio[14]=='crystal_fall_tink'
+ and #rockDamage.feedback.pieces==0,'falling shards did not play one tink per selected contact and clean up')
 
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()
@@ -77,6 +81,21 @@ local function receipt(actor,start,shape,windup)
  return node
 end
 local node=receipt('gunner',110,'Ball',.28)
+local muzzle=Instance.new('Attachment');muzzle.WorldPosition=Vector3.new(0,2,0)
+local aiming={source=Instance.new('Model'),shotMuzzle=muzzle,beam={holder=fx}}
+local aimView=Instance.new('Part');aimView.Parent=fx;aimView.Position=Vector3.new(0,2,8)
+local aimSource=Instance.new('Part');aimSource:SetAttribute('HP',80)
+local aimTarget={id='live',view=aimView,source=aimSource}
+RoleEffectView.aim(aiming,aimTarget)
+local sight=assert(aiming.sight)
+assert(sight.line.Enabled and #sight.line.Transparency==18 and sight.dot.Position.Z<8)
+node:SetAttribute('TargetAnchor',Vector3.new(.30,0,-.48));aiming.shotReceipt=node
+aimView.Position=Vector3.new(1,2,7)
+RoleEffectView.aim(aiming,aimTarget)
+assert(sight.dot.Position.X>1.2 and sight.line.Attachment0==muzzle,'sight missed the moving receipt anchor')
+RoleEffectView.aim(aiming,nil)
+assert(not sight.line.Enabled and sight.dot.Transparency==1)
+aimSource:Destroy();aimView:Destroy();muzzle:Destroy();aiming.source:Destroy()
 local shotAudio={}
 local observer=RoleEffectView.new({play=function(_,name,_,options) table.insert(shotAudio,{name,options}) end})
 local gunner={}

@@ -23,6 +23,8 @@ local CUES = {
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
+ crystal_release_tink={id='9125869138',volume=.19,duration=.21,pitch=1.62,cooldown=.09,range=53,maxVoices=2,fallback='volume_slider.ogg'},
+ crystal_fall_tink={id='9125869138',volume=.19,duration=.24,pitch=1.46,cooldown=.065,range=49,maxVoices=3,fallback='volume_slider.ogg'},
  gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},

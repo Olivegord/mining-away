@@ -121,7 +121,7 @@ check('a finishing gem stays hidden until its synchronized release',function()
  assert(#audio.calls==sounds+1,'gem chimed more than once')
  renderer:destroy();cargo:Destroy()
 end)
-check('settled gems remain still as the camera moves and share one price label',function()
+check('settled gems hover steadily, emit glints and share one price label',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,2,0)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local visuals=Instance.new('Folder');visuals.Parent=workspace
@@ -142,17 +142,19 @@ check('settled gems remain still as the camera moves and share one price label',
   local record=renderer.records[source];poses[i]=record.view.CFrame;sizes[i]=record.view.Size
  end
  for i=1,240 do renderer:update(1/60,realTime+.2+i/60) end
- local lit=0
+ local lit,emitted=0,0
  for i,source in ipairs(sources) do
   local record=renderer.records[source]
   if record.idle then
    lit+=1
    assert(record.idle.halo.Parent==record.view and record.idle.halo.StudsOffsetWorldSpace.Y==.44)
+   emitted+=record.idle.particles.Emitted or 0
   end
+  assert(record.view.Position.Y>1.25,'gem settled against the ground instead of hovering')
   assert(record.view.Position==poses[i].Position and record.view.CFrame.yaw==poses[i].yaw and record.view.Size==sizes[i],
    'idle ore moved, rotated or changed size')
  end
- assert(lit>0 and lit<=12 and renderer.idleCount==lit)
+ assert(lit>0 and lit<=12 and renderer.idleCount==lit and emitted>0)
  local gui=renderer.valueGui
  assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
  assert(#visuals:GetChildren()==81,'cargo allocated more than one price label')

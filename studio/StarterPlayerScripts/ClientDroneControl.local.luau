@@ -1260,6 +1260,8 @@ local CUES = {
  crystal_chip={id='9125869138',volume=.077,duration=.18,pitch=1.40,cooldown=.08,range=48,maxVoices=2},
  crystal_split={id='7158347304',volume=.54,duration=.71,pitch=1.04,attack=.007,cooldown=.105,range=72,maxVoices=3,fallback='action_jump_land.mp3'},
  crystal_impact={id='9125869495',volume=.38,duration=.43,pitch=.63,attack=.007,cooldown=.15,range=62,maxVoices=2,fallback='action_jump_land.mp3'},
+ crystal_release_tink={id='9125869138',volume=.19,duration=.21,pitch=1.62,cooldown=.09,range=53,maxVoices=2,fallback='volume_slider.ogg'},
+ crystal_fall_tink={id='9125869138',volume=.19,duration=.24,pitch=1.46,cooldown=.065,range=49,maxVoices=3,fallback='volume_slider.ogg'},
  gem_twinkle={id='9125644410',volume=.33,duration=.67,pitch=1.39,attack=.018,cooldown=.17,range=49,maxVoices=2,fallback='volume_slider.ogg'},
  rock_clack={ids={'9125869504','9125869495','9125869138'},volume=.23,duration=.48,pitch=1.05,cooldown=.065,range=65,maxVoices=4,fallback='action_jump_land.mp3'},
  pack_land={id='9125869495',volume=.21,duration=.55,pitch=.8,cooldown=.14,range=34,fallback='action_jump_land.mp3'},
@@ -5600,6 +5602,7 @@ local View={}
 local Players=game:GetService('Players')
 local WHITE=Color3.fromRGB(255,248,231)
 local PRISM_RED=Color3.fromRGB(249,22,60)
+local SIGHT_RED=Color3.fromRGB(255,56,72)
 local TRAIL_LIMIT,SHOT_LIMIT,BURST_LIMIT=12,18,12
 
 local function shotPart(parent,name,size,color,ball,transparency)
@@ -5609,6 +5612,67 @@ local function shotPart(parent,name,size,color,ball,transparency)
  if ball then part.Shape=Enum.PartType.Ball end
  part.Transparency=transparency or 0;part.Parent=parent
  return part
+end
+
+local function sightPattern(seed)
+ local function nextValue()
+  seed=(seed*48271)%2147483647
+  return seed/2147483647
+ end
+ local keys={NumberSequenceKeypoint.new(0,.68)}
+ for i=0,3 do
+  local from=i*.25+.018+nextValue()*.055
+  local to=from+.082+nextValue()*.059
+  local opacity=.11+nextValue()*.35
+  table.insert(keys,NumberSequenceKeypoint.new(from,1))
+  table.insert(keys,NumberSequenceKeypoint.new(from+.019,opacity))
+  table.insert(keys,NumberSequenceKeypoint.new(to,opacity))
+  table.insert(keys,NumberSequenceKeypoint.new(to+.018,1))
+ end
+ table.insert(keys,NumberSequenceKeypoint.new(1,.37))
+ return NumberSequence.new(keys)
+end
+
+local function newSight(drone)
+ local id=tostring(drone.source:GetAttribute('DroneId') or '')
+ local seed=1
+ for i=1,#id do seed=(seed*31+string.byte(id,i))%2147483646+1 end
+ local dot=shotPart(drone.beam.holder,'ProjectileAimDot',Vector3.one*.135,SIGHT_RED,true,1)
+ local tip=Instance.new('Attachment');tip.Parent=dot
+ local line=Instance.new('Beam');line.Name='SegmentedProjectileSight'
+ line.Attachment0=drone.shotMuzzle;line.Attachment1=tip;line.FaceCamera=true;line.Segments=64
+ line.Width0=.052;line.Width1=.078
+ line.Color=ColorSequence.new(SIGHT_RED,Color3.fromRGB(255,94,102))
+ line.Transparency=sightPattern(seed);line.LightEmission=.88;line.LightInfluence=0
+ line.Enabled=false;line.Parent=dot
+ return {dot=dot,line=line}
+end
+
+local function aimPoint(origin,part,anchor)
+ if typeof(anchor)=='Vector3' then return part.CFrame:PointToWorldSpace(anchor*part.Size) end
+ -- Before the first shot receipt, use the visible hull's near face.
+ local localOrigin=part.CFrame:PointToObjectSpace(origin)
+ local extent=localOrigin/part.Size
+ local edge=math.max(math.abs(extent.X),math.abs(extent.Y),math.abs(extent.Z))
+ return part.CFrame:PointToWorldSpace(localOrigin*(.44/math.max(.5,edge)))
+end
+
+function View.aim(drone,target)
+ local sight=drone.sight
+ local part=target and target.view
+ local origin=drone.shotMuzzle.WorldPosition
+ local visible=part and part.Parent and part.Transparency<1 and target.source:GetAttribute('Kind')~='Geode'
+  and (target.source:GetAttribute('HP') or 0)>0 and BeamVFX.near(origin,85) and (part.Position-origin).Magnitude<45
+ if not visible then
+  if sight then sight.line.Enabled=false;sight.dot.Transparency=1 end
+  return
+ end
+ local receipt=drone.shotReceipt
+ local anchor=receipt and receipt.Parent and receipt:GetAttribute('TargetId')==target.id and receipt:GetAttribute('TargetAnchor')
+ local point=aimPoint(origin,part,anchor)
+ if not sight then sight=newSight(drone);drone.sight=sight end
+ sight.dot.Position=point:Lerp(origin,.006);sight.dot.Transparency=.16
+ sight.line.Enabled=true
 end
 
 local function addRibbon(part,color,ball)
@@ -5948,8 +6012,8 @@ local function part(parent,class,name,color)
 end
 function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},parent=parent,audio=audio}
- local function track(p,at,from,velocity,duration,ground,spin)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin}
+ local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
  end
  function self:chips(at,point,normal,tint,count,large,scale,ground)
   if not BeamVFX.near(point,large and 92 or 60) then return end
@@ -5980,13 +6044,29 @@ function V.new(parent,audio,onSplit)
     e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)
     e.p.Transparency=.15+.85*q^.64
    else
-    local pos=e.from+e.v*t-Vector3.yAxis*(23*t*t)
-    local rx,ry,rz=t*9+e.spin.X,t*7+e.spin.Y,t*4+e.spin.Z
+    local gravity=e.weight and 96 or 46
+    local pos=e.from+e.v*t-Vector3.yAxis*(gravity*.5*t*t)
+    local turn=(e.landedAt or t)*(e.weight or 1)
+    local rx,ry,rz=turn*9+e.spin.X,turn*7+e.spin.Y,turn*4+e.spin.Z
     local size=e.p.Size
     local rotation=CFrame.Angles(rx,ry,rz)
     local support=PickupMotion.supportHeight(size.X,size.Y,size.Z,rx,ry,rz)
-    e.p.CFrame=CFrame.new(pos.X,math.max(e.ground+support-.06,pos.Y),pos.Z)*rotation
-    e.p.Transparency=math.clamp((t/e.duration-.62)/.38,0,1)
+    local floor=e.ground+support-.035
+    if e.weight and not e.landedAt and gravity*t>e.v.Y and pos.Y<=floor then
+     local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
+     e.landedAt=t
+     local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
+     e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
+     if e.tink and audio and t-touchAge<.13 then
+      audio:play('crystal_fall_tink',e.contact,{pitch=e.weight<.6 and .84 or 1.15,level=e.tink*math.clamp(speed/20,.55,1.15)})
+     end
+    end
+    if e.landedAt then
+     local skid=1-math.clamp((t-e.landedAt)/.13,0,1)
+     pos=e.contact+Vector3.new(e.v.X,0,e.v.Z)*(.032*(1-skid^3))
+    end
+    e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
+    e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
    end
   end
  end
@@ -6004,6 +6084,7 @@ function V.new(parent,audio,onSplit)
    local volume=owned and 1 or .62
    audio:play('crystal_split',point,{level=volume})
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+   audio:play('crystal_release_tink',point,{level=volume})
   end
   if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
@@ -6012,7 +6093,8 @@ function V.new(parent,audio,onSplit)
    wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.57,ground,Vector3.new(side*.7,side*.5,side*.2))
+   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
+    Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil)
   end
   if not reduced then
    if RoleVisuals then
@@ -6031,7 +6113,8 @@ function V.new(parent,audio,onSplit)
     local origin=point+direction*.22
     chip.Position=origin
     track(chip,now,origin,direction*(7+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     .53+.057*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49))
+     .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
    if #self.pieces<48 then
     local spark=part(parent,'Part','CrystalSplitSpark',r.baseColor:Lerp(WARM,.77))
@@ -10236,6 +10319,7 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
+local HOVER_HEIGHT=.68
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -10258,25 +10342,26 @@ local function idleGlow(view,tint)
  local halo=Instance.new('BillboardGui');halo.Name='FacetGleam';halo.Adornee=view
  halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=56
  halo.Size=UDim2.fromScale(.67,.67);halo.StudsOffsetWorldSpace=Vector3.new(0,.44,0)
- local function ray(width,height,rotation,color)
-  local frame=Instance.new('Frame');frame.BorderSizePixel=0
-  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5,.5)
-  frame.Size=UDim2.fromScale(width,height);frame.Rotation=rotation;frame.BackgroundColor3=color
-  frame.BackgroundTransparency=1;frame.Parent=halo
-  return frame
- end
  local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
- local outer=ray(.13,.87,13,warm);local inner=ray(.63,.11,13,PICKUP_HIGHLIGHT)
  local stars={}
  for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
   local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
   star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
   star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
   star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
-  star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+  star.Rotation=45+i*9;star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
  end
  halo.Parent=view
- return {halo=halo,outer=outer,inner=inner,stars=stars}
+ local particles=Instance.new('ParticleEmitter');particles.Name='FloatingFacetSparks'
+ particles.Texture='rbxasset://textures/sparkle.png';particles.Enabled=false;particles.Rate=0
+ particles.LightEmission=1;particles.LightInfluence=0;particles.Color=ColorSequence.new(PICKUP_HIGHLIGHT,warm)
+ particles.EmissionDirection=Enum.NormalId.Top;particles.SpreadAngle=Vector2.new(48,48)
+ particles.Lifetime=NumberRange.new(.27,.49);particles.Speed=NumberRange.new(1.8,3.5)
+ particles.Rotation=NumberRange.new(36,55);particles.Drag=1.8
+ particles.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.24,.60),NumberSequenceKeypoint.new(1,0)})
+ particles.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.25,.04),NumberSequenceKeypoint.new(1,1)})
+ particles.Parent=view
+ return {halo=halo,stars=stars,particles=particles}
 end
 local function twinkle(age,start,duration)
  local t=math.clamp((age-start)/duration,0,1)
@@ -10284,7 +10369,7 @@ local function twinkle(age,start,duration)
 end
 local function removeIdle(self,r)
  if not r.idle then return end
- r.idle.halo:Destroy();r.idle=nil
+ r.idle.halo:Destroy();r.idle.particles:Destroy();r.idle=nil
  self.idleCount-=1
 end
 local function backpack(owner,fallback)
@@ -10335,6 +10420,7 @@ function V.new(root,parent,audio,reducedMotion)
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
+  if source:GetAttribute('CleanCargoArc') and source.Material~=Enum.Material.Metal then view.Reflectance=.19 end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
@@ -10495,10 +10581,12 @@ function V:update(dt,now)
    local distanceFade=math.clamp((58-idleDistance)/10,0,1)
    local atRest=resting and not seated and (r.physical or r.hasArc)
    local settledAge=age-(r.landAge or 0)
-   local gleam=settledAge<.38 and twinkle(settledAge,0,.38)
-    or twinkle((settledAge+.42+r.seed*.61)%3.8,0,.28)*.65
+   local glintClock=math.max(0,settledAge-.55)+r.seed*.61
+   local glintPeriod=glintClock%3.1
+   local gleam=settledAge<.54 and twinkle(settledAge,0,.54)
+    or twinkle(glintPeriod,0,.50)*.85
    local launched=live and r.finishing and displayAt>=r.born and age<.60
-   local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
+   local shine=live and (r.physical or r.hasArc) and not pulling and not seated and (atRest or r.arc and settledAge>=0)
     and gleam*distanceFade*opacity or 0
    if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
@@ -10506,16 +10594,20 @@ function V:update(dt,now)
    if r.idle then
     if reducedEffects or not live or pulling or seated or distanceFade==0 then removeIdle(self,r)
     else
-     r.idle.outer.BackgroundTransparency=1-.65*shine
-     r.idle.inner.BackgroundTransparency=1-.81*shine
      local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
      local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
-     local width=launched and 2.65 or 1.65
+     local width=launched and 3.05 or 2.12
      r.idle.halo.Size=UDim2.fromScale(width,width)
+     if not reducedFlashing and launched and age>=.10 and not r.launchStars then
+      r.launchStars=true;r.idle.particles:Emit(3)
+     elseif not reducedFlashing and shine>.43 and not launched then
+      local cycle=settledAge<.54 and -1 or math.floor(glintClock/3.1)
+      if r.glintCycle~=cycle then r.glintCycle=cycle;r.idle.particles:Emit(1) end
+     end
      for i,star in ipairs(r.idle.stars) do
-      local pulse=launched and twinkle(age,.035+(i-1)*.098,.24)
-       or twinkle(settledAge,.03+(i-1)*.087,.24)*.82
-      local size=(i==1 and .77 or .46)*(.48+pulse*.52)
+      local pulse=launched and twinkle(age,.035+(i-1)*.098,.28)
+       or twinkle(settledAge<.54 and settledAge or glintPeriod,.015+(i-1)*.082,.33)*.91
+      local size=(i==1 and .83 or .50)*(.43+pulse*.57)
       star.Size=UDim2.fromScale(size,size)
       star.ImageTransparency=1-pulse*sparkleStrength
      end
@@ -10553,10 +10645,18 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-     local raised=math.max(latest.floor+support-.22,position.Y)
+     local restY=latest.floor+support-.22
+     local raised=math.max(restY,position.Y)
+     local hover=HOVER_HEIGHT*(1-r.pull)
      if r.arc and arcMix>0 then
-      local t=math.clamp((age/r.arc.contact-.65)/.35,0,1)
-      raised=raised+(position.Y+(support-.22)*t*t*(3-2*t)-raised)*arcMix
+      local t=math.clamp((age/r.arc.contact-.69)/.31,0,1)
+      local ease=t*t*(3-2*t)
+      local flightY=position.Y+(support-.22)*ease
+      local hoverY=flightY+(restY+hover-flightY)*ease
+      raised=raised+(hoverY-raised)*arcMix
+     elseif r.landAge and (r.physical or r.hasArc) then
+      local t=math.clamp((age-r.landAge)/.17,0,1)
+      raised+=hover*t*t*(3-2*t)
      end
      position=Vector3.new(position.X,raised,position.Z)
     end
@@ -12590,7 +12690,11 @@ local function renderDrone(d,dt,now)
  local id=s:GetAttribute(kind=='turret' and 'CombatTargetId' or 'TargetId')
  if active and type(id)=='string' and id~='' then beam.lastKey=id;beam.lastKind=kind
  elseif not active and not charging and state~='SpecialMine' and beam.lastKey then id=beam.lastKey;kind=beam.lastKind end
- local part,source,resource=resolveRenderedTarget(kind,id)
+ local part,source,resource=resolveRenderedTarget(kind,id,active and kind=='resource')
+ if d.shotMuzzle then
+  RoleEffectView.aim(d,alive and not motionPaused and s:GetAttribute('WorkPaused')~=true
+   and (state=='Warmup' or state=='SpecialMine') and resource or nil)
+ end
  local procKind=state=='Attack' and 'turret' or 'resource'
  local procId=s:GetAttribute(procKind=='turret' and 'ChainTargetId' or 'ForkTargetId')
  local procUntil=s:GetAttribute(procKind=='turret' and 'ChainUntil' or 'ForkUntil') or 0
@@ -12605,15 +12709,16 @@ local function renderDrone(d,dt,now)
  local breakAt,breakUntil
  -- A final hit retires the gameplay reservation immediately. Its short saved
  -- contact may finish the local fracture sequence while the drone moves on.
- -- A new active job wins, and no contact outlives either visible crystal.
+ -- Hold the previous visible contact through the split before showing a new
+ -- assignment. A save pause, recall, death or hidden mesh clears the contact.
  local finalAt=s:GetAttribute('MineBreakAt') or 0
  local finalUntil=s:GetAttribute('MineBreakUntil') or 0
- if alive and not active and not motionPaused and (s:GetAttribute('MineBreakSerial') or 0)>0
+ if alive and not motionPaused and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('MineBreakSerial') or 0)>0
   and now>=finalAt and now<math.min(finalUntil,finalAt+.3) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
   if finalPart then
-   part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true
+   part,source,resource=finalPart,finalSource,finalResource;id=primaryId;kind='resource';active=true;charging=false
    procId=s:GetAttribute('MineBreakSecondaryId')
    extra,extraSource=resolveRenderedTarget('resource',procId,true)
    beamSince=s:GetAttribute('MineBreakBeamSince') or now;breakAt=finalAt;breakUntil=finalUntil

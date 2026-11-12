@@ -19,8 +19,8 @@ local function part(parent,class,name,color)
 end
 function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},parent=parent,audio=audio}
- local function track(p,at,from,velocity,duration,ground,spin)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin}
+ local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
  end
  function self:chips(at,point,normal,tint,count,large,scale,ground)
   if not BeamVFX.near(point,large and 92 or 60) then return end
@@ -51,13 +51,29 @@ function V.new(parent,audio,onSplit)
     e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)
     e.p.Transparency=.15+.85*q^.64
    else
-    local pos=e.from+e.v*t-Vector3.yAxis*(23*t*t)
-    local rx,ry,rz=t*9+e.spin.X,t*7+e.spin.Y,t*4+e.spin.Z
+    local gravity=e.weight and 96 or 46
+    local pos=e.from+e.v*t-Vector3.yAxis*(gravity*.5*t*t)
+    local turn=(e.landedAt or t)*(e.weight or 1)
+    local rx,ry,rz=turn*9+e.spin.X,turn*7+e.spin.Y,turn*4+e.spin.Z
     local size=e.p.Size
     local rotation=CFrame.Angles(rx,ry,rz)
     local support=PickupMotion.supportHeight(size.X,size.Y,size.Z,rx,ry,rz)
-    e.p.CFrame=CFrame.new(pos.X,math.max(e.ground+support-.06,pos.Y),pos.Z)*rotation
-    e.p.Transparency=math.clamp((t/e.duration-.62)/.38,0,1)
+    local floor=e.ground+support-.035
+    if e.weight and not e.landedAt and gravity*t>e.v.Y and pos.Y<=floor then
+     local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
+     e.landedAt=t
+     local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
+     e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
+     if e.tink and audio and t-touchAge<.13 then
+      audio:play('crystal_fall_tink',e.contact,{pitch=e.weight<.6 and .84 or 1.15,level=e.tink*math.clamp(speed/20,.55,1.15)})
+     end
+    end
+    if e.landedAt then
+     local skid=1-math.clamp((t-e.landedAt)/.13,0,1)
+     pos=e.contact+Vector3.new(e.v.X,0,e.v.Z)*(.032*(1-skid^3))
+    end
+    e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
+    e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
    end
   end
  end
@@ -75,6 +91,7 @@ function V.new(parent,audio,onSplit)
    local volume=owned and 1 or .62
    audio:play('crystal_split',point,{level=volume})
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
+   audio:play('crystal_release_tink',point,{level=volume})
   end
   if owned and onSplit and not reduced then onSplit(point,strength,now) end
   for _,side in ipairs({-1,1}) do
@@ -83,7 +100,8 @@ function V.new(parent,audio,onSplit)
    wing.Size=Vector3.new(.82,1.54,1.12)*strength
    local origin=point+axis*side*strength*.24
    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.57,ground,Vector3.new(side*.7,side*.5,side*.2))
+   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
+    Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil)
   end
   if not reduced then
    if RoleVisuals then
@@ -102,7 +120,8 @@ function V.new(parent,audio,onSplit)
     local origin=point+direction*.22
     chip.Position=origin
     track(chip,now,origin,direction*(7+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     .53+.057*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49))
+     .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
    if #self.pieces<48 then
     local spark=part(parent,'Part','CrystalSplitSpark',r.baseColor:Lerp(WARM,.77))

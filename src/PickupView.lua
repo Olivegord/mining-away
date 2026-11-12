@@ -5,6 +5,7 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
+local HOVER_HEIGHT=.68
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -27,25 +28,26 @@ local function idleGlow(view,tint)
  local halo=Instance.new('BillboardGui');halo.Name='FacetGleam';halo.Adornee=view
  halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=56
  halo.Size=UDim2.fromScale(.67,.67);halo.StudsOffsetWorldSpace=Vector3.new(0,.44,0)
- local function ray(width,height,rotation,color)
-  local frame=Instance.new('Frame');frame.BorderSizePixel=0
-  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5,.5)
-  frame.Size=UDim2.fromScale(width,height);frame.Rotation=rotation;frame.BackgroundColor3=color
-  frame.BackgroundTransparency=1;frame.Parent=halo
-  return frame
- end
  local warm=tint:Lerp(PICKUP_HIGHLIGHT,.78)
- local outer=ray(.13,.87,13,warm);local inner=ray(.63,.11,13,PICKUP_HIGHLIGHT)
  local stars={}
  for i,offset in ipairs({Vector2.new(.54,.32),Vector2.new(.78,.55),Vector2.new(.27,.63)}) do
   local star=Instance.new('ImageLabel');star.Name='GemTwinkle'..i
   star.AnchorPoint=Vector2.new(.5,.5);star.Position=UDim2.fromScale(offset.X,offset.Y)
   star.BackgroundTransparency=1;star.Image='rbxasset://textures/sparkle.png'
   star.ImageColor3=i==1 and PICKUP_HIGHLIGHT or warm;star.ImageTransparency=1
-  star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
+  star.Rotation=45+i*9;star.Size=UDim2.fromScale(.4,.4);star.Parent=halo;stars[i]=star
  end
  halo.Parent=view
- return {halo=halo,outer=outer,inner=inner,stars=stars}
+ local particles=Instance.new('ParticleEmitter');particles.Name='FloatingFacetSparks'
+ particles.Texture='rbxasset://textures/sparkle.png';particles.Enabled=false;particles.Rate=0
+ particles.LightEmission=1;particles.LightInfluence=0;particles.Color=ColorSequence.new(PICKUP_HIGHLIGHT,warm)
+ particles.EmissionDirection=Enum.NormalId.Top;particles.SpreadAngle=Vector2.new(48,48)
+ particles.Lifetime=NumberRange.new(.27,.49);particles.Speed=NumberRange.new(1.8,3.5)
+ particles.Rotation=NumberRange.new(36,55);particles.Drag=1.8
+ particles.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.18),NumberSequenceKeypoint.new(.24,.60),NumberSequenceKeypoint.new(1,0)})
+ particles.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.32),NumberSequenceKeypoint.new(.25,.04),NumberSequenceKeypoint.new(1,1)})
+ particles.Parent=view
+ return {halo=halo,stars=stars,particles=particles}
 end
 local function twinkle(age,start,duration)
  local t=math.clamp((age-start)/duration,0,1)
@@ -53,7 +55,7 @@ local function twinkle(age,start,duration)
 end
 local function removeIdle(self,r)
  if not r.idle then return end
- r.idle.halo:Destroy();r.idle=nil
+ r.idle.halo:Destroy();r.idle.particles:Destroy();r.idle=nil
  self.idleCount-=1
 end
 local function backpack(owner,fallback)
@@ -104,6 +106,7 @@ function V.new(root,parent,audio,reducedMotion)
   local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
+  if source:GetAttribute('CleanCargoArc') and source.Material~=Enum.Material.Metal then view.Reflectance=.19 end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
@@ -264,10 +267,12 @@ function V:update(dt,now)
    local distanceFade=math.clamp((58-idleDistance)/10,0,1)
    local atRest=resting and not seated and (r.physical or r.hasArc)
    local settledAge=age-(r.landAge or 0)
-   local gleam=settledAge<.38 and twinkle(settledAge,0,.38)
-    or twinkle((settledAge+.42+r.seed*.61)%3.8,0,.28)*.65
+   local glintClock=math.max(0,settledAge-.55)+r.seed*.61
+   local glintPeriod=glintClock%3.1
+   local gleam=settledAge<.54 and twinkle(settledAge,0,.54)
+    or twinkle(glintPeriod,0,.50)*.85
    local launched=live and r.finishing and displayAt>=r.born and age<.60
-   local shine=live and r.arc and not pulling and not seated and (atRest or settledAge>=0)
+   local shine=live and (r.physical or r.hasArc) and not pulling and not seated and (atRest or r.arc and settledAge>=0)
     and gleam*distanceFade*opacity or 0
    if (launched or shine>.01) and not reducedEffects and not r.idle and self.idleCount<12 and distanceFade>0 then
     r.idle=idleGlow(r.view,r.color);self.idleCount+=1
@@ -275,16 +280,20 @@ function V:update(dt,now)
    if r.idle then
     if reducedEffects or not live or pulling or seated or distanceFade==0 then removeIdle(self,r)
     else
-     r.idle.outer.BackgroundTransparency=1-.65*shine
-     r.idle.inner.BackgroundTransparency=1-.81*shine
      local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
      local sparkleStrength=(reducedFlashing and .36 or 1)*distanceFade*opacity
-     local width=launched and 2.65 or 1.65
+     local width=launched and 3.05 or 2.12
      r.idle.halo.Size=UDim2.fromScale(width,width)
+     if not reducedFlashing and launched and age>=.10 and not r.launchStars then
+      r.launchStars=true;r.idle.particles:Emit(3)
+     elseif not reducedFlashing and shine>.43 and not launched then
+      local cycle=settledAge<.54 and -1 or math.floor(glintClock/3.1)
+      if r.glintCycle~=cycle then r.glintCycle=cycle;r.idle.particles:Emit(1) end
+     end
      for i,star in ipairs(r.idle.stars) do
-      local pulse=launched and twinkle(age,.035+(i-1)*.098,.24)
-       or twinkle(settledAge,.03+(i-1)*.087,.24)*.82
-      local size=(i==1 and .77 or .46)*(.48+pulse*.52)
+      local pulse=launched and twinkle(age,.035+(i-1)*.098,.28)
+       or twinkle(settledAge<.54 and settledAge or glintPeriod,.015+(i-1)*.082,.33)*.91
+      local size=(i==1 and .83 or .50)*(.43+pulse*.57)
       star.Size=UDim2.fromScale(size,size)
       star.ImageTransparency=1-pulse*sparkleStrength
      end
@@ -322,10 +331,18 @@ function V:update(dt,now)
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
      local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
-     local raised=math.max(latest.floor+support-.22,position.Y)
+     local restY=latest.floor+support-.22
+     local raised=math.max(restY,position.Y)
+     local hover=HOVER_HEIGHT*(1-r.pull)
      if r.arc and arcMix>0 then
-      local t=math.clamp((age/r.arc.contact-.65)/.35,0,1)
-      raised=raised+(position.Y+(support-.22)*t*t*(3-2*t)-raised)*arcMix
+      local t=math.clamp((age/r.arc.contact-.69)/.31,0,1)
+      local ease=t*t*(3-2*t)
+      local flightY=position.Y+(support-.22)*ease
+      local hoverY=flightY+(restY+hover-flightY)*ease
+      raised=raised+(hoverY-raised)*arcMix
+     elseif r.landAge and (r.physical or r.hasArc) then
+      local t=math.clamp((age-r.landAge)/.17,0,1)
+      raised+=hover*t*t*(3-2*t)
      end
      position=Vector3.new(position.X,raised,position.Z)
     end

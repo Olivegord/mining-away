@@ -8993,10 +8993,19 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    local worker=drones[id]
    if worker and worker.target==r then
     local manual=worker.manualTarget~=nil
+    local contact=worker.mineBreakContact
+    local keepContact=contact~=nil and contact.primaryId==r.id and contact.at==now
+    if not keepContact and r.field.cfg.SelectionOnly and worker.state=='Mine' and worker.mining then
+     -- Cutting drones keep their last visible contact while the broken
+     -- crystal finishes its pose. The reservation still retires immediately.
+     worker.mineBreakSerial+=1
+     worker.mineBreakContact={at=now,untilTime=now+.3,primaryId=r.id,secondaryId='',beamSince=worker.beamSince}
+     keepContact=true
+    end
     if worker.specialJob and not special then
      r.part:SetAttribute('EffectCancelledSerial',worker.specialJob.serial);r.part:SetAttribute('EffectType',nil)
     end
-    retireTarget(worker,not secondary and worker==d and d.mineBreakContact~=nil)
+    retireTarget(worker,keepContact)
     -- Breaking a shell commits its existing crew to the actual revealed work.
     -- This is continuation of that ordered geode, not free field automation.
     -- New stones still have their normal growth/arrival/warmup gates.
