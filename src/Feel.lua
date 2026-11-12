@@ -67,7 +67,7 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
  local cruise=math.max(0,maxStep60 or 0)*60
- response=math.clamp(response or 1,1,8)
+ response=math.clamp(response or 1,.3,8)
  local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
@@ -132,12 +132,12 @@ function F.formation(slot,count)
  return Vector3.new(x,0,z)
 end
 function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
-function F.followOffset(slot,count,time,maxStep60)
+function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
- return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
+ return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60)
- local x,y,z=F.followOffset(slot,count,time,maxStep60)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
+ local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)

@@ -37,7 +37,7 @@ local function prismSpill(parent,from,to,color,normal)
  local glow=EnergyDisc.sprite(impact,'PrismContactGlow')
  local sparks=Instance.new('ParticleEmitter');sparks.Name='PrismContactSparks'
  EnergyDisc.configure(sparks,.34,.29,.80,.24)
- sparks.Color=ColorSequence.new(Color3.fromRGB(255,242,221),Color3.fromRGB(255,76,109))
+ sparks.Color=ColorSequence.new(Color3.fromRGB(255,109,140),Color3.fromRGB(225,16,53))
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(56,56)
  sparks.Lifetime=NumberRange.new(.24,.51);sparks.Speed=NumberRange.new(6,15)
  sparks.Drag=2.2;sparks.Acceleration=Vector3.new(0,-14,0)
@@ -47,7 +47,7 @@ local function prismSpill(parent,from,to,color,normal)
   local mount=i==1 and prismPart(parent,'PrismSourceLight') or impact
   if i==1 then mount.Position=from:Lerp(to,.22) end
   local lamp=Instance.new('PointLight')
-  lamp.Color=color:Lerp(Color3.fromRGB(255,200,169),.70)
+  lamp.Color=color:Lerp(Color3.fromRGB(255,135,158),.70)
   lamp.Range=i==1 and 15 or 22;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
   lights[i]=lamp
  end
@@ -65,7 +65,7 @@ local function stepPrismSpill(spill,age,duration)
   lamp.Enabled=fade>.01
   lamp.Brightness=fade*(i==1 and 2.0 or 3.1)*(1+1.30*onset)*flashScale
  end
- EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,217,204),fade*(.29+.24*onset)*flashScale)
+ EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,133,155),fade*(.29+.24*onset)*flashScale)
  spill.sparks.Enabled=not reduced and age>=0 and age<duration
  spill.sparks.Rate=spill.sparks.Enabled and (21+onset*26)*rise or 0
 end
@@ -267,20 +267,24 @@ end
 
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
-local impactCount=0
+local impactCount,prismImpactCount=0,0
 function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string)
- if impactCount>=14 or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
+ local prism=kind=='PrismBlast'
+ if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
- impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
+ if prism then
+  prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
+ else
+  impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
+ end
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
- local prism=kind=='PrismBlast'
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
  sparks.Enabled=false;sparks.Rate=0
- sparks.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,248,216),.44),color)
+ sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
  sparks.Speed=prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
@@ -289,7 +293,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
- dust.Color=ColorSequence.new(prism and Color3.fromRGB(45,34,38) or color:Lerp(Color3.fromRGB(206,183,183),.36))
+ dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4

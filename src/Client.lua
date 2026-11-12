@@ -21,8 +21,8 @@ local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reduc
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
- presentation:crystalKick(position,strength,now)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
+ presentation:crystalKick(position,strength,now,prism)
 end)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
@@ -865,6 +865,7 @@ local function registerDrone(source)
   -- Never make a gameplay drone invisible just because the optional presentation asset is unavailable.
   return false
  end
+ if source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
@@ -1121,7 +1122,10 @@ end
 local function renderDrone(d,dt,now)
  local previousPosition=d.pos
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
- local referenceMiner=s:GetAttribute('Role')=='Striker'
+ local role=s:GetAttribute('Role')
+ local isRamiel=role=='Ramiel'
+ local heavyFlight=isRamiel and DroneConfig.Prominent.Ramiel
+ local referenceMiner=role=='Striker'
  local logical=s:GetAttribute('Position');local goal=s:GetAttribute('Goal') or logical
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
@@ -1133,7 +1137,7 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -1156,7 +1160,7 @@ local function renderDrone(d,dt,now)
   if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
-  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction) end
+  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,heavyFlight and heavyFlight.response or nil) end
  end
  if not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
@@ -1168,13 +1172,13 @@ local function renderDrone(d,dt,now)
    if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
   end
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
-  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
+  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredBank=(heavyFlight or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=d.ramiel and state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
@@ -1182,23 +1186,23 @@ local function renderDrone(d,dt,now)
  -- never replay an old recall.
  local recallAt=s:GetAttribute('RecallAt') or -100
  local recallAge=now-recallAt;local hop,recallPitch=0,0
- if not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+ if not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
   local p=recallAge/.72
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- local prominent=DroneConfig.Prominent[s:GetAttribute('Role')]
+ local prominent=DroneConfig.Prominent[role]
  local lift=0
  if prominent and state~='Destroyed' and state~='Reprinting' then
-  local distantRole=s:GetAttribute('Role')=='Ramiel' or s:GetAttribute('Role')=='Orbiter'
+  local distantRole=isRamiel or role=='Orbiter'
   lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
- d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
+ d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*(heavyFlight and 1.8 or 5)))
  local ramielRoll=0
  if d.ramiel and not CrystalImpactView.reducedMotion() then
   ramielRoll=d.ramielIdleTurn or 0
   if d.ramielResting~=false then
-   ramielRoll=(ramielRoll+.38*math.min(dt,.10))%(2*math.pi)
+   ramielRoll=(ramielRoll+.12*math.min(dt,.10))%(2*math.pi)
    d.ramielIdleTurn=ramielRoll
   end
  end

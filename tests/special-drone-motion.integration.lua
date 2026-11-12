@@ -155,6 +155,7 @@ for _,part in ipairs(glass:GetDescendants()) do
  if part:IsA('BasePart') and part~=rig.core then facets[part]={part.Transparency,part.Parent} end
 end
 local pivot,aim=CFrame.new(1,16,2),Vector3.new(1,4,-13)
+local verticalCenters={}
 local function sample(referenceTime,recovery)
  local charge=math.clamp((referenceTime-19.04)/4.94,0,1)
  DroneConfig.poseRamiel(rig,pivot,aim,charge,recovery,0,false,2.55)
@@ -162,6 +163,18 @@ local function sample(referenceTime,recovery)
  for facet,original in pairs(facets) do
   assert(facet.Transparency==original[1] and facet.Parent==original[2],'facet was replaced or faded')
   assert(facet.Size.Magnitude>.02 and facet.Position.Magnitude<24,'invalid glass deformation')
+ end
+ for _,half in ipairs(rig.halves) do
+  for _,band in ipairs(half.bands) do
+   local y=band.far and (band.near.Position.Y+band.far.Position.Y)*.5 or band.near.Position.Y
+   verticalCenters[band]=verticalCenters[band] or y
+   assert(math.abs(verticalCenters[band]-y)<.0001,'the slab changed height during the attack')
+  end
+  for _,pair in ipairs(half.mirrors) do
+   local y=pair[1].Position.Y
+   verticalCenters[pair]=verticalCenters[pair] or y
+   assert(math.abs(verticalCenters[pair]-y)<.0001,'the central crystal bobbed')
+  end
  end
  local corner=upper.CFrame:PointToWorldSpace(Vector3.new(upper.Size.X*.5,0,upper.Size.Z*.5))-upper.Position
  return upper.Size.X,upper.Position.Y-lower.Position.Y,upper.Position-pivot.Position,corner
@@ -180,9 +193,9 @@ local tucked,tuckedGap=sample(20.84)
 local before,_,_,cornerBefore=sample(21.18)
 local expanding,_,_,cornerAfter=sample(21.74)
 local wide,wideGap=sample(23.98)
-assert(narrow<idleWidth*.23 and narrowGap>1.25,'first separation did not pinch into a column')
-assert(tucked>narrow*2 and tuckedGap<.12,'bands did not race inward to pack around the core')
-assert(wide>tucked*1.30 and wideGap>.75,'wide shooting shape did not reopen around the core')
+assert(narrow<idleWidth*.23 and narrowGap>idleGap,'first separation did not pinch around the fixed axis')
+assert(tucked>narrow*2 and tuckedGap>=narrowGap,'bands did not widen around the core')
+assert(wide>tucked*1.30 and wideGap>tuckedGap,'wide shooting shape did not expose the core')
 assert(expanding>before*1.32 and cornerBefore.Unit:Dot(cornerAfter.Unit)<.75,
  'the final wave did not widen and sweep its corners around the axis')
 for _,half in ipairs(rig.halves) do
@@ -194,11 +207,21 @@ for _,half in ipairs(rig.halves) do
 end
 local fired,firedGap=sample(23.98,0)
 assert(math.abs(wide-fired)<1e-6 and math.abs(wideGap-firedGap)<1e-6,'discharge skipped a pose')
-local _,kickGap=sample(23.98,.038)
-assert(kickGap>wideGap+.14,'discharge lost its short outward kick')
+local _,kickGap,kick=sample(23.98,.09)
+assert(math.abs(kickGap-wideGap)<1e-6 and kick.Z>.26,'discharge moved vertically or lost its horizontal recoil')
 local held,heldGap=sample(23.98,2.54)
 assert(math.abs(held-wide)<1e-6 and math.abs(heldGap-wideGap)<1e-6,'shape drifted during the beam')
 local returned,returnedGap=sample(23.98,2.55+DroneConfig.RamielCloseTime)
 assert(math.abs(returned-idleWidth)<1e-6 and math.abs(returnedGap-idleGap)<1e-6,'recovery did not repack the octahedron')
 model:Destroy()
-print('PASS Ramiel pinches, packs inward, reopens, recoils, and holds the firing shape without swapping facets')
+local prototype=Instance.new('UnionOperation')
+prototype.Name='RamielHull';prototype.Size=Vector3.one*2.7;prototype.Parent=game:GetService('ReplicatedStorage')
+local shellModel=newModel('Ramiel',true)
+local shellRig=assert(DroneConfig.ramielRig(shellModel))
+assert(shellRig.closed.LocalTransparencyModifier==0 and shellRig.slices[1].LocalTransparencyModifier==1,'the closed travel hull shows panel seams')
+DroneConfig.poseRamiel(shellRig,pivot,aim,.6,nil,0,false)
+assert(shellRig.closed.LocalTransparencyModifier==1 and shellRig.slices[1].LocalTransparencyModifier==0,'the closed hull blocked the attack')
+DroneConfig.poseRamiel(shellRig,pivot,nil,0,nil,0,false)
+assert(shellRig.closed.LocalTransparencyModifier==0 and shellRig.slices[1].LocalTransparencyModifier==1,'the travel hull did not close again')
+shellModel:Destroy();prototype:Destroy()
+print('PASS Ramiel keeps fixed-height glass layers and uses one closed hull for flight')

@@ -731,7 +731,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,CorePower=1,Color={93,203,255},Description='Fires a thin lance through up to four crystals. Each hit crystal goes black after the beam, then bursts in one hit for 35% extra ore.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=10.0,Impact=6.4/10,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=6.34,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -1690,7 +1690,7 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
  local cruise=math.max(0,maxStep60 or 0)*60
- response=math.clamp(response or 1,1,8)
+ response=math.clamp(response or 1,.3,8)
  local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
@@ -1755,12 +1755,12 @@ function F.formation(slot,count)
  return Vector3.new(x,0,z)
 end
 function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
-function F.followOffset(slot,count,time,maxStep60)
+function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
- return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
+ return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60)
- local x,y,z=F.followOffset(slot,count,time,maxStep60)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
+ local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -4254,9 +4254,9 @@ end
 local RAMIEL_GLASS=Color3.fromRGB(24,78,200)
 local RAMIEL_RED=Color3.fromRGB(255,35,72)
 local RAMIEL_BANDS={
- {name='Equator',bottom=0,top=.24},
- {name='Shoulder',bottom=.24,top=.57},
- {name='Cap',bottom=.57,top=1},
+ {name='Equator',bottom=0,top=.40,firingThickness=.15},
+ {name='Shoulder',bottom=.40,top=.68,firingThickness=.23},
+ {name='Cap',bottom=.68,top=1,firingThickness=.32},
 }
 local RAMIEL_TINTS={
  Color3.fromRGB(85,181,255),Color3.fromRGB(33,100,230),
@@ -4264,16 +4264,57 @@ local RAMIEL_TINTS={
 }
 local RAMIEL_SQUARE={Vector3.xAxis,Vector3.zAxis,-Vector3.xAxis,-Vector3.zAxis}
 
+local function ramielGlass(part)
+ part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
+ part.Material=Enum.Material.Glass;part.Transparency=.13;part.Reflectance=.11
+end
+
+function DroneConfig.prepareRamielHull(parent: Instance)
+ if parent:FindFirstChild('RamielHull') then return end
+ local base=Instance.new('Part');base.Size=Vector3.one*3.4
+ local cutters={}
+ for _,x in ipairs({-1,1}) do
+  for _,y in ipairs({-1,1}) do
+   for _,z in ipairs({-1,1}) do
+    local normal=Vector3.new(x,y,z).Unit
+    local cutter=Instance.new('Part');cutter.Size=Vector3.one*12
+    local center=normal*(6+1.35/math.sqrt(3))
+    cutter.CFrame=CFrame.lookAt(center,center-normal)
+    cutters[#cutters+1]=cutter
+   end
+  end
+ end
+ local ok,result=pcall(function()
+  return game:GetService('GeometryService'):SubtractAsync(base,cutters,{
+   RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false,
+  })
+ end)
+ base:Destroy();for _,cutter in ipairs(cutters) do cutter:Destroy() end
+ if not ok then return end
+ local hull=result[1]
+ if #result~=1 or not hull:IsA('PartOperation') then
+  for _,part in ipairs(result) do part:Destroy() end
+  return
+ end
+ ramielGlass(hull);hull.Color=RAMIEL_GLASS;hull.UsePartColor=true
+ hull.Name='RamielHull';hull.PivotOffset=CFrame.new();hull.Parent=parent
+end
+
 -- Every slice uses the same facets at rest and throughout its morph.
 -- Flat hidden end faces become visible when the diamond separates.
 local function buildRamielShell(glass: Folder,pose: CFrame,scale: number,readable: boolean)
  local radius=scale*1.35
+ local prototype=game:GetService('ReplicatedStorage'):FindFirstChild('RamielHull')
+ if prototype and prototype:IsA('BasePart') then
+  local hull=prototype:Clone()
+  hull.Name='ClosedHull';hull.Size=prototype.Size*scale;hull.CFrame=pose;hull.Parent=glass
+  if not readable then return end
+ end
  local function facet(parent: Instance,name: string,a: Vector3,b: Vector3,c: Vector3,color: Color3)
   local left=Instance.new('WedgePart');local right=Instance.new('WedgePart')
   left.Name=name..'A';right.Name=name..'B'
   for _,pane in ipairs({left,right}) do
-   pane.Anchored=true;pane.CanCollide=false;pane.CanTouch=false;pane.CanQuery=false
-   pane.Material=Enum.Material.Glass;pane.Transparency=.13;pane.Reflectance=.11;pane.Color=color;pane.CastShadow=false
+   ramielGlass(pane);pane.Color=color
   end
   ramielWedges(pose:PointToWorldSpace(a*radius),pose:PointToWorldSpace(b*radius),pose:PointToWorldSpace(c*radius),left,right)
   left.Parent=parent;right.Parent=parent
@@ -4334,7 +4375,15 @@ end
 function DroneConfig.ramielRig(model: Model)
  local glass=model:FindFirstChild('RamielGlass')
  if not glass or not glass:FindFirstChild('UpperEquator') then return nil end
- local rig={halves={},core=glass:FindFirstChild('Core') :: BasePart,scale=model:GetScale()}
+ local rig={halves={},core=glass:FindFirstChild('Core') :: BasePart,scale=model:GetScale(),
+  closed=glass:FindFirstChild('ClosedHull'),slices={}}
+ if rig.closed then
+  for _,part in ipairs(glass:GetDescendants()) do
+   if part:IsA('BasePart') and part~=rig.closed and part~=rig.core then
+    rig.slices[#rig.slices+1]=part
+   end
+  end
+ end
  for i,prefix in ipairs({'Upper','Lower'}) do
   local half={bands={},mirrors={}}
   for j,band in ipairs(RAMIEL_BANDS) do
@@ -4355,81 +4404,72 @@ function DroneConfig.ramielRig(model: Model)
  return rig
 end
 
--- First attack in US5yoHbv-6Q. Time is the reference player's clock.
--- Each row gives the near edge, far edge, their radii, and unwrapped yaw
--- for the upper band followed by the lower band. Lengths use idle radius.
--- The widths pinch while the caps stay out, the inside bands run back
--- towards the core, then the shoulders expand on their own timing.
+-- The rim tracks specify width and rotation only. Each layer stays at its
+-- own height while its corners sweep outward. The equators flatten once
+-- around their centers to make room for the aperture.
 local RAMIEL_START,RAMIEL_LOCK=19.04,23.98
 local RAMIEL_TRACKS={
  { -- Equator
-  {19.04, 0,.24,1,.76,0, 0,.24,1,.76,0},
-  {19.24, .025,.265,.986,.74,1, .012,.25,.99,.75,0},
-  {19.44, .10,.35,.90,.65,5, .075,.34,.94,.69,-4},
-  {19.57, .18,.42,.86,.59,15, .14,.39,.89,.60,-12},
-  {19.74, .41,.58,.45,.38,35, .32,.51,.55,.42,-31},
-  {19.94, .63,.72,.23,.22,67, .55,.66,.26,.24,-52},
-  {20.04, .56,.66,.19,.22,95, .48,.61,.21,.23,-69},
-  {20.24, .34,.52,.29,.32,127, .27,.48,.27,.33,-105},
-  {20.44, .13,.46,.37,.40,159, .10,.42,.35,.36,-132},
-  {20.67, .032,.47,.46,.43,181, .038,.45,.45,.43,-154},
-  {20.89, .012,.48,.54,.50,198, .019,.46,.51,.48,-174},
-  {21.18, .020,.48,.58,.54,213, .024,.47,.56,.52,-189},
-  {21.34, .030,.47,.64,.59,222, .027,.46,.61,.58,-200},
-  {21.55, .068,.52,.80,.75,244, .048,.49,.73,.69,-220},
-  {21.74, .14,.59,.81,.80,269, .11,.54,.83,.78,-242},
-  {22.05, .25,.71,.77,.77,288, .21,.66,.81,.81,-263},
-  {22.51, .33,.80,.75,.75,304, .29,.72,.79,.79,-280},
-  {22.95, .35,.81,.75,.75,304, .30,.73,.79,.79,-283},
+  {19.04, 1, .6, 0, 1, .6, 0},
+  {19.24, .986, .74, 1, .99, .75, 0},
+  {19.44, .9, .65, 5, .94, .69, -4},
+  {19.57, .86, .59, 15, .89, .6, -12},
+  {19.74, .45, .38, 35, .55, .42, -31},
+  {19.94, .23, .22, 67, .26, .24, -52},
+  {20.04, .19, .22, 95, .21, .23, -69},
+  {20.24, .29, .32, 127, .27, .33, -105},
+  {20.44, .37, .4, 159, .35, .36, -132},
+  {20.67, .46, .43, 181, .45, .43, -154},
+  {20.89, .54, .5, 198, .51, .48, -174},
+  {21.18, .58, .54, 213, .56, .52, -189},
+  {21.34, .64, .59, 222, .61, .58, -200},
+  {21.55, .8, .75, 244, .73, .69, -220},
+  {21.74, .81, .8, 269, .83, .78, -242},
+  {22.05, .77, .77, 288, .81, .81, -263},
+  {22.51, .75, .75, 304, .79, .79, -280},
+  {22.95, .75, .75, 304, .79, .79, -283},
  },
  { -- Shoulder
-  {19.04, .24,.57,.76,.43,0, .24,.57,.76,.43,0},
-  {19.40, .34,.62,.70,.41,4, .31,.61,.73,.42,-3},
-  {19.59, .48,.69,.59,.37,15, .42,.65,.66,.40,-12},
-  {19.74, .62,.78,.37,.31,31, .52,.70,.45,.34,-23},
-  {19.94, .70,.84,.23,.19,50, .67,.82,.26,.20,-43},
-  {20.08, .73,.88,.23,.20,77, .72,.85,.22,.20,-70},
-  {20.27, .63,.82,.29,.23,103, .62,.84,.29,.24,-92},
-  {20.47, .52,.75,.34,.33,137, .49,.77,.36,.32,-111},
-  {20.68, .38,.70,.47,.43,155, .35,.71,.45,.45,-138},
-  {20.88, .33,.78,.54,.50,174, .34,.72,.50,.45,-156},
-  {21.11, .34,.80,.53,.51,182, .35,.71,.50,.46,-163},
-  {21.37, .38,.83,.49,.52,187, .31,.70,.54,.50,-179},
-  {21.54, .44,.86,.58,.55,222, .36,.76,.61,.57,-217},
-  {21.74, .52,.89,.67,.64,257, .45,.79,.69,.65,-253},
-  {22.05, .62,.95,.72,.72,314, .51,.84,.73,.73,-310},
-  {22.51, .66,.98,.76,.76,378, .55,.87,.76,.76,-358},
-  {22.95, .67,.99,.76,.76,394, .56,.88,.76,.76,-373},
+  {19.04, .6, .32, 0, .6, .32, 0},
+  {19.4, .57, .41, 4, .59, .42, -3},
+  {19.59, .59, .37, 15, .66, .4, -12},
+  {19.74, .37, .31, 31, .45, .34, -23},
+  {19.94, .23, .19, 50, .26, .2, -43},
+  {20.08, .23, .2, 77, .22, .2, -70},
+  {20.27, .29, .23, 103, .29, .24, -92},
+  {20.47, .34, .33, 137, .36, .32, -111},
+  {20.68, .47, .43, 155, .45, .45, -138},
+  {20.88, .54, .5, 174, .5, .45, -156},
+  {21.11, .53, .51, 182, .5, .46, -163},
+  {21.37, .49, .52, 187, .54, .5, -179},
+  {21.54, .58, .55, 222, .61, .57, -217},
+  {21.74, .67, .64, 257, .69, .65, -253},
+  {22.05, .72, .72, 314, .73, .73, -310},
+  {22.51, .76, .76, 378, .76, .76, -358},
+  {22.95, .76, .76, 394, .76, .76, -373},
  },
  { -- End caps keep the far tips nearly fixed through the narrowest pose.
-  {19.04, .57,1,.43,0,0, .57,1,.43,0,0},
-  {19.44, .61,1,.39,0,4, .60,1,.42,0,-4},
-  {19.74, .73,1,.32,0,16, .67,1,.37,0,-19},
-  {20.00, .80,1,.26,0,43, .78,1,.25,0,-47},
-  {20.21, .80,1,.24,0,70, .80,1,.23,0,-70},
-  {20.44, .81,1,.26,0,93, .82,1,.23,0,-91},
-  {20.71, .85,1,.27,0,120, .84,1,.21,0,-115},
-  {21.04, .87,1.05,.36,0,145, .86,1,.19,0,-145},
-  {21.38, .93,1.08,.41,0,177, .88,1,.17,0,-171},
-  {21.68, .90,1.06,.35,0,205, .90,1,.15,0,-186},
-  {22.18, .92,1.16,.32,0,235, .90,1,.13,0,-212},
-  {22.51, .94,1.15,.33,0,256, .90,1.01,.19,0,-231},
-  {22.95, .95,1.16,.34,0,269, .90,1.02,.19,0,-242},
+  {19.04, .32, 0, 0, .32, 0, 0},
+  {19.44, .31, 0, 4, .32, 0, -4},
+  {19.74, .32, 0, 16, .37, 0, -19},
+  {20, .26, 0, 43, .25, 0, -47},
+  {20.21, .24, 0, 70, .23, 0, -70},
+  {20.44, .26, 0, 93, .23, 0, -91},
+  {20.71, .27, 0, 120, .21, 0, -115},
+  {21.04, .36, 0, 145, .19, 0, -145},
+  {21.38, .41, 0, 177, .17, 0, -171},
+  {21.68, .35, 0, 205, .15, 0, -186},
+  {22.18, .32, 0, 235, .13, 0, -212},
+  {22.51, .33, 0, 256, .19, 0, -231},
+  {22.95, .34, 0, 269, .19, 0, -242},
  },
 }
 
--- The tiny diamonds fan into a chain while the hull pinches, get packed
--- back into the bands, and reappear as the bands open for the shot.
 local RAMIEL_MIRRORS={
- -- clock, nearest, spacing, width, yaw
- {19.04, .015,0,.05,0}, {19.55,.023,.041,.09,10},
- {19.78,.052,.11,.15,56}, {20.00,.070,.20,.25,108},
- {20.27,.051,.18,.29,156}, {20.64,.023,.063,.16,218},
- {20.88,.018,.020,.095,250}, {21.45,.019,.021,.10,278},
- {21.73,.034,.055,.14,315}, {22.13,.047,.082,.19,370},
- {22.55,.062,.088,.225,402}, {22.95,.074,.096,.25,432},
+ {19.04,0,0}, {19.55,.02,10}, {20.00,.12,95}, {20.65,.09,178},
+ {21.40,.10,230}, {22.10,.14,298}, {22.95,.16,350},
 }
-local RAMIEL_RECOIL={{0,0},{.038,1},{.071,.76},{.13,.29},{.24,0}}
+local RAMIEL_RECOIL={{0,0},{.09,1},{.20,.76},{.34,.29},{.50,0}}
 local function smoothstep(t: number): number
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
@@ -4458,7 +4498,7 @@ local function ramielSample(track: {{number}},clock: number,channel: number): nu
 end
 
 local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerRadius,yaw,recoil,aspect)
- local transform=frame*CFrame.new(0,0,.54*recoil)*CFrame.Angles(0,math.rad(yaw),0)
+ local transform=frame*CFrame.new(0,0,.30*recoil)*CFrame.Angles(0,math.rad(yaw),0)
  local base=Vector3.yAxis*(near*sign*radius)
  local endPoint=Vector3.yAxis*(far*sign*radius)
  local inner=innerRadius*radius
@@ -4492,95 +4532,106 @@ local function poseRamielBand(band,frame,sign,radius,near,far,innerRadius,outerR
  cut(band.far,far,outer,-1)
 end
 
-DroneConfig.RamielCloseTime=.76
+DroneConfig.RamielCloseTime=1.02
 function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: number,recovery: number?,roll: number,reduced: boolean?,hold: number?)
  local time=math.clamp(charge,0,1)
- local close=0
- local kick=0
+ local close,kick=0,0
  if recovery then
   close=smootherstep((recovery-(hold or 2.55))/DroneConfig.RamielCloseTime)
   if not reduced then kick=ramielSample(RAMIEL_RECOIL,recovery,2) end
   time=1
  end
- local locked=smootherstep(time/.19)*(1-close)
- local radius=rig.scale*1.35
+ local assembled=time<=.018 or close>=.998
  local frame=pivot*CFrame.Angles(0,roll,0)
+ if rig.closed and assembled~=rig.closedShown then
+  rig.closedShown=assembled
+  rig.closed.LocalTransparencyModifier=assembled and 0 or 1
+  for _,part in ipairs(rig.slices) do part.LocalTransparencyModifier=assembled and 1 or 0 end
+ end
+ local light=rig.core:FindFirstChild('ApertureLight')
+ if assembled and rig.closed then
+  rig.closed.CFrame=frame
+  rig.core.Transparency=1
+  if light then light.Enabled=false end
+  rig.holding=false
+  return
+ end
  if aim then
   local heading=Vector3.new(aim.X,pivot.Position.Y,aim.Z)
-  if (heading-pivot.Position).Magnitude>.01 then frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),locked) end
+  if (heading-pivot.Position).Magnitude>.01 then
+   local lock=smootherstep(time/.39)*(1-close)
+   frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),lock)
+  end
  end
+ local radius=rig.scale*1.35
  local clock=RAMIEL_START+(RAMIEL_LOCK-RAMIEL_START)*time
- local lockedSlabs=smootherstep((clock-21.14)/1.34)
- local simple=smoothstep((time-.12)/.53)
- local gap=1
- local rebuild=not recovery or recovery<=.29 or close>0 or not rig.holding
+ local opening=smootherstep((time-.04)/.58)*(1-close)
+ local simple=smootherstep((time-.09)/.69)
+ local gap=0
+ local rebuild=not recovery or recovery<=.55 or close>0 or not rig.holding
  for i,half in ipairs(rig.halves) do
   local sign=i==1 and 1 or -1
-  local column=2+(i-1)*5
+  local column=2+(i-1)*3
   for j,band in ipairs(half.bands) do
-   local track=RAMIEL_TRACKS[j]
-   local final=track[#track]
-   local function value(channel)
-    local idle=track[1][channel]
-    local sampled=reduced and idle+(final[channel]-idle)*simple or ramielSample(track,clock,channel)
-    return sampled+(idle-sampled)*close
-   end
-   local n,f=value(column),value(column+1)
-   if j==1 then gap=math.min(gap,n) end
+   local profile=RAMIEL_BANDS[j]
+   local middle=(profile.bottom+profile.top)*.5
+   local idleThickness=profile.top-profile.bottom
+   local thickness=idleThickness+(profile.firingThickness-idleThickness)*opening
+   local near,far=middle-thickness*.5,middle+thickness*.5
+   if j==1 then gap=near end
    if rebuild then
-    local push=kick*(.058-(j-1)*.012)
+    local track=RAMIEL_TRACKS[j]
+    local final=track[#track]
+    local function width(channel)
+     local idle=track[1][channel]
+     local sample=reduced and idle+(final[channel]-idle)*simple or ramielSample(track,clock,channel)
+     return sample+(idle-sample)*close
+    end
     local slabStart=21.14+(j-1)*.14+(i-1)*.08
     local slab=j<3 and smootherstep((clock-slabStart)/1.18)*(1-close) or 0
-    local inner=value(column+2)
-    local outer=value(column+3)
+    local inner,outer=width(column),width(column+1)
     outer+=(inner-outer)*slab
-    local yaw=ramielSample(track,clock,column+4)
-    if reduced then yaw=((final[column+4]+180)%360-180)*simple end
+    local yaw=ramielSample(track,clock,column+2)
+    if reduced then yaw=((final[column+2]+180)%360-180)*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    -- The corners sweep around the centerline as the horizontal radius grows.
-    poseRamielBand(band,frame,sign,radius,n+push,f+push,
-     inner,outer,yaw,kick,1-slab*(j==1 and .27 or .34))
+    poseRamielBand(band,frame,sign,radius,near,far,inner,outer,yaw,kick,1-slab*(j==1 and .27 or .34))
    end
   end
   if rebuild then
    for j,prism in ipairs(half.mirrors) do
     local mirrorClock=clock-(j-1)*.039-(i-1)*.047
-    local near=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)
-    local spacing=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)
-    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,4)*(1-(j-1)*.14)
-    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,5)-(j-1)*22*smoothstep((time-.07)/.23)
-    if reduced then near=.07*simple;spacing=.082*simple;yaw=23*simple end
+    local width=ramielSample(RAMIEL_MIRRORS,mirrorClock,2)*(1-(j-1)*.14)*opening
+    local yaw=ramielSample(RAMIEL_MIRRORS,mirrorClock,3)-(j-1)*22
+    if reduced then yaw=23*simple end
     if recovery then yaw=((yaw+180)%360-180)*(1-close) end
-    local offset=(near+(j-1)*spacing*.82)*(1-close)+kick*.016
-    local side=math.max(.03,width*radius*(1-close))
-    local tilt=lockedSlabs*(1-close)
-    local x=(j%2==0 and -.09 or .085)*radius*tilt
-    local pose=frame*CFrame.new(x,offset*sign*radius,kick*.38)
-     *CFrame.Angles(math.rad((j%2==0 and -14 or 17)*tilt),math.rad(yaw*sign),math.rad((j-2)*8*tilt))
+    local side=math.max(.025,width*radius)
+    local orbit=math.rad(yaw*sign)
+    local offset=(j-.55)*.031*sign*radius
+    local sweep=opening*radius*.065
+    local pose=frame*CFrame.new(math.cos(orbit)*sweep,offset,math.sin(orbit)*sweep+kick*.23)*CFrame.Angles(0,orbit,0)
     prism[1].Size=Vector3.new(side,math.max(.023,side*.39),side*.77)
     prism[2].Size=Vector3.new(side*.74,math.max(.023,side*.27),side*.68)
-    prism[1].CFrame=pose*CFrame.new(-side*.12,side*.068,0)*CFrame.Angles(0,.44,0)
-    prism[2].CFrame=pose*CFrame.new(side*.16,-side*.09,side*.09)*CFrame.Angles(math.pi,.44,0)
+    prism[1].CFrame=pose*CFrame.new(-side*.12,0,0)*CFrame.Angles(0,.44,0)
+    prism[2].CFrame=pose*CFrame.new(side*.16,0,side*.09)*CFrame.Angles(math.pi,.44,0)
    end
   end
  end
- rig.holding=recovery~=nil and recovery>.29 and close<=0
+ rig.holding=recovery~=nil and recovery>.55 and close<=0
  local energy=smootherstep((time-.45)/.55)
  if recovery then energy=(1-.65*smoothstep(recovery/.54))*(1-close) end
  if reduced then energy*=.45 end
- local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.12*smoothstep(gap/.26)+kick*.16))
+ local center=frame:PointToWorldSpace(Vector3.new(0,0,-radius*.12*smoothstep(gap/.125)+kick*.16))
  rig.core.CFrame=aim and (aim-center).Magnitude>.01 and CFrame.lookAt(center,aim) or CFrame.new(center)
  rig.core.Size=Vector3.one*radius*(.062+.105*energy)
- rig.core.Transparency=1-smoothstep((gap-.013)/.14)*(.85+.15*energy)
+ rig.core.Transparency=1-smoothstep(gap/.105)*(.85+.15*energy)
  rig.core.Color=RAMIEL_RED:Lerp(Color3.fromRGB(255,218,240),energy^3*.86)
- local light=rig.core:FindFirstChild('ApertureLight')
  if light and light:IsA('PointLight') then
   light.Enabled=energy>.15;light.Brightness=2.3*energy^2
  end
 end
 
 DroneConfig.Prominent={
- Ramiel={span=11.25,lift=15.0},Orbiter={span=3.30,lift=1.5},
+ Ramiel={span=11.25,lift=15.0,speed=.55,response=.52,turn=.34},Orbiter={span=3.30,lift=1.5},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
 
@@ -4769,6 +4820,7 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
  if role=='Ramiel' then
   local glass=Instance.new('Folder');glass.Name='RamielGlass';glass.Parent=model
   buildRamielShell(glass,pose,scale,readable==true)
+  model:SetAttribute('RamielHullAvailable',glass:FindFirstChild('ClosedHull')~=nil)
   if readable then
    local core=hardware('Core',Vector3.one*.6,CFrame.new(),RAMIEL_RED,Enum.Material.Neon,Enum.PartType.Ball)
    core.Parent=glass
@@ -8009,7 +8061,7 @@ local function spawnDrone(p,owned,slot,origin)
  elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local hr=characterRoot(p)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
- local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60)
+ local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel')
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
@@ -8068,6 +8120,7 @@ end
 scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=home,now=function() return now end,
  clear=function(from,to,character) return los(from,to,character,{droneFolder}) end})
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
+RoleConfig.prepareRamielHull(RS)
 if scene.runStart and scene.classicCrystal then
  scene.crystalCuts={}
  -- Build the three ore cuts once per server.
@@ -8966,6 +9019,11 @@ function scene.reclaimBattery(d,r,broken,abilityOrigin,contactKind)
 end
 -- Resolve the full ray before any crystal shrinks or loses CanQuery.
 -- The same path drives the damage and the client beam endpoints.
+local function prismEligible(d,p,rock,field)
+ return rock.field==field and not rock.paid and rock.hp>0 and not rock.prismShot
+  and rock.part.Parent and now>=rock.readyAt and rock.kind~='Geode'
+  and playerCanMine(p,rock.field) and sameRockType(d,rock)
+end
 function scene.prismTrace(d,primary,station,stopAtPrimary)
  local p=profiles[d.owner]
  if not healthy(p) then return nil end
@@ -8987,8 +9045,7 @@ function scene.prismTrace(d,primary,station,stopAtPrimary)
   local part=hit.Instance
   local rock=resources[part:GetAttribute('ResourceId') or '']
   if rock and rock.part==part then
-   if #hits>=spec.BeamTargets or rock.field~=primary.field or rock.paid or rock.hp<=0 or rock.prismShot
-    or now<rock.readyAt or rock.kind=='Geode' or not playerCanMine(p,rock.field) or not sameRockType(d,rock) then
+   if #hits>=spec.BeamTargets or not prismEligible(d,p,rock,primary.field) then
     endpoint=hit.Position;break
    end
    local item={rock=rock,point=hit.Position,normal=hit.Normal}
@@ -9292,22 +9349,47 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  return true,broken,r.stage>previous
 end
 scene.prismShots={}
+local function prismCluster(d,p,path,field,radius)
+ local hits=table.clone(path.hits)
+ local seen={}
+ local ignore={droneFolder,pickupFolder,p.player.Character}
+ for _,hit in ipairs(hits) do seen[hit.rock]=true end
+ for _,rock in ipairs(field.resources) do ignore[#ignore+1]=rock.part end
+ for _,rock in ipairs(field.resources) do
+  if seen[rock] or not prismEligible(d,p,rock,field) then continue end
+  for _,direct in ipairs(path.hits) do
+   local origin=direct.rock.part.Position
+   local delta=rock.part.Position-origin
+   if delta.Magnitude<=radius and los(origin,rock.part.Position,nil,ignore) then
+    local normal=delta.Magnitude>.01 and -delta.Unit or Vector3.yAxis
+    hits[#hits+1]={rock=rock,point=rock.part.Position,normal=normal}
+    break
+   end
+  end
+ end
+ return hits
+end
 function scene.firePrism(d,primary,job)
  if job~=d.specialJob or job.impacted or not primary.slots[d.id] then return false end
  local path=scene.prismTrace(d,primary,d.pos,false)
  if not path then return false end
  local spec=DroneCatalog.Types.Ramiel
+ local profile=profiles[d.owner]
+ local hits=prismCluster(d,profile,path,primary.field,spec.BlastRadius)
  local beamEnd=now+spec.BeamHold
- local shot={drone=d,profile=profiles[d.owner],runId=data(profiles[d.owner]).run.id,
-  hits=path.hits,projectile=job.projectile,blastAt=beamEnd+spec.BlackPause}
+ local shot={drone=d,profile=profile,runId=data(profile).run.id,
+  hits=hits,projectile=job.projectile,blastAt=beamEnd+spec.BlackPause}
  scene.prismShots[shot]=true
  job.impacted=true
  job.prismFired=true
  d.prismReadyAt=beamEnd+RoleConfig.RamielCloseTime
+ for _,hit in ipairs(hits) do
+  hit.rock.prismShot=shot
+  hit.rock.part:SetAttribute('PrismClusterSize',#hits)
+  hit.rock.part:SetAttribute('PrismBlackAt',now)
+ end
  local contacts={}
  for _,hit in ipairs(path.hits) do
-  hit.rock.prismShot=shot
-  hit.rock.part:SetAttribute('PrismBlackAt',beamEnd)
   if hit~=path.selected then table.insert(contacts,hit) end
  end
  RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal)
@@ -9333,7 +9415,9 @@ function scene.stepPrismShots()
     broken=accepted and broken
    end
    rock.prismShot=nil
-   if not broken and rock.part.Parent then rock.part:SetAttribute('PrismBlackAt',nil) end
+   if not broken and rock.part.Parent then
+    rock.part:SetAttribute('PrismBlackAt',nil);rock.part:SetAttribute('PrismClusterSize',nil)
+   end
   end
  end
 end
@@ -9343,7 +9427,7 @@ local function chooseResource(d: any,field: any,square: any?)
  local chunkCycle=square and field.cfg.SelectionOnly and definition and not definition.Projectile
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
-  if not r.paid and r.hp>0 and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
+  if not r.paid and r.hp>0 and not r.prismShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
    and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
@@ -9651,14 +9735,15 @@ local function combatHit(d,field,target,stats)
  publishTurretHealth(target)
 end
 local function travelSpeed(d)
+ local roleScale=d.role=='Ramiel' and RoleConfig.Prominent.Ramiel.speed or 1
  local returning=d.state=='Travel' and d.chargedPin and d.chargedPin==d.squareJob
  if d.state=='ToCharge' or returning then
   local p=profiles[d.owner]
   local fieldCharge=p and p.miningSquare and (p.fieldCharge or 0)>0
   local boost=p and (returning or not fieldCharge) and Workshop.chargeSpeed(data(p)) or 1
-  return d.stats.maxStep60*1.5*boost
+  return d.stats.maxStep60*1.5*boost*roleScale
  end
- return d.stats.maxStep60*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
+ return d.stats.maxStep60*roleScale*(d.role=='Medic' and .68 or (d.role=='Courier' and (1+(d.stats.fullAuto or 0)) or (d.state=='BreakerDive' and 2.5 or 1)))
 end
 local function move(d,goal,dt)
  d.intentGoal=goal
@@ -9670,6 +9755,7 @@ local function move(d,goal,dt)
  d.goal=goal
  local work=d.target~=nil or d.state=='ToCharge' or d.state=='Deliver' or d.state=='BreakerDive' or d.state=='BreakerRecover' or d.state=='Recover' or d.state=='Plant' or d.state=='GrowApproach'
  local speed=travelSpeed(d)
+ local ramiel=d.role=='Ramiel' and RoleConfig.Prominent.Ramiel
  local yaw
  if d.role=='Striker' then
   local p=profiles[d.owner];local hr=p and characterRoot(p)
@@ -9678,10 +9764,10 @@ local function move(d,goal,dt)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,1.35)
   else d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,speed,dt) end
  else
-  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work)
+  d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,speed,dt,work,nil,ramiel and ramiel.response or nil)
   yaw=Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
  end
- d.yaw=Feel.approachYaw(d.yaw,yaw,dt)
+ d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(ramiel and ramiel.turn or 1))
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
 function scene.holdSquare(d,p,dt)
@@ -9690,7 +9776,7 @@ function scene.holdSquare(d,p,dt)
  local offset=Feel.formation(d.slot,#p.drones)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
- local height=(d.flightHeight or Feel.FollowHeight)+Feel.hover(now,d.owned.base.maxStep60)
+ local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
  if d.role=='Striker' and square.field.clusters then
   -- Park at the same low working altitude instead of rising after each cut.
   height=square.field.clusters[1].Position.Y+Feel.WorkHeight-square.center.Y
@@ -9717,7 +9803,7 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
   d.state='Follow';d.mining=false;d.healTargetId=nil
   if scene.holdSquare(d,p,dt) then return end
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
+  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
@@ -9841,7 +9927,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
@@ -9858,7 +9944,7 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  local goal=committedStation(d,r);local yaw=d.yaw;d.state='Travel';d.mining=false;move(d,goal,dt)
  local arrived=Feel.canMine((d.pos-goal).Magnitude,now>=r.readyAt,true,d.hp>0)
  if projectile and arrived then
-  d.yaw=Feel.approachYaw(yaw,Feel.levelYaw(d.pos,r.position,yaw),dt)
+  d.yaw=Feel.approachYaw(yaw,Feel.levelYaw(d.pos,r.position,yaw),dt*(projectile=='Prism' and RoleConfig.Prominent.Ramiel.turn or 1))
  end
  local job=d.specialJob
  local warmup=scene.miningWarmup(d,r)+(projectile and not d.workShotStarted and ((d.slot*7)%11)*.012 or 0)
@@ -9928,7 +10014,7 @@ local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  if scene.holdSquare(d,p,dt) then return end
  d.mining=false;d.state=state or 'Follow'
- move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+ move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -10217,7 +10303,7 @@ local function droneStep(d: any,dt: number)
   if d.field then leaveField(p,nil,nil,true) end
   if d.state=='Follow' then
    local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0)
-   move(d,Feel.followGoal(spawnAt,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+   move(d,Feel.followGoal(spawnAt,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt)
   else
    move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,d.flightHeight or Feel.FollowHeight,0),dt)
   end
@@ -10286,7 +10372,7 @@ local function droneStep(d: any,dt: number)
   if not scene.runStart and logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
    if scene.holdSquare(d,p,dt) then return end
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt);return
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt);return
   end
   local offset=scene.runStart and p.emptierPickups and p.emptierPickups[d.id]
   if not scene.runStart and scene.emptierReady(p,data(p)) and now>=(d.collectAfter or 0) then
@@ -10311,7 +10397,7 @@ local function droneStep(d: any,dt: number)
    d.pickupAt=nil;d.deliveryRequested=false;d.pickupBlockedAt=nil
    d.state='Follow'
    if not scene.runStart and scene.holdSquare(d,p,dt) then return end
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt)
   end
   return
  elseif d.role=='Vacuum' then
@@ -10355,7 +10441,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel'),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -10365,7 +10451,7 @@ local function droneStep(d: any,dt: number)
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
   if d.state~='Return' then d.state='Follow' end
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60)
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel')
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end

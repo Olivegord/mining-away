@@ -78,26 +78,26 @@ RoleVisuals.ImpactParticles=function(point,color,strength,kind)
  impactParticles(point,color,strength,kind)
 end
 local charred=source:Clone();charred.Parent=workspace
-for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,PrismBlackAt=106.55}) do charred:SetAttribute(key,value) end
+for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,PrismBlackAt=104.34,PrismClusterSize=7}) do charred:SetAttribute(key,value) end
 local target={source=charred,view=charred:Clone(),baseColor=charred.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,104,3)}
 target.view.Parent=fx
 crystalFrame({target},104)
 local beforeChar,size=target.view.Color,target.view.Size
-crystalFrame({target},106.54)
+crystalFrame({target},104.33)
 assert(target.view.Color==beforeChar and #audio==14,'the target reacted before the beam stopped')
-crystalFrame({target},106.57)
-rockDamage.feedback:applyTints(106.57)
-assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==14,'black pause changed the rock shape or emitted feedback')
-for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=106.89,CrystalBreakAt=106.89,CrystalSplitAt=106.89,CutProjectile='Prism'}) do
+crystalFrame({target},104.35)
+rockDamage.feedback:applyTints(104.35)
+assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==14,'beam contact did not blacken the rock in place')
+for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=107.23,CrystalBreakAt=107.23,CrystalSplitAt=107.23,CutProjectile='Prism'}) do
  charred:SetAttribute(key,value)
 end
 target.dirty=true
-crystalFrame({target},106.90)
+crystalFrame({target},107.24)
 assert(target.view.Transparency==0 and not target.breakSize and #audio==14,'the prism break compressed or popped early')
-crystalFrame({target},107.00)
+crystalFrame({target},107.34)
 assert(target.view.Transparency==1 and audio[15]=='prism_blast' and #audio==17 and prismParticles==1,'the charred target did not explode once')
-crystalFrame({target},107.01)
+crystalFrame({target},107.35)
 assert(#audio==17,'the prism explosion replayed')
 charred:Destroy();target.view:Destroy()
 

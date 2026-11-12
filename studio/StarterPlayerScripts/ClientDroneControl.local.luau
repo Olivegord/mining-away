@@ -505,7 +505,7 @@ function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,
  if type(dt)~='number' or dt~=dt or dt<=0 then return position,velocity end
  local elapsed=math.min(dt,.1);local steps=math.max(1,math.ceil(elapsed*120));local h=elapsed/steps
  local cruise=math.max(0,maxStep60 or 0)*60
- response=math.clamp(response or 1,1,8)
+ response=math.clamp(response or 1,.3,8)
  local acceleration=math.max(10,cruise*1.6)*math.sqrt(response)
  for _=1,steps do
   local delta=goal-position;local distance=delta.Magnitude
@@ -570,12 +570,12 @@ function F.formation(slot,count)
  return Vector3.new(x,0,z)
 end
 function F.hover(time,maxStep60) return math.sin(time+maxStep60*200)/3 end
-function F.followOffset(slot,count,time,maxStep60)
+function F.followOffset(slot,count,time,maxStep60,steady)
  local angle=2*math.pi*slot/math.max(1,count)
- return math.cos(angle)*10,F.ReferenceFollowHeight+F.hover(time,maxStep60),math.sin(angle)*10
+ return math.cos(angle)*10,F.ReferenceFollowHeight+(steady and 0 or F.hover(time,maxStep60)),math.sin(angle)*10
 end
-function F.followGoal(ownerPosition,slot,count,time,maxStep60)
- local x,y,z=F.followOffset(slot,count,time,maxStep60)
+function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady)
+ local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,y,z)
 end
 local function swarmHash(id)
@@ -3172,7 +3172,7 @@ local Catalog = {
   Starforge = {Name='Starforge',Price=2600,Duration=3,Impact=.68,Power=1.2,Chunk=.25,Yield=1.6,Color={255,170,60},Description='Heats and pours a molten mineral chunk. Up to 25% rock health per hit; 1.6× ore on completion.'},
   Frostbite = {Name='Frostbite',Price=650,Duration=2.4,Impact=.68,Power=1.05,Chunk=.25,Yield=1.1,Color={150,255,245},Description='Freezes and snaps a mineral chunk loose. Up to 25% rock health per hit; 1.1× ore on completion.'},
   Resonator = {Name='Resonator',Price=2100,Duration=2.6,Impact=.68,Power=1.15,Chunk=.25,Yield=1.3,Color={125,255,160},Description='Builds resonance, then releases one fracture pulse. Up to 25% rock health per hit; 1.3× ore on completion.'},
-  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=8.40,Impact=5/8.40,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=4.94,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,CorePower=1,Color={93,203,255},Description='Fires a thin lance through up to four crystals. Each hit crystal goes black after the beam, then bursts in one hit for 35% extra ore.'},
+  Ramiel = {Name='Ramiel',Duration=2.80,CycleDuration=10.0,Impact=6.4/10,Power=4.4,Chunk=1,Yield=1.35,Projectile='Prism',Windup=6.34,Flight=.06,BeamHold=2.55,BlackPause=.34,BeamRange=64,BeamStation=32,BeamTargets=4,BlastRadius=11,CorePower=1,Color={93,203,255},Description='Blackens crystals near the beam impact, then shatters them together for 35% extra ore.'},
   Orbiter = {Name='Orbital',Duration=0,Color={195,135,255},Description='Calls a sky laser onto the strongest available crystal and spills damage into a second nearby rock.'},
   Needler = {Name='Needler',Duration=.66,Impact=.55,Power=1.12,Chunk=.40,Projectile='Dart',Windup=.20,Flight=.16,CorePower=1.25,Color={255,195,94},Description='Fires quick darts. Deals 25% more damage after the first two layers of deep crystals.'},
   Ballcaster = {Name='Ballcaster',Duration=1.62,Impact=.51,Power=1.2,Chunk=.55,Projectile='Ball',Windup=.56,Flight=.26,ShellPower=1.5,Color={150,124,255},Description='Charges a heavy shot that deals 50% more damage through the first two layers of deep crystals.'},
@@ -5198,7 +5198,7 @@ local function prismSpill(parent,from,to,color,normal)
  local glow=EnergyDisc.sprite(impact,'PrismContactGlow')
  local sparks=Instance.new('ParticleEmitter');sparks.Name='PrismContactSparks'
  EnergyDisc.configure(sparks,.34,.29,.80,.24)
- sparks.Color=ColorSequence.new(Color3.fromRGB(255,242,221),Color3.fromRGB(255,76,109))
+ sparks.Color=ColorSequence.new(Color3.fromRGB(255,109,140),Color3.fromRGB(225,16,53))
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(56,56)
  sparks.Lifetime=NumberRange.new(.24,.51);sparks.Speed=NumberRange.new(6,15)
  sparks.Drag=2.2;sparks.Acceleration=Vector3.new(0,-14,0)
@@ -5208,7 +5208,7 @@ local function prismSpill(parent,from,to,color,normal)
   local mount=i==1 and prismPart(parent,'PrismSourceLight') or impact
   if i==1 then mount.Position=from:Lerp(to,.22) end
   local lamp=Instance.new('PointLight')
-  lamp.Color=color:Lerp(Color3.fromRGB(255,200,169),.70)
+  lamp.Color=color:Lerp(Color3.fromRGB(255,135,158),.70)
   lamp.Range=i==1 and 15 or 22;lamp.Brightness=0;lamp.Enabled=false;lamp.Parent=mount
   lights[i]=lamp
  end
@@ -5226,7 +5226,7 @@ local function stepPrismSpill(spill,age,duration)
   lamp.Enabled=fade>.01
   lamp.Brightness=fade*(i==1 and 2.0 or 3.1)*(1+1.30*onset)*flashScale
  end
- EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,217,204),fade*(.29+.24*onset)*flashScale)
+ EnergyDisc.place(spill.glow,spill.impact.Position,1.08+onset*.82,Color3.fromRGB(255,133,155),fade*(.29+.24*onset)*flashScale)
  spill.sparks.Enabled=not reduced and age>=0 and age<duration
  spill.sparks.Rate=spill.sparks.Enabled and (21+onset*26)*rise or 0
 end
@@ -5428,20 +5428,24 @@ end
 
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
-local impactCount=0
+local impactCount,prismImpactCount=0,0
 function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,kind: string)
- if impactCount>=14 or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
+ local prism=kind=='PrismBlast'
+ if (prism and prismImpactCount>=32 or not prism and impactCount>=14) or BeamVFX.reduced() or not BeamVFX.near(position,115) then return end
  local root=part();if not root then return end
  root.Name=kind..'Particles';root.Transparency=1;root.Size=Vector3.one*.04;root.Position=position
- impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
+ if prism then
+  prismImpactCount+=1;root.Destroying:Connect(function() prismImpactCount-=1 end)
+ else
+  impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
+ end
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
- local prism=kind=='PrismBlast'
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
  EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
  sparks.Enabled=false;sparks.Rate=0
- sparks.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(255,248,216),.44),color)
+ sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(63,63)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
  sparks.Speed=prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
@@ -5450,7 +5454,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
  EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
- dust.Color=ColorSequence.new(prism and Color3.fromRGB(45,34,38) or color:Lerp(Color3.fromRGB(206,183,183),.36))
+ dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
  dust.EmissionDirection=Enum.NormalId.Top;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
@@ -6495,7 +6499,8 @@ end
 local WARM=Color3.fromRGB(255,218,139)
 local HOT=Color3.fromRGB(255,249,216)
 local CHAR=Color3.fromRGB(12,9,10)
-local EMBER=Color3.fromRGB(255,79,54)
+local EMBER=Color3.fromRGB(255,27,59)
+local RED_HIGHLIGHT=Color3.fromRGB(255,119,145)
 local Players=game:GetService('Players')
 local GuiService=game:GetService('GuiService')
 function V.reducedMotion()
@@ -6573,6 +6578,7 @@ function V.new(parent,audio,onSplit)
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
   local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local clusterSize=prism and (s:GetAttribute('PrismClusterSize') or 1) or 1
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -6584,29 +6590,31 @@ function V.new(parent,audio,onSplit)
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
-  if owned and onSplit and not reduced then onSplit(point,strength,now) end
-  for _,side in ipairs({-1,1}) do
-   if #self.pieces>=46 then break end
-   local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
-   local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
-   wing.Size=Vector3.new(.82,1.54,1.12)*strength
-   local origin=point+axis*side*strength*.24
-   wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-   track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
-    Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil)
+  if (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
+  if clusterSize<=5 then
+   for _,side in ipairs({-1,1}) do
+    if #self.pieces>=46 then break end
+    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
+    local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
+    wing.Size=Vector3.new(.82,1.54,1.12)*strength
+    local origin=point+axis*side*strength*.24
+    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
+    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
+     Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil)
+   end
   end
   if not reduced then
    if RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
-    if prism then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,HOT,strength*.23,strength*5.8,.29) end
+    if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
-   for i=1,prism and 14 or 8 do
+   for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and EMBER:Lerp(HOT,.52) or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(.11+.052*(i%4))
     chip.Size=Vector3.new(size*.55,size*2.1,size)
@@ -6617,8 +6625,8 @@ function V.new(parent,audio,onSplit)
      .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
-   if #self.pieces<48 then
-    local spark=part(parent,'Part','CrystalSplitSpark',r.baseColor:Lerp(WARM,.77))
+   if #self.pieces<48 and clusterSize<=5 then
+    local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))
     spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
     spark.Size=Vector3.one*.10;spark.Position=point
     self.pieces[#self.pieces+1]={p=spark,at=now,duration=.19,burst=true,size=strength}
@@ -7779,16 +7787,20 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
-function P:crystalKick(position,strength,now)
+function P:crystalKick(position,strength,now,prism)
  local camera=workspace.CurrentCamera
- if not camera or now-(self.crystalShakeAt or -math.huge)<.24 then return end
+ local age=now-(self.crystalShakeAt or -math.huge)
+ if not camera or age<.24 and (not prism or age>0) then return end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- local distance=math.max(((root and root.Position or camera.CFrame.Position)-position).Magnitude,
-  (camera.CFrame.Position-position).Magnitude)
- local amount=math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
+ local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
+ if not prism then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
+ local amount=prism and math.clamp((72-distance)/55,0,1)*1.4
+  or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
+ if prism and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
+ self.crystalShakePrism=prism
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 function P:prismPressure(from,to,at,duration)
@@ -7824,8 +7836,9 @@ function P:cameraOffset(now)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
- if impactAge<0 or impactAge>=.22 then return ordinary end
- local t=impactAge/.22
+ local impactDuration=self.crystalShakePrism and .34 or .22
+ if impactAge<0 or impactAge>=impactDuration then return ordinary end
+ local t=impactAge/impactDuration
  local recoil=self.crystalShakeAmount*math.min(t*10,1)*(1-t)^2*math.cos(t*4.8)
  local side=self.crystalShakeSide
  return ordinary*CFrame.new(side*.17*recoil,-.075*recoil,.075*recoil)
@@ -11962,8 +11975,8 @@ local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reduc
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now)
- presentation:crystalKick(position,strength,now)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
+ presentation:crystalKick(position,strength,now,prism)
 end)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
@@ -12806,6 +12819,7 @@ local function registerDrone(source)
   -- Never make a gameplay drone invisible just because the optional presentation asset is unavailable.
   return false
  end
+ if source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
  local role=source:GetAttribute('Role')
@@ -13062,7 +13076,10 @@ end
 local function renderDrone(d,dt,now)
  local previousPosition=d.pos
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
- local referenceMiner=s:GetAttribute('Role')=='Striker'
+ local role=s:GetAttribute('Role')
+ local isRamiel=role=='Ramiel'
+ local heavyFlight=isRamiel and DroneConfig.Prominent.Ramiel
+ local referenceMiner=role=='Striker'
  local logical=s:GetAttribute('Position');local goal=s:GetAttribute('Goal') or logical
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
  d.lastState=state
@@ -13074,7 +13091,7 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200)
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -13097,7 +13114,7 @@ local function renderDrone(d,dt,now)
   if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
-  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction) end
+  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,heavyFlight and heavyFlight.response or nil) end
  end
  if not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
@@ -13109,13 +13126,13 @@ local function renderDrone(d,dt,now)
    if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
   end
   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
-  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1))
+  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
- local desiredBank=(referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
+ local desiredBank=(heavyFlight or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
  d.bank=state=='BreakerImpact' and 0 or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=d.ramiel and state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.
@@ -13123,23 +13140,23 @@ local function renderDrone(d,dt,now)
  -- never replay an old recall.
  local recallAt=s:GetAttribute('RecallAt') or -100
  local recallAge=now-recallAt;local hop,recallPitch=0,0
- if not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
+ if not heavyFlight and not referenceMiner and not motionPaused and (state=='Follow' or state=='Return') and recallAge>=0 and recallAge<.72 then
   local p=recallAge/.72
   hop=math.sin(math.pi*p)^2*.9
   recallPitch=math.sin(2*math.pi*p)*math.rad(7)
  end
- local prominent=DroneConfig.Prominent[s:GetAttribute('Role')]
+ local prominent=DroneConfig.Prominent[role]
  local lift=0
  if prominent and state~='Destroyed' and state~='Reprinting' then
-  local distantRole=s:GetAttribute('Role')=='Ramiel' or s:GetAttribute('Role')=='Orbiter'
+  local distantRole=isRamiel or role=='Orbiter'
   lift=(distantRole or state=='Follow' or state=='Return' or state=='Idle') and prominent.lift or 0
  end
- d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*5))
+ d.visualLift=(d.visualLift or lift)+(lift-(d.visualLift or lift))*(1-math.exp(-math.min(dt,.1)*(heavyFlight and 1.8 or 5)))
  local ramielRoll=0
  if d.ramiel and not CrystalImpactView.reducedMotion() then
   ramielRoll=d.ramielIdleTurn or 0
   if d.ramielResting~=false then
-   ramielRoll=(ramielRoll+.38*math.min(dt,.10))%(2*math.pi)
+   ramielRoll=(ramielRoll+.12*math.min(dt,.10))%(2*math.pi)
    d.ramielIdleTurn=ramielRoll
   end
  end

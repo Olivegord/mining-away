@@ -1029,16 +1029,20 @@ function P:kick(position,strength,now)
  local remaining=math.max(0,(self.shakeStrength or 0)*(1-math.clamp((now-(self.shakeAt or 0))/.4,0,1)))
  self.shakeStrength=math.min(.16,remaining+amount);self.shakeAt=now
 end
-function P:crystalKick(position,strength,now)
+function P:crystalKick(position,strength,now,prism)
  local camera=workspace.CurrentCamera
- if not camera or now-(self.crystalShakeAt or -math.huge)<.24 then return end
+ local age=now-(self.crystalShakeAt or -math.huge)
+ if not camera or age<.24 and (not prism or age>0) then return end
  local player=game:GetService('Players').LocalPlayer
  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
- local distance=math.max(((root and root.Position or camera.CFrame.Position)-position).Magnitude,
-  (camera.CFrame.Position-position).Magnitude)
- local amount=math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
+ local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
+ if not prism then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
+ local amount=prism and math.clamp((72-distance)/55,0,1)*1.4
+  or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
+ if prism and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
+ self.crystalShakePrism=prism
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 function P:prismPressure(from,to,at,duration)
@@ -1074,8 +1078,9 @@ function P:cameraOffset(now)
   end
  end
  local impactAge=now-(self.crystalShakeAt or -100)
- if impactAge<0 or impactAge>=.22 then return ordinary end
- local t=impactAge/.22
+ local impactDuration=self.crystalShakePrism and .34 or .22
+ if impactAge<0 or impactAge>=impactDuration then return ordinary end
+ local t=impactAge/impactDuration
  local recoil=self.crystalShakeAmount*math.min(t*10,1)*(1-t)^2*math.cos(t*4.8)
  local side=self.crystalShakeSide
  return ordinary*CFrame.new(side*.17*recoil,-.075*recoil,.075*recoil)

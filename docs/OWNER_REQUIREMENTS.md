@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — Ramiel's weight, solid hull and cluster blast
+
+Keep the glass pieces at fixed heights as they turn and widen. Show a seamless diamond in flight, and make Ramiel accelerate, turn and travel more slowly. Blacken the rocks near the beam impacts as soon as it hits. Let the cluster shatter together with red particles, a blast sound and a camera shake.
+
 ## November 11 follow-up — Ramiel's delayed one-shot break and two stars
 
 Keep every crystal hit by Ramiel at its current health throughout the beam. When the beam ends, leave each rock black for a brief silent beat, then destroy it in one hit with a distinct explosion. Keep the launch star at peak size while its opacity flickers and fades. Give the separate firing star its own fast flicker in size and opacity.
