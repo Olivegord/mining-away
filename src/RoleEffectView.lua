@@ -519,6 +519,15 @@ function View.new(audio,onPrism,onNomadImpact)
        audio:setLoop(node,'prism_charge',aperture,.13+.95*rise,.65+.63*rise^3)
       else audio:stopLoop(node,landed==true) end
      end
+     local shatterAt=node:GetAttribute('ShatterAt')
+     local ground=node:GetAttribute('BlastGround')
+     local radius=node:GetAttribute('BlastRadius') or 7
+     if shatterAt and shatterAt<=now and typeof(ground)=='Vector3' and not r.shattered then
+      r.shattered=true
+      RoleVisuals.setTime(shatterAt)
+      RoleVisuals.PrismShatter(ground,radius,shatterAt,travel)
+      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('prism_blast',ground,{level=1.18,pitch=.88}) end
+     end
      if landed and not r.impacted then
       r.impacted=true
       if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
@@ -526,7 +535,8 @@ function View.new(audio,onPrism,onNomadImpact)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
        local groundNormal=node:GetAttribute('PrismGroundNormal')
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .49,hold,'Prism',groundNormal)
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',groundNormal)
+       if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
        if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
        if not reduced then
@@ -613,6 +623,12 @@ function View.new(audio,onPrism,onNomadImpact)
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
     if typeof(position)=='Vector3' and type(at)=='number' and now>=at then
+     local ground=node:GetAttribute('Ground')
+     local radius=node:GetAttribute('Radius') or 1
+     if ended and now>=ended and node:GetAttribute('Completed')==true and not r.rubble then
+      r.rubble=true
+      RoleVisuals.Crater(Vector3.new(position.X,ground or position.Y,position.Z),math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+     end
      MotionBuffer.push(r.samples,at,CFrame.new(position))
      local pose=MotionBuffer.pose(r.samples,now)
      -- Do not replay completed strikes to a late joiner.
@@ -642,6 +658,13 @@ function View.new(audio,onPrism,onNomadImpact)
      r.started=true
      local age=now-at
      local expires=node:GetAttribute('ExpiresAt') or at+1
+     if kind=='Breaker' and node:GetAttribute('Phase')=='Impact' then
+      local ground=node:GetAttribute('Ground')
+      if type(ground)=='number' then
+       local scale=math.clamp((node:GetAttribute('Diameter') or 3)/3,.65,3)
+       RoleVisuals.Crater(Vector3.new(position.X,ground,position.Z),math.clamp(3.4*scale,2.8,6.8),'Breaker',at,position-from)
+      end
+     end
      -- Short contact cues are never replayed as fresh hits after a late join.
      if now<expires and (age<=.35 or kind=='AbilityCharge' or kind=='Pulse' or kind=='Beam') then
       RoleVisuals.setTime(at)

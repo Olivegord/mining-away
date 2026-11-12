@@ -146,11 +146,12 @@ function A.step(state,now,dt,ctx,swarmContext)
     state.burn=nil;event(ctx,'orbitalEnd')
    else
     burn.accepted=true;burn.remaining-=slice
-    if now>=burn.nextPose then
+    local completed=broken or burn.remaining<=1e-7
+    if completed or now>=burn.nextPose then
      burn.nextPose=now+.1
      event(ctx,'orbital',{target=target,remaining=burn.remaining,precise=burn.precise})
     end
-    if broken or burn.remaining<=1e-7 then
+    if completed then
      if burn.relay then
       for _,r in ipairs(targets(ctx,burn.fieldId,'OrbitalRelay')) do
        if r.id~=target.id and distance(target,r)<=14 then
@@ -158,7 +159,7 @@ function A.step(state,now,dt,ctx,swarmContext)
        end
       end
      end
-     state.burn=nil;event(ctx,'orbitalEnd')
+     state.burn=nil;event(ctx,'orbitalEnd',{completed=true})
     end
    end
   end

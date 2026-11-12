@@ -86,6 +86,7 @@ function V.new(parent,audio,onSplit)
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
   local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*((prism or nomad) and 1.30 or 1)
   local clusterSize=(prism or nomad) and (s:GetAttribute('BlastClusterSize') or 1) or 1
+  local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -93,7 +94,7 @@ function V.new(parent,audio,onSplit)
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
   if audio and not nomad then
    local volume=owned and 1 or .62
-   audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume})
+   if not prismReceipt then audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume}) end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
@@ -115,8 +116,10 @@ function V.new(parent,audio,onSplit)
     RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(HOT,.46),strength*.78,'NomadCrystal')
    elseif RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
-    if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
+    if not prismReceipt then
+     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
+     if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
+    end
     RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
    for i=1,nomad and 2 or prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do

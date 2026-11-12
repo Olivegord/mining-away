@@ -490,6 +490,7 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
  local shatterAt=node:GetAttribute('ShatterAt')
  if shatterAt and now>=shatterAt and not r.shattered then
   r.shattered=true
+  RoleVisuals.Crater(floor,radius*.96,'Nomad',shatterAt)
   if now-shatterAt<.24 and near then
    RoleVisuals.setTime(shatterAt)
    RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,radius*.46,radius*3.06,.82)

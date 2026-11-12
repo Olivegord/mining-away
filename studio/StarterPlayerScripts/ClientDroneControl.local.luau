@@ -2126,7 +2126,7 @@ B.styles={
  Repair={body=.13,core=.025,taper=.82,orbit=.18,spin=1,star=.12,tail=.7},
  Courier={body=.10,core=.02,taper=.35,orbit=.20,spin=-1.8,star=.12,tail=.6},
  Sentry={body=.32,core=.065,taper=.18,orbit=.26,spin=-2,star=.38,tail=.45},
- Prism={body=.24,core=.055,taper=.58,orbit=0,spin=0,star=.20,tail=0},
+ Prism={body=.24,core=.079,taper=.78,orbit=0,spin=0,star=.20,tail=0},
  Lance={body=.24,core=.055,taper=.08,orbit=.24,spin=3,star=.38,tail=.8},
  Orbital={body=1.8,core=.2,taper=.6,orbit=2.1,spin=3.1,star=1.65,tail=1.1},
  Gridcutter={body=.065,core=.018,taper=.15,orbit=.15,spin=0,star=.17,tail=.55},
@@ -2145,9 +2145,9 @@ local INK=sequence(1,.42,.65,1)
 local ARC=sequence(1,.3,.45,1)
 local STAR=NumberSequence.new(.18)
 function B.fadePrism(r,opacity)
- r.body.Transparency=sequence(1,1-.90*opacity,1-.84*opacity,1-.61*opacity)
- r.core.Transparency=sequence(1,1-.98*opacity,1-.965*opacity,1-.88*opacity)
- r.corona.Transparency=sequence(1,1-.15*opacity,1-.10*opacity,1)
+ r.body.Transparency=sequence(1,1-.95*opacity,1-.92*opacity,1-.76*opacity)
+ r.core.Transparency=sequence(1,1-.99*opacity,1-.98*opacity,1-.93*opacity)
+ r.corona.Transparency=sequence(1,1-.25*opacity,1-.20*opacity,1-.06*opacity)
 end
 local function clamp(v) return math.clamp(v,0,1) end
 local function smooth(v) v=clamp(v);return v*v*(3-2*v) end
@@ -2194,8 +2194,9 @@ function B.new(parent,style,color,detail,chargeLens)
  r.core=ribbon(root,'NeedleCore',r.a,r.b,color:Lerp(WHITE,.65),CORE);r.all[#r.all+1]=r.core
  if style=='Prism' then
   r.body.Segments=20;r.core.Segments=20
+  r.body.Brightness=1.45
   r.core.Color=ColorSequence.new(color:Lerp(WHITE,.86))
-  r.core.Brightness=2
+  r.core.Brightness=2.5
   r.corona=ribbon(root,'PrismCorona',r.a,r.b,color,EDGE);r.corona.Segments=20
   B.fadePrism(r,1)
   r.all[#r.all+1]=r.corona
@@ -4844,6 +4845,7 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 function FX.new(world,options)
  options=options or {}
  local self={world=world,tracked={},dirty={},retry={},active={},cached={},completed={},count=0,effectSlots=0,connections={},destroyed=false,poseUpdates=0,reuseGeometry=options.reuseGeometry==true}
+ local finished={}
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)
@@ -4900,7 +4902,7 @@ function FX.new(world,options)
   remove(v)
   if self.cached[v] then freeGeometry(self.cached[v]);self.cached[v]=nil end
   if self.tracked[v] then self.tracked[v]:Disconnect();self.tracked[v]=nil end
-  self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil
+  self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil;finished[v]=nil
  end)
  for _,v in ipairs(world:GetDescendants()) do observe(v) end
  function self:isActive(source) return self.active[source]~=nil end
@@ -4915,6 +4917,11 @@ function FX.new(world,options)
     local kind=v:GetAttribute('EffectType')
     local start=v:GetAttribute('EffectStartedAt')
     local duration=v:GetAttribute('EffectDuration')
+    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and v:GetAttribute('EffectDepleted')==true then
+     local done=v:GetAttribute('EffectDoneAt') or 0
+     if done>now then self.retry[v]=done
+     elseif done>0 then finished[v]=serial;options.onImpact(v,done) end
+    end
     local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
     if e and e.serial==serial and cancelled and v:GetAttribute('EffectDepleted')==true then concealDepleted(e)
@@ -5002,6 +5009,7 @@ function FX.new(world,options)
   for _,connection in pairs(self.tracked) do connection:Disconnect() end
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked);table.clear(self.completed)
+  table.clear(finished)
   self.folder:Destroy()
  end
  return self
@@ -5234,6 +5242,174 @@ end
 return M
 
 end)()
+local ImpactRubble = (function()
+-- Local rock slabs sampled from the walkable surface and posed by server time.
+local Rubble={}
+local UP=Vector3.yAxis
+local SMOKE='rbxasset://textures/particles/smoke_main.dds'
+local STONE=Color3.fromRGB(70,66,63)
+local MAX_SLABS=80
+local MAX_AGE=4.65
+local active={}
+local live=0
+local styles={
+ Prism={count=16,rock=Color3.fromRGB(104,50,52),stretch=1.20},
+ Nomad={count=18,rock=Color3.fromRGB(107,78,59),stretch=1.06},
+ Orbital={count=14,rock=Color3.fromRGB(85,64,106),stretch=1.02},
+ Breaker={count=10,rock=Color3.fromRGB(105,86,66),stretch=1.14},
+ Specialist={count=8,rock=STONE,stretch=1.08},
+}
+
+local function smooth(q)
+ q=math.clamp(q,0,1)
+ return q*q*(3-2*q)
+end
+
+local function part(parent,class,name)
+ local value=Instance.new(class)
+ value.Name=name;value.Anchored=true;value.CanCollide=false
+ value.CanTouch=false;value.CanQuery=false;value.CastShadow=false
+ value.Transparency=1;value.Parent=parent
+ return value
+end
+
+local function surface(position,query)
+ local hit=workspace:Raycast(position+UP*4.6,-UP*9.4,query)
+ if not hit or hit.Normal.Y<.65 then return nil end
+ return hit
+end
+
+local function surfaceFinish(hit)
+ local material=hit.Material
+ local base=hit.Instance
+ local color=base==workspace.Terrain and base:GetMaterialColor(material) or base.Color
+ if material==Enum.Material.Grass or material==Enum.Material.LeafyGrass then material=Enum.Material.Ground end
+ if material==Enum.Material.Plastic or material==Enum.Material.SmoothPlastic or material==Enum.Material.Neon
+  or material==Enum.Material.ForceField or material==Enum.Material.Glass then material=Enum.Material.Slate end
+ return color,material
+end
+
+local function dust(root,point,normal,direction,color,radius,count)
+ local carrier=part(root,'Part','RubbleDust')
+ carrier.Size=Vector3.one*.045
+ carrier.CFrame=CFrame.lookAt(point+normal*.14,point+direction+normal*.31)
+ local plume=Instance.new('ParticleEmitter');plume.Name='LiftedQuarryDust'
+ plume.Texture=SMOKE;plume.Enabled=false;plume.Rate=0
+ plume.Color=ColorSequence.new(color:Lerp(Color3.fromRGB(197,170,149),.32),color:Lerp(STONE,.43))
+ local size=math.clamp(radius*.28,.84,3.6)
+ plume.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,size*.3),
+  NumberSequenceKeypoint.new(.26,size,size*.21),NumberSequenceKeypoint.new(1,size*1.58)})
+ plume.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.16,.58),
+  NumberSequenceKeypoint.new(.57,.76),NumberSequenceKeypoint.new(1,1)})
+ plume.EmissionDirection=Enum.NormalId.Front;plume.SpreadAngle=Vector2.new(33,21)
+ plume.Lifetime=NumberRange.new(.54,1.36);plume.Speed=NumberRange.new(5,math.clamp(radius*1.55,7,20))
+ plume.Acceleration=UP*.46;plume.Drag=3.8;plume.WindAffectsDrag=false
+ plume.Rotation=NumberRange.new(-180,180);plume.RotSpeed=NumberRange.new(-34,34)
+ plume.LightEmission=0;plume.LightInfluence=.54
+ plume.Parent=carrier;plume:Emit(count)
+end
+
+local function pose(slab,age,steady)
+ local t=age-slab.delay
+ local value=slab.part
+ if t<0 then value.Transparency=1;return end
+ if slab.settled and t<=slab.hold then return end
+ local sink=smooth((t-slab.hold)/slab.sinkTime)
+ local reveal=steady and 1 or smooth(t/.06)
+ local drift=steady and 1 or 1-(1-math.clamp(t/.38,0,1))^3
+ local lift=steady and 0 or slab.lift*(1-(1-math.clamp(t/.16,0,1))^3)*(1-smooth((t-.15)/.37))
+ local y=slab.rest+lift-(steady and 0 or slab.sinkDepth*sink)
+ local center=slab.position+slab.up*y-slab.out*(1-drift)*slab.travel
+ local tilt=slab.pitch+(steady and 0 or .27*(1-drift))
+ value.CFrame=CFrame.fromMatrix(center,slab.right,slab.up)*CFrame.Angles(tilt,slab.yaw,slab.roll)
+ value.Transparency=1-reveal*(1-smooth((sink-.10)/.90))
+ slab.settled=t>=.52 and t<=slab.hold
+end
+
+local function remove(root,ring)
+ root:Destroy();active[root]=nil;live-=#ring.slabs
+end
+
+function Rubble.spawn(parent,position,radius,style,at,now,direction,steady)
+ if now-at>=MAX_AGE or live>MAX_SLABS-6 then return false end
+ local world=workspace:FindFirstChild('MiningAway')
+ local map=world and world:FindFirstChild('Map')
+ if not map then return false end
+ local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include
+ query.RespectCanCollide=true;query.IgnoreWater=true;query.FilterDescendantsInstances={map,workspace.Terrain}
+ local ground=surface(position,query)
+ if not ground then return false end
+ local center,normal=ground.Position,ground.Normal
+ for _,ring in pairs(active) do
+  if ring.style==style and math.abs(ring.at-at)<1.05 and (ring.center-center).Magnitude<math.min(ring.radius,radius)*.6 then return false end
+ end
+ local spec=styles[style] or styles.Specialist
+ local count=math.min(MAX_SLABS-live,steady and math.max(6,spec.count-4) or spec.count)
+ local root=Instance.new('Folder');root.Name=style..'Crater';root.Parent=parent
+ local ring={at=at,center=center,radius=radius,style=style,slabs={},steady=steady}
+ local random=Random.new((math.floor(at*1000)+math.floor(center.X*19)+math.floor(center.Z*41))%2147483647)
+ local flat=direction and direction-normal*direction:Dot(normal) or nil
+ local forward=flat and flat.Magnitude>.01 and flat.Unit or normal:Cross(Vector3.xAxis).Unit
+ local across=normal:Cross(forward)
+ local phase=random:NextNumber(0,math.pi*2)
+ local arc=math.pi*2/count
+ for i=1,count do
+  local angle=phase+(i-1)*arc+random:NextNumber(-.21,.21)*arc
+  local bearing=forward*math.cos(angle)+across*math.sin(angle)
+  local offset=forward*(math.cos(angle)*spec.stretch)+across*math.sin(angle)
+  local hit=surface(center+offset*radius*random:NextNumber(.85,1.14),query)
+  if not hit or math.abs(hit.Position.Y-center.Y)>3.3 then continue end
+  local up=hit.Normal
+  local out=(bearing-up*bearing:Dot(up)).Unit
+  local right=up:Cross(out).Unit
+  local raw,material=surfaceFinish(hit)
+  local piece=part(root,i%4==1 and 'WedgePart' or 'Part','BrokenSlab')
+  piece.Material=material
+  piece.Color=raw:Lerp(spec.rock,random:NextNumber(.30,.57)):Lerp(STONE,random:NextNumber(.02,.19))
+  piece.Size=Vector3.new(radius*arc*random:NextNumber(.73,1.30),
+   math.clamp(radius*random:NextNumber(.12,.24),.54,2.8),radius*random:NextNumber(.21,.39))
+  piece.CastShadow=not steady and i%4==0
+  local height=piece.Size.Y
+  local slab={part=piece,position=hit.Position,up=up,out=out,right=right,rest=height*random:NextNumber(.02,.30),
+   lift=height*random:NextNumber(.54,.96),travel=radius*random:NextNumber(.04,.12),
+   pitch=random:NextNumber(.18,.48),yaw=random:NextNumber(-.42,.42),roll=random:NextNumber(-.24,.24),
+   delay=random:NextNumber(0,.115),hold=random:NextNumber(2.02,2.58),sinkTime=random:NextNumber(1.08,1.64),
+   sinkDepth=height+piece.Size.Z*.44}
+  ring.slabs[#ring.slabs+1]=slab
+  pose(slab,now-at,steady)
+  if not steady and i%3==0 and now-at<.26 then dust(root,hit.Position,up,out,raw,radius,style=='Specialist' and 3 or 5) end
+ end
+ if #ring.slabs==0 then root:Destroy();return false end
+ -- A faint contact shadow anchors the tilted rim on the flat quarry bed.
+ local stain=part(root,'Part','GroundScuff')
+ stain.Shape=Enum.PartType.Cylinder;stain.Material=Enum.Material.Basalt
+ local soil=surfaceFinish(ground)
+ stain.Color=soil:Lerp(STONE,.76)
+ stain.Size=Vector3.new(.025,radius*1.59,radius*1.57*spec.stretch)
+ stain.CFrame=CFrame.fromMatrix(center+normal*.028,normal,across)
+ ring.stain=stain
+ stain.Transparency=1-(1-smooth((now-at-2.5)/1.72))*.25*smooth((now-at)/.20)
+ active[root]=ring;live+=#ring.slabs
+ return true
+end
+
+function Rubble.step(now)
+ for root,ring in pairs(active) do
+  local age=now-ring.at
+  if not root.Parent or age>=MAX_AGE then remove(root,ring)
+  else
+   for _,slab in ipairs(ring.slabs) do pose(slab,age,ring.steady) end
+   ring.stain.Transparency=1-(1-smooth((age-2.5)/1.72))*.25*smooth(age/.20)
+  end
+ end
+end
+
+function Rubble.clear()
+ for root,ring in pairs(active) do remove(root,ring) end
+end
+return Rubble
+
+end)()
 local RoleVisuals = (function()
 -- Client-only role visuals. The server publishes compact effect descriptions.
 local Debris = game:GetService("Debris")
@@ -5322,6 +5498,7 @@ local function prismScorch(parent,point,normal,travel,at)
  scorchTimelines[root]={at=at,layers=layers}
 end
 function Effects.step(now)
+ ImpactRubble.step(now)
  for root,mark in pairs(scorchTimelines) do
   local age=now-mark.at
   if not root.Parent or age>=17 then
@@ -5351,10 +5528,11 @@ function Effects.step(now)
   elseif age<0 then BeamVFX.hide(rig)
   elseif age<t.duration then
    if prism then
-    local opacity=(1-age/t.duration)^1.55
+    local remaining=1-age/t.duration
+    local opacity=remaining^.98
     BeamVFX.draw(rig,t.from,t.to,now,.64+.36*opacity,nil,age,t.scale)
     BeamVFX.fadePrism(rig,opacity)
-    if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,opacity) end
+    if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,remaining^1.55) end
    else
     local expansion=math.min(1,age/.035)
     local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
@@ -5499,6 +5677,13 @@ function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, end
  Debris:AddItem(value,duration+.05)
 end
 
+function Effects.Crater(position: Vector3,radius: number,style: string,at: number,direction: Vector3?)
+ if BeamVFX.reduced() or not BeamVFX.near(position,150) then return end
+ local player=Players.LocalPlayer
+ local steady=game:GetService('GuiService').ReducedMotionEnabled or (player and player:GetAttribute('ReducedMotion')==true)
+ ImpactRubble.spawn(folder(),position,radius,style,at,workspace:GetServerTimeNow(),direction,steady)
+end
+
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
 local impactCount,prismImpactCount=0,0
@@ -5534,6 +5719,18 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(prism and 9 or orbital and 5 or 4)
  Debris:AddItem(root,residual and 2.7 or 1.4)
+end
+
+function Effects.PrismWave(position: Vector3,radius: number,duration: number)
+ Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration)
+ Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62)
+end
+
+function Effects.PrismShatter(position: Vector3,radius: number,at: number,direction: Vector3)
+ Effects.Crater(position,radius,'Prism',at,direction)
+ if workspace:GetServerTimeNow()-at>=.24 then return end
+ local red=Color3.fromRGB(229,40,78)
+ Effects.ImpactParticles(position+Vector3.yAxis*.55,red,2.1,'PrismBlast')
 end
 
 function Effects.Heal(from: Vector3, to: Vector3)
@@ -5816,6 +6013,7 @@ function Effects.Ability(owner: any,event: any,template: Model?)
 end
 
 function Effects.destroy()
+ ImpactRubble.clear()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
  table.clear(beamTimelines);table.clear(chargeTimelines);table.clear(orbitalTimelines)
  for root in pairs(scorchTimelines) do root:Destroy() end
@@ -6322,6 +6520,7 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
  local shatterAt=node:GetAttribute('ShatterAt')
  if shatterAt and now>=shatterAt and not r.shattered then
   r.shattered=true
+  RoleVisuals.Crater(floor,radius*.96,'Nomad',shatterAt)
   if now-shatterAt<.24 and near then
    RoleVisuals.setTime(shatterAt)
    RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,radius*.46,radius*3.06,.82)
@@ -6873,6 +7072,15 @@ function View.new(audio,onPrism,onNomadImpact)
        audio:setLoop(node,'prism_charge',aperture,.13+.95*rise,.65+.63*rise^3)
       else audio:stopLoop(node,landed==true) end
      end
+     local shatterAt=node:GetAttribute('ShatterAt')
+     local ground=node:GetAttribute('BlastGround')
+     local radius=node:GetAttribute('BlastRadius') or 7
+     if shatterAt and shatterAt<=now and typeof(ground)=='Vector3' and not r.shattered then
+      r.shattered=true
+      RoleVisuals.setTime(shatterAt)
+      RoleVisuals.PrismShatter(ground,radius,shatterAt,travel)
+      if audio and now-shatterAt<.24 and BeamVFX.near(ground,135) then audio:play('prism_blast',ground,{level=1.18,pitch=.88}) end
+     end
      if landed and not r.impacted then
       r.impacted=true
       if now-contactAt<hold and travel.Magnitude>.1 and BeamVFX.near(origin:Lerp(endpoint,.48),150) then
@@ -6880,7 +7088,8 @@ function View.new(audio,onPrism,onNomadImpact)
        local reduced=BeamVFX.reduced() or Players.LocalPlayer:GetAttribute('ReducedFlashing')==true
        local gap=math.min(travel.Magnitude*.14,1.22)
        local groundNormal=node:GetAttribute('PrismGroundNormal')
-       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .32 or .49,hold,'Prism',groundNormal)
+       RoleVisuals.Beam(origin+travel.Unit*gap,endpoint,PRISM_RED,reduced and .88 or 1.52,hold,'Prism',groundNormal)
+       if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
        if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
        if not reduced then
@@ -6967,6 +7176,12 @@ function View.new(audio,onPrism,onNomadImpact)
    elseif kind=='Orbital' then
     local at=node:GetAttribute('ContactAt');local position=node:GetAttribute('Position');local ended=node:GetAttribute('EndedAt')
     if typeof(position)=='Vector3' and type(at)=='number' and now>=at then
+     local ground=node:GetAttribute('Ground')
+     local radius=node:GetAttribute('Radius') or 1
+     if ended and now>=ended and node:GetAttribute('Completed')==true and not r.rubble then
+      r.rubble=true
+      RoleVisuals.Crater(Vector3.new(position.X,ground or position.Y,position.Z),math.clamp(4.8+radius*1.15,6,10),'Orbital',ended)
+     end
      MotionBuffer.push(r.samples,at,CFrame.new(position))
      local pose=MotionBuffer.pose(r.samples,now)
      -- Do not replay completed strikes to a late joiner.
@@ -6996,6 +7211,13 @@ function View.new(audio,onPrism,onNomadImpact)
      r.started=true
      local age=now-at
      local expires=node:GetAttribute('ExpiresAt') or at+1
+     if kind=='Breaker' and node:GetAttribute('Phase')=='Impact' then
+      local ground=node:GetAttribute('Ground')
+      if type(ground)=='number' then
+       local scale=math.clamp((node:GetAttribute('Diameter') or 3)/3,.65,3)
+       RoleVisuals.Crater(Vector3.new(position.X,ground,position.Z),math.clamp(3.4*scale,2.8,6.8),'Breaker',at,position-from)
+      end
+     end
      -- Short contact cues are never replayed as fresh hits after a late join.
      if now<expires and (age<=.35 or kind=='AbilityCharge' or kind=='Pulse' or kind=='Beam') then
       RoleVisuals.setTime(at)
@@ -7200,6 +7422,7 @@ function V.new(parent,audio,onSplit)
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
   local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*((prism or nomad) and 1.30 or 1)
   local clusterSize=(prism or nomad) and (s:GetAttribute('BlastClusterSize') or 1) or 1
+  local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
   local reduced=BeamVFX.reduced() or V.reducedMotion()
@@ -7207,7 +7430,7 @@ function V.new(parent,audio,onSplit)
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
   if audio and not nomad then
    local volume=owned and 1 or .62
-   audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume})
+   if not prismReceipt then audio:play(prism and 'prism_blast' or 'crystal_split',point,{level=volume}) end
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
@@ -7229,8 +7452,10 @@ function V.new(parent,audio,onSplit)
     RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(HOT,.46),strength*.78,'NomadCrystal')
    elseif RoleVisuals then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
-    RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
-    if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
+    if not prismReceipt then
+     RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
+     if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
+    end
     RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
    for i=1,nomad and 2 or prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
@@ -14214,6 +14439,13 @@ local function renderBackpacks()
 end
 
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
+ onImpact=function(source,at)
+  local size=source:GetAttribute('FullSize') or source.Size
+  if type(size)=='number' then size=Vector3.one*size end
+  local p=source.Position
+  local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
+  RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+ end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)

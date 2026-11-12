@@ -85,6 +85,8 @@ def module_bundle(names):
   names=tuple(n for name in names for n in (tuple(dep for dep in ('PullMotion','PlaneBurst','LaunchAftermath') if dep not in names)+(name,) if name=='StartupFX' else (name,)))
  if 'EnergyDisc' not in names and any(n in names for n in ('LaunchAftermath','BeamVFX','StartupFX','WorkEffects','RoleVisuals','RoleEffectView')):
   names=('EnergyDisc',)+tuple(names)
+ if 'RoleVisuals' in names and 'ImpactRubble' not in names:
+  names=tuple(n for name in names for n in (('ImpactRubble','RoleVisuals') if name=='RoleVisuals' else (name,)))
  if 'RoleEffectView' in names and 'NomadView' not in names:
   names=tuple(n for name in names for n in (('NomadView','RoleEffectView') if name=='RoleEffectView' else (name,)))
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'

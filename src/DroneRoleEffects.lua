@@ -36,29 +36,33 @@ function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,ta
  -- release destroys a canceled shot and contact starts the short cleanup.
  return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery,ScanGround=ground})
 end
-function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
- if not node or not node.Parent then return end
+local function contact(node,point,normal,fractured,broken,powered,at)
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
  node:SetAttribute('ContactFracture',fractured);node:SetAttribute('ContactBroken',broken);node:SetAttribute('ContactPowered',powered)
  node:SetAttribute('ContactAt',at)
+end
+function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
+ if not node or not node.Parent then return end
+ contact(node,point,normal,fractured,broken,powered,at)
  Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
-function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNormal)
+function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNormal,blastGround,blastRadius)
  if not node or not node.Parent then return end
  node:SetAttribute('PrismFrom',origin);node:SetAttribute('PrismEnd',endpoint)
  node:SetAttribute('PrismGroundNormal',groundNormal)
+ node:SetAttribute('BlastGround',blastGround);node:SetAttribute('BlastRadius',blastRadius)
  for i,hit in ipairs(contacts) do
   node:SetAttribute('PrismHit'..i,hit.point);node:SetAttribute('PrismNormal'..i,hit.normal)
  end
  node:SetAttribute('PrismHits',#contacts)
- Effects.ProjectileContact(node,primary.point,primary.normal,false,false,false,at)
+ contact(node,primary.point,primary.normal,false,false,false,at)
 end
 function Effects.NomadContact(node,point,ground,radius,at)
  if not node or not node.Parent then return end
  node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',ground);node:SetAttribute('BlastRadius',radius)
  node:SetAttribute('ContactAt',at)
 end
-function Effects.NomadShatter(node,at)
+function Effects.ClusterShatter(node,at)
  if not node or not node.Parent then return end
  if at then node:SetAttribute('ShatterAt',at) end
  Debris:AddItem(node,5.2)
@@ -72,12 +76,15 @@ end
 function Effects.Grow(from,target,planted)
  record('Grow',{From=from,Position=target,Planted=planted},1.8)
 end
-function Effects.BreakerPhase(position,target,phase,diameter)
- record('Breaker',{From=position,Position=target,Phase=phase,Diameter=diameter},1.8)
+function Effects.BreakerPhase(position,target,phase,diameter,ground)
+ record('Breaker',{From=position,Position=target,Phase=phase,Diameter=diameter,Ground=ground},phase=='Impact' and 4.8 or 1.8)
 end
-local function endBurn(owner)
+local function endBurn(owner,completed)
  local old=burns[owner];burns[owner]=nil
- if old and old.Parent then old:SetAttribute('EndedAt',workspace:GetServerTimeNow());Debris:AddItem(old,4.4) end
+ if old and old.Parent then
+  if completed then old:SetAttribute('Completed',true) end
+  old:SetAttribute('EndedAt',workspace:GetServerTimeNow());Debris:AddItem(old,4.8)
+ end
 end
 local function watchBurn(owner,node)
  task.delay(8,function()
@@ -94,7 +101,7 @@ function Effects.Ability(owner,event,template)
  if kind=='clear' then Effects.ClearAbility(owner)
  elseif kind=='clearCharge' then clear(markers,owner)
  elseif kind=='clearScrap' then clear(swarms,owner)
- elseif kind=='orbitalEnd' then endBurn(owner)
+ elseif kind=='orbitalEnd' then endBurn(owner,event.completed)
  elseif kind=='charge' then
   clear(markers,owner)
   local duration=event.duration or 1.4

@@ -201,6 +201,7 @@ local poses={Bubbler=bubblePose,Halver=halverPose,Gridcutter=gridPose,Singularit
 function FX.new(world,options)
  options=options or {}
  local self={world=world,tracked={},dirty={},retry={},active={},cached={},completed={},count=0,effectSlots=0,connections={},destroyed=false,poseUpdates=0,reuseGeometry=options.reuseGeometry==true}
+ local finished={}
  local maxDistance=options.maxDistance or 160
  local focusPosition
  local function nearby(v)
@@ -257,7 +258,7 @@ function FX.new(world,options)
   remove(v)
   if self.cached[v] then freeGeometry(self.cached[v]);self.cached[v]=nil end
   if self.tracked[v] then self.tracked[v]:Disconnect();self.tracked[v]=nil end
-  self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil
+  self.dirty[v]=nil;self.retry[v]=nil;self.completed[v]=nil;finished[v]=nil
  end)
  for _,v in ipairs(world:GetDescendants()) do observe(v) end
  function self:isActive(source) return self.active[source]~=nil end
@@ -272,6 +273,11 @@ function FX.new(world,options)
     local kind=v:GetAttribute('EffectType')
     local start=v:GetAttribute('EffectStartedAt')
     local duration=v:GetAttribute('EffectDuration')
+    if options.onImpact and serial>0 and finished[v]~=serial and supported[kind] and v:GetAttribute('EffectDepleted')==true then
+     local done=v:GetAttribute('EffectDoneAt') or 0
+     if done>now then self.retry[v]=done
+     elseif done>0 then finished[v]=serial;options.onImpact(v,done) end
+    end
     local cancelled=(v:GetAttribute('EffectCancelledSerial') or 0)>=serial
     local e=self.active[v]
     if e and e.serial==serial and cancelled and v:GetAttribute('EffectDepleted')==true then concealDepleted(e)
@@ -359,6 +365,7 @@ function FX.new(world,options)
   for _,connection in pairs(self.tracked) do connection:Disconnect() end
   for _,connection in ipairs(self.connections) do connection:Disconnect() end
   table.clear(self.dirty);table.clear(self.retry);table.clear(self.tracked);table.clear(self.completed)
+  table.clear(finished)
   self.folder:Destroy()
  end
  return self

@@ -1689,7 +1689,10 @@ function scene.firePrism(d,primary,job)
  for _,hit in ipairs(path.hits) do
   if hit~=path.selected then table.insert(contacts,hit) end
  end
- RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal)
+ local center=primary.part.Position
+ local ground=Vector3.new(center.X,primary.part:GetAttribute('GroundY') or center.Y-primary.part.Size.Y*.5,center.Z)
+ if path.groundNormal and (path.endpoint-ground).Magnitude<=spec.BlastRadius*.82 then ground=path.endpoint end
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal,ground,spec.BlastRadius)
  return true
 end
 function scene.fireNomad(d,primary,job)
@@ -1750,7 +1753,7 @@ function scene.stepClusterShots()
     rock.part:SetAttribute('ClusterBlackAt',nil);rock.part:SetAttribute('BlastClusterSize',nil)
    end
   end
-  if shot.finishKind=='NomadFinish' then RoleEffects.NomadShatter(shot.projectile,anyBroken and now or nil) end
+  RoleEffects.ClusterShatter(shot.projectile,anyBroken and now or nil)
  end
 end
 function scene.nomadTargetScore(d,rock,distance)
@@ -2571,7 +2574,7 @@ local function breakerDrone(d,p,hr,field,dt)
   if hitResource(d,r,d.stats.miningDPS*3.2,false,nil,d.pos,'Breaker') then
    d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
    d.goal=job.station;d.intentGoal=job.station;publishBreakerPhase(d,job)
-   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact',diameter)
+   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact',diameter,r.part:GetAttribute('GroundY'))
   else
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6
    release(d)

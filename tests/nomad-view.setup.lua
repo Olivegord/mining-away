@@ -1,7 +1,11 @@
 -- Evaluate the production shot presentation at adjacent phase boundaries.
 local BeamVFX={near=function() return true end,reduced=function() return false end}
-local RoleVisuals={pulses=0,setTime=function() end}
+local RoleVisuals={pulses=0,craters=0,setTime=function() end}
 function RoleVisuals.Pulse() RoleVisuals.pulses+=1 end
+function RoleVisuals.Crater(_,radius,style,at)
+ assert(radius>12 and style=='Nomad' and at==5.50)
+ RoleVisuals.craters+=1
+end
 local NumberSequenceKeypoint={new=function(t,value) return {Time=t,Value=value} end}
 local function typeof(value) return getmetatable(value)==VM and 'Vector3' or type(value) end
 function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end

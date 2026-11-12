@@ -186,7 +186,7 @@ end)
 check('Prism is visible at contact and fades immediately before leaving char',function()
  RoleVisuals.setTime(realTime)
  local from,to=Vector3.new(0,20,0),Vector3.new(0,0,-36)
- RoleVisuals.Beam(from,to,Color3.new(1,.08,.12),.49,.42,'Prism',Vector3.yAxis)
+ RoleVisuals.Beam(from,to,Color3.new(1,.08,.12),1.52,.42,'Prism',Vector3.yAxis)
  local at=realTime
  local group=assert(workspace:FindFirstChild('DroneRoleClientEffects'))
  local impact=assert(group:FindFirstChild('PrismImpactLight',true))
@@ -198,7 +198,10 @@ check('Prism is visible at contact and fades immediately before leaving char',fu
  local beamRoot=impact.Parent
  local main=beamRoot:FindFirstChild('TaperedBody')
  RoleVisuals.step(at)
- assert(main.Enabled and main.Width0>.18 and main.Width0<.23,'Prism was not bright and thin at release')
+ local core=beamRoot:FindFirstChild('NeedleCore')
+ local corona=beamRoot:FindFirstChild('PrismCorona')
+ assert(main.Enabled and main.Width0>.64 and main.Width1>.50,'Prism lost width across its path')
+ assert(core.Width0>.19 and core.Brightness>=2 and corona.Width0>3,'Prism lost the bright core or outer glow')
  assert(lamp.Enabled and lamp.Brightness>2 and sparks.Enabled and sparks.Rate>18)
  local first=main.Transparency[2].Value
  RoleVisuals.step(at+.05)

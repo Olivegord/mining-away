@@ -42,6 +42,8 @@ local function checkPrism()
  local beforePickup=pickupSerial
  assert(scene.firePrism(drone,target,drone.specialJob),'valid path did not fire')
  assert(receipt:GetAttribute('ContactAt')==now and receipt:GetAttribute('PrismHits')==2)
+ local ground=assert(receipt:GetAttribute('BlastGround'))
+ assert(ground.Y==target.part:GetAttribute('GroundY') and receipt:GetAttribute('BlastRadius')==spec.BlastRadius)
  local origin,endpoint=receipt:GetAttribute('PrismFrom'),receipt:GetAttribute('PrismEnd')
  assert(math.abs((endpoint-origin).Magnitude-distance(4))<.001,'path did not stop at the reserved rock')
  assert(receipt:GetAttribute('PrismHit1') and receipt:GetAttribute('PrismHit2') and not receipt:GetAttribute('PrismHit3'))
@@ -50,6 +52,7 @@ local function checkPrism()
  for _,t in ipairs({.01,spec.BeamHold,spec.BeamHold+spec.BlackPause-.01}) do
   now=fireAt+t
   scene.stepClusterShots()
+  assert(not receipt:GetAttribute('ShatterAt'),'the final impact was sent during the beam or blackout')
   for _,rock in ipairs({target,second,third,nearby}) do
    assert(rock.hp==800 and rock.stage==0 and not rock.extractedOre,'health or rewards changed before the explosion')
    assert(rock.part:GetAttribute('ClusterBlackAt')==fireAt)
@@ -63,6 +66,7 @@ local function checkPrism()
  p.busy=false
  scene.stepClusterShots()
  local rewardSerial=pickupSerial
+ assert(receipt:GetAttribute('ShatterAt')==now,'the ground impact must use the confirmed fracture clock')
  assert(rewardSerial>beforePickup,'the blast did not award ore')
  for _,rock in ipairs({target,second,third,nearby}) do
   assert(rock.hp==0 and rock.paid and rock.extractedOre==rock.ore and not rock.clusterShot,'the explosion did not finish the hit rock')

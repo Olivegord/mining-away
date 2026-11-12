@@ -207,12 +207,15 @@ assert(math.abs(secondStar.Width0-width)>.001 and math.abs(secondStar.Transparen
 RoleEffectView.ramielCharge(prism,1,-.43,false)
 assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
 local beamCalls,kicks={},0
+local waves,shatters={},{}
 RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
-local loop,launches=nil,0
+RoleVisuals.PrismWave=function(...) table.insert(waves,{...}) end
+RoleVisuals.PrismShatter=function(...) table.insert(shatters,{...}) end
+local loop,launches,cracks=nil,0,0
 local audio={
  setLoop=function(_,_,name,_,level) loop={name=name,level=level} end,
  stopLoop=function() loop=nil end,
- play=function(_,name) if name=='prism_fire' then launches+=1 end end,
+ play=function(_,name) if name=='prism_fire' then launches+=1 elseif name=='prism_blast' then cracks+=1 end end,
 }
 local discharge=RoleEffectView.new(audio,function() kicks+=1 end)
 local cast=receipt('ramiel',115,'Prism',4.94)
@@ -221,17 +224,20 @@ cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',beamDuration)
 roleFolder.ChildAdded:Fire(cast)
 local prismDrones={ramiel={ramiel=prism}}
 discharge:step(119.95,prismDrones,targets)
-assert(#beamCalls==0 and kicks==0 and loop.name=='prism_charge','Ramiel fired before contact or missed its charge sound')
+assert(#beamCalls==0 and #waves==0 and kicks==0 and loop.name=='prism_charge','Ramiel fired before contact or missed its charge sound')
 cast:SetAttribute('PrismFrom',Vector3.zero)
 cast:SetAttribute('PrismEnd',Vector3.new(0,8,32))
 cast:SetAttribute('PrismGroundNormal',Vector3.yAxis)
 cast:SetAttribute('PrismHits',1);cast:SetAttribute('PrismHit1',Vector3.new(0,5,20))
 cast:SetAttribute('ContactAt',120)
 cast:SetAttribute('ContactPoint',Vector3.new(0,2,8))
+local floor=Vector3.new(0,0,8)
+cast:SetAttribute('BlastGround',floor);cast:SetAttribute('BlastRadius',11)
 discharge:step(120.01,prismDrones,targets)
-assert(#beamCalls==1 and kicks==1)
+assert(#beamCalls==1 and kicks==1 and #waves==1 and #shatters==0)
+assert(waves[1][1]==floor and waves[1][2]==11 and waves[1][3]==beamDuration,'the shockwave did not share the beam beat')
 local beam=beamCalls[1]
-assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]<=.49 and beam[5]==beamDuration and beam[6]=='Prism')
+assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]>=1.5 and beam[5]==beamDuration and beam[6]=='Prism')
 assert(beam[7]==Vector3.yAxis,'ground normal did not reach the renderer')
 local lighting=game:GetService('Lighting')
 local exposure=assert(lighting:FindFirstChild('RamielReleaseExposure'))
@@ -247,6 +253,13 @@ assert(#beamCalls==1 and kicks==1 and launches==1,'Ramiel discharge replayed')
 assert(not loop,'the firing loop outlived the beam')
 discharge:step(120.45,prismDrones,targets)
 assert(not exposure.Parent and not bloom.Parent,'lighting did not recover after the shot')
+cast:SetAttribute('ShatterAt',120.50)
+discharge:step(120.49,prismDrones,targets)
+assert(#shatters==0 and cracks==0,'rubble or shatter audio fired during the blackout')
+discharge:step(120.51,prismDrones,targets)
+discharge:step(120.52,prismDrones,targets)
+assert(#shatters==1 and shatters[1][1]==floor and shatters[1][3]==120.50 and cracks==1 and #waves==1,
+ 'the confirmed break must release rubble and sound exactly once')
 local latePrism=RoleEffectView.new(nil,function() kicks+=1 end)
 local lateDrones={ramiel={ramiel=prism}}
 latePrism:step(120.23,lateDrones,targets)

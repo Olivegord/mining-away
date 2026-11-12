@@ -1432,6 +1432,13 @@ local function renderBackpacks()
 end
 
 local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=resources[source];return record and record.view end,
+ onImpact=function(source,at)
+  local size=source:GetAttribute('FullSize') or source.Size
+  if type(size)=='number' then size=Vector3.one*size end
+  local p=source.Position
+  local ground=source:GetAttribute('GroundY') or p.Y-size.Y*.5
+  RoleVisuals.Crater(Vector3.new(p.X,ground,p.Z),math.clamp(math.max(size.X,size.Z)*.7+1.5,3,6),'Specialist',at)
+ end,
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)

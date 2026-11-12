@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `65bea3f8f683a07b1b58197514a6d74817f5c64ac337ddd18bcb06213d776142` | Nomad's larger hull, cruising scanner, wide approach and delayed blast. |
-| Shared Studio Sources | Verified Team Create save **212** | All seven managed Sources match the canonical file and Script Sync export. |
+| Native-file SHA-256 | `5fd0bfedaf187afd7b8454f1163cbb168978f01104513b3a4cfe3dcaae065416` | Ramiel's wider beam, synchronized shockwave and heavy-impact rubble. |
+| Shared Studio Sources | Verified Team Create save **213** | All seven managed Sources match the canonical file and Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's larger hull and delayed blast in save **212**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the wider Ramiel beam and heavy-impact rubble in save **213**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — widen Ramiel's beam and ground the heavy impacts
+
+Ramiel fires a roughly three-times-wider red beam with a pale core and broad corona. The ground shockwave starts on the same contact and clears with the beam at 0.42 seconds. The confirmed shatter follows at 0.50 seconds with one deep crack, particle grit and a rim of ground-colored slabs. Slabs rise in an uneven ring, settle and sink while fading. Nomad, Orbital, Breaker and the seven prestige mining specialists use smaller or larger rims at their confirmed hit or finish. The effect is local and noncolliding.
+
+One Studio Edit preview verified the rim on the authored quarry floor. A native sample checked 16 slabs, including four wedge shapes, their rise, settle, sink and cleanup, and that a late observer skips the dust burst. Beam, energy, Orbital completion, crystal contact-clock, Ramiel and Nomad checks passed with API doubles. The broader gadget suite still stops at its existing client-inertia fixture error. Full gameplay visuals, audio balance and multiplayer were not playtested. Script Sync and a Source-only canonical refresh verified all seven managed Sources at Team Create save **213** for place **124078027733625**, universe **10774898335**. Reproduce from the prior snapshot with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 4bbbc70`. This revision is unpublished.
 
 ## November 11 — give Nomad slow flight and a heavier blast
 

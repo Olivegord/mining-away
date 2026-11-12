@@ -86,6 +86,7 @@ local function prismScorch(parent,point,normal,travel,at)
  scorchTimelines[root]={at=at,layers=layers}
 end
 function Effects.step(now)
+ ImpactRubble.step(now)
  for root,mark in pairs(scorchTimelines) do
   local age=now-mark.at
   if not root.Parent or age>=17 then
@@ -115,10 +116,11 @@ function Effects.step(now)
   elseif age<0 then BeamVFX.hide(rig)
   elseif age<t.duration then
    if prism then
-    local opacity=(1-age/t.duration)^1.55
+    local remaining=1-age/t.duration
+    local opacity=remaining^.98
     BeamVFX.draw(rig,t.from,t.to,now,.64+.36*opacity,nil,age,t.scale)
     BeamVFX.fadePrism(rig,opacity)
-    if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,opacity) end
+    if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,remaining^1.55) end
    else
     local expansion=math.min(1,age/.035)
     local collapse=1-math.clamp((age/t.duration-.62)/.38,0,1)
@@ -263,6 +265,13 @@ function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, end
  Debris:AddItem(value,duration+.05)
 end
 
+function Effects.Crater(position: Vector3,radius: number,style: string,at: number,direction: Vector3?)
+ if BeamVFX.reduced() or not BeamVFX.near(position,150) then return end
+ local player=Players.LocalPlayer
+ local steady=game:GetService('GuiService').ReducedMotionEnabled or (player and player:GetAttribute('ReducedMotion')==true)
+ ImpactRubble.spawn(folder(),position,radius,style,at,workspace:GetServerTimeNow(),direction,steady)
+end
+
 -- World-space particles survive the rock, drone or beam that triggered them.
 -- One capped carrier per beat keeps clustered finishes within a fixed budget.
 local impactCount,prismImpactCount=0,0
@@ -298,6 +307,18 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  dust.Acceleration=Vector3.new(0,1.1,0)
  dust.Parent=root;dust:Emit(prism and 9 or orbital and 5 or 4)
  Debris:AddItem(root,residual and 2.7 or 1.4)
+end
+
+function Effects.PrismWave(position: Vector3,radius: number,duration: number)
+ Effects.Pulse(position+Vector3.yAxis*.09,Color3.fromRGB(229,40,78),radius*.4,radius*2.7,duration)
+ Effects.Pulse(position+Vector3.yAxis*.20,Color3.fromRGB(255,204,217),radius*.19,radius*1.87,duration*.62)
+end
+
+function Effects.PrismShatter(position: Vector3,radius: number,at: number,direction: Vector3)
+ Effects.Crater(position,radius,'Prism',at,direction)
+ if workspace:GetServerTimeNow()-at>=.24 then return end
+ local red=Color3.fromRGB(229,40,78)
+ Effects.ImpactParticles(position+Vector3.yAxis*.55,red,2.1,'PrismBlast')
 end
 
 function Effects.Heal(from: Vector3, to: Vector3)
@@ -580,6 +601,7 @@ function Effects.Ability(owner: any,event: any,template: Model?)
 end
 
 function Effects.destroy()
+ ImpactRubble.clear()
  for rig in pairs(beamTimelines) do BeamVFX.destroy(rig) end
  table.clear(beamTimelines);table.clear(chargeTimelines);table.clear(orbitalTimelines)
  for root in pairs(scorchTimelines) do root:Destroy() end

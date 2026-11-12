@@ -634,11 +634,12 @@ function A.step(state,now,dt,ctx,swarmContext)
     state.burn=nil;event(ctx,'orbitalEnd')
    else
     burn.accepted=true;burn.remaining-=slice
-    if now>=burn.nextPose then
+    local completed=broken or burn.remaining<=1e-7
+    if completed or now>=burn.nextPose then
      burn.nextPose=now+.1
      event(ctx,'orbital',{target=target,remaining=burn.remaining,precise=burn.precise})
     end
-    if broken or burn.remaining<=1e-7 then
+    if completed then
      if burn.relay then
       for _,r in ipairs(targets(ctx,burn.fieldId,'OrbitalRelay')) do
        if r.id~=target.id and distance(target,r)<=14 then
@@ -646,7 +647,7 @@ function A.step(state,now,dt,ctx,swarmContext)
        end
       end
      end
-     state.burn=nil;event(ctx,'orbitalEnd')
+     state.burn=nil;event(ctx,'orbitalEnd',{completed=true})
     end
    end
   end
@@ -5136,29 +5137,33 @@ function Effects.Projectile(shape,from,to,color,startedAt,windup,flight,actor,ta
  -- release destroys a canceled shot and contact starts the short cleanup.
  return record('MiningShot',{Shape=shape,From=from,Position=to,Color=color,StartedAt=startedAt,Windup=windup,Duration=flight,Actor=actor,TargetId=target,TargetAnchor=anchor,BeamHold=beamHold,VisualRecovery=visualRecovery,ScanGround=ground})
 end
-function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
- if not node or not node.Parent then return end
+local function contact(node,point,normal,fractured,broken,powered,at)
  node:SetAttribute('ContactPoint',point);node:SetAttribute('ContactNormal',normal)
  node:SetAttribute('ContactFracture',fractured);node:SetAttribute('ContactBroken',broken);node:SetAttribute('ContactPowered',powered)
  node:SetAttribute('ContactAt',at)
+end
+function Effects.ProjectileContact(node,point,normal,fractured,broken,powered,at)
+ if not node or not node.Parent then return end
+ contact(node,point,normal,fractured,broken,powered,at)
  Debris:AddItem(node,math.max(.9,(node:GetAttribute('VisualRecovery') or 0)+.10))
 end
-function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNormal)
+function Effects.PrismContact(node,origin,endpoint,primary,contacts,at,groundNormal,blastGround,blastRadius)
  if not node or not node.Parent then return end
  node:SetAttribute('PrismFrom',origin);node:SetAttribute('PrismEnd',endpoint)
  node:SetAttribute('PrismGroundNormal',groundNormal)
+ node:SetAttribute('BlastGround',blastGround);node:SetAttribute('BlastRadius',blastRadius)
  for i,hit in ipairs(contacts) do
   node:SetAttribute('PrismHit'..i,hit.point);node:SetAttribute('PrismNormal'..i,hit.normal)
  end
  node:SetAttribute('PrismHits',#contacts)
- Effects.ProjectileContact(node,primary.point,primary.normal,false,false,false,at)
+ contact(node,primary.point,primary.normal,false,false,false,at)
 end
 function Effects.NomadContact(node,point,ground,radius,at)
  if not node or not node.Parent then return end
  node:SetAttribute('ContactPoint',point);node:SetAttribute('BlastGround',ground);node:SetAttribute('BlastRadius',radius)
  node:SetAttribute('ContactAt',at)
 end
-function Effects.NomadShatter(node,at)
+function Effects.ClusterShatter(node,at)
  if not node or not node.Parent then return end
  if at then node:SetAttribute('ShatterAt',at) end
  Debris:AddItem(node,5.2)
@@ -5172,12 +5177,15 @@ end
 function Effects.Grow(from,target,planted)
  record('Grow',{From=from,Position=target,Planted=planted},1.8)
 end
-function Effects.BreakerPhase(position,target,phase,diameter)
- record('Breaker',{From=position,Position=target,Phase=phase,Diameter=diameter},1.8)
+function Effects.BreakerPhase(position,target,phase,diameter,ground)
+ record('Breaker',{From=position,Position=target,Phase=phase,Diameter=diameter,Ground=ground},phase=='Impact' and 4.8 or 1.8)
 end
-local function endBurn(owner)
+local function endBurn(owner,completed)
  local old=burns[owner];burns[owner]=nil
- if old and old.Parent then old:SetAttribute('EndedAt',workspace:GetServerTimeNow());Debris:AddItem(old,4.4) end
+ if old and old.Parent then
+  if completed then old:SetAttribute('Completed',true) end
+  old:SetAttribute('EndedAt',workspace:GetServerTimeNow());Debris:AddItem(old,4.8)
+ end
 end
 local function watchBurn(owner,node)
  task.delay(8,function()
@@ -5194,7 +5202,7 @@ function Effects.Ability(owner,event,template)
  if kind=='clear' then Effects.ClearAbility(owner)
  elseif kind=='clearCharge' then clear(markers,owner)
  elseif kind=='clearScrap' then clear(swarms,owner)
- elseif kind=='orbitalEnd' then endBurn(owner)
+ elseif kind=='orbitalEnd' then endBurn(owner,event.completed)
  elseif kind=='charge' then
   clear(markers,owner)
   local duration=event.duration or 1.4
@@ -9563,7 +9571,10 @@ function scene.firePrism(d,primary,job)
  for _,hit in ipairs(path.hits) do
   if hit~=path.selected then table.insert(contacts,hit) end
  end
- RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal)
+ local center=primary.part.Position
+ local ground=Vector3.new(center.X,primary.part:GetAttribute('GroundY') or center.Y-primary.part.Size.Y*.5,center.Z)
+ if path.groundNormal and (path.endpoint-ground).Magnitude<=spec.BlastRadius*.82 then ground=path.endpoint end
+ RoleEffects.PrismContact(job.projectile,path.origin,path.endpoint,path.selected,contacts,now,path.groundNormal,ground,spec.BlastRadius)
  return true
 end
 function scene.fireNomad(d,primary,job)
@@ -9624,7 +9635,7 @@ function scene.stepClusterShots()
     rock.part:SetAttribute('ClusterBlackAt',nil);rock.part:SetAttribute('BlastClusterSize',nil)
    end
   end
-  if shot.finishKind=='NomadFinish' then RoleEffects.NomadShatter(shot.projectile,anyBroken and now or nil) end
+  RoleEffects.ClusterShatter(shot.projectile,anyBroken and now or nil)
  end
 end
 function scene.nomadTargetScore(d,rock,distance)
@@ -10445,7 +10456,7 @@ local function breakerDrone(d,p,hr,field,dt)
   if hitResource(d,r,d.stats.miningDPS*3.2,false,nil,d.pos,'Breaker') then
    d.impactSerial=(d.impactSerial or 0)+1;d.impactAt=now
    d.goal=job.station;d.intentGoal=job.station;publishBreakerPhase(d,job)
-   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact',diameter)
+   RoleEffects.BreakerPhase(d.pos,job.contact,'Impact',diameter,r.part:GetAttribute('GroundY'))
   else
    r.blockedUntil=r.blockedUntil or {};r.blockedUntil[d.id]=now+6
    release(d)
