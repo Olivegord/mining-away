@@ -478,6 +478,14 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
  local radius=rig.scale*1.35
  local frame=pivot*CFrame.Angles(0,roll,0)
  local assembled=elapsed<=.07 or close>=1
+ if assembled then
+  rig.openRotation=nil
+ else
+  -- The two stacks turn in opposite directions. Hold their common axis
+  -- through the fade so steering cannot counter-rotate either stack.
+  rig.openRotation=rig.openRotation or frame.Rotation
+  frame=CFrame.new(pivot.Position)*rig.openRotation
+ end
  local hullOpacity=assembled and 1 or 0
  if rig.hullOpacity~=hullOpacity then
   rig.hullOpacity=hullOpacity
@@ -485,13 +493,6 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
  end
  if rig.closed then rig.closed.CFrame=frame
  elseif rig.closedFacets and hullOpacity>0 then rig.closedFacets:PivotTo(frame) end
- if not assembled and aim then
-  local heading=Vector3.new(aim.X,pivot.Position.Y,aim.Z)
-  if (heading-pivot.Position).Magnitude>.01 then
-   local lock=smootherstep(time/.18)*(1-close)
-   frame=frame:Lerp(CFrame.lookAt(pivot.Position,heading),lock)
-  end
- end
  local shellOpacity=assembled and 0 or 1-smoothstep((close-.76)/.24)
  for i,half in ipairs(rig.halves) do
   local sign=i==1 and 1 or -1
@@ -506,7 +507,7 @@ function DroneConfig.poseRamiel(rig: any,pivot: CFrame,aim: Vector3?,charge: num
    local tip=1+(sign==1 and .17 or .015)*capSettle
    local near=.055*seam+(sign==1 and .72 or .60)*pinch+.065*capSettle
    if sign<0 then near+=.12*ramielProgress(clock,.95,1.42) end
-   local width=1-.74*pinch+.045*capSettle
+   local width=1-.74*pinch
    local yaw=reduced and 0 or 19*seam+72*pinch+115*capSettle
    poseRamielBand(cap,frame,sign,radius,near+close*.25,tip+close*.25,width,0,sign*yaw,1)
   end

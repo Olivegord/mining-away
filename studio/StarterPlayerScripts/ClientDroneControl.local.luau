@@ -10878,8 +10878,9 @@ local Http=game:GetService('HttpService')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
-local GLINT_LIMIT,SHEEN_LIMIT=12,12
-local REFLECTION_LIGHT=Vector3.new(-.42,.86,.28).Unit
+local GLINT_LIMIT=12
+-- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
+local GEM_GLINT='rbxassetid://6997866340'
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -10900,106 +10901,34 @@ local function removeTrail(self,r)
 end
 local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
- local halo=Instance.new('BillboardGui');halo.Name='DottedStar';halo.Adornee=anchor
- halo.AlwaysOnTop=true;halo.LightInfluence=0;halo.MaxDistance=96;halo.Parent=anchor
- local dots={}
- local function dot(x,y,width,brightness)
-  local frame=Instance.new('Frame');frame.Name='GlintDot';frame.BorderSizePixel=0
-  frame.AnchorPoint=Vector2.new(.5,.5);frame.Position=UDim2.fromScale(.5+x,.5+y)
-  local pixels=math.max(1,math.round(width))
-  frame.Size=UDim2.new(.012,pixels,.012,pixels)
-  local round=Instance.new('UICorner');round.CornerRadius=UDim.new(.5,0);round.Parent=frame
-  frame.Parent=halo;dots[#dots+1]={frame=frame,brightness=brightness}
- end
- dot(0,0,2.1,1)
- for _,side in ipairs({-1,1}) do
-  for i=1,5 do dot(side*i*.013,side*i*.085,1.62-i*.14,1-i*.12) end
-  for i=1,3 do dot(side*i*.088,-side*i*.013,1.55-i*.16,1-i*.18) end
- end
- return {anchor=anchor,halo=halo,dots=dots}
-end
-local function twinkle(age,start,duration)
- local t=math.clamp((age-start)/duration,0,1)
- return math.sin(math.pi*t)^2
+ local halo=Instance.new('BillboardGui');halo.Name='GemSparkle';halo.Adornee=anchor
+ halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=58;halo.Parent=anchor
+ local sprite=Instance.new('ImageLabel');sprite.Name='GlintSprite'
+ sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1);sprite.Image=GEM_GLINT
+ sprite.ImageTransparency=1;sprite.Parent=halo
+ return {anchor=anchor,halo=halo,sprite=sprite}
 end
 local function removeIdle(self,r)
  if not r.idle then return end
  r.idle.anchor.Parent=nil;table.insert(self.idlePool,r.idle);r.idle=nil
  self.idleCount-=1
 end
-local function updateGlint(self,r,age,strength,eye,now)
- local sinceContact=age-r.arc.contact
- local clock=math.max(0,sinceContact-.55)+r.seed*.53
- local cycle=sinceContact<.55 and -1 or math.floor(clock/2.15)
- local pulse=sinceContact<0 and twinkle(age,.13,.35)
-  or cycle==-1 and twinkle(sinceContact,-.035,.39) or twinkle(clock%2.15,0,.42)
- if pulse*strength<.015 then removeIdle(self,r);return end
- -- The fine dots use screen-space depth override only while the gem itself is visible.
- if now>=(r.glintQueryAt or 0) then
-  r.glintQueryAt=now+.085
-  local ignore={self.parent};if self.player.Character then table.insert(ignore,self.player.Character) end
-  self.glintRay.FilterDescendantsInstances=ignore
-  local target=r.drawPosition+Vector3.yAxis*r.view.Size.Y*.55
-  r.glintBlocked=workspace:Raycast(eye,target-eye,self.glintRay)~=nil
- end
- if r.glintBlocked then removeIdle(self,r);return end
+local function updateGlint(self,r,age,strength)
+ local clock=age<.5 and age or (age-.5+r.seed*.61)%3.4
+ local t=math.clamp(clock/.22,0,1)
+ local alpha=math.sin(math.pi*t)^2*strength*.78
+ if alpha<.025 then removeIdle(self,r);return end
  if not r.idle then
   if self.idleCount>=GLINT_LIMIT then return end
   r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
-  local side=(r.seed+cycle)%2==0 and 1 or -1
   local size=r.view.Size
-  r.idle.anchor.Position=Vector3.new(side*size.X*.18,size.Y*.52,-side*size.Z*.12)
+  local side=r.seed%2==0 and 1 or -1
+  r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.56,-side*size.Z*.08)
+  local width=r.physical and 1.14 or .86
+  r.idle.halo.Size=UDim2.fromScale(width,width)
   r.idle.anchor.Parent=r.view
-  local tint=r.color:Lerp(PICKUP_HIGHLIGHT,.88)
-  for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundColor3=tint end
  end
- local width=(r.physical and 3.35 or 2.45)*(.74+pulse*.26)
- r.idle.halo.Size=UDim2.new(width,16,width,16)
- for _,dot in ipairs(r.idle.dots) do dot.frame.BackgroundTransparency=1-pulse*strength*dot.brightness end
-end
-local function removeSheen(self,r)
- if not r.sheen then return end
- for _,patch in ipairs(r.sheen) do patch:Destroy() end
- r.sheen=nil;self.sheenCount-=1
-end
-local function updateSheen(self,r,eye,opacity)
- if not r.sheen then
-  if self.sheenCount>=SHEEN_LIMIT then return end
-  r.sheen={};self.sheenCount+=1
-  for i=1,3 do
-   local patch=Instance.new('Part');patch.Name='FacetReflection';patch.Anchored=true
-   patch.CanCollide=false;patch.CanTouch=false;patch.CanQuery=false;patch.CastShadow=false
-   patch.Material=Enum.Material.Neon;patch.Transparency=1
-   patch.Color=r.color:Lerp(PICKUP_HIGHLIGHT,i==1 and .91 or .68);patch.Parent=r.view
-   r.sheen[i]=patch
-  end
- end
- local pose,size=r.view.CFrame,r.view.Size
- local localEye=pose:PointToObjectSpace(eye)
- local direction=eye-pose.Position
- if direction.Magnitude<.001 then return end
- local halfway=direction.Unit+REFLECTION_LIGHT
- local halfNormal=halfway.Magnitude>.001 and halfway.Unit or REFLECTION_LIGHT
- local tableNormal=pose:PointToWorldSpace(Vector3.yAxis)-pose.Position
- local polished=math.max(0,tableNormal:Dot(halfNormal))^14
- local span=math.min(size.X,size.Z)
- local main,edge,crown=table.unpack(r.sheen)
- main.Size=Vector3.new(span*.42,.003,span*.10)
- edge.Size=Vector3.new(span*.26,.003,span*.026)
- local angle=CFrame.Angles(0,.57,0)
- main.CFrame=pose*CFrame.new(size.X*.012,size.Y*.501,-size.Z*.025)*angle
- edge.CFrame=pose*CFrame.new(size.X*.028,size.Y*.501,size.Z*.058)*angle
- main.Transparency=1-opacity*(.49+.46*polished)
- edge.Transparency=1-opacity*(.34+.54*polished)
- -- Keep the broad accent on the crown face turned toward the viewer.
- local side=math.abs(localEye.X/size.X)>math.abs(localEye.Z/size.Z)
- local yaw=side and (localEye.X>=0 and 0 or math.pi) or (localEye.Z<0 and math.pi*.5 or -math.pi*.5)
- local run=side and size.X or size.Z
- crown.Size=Vector3.new(span*.21,.003,span*.16)
- crown.CFrame=pose*CFrame.Angles(0,yaw,0)*CFrame.new(run*.322,size.Y*.352,span*.04)
-  *CFrame.Angles(0,0,-math.atan2(size.Y*.33,run*.20))
- local crownNormal=crown.CFrame:PointToWorldSpace(Vector3.yAxis)-crown.Position
- crown.Transparency=1-opacity*(.38+.54*math.max(0,crownNormal:Dot(halfNormal))^9)
+ r.idle.sprite.ImageTransparency=1-alpha
 end
 local function backpack(owner,fallback)
  local character=owner and owner.Character
@@ -11040,8 +10969,7 @@ end
 function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
-  player=player,trailCount=0,idleCount=0,idlePool={},sheenCount=0,glintRay=RaycastParams.new(),lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
- self.glintRay.FilterType=Enum.RaycastFilterType.Exclude;self.glintRay.RespectCanCollide=true
+  player=player,trailCount=0,idleCount=0,idlePool={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -11063,7 +10991,7 @@ function V.new(root,parent,audio,reducedMotion)
    if source:GetAttribute('CleanCargoArc') and type(floor)=='number' then
     r.arc=OreDrops.rawArc(origin.X,origin.Y,origin.Z,velocity.X,velocity.Y,velocity.Z,floor)
     r.landAge=r.arc.contact
-    view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='';view.Reflectance=.62;view.CastShadow=true
+    view.CastShadow=true
    end
    local height=math.max(0,origin.Y-(source:GetAttribute('FloorY') or origin.Y))
    r.arcTimeout=(velocity.Y+math.sqrt(velocity.Y^2+2*PickupMotion.GRAVITY*height))/PickupMotion.GRAVITY+.18
@@ -11182,7 +11110,7 @@ function V:update(dt,now)
   end
   if r.arc and displayAt<r.born then opacity=0 end
   if done then
-   removeTrail(self,r);removeIdle(self,r);removeSheen(self,r);r.view:Destroy()
+   removeTrail(self,r);removeIdle(self,r);r.view:Destroy()
    self.byId[r.seed]=nil;self.records[source]=nil
   else
    local latest=r.samples[#r.samples]
@@ -11253,14 +11181,11 @@ function V:update(dt,now)
     r.drawPosition=r.motionPose.Position;r.view.CFrame=r.motionPose
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   if r.arc and live and displayAt>=r.born and not seated and cameraPosition then
-    local distance=(r.drawPosition-cameraPosition).Magnitude
-    if opacity>.02 and distance<(r.sheen and 88 or 82) then updateSheen(self,r,cameraPosition,opacity) else removeSheen(self,r) end
-    if not reducedEffects and (not pulling or age<r.landAge+OreDrops.GEM_CONTACT_HOLD) then
-     local distanceFade=math.clamp((94-distance)/17,0,1)
-     updateGlint(self,r,age,glintStrength*distanceFade*opacity,cameraPosition,now)
-    else removeIdle(self,r) end
-   else removeIdle(self,r);removeSheen(self,r) end
+   if r.arc and live and age>=r.landAge and not seated and not reducedEffects and cameraPosition
+    and (not pulling or age<r.landAge+OreDrops.GEM_CONTACT_HOLD) then
+    local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
+    updateGlint(self,r,age-r.landAge,glintStrength*distanceFade*opacity)
+   else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
     local distance=offset:Dot(offset)
@@ -13239,11 +13164,11 @@ local function renderDrone(d,dt,now)
   *CFrame.Angles(recallPitch,0,d.bank)*CFrame.Angles(0,ramielRoll,0)
  local charge,recovery,aim,untilContact,hold=0,nil,nil,nil,nil
  local ramielLatched=false
- local showRamiel=d.ramiel and (BeamVFX.near(visiblePose.Position,140) or not d.ramielNeutral)
+ local ramielInRange=d.ramiel and BeamVFX.near(visiblePose.Position,d.ramielNeutral and 165 or 185)
+ local showRamiel=d.ramiel and (ramielInRange or not d.ramielNeutral)
  if showRamiel then
-  local near=BeamVFX.near(visiblePose.Position,140)
-  d.ramielNeutral=not near
-  local shot=near and d.shotReceipt
+  d.ramielNeutral=not ramielInRange
+  local shot=ramielInRange and d.shotReceipt
   if shot and shot.Parent and (s:GetAttribute('HP') or 0)>0 then
    local started=shot:GetAttribute('StartedAt') or now
    local paused=shot:GetAttribute('PausedAt') or 0

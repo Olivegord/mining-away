@@ -11,18 +11,24 @@ Last substantive handoff: **November 11, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `bb31ed230e7731856db555cdabe35f658908154c17f4e00805d91a389a0d28ae` | Includes the rebuilt Ramiel silhouette and the revised metallic gems. |
-| Shared Studio Sources | Last verified Team Create save **202**, gameplay revision `a4d0bf2` | The new revision needs Script Sync and save in shared Edit. |
+| Native-file SHA-256 | `50caaa1e6a1d8850dc0f21b69df8d8092f51c69c653f5d1dc8a052f30372256f` | Includes the one-way Ramiel animation and the revised metallic gems. |
+| Shared Studio Sources | Verified Team Create save **203** | All seven Sources match the canonical file and tracked Script Sync export. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in the owner's Play session** | Client and drone configuration fingerprints match the scripts from Team Create save 202. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions use the Sources verified in Team Create save 203. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 11 — one-way Ramiel motion and rock update in shared Edit
+
+The rebuilt split diamond, growing slabs, crossed stacks and solid hull latch are installed. The open rig holds its orientation while the slabs move outward and fade, so flight steering cannot swing them back. The pointed tips narrow once. The same save includes the red cluster shatter and the revised cut gems with metallic reflections, a four-point glint and a firm landing clink.
+
+The owner's initial Play session was left alone. Once Studio returned to Edit at place **124078027733625**, universe **10774898335**, native Script Sync updated the three changed Sources and Studio reported a successful Team Create save at version **203**. All seven post-save Source fingerprints match the canonical file. Reproduce the native refresh with `python3 tools/build.py --previous-commit c845dfe`. It preserved the authored map and unrelated or backup Sources. The focused motion, beam and pickup checks passed. A detached Studio rig kept the slabs moving outward through steering changes and latched the hull. The installed gem Sources contain the updated material and glint texture. The broader logistics suite still stops on the existing schema-six migration fixture. Visual and audio appearance in a new Play session remains unverified. This revision is unpublished.
 
 ## November 11 — restore Ramiel's reference silhouette and revise gems
 

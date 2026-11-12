@@ -2,6 +2,10 @@
 
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
+## November 11 follow-up — keep the working Ramiel rig and latest rock effects
+
+Keep the split diamond and crossed slabs. Slabs travel outward once and disappear before the solid hull latches. Keep their axis fixed throughout the attack so steering cannot make them turn back. Include the latest rock and cut-gem changes in the shared Studio build.
+
 ## November 11 follow-up — rebuild Ramiel's silhouette
 
 The owner rejected the animation in Team Create version 202 as completely different from the reference. Match the first attack's visible shapes and timing. Keep the pointed halves through the initial split and narrow column. Let smaller layers grow outward once along the centerline, then form the broader crossed stacks and reveal the tiny pyramids. [Reference video](https://www.youtube.com/watch?v=US5yoHbv-6Q&t=19s)

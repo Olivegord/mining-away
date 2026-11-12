@@ -167,11 +167,13 @@ assert(cap.LocalTransparencyModifier==0 and rig.closedParts[1].LocalTransparency
  and upper.bands[1].near.LocalTransparencyModifier==1,'the diamond did not split into two solid pointed halves')
 sample(1.04/4.94)
 assert(cap.LocalTransparencyModifier==0 and cap.Size.X<splitWidth*.30,'the end cap did not pinch into the narrow column')
+local narrowWidth=cap.Size.X
 sample(1.85/4.94)
 local blockWidth=upper.bands[1].near.Size.X
 assert(blockWidth>splitWidth*.40 and upper.bands[1].near.LocalTransparencyModifier==0,'the broad center of the stack did not form')
 sample(1)
 assert(upper.bands[1].near.Size.X>blockWidth*1.60,'the last wave did not flare out into crossed slabs')
+assert(cap.Size.X<=narrowWidth+1e-6,'the end cap widened again after pinching')
 for frame=0,300 do
  sample(frame/300)
  for part,state in pairs(pieces) do
@@ -204,10 +206,25 @@ for _,half in ipairs(rig.halves) do
 end
 local slab=rig.halves[1].bands[1].near
 local before=slab.Position
+local axes={}
+for _,half in ipairs(rig.halves) do
+ for _,band in ipairs(half.bands) do axes[band.near]=rotate(band.near.CFrame,Vector3.xAxis) end
+end
 sample(1,hold-.01)
 assert((slab.Position-before).Magnitude<1e-6,'the crossed slabs moved during the shot')
 local closeAt=hold+DroneConfig.RamielCloseTime
-sample(1,closeAt-1/60)
+for frame=1,59 do
+ local progress=frame/60
+ local steering=pivot*CFrame.Angles(0,math.sin(progress*math.pi*2)*.64,0)
+ DroneConfig.poseRamiel(rig,steering,nil,1,hold+DroneConfig.RamielCloseTime*progress,0,false,hold)
+ for part,axis in pairs(axes) do
+  assert((rotate(part.CFrame,Vector3.xAxis)-axis).Magnitude<1e-6,'an open piece turned back with flight steering')
+  local outward=math.abs(part.Position.Y-pivot.Position.Y)
+  local state=pieces[part] or {};pieces[part]=state
+  assert(outward>=(state.distance or 0)-1e-6,'a departing piece slid back towards the core')
+  state.distance=outward
+ end
+end
 assert(slab.Position.Y>before.Y and slab.LocalTransparencyModifier>0 and rig.closedParts[1].LocalTransparencyModifier==1,
  'the departing slabs reversed or the hull appeared before the hard latch')
 sample(0)
