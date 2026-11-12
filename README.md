@@ -2,7 +2,7 @@
 
 **One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The current integration branch is **`codex/restore-feel-prestige`**.
 
-**Normal test entry** is the existing shared **DRONEREVOLUTION** Studio Edit session. The latest verified Team Create save is 223. Its seven managed Sources match `studio/` and [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the canonical map and recovery snapshot. See [project state](docs/PROJECT_STATE.md) for verification and publication status.
+**Normal test entry** is the existing shared **DRONEREVOLUTION** Studio Edit session. The latest verified Team Create save is 224. Its seven managed Sources match `studio/` and [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the canonical map and recovery snapshot. See [project state](docs/PROJECT_STATE.md) for verification and publication status.
 
 **Existing shared Roblox game:** [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625), place **124078027733625**, universe **10774898335**. MideDibber has Playtest and Edit access, verified November 6, 2026. Publication of the latest local file to that game is **not yet verified**. GitHub updates do not publish Roblox.
 

@@ -97,6 +97,40 @@ local function checkNomadView()
  assert(RoleVisuals.craterAt==impactAt+.50)
  assert(NomadView.detach(record,impactAt+5) and not blast.root.Parent)
  NomadView.clear(record)
+
+ local camera=workspace.CurrentCamera
+ local fixture=Instance.new('Folder');fixture:SetAttribute('ScanFrom',side)
+ local comparison={}
+ local age=.55*scanClock
+ local function sample()
+  NomadView.step(comparison,fixture,age,from,target,age,windup,(age-windup)/flight)
+ end
+ sample()
+ local edges=comparison.scan.panes[1].edges
+ local feet={edges[1].a.WorldCFrame.Position,edges[2].a.WorldCFrame.Position,edges[3].a.WorldCFrame.Position}
+ local savedCamera=camera.CFrame
+ for _,pitch in ipairs({.17,-.22}) do
+  local c,s=math.cos(pitch),math.sin(pitch)
+  local eye=Vector3.new(5,4,55)
+  local view={RightVector=Vector3.xAxis,PointToObjectSpace=function(_,point)
+   local d=point-eye
+   return Vector3.new(d.X,d.Y*c+d.Z*s,-d.Y*s+d.Z*c)
+  end}
+  camera.CFrame=view
+  sample()
+  for i,edge in ipairs(edges) do
+   local foot=edge.a.WorldCFrame.Position
+   local top=edge.b.WorldCFrame.Position
+   local a,b=view:PointToObjectSpace(foot),view:PointToObjectSpace(top)
+   assert((foot-feet[i]).Magnitude<.0001,'camera moved the ground anchors')
+   assert(math.abs(a.X/a.Z-b.X/b.Z)<.00001,'camera pitch skewed the scanner on screen')
+  end
+  local sheet=comparison.scan.panes[1].sheet
+  assert(math.abs(sheet.main.Width1-(edges[2].b.WorldCFrame.Position-edges[1].b.WorldCFrame.Position).Magnitude)<.0001)
+ end
+ camera.CFrame=savedCamera
+ NomadView.clear(comparison);fixture:Destroy()
  print('PASS Nomad pre-teeth apertures, original bank widths, stage-synced audio and 1.8-second blackout')
+ print('PASS Nomad camera pitch keeps the scanner straight on screen and its floor anchors fixed')
 end
 checkNomadView()

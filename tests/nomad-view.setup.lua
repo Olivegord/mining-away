@@ -20,3 +20,6 @@ function game:GetService(name)
  return getService(self,name)
 end
 workspace.CurrentCamera=Instance.new('Camera')
+workspace.CurrentCamera.CFrame={RightVector=Vector3.xAxis,PointToObjectSpace=function(_,point)
+ return point-Vector3.new(0,0,55)
+end}

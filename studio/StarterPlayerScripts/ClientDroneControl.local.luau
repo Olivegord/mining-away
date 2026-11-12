@@ -6115,9 +6115,9 @@ local function fadeCurves(foot,middle,sky)
  end
  return curves
 end
-local SHEET_ALPHA=fadeCurves(.79,.91,.87)
-local CORE_ALPHA=fadeCurves(.10,.46,.22)
-local HALO_ALPHA=fadeCurves(.50,.79,.60)
+local SHEET_ALPHA=fadeCurves(.79,.90,.984)
+local CORE_ALPHA=fadeCurves(.10,.37,.965)
+local HALO_ALPHA=fadeCurves(.50,.76,.998)
 local SHEET_COLOR=ColorSequence.new(BLUE,DEEP)
 local CORE_COLOR=ColorSequence.new(ICE,CYAN)
 local HALO_COLOR=ColorSequence.new(BLUE,DEEP)
@@ -6132,10 +6132,10 @@ local function scanLine(root,isSheet)
  return {a=a,b=b,main=main,halo=halo,alpha=alpha}
 end
 
-local function paintLine(line,foot,sky,across,width,gain)
+local function paintLine(line,foot,sky,across,width,gain,skyAcross,skyWidth)
  line.a.WorldCFrame=CFrame.fromMatrix(foot,VERTICAL,across)
- line.b.WorldCFrame=CFrame.fromMatrix(sky,VERTICAL,across)
- line.main.Width0=width;line.main.Width1=width
+ line.b.WorldCFrame=CFrame.fromMatrix(sky,VERTICAL,skyAcross or across)
+ line.main.Width0=width;line.main.Width1=skyWidth or width
  local grade=math.clamp(math.round(gain*16),0,16)
  line.main.Transparency=line.alpha[grade]
  line.main.Enabled=grade>0
@@ -6239,7 +6239,19 @@ local function groundPoint(top,height)
  return Vector3.new(top.X,height,top.Z)
 end
 
-local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
+-- The floor stays in the quarry. Correct the decorative upper endpoint so a
+-- camera looking up or down does not fan the columns into a trapezoid.
+local function straightTop(view,foot,sky)
+ if not view then return sky end
+ local base=view:PointToObjectSpace(foot)
+ local top=view:PointToObjectSpace(sky)
+ if base.Z>=-1 or top.Z>=-1 then return sky end
+ local shift=base.X*top.Z/base.Z-top.X
+ local weight=math.clamp((-math.max(base.Z,top.Z)-1)/4,0,1)
+ return sky+view.RightVector*(shift*weight)
+end
+
+local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash,view)
  local virtualHull=groundPoint(center,ground+SCAN_HEIGHT)-bearing*KEEL_OFFSET
  local frame=CFrame.lookAt(virtualHull,virtualHull+bearing)
  local floor=ground+.065
@@ -6252,16 +6264,21 @@ local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
    topA,topB=frame:PointToWorldSpace(mount.a),frame:PointToWorldSpace(mount.b)
    a,b=groundPoint(topA,floor),groundPoint(topB,floor)
    across=(b-a).Unit
+   topA,topB=straightTop(view,a,topA),straightTop(view,b,topB)
   end
   if mount and not stage.pins then
    if reduced then hideLine(pane.sheet)
-   else paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84) end
+   else
+    local topSpan=topB-topA
+    paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84,
+     topSpan.Magnitude>.001 and topSpan.Unit or across,math.max(.001,topSpan.Magnitude))
+   end
    paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
    paintLine(pane.edges[2],b,topB,across,.069,gain)
    paintRail(pane.feet[1],a,b,.062,gain*.87)
    local topC=mount.c and frame:PointToWorldSpace(mount.c)
    local c=topC and groundPoint(topC,floor)
-   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
+   if c and not reduced then paintLine(pane.edges[3],c,straightTop(view,c,topC),across,.035,gain*.70)
    else hideLine(pane.edges[3]) end
    if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
    pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
@@ -6465,7 +6482,7 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
   local soundPoint=Vector3.new(center.X,to.Y+5,center.Z)
   if stage.banks then
    r.scan=r.scan or newScanner(camera)
-   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash) end
+   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash,camera.CFrame) end
   elseif r.scan then r.scan.folder:Destroy();r.scan=nil end
   local stageAge=age-(stage.at or Feel.NomadBeamCutoff)*scanClock
   if audio and index~=r.stage and not paused and stageAge<.16 then
