@@ -627,6 +627,7 @@ DroneConfig.Prominent={
  Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
+DroneConfig.HullSpans={Striker=2.55,Needler=2.65,Ballcaster=2.85,Vacuum=2.75,Compactor=3.05,Courier=2.75,Medic=2.2,Charger=3.05}
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
 -- also serve as projector apertures on the visible model.
@@ -645,10 +646,10 @@ DroneConfig.NomadDropOffset=Vector3.new(2.65,-.85,.17)
 
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
-function DroneConfig.fitBody(model: Model)
+function DroneConfig.fitBody(model: Model, visibleRole: string?)
  local pivot=model:GetPivot()
  local originalScale=model:GetScale()
- local role=model:GetAttribute('RoleGeometry')
+ local role=visibleRole or model:GetAttribute('RoleGeometry')
  local prominent=DroneConfig.Prominent[role]
  if role=='Ramiel' then
   model:ScaleTo(prominent.span/2.70);return
@@ -669,7 +670,8 @@ function DroneConfig.fitBody(model: Model)
  local size=high-low
  local span=math.max(size.X,size.Y,size.Z)
  if span<=.01 then return end
- model:ScaleTo(originalScale*(prominent and prominent.span or 2.65)/span)
+ local targetSpan=prominent and prominent.span or (role and DroneConfig.HullSpans[role]) or 2.75
+ model:ScaleTo(originalScale*targetSpan/span)
  if model:GetAttribute('RoleGeometry')=='Compactor' then
   -- The authoritative ore flight still ends at the original input sockets.
   for i,position in ipairs(DroneConfig.PressSockets) do
@@ -879,39 +881,58 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)
   hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(1.78,-.58,.115),Color3.fromRGB(52,72,88),smooth)
  elseif role=='Needler' then
-  local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
-  shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)
+  hardware('NeedlerSpine',Vector3.new(.65,.36,1.55),CFrame.new(0,-.14,.04),dark,metal)
+  hardware('DartMagazine',Vector3.new(.80,.55,.74),CFrame.new(0,.14,.42),painted,slate)
+  hardware('MagazineCap',Vector3.new(.67,.08,.54),CFrame.new(0,.45,.43),pale,smooth)
+  local rail=hardware('DartGuide',Vector3.new(.34,.16,1.32),CFrame.new(0,-.02,-.61),dark,metal,nil,'DartSlide')
+  shotMuzzle(rail,Vector3.new(0,.14,-.70)*scale)
   for _,side in ipairs({-1,1}) do
-   hardware('DartRail',Vector3.new(.26,.29,1.5),CFrame.new(side*.52,.07,-.79),dark,metal,nil,'DartSlide')
-   hardware('DartTip',Vector3.new(.21,.20,.34),CFrame.new(side*.52,.07,-1.55),pale,smooth,nil,'DartSlide')
+   hardware('DartRail',Vector3.new(.10,.20,1.50),CFrame.new(side*.23,.07,-.57),pale,metal,nil,'DartSlide')
+   hardware('NeedlerWing',Vector3.new(.77,.16,.84),CFrame.new(side*.61,-.07,.43)*CFrame.Angles(0,side*.32,0),painted,slate)
+   hardware('NeedlerDrive',Vector3.new(.45,.31,.48),CFrame.new(side*.70,-.16,.70),dark,metal)
   end
-  hardware('RailCover',Vector3.new(1.24,.10,.38),CFrame.new(0,.28,.27),pale,smooth)
-  hardware('ChamberedDart',Vector3.new(.23,.24,.80),CFrame.new(0,.19,-1.40),Color3.fromRGB(255,220,138),Enum.Material.Neon,nil,'DartLoad')
+  hardware('ChamberedDart',Vector3.new(.14,.14,.62),CFrame.new(0,.14,-.86),Color3.fromRGB(255,220,138),Enum.Material.Neon,nil,'DartLoad')
  elseif role=='Ballcaster' then
-  pod('CoilHull',1.88,.58,0,painted,slate)
-  local ring=hardware('LaunchRing',Vector3.new(.24,1.28,1.28),CFrame.new(0,.14,-.96)*foreAft,dark,metal,cylinder,'BallSlide')
-  shotMuzzle(ring,Vector3.new(.16,0,0)*scale)
-  hardware('CoilFace',Vector3.new(.10,.94,.94),CFrame.new(0,.14,-1.10)*foreAft,pale,smooth,cylinder,'BallSlide')
-  hardware('LoadedOrb',Vector3.one*.62,CFrame.new(0,.14,-1.24),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
- elseif role=='Vacuum' then
-  pod('VacuumHousing',1.82,.57,.03,painted,slate)
-  hardware('WideIntake',Vector3.new(.30,1.46,1.46),CFrame.new(0,-.46,0)*vertical,dark,metal,cylinder,'Intake')
-  hardware('IntakeGlow',Vector3.new(.12,.80,.80),CFrame.new(0,-.62,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
+  hardware('CoilHousing',Vector3.new(.88,1.32,1.32),CFrame.new(0,.02,.54)*foreAft,painted,slate,cylinder)
+  hardware('Breech',Vector3.new(.21,1.13,1.13),CFrame.new(0,.02,.01)*foreAft,dark,metal,cylinder)
+  local port=hardware('OrbSeat',Vector3.new(.14,.64,.64),CFrame.new(0,.02,-.16)*foreAft,dark,metal,cylinder,'BallSlide')
+  shotMuzzle(port,Vector3.new(.82,0,0)*scale)
+  for i=1,6 do
+   local angle=i*math.pi/3
+   local frame=CFrame.new(0,.02,-.57)*CFrame.Angles(0,0,angle)
+   hardware('CoilProng',Vector3.new(.26,.23,.85),frame*CFrame.new(0,.59,0),dark,metal,nil,'BallSlide')
+   hardware('CoilContact',Vector3.new(.19,.05,.32),frame*CFrame.new(0,.45,-.20),color,Enum.Material.Neon,nil,'BallSlide')
+  end
   for _,side in ipairs({-1,1}) do
-   hardware('SuctionCanister',Vector3.new(1.34,.52,.52),CFrame.new(side*.94,.22,0)*foreAft,pale,smooth,cylinder,'Canister',side)
+   hardware('Capacitor',Vector3.new(.84,.42,.42),CFrame.new(side*.83,-.19,.47)*foreAft,pale,metal,cylinder)
+  end
+  hardware('LoadedOrb',Vector3.one*.69,CFrame.new(0,.02,-.64),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
+ elseif role=='Vacuum' then
+  pod('TurbineHousing',1.28,.52,.20,painted,slate)
+  pod('IntakeThroat',.89,.52,-.10,dark,metal)
+  hardware('IntakeTurbine',Vector3.new(.06,.61,.61),CFrame.new(0,-.39,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
+  for i=1,8 do
+   local frame=CFrame.Angles(0,i*math.pi/4,0)
+   hardware('FlaredIntake',Vector3.new(.64,.40,.12),frame*CFrame.new(0,-.46,.68)*CFrame.Angles(.43,0,0),dark,metal,nil,'Intake')
+   hardware('IntakeRim',Vector3.new(.66,.105,.12),frame*CFrame.new(0,-.65,.76),pale,metal,nil,'Intake')
+  end
+  for _,side in ipairs({-1,1}) do
+   hardware('SuctionCanister',Vector3.new(1.30,.51,.51),CFrame.new(side*.82,.12,.14)*foreAft,pale,smooth,cylinder,'Canister',side)
+   hardware('SuctionCap',Vector3.new(.17,.44,.44),CFrame.new(side*.82,.12,.81)*foreAft,painted,slate,cylinder,'Canister',side)
   end
  elseif role=='Compactor' then
-  hardware('PressHull',Vector3.new(1.9,.56,1.62),CFrame.new(),painted,slate)
-  hardware('PressCap',Vector3.new(1.43,.20,1.23),CFrame.new(0,.32,0),pale,smooth)
-  hardware('PressIntake',Vector3.new(.19,.95,.95),CFrame.new(0,-.45,0)*vertical,dark,metal,cylinder)
-  hardware('PressIndicator',Vector3.new(.09,.57,.57),CFrame.new(0,-.56,0)*vertical,color,Enum.Material.Neon,cylinder)
+  hardware('PressBridge',Vector3.new(2.05,.34,1.41),CFrame.new(0,.44,.02),painted,slate)
+  hardware('PressMotor',Vector3.new(.73,.44,.78),CFrame.new(0,.70,.21),dark,metal)
+  hardware('PressIndicator',Vector3.new(.49,.07,.24),CFrame.new(0,.95,.21),color,Enum.Material.Neon)
+  hardware('PressDie',Vector3.new(.67,.32,.73),CFrame.new(0,-.12,.02),dark,metal)
   for i,position in ipairs(DroneConfig.PressSockets) do
    hardware('PressSocket'..i,Vector3.new(.13,.63,.63),CFrame.new(position-Vector3.yAxis*.28)*vertical,dark,metal)
   end
   for _,side in ipairs({-1,1}) do
-   hardware('PressRail',Vector3.new(.27,.91,1.52),CFrame.new(side*.93,-.21,0),dark,metal)
-   hardware('PressJaw',Vector3.new(.27,.25,1.31),CFrame.new(side*.76,-.73,0),pale,metal,nil,'PressJaw',side)
-   hardware('PressFoot',Vector3.new(.39,.33,1.22),CFrame.new(side*.97,-.49,0),pale,metal,nil,'PressFoot',side)
+   hardware('PressColumn',Vector3.new(.24,.77,1.28),CFrame.new(side*.90,.01,.06),dark,metal)
+   hardware('PressPiston',Vector3.new(.47,.34,.34),CFrame.new(side*.61,-.29,0),pale,metal,nil,'PressJaw',side)
+   hardware('PressJaw',Vector3.new(.29,.43,1.03),CFrame.new(side*.75,-.67,0),painted,metal,nil,'PressJaw',side)
+   hardware('PressFoot',Vector3.new(.37,.19,1.10),CFrame.new(side*1.02,-.46,0),pale,metal,nil,'PressFoot',side)
   end
  elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)
@@ -931,11 +952,13 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   lens('SeedOutlet',Vector3.new(0,-.40,-.31),color,.23)
  elseif role=='Charger' then
-  hardware('RamCylinder',Vector3.new(2.15,1.27,1.27),CFrame.new(0,.01,0)*foreAft,painted,slate,cylinder)
-  hardware('ForgedRamFace',Vector3.new(.30,1.32,1.32),CFrame.new(0,.01,-1.09)*foreAft,dark,metal,cylinder)
-  hardware('RamCap',Vector3.new(.12,.93,.93),CFrame.new(0,.01,-1.29)*foreAft,color,smooth,cylinder)
+  hardware('BreakerFrame',Vector3.new(1.36,.58,1.66),CFrame.new(0,.18,0),painted,slate)
+  pod('ImpactRam',.74,.83,-.23,dark,metal)
+  pod('ForgedRamFace',1.14,.20,-.70,pale,metal)
+  pod('RamTip',.76,.14,-.85,color,metal)
   for _,side in ipairs({-1,1}) do
-   hardware('ImpactDrum',Vector3.new(.72,.74,.74),CFrame.new(side*.79,-.08,.32),dark,metal,cylinder)
+   hardware('ImpactDrum',Vector3.new(.85,.60,.60),CFrame.new(side*.81,.16,.12)*vertical,dark,metal,cylinder)
+   hardware('BoosterCollar',Vector3.new(.12,.63,.63),CFrame.new(side*.81,.56,.12)*vertical,painted,slate,cylinder)
   end
  elseif role=='Orbiter' then
   pod('RelayUndercarriage',1.31,.52,-.10,dark,metal)
@@ -956,18 +979,25 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   lens('FabricatorIndicator',Vector3.new(0,.33,.35),color,.26)
  elseif role=='Medic' then
-  pod('RepairDisc',1.51,.24,.01,dark,metal)
-  pod('CeramicCover',1.32,.20,.20,pale,smooth)
+  pod('RepairDisc',1.26,.28,.01,dark,metal)
+  pod('CeramicCover',1.18,.20,.20,pale,smooth)
   hardware('RepairCrossA',Vector3.new(.76,.06,.21),CFrame.new(0,.33,0),color,smooth)
   hardware('RepairCrossB',Vector3.new(.21,.06,.76),CFrame.new(0,.33,0),color,smooth)
+  for _,side in ipairs({-1,1}) do
+   hardware('RepairArm',Vector3.new(.50,.12,.18),CFrame.new(side*.60,-.12,-.26)*CFrame.Angles(0,0,side*.30),dark,metal)
+   hardware('RepairElectrode',Vector3.new(.20,.32,.23),CFrame.new(side*.80,-.28,-.26),pale,metal)
+  end
   lens('RepairOutlet',Vector3.new(0,-.29,0),color,.28)
  elseif role=='Courier' then
-  hardware('ParcelSling',Vector3.new(1.05,.20,1.36),CFrame.new(0,-.38,0),painted,slate)
-  hardware('FrontKeel',Vector3.new(.91,.38,1.04),CFrame.new(0,-.07,-.27),painted,slate,nil,nil,nil,true)
+  hardware('CargoSpine',Vector3.new(.51,.35,2.33),CFrame.new(0,-.17,0),dark,metal)
+  hardware('EmptierCab',Vector3.new(.75,.46,.60),CFrame.new(0,.13,-.74),painted,slate)
+  hardware('RackCrossbar',Vector3.new(2.21,.14,.28),CFrame.new(0,-.37,.63),dark,metal)
+  hardware('RackCrossbar',Vector3.new(2.21,.14,.28),CFrame.new(0,-.37,-.53),dark,metal)
   for _,side in ipairs({-1,1}) do
-   hardware('LiftDrum',Vector3.new(.75,.48,.48),CFrame.new(side*.81,.09,0)*vertical,dark,metal,cylinder)
-   hardware('LiftDrumCap',Vector3.new(.13,.52,.52),CFrame.new(side*.81,.52,0)*vertical,pale,smooth,cylinder)
-   hardware('ParcelRail',Vector3.new(.13,.16,1.31),CFrame.new(side*.52,-.22,.05),dark,metal)
+   hardware('LiftDrum',Vector3.new(.35,.67,.67),CFrame.new(side*.92,-.07,-.20)*vertical,dark,metal,cylinder)
+   hardware('LiftDrumCap',Vector3.new(.10,.55,.55),CFrame.new(side*.92,.14,-.20)*vertical,painted,slate,cylinder)
+   hardware('CargoRail',Vector3.new(.15,.15,2.05),CFrame.new(side*.60,-.43,.05),pale,metal)
+   hardware('RailMarker',Vector3.new(.09,.08,.23),CFrame.new(side*.60,-.32,.93),color,Enum.Material.Neon)
   end
   lens('ParcelIndicator',Vector3.new(0,-.49,.35),color,.22)
  end

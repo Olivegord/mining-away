@@ -141,6 +141,10 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
+function F.quarryFollowHeight(role,time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight end
+ return (role=='Courier' and 3.4 or 4.6)+F.hover(time,maxStep60)
+end
 local function swarmHash(id)
  local value=0
  for i=1,#id do value=(value*131+string.byte(id,i))%2147483647 end
@@ -252,13 +256,18 @@ function F.stationOffset(slot,geode,height)
  local angle=2*math.pi*((slot or 1)-1)/3
  return math.cos(angle)*.85,height,math.sin(angle)*.85
 end
-function F.mineGoal(resourcePosition,slot,geode,fullSize,reference)
+function F.mineGoal(resourcePosition,slot,geode,fullSize,reference,quarry)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
  -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
  -- Mining Away sends Crystal.Primary.Position + 10. The visible Mesh is
  -- welded three studs above that primary, so its center-to-drone gap is seven.
  if reference then height=F.WorkHeight-F.ReferenceCrystalPivot end
+ if quarry and fullSize then
+  -- Center the drone above the intact tip. The deck height keeps the
+  -- original 2-stud miner shell clear even over the smallest crystals.
+  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)
+ end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end

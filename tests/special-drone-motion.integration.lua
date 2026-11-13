@@ -109,8 +109,8 @@ print(checks..' distinct specialist assembly, joint, pause, cancellation and sha
 
 for _,test in ipairs({
  {role='Needler',part='DartRail',state='SpecialMine',shot=true},
- {role='Ballcaster',part='LaunchRing',state='SpecialMine',shot=true},
- {role='Vacuum',part='WideIntake',state='Vacuum'},
+ {role='Ballcaster',part='OrbSeat',state='SpecialMine',shot=true},
+ {role='Vacuum',part='IntakeTurbine',state='Vacuum'},
  {role='Dart',part='MineralSeeder',state='Plant'},
 }) do
  local model=newModel(test.role)

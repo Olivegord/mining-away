@@ -355,7 +355,8 @@ local function spawnDrone(p,owned,slot,origin)
  elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local hr=characterRoot(p)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
- local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',roleName=='Nomad' and flightHeight or nil)
+ local followHeight=roleName=='Nomad' and flightHeight or scene.runStart and Feel.quarryFollowHeight(roleName,now,owned.base.maxStep60) or nil
+ local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',followHeight)
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
@@ -465,7 +466,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut and variant=='Spear' then fullSize*=Vector3.new(.72,1,.72)
  elseif cut and variant=='Oblique' then fullSize*=Vector3.new(.83,1,.91) end
- local steady=field.cfg.ContinuousCrystals==true and size>=3.65
+ local steady=field.cfg.ContinuousCrystals==true and size>=1.70+2.10*1.80/3.35
  if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
@@ -831,8 +832,9 @@ function scene.snapshotOrePickup(drop)
  local moved=not position or position.X~=drop.x or position.Y~=drop.y or position.Z~=drop.z
  local accelerated=not velocity or velocity.X~=drop.vx or velocity.Y~=drop.vy or velocity.Z~=drop.vz
  local homing=drop.homing==true
+ local dronePull=homing and drop.dronePull==true
  if not moved and not accelerated and homing==drop.publishedHoming
-  and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
+  and dronePull==(drop.publishedDronePull==true) and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
  if moved then
   position=Vector3.new(drop.x,drop.y,drop.z)
   part.Position=position;part:SetAttribute('Position',position)
@@ -842,11 +844,13 @@ function scene.snapshotOrePickup(drop)
   part:SetAttribute('Velocity',velocity)
  end
  if homing~=drop.publishedHoming then part:SetAttribute('Homing',homing) end
+ if dronePull~=(drop.publishedDronePull==true) then part:SetAttribute('DronePull',dronePull) end
  if drop.arcEnded and not drop.publishedArcEnd then
   drop.publishedArcEnd=true;part:SetAttribute('CargoArcEnded',true)
  end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=homing;drop.publishedSocket=drop.pressSocket;drop.publishedFloor=drop.floor
+ drop.publishedDronePull=dronePull
  part:SetAttribute('SnapshotAt',now)
 end
 local function pendingOre(p)
@@ -1206,6 +1210,7 @@ local function pickupStep(dt)
     p.pinOreOutOfReach=square
    end
    local pickupDt=drop.launchAt and math.min(dt,now-drop.launchAt) or dt
+   drop.dronePull=pressing or vacuuming
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},pickupDt,canCollect,reach)
    if groundSpeed and groundSpeed>1 and not drop.firstImpactPublished then
     drop.firstImpactPublished=true
@@ -2134,6 +2139,11 @@ local function move(d,goal,dt)
  d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1))
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
+function scene.followGoal(d,position,count)
+ local maxStep=d.owned.base.maxStep60
+ local height=d.role=='Nomad' and d.flightHeight or scene.runStart and Feel.quarryFollowHeight(d.role,now,maxStep) or nil
+ return Feel.followGoal(position,d.slot,count,now,maxStep,d.role=='Ramiel',height)
+end
 function scene.holdSquare(d,p,dt)
  local square=p.miningSquare
  if not square or d.carrierId then return false end
@@ -2143,7 +2153,7 @@ function scene.holdSquare(d,p,dt)
  local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
  if d.role=='Striker' and square.field.cfg.SelectionOnly then
   -- Park at the same low working altitude instead of rising after each cut.
-  height=Feel.WorkHeight-1
+  height=7
  end
  d.mining=false;d.state='HoldSelector'
  move(d,square.center+offset+Vector3.new(0,height,0),dt)
@@ -2167,7 +2177,7 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
   d.state='Follow';d.mining=false;d.healTargetId=nil
   if scene.holdSquare(d,p,dt) then return end
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt);return
+  move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
@@ -2211,7 +2221,7 @@ end
 local function committedStation(d,r)
  if d.workTargetId~=r.id then
   d.workTargetId=r.id
-  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
+  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal,r.field.cfg.ContinuousCrystals)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile=='Nomad' then
    local approach=r.position-d.pos
@@ -2297,7 +2307,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+  move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
@@ -2386,7 +2396,7 @@ local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  if scene.holdSquare(d,p,dt) then return end
  d.mining=false;d.state=state or 'Follow'
- move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+ move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -2651,10 +2661,12 @@ function scene.collectGroundCargo(d,p,hr,dt)
  if now-d.pickupAt<RoleConfig.Courier.PickupHold then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreLoadedAt=d.oreLoadedAt or now
-  d.oreSeatUntil=now+.18
+  d.oreSeatUntil=now+.32
+  d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
   drop.part:SetAttribute('CourierCollected',true)
+  drop.part:SetAttribute('CourierDroneId',d.id)
   drop.part:SetAttribute('CollectedPosition',d.pos-Vector3.yAxis*.75)
   drop.part:SetAttribute('CollectedAt',now)
   drop.part.Transparency=1;Debris:AddItem(drop.part,.35);pickups[id]=nil
@@ -2710,7 +2722,7 @@ local function droneStep(d: any,dt: number)
   if d.field then leaveField(p,nil,nil,true) end
   if d.state=='Follow' then
    local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0)
-   move(d,Feel.followGoal(spawnAt,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+   move(d,scene.followGoal(d,spawnAt,#p.drones),dt)
   else
    move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,d.flightHeight or Feel.FollowHeight,0),dt)
   end
@@ -2779,14 +2791,14 @@ local function droneStep(d: any,dt: number)
   if scene.runStart then
    if not scene.collectGroundCargo(d,p,hr,dt) then
     d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
    end
    return
   end
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
    if scene.holdSquare(d,p,dt) then return end
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt);return
+   move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
   end
   if scene.emptierReady(d,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
@@ -2841,7 +2853,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -2851,7 +2863,7 @@ local function droneStep(d: any,dt: number)
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
   if d.state~='Return' then d.state='Follow' end
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil)
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or scene.followGoal(d,hr.Position,#p.drones)
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
@@ -2926,6 +2938,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierOrePosition=groundCargo and Vector3.new(groundCargo.x,groundCargo.y,groundCargo.z) or Vector3.zero,
+  CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=salePosition,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',

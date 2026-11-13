@@ -11,7 +11,7 @@ end
 function Freeze:request(kind,position)
  local beat=beats[kind]
  local camera=workspace.CurrentCamera
- if not beat or not camera or self.untilAt then return end
+ if not beat or not camera or self.untilAt or camera:GetAttribute('FleetCamera') then return end
  local root=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if ((root and root.Position or camera.CFrame.Position)-position).Magnitude>beat[2] then return end
  if (camera.CFrame.Position-position).Magnitude>beat[2]+25 then return end
@@ -57,7 +57,7 @@ function Freeze:beginFrame(now,reduced,localFX)
  end
  local duration=self.pending;self.pending=nil
  if not duration or reduced or now-self.last<.9 then return false,0 end
- local camera=workspace.CurrentCamera;if not camera then return false,0 end
+ local camera=workspace.CurrentCamera;if not camera or camera:GetAttribute('FleetCamera') then return false,0 end
  self.last=now;self.untilAt=now+duration;self.camera=camera
  self.cameraFrame=camera.CFrame;self.focus=camera.Focus;self.fov=camera.FieldOfView
  local function particles(part)

@@ -625,6 +625,10 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
+function F.quarryFollowHeight(role,time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight end
+ return (role=='Courier' and 3.4 or 4.6)+F.hover(time,maxStep60)
+end
 local function swarmHash(id)
  local value=0
  for i=1,#id do value=(value*131+string.byte(id,i))%2147483647 end
@@ -736,13 +740,18 @@ function F.stationOffset(slot,geode,height)
  local angle=2*math.pi*((slot or 1)-1)/3
  return math.cos(angle)*.85,height,math.sin(angle)*.85
 end
-function F.mineGoal(resourcePosition,slot,geode,fullSize,reference)
+function F.mineGoal(resourcePosition,slot,geode,fullSize,reference,quarry)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
  -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
  -- Mining Away sends Crystal.Primary.Position + 10. The visible Mesh is
  -- welded three studs above that primary, so its center-to-drone gap is seven.
  if reference then height=F.WorkHeight-F.ReferenceCrystalPivot end
+ if quarry and fullSize then
+  -- Center the drone above the intact tip. The deck height keeps the
+  -- original 2-stud miner shell clear even over the smallest crystals.
+  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)
+ end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end
@@ -1002,14 +1011,16 @@ function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages
  -- Most deposits stay close to the familiar size. The upper tail makes
  -- occasional outcrops worth choosing when cargo slots are the bottleneck.
  local fraction=math.clamp((roll-50)/50,0,1)
- local size=1.85+3.35*fraction^1.55
+ local growth=fraction^1.55
+ local size=1.70+2.10*growth
  local mineral=M.deepCrystal(roll,hardness,baseOre)
- local stageBonus=if size>=4.35 then 3 elseif size>=3.65 then 2 elseif size>=2.85 then 1 else 0
+ -- Preserve the rolled work/reward ladder when adjusting the display scale.
+ local stageBonus=if growth>=2.50/3.35 then 3 elseif growth>=1.80/3.35 then 2 elseif growth>=1/3.35 then 1 else 0
  mineral.size=size
  -- Keep the established seven-stage ceiling while reserving extra stages
  -- for the largest rocks at every depth.
  mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
- mineral.breakHold=.45*math.clamp((size-2.85)/(5.20-2.85),0,1)
+ mineral.breakHold=.45*math.clamp((growth-1/3.35)/(2.35/3.35),0,1)
  return mineral
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
@@ -2714,6 +2725,17 @@ local function particle(parent,name,color)
  p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.zero;p.WindAffectsDrag=false
  p.Parent=parent;return p
 end
+local function cargoDust(cargo)
+ local dust=particle(cargo,'CarriedOreDust',cargo.Color)
+ dust.Color=ColorSequence.new(cargo.Color:Lerp(WHITE,.52),cargo.Color)
+ EnergyDisc.configure(dust,.19,.32,1,.16,.21)
+ dust.EmissionDirection=Enum.NormalId.Back
+ dust.Lifetime=NumberRange.new(.34,.62);dust.Speed=NumberRange.new(.45,1.6)
+ dust.Acceleration=Vector3.new(0,-4.5,0);dust.SpreadAngle=Vector2.new(50,50)
+ return dust
+end
+local cargoRawSize=Vector3.new(1.64,.97,1.47)*.57
+local cargoBlockSize=Vector3.new(1.45,.90,1.22)*.58
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
 -- the nested glow breathing without sudden size or transparency changes.
 local function spheres(parent,color)
@@ -3020,6 +3042,7 @@ function W:repair(drone,record,now)
 end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
+ drone.cargoMount=nil
  local enabled=source:GetAttribute('Role')=='Courier' and not record.events.dead and cameraNear(drone.pos,200)
  local fx=record.courier
  if not enabled then self:destroyCourier(record);return end
@@ -3078,7 +3101,7 @@ function W:courier(drone,record,now)
  local loadId=source:GetAttribute('DeliveryId') or ''
  if loadId~='' and loadId~=fx.loadId and launch>0 and now-launch<.5 then self:burst(mount,Vector3.new(0,-1,0),GOLD,8,now) end
  fx.loadId=loadId
- if pickup then drone.view:PivotTo(pivot*CFrame.new(0,-.10*q,0))
+ if pickup then drone.view:PivotTo(pivot*CFrame.new(0,-.10*math.sin(q*math.pi),0))
  elseif state=='Launch' and launch>0 then
   local t=progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
@@ -3120,17 +3143,34 @@ function W:courier(drone,record,now)
  if slots>0 then
   local materials=source:GetAttribute('DeliveryMaterials') or ''
   if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
-  local count=math.max(slots,math.min(parcelUnits,6))
+  local count=math.min(6,math.max(slots,parcelUnits))
+  if saleAge>=0 and saleAge<.21 then count=math.max(count,#fx.mounts) end
+  local loadedId=source:GetAttribute('CourierLoadedOre')
+  local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
+  local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
+  local loadingSlot
+  if loadedId and loadedId>0 and loadAge<.55 and not unload then
+   for i=math.min(parcelUnits,6),1,-1 do
+    if fx.load[i]==loadedMaterial then loadingSlot=i;break end
+   end
+  end
+  local speed=drone.velocity and drone.velocity.Magnitude or 0
+  local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
+   and now-(source:GetAttribute('SnapshotAt') or 0)<.5
   for i=1,count do
    local slot=fx.mounts[i]
    if not slot then
-    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.52,.13,.62)
+    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.49,.18,.73)
     tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
-    slot={tray=tray};fx.mounts[i]=slot
+    local latch=part(fx.root,'CargoGrip');latch.Size=Vector3.new(.13,.37,.49)
+    latch.Material=Enum.Material.Metal;latch.Color=Color3.fromRGB(59,69,77)
+    slot={tray=tray,latch=latch};fx.mounts[i]=slot
    end
    local side=i%2==1 and -1 or 1
-   local frame=pivot*CFrame.new(Vector3.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)*mountScale)
+   local row=math.floor((i-1)/2)
+   local frame=pivot*CFrame.new(side*.66,-.55,.88-row*.88)
    slot.tray.CFrame=frame;slot.tray.Transparency=0
+   slot.latch.CFrame=frame*CFrame.new(-side*.17,-.16,0);slot.latch.Transparency=0
    if i<=parcelUnits then
     local material=fx.load[i] or ''
     if slot.material~=material then
@@ -3148,36 +3188,52 @@ function W:courier(drone,record,now)
       end
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
-      slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.Glass
-      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=0
+      slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or 1
+      slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     local variation=.86+(i*13%9)*.035
-     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)*variation
+     slot.cargo.Color=key=='Quartz' and not packed and Color3.fromRGB(255,0,0)
+      or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
+     if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
      slot.packed=packed
     end
     local cargo=slot.cargo
     cargo.Transparency=0
-    local position=frame.Position-Vector3.yAxis*.28
-    local yaw=slot.packed and 0 or .7+i*.28
-    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or .26)
+    local cargoFrame=frame*CFrame.new(0,-.34,0)
+    local position=cargoFrame.Position
+    local yaw=slot.packed and 0 or side*.12
+    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or side*.09)
     if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
      local ease=t*t*(3-2*t)
-     local finish=sell+Vector3.new(side*.38,cargo.Size.Y*.5+.015,(math.floor((i-1)/2)-1)*.60)
+     local finish=sell+Vector3.new(side*.54,cargo.Size.Y*.5+.015,(row-1)*.88)
      position=position:Lerp(finish,ease)
      if not reduced then position+=Vector3.yAxis*(math.sin(t*math.pi)*.32) end
      rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
     end
     cargo.CFrame=CFrame.new(position)*rotation
+    if i==loadingSlot then
+     local mount=fx.loadingMount or {}
+     fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame;mount.size=cargo.Size
+     drone.cargoMount=mount
+     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<.32 then cargo.Transparency=1 end
+    end
+    if slot.dust then
+     slot.dust.Enabled=moving and cargo.Transparency<1 and i<=4
+     slot.dust.Rate=math.clamp(speed*.68,3,11)
+    end
    elseif slot.cargo then
-    slot.cargo.Transparency=1
+    slot.cargo.Transparency=saleAge>=0 and saleAge<.21 and math.clamp(saleAge/.21,0,1) or 1
+    if slot.dust then slot.dust.Enabled=false end
    end
+   if i>slots and i>parcelUnits then slot.tray.Transparency=1;slot.latch.Transparency=1 end
   end
   for i=count+1,#fx.mounts do
-   local slot=fx.mounts[i];slot.tray.Transparency=1
+   local slot=fx.mounts[i];slot.tray.Transparency=1;slot.latch.Transparency=1
    if slot.cargo then slot.cargo.Transparency=1 end
+   if slot.dust then slot.dust.Enabled=false end
   end
  end
 end
@@ -8112,10 +8168,10 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point,ink)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=ink and (2.80+.55*flicker) or (4.60+1.00*flicker)
+ local size=ink and (1.40+.45*flicker) or (1.72+.58*flicker)
  beam.flareStar.ImageColor3=ink and InkbeamView.Gold or Color3.new(1,1,1)
  beam.flareLight.Color=ink and InkbeamView.Gold or Color3.fromRGB(212,230,255)
- flare.Size=UDim2.new(size,18,size,18)
+ flare.Size=UDim2.new(size,7,size,7)
  local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
  beam.flareLight.Brightness=strength*.95
@@ -9547,7 +9603,7 @@ end
 function Freeze:request(kind,position)
  local beat=beats[kind]
  local camera=workspace.CurrentCamera
- if not beat or not camera or self.untilAt then return end
+ if not beat or not camera or self.untilAt or camera:GetAttribute('FleetCamera') then return end
  local root=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
  if ((root and root.Position or camera.CFrame.Position)-position).Magnitude>beat[2] then return end
  if (camera.CFrame.Position-position).Magnitude>beat[2]+25 then return end
@@ -9593,7 +9649,7 @@ function Freeze:beginFrame(now,reduced,localFX)
  end
  local duration=self.pending;self.pending=nil
  if not duration or reduced or now-self.last<.9 then return false,0 end
- local camera=workspace.CurrentCamera;if not camera then return false,0 end
+ local camera=workspace.CurrentCamera;if not camera or camera:GetAttribute('FleetCamera') then return false,0 end
  self.last=now;self.untilAt=now+duration;self.camera=camera
  self.cameraFrame=camera.CFrame;self.focus=camera.Focus;self.fov=camera.FieldOfView
  local function particles(part)
@@ -11085,10 +11141,16 @@ local Context=game:GetService('ContextActionService')
 local Storage=game:GetService('ReplicatedStorage')
 local STAGE=Vector3.new(0,12000,0)
 local ZOOM_TIME=.72
+local COVER_TIME=.18
+local REVEAL_TIME=.24
 local FOG=Color3.fromRGB(43,51,80)
 local WHITE=Color3.fromRGB(248,251,255)
 local CAMERA_BIND='MiningAwayFleetCamera'
 local INPUT_BIND='MiningAwayFleetMovement'
+local function ease(t)
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
 
 local function block(parent,name,size,cf,color,material)
  local part=Instance.new('Part')
@@ -11163,7 +11225,8 @@ function FleetView.new(options)
  local U=options.U
  local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
  root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
- local tint=U.frame(root,UDim2.fromScale(0,0),UDim2.fromScale(1,1),FOG);tint.BackgroundTransparency=1;tint.ZIndex=90
+ local tint=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1),FOG)
+ tint.Name='FleetCameraFade';tint.BackgroundTransparency=1;tint.ZIndex=90;tint.Active=true;tint.Visible=false
  self.root=root;self.tint=tint
  local header=U.frame(root,UDim2.fromOffset(12,12),UDim2.new(1,-72,0,58),U.palette.ink)
  header.BackgroundTransparency=.21;U.corner(header,8)
@@ -11236,7 +11299,11 @@ function FleetView:buildStage(character,profile)
   local original=self.options.resolve(drone.id)
   local rig=original and cloneRig(original.view,original.parts) or cloneRig(template)
   if rig then
-   if not original then self.options.droneConfig.decorate(rig,drone.role or drone.type,nil,true) end
+   if not original then
+    local role=drone.role or drone.type
+    if role~='Striker' then self.options.droneConfig.decorate(rig,role,nil,true) end
+    self.options.droneConfig.fitBody(rig,role)
+   end
    rig.Name=drone.name or 'Drone';rig.Parent=scene;self.rigs[drone.id]=rig
    local label=Instance.new('BillboardGui');label.Name='CrewName';label.Size=UDim2.fromOffset(154,25)
    label.AlwaysOnTop=true;label.LightInfluence=0;label.MaxDistance=120;label.StudsOffsetWorldSpace=Vector3.yAxis*1.75
@@ -11421,13 +11488,14 @@ function FleetView:open(profile,choice,targets)
  if not character or not camera then return false end
  local humanoid=character:FindFirstChildOfClass('Humanoid')
  if not humanoid or humanoid.Health<=0 then return false end
- self:close()
- self.choice=choice;self.camera=camera
+ self:close(true)
+ self.choice=choice;self.camera=camera;self.character=character
  self.cameraState={camera.CameraType,camera.CameraSubject,camera.CFrame,camera.Focus,camera.FieldOfView}
  self:buildStage(character,profile)
  self.targets=targets or self.crew;self.index=1
  self.stackKey=nil;self:arrange()
- local quiet=CardView.reducedMotion();self.elapsed=quiet and ZOOM_TIME or 0
+ local quiet=CardView.reducedMotion();local elapsed=quiet and ZOOM_TIME or 0
+ local covered=quiet
  local shift=self.stageOffset or STAGE-character:GetPivot().Position
  local startFrame=self.cameraState[3]+shift
  local startFocus=self.cameraState[4]+shift
@@ -11439,11 +11507,17 @@ function FleetView:open(profile,choice,targets)
  local fitDistance=(self.span+3)/math.max(.17,halfHeight*math.min(1,aspect)*.8)
  local finishDistance=math.max(distance*.77,fitDistance)
  local finishFov=finishDistance>distance*.77 and fieldOfView*.94 or fieldOfView
- camera.CFrame=startFrame;camera.Focus=startFocus
- self.root.Visible=true;self.tint.BackgroundTransparency=quiet and 1 or 0
+ self.root.Visible=true
+ local function cover(opacity)
+  self.tint.BackgroundTransparency=1-opacity
+  self.tint.Visible=opacity>0
+ end
+ cover(0)
+ if not quiet then self.focus.Enabled=false end
  self.originalSelection=GuiService.SelectedObject
  if UIS.GamepadEnabled and UIS:GetLastInputType().Name:match('^Gamepad') then GuiService.SelectedObject=self.back end
  camera.CameraType=Enum.CameraType.Scriptable
+ camera:SetAttribute('FleetCamera',true)
  Context:BindActionAtPriority(INPUT_BIND,function() return Enum.ContextActionResult.Sink end,false,
   Enum.ContextActionPriority.High.Value,Enum.PlayerActions.CharacterForward,Enum.PlayerActions.CharacterBackward,
   Enum.PlayerActions.CharacterLeft,Enum.PlayerActions.CharacterRight,Enum.PlayerActions.CharacterJump)
@@ -11451,46 +11525,92 @@ function FleetView:open(profile,choice,targets)
   if workspace.CurrentCamera~=camera or player.Character~=character or humanoid.Health<=0 then
    self.options.onAbort();return
   end
-  self.elapsed+=math.min(dt,.1)
-  if self.elapsed>=ZOOM_TIME then
+  elapsed+=math.min(dt,.1)
+  if elapsed>=ZOOM_TIME then
    local motion=quiet and 1 or 1-math.exp(-13*math.min(dt,.1))
    for rig,pose in pairs(self.poses) do
     local current=rig:GetPivot()
     if (current.Position-pose.Position).Magnitude>.005 then rig:PivotTo(current:Lerp(pose,motion)) end
    end
   end
-  local t=math.clamp((self.elapsed-.14)/(ZOOM_TIME-.14),0,1)
-  local ease=t*t*(3-2*t)
-  local aim=startFocus:Lerp(CFrame.new(self.aim)*startFocus.Rotation,ease)
-  local from=startFrame.Position:Lerp(self.aim-forward*finishDistance,ease)
+  local lead=forward*math.min(1.6,distance*.08)
+  if not covered then
+   local t=ease(elapsed/COVER_TIME)
+   camera.CFrame=self.cameraState[3]+lead*t;camera.Focus=self.cameraState[4]
+   camera.FieldOfView=fieldOfView
+   cover(t)
+   if t>=1 then elapsed=COVER_TIME;covered=true end
+   return
+  end
+  self.focus.Enabled=true
+  local t=ease((elapsed-COVER_TIME)/(ZOOM_TIME-COVER_TIME))
+  local aim=startFocus:Lerp(CFrame.new(self.aim)*startFocus.Rotation,t)
+  local from=(startFrame.Position+(quiet and Vector3.zero or lead)):Lerp(self.aim-forward*finishDistance,t)
   camera.CFrame=CFrame.new(from)*startFrame.Rotation;camera.Focus=aim
-  camera.FieldOfView=fieldOfView+(finishFov-fieldOfView)*ease
+  camera.FieldOfView=fieldOfView+(finishFov-fieldOfView)*t
   self.focus.FocusDistance=math.max(.5,(aim.Position-from):Dot(forward))
-  self.tint.BackgroundTransparency=math.clamp(self.elapsed/.20,0,1)
-  self.tint.Visible=self.tint.BackgroundTransparency<1
+  cover(quiet and 0 or 1-ease((elapsed-COVER_TIME)/REVEAL_TIME))
  end)
  return true
 end
 
-function FleetView:close()
- if not self:isOpen() then return end
- RunService:UnbindFromRenderStep(CAMERA_BIND);Context:UnbindAction(INPUT_BIND)
- local camera,state=self.camera,self.cameraState
- if camera==workspace.CurrentCamera then
-  if state[2] and state[2].Parent then camera.CameraSubject=state[2] end
-  camera.CFrame=state[3];camera.Focus=state[4];camera.FieldOfView=state[5];camera.CameraType=state[1]
+function FleetView:close(immediate)
+ if self.finishClose then
+  if immediate then self.finishClose() end
+  return
  end
+ if not self:isOpen() then return end
+ local camera,state=self.camera,self.cameraState
+ local character=self.character
+ local function restore()
+  if camera==workspace.CurrentCamera and self.options.player.Character==character then
+   if state[2] and state[2].Parent then camera.CameraSubject=state[2] end
+   camera.CFrame=state[3];camera.Focus=state[4];camera.FieldOfView=state[5];camera.CameraType=state[1]
+  end
+ end
+ local function finish()
+  RunService:UnbindFromRenderStep(CAMERA_BIND);Context:UnbindAction(INPUT_BIND)
+  if self.scene then restore();self.scene:Destroy();self.focus:Destroy() end
+  camera:SetAttribute('FleetCamera',nil)
+  self.tint.Visible=false;self.finishClose=nil
+  self.stageOffset=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+  self.camera=nil;self.cameraState=nil;self.character=nil
+ end
+ self.finishClose=finish
  local selected=GuiService.SelectedObject
  if selected and selected:IsDescendantOf(self.root) then
   GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
  end
- self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
+ self.root.Visible=false;self.choice=nil
  table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted);table.clear(self.nameplates)
- self.stageOffset=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+ local humanoid=character and character:FindFirstChildOfClass('Humanoid')
+ if immediate or CardView.reducedMotion() or camera~=workspace.CurrentCamera or self.options.player.Character~=character or not humanoid or humanoid.Health<=0 then
+  finish();return
+ end
+ RunService:UnbindFromRenderStep(CAMERA_BIND)
+ local elapsed=0
+ local covered=false
+ local startOpacity=1-self.tint.BackgroundTransparency
+ self.tint.Visible=true
+ RunService:BindToRenderStep(CAMERA_BIND,Enum.RenderPriority.Camera.Value+5,function(dt)
+  if camera~=workspace.CurrentCamera or self.options.player.Character~=character or humanoid.Health<=0 then finish();return end
+  elapsed+=math.min(dt,.1)
+  if not covered then
+   self.tint.BackgroundTransparency=(1-startOpacity)*(1-ease(elapsed/COVER_TIME))
+   if elapsed>=COVER_TIME then elapsed=COVER_TIME;covered=true end
+  else
+   if self.scene then
+    restore();self.scene:Destroy();self.focus:Destroy();self.scene=nil
+    Context:UnbindAction(INPUT_BIND)
+   end
+   self.tint.BackgroundTransparency=ease((elapsed-COVER_TIME)/REVEAL_TIME)
+   if elapsed>=COVER_TIME+REVEAL_TIME then finish() end
+  end
+ end)
 end
 
 function FleetView:destroy()
- self:close();self.root:Destroy()
+ self:close(true);self.tint:Destroy();self.root:Destroy()
 end
 return FleetView
 
@@ -12874,6 +12994,18 @@ local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
+local COURIER_LIFT=.32
+local function liftDust(view,tint)
+ local emitter=Instance.new('ParticleEmitter')
+ emitter.Name='OreTransferDust';emitter.Enabled=false;emitter.Rate=14
+ EnergyDisc.configure(emitter,.19,.32,1,.18,.22)
+ emitter.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.58),tint)
+ emitter.EmissionDirection=Enum.NormalId.Bottom
+ emitter.Lifetime=NumberRange.new(.25,.42);emitter.Speed=NumberRange.new(.35,1.1)
+ emitter.SpreadAngle=Vector2.new(45,45);emitter.Acceleration=Vector3.new(0,-3,0)
+ emitter.Parent=view
+ return emitter
+end
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -13016,7 +13148,8 @@ local function sample(r,source,now)
  local velocity=source:GetAttribute('Velocity') or Vector3.zero
  r.sampleAt=at
  table.insert(r.samples,{at=at,x=position.X,y=position.Y,z=position.Z,vx=velocity.X,vy=velocity.Y,vz=velocity.Z,
-  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,seated=source:GetAttribute('PressSocket')~=nil})
+  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,dronePull=source:GetAttribute('DronePull')==true,
+  seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
 end
 function V.new(root,parent,audio,reducedMotion)
@@ -13124,13 +13257,18 @@ function V:update(dt,now)
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
     r.courierCollected=source:GetAttribute('CourierCollected')==true
-    r.collectAt=r.processed and collectedAt or now
+    r.collectAt=(r.processed or r.courierCollected) and collectedAt or now
     r.collectFrom=r.drawPosition or r.pos
+    if r.courierCollected then
+     r.courierId=source:GetAttribute('CourierDroneId')
+     r.liftFrom=r.view.CFrame;r.liftSize=r.view.Size
+    end
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity,scale,glow,done=1,1,0,false
+  local liftPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
@@ -13139,10 +13277,22 @@ function V:update(dt,now)
    scale=math.max(.045,(r.pressScale or .48)*shrink)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
+  elseif r.collectAt and r.courierCollected then
+   local t=math.clamp((now-r.collectAt)/COURIER_LIFT,0,1)
+   local mount,size
+   if self.cargoMount then mount,size=self.cargoMount(r.courierId,r.seed) end
+   mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
+   local eased=t*t*(3-2*t)
+   liftPose=r.liftFrom:Lerp(mount,eased)
+   if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
+   r.pos=liftPose.Position
+   scale=r.liftSize.Y/r.size.Y
+   scale+=((size and size.Y/r.size.Y or .57)-scale)*eased
+   done=t>=1
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=r.courierCollected and r.collectTarget or backpack(owner,r.collectTarget or r.collectFrom)
+   local target=backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)
@@ -13162,14 +13312,20 @@ function V:update(dt,now)
    opacity=0;done=now-r.removedAt>=.28
   end
   if r.arc and displayAt<r.born then opacity=0 end
+  local latest=r.samples[#r.samples]
+  local dust=not done and not reducedEffects and r.physical and cameraPosition
+   and (r.pos-cameraPosition).Magnitude<75
+   and (liftPose~=nil or not r.collectAt and source.Parent and latest and latest.dronePull)
+  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
+  if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    finishTrail(self,r,now);removeIdle(self,r)
-   if r.ribbon then r.view.Transparency=1
+   if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
+   if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
    else
     r.view:Destroy();self.byId[r.seed]=nil;self.records[source]=nil
    end
   else
-   local latest=r.samples[#r.samples]
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
@@ -13227,7 +13383,7 @@ function V:update(dt,now)
      if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
-    r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
@@ -13254,7 +13410,7 @@ function V:update(dt,now)
    if not hovering then r.hoverStartedAt=nil end
    if newPose or hovering or wasHovering then
     local pose=r.motionPose
-    if r.hoverAlpha then
+    if r.hoverAlpha and not liftPose then
      local t=r.hoverTime
      local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
      local yaw=t*HOVER_TURN_RATE
@@ -14140,7 +14296,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   end
  end
  local previewOffset=camera and celestialRain and celestialRain:step(now,camera)
- if camera and not CrystalImpactView.reducedMotion() then
+ if camera and not camera:GetAttribute('FleetCamera') and not CrystalImpactView.reducedMotion() then
   previousShake=presentation:cameraOffset(now)*(previewOffset or CFrame.new());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
@@ -14208,6 +14364,11 @@ if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do r
 
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
+pickupView.cargoMount=function(droneId,pickupId)
+ local drone=droneIndex[droneId]
+ local mount=drone and drone.cargoMount
+ if mount and mount.id==pickupId then return mount.frame,mount.size end
+end
 local turretIndex={}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -14986,7 +15147,7 @@ local function registerDrone(source)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
- DroneConfig.fitBody(clone)
+ DroneConfig.fitBody(clone,role)
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
@@ -15006,6 +15167,15 @@ local function registerDrone(source)
   panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
   panel.Color=ink and Color3.fromRGB(255,224,66) or Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
   panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
+  local optic=localPart(clone,'MiningOptic',pivot.Position)
+  optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
+  optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
+  optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
+  for _,side in ipairs({-1,1}) do
+   local skid=localPart(clone,'MinerSidePod',pivot.Position)
+   skid.Size=Vector3.new(.19,.32,1.42);skid.Transparency=0;skid.Material=Enum.Material.Metal;skid.Color=emitter.Color
+   skid.CFrame=pivot.CFrame*CFrame.new(side*(pivot.Size.X*.5-.03),-.39,.16)
+  end
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
@@ -15022,6 +15192,7 @@ local function registerDrone(source)
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ if role=='Courier' then d.hasCargoPickup=function(id) return pickupView.byId[id]~=nil end end
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -15261,7 +15432,9 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel,isNomad and heavyFlight.altitude or nil)
+   local phaseStep=(s:GetAttribute('PhaseSeed') or maxStep*200)/200
+   local height=isNomad and heavyFlight.altitude or world:GetAttribute('FieldToolsEnabled')==false and Feel.quarryFollowHeight(role,now,phaseStep) or nil
+   goal=Feel.followGoal(hr.Position,slot,count,now,phaseStep,isRamiel,height)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -15588,7 +15761,6 @@ connect(RunService.RenderStepped,function(dt)
  end
  presentation:beginFrame()
  chargerView:update(dt)
- pickupView:update(dt,now)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
@@ -15622,6 +15794,7 @@ connect(RunService.RenderStepped,function(dt)
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
+ pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()

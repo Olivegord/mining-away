@@ -93,7 +93,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   end
  end
  local previewOffset=camera and celestialRain and celestialRain:step(now,camera)
- if camera and not CrystalImpactView.reducedMotion() then
+ if camera and not camera:GetAttribute('FleetCamera') and not CrystalImpactView.reducedMotion() then
   previousShake=presentation:cameraOffset(now)*(previewOffset or CFrame.new());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
@@ -161,6 +161,11 @@ if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do r
 
 local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
+pickupView.cargoMount=function(droneId,pickupId)
+ local drone=droneIndex[droneId]
+ local mount=drone and drone.cargoMount
+ if mount and mount.id==pickupId then return mount.frame,mount.size end
+end
 local turretIndex={}
 local hiddenParts={}
 local pendingDroneSources={}
@@ -939,7 +944,7 @@ local function registerDrone(source)
  local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
- DroneConfig.fitBody(clone)
+ DroneConfig.fitBody(clone,role)
  pendingDroneSources[source]=nil
  local pivot=clone.PrimaryPart or clone:FindFirstChildWhichIsA('BasePart',true);if not pivot then clone:Destroy();return false end
  clone.PrimaryPart=pivot;clone.Parent=localFX
@@ -959,6 +964,15 @@ local function registerDrone(source)
   panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
   panel.Color=ink and Color3.fromRGB(255,224,66) or Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
   panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
+  local optic=localPart(clone,'MiningOptic',pivot.Position)
+  optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
+  optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
+  optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
+  for _,side in ipairs({-1,1}) do
+   local skid=localPart(clone,'MinerSidePod',pivot.Position)
+   skid.Size=Vector3.new(.19,.32,1.42);skid.Transparency=0;skid.Material=Enum.Material.Metal;skid.Color=emitter.Color
+   skid.CFrame=pivot.CFrame*CFrame.new(side*(pivot.Size.X*.5-.03),-.39,.16)
+  end
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
@@ -975,6 +989,7 @@ local function registerDrone(source)
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
+ if role=='Courier' then d.hasCargoPickup=function(id) return pickupView.byId[id]~=nil end end
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -1214,7 +1229,9 @@ local function renderDrone(d,dt,now)
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel,isNomad and heavyFlight.altitude or nil)
+   local phaseStep=(s:GetAttribute('PhaseSeed') or maxStep*200)/200
+   local height=isNomad and heavyFlight.altitude or world:GetAttribute('FieldToolsEnabled')==false and Feel.quarryFollowHeight(role,now,phaseStep) or nil
+   goal=Feel.followGoal(hr.Position,slot,count,now,phaseStep,isRamiel,height)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -1541,7 +1558,6 @@ connect(RunService.RenderStepped,function(dt)
  end
  presentation:beginFrame()
  chargerView:update(dt)
- pickupView:update(dt,now)
  for _,r in pairs(resources) do
   local dirty=r.dirty
   renderResource(r,now)
@@ -1575,6 +1591,7 @@ connect(RunService.RenderStepped,function(dt)
     and Feel.cameraObstruction(cameraPosition,focus,part.Position,math.min(3,part.Size.Magnitude*.5)) or 0 end
   end
  end
+ pickupView:update(dt,now)
  roleEffectView:step(now,droneIndex,resourceIndex)
  renderHealing(now);renderBackpacks()
  presentation:flushMiningBeams()

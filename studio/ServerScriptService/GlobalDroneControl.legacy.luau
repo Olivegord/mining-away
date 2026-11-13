@@ -1782,6 +1782,10 @@ function F.followGoal(ownerPosition,slot,count,time,maxStep60,steady,altitude)
  local x,y,z=F.followOffset(slot,count,time,maxStep60,steady)
  return ownerPosition+Vector3.new(x,altitude or y,z)
 end
+function F.quarryFollowHeight(role,time,maxStep60)
+ if role=='Ramiel' then return F.ReferenceFollowHeight end
+ return (role=='Courier' and 3.4 or 4.6)+F.hover(time,maxStep60)
+end
 local function swarmHash(id)
  local value=0
  for i=1,#id do value=(value*131+string.byte(id,i))%2147483647 end
@@ -1893,13 +1897,18 @@ function F.stationOffset(slot,geode,height)
  local angle=2*math.pi*((slot or 1)-1)/3
  return math.cos(angle)*.85,height,math.sin(angle)*.85
 end
-function F.mineGoal(resourcePosition,slot,geode,fullSize,reference)
+function F.mineGoal(resourcePosition,slot,geode,fullSize,reference,quarry)
  -- Large original geodes can be eight studs tall. Keep the smaller worker
  -- above the original volume, with a visible beam gap throughout mining.
  local height=fullSize and math.max(F.WorkHeight,fullSize.Y*.5+F.WorkClearance) or nil
  -- Mining Away sends Crystal.Primary.Position + 10. The visible Mesh is
  -- welded three studs above that primary, so its center-to-drone gap is seven.
  if reference then height=F.WorkHeight-F.ReferenceCrystalPivot end
+ if quarry and fullSize then
+  -- Center the drone above the intact tip. The deck height keeps the
+  -- original 2-stud miner shell clear even over the smallest crystals.
+  height=math.max(7-fullSize.Y*.5,fullSize.Y*.5+3.1)
+ end
  local x,y,z=F.stationOffset(slot,geode,height)
  return resourcePosition+Vector3.new(x,y,z)
 end
@@ -2097,14 +2106,16 @@ function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages
  -- Most deposits stay close to the familiar size. The upper tail makes
  -- occasional outcrops worth choosing when cargo slots are the bottleneck.
  local fraction=math.clamp((roll-50)/50,0,1)
- local size=1.85+3.35*fraction^1.55
+ local growth=fraction^1.55
+ local size=1.70+2.10*growth
  local mineral=M.deepCrystal(roll,hardness,baseOre)
- local stageBonus=if size>=4.35 then 3 elseif size>=3.65 then 2 elseif size>=2.85 then 1 else 0
+ -- Preserve the rolled work/reward ladder when adjusting the display scale.
+ local stageBonus=if growth>=2.50/3.35 then 3 elseif growth>=1.80/3.35 then 2 elseif growth>=1/3.35 then 1 else 0
  mineral.size=size
  -- Keep the established seven-stage ceiling while reserving extra stages
  -- for the largest rocks at every depth.
  mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
- mineral.breakHold=.45*math.clamp((size-2.85)/(5.20-2.85),0,1)
+ mineral.breakHold=.45*math.clamp((growth-1/3.35)/(2.35/3.35),0,1)
  return mineral
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
@@ -4757,6 +4768,7 @@ DroneConfig.Prominent={
  Nomad={span=14.2,lift=0,altitude=45,speed=.84,response=.77,turn=.64},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
+DroneConfig.HullSpans={Striker=2.55,Needler=2.65,Ballcaster=2.85,Vacuum=2.75,Compactor=3.05,Courier=2.75,Medic=2.2,Charger=3.05}
 
 -- Each slit is cut into a fixed part of Nomad's underside. The endpoints
 -- also serve as projector apertures on the visible model.
@@ -4775,10 +4787,10 @@ DroneConfig.NomadDropOffset=Vector3.new(2.65,-.85,.17)
 
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
-function DroneConfig.fitBody(model: Model)
+function DroneConfig.fitBody(model: Model, visibleRole: string?)
  local pivot=model:GetPivot()
  local originalScale=model:GetScale()
- local role=model:GetAttribute('RoleGeometry')
+ local role=visibleRole or model:GetAttribute('RoleGeometry')
  local prominent=DroneConfig.Prominent[role]
  if role=='Ramiel' then
   model:ScaleTo(prominent.span/2.70);return
@@ -4799,7 +4811,8 @@ function DroneConfig.fitBody(model: Model)
  local size=high-low
  local span=math.max(size.X,size.Y,size.Z)
  if span<=.01 then return end
- model:ScaleTo(originalScale*(prominent and prominent.span or 2.65)/span)
+ local targetSpan=prominent and prominent.span or (role and DroneConfig.HullSpans[role]) or 2.75
+ model:ScaleTo(originalScale*targetSpan/span)
  if model:GetAttribute('RoleGeometry')=='Compactor' then
   -- The authoritative ore flight still ends at the original input sockets.
   for i,position in ipairs(DroneConfig.PressSockets) do
@@ -5009,39 +5022,58 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)
   hardware('DropBayLens',Vector3.new(.23,.045,.32),CFrame.new(1.78,-.58,.115),Color3.fromRGB(52,72,88),smooth)
  elseif role=='Needler' then
-  local hull=hardware('DartHull',Vector3.new(1.5,.48,1.75),CFrame.new(),painted,slate)
-  shotMuzzle(hull,Vector3.new(0,.08,-1.73)*scale)
+  hardware('NeedlerSpine',Vector3.new(.65,.36,1.55),CFrame.new(0,-.14,.04),dark,metal)
+  hardware('DartMagazine',Vector3.new(.80,.55,.74),CFrame.new(0,.14,.42),painted,slate)
+  hardware('MagazineCap',Vector3.new(.67,.08,.54),CFrame.new(0,.45,.43),pale,smooth)
+  local rail=hardware('DartGuide',Vector3.new(.34,.16,1.32),CFrame.new(0,-.02,-.61),dark,metal,nil,'DartSlide')
+  shotMuzzle(rail,Vector3.new(0,.14,-.70)*scale)
   for _,side in ipairs({-1,1}) do
-   hardware('DartRail',Vector3.new(.26,.29,1.5),CFrame.new(side*.52,.07,-.79),dark,metal,nil,'DartSlide')
-   hardware('DartTip',Vector3.new(.21,.20,.34),CFrame.new(side*.52,.07,-1.55),pale,smooth,nil,'DartSlide')
+   hardware('DartRail',Vector3.new(.10,.20,1.50),CFrame.new(side*.23,.07,-.57),pale,metal,nil,'DartSlide')
+   hardware('NeedlerWing',Vector3.new(.77,.16,.84),CFrame.new(side*.61,-.07,.43)*CFrame.Angles(0,side*.32,0),painted,slate)
+   hardware('NeedlerDrive',Vector3.new(.45,.31,.48),CFrame.new(side*.70,-.16,.70),dark,metal)
   end
-  hardware('RailCover',Vector3.new(1.24,.10,.38),CFrame.new(0,.28,.27),pale,smooth)
-  hardware('ChamberedDart',Vector3.new(.23,.24,.80),CFrame.new(0,.19,-1.40),Color3.fromRGB(255,220,138),Enum.Material.Neon,nil,'DartLoad')
+  hardware('ChamberedDart',Vector3.new(.14,.14,.62),CFrame.new(0,.14,-.86),Color3.fromRGB(255,220,138),Enum.Material.Neon,nil,'DartLoad')
  elseif role=='Ballcaster' then
-  pod('CoilHull',1.88,.58,0,painted,slate)
-  local ring=hardware('LaunchRing',Vector3.new(.24,1.28,1.28),CFrame.new(0,.14,-.96)*foreAft,dark,metal,cylinder,'BallSlide')
-  shotMuzzle(ring,Vector3.new(.16,0,0)*scale)
-  hardware('CoilFace',Vector3.new(.10,.94,.94),CFrame.new(0,.14,-1.10)*foreAft,pale,smooth,cylinder,'BallSlide')
-  hardware('LoadedOrb',Vector3.one*.62,CFrame.new(0,.14,-1.24),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
- elseif role=='Vacuum' then
-  pod('VacuumHousing',1.82,.57,.03,painted,slate)
-  hardware('WideIntake',Vector3.new(.30,1.46,1.46),CFrame.new(0,-.46,0)*vertical,dark,metal,cylinder,'Intake')
-  hardware('IntakeGlow',Vector3.new(.12,.80,.80),CFrame.new(0,-.62,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
+  hardware('CoilHousing',Vector3.new(.88,1.32,1.32),CFrame.new(0,.02,.54)*foreAft,painted,slate,cylinder)
+  hardware('Breech',Vector3.new(.21,1.13,1.13),CFrame.new(0,.02,.01)*foreAft,dark,metal,cylinder)
+  local port=hardware('OrbSeat',Vector3.new(.14,.64,.64),CFrame.new(0,.02,-.16)*foreAft,dark,metal,cylinder,'BallSlide')
+  shotMuzzle(port,Vector3.new(.82,0,0)*scale)
+  for i=1,6 do
+   local angle=i*math.pi/3
+   local frame=CFrame.new(0,.02,-.57)*CFrame.Angles(0,0,angle)
+   hardware('CoilProng',Vector3.new(.26,.23,.85),frame*CFrame.new(0,.59,0),dark,metal,nil,'BallSlide')
+   hardware('CoilContact',Vector3.new(.19,.05,.32),frame*CFrame.new(0,.45,-.20),color,Enum.Material.Neon,nil,'BallSlide')
+  end
   for _,side in ipairs({-1,1}) do
-   hardware('SuctionCanister',Vector3.new(1.34,.52,.52),CFrame.new(side*.94,.22,0)*foreAft,pale,smooth,cylinder,'Canister',side)
+   hardware('Capacitor',Vector3.new(.84,.42,.42),CFrame.new(side*.83,-.19,.47)*foreAft,pale,metal,cylinder)
+  end
+  hardware('LoadedOrb',Vector3.one*.69,CFrame.new(0,.02,-.64),color,Enum.Material.Neon,Enum.PartType.Ball,'BallReload')
+ elseif role=='Vacuum' then
+  pod('TurbineHousing',1.28,.52,.20,painted,slate)
+  pod('IntakeThroat',.89,.52,-.10,dark,metal)
+  hardware('IntakeTurbine',Vector3.new(.06,.61,.61),CFrame.new(0,-.39,0)*vertical,color,Enum.Material.Neon,cylinder,'Intake')
+  for i=1,8 do
+   local frame=CFrame.Angles(0,i*math.pi/4,0)
+   hardware('FlaredIntake',Vector3.new(.64,.40,.12),frame*CFrame.new(0,-.46,.68)*CFrame.Angles(.43,0,0),dark,metal,nil,'Intake')
+   hardware('IntakeRim',Vector3.new(.66,.105,.12),frame*CFrame.new(0,-.65,.76),pale,metal,nil,'Intake')
+  end
+  for _,side in ipairs({-1,1}) do
+   hardware('SuctionCanister',Vector3.new(1.30,.51,.51),CFrame.new(side*.82,.12,.14)*foreAft,pale,smooth,cylinder,'Canister',side)
+   hardware('SuctionCap',Vector3.new(.17,.44,.44),CFrame.new(side*.82,.12,.81)*foreAft,painted,slate,cylinder,'Canister',side)
   end
  elseif role=='Compactor' then
-  hardware('PressHull',Vector3.new(1.9,.56,1.62),CFrame.new(),painted,slate)
-  hardware('PressCap',Vector3.new(1.43,.20,1.23),CFrame.new(0,.32,0),pale,smooth)
-  hardware('PressIntake',Vector3.new(.19,.95,.95),CFrame.new(0,-.45,0)*vertical,dark,metal,cylinder)
-  hardware('PressIndicator',Vector3.new(.09,.57,.57),CFrame.new(0,-.56,0)*vertical,color,Enum.Material.Neon,cylinder)
+  hardware('PressBridge',Vector3.new(2.05,.34,1.41),CFrame.new(0,.44,.02),painted,slate)
+  hardware('PressMotor',Vector3.new(.73,.44,.78),CFrame.new(0,.70,.21),dark,metal)
+  hardware('PressIndicator',Vector3.new(.49,.07,.24),CFrame.new(0,.95,.21),color,Enum.Material.Neon)
+  hardware('PressDie',Vector3.new(.67,.32,.73),CFrame.new(0,-.12,.02),dark,metal)
   for i,position in ipairs(DroneConfig.PressSockets) do
    hardware('PressSocket'..i,Vector3.new(.13,.63,.63),CFrame.new(position-Vector3.yAxis*.28)*vertical,dark,metal)
   end
   for _,side in ipairs({-1,1}) do
-   hardware('PressRail',Vector3.new(.27,.91,1.52),CFrame.new(side*.93,-.21,0),dark,metal)
-   hardware('PressJaw',Vector3.new(.27,.25,1.31),CFrame.new(side*.76,-.73,0),pale,metal,nil,'PressJaw',side)
-   hardware('PressFoot',Vector3.new(.39,.33,1.22),CFrame.new(side*.97,-.49,0),pale,metal,nil,'PressFoot',side)
+   hardware('PressColumn',Vector3.new(.24,.77,1.28),CFrame.new(side*.90,.01,.06),dark,metal)
+   hardware('PressPiston',Vector3.new(.47,.34,.34),CFrame.new(side*.61,-.29,0),pale,metal,nil,'PressJaw',side)
+   hardware('PressJaw',Vector3.new(.29,.43,1.03),CFrame.new(side*.75,-.67,0),painted,metal,nil,'PressJaw',side)
+   hardware('PressFoot',Vector3.new(.37,.19,1.10),CFrame.new(side*1.02,-.46,0),pale,metal,nil,'PressFoot',side)
   end
  elseif role=='Striker' then
   pod('RoundMinerHull',2.12,.48,.05,painted,slate)
@@ -5061,11 +5093,13 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   lens('SeedOutlet',Vector3.new(0,-.40,-.31),color,.23)
  elseif role=='Charger' then
-  hardware('RamCylinder',Vector3.new(2.15,1.27,1.27),CFrame.new(0,.01,0)*foreAft,painted,slate,cylinder)
-  hardware('ForgedRamFace',Vector3.new(.30,1.32,1.32),CFrame.new(0,.01,-1.09)*foreAft,dark,metal,cylinder)
-  hardware('RamCap',Vector3.new(.12,.93,.93),CFrame.new(0,.01,-1.29)*foreAft,color,smooth,cylinder)
+  hardware('BreakerFrame',Vector3.new(1.36,.58,1.66),CFrame.new(0,.18,0),painted,slate)
+  pod('ImpactRam',.74,.83,-.23,dark,metal)
+  pod('ForgedRamFace',1.14,.20,-.70,pale,metal)
+  pod('RamTip',.76,.14,-.85,color,metal)
   for _,side in ipairs({-1,1}) do
-   hardware('ImpactDrum',Vector3.new(.72,.74,.74),CFrame.new(side*.79,-.08,.32),dark,metal,cylinder)
+   hardware('ImpactDrum',Vector3.new(.85,.60,.60),CFrame.new(side*.81,.16,.12)*vertical,dark,metal,cylinder)
+   hardware('BoosterCollar',Vector3.new(.12,.63,.63),CFrame.new(side*.81,.56,.12)*vertical,painted,slate,cylinder)
   end
  elseif role=='Orbiter' then
   pod('RelayUndercarriage',1.31,.52,-.10,dark,metal)
@@ -5086,18 +5120,25 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
   end
   lens('FabricatorIndicator',Vector3.new(0,.33,.35),color,.26)
  elseif role=='Medic' then
-  pod('RepairDisc',1.51,.24,.01,dark,metal)
-  pod('CeramicCover',1.32,.20,.20,pale,smooth)
+  pod('RepairDisc',1.26,.28,.01,dark,metal)
+  pod('CeramicCover',1.18,.20,.20,pale,smooth)
   hardware('RepairCrossA',Vector3.new(.76,.06,.21),CFrame.new(0,.33,0),color,smooth)
   hardware('RepairCrossB',Vector3.new(.21,.06,.76),CFrame.new(0,.33,0),color,smooth)
+  for _,side in ipairs({-1,1}) do
+   hardware('RepairArm',Vector3.new(.50,.12,.18),CFrame.new(side*.60,-.12,-.26)*CFrame.Angles(0,0,side*.30),dark,metal)
+   hardware('RepairElectrode',Vector3.new(.20,.32,.23),CFrame.new(side*.80,-.28,-.26),pale,metal)
+  end
   lens('RepairOutlet',Vector3.new(0,-.29,0),color,.28)
  elseif role=='Courier' then
-  hardware('ParcelSling',Vector3.new(1.05,.20,1.36),CFrame.new(0,-.38,0),painted,slate)
-  hardware('FrontKeel',Vector3.new(.91,.38,1.04),CFrame.new(0,-.07,-.27),painted,slate,nil,nil,nil,true)
+  hardware('CargoSpine',Vector3.new(.51,.35,2.33),CFrame.new(0,-.17,0),dark,metal)
+  hardware('EmptierCab',Vector3.new(.75,.46,.60),CFrame.new(0,.13,-.74),painted,slate)
+  hardware('RackCrossbar',Vector3.new(2.21,.14,.28),CFrame.new(0,-.37,.63),dark,metal)
+  hardware('RackCrossbar',Vector3.new(2.21,.14,.28),CFrame.new(0,-.37,-.53),dark,metal)
   for _,side in ipairs({-1,1}) do
-   hardware('LiftDrum',Vector3.new(.75,.48,.48),CFrame.new(side*.81,.09,0)*vertical,dark,metal,cylinder)
-   hardware('LiftDrumCap',Vector3.new(.13,.52,.52),CFrame.new(side*.81,.52,0)*vertical,pale,smooth,cylinder)
-   hardware('ParcelRail',Vector3.new(.13,.16,1.31),CFrame.new(side*.52,-.22,.05),dark,metal)
+   hardware('LiftDrum',Vector3.new(.35,.67,.67),CFrame.new(side*.92,-.07,-.20)*vertical,dark,metal,cylinder)
+   hardware('LiftDrumCap',Vector3.new(.10,.55,.55),CFrame.new(side*.92,.14,-.20)*vertical,painted,slate,cylinder)
+   hardware('CargoRail',Vector3.new(.15,.15,2.05),CFrame.new(side*.60,-.43,.05),pale,metal)
+   hardware('RailMarker',Vector3.new(.09,.08,.23),CFrame.new(side*.60,-.32,.93),color,Enum.Material.Neon)
   end
   lens('ParcelIndicator',Vector3.new(0,-.49,.35),color,.22)
  end
@@ -8262,7 +8303,8 @@ local function spawnDrone(p,owned,slot,origin)
  elseif roleName~='Courier' and roleName~='Charger' then flightHeight+=1.8 end
  local hr=characterRoot(p)
  origin=origin or (hr and hr.Position) or (scene.spawnPosition or home)+Vector3.new(0,4,0)
- local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',roleName=='Nomad' and flightHeight or nil)
+ local followHeight=roleName=='Nomad' and flightHeight or scene.runStart and Feel.quarryFollowHeight(roleName,now,owned.base.maxStep60) or nil
+ local pos=Feel.followGoal(origin,slot,#scene.runtimeFleet(p),now,owned.base.maxStep60,roleName=='Ramiel',followHeight)
  local model,body,emitter=World.drone(droneFolder,RS:FindFirstChild('Drone'),pos,colors[owned.type] or RoleConfig.Types[roleName] and RoleConfig.Types[roleName].Color or colors.Blue,roleName=='Striker')
  if roleName~='Striker' then model,body,emitter=RoleConfig.decorate(model,roleName) end
  model.Name='Drone_'..owned.id
@@ -8372,7 +8414,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut and variant=='Spear' then fullSize*=Vector3.new(.72,1,.72)
  elseif cut and variant=='Oblique' then fullSize*=Vector3.new(.83,1,.91) end
- local steady=field.cfg.ContinuousCrystals==true and size>=3.65
+ local steady=field.cfg.ContinuousCrystals==true and size>=1.70+2.10*1.80/3.35
  if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
@@ -8738,8 +8780,9 @@ function scene.snapshotOrePickup(drop)
  local moved=not position or position.X~=drop.x or position.Y~=drop.y or position.Z~=drop.z
  local accelerated=not velocity or velocity.X~=drop.vx or velocity.Y~=drop.vy or velocity.Z~=drop.vz
  local homing=drop.homing==true
+ local dronePull=homing and drop.dronePull==true
  if not moved and not accelerated and homing==drop.publishedHoming
-  and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
+  and dronePull==(drop.publishedDronePull==true) and drop.pressSocket==drop.publishedSocket and drop.floor==drop.publishedFloor then return end
  if moved then
   position=Vector3.new(drop.x,drop.y,drop.z)
   part.Position=position;part:SetAttribute('Position',position)
@@ -8749,11 +8792,13 @@ function scene.snapshotOrePickup(drop)
   part:SetAttribute('Velocity',velocity)
  end
  if homing~=drop.publishedHoming then part:SetAttribute('Homing',homing) end
+ if dronePull~=(drop.publishedDronePull==true) then part:SetAttribute('DronePull',dronePull) end
  if drop.arcEnded and not drop.publishedArcEnd then
   drop.publishedArcEnd=true;part:SetAttribute('CargoArcEnded',true)
  end
  drop.publishedPosition=position;drop.publishedVelocity=velocity
  drop.publishedHoming=homing;drop.publishedSocket=drop.pressSocket;drop.publishedFloor=drop.floor
+ drop.publishedDronePull=dronePull
  part:SetAttribute('SnapshotAt',now)
 end
 local function pendingOre(p)
@@ -9113,6 +9158,7 @@ local function pickupStep(dt)
     p.pinOreOutOfReach=square
    end
    local pickupDt=drop.launchAt and math.min(dt,now-drop.launchAt) or dt
+   drop.dronePull=pressing or vacuuming
    local reached,groundSpeed=OreDrops.step(drop,{x=target.X,y=target.Y,z=target.Z},pickupDt,canCollect,reach)
    if groundSpeed and groundSpeed>1 and not drop.firstImpactPublished then
     drop.firstImpactPublished=true
@@ -10041,6 +10087,11 @@ local function move(d,goal,dt)
  d.yaw=Feel.approachYaw(d.yaw,yaw,dt*(flight and flight.turn or 1))
  -- Fixed-rate logical motion; snapshotDrone publishes its physical proxy.
 end
+function scene.followGoal(d,position,count)
+ local maxStep=d.owned.base.maxStep60
+ local height=d.role=='Nomad' and d.flightHeight or scene.runStart and Feel.quarryFollowHeight(d.role,now,maxStep) or nil
+ return Feel.followGoal(position,d.slot,count,now,maxStep,d.role=='Ramiel',height)
+end
 function scene.holdSquare(d,p,dt)
  local square=p.miningSquare
  if not square or d.carrierId then return false end
@@ -10050,7 +10101,7 @@ function scene.holdSquare(d,p,dt)
  local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
  if d.role=='Striker' and square.field.cfg.SelectionOnly then
   -- Park at the same low working altitude instead of rising after each cut.
-  height=Feel.WorkHeight-1
+  height=7
  end
  d.mining=false;d.state='HoldSelector'
  move(d,square.center+offset+Vector3.new(0,height,0),dt)
@@ -10074,7 +10125,7 @@ local function supportDrone(d: any,p: any,hr: any,dt: number)
  if (not best or (best.hp>=best.stats.maxHealth and not best.target)) and now>=(d.healUntil or 0) then
   d.state='Follow';d.mining=false;d.healTargetId=nil
   if scene.holdSquare(d,p,dt) then return end
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt);return
+  move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
  end
  local goal=best and best.pos+Vector3.new(2,1,2) or hr.Position+Vector3.new(3,d.flightHeight,3)
  d.state='Support';d.mining=false;move(d,goal,dt)
@@ -10118,7 +10169,7 @@ end
 local function committedStation(d,r)
  if d.workTargetId~=r.id then
   d.workTargetId=r.id
-  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal)
+  d.workStation=Feel.mineGoal(r.position,d.targetSlot,r.limit>1,r.fullSize,r.referenceCrystal,r.field.cfg.ContinuousCrystals)
   local definition=DroneCatalog.Types[d.role]
   if definition and definition.Projectile=='Nomad' then
    local approach=r.position-d.pos
@@ -10204,7 +10255,7 @@ local function mineDrone(d: any,p: any,field: any,dt: number)
   if d.autoField==field.id then d.state='Waiting';move(d,field.center+Feel.formation(d.slot,#p.drones)+Vector3.new(0,10,0),dt);return end
   if not d.autoField then local old=d.field;d.field=nil;dropFieldIfEmpty(p,old) end
   local hr=characterRoot(p)
-  move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+  move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
  end
 end
 local function specialDrone(d: any,p: any,field: any,dt: number)
@@ -10293,7 +10344,7 @@ local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
  if scene.holdSquare(d,p,dt) then return end
  d.mining=false;d.state=state or 'Follow'
- move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+ move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
 end
 local function roleNodes(p,field,worker)
  local list={}
@@ -10558,10 +10609,12 @@ function scene.collectGroundCargo(d,p,hr,dt)
  if now-d.pickupAt<RoleConfig.Courier.PickupHold then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreLoadedAt=d.oreLoadedAt or now
-  d.oreSeatUntil=now+.18
+  d.oreSeatUntil=now+.32
+  d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
   drop.part:SetAttribute('CourierCollected',true)
+  drop.part:SetAttribute('CourierDroneId',d.id)
   drop.part:SetAttribute('CollectedPosition',d.pos-Vector3.yAxis*.75)
   drop.part:SetAttribute('CollectedAt',now)
   drop.part.Transparency=1;Debris:AddItem(drop.part,.35);pickups[id]=nil
@@ -10617,7 +10670,7 @@ local function droneStep(d: any,dt: number)
   if d.field then leaveField(p,nil,nil,true) end
   if d.state=='Follow' then
    local spawnAt=(scene.spawnPosition or home)+Vector3.new(0,4,0)
-   move(d,Feel.followGoal(spawnAt,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+   move(d,scene.followGoal(d,spawnAt,#p.drones),dt)
   else
    move(d,home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,d.flightHeight or Feel.FollowHeight,0),dt)
   end
@@ -10686,14 +10739,14 @@ local function droneStep(d: any,dt: number)
   if scene.runStart then
    if not scene.collectGroundCargo(d,p,hr,dt) then
     d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
    end
    return
   end
   if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
    if scene.holdSquare(d,p,dt) then return end
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt);return
+   move(d,scene.followGoal(d,hr.Position,#p.drones),dt);return
   end
   if scene.emptierReady(d,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
@@ -10748,7 +10801,7 @@ local function droneStep(d: any,dt: number)
     -- the swarm along. The profile-level leash clears the order before work resumes.
     if field.junk then leaveDroneField(p,d) end
     d.mining=false;d.warmAt=nil;d.mineCharge=0;d.state='Follow'
-    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+    move(d,scene.followGoal(d,hr.Position,#p.drones),dt)
    elseif DroneCatalog.Types[d.role] then specialDrone(d,p,field,dt)
    elseif d.role=='Charger' then breakerDrone(d,p,hr,field,dt)
    else mineDrone(d,p,field,dt) end
@@ -10758,7 +10811,7 @@ local function droneStep(d: any,dt: number)
   d.chargeAt=nil;d.chargeTarget=nil
   local height=d.flightHeight or Feel.FollowHeight
   if d.state~='Return' then d.state='Follow' end
-  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil)
+  local goal=d.state=='Return' and home+Feel.formation(d.slot,#p.drones)+Vector3.new(0,height,0) or scene.followGoal(d,hr.Position,#p.drones)
   move(d,goal,dt)
   if d.state=='Return' and (d.pos-goal).Magnitude<1 then d.state='Follow' end
   if (d.pos-home).Magnitude<22 then d.hp=math.min(d.stats.maxHealth,d.hp+8*dt) end
@@ -10833,6 +10886,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierOrePosition=groundCargo and Vector3.new(groundCargo.x,groundCargo.y,groundCargo.z) or Vector3.zero,
+  CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=salePosition,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',

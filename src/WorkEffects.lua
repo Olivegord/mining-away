@@ -51,6 +51,17 @@ local function particle(parent,name,color)
  p.SpreadAngle=Vector2.new(45,45);p.Acceleration=Vector3.zero;p.WindAffectsDrag=false
  p.Parent=parent;return p
 end
+local function cargoDust(cargo)
+ local dust=particle(cargo,'CarriedOreDust',cargo.Color)
+ dust.Color=ColorSequence.new(cargo.Color:Lerp(WHITE,.52),cargo.Color)
+ EnergyDisc.configure(dust,.19,.32,1,.16,.21)
+ dust.EmissionDirection=Enum.NormalId.Back
+ dust.Lifetime=NumberRange.new(.34,.62);dust.Speed=NumberRange.new(.45,1.6)
+ dust.Acceleration=Vector3.new(0,-4.5,0);dust.SpreadAngle=Vector2.new(50,50)
+ return dust
+end
+local cargoRawSize=Vector3.new(1.64,.97,1.47)*.57
+local cargoBlockSize=Vector3.new(1.45,.90,1.22)*.58
 -- Three concentric sphere Parts, not orbiting rings. Different phases keep
 -- the nested glow breathing without sudden size or transparency changes.
 local function spheres(parent,color)
@@ -357,6 +368,7 @@ function W:repair(drone,record,now)
 end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
+ drone.cargoMount=nil
  local enabled=source:GetAttribute('Role')=='Courier' and not record.events.dead and cameraNear(drone.pos,200)
  local fx=record.courier
  if not enabled then self:destroyCourier(record);return end
@@ -415,7 +427,7 @@ function W:courier(drone,record,now)
  local loadId=source:GetAttribute('DeliveryId') or ''
  if loadId~='' and loadId~=fx.loadId and launch>0 and now-launch<.5 then self:burst(mount,Vector3.new(0,-1,0),GOLD,8,now) end
  fx.loadId=loadId
- if pickup then drone.view:PivotTo(pivot*CFrame.new(0,-.10*q,0))
+ if pickup then drone.view:PivotTo(pivot*CFrame.new(0,-.10*math.sin(q*math.pi),0))
  elseif state=='Launch' and launch>0 then
   local t=progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25)
   drone.view:PivotTo(pivot*CFrame.new(0,math.sin(t*math.pi)*.18,0))
@@ -457,17 +469,34 @@ function W:courier(drone,record,now)
  if slots>0 then
   local materials=source:GetAttribute('DeliveryMaterials') or ''
   if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
-  local count=math.max(slots,math.min(parcelUnits,6))
+  local count=math.min(6,math.max(slots,parcelUnits))
+  if saleAge>=0 and saleAge<.21 then count=math.max(count,#fx.mounts) end
+  local loadedId=source:GetAttribute('CourierLoadedOre')
+  local loadedMaterial=source:GetAttribute('CourierLoadedMaterial')
+  local loadAge=now-(source:GetAttribute('CourierLoadedAt') or 0)
+  local loadingSlot
+  if loadedId and loadedId>0 and loadAge<.55 and not unload then
+   for i=math.min(parcelUnits,6),1,-1 do
+    if fx.load[i]==loadedMaterial then loadingSlot=i;break end
+   end
+  end
+  local speed=drone.velocity and drone.velocity.Magnitude or 0
+  local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
+   and now-(source:GetAttribute('SnapshotAt') or 0)<.5
   for i=1,count do
    local slot=fx.mounts[i]
    if not slot then
-    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.52,.13,.62)
+    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.49,.18,.73)
     tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
-    slot={tray=tray};fx.mounts[i]=slot
+    local latch=part(fx.root,'CargoGrip');latch.Size=Vector3.new(.13,.37,.49)
+    latch.Material=Enum.Material.Metal;latch.Color=Color3.fromRGB(59,69,77)
+    slot={tray=tray,latch=latch};fx.mounts[i]=slot
    end
    local side=i%2==1 and -1 or 1
-   local frame=pivot*CFrame.new(Vector3.new(side*.76,-.57,.78-math.floor((i-1)/2)*.70)*mountScale)
+   local row=math.floor((i-1)/2)
+   local frame=pivot*CFrame.new(side*.66,-.55,.88-row*.88)
    slot.tray.CFrame=frame;slot.tray.Transparency=0
+   slot.latch.CFrame=frame*CFrame.new(-side*.17,-.16,0);slot.latch.Transparency=0
    if i<=parcelUnits then
     local material=fx.load[i] or ''
     if slot.material~=material then
@@ -485,36 +514,52 @@ function W:courier(drone,record,now)
       end
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
-      slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.Glass
-      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=0
+      slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or 1
+      slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     local variation=.86+(i*13%9)*.035
-     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)*variation
+     slot.cargo.Color=key=='Quartz' and not packed and Color3.fromRGB(255,0,0)
+      or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
+     if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
      slot.packed=packed
     end
     local cargo=slot.cargo
     cargo.Transparency=0
-    local position=frame.Position-Vector3.yAxis*.28
-    local yaw=slot.packed and 0 or .7+i*.28
-    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or .26)
+    local cargoFrame=frame*CFrame.new(0,-.34,0)
+    local position=cargoFrame.Position
+    local yaw=slot.packed and 0 or side*.12
+    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or side*.09)
     if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
      local ease=t*t*(3-2*t)
-     local finish=sell+Vector3.new(side*.38,cargo.Size.Y*.5+.015,(math.floor((i-1)/2)-1)*.60)
+     local finish=sell+Vector3.new(side*.54,cargo.Size.Y*.5+.015,(row-1)*.88)
      position=position:Lerp(finish,ease)
      if not reduced then position+=Vector3.yAxis*(math.sin(t*math.pi)*.32) end
      rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
     end
     cargo.CFrame=CFrame.new(position)*rotation
+    if i==loadingSlot then
+     local mount=fx.loadingMount or {}
+     fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame;mount.size=cargo.Size
+     drone.cargoMount=mount
+     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<.32 then cargo.Transparency=1 end
+    end
+    if slot.dust then
+     slot.dust.Enabled=moving and cargo.Transparency<1 and i<=4
+     slot.dust.Rate=math.clamp(speed*.68,3,11)
+    end
    elseif slot.cargo then
-    slot.cargo.Transparency=1
+    slot.cargo.Transparency=saleAge>=0 and saleAge<.21 and math.clamp(saleAge/.21,0,1) or 1
+    if slot.dust then slot.dust.Enabled=false end
    end
+   if i>slots and i>parcelUnits then slot.tray.Transparency=1;slot.latch.Transparency=1 end
   end
   for i=count+1,#fx.mounts do
-   local slot=fx.mounts[i];slot.tray.Transparency=1
+   local slot=fx.mounts[i];slot.tray.Transparency=1;slot.latch.Transparency=1
    if slot.cargo then slot.cargo.Transparency=1 end
+   if slot.dust then slot.dust.Enabled=false end
   end
  end
 end

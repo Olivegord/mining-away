@@ -193,7 +193,9 @@ assert(assignOre(p,d,replacement))
 p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
 d.squareJob=p.miningSquare;d.lingerUntil=nil
 d.pos=committedStation(d,replacement);d.velocity=Vector3.zero
-assert(math.abs(d.pos.Y-replacement.position.Y-7)<.001)
+local tip=replacement.position.Y+replacement.fullSize.Y*.5
+local ground=replacement.part:GetAttribute('GroundY')
+assert(math.abs(d.pos.Y-math.max(tip+3.1,ground+6.94))<.001)
 local before=replacement.hp
 step(1);assert(d.state=='Warmup' and replacement.hp==before)
 snapshotDrone(d)
@@ -204,7 +206,7 @@ step(math.ceil(.4/C.Tick));assert(d.mining and replacement.hp<before,'the charge
 release(d)
 p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)
-assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-p.miningSquare.center.Y-9)<.001)
+assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-p.miningSquare.center.Y-7)<.001)
 print('PASS continuous field population, clearance, grower placement, mining and standby heights')
 
 do
@@ -231,7 +233,7 @@ do
   old.readyAt=now
   assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
   assert(hitResource(worker,old,1000) and old.paid)
-  assert(math.abs(old.part:GetAttribute('CrystalSplitAt')-now-.56)<.001)
+  assert(math.abs(old.part:GetAttribute('CrystalSplitAt')-now-OreDrops.BREAK_DELAY-mineral.breakHold)<.001)
   local cargo=pickups[pickupSerial]
   assert(cargo.nodeId==old.id and cargo.units==1 and cargo.value==mineral.ore)
   assert(math.abs(cargo.launchAt-old.splitAt-(OreDrops.REWARD_DELAY-OreDrops.BREAK_DELAY))<.001)

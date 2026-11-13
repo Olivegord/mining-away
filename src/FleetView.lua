@@ -11,10 +11,16 @@ local Context=game:GetService('ContextActionService')
 local Storage=game:GetService('ReplicatedStorage')
 local STAGE=Vector3.new(0,12000,0)
 local ZOOM_TIME=.72
+local COVER_TIME=.18
+local REVEAL_TIME=.24
 local FOG=Color3.fromRGB(43,51,80)
 local WHITE=Color3.fromRGB(248,251,255)
 local CAMERA_BIND='MiningAwayFleetCamera'
 local INPUT_BIND='MiningAwayFleetMovement'
+local function ease(t)
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
 
 local function block(parent,name,size,cf,color,material)
  local part=Instance.new('Part')
@@ -89,7 +95,8 @@ function FleetView.new(options)
  local U=options.U
  local root=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1))
  root.Name='FleetInspection';root.ZIndex=65;root.Active=true;root.Visible=false;root.BackgroundTransparency=1
- local tint=U.frame(root,UDim2.fromScale(0,0),UDim2.fromScale(1,1),FOG);tint.BackgroundTransparency=1;tint.ZIndex=90
+ local tint=U.frame(options.parent,UDim2.fromScale(0,0),UDim2.fromScale(1,1),FOG)
+ tint.Name='FleetCameraFade';tint.BackgroundTransparency=1;tint.ZIndex=90;tint.Active=true;tint.Visible=false
  self.root=root;self.tint=tint
  local header=U.frame(root,UDim2.fromOffset(12,12),UDim2.new(1,-72,0,58),U.palette.ink)
  header.BackgroundTransparency=.21;U.corner(header,8)
@@ -162,7 +169,11 @@ function FleetView:buildStage(character,profile)
   local original=self.options.resolve(drone.id)
   local rig=original and cloneRig(original.view,original.parts) or cloneRig(template)
   if rig then
-   if not original then self.options.droneConfig.decorate(rig,drone.role or drone.type,nil,true) end
+   if not original then
+    local role=drone.role or drone.type
+    if role~='Striker' then self.options.droneConfig.decorate(rig,role,nil,true) end
+    self.options.droneConfig.fitBody(rig,role)
+   end
    rig.Name=drone.name or 'Drone';rig.Parent=scene;self.rigs[drone.id]=rig
    local label=Instance.new('BillboardGui');label.Name='CrewName';label.Size=UDim2.fromOffset(154,25)
    label.AlwaysOnTop=true;label.LightInfluence=0;label.MaxDistance=120;label.StudsOffsetWorldSpace=Vector3.yAxis*1.75
@@ -347,13 +358,14 @@ function FleetView:open(profile,choice,targets)
  if not character or not camera then return false end
  local humanoid=character:FindFirstChildOfClass('Humanoid')
  if not humanoid or humanoid.Health<=0 then return false end
- self:close()
- self.choice=choice;self.camera=camera
+ self:close(true)
+ self.choice=choice;self.camera=camera;self.character=character
  self.cameraState={camera.CameraType,camera.CameraSubject,camera.CFrame,camera.Focus,camera.FieldOfView}
  self:buildStage(character,profile)
  self.targets=targets or self.crew;self.index=1
  self.stackKey=nil;self:arrange()
- local quiet=CardView.reducedMotion();self.elapsed=quiet and ZOOM_TIME or 0
+ local quiet=CardView.reducedMotion();local elapsed=quiet and ZOOM_TIME or 0
+ local covered=quiet
  local shift=self.stageOffset or STAGE-character:GetPivot().Position
  local startFrame=self.cameraState[3]+shift
  local startFocus=self.cameraState[4]+shift
@@ -365,11 +377,17 @@ function FleetView:open(profile,choice,targets)
  local fitDistance=(self.span+3)/math.max(.17,halfHeight*math.min(1,aspect)*.8)
  local finishDistance=math.max(distance*.77,fitDistance)
  local finishFov=finishDistance>distance*.77 and fieldOfView*.94 or fieldOfView
- camera.CFrame=startFrame;camera.Focus=startFocus
- self.root.Visible=true;self.tint.BackgroundTransparency=quiet and 1 or 0
+ self.root.Visible=true
+ local function cover(opacity)
+  self.tint.BackgroundTransparency=1-opacity
+  self.tint.Visible=opacity>0
+ end
+ cover(0)
+ if not quiet then self.focus.Enabled=false end
  self.originalSelection=GuiService.SelectedObject
  if UIS.GamepadEnabled and UIS:GetLastInputType().Name:match('^Gamepad') then GuiService.SelectedObject=self.back end
  camera.CameraType=Enum.CameraType.Scriptable
+ camera:SetAttribute('FleetCamera',true)
  Context:BindActionAtPriority(INPUT_BIND,function() return Enum.ContextActionResult.Sink end,false,
   Enum.ContextActionPriority.High.Value,Enum.PlayerActions.CharacterForward,Enum.PlayerActions.CharacterBackward,
   Enum.PlayerActions.CharacterLeft,Enum.PlayerActions.CharacterRight,Enum.PlayerActions.CharacterJump)
@@ -377,45 +395,91 @@ function FleetView:open(profile,choice,targets)
   if workspace.CurrentCamera~=camera or player.Character~=character or humanoid.Health<=0 then
    self.options.onAbort();return
   end
-  self.elapsed+=math.min(dt,.1)
-  if self.elapsed>=ZOOM_TIME then
+  elapsed+=math.min(dt,.1)
+  if elapsed>=ZOOM_TIME then
    local motion=quiet and 1 or 1-math.exp(-13*math.min(dt,.1))
    for rig,pose in pairs(self.poses) do
     local current=rig:GetPivot()
     if (current.Position-pose.Position).Magnitude>.005 then rig:PivotTo(current:Lerp(pose,motion)) end
    end
   end
-  local t=math.clamp((self.elapsed-.14)/(ZOOM_TIME-.14),0,1)
-  local ease=t*t*(3-2*t)
-  local aim=startFocus:Lerp(CFrame.new(self.aim)*startFocus.Rotation,ease)
-  local from=startFrame.Position:Lerp(self.aim-forward*finishDistance,ease)
+  local lead=forward*math.min(1.6,distance*.08)
+  if not covered then
+   local t=ease(elapsed/COVER_TIME)
+   camera.CFrame=self.cameraState[3]+lead*t;camera.Focus=self.cameraState[4]
+   camera.FieldOfView=fieldOfView
+   cover(t)
+   if t>=1 then elapsed=COVER_TIME;covered=true end
+   return
+  end
+  self.focus.Enabled=true
+  local t=ease((elapsed-COVER_TIME)/(ZOOM_TIME-COVER_TIME))
+  local aim=startFocus:Lerp(CFrame.new(self.aim)*startFocus.Rotation,t)
+  local from=(startFrame.Position+(quiet and Vector3.zero or lead)):Lerp(self.aim-forward*finishDistance,t)
   camera.CFrame=CFrame.new(from)*startFrame.Rotation;camera.Focus=aim
-  camera.FieldOfView=fieldOfView+(finishFov-fieldOfView)*ease
+  camera.FieldOfView=fieldOfView+(finishFov-fieldOfView)*t
   self.focus.FocusDistance=math.max(.5,(aim.Position-from):Dot(forward))
-  self.tint.BackgroundTransparency=math.clamp(self.elapsed/.20,0,1)
-  self.tint.Visible=self.tint.BackgroundTransparency<1
+  cover(quiet and 0 or 1-ease((elapsed-COVER_TIME)/REVEAL_TIME))
  end)
  return true
 end
 
-function FleetView:close()
- if not self:isOpen() then return end
- RunService:UnbindFromRenderStep(CAMERA_BIND);Context:UnbindAction(INPUT_BIND)
- local camera,state=self.camera,self.cameraState
- if camera==workspace.CurrentCamera then
-  if state[2] and state[2].Parent then camera.CameraSubject=state[2] end
-  camera.CFrame=state[3];camera.Focus=state[4];camera.FieldOfView=state[5];camera.CameraType=state[1]
+function FleetView:close(immediate)
+ if self.finishClose then
+  if immediate then self.finishClose() end
+  return
  end
+ if not self:isOpen() then return end
+ local camera,state=self.camera,self.cameraState
+ local character=self.character
+ local function restore()
+  if camera==workspace.CurrentCamera and self.options.player.Character==character then
+   if state[2] and state[2].Parent then camera.CameraSubject=state[2] end
+   camera.CFrame=state[3];camera.Focus=state[4];camera.FieldOfView=state[5];camera.CameraType=state[1]
+  end
+ end
+ local function finish()
+  RunService:UnbindFromRenderStep(CAMERA_BIND);Context:UnbindAction(INPUT_BIND)
+  if self.scene then restore();self.scene:Destroy();self.focus:Destroy() end
+  camera:SetAttribute('FleetCamera',nil)
+  self.tint.Visible=false;self.finishClose=nil
+  self.stageOffset=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+  self.camera=nil;self.cameraState=nil;self.character=nil
+ end
+ self.finishClose=finish
  local selected=GuiService.SelectedObject
  if selected and selected:IsDescendantOf(self.root) then
   GuiService.SelectedObject=self.originalSelection and self.originalSelection.Parent and self.originalSelection or nil
  end
- self.root.Visible=false;self.scene:Destroy();self.focus:Destroy()
+ self.root.Visible=false;self.choice=nil
  table.clear(self.rigs);table.clear(self.poses);table.clear(self.rest);table.clear(self.muted);table.clear(self.nameplates)
- self.stageOffset=nil;self.scene=nil;self.focus=nil;self.avatar=nil;self.choice=nil
+ local humanoid=character and character:FindFirstChildOfClass('Humanoid')
+ if immediate or CardView.reducedMotion() or camera~=workspace.CurrentCamera or self.options.player.Character~=character or not humanoid or humanoid.Health<=0 then
+  finish();return
+ end
+ RunService:UnbindFromRenderStep(CAMERA_BIND)
+ local elapsed=0
+ local covered=false
+ local startOpacity=1-self.tint.BackgroundTransparency
+ self.tint.Visible=true
+ RunService:BindToRenderStep(CAMERA_BIND,Enum.RenderPriority.Camera.Value+5,function(dt)
+  if camera~=workspace.CurrentCamera or self.options.player.Character~=character or humanoid.Health<=0 then finish();return end
+  elapsed+=math.min(dt,.1)
+  if not covered then
+   self.tint.BackgroundTransparency=(1-startOpacity)*(1-ease(elapsed/COVER_TIME))
+   if elapsed>=COVER_TIME then elapsed=COVER_TIME;covered=true end
+  else
+   if self.scene then
+    restore();self.scene:Destroy();self.focus:Destroy();self.scene=nil
+    Context:UnbindAction(INPUT_BIND)
+   end
+   self.tint.BackgroundTransparency=ease((elapsed-COVER_TIME)/REVEAL_TIME)
+   if elapsed>=COVER_TIME+REVEAL_TIME then finish() end
+  end
+ end)
 end
 
 function FleetView:destroy()
- self:close();self.root:Destroy()
+ self:close(true);self.tint:Destroy();self.root:Destroy()
 end
 return FleetView

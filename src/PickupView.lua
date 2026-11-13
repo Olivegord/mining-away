@@ -11,6 +11,18 @@ local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
+local COURIER_LIFT=.32
+local function liftDust(view,tint)
+ local emitter=Instance.new('ParticleEmitter')
+ emitter.Name='OreTransferDust';emitter.Enabled=false;emitter.Rate=14
+ EnergyDisc.configure(emitter,.19,.32,1,.18,.22)
+ emitter.Color=ColorSequence.new(tint:Lerp(PICKUP_HIGHLIGHT,.58),tint)
+ emitter.EmissionDirection=Enum.NormalId.Bottom
+ emitter.Lifetime=NumberRange.new(.25,.42);emitter.Speed=NumberRange.new(.35,1.1)
+ emitter.SpreadAngle=Vector2.new(45,45);emitter.Acceleration=Vector3.new(0,-3,0)
+ emitter.Parent=view
+ return emitter
+end
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -153,7 +165,8 @@ local function sample(r,source,now)
  local velocity=source:GetAttribute('Velocity') or Vector3.zero
  r.sampleAt=at
  table.insert(r.samples,{at=at,x=position.X,y=position.Y,z=position.Z,vx=velocity.X,vy=velocity.Y,vz=velocity.Z,
-  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,seated=source:GetAttribute('PressSocket')~=nil})
+  floor=source:GetAttribute('FloorY'),homing=source:GetAttribute('Homing')==true,dronePull=source:GetAttribute('DronePull')==true,
+  seated=source:GetAttribute('PressSocket')~=nil})
  while #r.samples>5 do table.remove(r.samples,1) end
 end
 function V.new(root,parent,audio,reducedMotion)
@@ -261,13 +274,18 @@ function V:update(dt,now)
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
     r.courierCollected=source:GetAttribute('CourierCollected')==true
-    r.collectAt=r.processed and collectedAt or now
+    r.collectAt=(r.processed or r.courierCollected) and collectedAt or now
     r.collectFrom=r.drawPosition or r.pos
+    if r.courierCollected then
+     r.courierId=source:GetAttribute('CourierDroneId')
+     r.liftFrom=r.view.CFrame;r.liftSize=r.view.Size
+    end
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity,scale,glow,done=1,1,0,false
+  local liftPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
@@ -276,10 +294,22 @@ function V:update(dt,now)
    scale=math.max(.045,(r.pressScale or .48)*shrink)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
+  elseif r.collectAt and r.courierCollected then
+   local t=math.clamp((now-r.collectAt)/COURIER_LIFT,0,1)
+   local mount,size
+   if self.cargoMount then mount,size=self.cargoMount(r.courierId,r.seed) end
+   mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
+   local eased=t*t*(3-2*t)
+   liftPose=r.liftFrom:Lerp(mount,eased)
+   if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
+   r.pos=liftPose.Position
+   scale=r.liftSize.Y/r.size.Y
+   scale+=((size and size.Y/r.size.Y or .57)-scale)*eased
+   done=t>=1
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=r.courierCollected and r.collectTarget or backpack(owner,r.collectTarget or r.collectFrom)
+   local target=backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)
@@ -299,14 +329,20 @@ function V:update(dt,now)
    opacity=0;done=now-r.removedAt>=.28
   end
   if r.arc and displayAt<r.born then opacity=0 end
+  local latest=r.samples[#r.samples]
+  local dust=not done and not reducedEffects and r.physical and cameraPosition
+   and (r.pos-cameraPosition).Magnitude<75
+   and (liftPose~=nil or not r.collectAt and source.Parent and latest and latest.dronePull)
+  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
+  if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    finishTrail(self,r,now);removeIdle(self,r)
-   if r.ribbon then r.view.Transparency=1
+   if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
+   if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
    else
     r.view:Destroy();self.byId[r.seed]=nil;self.records[source]=nil
    end
   else
-   local latest=r.samples[#r.samples]
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
@@ -364,7 +400,7 @@ function V:update(dt,now)
      if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
-    r.motionPose=CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
@@ -391,7 +427,7 @@ function V:update(dt,now)
    if not hovering then r.hoverStartedAt=nil end
    if newPose or hovering or wasHovering then
     local pose=r.motionPose
-    if r.hoverAlpha then
+    if r.hoverAlpha and not liftPose then
      local t=r.hoverTime
      local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
      local yaw=t*HOVER_TURN_RATE

@@ -1,6 +1,6 @@
 # Shared project context
 
-Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
+Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `dcbfae3e9d8de3d296e63025b550492335a0921a76251c80f233c684a945d24e` | Client impact freeze and the relocated Celestial Rain test. |
-| Shared Studio Sources | Team Create save **250** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `e29427720dc11a0aa114e7e73636f66aa924812f9ac9f28ea0c7856139c7f62a` | Drone hull, scale, cargo and Crew camera pass. |
+| Shared Studio Sources | Team Create save **252** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the impact freeze, selective heavy shakes, and the relocated Celestial Rain preview from save **250**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the remodeled crew, revised heights, cargo handoff and Crew camera transition from save **252**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — drone proportions, working silhouettes and ore transport
+
+The five authored Crystal Run beds each measure 108 × 64 studs. The selector remains 30 × 30 and each bed still targets 60 rocks. A full selector samples about eight crystals on average if spread evenly, with local variation from existing pockets. The original crystal union measures 3.14 × 6.57 × 4.49 at scale 3. The revised rock roll gives roughly 3.7–8.3 studs of visible height (formerly up to 11.4), with the same rolled health, yield, fracture stages and release delay. Standard hulls measure approximately 2.2–3.3 studs across, with the quarry follow ring at 4.6 studs above the avatar root and the Emptier at 3.4. Mining centers sit 3.1 studs above the intact tip or approximately 7 studs above the ground, whichever is higher. Shorter gaps and a smaller optic flare make it easier to see the body and rock together. Ramiel and Nomad retain their flagship proportions.
+
+Needler exposes a moving dart guide and a rear magazine. Ballcaster charges an orb between six open coil prongs. Vacuum extends a flared intake and Compactor closes visible jaws in a bridged frame. Emptiers use exposed rails and individual grips, Breaker has a downward ram, and Medic has visible electrodes. The Emptier's collected gem stays visible through a 0.32-second lift into the moving grip, then sheds ore-colored particles in flight and fades after confirmed sale. Vacuum and Compactor pull effects shed particles from the moving rocks. The Crew camera eases into and out of the isolated inspection stage, and Reduced Motion uses its direct transition.
+
+Valve's published silhouette study informed the emphasis on readable work hardware. The camera uses Roblox's Scriptable camera and keeps its Focus current. [Valve art and rendering study](https://cdn.akamai.steamstatic.com/apps/valve/2007/NPAR07_IllustrativeRenderingInTeamFortress2.pdf) · [Roblox camera documentation](https://create.roblox.com/docs/workspace/camera)
+
+The pickup, beam and energy checks passed with API doubles, and both production bundles compiled. Detached Studio Edit checks measured the hulls and exercised the Needler, Ballcaster, Vacuum and Compactor articulation. Full gameplay, motion of the in-game Crew camera, and multiplayer visuals still require Play. Studio was already open and remains open. Team Create save **252** and all seven matching Sources were verified in place **124078027733625**, universe **10774898335**. No Roblox publication. Reproduce the canonical refresh with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 0afcfe2`.
 
 ## November 12 — client impact freeze and visible Celestial Rain
 

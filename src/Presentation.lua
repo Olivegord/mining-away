@@ -39,10 +39,10 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point,ink)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=ink and (2.80+.55*flicker) or (4.60+1.00*flicker)
+ local size=ink and (1.40+.45*flicker) or (1.72+.58*flicker)
  beam.flareStar.ImageColor3=ink and InkbeamView.Gold or Color3.new(1,1,1)
  beam.flareLight.Color=ink and InkbeamView.Gold or Color3.fromRGB(212,230,255)
- flare.Size=UDim2.new(size,18,size,18)
+ flare.Size=UDim2.new(size,7,size,7)
  local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
  beam.flareLight.Brightness=strength*.95
