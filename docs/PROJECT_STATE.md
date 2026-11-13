@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `1fc0d53bd3873714ce20cf633ba2487be2d75a5044493386a48a4a342891b71e` | Brighter crystal glints with fast brightness flicker and nearly fixed size. |
-| Shared Studio Sources | Team Create save **246** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `acf1c1f3d07f8c306b82af41ae58d8c6b020ca42160a14df9aadcda6c1bb40fc` | Subtle glint shimmer with movement and size driven by the view angle. |
+| Shared Studio Sources | Team Create save **247** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the faster crystal glints from save **246**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the subtler shimmer and moving facet glints from save **247**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — glints that travel along the facets
+
+The owner asked for faster but subtler shimmer, with glints that actually move and change size as the viewer walks. Irregular, low-amplitude brightness variation replaces the hard flicker. View angle drives glint size and a short shift across the native surface. Surface probes limit the shift to the sampled facet area.
+
+The beam suite and both bundle compiles passed. An isolated Studio Edit sweep on native crystals observed the same glint moving up to 1.06 studs and changing size by up to 64% as the camera moved. At rest, position and size held steady and the measured brightness swing was at most 18%. In-game appearance remains unverified. Studio was already open and remains in Edit. All seven managed Sources matched the canonical file after Team Create save **247**. No publication.
 
 ## November 12 — faster crystal glints
 

@@ -7621,14 +7621,15 @@ return V
 
 end)()
 local CrystalSunGlints = (function()
--- Cache fixed points on each crystal's surface. The camera changes which
--- facets catch the light; a sparkle's position never follows the camera.
+-- Cache candidate facets, then let the viewpoint move each reflection
+-- across its own surface and change its apparent size.
 local Lighting=game:GetService('Lighting')
 local G={}
 local RANGE,LIMIT,ACTIVE_LIMIT,ROCK_LIMIT,PER_ROCK,INTERVAL=112,64,44,22,5,.055
 local STAR='rbxassetid://77624818077620'
 local WHITE=Color3.fromRGB(255,251,239)
 local LEVELS={.04,.25,.43}
+local TRACE_FRACTIONS={1,.5}
 local function ramp(t)
  t=math.clamp(t,0,1);return t*t*(3-2*t)
 end
@@ -7674,8 +7675,8 @@ local function sampleSites(source,params,seed)
       elseif variety<.90 then random:NextNumber(2.9,5.1) else random:NextNumber(5.7,8.1)
      table.insert(sites,{point=point,normal=frame:VectorToObjectSpace(hit.Normal)*size,index=index,
       band=random:NextNumber(-.54,.54),width=random:NextNumber(.065,.18),span=span,
-      phase=random:NextNumber(),period=random:NextNumber(.085,.155),
-      pulse=random:NextNumber(.28,.51),rotation=random:NextNumber(-28,28)})
+      phase=random:NextNumber(0,256),frequency=random:NextNumber(22,38),
+      rotation=random:NextNumber(-28,28)})
     end
    end
   end
@@ -7694,7 +7695,30 @@ local function response(site,normal,toward,sun)
  local mirror=normal*(2*lit)-sun
  local error=math.abs((toward-mirror):Dot(tangent.Unit)-site.band)
  local flash=math.clamp((1-error/site.width)*2.8,0,1)
- return gloss*(.17+.83*flash),flash
+ return gloss*(.28+.72*flash),flash,gloss
+end
+local function traceReflection(site,source,view,camera,params)
+ local frame,size=view.CFrame,view.Size
+ local localNormal=(site.normal/size).Unit
+ local worldPoint=frame:PointToWorldSpace(site.point*size)
+ local toward=frame:VectorToObjectSpace((camera-worldPoint).Unit)
+ local tangent=toward-localNormal*toward:Dot(localNormal)
+ -- Move within the facet as the eye moves. Reproject onto the native
+ -- surface so the highlight cannot slide off a tip or across a void.
+ local drift=tangent*.24
+ local sourceFrame,sourceSize=source.CFrame,source.Size
+ local normal=(site.normal/sourceSize).Unit
+ local reach=sourceSize.Magnitude*.17
+ local axis=sourceFrame:VectorToWorldSpace(normal)
+ params.FilterDescendantsInstances={source}
+ for _,fraction in ipairs(TRACE_FRACTIONS) do
+  local center=sourceFrame:PointToWorldSpace((site.point+drift*fraction)*sourceSize)
+  local hit=workspace:Raycast(center+axis*reach,-axis*reach*2,params)
+  if hit and hit.Normal:Dot(axis)>.94 and math.abs((hit.Position-center):Dot(axis))<reach*.22 then
+   return sourceFrame:PointToObjectSpace(hit.Position)/sourceSize
+  end
+ end
+ return site.point
 end
 local function makeSprite(carrier)
  local sprite=EnergyDisc.sprite(carrier,'CrystalSunGlint')
@@ -7775,7 +7799,15 @@ function G.new(parent,player)
        self.created+=1;sprite=makeSprite(carrier)
       end
       if sprite then
-       if not self.active[site] then sprite.rock=r;sprite.alpha=0;self.active[site]=sprite end
+       if not site.traceEye or (site.traceEye-position).Magnitude>.06
+        or site.traceFrame~=frame or site.traceSize~=scale then
+        site.tracePoint=traceReflection(site,r.source,v,position,probe)
+        site.traceEye=position;site.traceFrame=frame;site.traceSize=scale
+       end
+       sprite.targetPoint=site.tracePoint
+       if not self.active[site] then
+        sprite.rock=r;sprite.alpha=0;sprite.point=sprite.targetPoint;self.active[site]=sprite
+       end
        sprite.targetAlpha=ramp((RANGE-math.sqrt(r.glintDistance))/28)*ramp((sun.Y-.015)/.06)
        placed+=1;visibleBudget-=1
       end
@@ -7791,29 +7823,27 @@ function G.new(parent,player)
    if not drawable(r) then release(site,sprite);continue end
    local v=r.view
    local normal=(site.normal/v.Size).Unit
-   local point=v.CFrame:PointToWorldSpace(site.point*v.Size+normal*.12)
-   local strength,flash=response(site,v.CFrame:VectorToWorldSpace(normal),(position-point).Unit,sun)
-   local cycle=(now/site.period+site.phase)%1
-   -- Independent hard beats, with a brief trailing edge to keep a
-   -- flash readable across different render rates.
-   local twinkle=steady and 0 or math.clamp((site.pulse-cycle)*12,0,1)
-   local target=sprite.targetAlpha*strength*(steady and .63 or (.22+.78*twinkle))
-   if steady then
-    sprite.alpha+=(target-sprite.alpha)*(1-math.exp(-math.min(dt,.1)*8))
-   else
-    sprite.alpha=math.min(1,target*(1.75+.65*(flash or 0)))
-   end
+   local blend=1-math.exp(-math.min(dt,.1)*26)
+   sprite.point=sprite.point:Lerp(sprite.targetPoint,blend)
+   local point=v.CFrame:PointToWorldSpace(sprite.point*v.Size+normal*.12)
+   local strength,flash,gloss=response(site,v.CFrame:VectorToWorldSpace(normal),(position-point).Unit,sun)
+   -- A quick, irregular shimmer rides on the reflection. Viewing angle
+   -- supplies the larger changes in brightness and apparent size.
+   local shimmer=steady and 1 or .91+.09*math.clamp(math.noise(now*site.frequency%2048,site.phase)*2,-1,1)
+   local target=sprite.targetAlpha*math.min(1,strength*1.42)
+   if steady then target*=.72 end
+   sprite.alpha+=(target-sprite.alpha)*(steady and 1-math.exp(-math.min(dt,.1)*8) or blend)
    if sprite.targetAlpha==0 and sprite.alpha<.012 then release(site,sprite);continue end
-   sprite.gui.Enabled=sprite.alpha>.027
+   sprite.gui.Enabled=sprite.alpha>.035
    if sprite.gui.Enabled then
     sprite.anchor.WorldPosition=point
-    local bloom=1+.02*twinkle
-    local size=site.span*bloom
-    local pixels=math.floor(14+site.span*5.8+.5)
+    local spread=.52+.30*(gloss or 0)+.30*(flash or 0)
+    local size=site.span*spread
+    local pixels=math.floor((14+site.span*5.8)*spread+.5)
     sprite.gui.Size=UDim2.new(size,pixels,size,pixels)
     sprite.image.Rotation=site.rotation
     sprite.image.ImageColor3=WHITE:Lerp(r.baseColor,.06)
-    sprite.image.ImageTransparency=1-sprite.alpha
+    sprite.image.ImageTransparency=1-sprite.alpha*shimmer
    end
   end
  end
