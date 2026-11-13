@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `3f3a93b98b9289681f12dbe4d74012333a9a8cba1221841c30cf4d31ad034cba` | Visible Nomad restoration from `4bbbc70`, installed and saved in shared Edit. |
-| Shared Studio Sources | Team Create save **230** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `fa22ab3635c1c0e0af811e34955d68816df334a55f6626a2f300535257a79b70` | Corrected Nomad restoration from `44f061c`, installed and saved in shared Edit. |
+| Shared Studio Sources | Team Create save **231** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the restored visible Nomad from save **230** (gameplay revision `e284d11`). |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the earlier `44f061c` Nomad behavior from save **231**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — corrected Nomad restoration, one revision earlier
+
+The owner rejected the `4bbbc70` rollback as one revision too late and requested its immediate predecessor, **`44f061c`**. NomadView is byte-for-byte identical to that predecessor. Restored its 14.2-stud hull, broad hull projector positions, original attack-only stage cuts, flight and immediate five-rock blast/mushroom. Retained the current common cluster-reservation API for Ramiel and adapted Nomad's immediate resolver to it, preserving later unrelated gameplay and effects.
+
+Focused Nomad renderer and server checks, Ramiel regression, crystal contact clock, shared beam suite and changed module compilation pass using API doubles. The broad gadget runner then stops at its pre-existing client-inertia fixture's nil `GetAttribute` error; it is not reported as passing. No new native Play/visual/multiplayer test was started.
+
+Verified the existing shared Edit document's place `124078027733625`, universe `10774898335`, and three synced roots before export. Shared Team Create save **231** contains all seven matching Sources; the five backup Sources are unchanged. Canonical SHA-256: `fa22ab3635c1c0e0af811e34955d68816df334a55f6626a2f300535257a79b70`. Refresh used `python3 tools/build.py --previous-commit 04727c9`; every non-Source chunk and unrelated Source was preserved. Studio stays open in Edit; next Play loads this corrected earlier Nomad. No Roblox publication. Coordinated source/native ownership with the active effects chat, whose follow-up changes are separate from this rollback.
 
 ## November 12 — restore the historical visible Nomad (installed)
 

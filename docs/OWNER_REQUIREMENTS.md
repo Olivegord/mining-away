@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 12 — corrected rollback: one revision earlier
+
+The owner corrected the rollback: restore **`44f061c`**, the version immediately before `4bbbc70`. This supersedes the preceding visible-drone restoration selection. Use the smaller 14.2-stud hull, broad wing/ring/keel projector banks, original attack-only scanner cuts, original flight and immediate five-rock blast/mushroom effect. Do not retain the middle-teeth apertures, 2.5× enlargement, cruise scanning or larger delayed particle blast introduced by `4bbbc70`. Preserve unrelated later work.
+
 ## November 12 — explicitly restore the visible Nomad
 
 The owner confirmed restoring Nomad from `4bbbc70f830f0b4009955b1319df67571b525208`: visible above the regular drones, slow wide arcs, a stop above its target, the original hull-mounted cycling scanner, and the larger particle explosion with delayed cluster death and white flash. This explicitly supersedes the later off-screen whole-field patrol, broad field-fixed scanner revisions and 1.8-second blackout request for Nomad. Preserve unrelated later work.

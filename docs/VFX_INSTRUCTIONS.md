@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 12 — corrected rollback: one revision earlier
+
+The owner corrected the rollback: restore **`44f061c`**, the version immediately before `4bbbc70`. This supersedes the preceding visible-drone restoration selection. Use the smaller 14.2-stud hull, broad wing/ring/keel projector banks, original attack-only scanner cuts, original flight and immediate five-rock blast/mushroom effect. Do not retain the middle-teeth apertures, 2.5× enlargement, cruise scanning or larger delayed particle blast introduced by `4bbbc70`. Preserve unrelated later work.
+
 ## November 12 — current Nomad direction: historical visible-drone restoration
 
 The owner explicitly confirmed returning Nomad to `4bbbc70f830f0b4009955b1319df67571b525208`. Restore its renderer exactly, with the corresponding visible model, cruise scanner, slow capped arc flight, physical projector attachments, 4.05-second windup, .95-second missile flight, 13-stud/up-to-five-rock blast and .50-second delayed shatter. Later Nomad patrol/field-fixed/camera compensation experiments and their timing are superseded. Keep later Ramiel, other attacks, map, UI and progression changes. This is a historical restoration, not a newly approved visual redesign.

@@ -6,10 +6,11 @@ local CYAN=Color3.fromRGB(113,220,255)
 local ICE=Color3.fromRGB(220,248,255)
 local AMBER=Color3.fromRGB(255,142,68)
 local GOLD=Color3.fromRGB(255,218,146)
+local CLAY=Color3.fromRGB(111,69,72)
 local VERTICAL=Vector3.yAxis
-local BLAST_TAIL=4.8
+local CLOUD_TIME=2.05
 local live={}
-local leases={NomadTracker=4,NomadCruiseTracker=4,NomadRocket=10,NomadBlast=4}
+local leases={NomadTracker=4,NomadRocket=10,NomadMushroom=8}
 
 local function smooth(t)
  t=math.clamp(t,0,1)
@@ -99,8 +100,8 @@ local function paintRail(line,a,b,width,opacity)
  line.core.Transparency=1-opacity;line.halo.Transparency=1-opacity*.27
 end
 
-local function newScanner(parent,projectors,cruise)
- local folder=group(parent,cruise and 'NomadCruiseTracker' or 'NomadTracker')
+local function newScanner(parent,projectors)
+ local folder=group(parent,'NomadTracker')
  if not folder then return nil end
  local root=part(folder,'TrackerAnchor',BLUE,Vector3.one*.05)
  local scan={folder=folder,projectors=projectors,panes={},mounts={},seams={rail(folder,'Join'),rail(folder,'Join')}}
@@ -220,43 +221,6 @@ local function drawScanner(scan,stage,pins,ground,now,target,reduced,lowFlash)
  scan.lastStage=stage
 end
 
-function N.clearCruise(drone)
- if not drone.nomadCruise then return end
- drone.nomadCruise.folder:Destroy();drone.nomadCruise=nil
-end
-
-function N.cruise(drone,now,world)
- local camera=workspace.CurrentCamera
- local state=drone.source:GetAttribute('State')
- local shot=drone.shotReceipt
- local contact=shot and shot.Parent and shot:GetAttribute('ContactAt')
- local active=shot and shot.Parent and shot:GetAttribute('Shape')=='Nomad' and (not contact or now<contact+.50)
- local position=drone.view:GetPivot().Position
- if not camera or active or state=='Destroyed' or state=='Reprinting' or state=='Docked' or state=='Charging'
-  or not BeamVFX.near(position,205) then N.clearCruise(drone);return end
- local scan=drone.nomadCruise
- if not scan then
-  scan=newScanner(camera,drone.nomadProjectors,true)
-  if not scan then return end
-  drone.nomadCruise=scan
-  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.RespectCanCollide=true
-  query.FilterDescendantsInstances={workspace.Terrain,world:FindFirstChild('Map')}
-  scan.groundQuery=query
- end
- if now>=(scan.nextGround or 0) then
-  scan.nextGround=now+.09
-  local hit=workspace:Raycast(position,-VERTICAL*110,scan.groundQuery)
-  scan.ground=hit and hit.Position.Y or position.Y-(drone.source:GetAttribute('FlightHeight') or 45)
- end
- local slot=drone.source:GetAttribute('FormationSlot') or 1
- local q=((now+slot*.39)/6.30)%.773
- local stage,pins=scanStage(q)
- local player=game:GetService('Players').LocalPlayer
- local reduced=BeamVFX.reduced()
- drawScanner(scan,stage,pins,math.min(scan.ground,position.Y-3.5),now,nil,reduced,
-  reduced or (player and player:GetAttribute('ReducedFlashing')==true))
-end
-
 local function newRocket(parent,reduced)
  local root=group(parent,'NomadRocket')
  if not root then return nil end
@@ -303,116 +267,61 @@ local function stopRocket(rocket,now)
  if rocket.trail then rocket.trail.Enabled=false end
 end
 
-local SMOKE='rbxasset://textures/particles/smoke_main.dds'
-local SOOT=Color3.fromRGB(49,44,48)
-local COPPER=Color3.fromRGB(191,80,41)
-local ASH=Color3.fromRGB(109,92,86)
-local HEAT=Color3.fromRGB(255,248,217)
-local function cooling(mid,last)
- return ColorSequence.new({ColorSequenceKeypoint.new(0,HEAT),ColorSequenceKeypoint.new(.10,GOLD),
-  ColorSequenceKeypoint.new(.36,mid),ColorSequenceKeypoint.new(1,last)})
-end
-local function smokeTone(first,middle)
- return ColorSequence.new({ColorSequenceKeypoint.new(0,first),ColorSequenceKeypoint.new(.18,middle),
-  ColorSequenceKeypoint.new(.61,ASH),ColorSequenceKeypoint.new(1,SOOT)})
-end
-local function billowOpacity(mid,falloff)
- return NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.13,mid),
-  NumberSequenceKeypoint.new(.62,falloff),NumberSequenceKeypoint.new(1,1)})
-end
-local STEM={sizes={2.8,8.8,10.4},life=NumberRange.new(1.42,2.45),speed=NumberRange.new(19,28),
- drag=1.33,rise=3.6,spread=Vector2.new(13,15),color=cooling(COPPER,SOOT),alpha=billowOpacity(.27,.48),emission=.19}
-local CAP={sizes={4.5,12.9,15.5},life=NumberRange.new(1.82,3.25),speed=NumberRange.new(12,21),
- drag=2.2,rise=2.6,spread=Vector2.new(21,16),color=smokeTone(Color3.fromRGB(204,117,66),Color3.fromRGB(132,76,53)),
- alpha=billowOpacity(.32,.52),emission=.035}
-local SKIRT={sizes={1.8,5.8,8.9},life=NumberRange.new(.84,1.78),speed=NumberRange.new(27,37),
- drag=2.25,rise=1.1,spread=Vector2.new(19,9),color=smokeTone(Color3.fromRGB(168,133,103),ASH),
- alpha=billowOpacity(.44,.63),emission=.03}
-local FLASH={sizes={2.2,12.1,14.3},life=NumberRange.new(.27,.51),speed=NumberRange.new(10,17),
- drag=1.9,rise=1.7,spread=Vector2.new(66,66),color=cooling(AMBER,COPPER),alpha=billowOpacity(.10,.55),emission=.92}
-
-local function plumeEmitter(root,name,offset,direction,spec,scale)
- local anchor=Instance.new('Attachment')
- anchor.CFrame=direction and CFrame.lookAt(offset,offset+direction) or CFrame.new(offset)
- anchor.Parent=root
- local emitter=Instance.new('ParticleEmitter');emitter.Name=name;emitter.Texture=SMOKE
- emitter.Enabled=false;emitter.Rate=0;emitter.LockedToPart=false
- emitter.Orientation=Enum.ParticleOrientation.FacingCamera
- emitter.EmissionDirection=direction and Enum.NormalId.Front or Enum.NormalId.Top
- emitter.Lifetime=spec.life;emitter.Speed=spec.speed
- emitter.Drag=spec.drag;emitter.Acceleration=VERTICAL*spec.rise
- emitter.SpreadAngle=spec.spread
- emitter.Rotation=NumberRange.new(0,360);emitter.RotSpeed=NumberRange.new(-39,39)
- emitter.Color=spec.color;emitter.Transparency=spec.alpha
- local sizes=spec.sizes
- emitter.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,sizes[1]*scale),
-  NumberSequenceKeypoint.new(.27,sizes[2]*scale,sizes[2]*scale*.21),NumberSequenceKeypoint.new(1,sizes[3]*scale)})
- emitter.LightEmission=spec.emission;emitter.LightInfluence=.18
- emitter.Parent=anchor
- return emitter
+local function newCloud(parent,ground,reduced)
+ local root=group(parent,'NomadMushroom')
+ if not root then return nil end
+ local cap,stem={},{}
+ for i=1,reduced and 5 or 8 do
+  cap[i]=part(root,'CloudCap',AMBER,Vector3.one*.1,Enum.PartType.Ball)
+  cap[i].Material=Enum.Material.SmoothPlastic
+ end
+ for i=1,3 do
+  stem[i]=part(root,'CloudStem',AMBER,Vector3.one*.1,Enum.PartType.Ball)
+  stem[i].Material=Enum.Material.SmoothPlastic
+ end
+ local heart=part(root,'BlastHeart',GOLD,Vector3.one*.1,Enum.PartType.Ball)
+ heart.Position=ground+VERTICAL*.42
+ local light=Instance.new('PointLight');light.Color=AMBER;light.Range=13;light.Brightness=0;light.Parent=heart
+ return {root=root,cap=cap,stem=stem,heart=heart,light=light}
 end
 
-local function newBlast(parent,ground,radius,reduced,lowFlash,at)
- local folder=group(parent,'NomadBlast')
- if not folder then return nil end
- local root=part(folder,'PlumeOrigin',HEAT,Vector3.one*.05)
- root.Position=ground+VERTICAL*.24
- local scale=radius/13
- local blast={root=folder,skirt={},cap={},capAt=at+.25,untilAt=at+BLAST_TAIL,reduced=reduced}
- blast.stem=plumeEmitter(root,'RisingFireAndSmoke',VERTICAL*.58,nil,STEM,scale)
- if not lowFlash then
-  blast.fire=plumeEmitter(root,'ImpactFireball',VERTICAL*.80,nil,FLASH,scale)
-  local light=Instance.new('PointLight');light.Name='ImpactLight';light.Color=HEAT
-  light.Range=math.min(48,radius*3.3);light.Brightness=0;light.Parent=root;blast.light=light
+local function drawCloud(cloud,ground,age,reduced,lowFlash)
+ local bloom=1-math.exp(-age*8.2)
+ local rise=smooth(age/.70)
+ local cool=smooth((age-.13)/.86)
+ local fade=smooth((age-.66)/(CLOUD_TIME-.66))
+ local capHeight=.66+2.36*rise+.7*smooth((age-.65)/1.4)
+ local stemHeight=.45+2.42*rise
+ local core=math.max(0,1-age/.25)^2
+ cloud.light.Brightness=not lowFlash and not reduced and 2.35*core or 0
+ cloud.heart.Transparency=1-core*(lowFlash and .28 or .76)
+ cloud.heart.Size=Vector3.new(2.7,1.65,2.7)*(.13+.87*bloom)
+ for i,puff in ipairs(cloud.stem) do
+  local step=i/3
+  puff.Position=ground+Vector3.new((step-.5)*.28,.18+stemHeight*step,0)
+  puff.Size=Vector3.new(1.32-step*.42,.76+step*.49,1.32-step*.42)*(.2+bloom)
+  puff.Color=GOLD:Lerp(CLAY,cool*.91)
+  puff.Transparency=.24+fade*.76
  end
- local count=reduced and 4 or 8
- for i=1,count do
-  local a=(i-1)*math.pi*2/count
-  local radial=Vector3.new(math.cos(a),0,math.sin(a))
-  local direction=(radial+VERTICAL*.22).Unit
-  blast.skirt[i]=plumeEmitter(root,'GroundDust',radial*.94+VERTICAL*.24,direction,SKIRT,scale)
-  blast.cap[i]=plumeEmitter(root,'RollingSmokeCap',radial*(1.7*scale)+VERTICAL*((10.8+(i%3)*.97)*scale),direction,CAP,scale)
- end
- if not reduced then
-  local sparks=Instance.new('ParticleEmitter');sparks.Name='HotMineralSparks';sparks.Rate=0;sparks.Enabled=false
-  EnergyDisc.configure(sparks,.54,.16,.8,.22)
-  sparks.Color=ColorSequence.new(GOLD,AMBER)
-  sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(69,69)
-  sparks.Lifetime=NumberRange.new(.44,1.15);sparks.Speed=NumberRange.new(19,34)
-  sparks.Drag=2.1;sparks.Acceleration=-VERTICAL*28;sparks.Parent=root;blast.sparks=sparks
- end
- return blast
-end
-
-local function startBlast(blast)
- if blast.fire then blast.fire:Emit(14) end
- blast.stem:Emit(blast.reduced and 9 or 18)
- for _,emitter in ipairs(blast.skirt) do emitter:Emit(blast.reduced and 3 or 5) end
- if blast.sparks then blast.sparks:Emit(18) end
-end
-
-local function stepBlast(blast,at,now)
- if blast.light then
-  local glow=math.max(0,1-(now-at)/.24)^2
-  blast.light.Brightness=glow*9
-  blast.light.Enabled=glow>.01
- end
- if not blast.rolled and now>=blast.capAt then
-  blast.rolled=true
-  for _,emitter in ipairs(blast.cap) do emitter:Emit(blast.reduced and 3 or 5) end
-  blast.stem:Emit(blast.reduced and 4 or 8)
+ for i,puff in ipairs(cloud.cap) do
+  local angle=i*math.pi*2/(#cloud.cap-1)
+  local radius=i==1 and 0 or (.42+1.06*bloom)*(.95+.14*math.sin(i*2.3))
+  puff.Position=ground+Vector3.new(radius*math.cos(angle),capHeight+(i==1 and .40 or .21*math.sin(i*1.9)),radius*math.sin(angle))
+  puff.Size=Vector3.new(1.92,1.44,1.84)*(.19+bloom)*(.88+(i%3)*.09)*(1+fade*.14)
+  puff.Color=(i%3==0 and GOLD or AMBER):Lerp(CLAY,cool*.88)
+  puff.Transparency=.13+fade*.87
  end
 end
 
 function N.clear(r)
- if not (r.scan or r.rocket or r.blast) then return end
- for _,key in ipairs({'scan','rocket','blast'}) do
+ if not (r.scan or r.rocket or r.cloud) then return end
+ for _,key in ipairs({'scan','rocket','cloud'}) do
   local value=r[key]
   if value then (value.folder or value.root):Destroy();r[key]=nil end
  end
 end
 
-function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpact,onFlash)
+function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpact)
  local camera=workspace.CurrentCamera
  local ground=node:GetAttribute('ScanGround') or to.Y-1
  local contactAt=node:GetAttribute('ContactAt')
@@ -429,7 +338,6 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
   local q=age/windup
   local stage,pins=scanStage(q)
   if projectors and projectors.Parent then
-   N.clearCruise(drone)
    if r.scan and r.scan.projectors~=projectors then r.scan.folder:Destroy();r.scan=nil end
    r.scan=r.scan or newScanner(camera,projectors)
    if r.scan then
@@ -465,42 +373,21 @@ function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpa
  local ageSince=now-contactAt
  local floor=node:GetAttribute('BlastGround')
  if typeof(floor)~='Vector3' then return end
- local radius=node:GetAttribute('BlastRadius') or 13
  if not r.impacted then
   r.impacted=true
   if ageSince<.20 and near then
+   local radius=node:GetAttribute('BlastRadius') or 13
    RoleVisuals.setTime(contactAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,radius*2.64,.67)
-   if audio then audio:play('nomad_impact',floor) end
-   if onFlash and not lowFlash then onFlash(floor,contactAt) end
-   if onImpact and not steady then onImpact(floor,2.7,contactAt) end
+   RoleVisuals.Pulse(floor+VERTICAL*.085,AMBER,.7,radius*2,.48)
+   if not reduced then RoleVisuals.ImpactParticles(floor+VERTICAL*.37,AMBER,1.25,'NomadBlast') end
+   if audio then audio:play('prism_blast',floor,{level=.88,pitch=.94}) end
+   if onImpact and not steady then onImpact(floor,1.6,contactAt) end
   end
  end
- if not r.blast and not r.plumeStarted and ageSince<.85 and near then
-  r.blast=newBlast(camera,floor,radius,reduced,lowFlash,contactAt)
-  if r.blast then
-   r.plumeStarted=true
-   if ageSince<.22 then startBlast(r.blast) end
-  end
- end
- if r.blast then
-  if now<r.blast.untilAt then stepBlast(r.blast,contactAt,now)
-  else r.blast.root:Destroy();r.blast=nil end
- end
- local shatterAt=node:GetAttribute('ShatterAt')
- if shatterAt and now>=shatterAt and not r.shattered then
-  r.shattered=true
-  if now-shatterAt<.24 and near then
-   RoleVisuals.setTime(shatterAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,radius*.46,radius*3.06,.82)
-   if r.blast then
-    for _,emitter in ipairs(r.blast.skirt) do emitter:Emit(reduced and 2 or 3) end
-    if r.blast.sparks then r.blast.sparks:Emit(20) end
-   end
-   if audio then audio:play('nomad_shatter',floor) end
-   if onImpact and not steady then onImpact(floor,4.0,shatterAt) end
-  end
- end
+ if ageSince<CLOUD_TIME and near then
+  r.cloud=r.cloud or newCloud(camera,floor,reduced)
+  if r.cloud then drawCloud(r.cloud,floor,ageSince,reduced,lowFlash) end
+ elseif r.cloud then r.cloud.root:Destroy();r.cloud=nil end
 end
 
 function N.detach(r,now)
@@ -508,10 +395,6 @@ function N.detach(r,now)
  if r.rocket then
   stopRocket(r.rocket,now)
   if now-r.rocket.tailAt<.25 then return false end
- end
- if r.blast and now<r.blast.untilAt then
-  if r.blast.light then r.blast.light.Enabled=false end
-  return false
  end
  N.clear(r)
  return true

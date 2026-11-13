@@ -84,8 +84,8 @@ function V.new(parent,audio,onSplit)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*((prism or nomad) and 1.30 or 1)
-  local clusterSize=(prism or nomad) and (s:GetAttribute('BlastClusterSize') or 1) or 1
+  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
   local axis=frame.RightVector
@@ -99,7 +99,7 @@ function V.new(parent,audio,onSplit)
    audio:play('crystal_release_tink',point,{level=volume})
   end
   if not nomad and (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
-  if clusterSize<=5 and not nomad then
+  if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
     local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
@@ -112,9 +112,7 @@ function V.new(parent,audio,onSplit)
    end
   end
   if not reduced then
-   if RoleVisuals and nomad then
-    RoleVisuals.ImpactParticles(point,r.baseColor:Lerp(HOT,.46),strength*.78,'NomadCrystal')
-   elseif RoleVisuals then
+   if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
      RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
@@ -122,11 +120,11 @@ function V.new(parent,audio,onSplit)
     end
     RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
-   for i=1,nomad and 2 or prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
+   for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=nomad and CHAR:Lerp(r.baseColor,.43) or prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(.11+.052*(i%4))
     chip.Size=Vector3.new(size*.55,size*2.1,size)
@@ -137,7 +135,7 @@ function V.new(parent,audio,onSplit)
      .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil)
    end
-   if #self.pieces<48 and clusterSize<=5 and not nomad then
+   if #self.pieces<48 and clusterSize<=5 then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))
     spark.Shape=Enum.PartType.Ball;spark.Material=Enum.Material.Neon
     spark.Size=Vector3.one*.10;spark.Position=point

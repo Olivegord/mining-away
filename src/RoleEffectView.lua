@@ -480,15 +480,6 @@ end
 
 function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
- local function nomadFlash(position,at)
-  local camera=workspace.CurrentCamera
-  if not camera then return end
-  local player=Players.LocalPlayer
-  local root=player and player.Character and player.Character:FindFirstChild('HumanoidRootPart')
-  local cameraDistance=(camera.CFrame.Position-position).Magnitude
-  local distance=root and math.max((root.Position-position).Magnitude,cameraDistance*.65) or cameraDistance
-  if distance<115 then releaseLighting(self,at,1-smooth((distance-25)/90),true) end
- end
  local function attach(root)
   if self.root==root then return end
   self.root=root
@@ -538,7 +529,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
-     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact,nomadFlash)
+     NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact)
      continue
     end
     if typeof(anchor)=='Vector3' and target and target.view.Parent and target.view.Transparency<1 then
