@@ -11,7 +11,7 @@ assert(b.work.impact.Enabled and b.work.impact.Rate>0 and b.work.impact.Rate<=6)
 assert(b.work.impact.Speed.Max<=12 and b.work.impact.Drag>=4)
 assert(b.work.impact.Orientation==Enum.ParticleOrientation.FacingCamera)
 assert(b.work.impact.Texture=='rbxasset://textures/ui/VR/circleWhite.png' and not b.work.impact.WindAffectsDrag)
-assert(b.work.impact.Size[2].Value>=.8 and b.work.impact.Transparency[2].Value>=.4)
+assert(b.work.impact.Size[1].Value>=.8 and b.work.impact.Size[2].Value==0 and b.work.impact.Transparency[2].Value>=.4)
 assert(b.work.impact.LightEmission<.5 and b.work.impact.Brightness>=1 and b.work.impact.Brightness<=2 and b.work.impact.TimeScale==1)
 assert(b.work.impact.Lifetime.Max>=.7 and b.work.impact.Acceleration.Y<0)
 local tip=b.work.tip;local clears=b.work.impact.cleared

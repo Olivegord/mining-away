@@ -104,10 +104,11 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)
-   local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
-   local envelope=math.min(t/.16,1,(1-t)/.28)
-   local diameter=.24+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.003
-   EnergyDisc.place(mote,position,diameter*scale*math.max(.02,envelope),rig.moteColor,math.sqrt(envelope)*strength*.82)
+   local position=ground+Vector3.new(math.cos(angle)*reach,.30+4.3*t,math.sin(angle)*reach)*scale
+   local diameter=.45+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.004
+   local remaining=1-t
+   local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
+   EnergyDisc.place(mote,position,diameter*scale*remaining,rig.moteColor,opacity)
   end
  end
 end

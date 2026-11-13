@@ -23,8 +23,10 @@ end
 function V.new(parent,audio,onSplit,onCameraBeat)
  local variation=Random.new()
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
- local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail,size=p.Size}
+ local function track(p,at,from,velocity,ground,spin,weight,tink,groundTail)
+  local flight=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,from.Y-ground)))/96
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=flight+groundTail,
+   ground=ground,spin=spin,weight=weight,tink=tink,size=p.Size}
  end
  function self:chips(at,point,normal,tint,count,large,scale,ground,source)
   if not BeamVFX.near(point,large and 92 or 60) then return end
@@ -49,8 +51,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
    local floor=ground or point.Y-4
    -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
-   local landing=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,origin.Y-floor)))/96
-   track(p,at,origin,velocity,landing+1.6,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,.78)
+   track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
  function self:step(now)
@@ -62,7 +63,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)
     e.p.Transparency=.15+.85*q^.64
    else
-    local gravity=e.weight and 96 or 46
+    local gravity=96
     local pos=e.from+e.v*t-Vector3.yAxis*(gravity*.5*t*t)
     local turn=(e.landedAt or t)*(e.weight or 1)
     local rx,ry,rz=turn*9+e.spin.X,turn*7+e.spin.Y,turn*4+e.spin.Z
@@ -74,11 +75,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
      local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
      local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
      e.landedAt=t
-     if e.settleTail then
-      e.rebound=math.min(speed*.20,8)
-      e.bounceTime=2*e.rebound/gravity
-      e.duration=t+e.bounceTime+e.settleTail
-     end
+     e.rebound=math.min(speed*.20,8)
      e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
      if e.tink and audio and t-touchAge<.13 then
       audio:play('crystal_fall_tink',e.contact,{pitch=e.weight<.6 and .84 or 1.15,level=e.tink*math.clamp(speed/20,.55,1.15)})
@@ -90,15 +87,12 @@ function V.new(parent,audio,onSplit,onCameraBeat)
      local hop=e.rebound and math.max(0,e.rebound*age-gravity*.5*age*age) or 0
      pos=e.contact+Vector3.new(e.v.X*.065*(1-skid^3),hop,e.v.Z*.065*(1-skid^3))
     end
-    local shrink=0
-    if e.settleTail and e.landedAt then shrink=math.clamp((t-e.duration+.38)/.38,0,1) end
-    if shrink>0 then
-     local scale=math.max(.03,1-shrink*shrink)
-     e.p.Size=size*scale
-     pos-=Vector3.yAxis*support*(1-scale)
-     floor=e.ground+support*scale-.035
-     e.p.Transparency=.20*shrink^3
-    end
+    local progress=math.clamp(t/e.duration,0,1)
+    local scale=math.max(.001,1-progress^2)
+    e.p.Size=size*scale
+    pos-=Vector3.yAxis*support*(1-scale)
+    floor=e.ground+support*scale-.035
+    e.p.Transparency=.20*progress^3
     e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
    end
   end
@@ -132,7 +126,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     wing.Size=Vector3.new(.82,1.54,1.12)*strength*(prism and 1 or variation:NextNumber(.80,1.20))
     local origin=point+axis*side*strength*.24
     wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),1.9,ground,
+    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),ground,
      Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil,.94)
    end
   end
@@ -158,7 +152,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     local origin=point+direction*.22
     chip.Position=origin
     track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     1.9,ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+     ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
    if #self.pieces<48 and clusterSize<=5 then

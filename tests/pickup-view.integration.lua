@@ -170,11 +170,12 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(not r.ribbon and not ribbon.trail.Parent,'landing trail outlived its fade')
  renderer:update(1/60,contact+.5)
  assert(not r.idle,'landing twinkle outlived its particle lifetime')
+ renderer:update(1/60,contact+1)
  assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
   'gem should lift from its real contact point without a second landing cue')
  local hoverHeight=r.view.Position.Y
- renderer:update(1/60,contact+7)
- assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one slow bob in 6.5 seconds')
+ renderer:update(1/60,contact+11)
+ assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one slow bob in 10 seconds')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
 check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()
@@ -234,7 +235,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  for i,mote in ipairs(rig.motes) do
   if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then
    rising=true
-   assert(mote.gui.Size[1]>0 and mote.gui.Size[1]<=.54)
+   assert(mote.gui.Size[1]>0 and mote.gui.Size[1]<=.85)
   end
  end
  assert(rising and rig.points[1].Position~=startPoint,'strand or rising motes were static')

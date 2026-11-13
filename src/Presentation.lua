@@ -9,10 +9,11 @@ local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local Players=game:GetService('Players')
 local MINING_FLARE='rbxassetid://108650998238348'
+local MINING_STAR='rbxassetid://77624818077620'
 local function drawMiningFlare(beam,visible,width,now,ignition,point)
  local flare=beam.flare
  if not visible then
-  if flare then flare.Enabled=false end
+  if flare then flare.Enabled=false;beam.flareLight.Enabled=false end
   return
  end
  if not flare then
@@ -22,11 +23,17 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
   anchor.Parent=beam.holder;beam.flareAnchor=anchor
   flare=Instance.new('BillboardGui');flare.Name='PrismaticMiningFlare'
   flare.Adornee=beam.flareAnchor;flare.LightInfluence=0;flare.MaxDistance=100
-  flare.AlwaysOnTop=true
+  flare.AlwaysOnTop=false;flare.Brightness=2.8
   local sprite=Instance.new('ImageLabel');sprite.Name='Flare'
   sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1)
   sprite.Image=MINING_FLARE;sprite.Parent=flare;flare.Parent=beam.holder
-  beam.flare=flare;beam.flareSprite=sprite
+  local star=Instance.new('ImageLabel');star.Name='FourPointStar';star.ZIndex=2
+  star.BackgroundTransparency=1;star.AnchorPoint=Vector2.new(.5,.5)
+  star.Position=UDim2.fromScale(.5,.5);star.Size=UDim2.fromScale(.93,.93)
+  star.Image=MINING_STAR;star.Parent=flare
+  local light=Instance.new('PointLight');light.Name='MiningStarGlow'
+  light.Color=Color3.fromRGB(212,230,255);light.Range=6;light.Shadows=true;light.Parent=anchor
+  beam.flare=flare;beam.flareSprite=sprite;beam.flareStar=star;beam.flareLight=light
  end
  local flicker=.72
  local player=Players.LocalPlayer
@@ -38,7 +45,11 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
  local size=1.75+.65*flicker
  flare.Size=UDim2.new(size,8,size,8)
- beam.flareSprite.ImageTransparency=1-math.min(1,width*2)*flicker
+ local strength=math.min(1,width*2)*flicker
+ beam.flareSprite.ImageTransparency=1-strength*.64
+ beam.flareStar.ImageTransparency=1-strength
+ beam.flareLight.Brightness=strength*.95
+ beam.flareLight.Enabled=BeamVFX.near(beam.flareAnchor.Position,50)
  flare.Enabled=true
 end
 local miningLooks={

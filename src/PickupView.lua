@@ -8,7 +8,7 @@ local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 local DISPLAY_TAIL=.28
-local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/6.5,2*math.pi/14
+local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/10,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
 local function launchTrail(view,tint,halfWidth)
@@ -70,9 +70,7 @@ local function updateGlint(self,r,age,strength,now)
  local width=r.physical and 2.85 or 1.8
  local emitter=r.idle.emitter
  emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,width*.62),
-  NumberSequenceKeypoint.new(.13,width),
-  NumberSequenceKeypoint.new(.49,width*.90),
+  NumberSequenceKeypoint.new(0,width),
   NumberSequenceKeypoint.new(1,0),
  })
  emitter.Transparency=NumberSequence.new({
@@ -378,7 +376,7 @@ function V:update(dt,now)
    local hovering=(resting or arcLanded) and not seated and hoverAge>=0
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
-    local t=math.clamp(hoverAge/.38,0,1)
+    local t=math.clamp(hoverAge/.85,0,1)
     r.hoverAlpha=t*t*(3-2*t)
     r.hoverTime=reducedMotion and 0 or hoverAge
    elseif wasHovering then
@@ -390,7 +388,7 @@ function V:update(dt,now)
     local pose=r.motionPose
     if r.hoverAlpha then
      local t=r.hoverTime
-     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .065*math.sin(t*HOVER_BOB_RATE+r.seed))
+     local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
      local yaw=(t*HOVER_TURN_RATE+math.pi)%(2*math.pi)-math.pi
      pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(.22*r.hoverAlpha,yaw*r.hoverAlpha,-.32*r.hoverAlpha)
     end

@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `4847b710ba819ba52d92f4c204fde6111ed8c8e566bf9b3baac5159fbf6ba687` | Crystal Run with clearer flares and longer-lived shards. |
-| Shared Studio Sources | Team Create save **239** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `67447fdd63b68cc2050a0c3686493ffd431b84c51d9d1ac369cfb3f18c37ee27` | Occluded laser star, continuous shrink and slower ore hover. |
+| Shared Studio Sources | Team Create save **240** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the revised flare, sparkle and rock chips from save **239**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the laser star, revised shrink and ore hover from save **240**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — occluded laser star, continuous shrink and slower ore hover
+
+The mining optic layers the four-point star over the prismatic flare. Both sprites are occluded by world geometry, and a shadow-casting light illuminates nearby surfaces. Shards shrink on one curve from release through their floor bounce and cleanup. The shrinking circular particles, gem glints and rising motes use a continuous size ramp. Dropped ore now bobs once every ten seconds with a gentler initial rise. Its motes start larger and climb nearly twice as high.
+
+Beam, pickup, energy and crystal contact checks passed. The broader gadget runner stopped at its existing client-inertia fixture error. Script Sync and the canonical refresh from `6d1f9c6` matched all seven Sources after shared Edit save **240**. In-game appearance remains to be checked in Play. No place publication.
 
 ## November 12 — clearer flare, gem sparkle and rock debris
 

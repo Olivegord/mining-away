@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 12 — shrink on one curve
+
+When an effect shrinks away, use one continuous size curve from the start of its lifetime. Keep the rock shards' bounce and ground motion while their size changes. Dropped ore should bob slowly and send larger motes higher. Use the four-point star on the active mining laser with local light and normal world occlusion.
+
 ## November 12 — apply the supplied game-feel reference selectively
 
 Reference: Design Diary, [10 Ways to Improve Game Feel](https://www.youtube.com/watch?v=qCj9CZoAvFY), especially particles (2:29), lighting (3:29), surface impacts (4:30), hit reactions (5:25), squash/stretch (6:51) and camera shake (8:02). Its demonstration comes from [Deepnight's game-feel tool](https://deepnight.net/games/game-feel/), which isolates cosmetic feedback without replacing the mechanics.

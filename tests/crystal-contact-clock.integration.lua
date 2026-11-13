@@ -347,6 +347,7 @@ for _,fps in ipairs({30,60,144}) do
  local tint=Color3.fromRGB(205,26,63)
  debris:chips(200,Vector3.new(0,8,0),Vector3.zAxis,tint,6,false,nil,0,mineral)
  local chips=table.clone(debris.pieces)
+ local sizes={}
  assert(#chips==6)
  for frame=0,fps*2 do
   local now=200+frame/fps
@@ -355,12 +356,10 @@ for _,fps in ipairs({30,60,144}) do
    if piece.p.Parent then
     assert(piece.p.Material==mineral.Material and piece.p.Reflectance==mineral.Reflectance)
     assert(piece.p.Color.R>piece.p.Color.G*2,'chips lost the mineral hue')
-    local age=now-piece.at
-    if not piece.landedAt or age-piece.landedAt<.35 then
-     assert(piece.p.Transparency==0 and (piece.p.Size-piece.size).Magnitude<1e-6,'chip changed size or opacity before its hold ended')
-    elseif age>piece.duration-.20 then
-     assert(piece.p.Size.Magnitude<piece.size.Magnitude and piece.p.Transparency<.22,'chip faded instead of shrinking')
-    end
+    local magnitude=piece.p.Size.Magnitude
+    assert(not sizes[piece] or magnitude<sizes[piece],'chip stopped shrinking before cleanup')
+    assert(piece.p.Transparency<.21,'chip faded instead of shrinking')
+    sizes[piece]=magnitude
    end
   end
  end

@@ -12,14 +12,21 @@ function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVa
  emitter.Brightness=1.05
  emitter.WindAffectsDrag=false
  emitter.LockedToPart=false
- local start=diameter*(startScale or .52)
- local finish=diameter*(endScale or .28)
- emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
-  NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
-  NumberSequenceKeypoint.new(.67,finish,finish*(sizeVariation or 0)),
-  NumberSequenceKeypoint.new(1,0),
- })
+ -- Dust spreads as it dissipates; solid light particles shrink from birth.
+ local expanding=(endScale or 0)>1
+ if expanding then
+  local start=diameter*(startScale or .52)
+  emitter.Size=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
+   NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
+   NumberSequenceKeypoint.new(1,diameter*endScale),
+  })
+ else
+  emitter.Size=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,diameter,diameter*(sizeVariation or .13)),
+   NumberSequenceKeypoint.new(1,0),
+  })
+ end
  emitter.Transparency=NumberSequence.new({
   NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
   NumberSequenceKeypoint.new(.12,transparency),

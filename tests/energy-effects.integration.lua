@@ -6,7 +6,8 @@ local function near(a,b) assert(math.abs(a-b)<1e-7,tostring(a)..' ~= '..tostring
 local function round(emitter,min,max)
  assert(emitter.Texture=='rbxasset://textures/ui/VR/circleWhite.png')
  assert(emitter.Orientation==Enum.ParticleOrientation.FacingCamera and not emitter.WindAffectsDrag and not emitter.LockedToPart)
- assert(emitter.Size[2].Value>=min and emitter.Size[2].Value+emitter.Size[2].Envelope<=max)
+ local peak=#emitter.Size==2 and emitter.Size[1] or emitter.Size[2]
+ assert(peak.Value>=min and peak.Value+peak.Envelope<=max)
  assert(emitter.Transparency[2].Value>=.4 and emitter.Transparency[#emitter.Transparency].Value==1)
 end
 local root=Instance.new('Folder');root.Parent=workspace
