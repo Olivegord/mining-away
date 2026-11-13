@@ -312,6 +312,15 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
  sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
  sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or 8)
+ -- Keep impact signatures distinct: cuts have a short directional snap;
+ -- mineral and ice release pinpricks; heavy attacks shed dark debris.
+ local fast=kind=='Gridcutter' or kind=='Halver' or kind=='Scrap' or kind=='Starforge'
+ local dark=prism or kind=='NomadBlast' or kind=='Touchdown' or kind=='Singularity'
+ local mode=residual and 'mote' or dark and 'ink' or fast and 'streak' or 'glint'
+ local accentColor=dark and color:Lerp(Color3.fromRGB(12,8,25),.89) or color:Lerp(Color3.fromRGB(255,249,213),.55)
+ local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
+  mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+ accent:Emit(prism and 4 or dark and 5 or 3)
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end

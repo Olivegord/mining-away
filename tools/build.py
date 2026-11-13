@@ -78,6 +78,8 @@ def module_bundle(names):
   names=tuple(n for name in names for n in (('Packs','Cards') if name=='Cards' else (name,)))
  if 'Profile' in names and 'Consumables' not in names:
   names=tuple(n for name in names for n in (('Consumables','Profile') if name=='Profile' else (name,)))
+ if 'Presentation' in names and 'InkbeamView' not in names:
+  names=tuple(n for name in names for n in (('InkbeamView','Presentation') if name=='Presentation' else (name,)))
  # The shared beam renderer owns startup leases in every production/test bundle.
  if 'BeamVFX' in names and 'StartupFX' not in names:
   names=tuple(n for name in names for n in (('StartupFX','BeamVFX') if name=='BeamVFX' else (name,)))

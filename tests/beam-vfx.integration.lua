@@ -15,6 +15,26 @@ check('every line family has a bounded and distinct vocabulary',function()
  assert(BeamVFX.styles.Orbital.orbit>BeamVFX.styles.Cutter.orbit*5)
  assert(BeamVFX.styles.Repair.spin<BeamVFX.styles.Combat.spin)
 end)
+check('Inkbeam anchors its tapered color ray and leases only four nearby ink silhouettes',function()
+ local rigs={}
+ for i=1,5 do rigs[i]=InkbeamView.draw(nil,root,from,to,1,.3,true) end
+ local r=rigs[1];local ray=r.layers[2]
+ assert(ray.beam.Enabled and ray.beam.Width0>8*ray.beam.Width1)
+ near((r.root.Position+ray.b.Position-to).Magnitude,0)
+ assert(r.ink[1][1].beam.CurveSize0>0 and r.ink[2][1].beam.CurveSize0==nil)
+ assert(r.ink[1][1].beam.LightEmission==0 and r.ink[5][1].beam.LightEmission>0)
+ assert(rigs[4].detailed and not rigs[5].detailed)
+ local before=r.ink[1][1].a.Position
+ InkbeamView.draw(r,root,from,to,1,.31,true)
+ local advance=(before-r.ink[1][1].a.Position).Magnitude
+ assert(advance>0 and advance<.03)
+ InkbeamView.draw(r,root,from,to,.25,.8,false)
+ assert(not r.detailed and #r.ink==0 and ray.beam.Enabled and ray.beam.Transparency>.65)
+ InkbeamView.draw(rigs[5],root,from,to,1,.8,true)
+ assert(rigs[5].detailed,'distant/reduced effect failed to free its detail lease')
+ for _,rig in ipairs(rigs) do InkbeamView.destroy(rig) end
+ assert(not r.root.Parent)
+end)
 check('charge gathers compresses and changes silhouette before release',function()
  local full=BeamVFX.charge(.76);local compressed=BeamVFX.charge(.9)
  assert(full>.99 and compressed<.4)

@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 12 — layered silhouettes and particle variety
+
+Use the supplied still for Inkbeam's visual composition: a warm luminous taper that ends in lime/cyan, a dark asymmetric sweep with broken angular offshoots, occasional bright contact glints and loose turquoise circles. Draw smooth changes in the underlying motion while letting individual silhouettes keep hard corners. Maintain the working point on the real crystal. Reuse the principle of distinct light, shadow, and particles on other attacks in their own palettes and rhythms. Preserve the regular mining sequence, the physical crystal break, and the restored specialist sequences.
+
 ## November 12 — shrink on one curve
 
 When an effect shrinks away, use one continuous size curve from the start of its lifetime. Keep the rock shards' bounce and ground motion while their size changes. Dropped ore should bob on a stable 1.4-second cycle and send larger motes higher. Use the four-point star as the active mining laser's flare texture, with local light and normal world occlusion.

@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
+**Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `acf1c1f3d07f8c306b82af41ae58d8c6b020ca42160a14df9aadcda6c1bb40fc` | Subtle glint shimmer with movement and size driven by the view angle. |
-| Shared Studio Sources | Team Create save **247** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `23c59bd3142d689ceecac58befe3deb7479889219a5571d2be1f32947f1e43d8` | Inkbeam starter and varied attack accents. |
+| Shared Studio Sources | Team Create save **248** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the subtler shimmer and moving facet glints from save **247**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Inkbeam and the attack effects from save **248**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — Inkbeam and layered attack effects
+
+Fresh fleets start with two ordinary Laser Miners and Inkbeam. Its third slot, base traits, Blue card eligibility, damage, targeting and persistent ID follow the original cutter. Old saves retain their fleet. Studio's existing **All drone types** test loadout includes a temporary Inkbeam, and Double Beam shows both emitters when fitted.
+
+The screenshot supplied by the owner is a visual reference. Inkbeam has a yellow/orange body that tapers through lime to cyan, a smooth near-black navy sweep, sharp navy and plum cuts, a small contact star, and separate cyan discs, dark splinters and fast warm streaks. The shape flexes over time while the verified contact stays attached. The standard cutter adds a brief mineral-colored streak at first contact; Needler adds narrow splinters, Ballcaster adds glints over the pressure front, and specialist, heavy, orbital, and field-tool impacts mix accents according to their existing timing. The retained Nomad hull, scanner and blast cloud are unchanged. Rich Inkbeam contours are capped at four nearby beams and omitted in reduced effects.
+
+The beam, energy, workshop, mining-flight and progression checks passed using API doubles; both production bundles compile. An isolated native Edit component check confirmed taper, contour deformation, sharp offshoots, particle settings, reduced effects and cleanup. No full Studio Play, visual acceptance or multiplayer test was run. Studio was already open and remained in Edit. All three roots reported `SyncedAsRoot`; all seven Source fingerprints matched the canonical snapshot after Team Create save **248** to place **124078027733625**, universe **10774898335**. No Roblox publication. Reproduce the Source refresh from `8ad3dda` with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 8ad3dda`.
 
 ## November 12 — glints that travel along the facets
 

@@ -55,4 +55,30 @@ function Disc.place(sprite,position,diameter,color,opacity)
  sprite.image.ImageTransparency=1-opacity
 end
 
+-- The existing four-point glint has transparent corners. Stretch it for
+-- high-speed cuts, or leave it small and sharp for slow, tumbling glints.
+function Disc.accent(parent,name,color,diameter,mode,face,spread)
+ local p=Instance.new('ParticleEmitter');p.Name=name
+ Disc.configure(p,diameter,mode=='ink' and .10 or .26,nil,nil,.36)
+ p.Enabled=false;p.Rate=0
+ local fast=mode=='streak'
+ local ink=mode=='ink'
+ if mode~='mote' then p.Texture='rbxassetid://77624818077620' end
+ if fast or ink then
+  p.Orientation=Enum.ParticleOrientation.VelocityParallel
+  p.Squash=NumberSequence.new(fast and -.58 or -.34)
+ else
+  p.Rotation=NumberRange.new(-35,35);p.RotSpeed=NumberRange.new(-46,46)
+ end
+ p.Color=ColorSequence.new(color);p.Brightness=ink and 1 or 1.25
+ p.LightEmission=ink and 0 or .75
+ p.EmissionDirection=face;p.SpreadAngle=Vector2.new(spread,spread)
+ p.Lifetime=fast and NumberRange.new(.12,.25) or ink and NumberRange.new(.22,.43) or NumberRange.new(.34,.57)
+ p.Speed=fast and NumberRange.new(11,18) or ink and NumberRange.new(5,11) or NumberRange.new(2,6)
+ p.Drag=fast and 7 or 4.6
+ p.Acceleration=Vector3.new(0,mode=='mote' and 1.1 or -2.5,0)
+ p.Parent=parent
+ return p
+end
+
 return Disc

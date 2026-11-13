@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 12 — Inkbeam and varied attacks
+
+Replace one of the three starter Laser Miners with Inkbeam. Match the supplied still's tapered yellow-to-cyan beam, juxtaposed near-black organic curves and sharp cuts, and different sizes, shapes and colors of particles. Apply the layering principles to the rest of the attack effects while keeping motion smooth and each attack distinct. Keep existing permanent fleets and base traits.
+
 ## November 12 — reference-led game feel in the simple abstract scene
 
 The owner says the scene is intentionally very simple and abstract. Preserve that direction; do not interpret open space or simple shapes as missing scenery/detail. The owner will handle UI. Focus on model proportions and especially effects, faithfully recreating supplied references before introducing new designs. The physical card style stays; the flattened dark-card experiment was rejected and reverted.

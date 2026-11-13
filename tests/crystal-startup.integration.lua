@@ -22,6 +22,7 @@ local expected={'Striker','Striker','Striker','Needler','Ballcaster','Vacuum','C
 assert(#p.drones==#expected)
 for i,d in ipairs(p.drones) do assert(d.role==expected[i] and d.slot==i) end
 
+
 local center=characterRoot(p).Position
 local function advance(seconds)
  for _=1,math.ceil(seconds/C.Tick) do
@@ -39,6 +40,10 @@ local function verifyRing()
  end
 end
 advance(3);verifyRing()
+for i=1,3 do
+ local d=p.drones[i];local variant=i==3 and 'Inkbeam' or nil
+ assert(d.model:GetAttribute('BeamVariant')==variant and d.owned.beamVariant==variant)
+end
 center+=Vector3.new(20,0,-30);pl.Character:PivotTo(CFrame.new(center))
 advance(8);verifyRing()
 

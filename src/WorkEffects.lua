@@ -110,6 +110,12 @@ function W:burst(position,normal,color,count,now)
  sparks.SpreadAngle=Vector2.new(65,65)
  sparks:Emit(math.min(12,math.ceil(count*.6)));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
+function W:cutAccent(position,normal,color,now)
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,76) then return end
+ local anchor=part(self.parent,'MiningContactAccent');anchor.CFrame=facing(position+normal*.11,normal)
+ EnergyDisc.accent(anchor,'FacetStreaks',color:Lerp(WHITE,.52),.50,'streak',Enum.NormalId.Front,52):Emit(3)
+ table.insert(self.bursts,{part=anchor,untilAt=now+.28})
+end
 function W:destroyMining(beam)
  local fx=beam.work
  if not fx then return end
@@ -117,6 +123,7 @@ function W:destroyMining(beam)
 end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
+ local ink=sample.beamVariant=='Inkbeam'
  local working=sample.active and sample.isMining and not sample.paused and point~=nil and width>.001
  local visible=not BeamVFX.reduced() and sample.alive and sample.isMining and (charging or working or width>.001) and cameraNear(beam.origin.WorldPosition,95)
  local fx=beam.work
@@ -142,6 +149,15 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  if ink then
+   fx.accents={
+    EnergyDisc.accent(anchor,'CyanDrops',Color3.fromRGB(49,246,237),.56,'mote',Enum.NormalId.Front,82),
+    EnergyDisc.accent(anchor,'InkSplinters',Color3.fromRGB(16,8,33),.82,'ink',Enum.NormalId.Front,63),
+    EnergyDisc.accent(fx.tip,'CyanContactMotes',Color3.fromRGB(57,246,225),.46,'mote',Enum.NormalId.Front,69),
+    EnergyDisc.accent(fx.tip,'HotContactGlints',Color3.fromRGB(242,255,77),.68,'glint',Enum.NormalId.Front,54),
+    EnergyDisc.accent(fx.tip,'YellowCutStreaks',Color3.fromRGB(255,225,50),.74,'streak',Enum.NormalId.Front,34),
+   }
+  end
   EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
   fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
@@ -164,7 +180,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if fx.key~=sample.key or fx.life~=sample.life then
   -- Already-emitted world-space light belongs to the previous contact. Let it
   -- finish naturally when changing rocks; only a new life invalidates the tail.
-  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
+  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear();for _,e in ipairs(fx.accents or {}) do e:Clear() end end
   fx.key=sample.key;fx.life=sample.life
   fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
@@ -194,13 +210,22 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Drag=resonance and 5 or 4
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or resonance and 4 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
  fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
+ if fx.accents and working then
+  if (not fx.nextInkAccent or now>=fx.nextInkAccent) then
+   fx.nextInkAccent=now+.29
+   fx.inkAccent=(fx.inkAccent or 0)+1
+   local index=fx.inkAccent%3
+   fx.accents[index==0 and 1 or index==1 and 3 or 4]:Emit(1)
+  end
+ end
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
    fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+   if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then

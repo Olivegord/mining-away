@@ -919,11 +919,12 @@ local function registerDrone(source)
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if referenceMiner then
-  pivot.Color=Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
+  local ink=source:GetAttribute('BeamVariant')=='Inkbeam'
+  pivot.Color=ink and Color3.fromRGB(22,23,43) or Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
   emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
   local panel=localPart(clone,'MinerTopPanel',pivot.Position)
   panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
-  panel.Color=Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
+  panel.Color=ink and Color3.fromRGB(255,224,66) or Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
   panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
@@ -1371,7 +1372,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,

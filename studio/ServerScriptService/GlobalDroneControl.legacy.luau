@@ -2759,6 +2759,8 @@ function P.new(uid,seed,roleConfig)
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
  for serial=1,STARTER_COUNT do fleet[serial]=starterMiner(uid,serial,seed) end
+ -- Beam identity persists independently of the Blue upgrade family and Striker work role.
+ fleet[3].name='Inkbeam';fleet[3].beamVariant='Inkbeam'
  if roleConfig then
   for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
    local serial=#fleet+1
@@ -2782,6 +2784,7 @@ function P.validate(p,uid)
   local idSerial=tonumber(string.sub(d.id,#prefix+1))
   if not integer(idSerial) or idSerial<=lastSerial or d.id~=prefix..idSerial
    or (p.starterDrones~=crystalStarterCount and idSerial~=serial) then return false,'Permanent drone ID does not match owner/serial' end
+  if d.beamVariant~=nil and (d.beamVariant~='Inkbeam' or idSerial~=3 or d.type~='Blue' or d.role~='Striker') then return false,'Invalid permanent beam variant' end
   lastSerial=idSerial
   ids[d.id]=d
   if not roles[d.role] or ((specialTypes[d.type] or starterTypes[d.type]) and d.role~=d.type) then return false,'Invalid permanent role' end
@@ -8222,6 +8225,10 @@ local function roleTestFleet(p: any,starterOnly: boolean?)
  end
  -- Keep the real first miner's identity so named cards also work in this test.
  local miner=Pro.clone(data(p).fleet[1]);miner.role='Striker';miner.name='Miner';fleet[1]=miner
+ if not starterOnly then
+  local ink=Pro.clone(miner);ink.id=string.format('test:%d:%d:%d',p.player.UserId,p.testRoll,#fleet+1)
+  ink.name='Inkbeam';ink.type='Blue';ink.beamVariant='Inkbeam';table.insert(fleet,ink)
+ end
  p.player:SetAttribute('MA_TestLoadoutLabel',(starterOnly and 'Core crew' or 'All drone types')..' · Rock Scanner · max backpack')
  return includePurchasedSpecials(p,fleet)
 end
@@ -10819,7 +10826,7 @@ local function snapshotDrone(d)
   Position=d.pos,Goal=d.goal,Velocity=d.velocity or Vector3.zero,SwarmOffset=d.swarmOffset or Vector3.zero,Yaw=d.yaw,WorkPaused=profiles[d.owner].busy,MotionPaused=not store:healthy(profiles[d.owner].session) and d.hp>0,MaxStep60=travelSpeed(d),PhaseSeed=d.owned.base.maxStep60*200,FormationSlot=d.slot,FleetCount=#profiles[d.owner].drones,
   TargetId=target and target.id or '',CombatTargetId=combatId,TargetPosition=target and target.position or (combatId~='' and combatTarget.emitter.Position) or d.pos,Mining=mining,BeamSince=d.beamSince,WarmupStart=d.warmAt or 0,WarmupDuration=scene.miningWarmup(d,target),
   DoubleBeam=d.stats.doubleBeam==1,TwinThrusters=d.stats.twinThrusters==1,OreDuplicator=d.stats.oreDuplicator==1,
-  MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
+  BeamVariant=d.owned.beamVariant,MiningStyle=DroneRoles.isMiner(d.role) and 'Cutter' or 'None',MinePulseSerial=d.minePulseSerial,MinePulseAt=d.minePulseAt,MinePulseTargetId=d.minePulseTargetId,
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,

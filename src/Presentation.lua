@@ -9,7 +9,7 @@ local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local Players=game:GetService('Players')
 local MINING_STAR='rbxassetid://77624818077620'
-local function drawMiningFlare(beam,visible,width,now,ignition,point)
+local function drawMiningFlare(beam,visible,width,now,ignition,point,ink)
  local flare=beam.flare
  if not visible then
   if flare then flare.Enabled=false;beam.flareLight.Enabled=false end
@@ -39,7 +39,9 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=4.60+1.00*flicker
+ local size=ink and (2.80+.55*flicker) or (4.60+1.00*flicker)
+ beam.flareStar.ImageColor3=ink and InkbeamView.Gold or Color3.new(1,1,1)
+ beam.flareLight.Color=ink and InkbeamView.Gold or Color3.fromRGB(212,230,255)
  flare.Size=UDim2.new(size,18,size,18)
  local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
@@ -147,6 +149,7 @@ function P:destroyMiningBeam(beam)
  if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
  self.work:destroyMining(beam)
  BeamVFX.destroy(beam.vfx);BeamVFX.destroy(beam.branchVFX)
+ for _,rig in pairs(beam.ink or {}) do InkbeamView.destroy(rig) end
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
@@ -343,7 +346,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
  end
  local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
- local tint=miningTypeColors[sample.droneType] or look.color
+ local ink=sample.beamVariant=='Inkbeam' and sample.droneRole=='Striker'
+ local tint=ink and InkbeamView.Gold or miningTypeColors[sample.droneType] or look.color
  if beam.look~=look or beam.tint~=tint then
   beam.look=look;beam.tint=tint
   beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.4) or look.core
@@ -378,6 +382,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   end
   local tip=vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
   local workerScale=.23;local alpha=beam.visibility
+  if ink then
+   beam.ink=beam.ink or {}
+   local rich=not BeamVFX.reduced() and BeamVFX.near(origin,78)
+   if not beam.twinOrigins then
+    beam.ink[1]=InkbeamView.draw(beam.ink[1],beam.holder,origin,tip,width,now-ignition,rich)
+    InkbeamView.destroy(beam.ink[2]);beam.ink[2]=nil
+   else
+    for i,socket in ipairs(beam.twinOrigins) do
+     beam.ink[i]=InkbeamView.draw(beam.ink[i],beam.holder,socket.WorldPosition,tip,width*.74,now-ignition,rich and i==1)
+    end
+   end
+  end
   if reference then beam.endpoint.Position=tip
   else
    WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
@@ -402,8 +418,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
- drawReferenceBeam(beam,reference and visible,width,sample,now)
- drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point)
+ if beam.ink and not (ink and visible) then
+  for _,rig in pairs(beam.ink) do InkbeamView.destroy(rig) end;beam.ink=nil
+ end
+ drawReferenceBeam(beam,reference and not ink and visible,width,sample,now)
+ drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point,ink)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
@@ -430,9 +449,14 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
- elseif glow and sample.resource and sample.resource.cutFeedback then
+ if not reference or ink then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
+  if not ink and beam.contactAccentAt~=sample.since then
+   beam.contactAccentAt=sample.since
+   local age=now-(sample.since or -100)
+   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.baseColor,now) end
+  end
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
    sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))

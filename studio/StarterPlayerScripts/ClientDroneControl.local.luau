@@ -58,6 +58,32 @@ function Disc.place(sprite,position,diameter,color,opacity)
  sprite.image.ImageTransparency=1-opacity
 end
 
+-- The existing four-point glint has transparent corners. Stretch it for
+-- high-speed cuts, or leave it small and sharp for slow, tumbling glints.
+function Disc.accent(parent,name,color,diameter,mode,face,spread)
+ local p=Instance.new('ParticleEmitter');p.Name=name
+ Disc.configure(p,diameter,mode=='ink' and .10 or .26,nil,nil,.36)
+ p.Enabled=false;p.Rate=0
+ local fast=mode=='streak'
+ local ink=mode=='ink'
+ if mode~='mote' then p.Texture='rbxassetid://77624818077620' end
+ if fast or ink then
+  p.Orientation=Enum.ParticleOrientation.VelocityParallel
+  p.Squash=NumberSequence.new(fast and -.58 or -.34)
+ else
+  p.Rotation=NumberRange.new(-35,35);p.RotSpeed=NumberRange.new(-46,46)
+ end
+ p.Color=ColorSequence.new(color);p.Brightness=ink and 1 or 1.25
+ p.LightEmission=ink and 0 or .75
+ p.EmissionDirection=face;p.SpreadAngle=Vector2.new(spread,spread)
+ p.Lifetime=fast and NumberRange.new(.12,.25) or ink and NumberRange.new(.22,.43) or NumberRange.new(.34,.57)
+ p.Speed=fast and NumberRange.new(11,18) or ink and NumberRange.new(5,11) or NumberRange.new(2,6)
+ p.Drag=fast and 7 or 4.6
+ p.Acceleration=Vector3.new(0,mode=='mote' and 1.1 or -2.5,0)
+ p.Parent=parent
+ return p
+end
+
 return Disc
 
 end)()
@@ -2747,6 +2773,12 @@ function W:burst(position,normal,color,count,now)
  sparks.SpreadAngle=Vector2.new(65,65)
  sparks:Emit(math.min(12,math.ceil(count*.6)));table.insert(self.bursts,{part=anchor,untilAt=now+ENERGY_TAIL})
 end
+function W:cutAccent(position,normal,color,now)
+ if #self.bursts>=self.maxBursts or BeamVFX.reduced() or not cameraNear(position,76) then return end
+ local anchor=part(self.parent,'MiningContactAccent');anchor.CFrame=facing(position+normal*.11,normal)
+ EnergyDisc.accent(anchor,'FacetStreaks',color:Lerp(WHITE,.52),.50,'streak',Enum.NormalId.Front,52):Emit(3)
+ table.insert(self.bursts,{part=anchor,untilAt=now+.28})
+end
 function W:destroyMining(beam)
  local fx=beam.work
  if not fx then return end
@@ -2754,6 +2786,7 @@ function W:destroyMining(beam)
 end
 function W:mining(beam,sample,point,normal,width,pulse,now)
  local charging=sample.charging and not sample.paused and sample.warmupStart>0
+ local ink=sample.beamVariant=='Inkbeam'
  local working=sample.active and sample.isMining and not sample.paused and point~=nil and width>.001
  local visible=not BeamVFX.reduced() and sample.alive and sample.isMining and (charging or working or width>.001) and cameraNear(beam.origin.WorldPosition,95)
  local fx=beam.work
@@ -2779,6 +2812,15 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
+  if ink then
+   fx.accents={
+    EnergyDisc.accent(anchor,'CyanDrops',Color3.fromRGB(49,246,237),.56,'mote',Enum.NormalId.Front,82),
+    EnergyDisc.accent(anchor,'InkSplinters',Color3.fromRGB(16,8,33),.82,'ink',Enum.NormalId.Front,63),
+    EnergyDisc.accent(fx.tip,'CyanContactMotes',Color3.fromRGB(57,246,225),.46,'mote',Enum.NormalId.Front,69),
+    EnergyDisc.accent(fx.tip,'HotContactGlints',Color3.fromRGB(242,255,77),.68,'glint',Enum.NormalId.Front,54),
+    EnergyDisc.accent(fx.tip,'YellowCutStreaks',Color3.fromRGB(255,225,50),.74,'streak',Enum.NormalId.Front,34),
+   }
+  end
   EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
   fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
@@ -2801,7 +2843,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  if fx.key~=sample.key or fx.life~=sample.life then
   -- Already-emitted world-space light belongs to the previous contact. Let it
   -- finish naturally when changing rocks; only a new life invalidates the tail.
-  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear() end
+  if fx.life~=sample.life then fx.sparks:Clear();fx.glow:Clear();fx.impact:Clear();for _,e in ipairs(fx.accents or {}) do e:Clear() end end
   fx.key=sample.key;fx.life=sample.life
   fx.pulseSerial=sample.pulseSerial or 0;fx.biteAt=nil
  end
@@ -2831,13 +2873,22 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.impact.Drag=resonance and 5 or 4
  -- Keep the large discs readable when an entire pinned field lights up.
  local crowded=self.miningCount>8
- fx.impact.Rate=continuous and (crowded and 3 or resonance and 4 or 6) or 0
+ fx.impact.Rate=continuous and (crowded and 3 or (ink or resonance) and 4 or 6) or 0
  fx.impact.Enabled=working and continuous
  if point and normal then beam.marker.CFrame=facing(point+normal*.2,normal) end
+ if fx.accents and working then
+  if (not fx.nextInkAccent or now>=fx.nextInkAccent) then
+   fx.nextInkAccent=now+.29
+   fx.inkAccent=(fx.inkAccent or 0)+1
+   local index=fx.inkAccent%3
+   fx.accents[index==0 and 1 or index==1 and 3 or 4]:Emit(1)
+  end
+ end
  if working and fx.releaseAt~=sample.since then
   fx.releaseAt=sample.since
   if sample.since and now>=sample.since and now-sample.since<.15 then
    fx.biteAt=now;fx.impact:Emit(crowded and 4 or 8);fx.sparks:Emit(crowded and 1 or 3)
+   if fx.accents then for i,e in ipairs(fx.accents) do e:Emit(i==1 and 3 or 2) end end
   end
  end
  if sample.pulseSerial~=fx.pulseSerial then
@@ -5709,6 +5760,15 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  sparks.Speed=style and style.speed or prism and NumberRange.new(15,27) or residual and NumberRange.new(2,5) or NumberRange.new(8,16)
  sparks.Acceleration=Vector3.new(0,style and style.lift or residual and .8 or -12,0);sparks.Drag=residual and 3.2 or 3.8
  sparks.Parent=root;sparks:Emit(style and style.count or prism and 20 or residual and 9 or orbital and 10 or 8)
+ -- Keep impact signatures distinct: cuts have a short directional snap;
+ -- mineral and ice release pinpricks; heavy attacks shed dark debris.
+ local fast=kind=='Gridcutter' or kind=='Halver' or kind=='Scrap' or kind=='Starforge'
+ local dark=prism or kind=='NomadBlast' or kind=='Touchdown' or kind=='Singularity'
+ local mode=residual and 'mote' or dark and 'ink' or fast and 'streak' or 'glint'
+ local accentColor=dark and color:Lerp(Color3.fromRGB(12,8,25),.89) or color:Lerp(Color3.fromRGB(255,249,213),.55)
+ local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
+  mode,sparks.EmissionDirection,fast and spread*.66 or spread)
+ accent:Emit(prism and 4 or dark and 5 or 3)
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end
@@ -6902,6 +6962,12 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
+ -- Needle snaps stay narrow and fast; the heavy shot sheds a few bright
+ -- fragments that stay behind the round pressure front.
+ local accent=EnergyDisc.accent(node,ball and 'ShotGlints' or 'NeedleSplinters',
+  color:Lerp(WHITE,ball and .66 or .45),(ball and .68 or .59)*math.min(grade,1.7),
+  ball and 'glint' or 'streak',Enum.NormalId.Front,ball and 64 or spread*.72)
+ accent:Emit(ball and (impact and 4 or 3) or (impact and 4 or 2))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),true,.09)
  flash.CFrame=node.CFrame
  local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
@@ -7852,6 +7918,143 @@ end
 return G
 
 end)()
+local InkbeamView = (function()
+-- One clear cutting axis, with asymmetrical ink shapes drawn in its projected
+-- plane. The signed profiles are the silhouette; only their offsets breathe.
+local V={}
+V.Gold=Color3.fromRGB(255,234,47)
+local cyan=Color3.fromRGB(44,242,234)
+local ivory=Color3.fromRGB(255,255,179)
+local navy=Color3.fromRGB(8,10,37)
+local plum=Color3.fromRGB(31,5,25)
+local function key(t,c) return ColorSequenceKeypoint.new(t,c) end
+local spectrum=ColorSequence.new({key(0,V.Gold),key(.13,V.Gold),key(.32,ivory),
+ key(.52,Color3.fromRGB(255,164,42)),key(.76,V.Gold),key(.89,Color3.fromRGB(144,255,89)),key(1,cyan)})
+local function path(root,name,colors,opacity,lit,segments)
+ local a=Instance.new('Attachment');a.Parent=root
+ local b=Instance.new('Attachment');b.Parent=root
+ local v=Instance.new('Beam');v.Name=name;v.Attachment0=a;v.Attachment1=b;v.FaceCamera=true
+ v.Color=colors;v.Transparency=NumberSequence.new(opacity);v.LightEmission=lit and .88 or 0
+ v.LightInfluence=0;v.Brightness=lit and 1.65 or 1;v.Segments=segments or 1;v.Enabled=false;v.Parent=root
+ return {a=a,b=b,beam=v}
+end
+local details=0
+local DETAIL_LIMIT=4
+local outlines={
+ -- fraction along the ray, signed offset, width. The three cuts on the
+ -- opposite side leave clear gaps; the silhouette never becomes a second ray.
+ {navy,{{.035,-.19,.015},{.15,-.27,.52},{.32,-.49,.80},{.53,-.42,.60},{.71,-.28,.20},{.86,-.06,0}}},
+ {navy,{{.21,.18,.03},{.33,.53,.38},{.42,.86,.24},{.43,.68,.10},{.61,1.24,0}}},
+ {plum,{{.45,.76,0},{.53,.87,.22},{.55,.77,.035},{.69,1.19,0}}},
+ {plum,{{.58,-.47,0},{.72,-.52,.23},{.76,-.32,.045},{.87,-.39,0}}},
+ {cyan,{{.11,.03,0},{.23,.35,.18},{.31,.42,0}}},
+ {ivory,{{.02,.18,.03},{.08,.32,.32},{.19,.46,0}}},
+}
+local function new(parent)
+ local root=Instance.new('Part');root.Name='Inkbeam';root.Size=Vector3.one*.025
+ root.Anchored=true;root.CanQuery=false;root.CanTouch=false;root.CanCollide=false;root.CastShadow=false
+ root.Transparency=1;root.Parent=parent
+ local r={root=root,ink={},tip={},layers={
+  path(root,'InkbeamGlow',spectrum,.76,true,20),
+  path(root,'InkbeamColor',spectrum,.12,true,20),
+  path(root,'InkbeamHotEdge',ColorSequence.new(ivory,V.Gold),.28,true,8),
+ }}
+ root.Destroying:Connect(function()
+  if r.detailed then r.detailed=false;details-=1 end
+ end)
+ return r
+end
+function V.destroy(r)
+ if r then r.root:Destroy() end
+end
+local function set(path,a,b,w0,w1,fade,opacity)
+ path.a.Position=a;path.b.Position=b
+ path.beam.Width0=w0;path.beam.Width1=w1
+ path.beam.Enabled=fade>.006 and (b-a).Magnitude>.009
+ -- Cache stable active opacity. Only a start/stop envelope updates it.
+ local alpha=1-(1-opacity)*fade
+ if path.alpha~=alpha then path.alpha=alpha;path.beam.Transparency=NumberSequence.new(alpha) end
+end
+function V.draw(r,parent,from,to,width,age,detail)
+ local delta=to-from;local length=delta.Magnitude
+ if length<.02 or width<=.001 then V.destroy(r);return nil end
+ r=r or new(parent)
+ r.root.CFrame=CFrame.new(from)
+ local axis=delta/length
+ local camera=workspace.CurrentCamera
+ local eye=camera and camera.CFrame.Position-(from+to)*.5 or Vector3.zAxis
+ local side=axis:Cross(eye)
+ if side.Magnitude<.01 then side=axis:Cross(math.abs(axis.Y)>.95 and Vector3.zAxis or Vector3.yAxis) end
+ side=side.Unit
+ local envelope=math.clamp(width,0,1)
+ local scale=math.min(1.25,length*.30)*envelope
+ local impulse=1+.28*math.exp(-math.max(0,age)*11)
+ local clock=math.max(0,age)
+ local heat=detail and (1+.045*math.sin(clock*10)) or 1
+ local front=side:Cross(axis)*math.min(.08,length*.016)
+ set(r.layers[1],Vector3.zero,delta,1.27*scale*heat*impulse,.12*scale,envelope,.76)
+ set(r.layers[2],front,delta,.53*scale*heat*impulse,.039*scale,envelope,.12)
+ set(r.layers[3],front*2+side*.11*scale,delta*.59+front*2,.115*scale,.002,envelope,.28)
+ if not detail and r.detailed then
+  r.detailed=false;details-=1
+  for _,row in ipairs(r.ink) do
+   for _,segment in ipairs(row) do segment.beam:Destroy();segment.a:Destroy();segment.b:Destroy() end
+  end
+  table.clear(r.ink)
+  for _,ray in ipairs(r.tip) do ray.beam:Destroy();ray.a:Destroy();ray.b:Destroy() end
+  table.clear(r.tip)
+ end
+ if detail and (r.detailed or details<DETAIL_LIMIT) then
+  if not r.detailed then
+   r.detailed=true;details+=1
+   for i=1,4 do r.tip[i]=path(r.root,'InkbeamContactStar',ColorSequence.new(ivory,V.Gold),.12,true) end
+   for i,outline in ipairs(outlines) do
+    local row={};r.ink[i]=row
+    for j=2,#outline[2] do row[j-1]=path(r.root,'InkbeamContour',ColorSequence.new(outline[1]),.04,i>=5,i==1 and 5 or 1) end
+   end
+  end
+  local star=scale*(.29+.16*math.exp(-clock*12))
+  local hub=delta-axis*.075+front
+  for i,ray in ipairs(r.tip) do
+   local skew=(i==1 or i==3) and axis*.76+side*.64 or axis*.62-side*.78
+   local extent=star*(i<=2 and 1 or -.54)
+   local point=hub+skew*extent
+   -- Tuck the tips before the surface rather than piercing the target.
+   point-=axis*math.max(0,point:Dot(axis)-length+.025)
+   set(ray,hub,point,star*.35,0,envelope,.16)
+  end
+  for i,outline in ipairs(outlines) do
+   local points=outline[2]
+   local function at(p)
+    local wave=math.sin(clock*4.1-p[1]*7+i*.8)*.087
+    return delta*p[1]+side*((p[2]+wave)*scale*impulse)+front*(i>=5 and 2.4 or .44)
+   end
+   local a=at(points[1])
+   for j=2,#points do
+    local b=at(points[j])
+    local segment=r.ink[i][j-1]
+    set(segment,a,b,points[j-1][3]*scale,points[j][3]*scale,envelope,i>=5 and .12 or .03)
+    -- The big dark sweep is one smooth shape; the offshoots keep hard bends.
+    if i==1 and segment.beam.Enabled then
+     local before=at(points[math.max(1,j-2)])
+     local after=at(points[math.min(#points,j+1)])
+     local startTangent=(b-before).Unit
+     local endTangent=(after-a).Unit
+     local up=front.Unit
+     segment.a.CFrame=CFrame.fromMatrix(a,startTangent,up,startTangent:Cross(up))
+     segment.b.CFrame=CFrame.fromMatrix(b,endTangent,up,endTangent:Cross(up))
+     local handle=(b-a).Magnitude/3
+     segment.beam.CurveSize0=handle;segment.beam.CurveSize1=handle
+    end
+    a=b
+   end
+  end
+ end
+ return r
+end
+return V
+
+end)()
 local Presentation = (function()
 -- Client-only animation and cosmetic debris. No remotes, damage or rewards.
 -- Feedback is bundled immediately before this module by tools/build.py.
@@ -7864,7 +8067,7 @@ local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local Players=game:GetService('Players')
 local MINING_STAR='rbxassetid://77624818077620'
-local function drawMiningFlare(beam,visible,width,now,ignition,point)
+local function drawMiningFlare(beam,visible,width,now,ignition,point,ink)
  local flare=beam.flare
  if not visible then
   if flare then flare.Enabled=false;beam.flareLight.Enabled=false end
@@ -7894,7 +8097,9 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=4.60+1.00*flicker
+ local size=ink and (2.80+.55*flicker) or (4.60+1.00*flicker)
+ beam.flareStar.ImageColor3=ink and InkbeamView.Gold or Color3.new(1,1,1)
+ beam.flareLight.Color=ink and InkbeamView.Gold or Color3.fromRGB(212,230,255)
  flare.Size=UDim2.new(size,18,size,18)
  local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
@@ -8002,6 +8207,7 @@ function P:destroyMiningBeam(beam)
  if self.audio and self.audio.stopLoop then self.audio:stopLoop(beam) end
  self.work:destroyMining(beam)
  BeamVFX.destroy(beam.vfx);BeamVFX.destroy(beam.branchVFX)
+ for _,rig in pairs(beam.ink or {}) do InkbeamView.destroy(rig) end
  if beam.origin then beam.origin:Destroy() end
  if beam.holder then beam.holder:Destroy() end
 end
@@ -8198,7 +8404,8 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if sample.resource then sample.resource.lastContact={anchor=beam.surface.anchor,normal=beam.surface.normal} end
  end
  local style=sample.style or 'Cutter';local look=miningLooks[style] or miningLooks.Cutter
- local tint=miningTypeColors[sample.droneType] or look.color
+ local ink=sample.beamVariant=='Inkbeam' and sample.droneRole=='Striker'
+ local tint=ink and InkbeamView.Gold or miningTypeColors[sample.droneType] or look.color
  if beam.look~=look or beam.tint~=tint then
   beam.look=look;beam.tint=tint
   beam.core.Color=miningTypeColors[sample.droneType] and tint:Lerp(WHITE,.4) or look.core
@@ -8233,6 +8440,18 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   end
   local tip=vertical and Vector3.new(origin.X,beam.endY,origin.Z) or point
   local workerScale=.23;local alpha=beam.visibility
+  if ink then
+   beam.ink=beam.ink or {}
+   local rich=not BeamVFX.reduced() and BeamVFX.near(origin,78)
+   if not beam.twinOrigins then
+    beam.ink[1]=InkbeamView.draw(beam.ink[1],beam.holder,origin,tip,width,now-ignition,rich)
+    InkbeamView.destroy(beam.ink[2]);beam.ink[2]=nil
+   else
+    for i,socket in ipairs(beam.twinOrigins) do
+     beam.ink[i]=InkbeamView.draw(beam.ink[i],beam.holder,socket.WorldPosition,tip,width*.74,now-ignition,rich and i==1)
+    end
+   end
+  end
   if reference then beam.endpoint.Position=tip
   else
    WorkEffects.drawCylinder(beam.core,origin,tip,.11*width*workerScale,1-.62*alpha)
@@ -8257,8 +8476,11 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
  elseif beam.vfx then
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
- drawReferenceBeam(beam,reference and visible,width,sample,now)
- drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point)
+ if beam.ink and not (ink and visible) then
+  for _,rig in pairs(beam.ink) do InkbeamView.destroy(rig) end;beam.ink=nil
+ end
+ drawReferenceBeam(beam,reference and not ink and visible,width,sample,now)
+ drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point,ink)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then
@@ -8285,9 +8507,14 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   if valid then beam.marker.Position=point+normal*(beam.marker.Size.X*.5) end
   beam.marker.Transparency=visible and sample.contact and (.6+.4*(1-width)) or 1
  end
- if not reference then self.work:mining(beam,sample,point,normal,width,pulse,now)
- elseif glow and sample.resource and sample.resource.cutFeedback then
+ if not reference or ink then self.work:mining(beam,sample,point,normal,width,pulse,now) end
+ if glow and sample.resource and sample.resource.cutFeedback then
   sample.resource.cutFeedback:cut(sample.resource,now,beat*math.min(1,width+.25))
+  if not ink and beam.contactAccentAt~=sample.since then
+   beam.contactAccentAt=sample.since
+   local age=now-(sample.since or -100)
+   if age>=0 and age<.15 then self.work:cutAccent(point,normal,sample.resource.baseColor,now) end
+  end
   if now>=(beam.nextCrystalChip or 0) then
    beam.nextCrystalChip=now+.23+(now%.07)
    sample.resource.cutFeedback:chips(now,point,normal,sample.resource.baseColor,1,false,nil,sample.serverSource:GetAttribute('GroundY'))
@@ -14360,11 +14587,12 @@ local function registerDrone(source)
  emitter.Color=typeColor or emitter.Color
  -- The original 1-stud emitter is enclosed by its 2-stud body; a restrained tint stays visible.
  if referenceMiner then
-  pivot.Color=Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
+  local ink=source:GetAttribute('BeamVariant')=='Inkbeam'
+  pivot.Color=ink and Color3.fromRGB(22,23,43) or Color3.fromRGB(75,117,175);pivot.Material=Enum.Material.SmoothPlastic;pivot.MaterialVariant=''
   emitter.Color=Color3.fromRGB(42,53,73);emitter.Material=pivot.Material;emitter.MaterialVariant=''
   local panel=localPart(clone,'MinerTopPanel',pivot.Position)
   panel.Size=Vector3.new(pivot.Size.X*.75,.11,pivot.Size.Z*.58);panel.Transparency=0
-  panel.Color=Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
+  panel.Color=ink and Color3.fromRGB(255,224,66) or Color3.fromRGB(231,239,231);panel.Material=Enum.Material.SmoothPlastic
   panel.CFrame=pivot.CFrame*CFrame.new(0,pivot.Size.Y*.5+.045,0)
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
@@ -14812,7 +15040,7 @@ local function renderDrone(d,dt,now)
   contact=active,
   isMining=kind=='resource',charging=charging,specialReleaseAt=specialReleaseAt,
   warmupStart=s:GetAttribute('WarmupStart') or 0,warmupDuration=s:GetAttribute('WarmupDuration') or .8,mineralColor=resource and resource.baseColor,
-  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
+  style=state=='Attack' and 'Cutter' or s:GetAttribute('MiningStyle'),beamVariant=s:GetAttribute('BeamVariant'),droneType=s:GetAttribute('Type'),droneRole=s:GetAttribute('Role'),paused=s:GetAttribute('MotionPaused')==true or s:GetAttribute('WorkPaused')==true,
   pulseSerial=s:GetAttribute('MinePulseSerial') or 0,pulseAt=s:GetAttribute('MinePulseAt') or 0,pulseKey=s:GetAttribute('MinePulseTargetId'),
   since=beamSince,breakContactAt=breakAt,breakContactUntil=breakUntil,
   part=part,serverSource=source,resource=resource,secondaryPart=extra,secondarySource=extraSource,

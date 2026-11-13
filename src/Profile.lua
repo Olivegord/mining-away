@@ -126,6 +126,8 @@ function P.new(uid,seed,roleConfig)
  seed=integer(seed) and seed%2147483646 or (uid*7919+104729)%2147483646
  local fleet={}
  for serial=1,STARTER_COUNT do fleet[serial]=starterMiner(uid,serial,seed) end
+ -- Beam identity persists independently of the Blue upgrade family and Striker work role.
+ fleet[3].name='Inkbeam';fleet[3].beamVariant='Inkbeam'
  if roleConfig then
   for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do
    local serial=#fleet+1
@@ -149,6 +151,7 @@ function P.validate(p,uid)
   local idSerial=tonumber(string.sub(d.id,#prefix+1))
   if not integer(idSerial) or idSerial<=lastSerial or d.id~=prefix..idSerial
    or (p.starterDrones~=crystalStarterCount and idSerial~=serial) then return false,'Permanent drone ID does not match owner/serial' end
+  if d.beamVariant~=nil and (d.beamVariant~='Inkbeam' or idSerial~=3 or d.type~='Blue' or d.role~='Striker') then return false,'Invalid permanent beam variant' end
   lastSerial=idSerial
   ids[d.id]=d
   if not roles[d.role] or ((specialTypes[d.type] or starterTypes[d.type]) and d.role~=d.type) then return false,'Invalid permanent role' end

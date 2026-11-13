@@ -444,6 +444,12 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
+ -- Needle snaps stay narrow and fast; the heavy shot sheds a few bright
+ -- fragments that stay behind the round pressure front.
+ local accent=EnergyDisc.accent(node,ball and 'ShotGlints' or 'NeedleSplinters',
+  color:Lerp(WHITE,ball and .66 or .45),(ball and .68 or .59)*math.min(grade,1.7),
+  ball and 'glint' or 'streak',Enum.NormalId.Front,ball and 64 or spread*.72)
+ accent:Emit(ball and (impact and 4 or 3) or (impact and 4 or 2))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),true,.09)
  flash.CFrame=node.CFrame
  local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
