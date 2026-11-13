@@ -9,16 +9,20 @@ local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local Players=game:GetService('Players')
 local MINING_FLARE='rbxassetid://108650998238348'
-local function drawMiningFlare(beam,visible,width,now,ignition)
+local function drawMiningFlare(beam,visible,width,now,ignition,point)
  local flare=beam.flare
  if not visible then
   if flare then flare.Enabled=false end
   return
  end
  if not flare then
+  local anchor=Instance.new('Part');anchor.Name='MiningFlareAnchor'
+  anchor.Size=Vector3.one*.05;anchor.Transparency=1;anchor.Anchored=true
+  anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
+  anchor.Parent=beam.holder;beam.flareAnchor=anchor
   flare=Instance.new('BillboardGui');flare.Name='PrismaticMiningFlare'
-  flare.Adornee=beam.origin;flare.LightInfluence=0;flare.MaxDistance=85
-  flare.StudsOffset=Vector3.new(0,0,.18)
+  flare.Adornee=beam.flareAnchor;flare.LightInfluence=0;flare.MaxDistance=100
+  flare.AlwaysOnTop=true
   local sprite=Instance.new('ImageLabel');sprite.Name='Flare'
   sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1)
   sprite.Image=MINING_FLARE;sprite.Parent=flare;flare.Parent=beam.holder
@@ -30,9 +34,11 @@ local function drawMiningFlare(beam,visible,width,now,ignition)
   local age=math.max(0,now-ignition)
   flicker=.74+.16*math.sin(age*37)+.10*math.sin(age*61+1.2)
  end
- local size=.85+.32*flicker
- flare.Size=UDim2.fromScale(size,size)
- beam.flareSprite.ImageTransparency=1-width*flicker*.62
+ local origin=beam.origin.WorldPosition
+ beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
+ local size=1.75+.65*flicker
+ flare.Size=UDim2.new(size,8,size,8)
+ beam.flareSprite.ImageTransparency=1-math.min(1,width*2)*flicker
  flare.Enabled=true
 end
 local miningLooks={
@@ -391,7 +397,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
- drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition)
+ drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition,point)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then

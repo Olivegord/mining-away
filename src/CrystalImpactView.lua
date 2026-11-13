@@ -24,7 +24,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
  local variation=Random.new()
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail}
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail,size=p.Size}
  end
  function self:chips(at,point,normal,tint,count,large,scale,ground,source)
   if not BeamVFX.near(point,large and 92 or 60) then return end
@@ -37,7 +37,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.14,.51)
+   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.23,.65)
    local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,variation:NextNumber(.02,.21)))
    if source then
     p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
@@ -49,9 +49,8 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
    local floor=ground or point.Y-4
    -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
-   -- Keep the existing bounded count; a short planted tail supplies the aftermath.
    local landing=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,origin.Y-floor)))/96
-   track(p,at,origin,velocity,landing+.40,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,.34)
+   track(p,at,origin,velocity,landing+1.6,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,.78)
   end
  end
  function self:step(now)
@@ -67,30 +66,40 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     local pos=e.from+e.v*t-Vector3.yAxis*(gravity*.5*t*t)
     local turn=(e.landedAt or t)*(e.weight or 1)
     local rx,ry,rz=turn*9+e.spin.X,turn*7+e.spin.Y,turn*4+e.spin.Z
-    local size=e.p.Size
+    local size=e.size
     local rotation=CFrame.Angles(rx,ry,rz)
     local support=PickupMotion.supportHeight(size.X,size.Y,size.Z,rx,ry,rz)
     local floor=e.ground+support-.035
     if e.weight and not e.landedAt and gravity*t>e.v.Y and pos.Y<=floor then
      local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
-     e.landedAt=t
-     if e.settleTail then e.duration=t+e.settleTail end
      local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
+     e.landedAt=t
+     if e.settleTail then
+      e.rebound=math.min(speed*.20,8)
+      e.bounceTime=2*e.rebound/gravity
+      e.duration=t+e.bounceTime+e.settleTail
+     end
      e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
      if e.tink and audio and t-touchAge<.13 then
       audio:play('crystal_fall_tink',e.contact,{pitch=e.weight<.6 and .84 or 1.15,level=e.tink*math.clamp(speed/20,.55,1.15)})
      end
     end
     if e.landedAt then
-     local skid=1-math.clamp((t-e.landedAt)/.13,0,1)
-     pos=e.contact+Vector3.new(e.v.X,0,e.v.Z)*(.032*(1-skid^3))
+     local age=t-e.landedAt
+     local skid=1-math.clamp(age/.19,0,1)
+     local hop=e.rebound and math.max(0,e.rebound*age-gravity*.5*age*age) or 0
+     pos=e.contact+Vector3.new(e.v.X*.065*(1-skid^3),hop,e.v.Z*.065*(1-skid^3))
+    end
+    local shrink=0
+    if e.settleTail and e.landedAt then shrink=math.clamp((t-e.duration+.38)/.38,0,1) end
+    if shrink>0 then
+     local scale=math.max(.03,1-shrink*shrink)
+     e.p.Size=size*scale
+     pos-=Vector3.yAxis*support*(1-scale)
+     floor=e.ground+support*scale-.035
+     e.p.Transparency=.20*shrink^3
     end
     e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
-    if e.settleTail then
-     e.p.Transparency=e.landedAt and math.clamp((t-e.landedAt-.12)/(e.settleTail-.12),0,1) or 0
-    else
-     e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
-    end
    end
   end
  end
@@ -123,8 +132,8 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     wing.Size=Vector3.new(.82,1.54,1.12)*strength*(prism and 1 or variation:NextNumber(.80,1.20))
     local origin=point+axis*side*strength*.24
     wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
-     Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil)
+    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),1.9,ground,
+     Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil,.94)
    end
   end
   if not reduced then
@@ -142,14 +151,15 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
     local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,variation:NextNumber(.03,.27))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
-    local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.085,.33))
+    local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
     chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=i%3==0 and Enum.Material.Neon or Enum.Material.Glass
+    chip.Material=prism and (i%3==0 and Enum.Material.Neon or Enum.Material.Glass) or v.Material
+    if not prism then chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance end
     local origin=point+direction*.22
     chip.Position=origin
     track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     .70+.055*(i%4),ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
-     (i==2 or i==7) and (owned and .64 or .39) or nil)
+     1.9,ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
    if #self.pieces<48 and clusterSize<=5 then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or r.baseColor:Lerp(WARM,.77))

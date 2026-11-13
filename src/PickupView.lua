@@ -10,6 +10,7 @@ local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/6.5,2*math.pi/14
 local GEM_GLINT='rbxassetid://77624818077620'
+local GLINT_LIFETIME=.46
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -39,10 +40,11 @@ local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
  local emitter=Instance.new('ParticleEmitter');emitter.Name='GemSparkle'
  emitter.Texture=GEM_GLINT;emitter.Enabled=false;emitter.Rate=0
- emitter.LightInfluence=0;emitter.LightEmission=.76
- emitter.Speed=NumberRange.new(0);emitter.Lifetime=NumberRange.new(.24)
+ emitter.LightInfluence=0;emitter.LightEmission=.85;emitter.Brightness=2
+ emitter.Orientation=Enum.ParticleOrientation.FacingCamera
+ emitter.Speed=NumberRange.new(0);emitter.Lifetime=NumberRange.new(GLINT_LIFETIME)
  emitter.LockedToPart=true;emitter.Rotation=NumberRange.new(-18,18)
- emitter.ZOffset=.08;emitter.Parent=anchor
+ emitter.ZOffset=.45;emitter.Parent=anchor
  return {anchor=anchor,emitter=emitter}
 end
 local function removeIdle(self,r)
@@ -59,19 +61,24 @@ local function updateGlint(self,r,age,strength,now)
  local clock=age-.5+r.seed*.61
  local cycle=age<.5 and -1 or math.floor(clock/2.65)
  local phase=age<.5 and age or clock%2.65
- if phase>=.16 or strength<.04 or r.glintCycle==cycle or self.idleCount>=GLINT_LIMIT then return end
- r.glintCycle=cycle;r.glintUntil=now+.24
+ if phase>=.24 or strength<.04 or r.glintCycle==cycle or self.idleCount>=GLINT_LIMIT then return end
+ r.glintCycle=cycle;r.glintUntil=now+GLINT_LIFETIME
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
  local size=r.view.Size
  local side=r.seed%2==0 and 1 or -1
- r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.56,-side*size.Z*.08)
- local width=r.physical and 1.35 or .96
+ r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.67,-side*size.Z*.08)
+ local width=r.physical and 2.85 or 1.8
  local emitter=r.idle.emitter
- emitter.Size=NumberSequence.new(width)
+ emitter.Size=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,width*.62),
+  NumberSequenceKeypoint.new(.13,width),
+  NumberSequenceKeypoint.new(.49,width*.90),
+  NumberSequenceKeypoint.new(1,0),
+ })
  emitter.Transparency=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,1),
-  NumberSequenceKeypoint.new(.16,1-strength*.92),
-  NumberSequenceKeypoint.new(.55,1-strength*.54),
+  NumberSequenceKeypoint.new(0,1-strength*.68),
+  NumberSequenceKeypoint.new(.13,1-strength),
+  NumberSequenceKeypoint.new(.82,1-strength*.80),
   NumberSequenceKeypoint.new(1,1),
  })
  r.idle.anchor.Parent=r.view
@@ -407,8 +414,8 @@ function V:update(dt,now)
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
-   if r.arc and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
-    local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
+   if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
+    local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
     updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then

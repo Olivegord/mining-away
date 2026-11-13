@@ -107,7 +107,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
    local envelope=math.min(t/.16,1,(1-t)/.28)
    local diameter=.24+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.003
-   EnergyDisc.place(mote,position,diameter*scale,rig.moteColor,envelope*strength*.82)
+   EnergyDisc.place(mote,position,diameter*scale*math.max(.02,envelope),rig.moteColor,math.sqrt(envelope)*strength*.82)
   end
  end
 end

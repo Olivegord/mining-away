@@ -117,7 +117,7 @@ check('physical launch trail fades on the displayed landing and never reappears 
  renderer:update(1/60,realTime+1.10)
  assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land' and audio.calls[#audio.calls].position.X==4)
- assert(not record.idle,'bloom appeared before the ore settled')
+ assert(record.idle and record.idle.emitter.Emitted==1,'physical ore missed its landing sparkle')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
  renderer:update(1/60,realTime+1.37)
@@ -165,14 +165,13 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  renderer:update(1/60,contact+.045)
  assert(r.idle and r.idle.emitter:IsA('ParticleEmitter') and r.idle.emitter.Texture:match('^rbxassetid://%d+$'))
  assert(r.idle.emitter.Emitted==1 and r.idle.emitter.Rate==0)
- renderer:update(1/60,contact+.27)
- assert(not r.idle,'landing twinkle did not fade')
- assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
-  'gem should lift from its real contact point without a second landing cue')
  assert(r.ribbon==ribbon and ribbon.trail.Parent==r.view)
  renderer:update(1/60,contact+.31)
  assert(not r.ribbon and not ribbon.trail.Parent,'landing trail outlived its fade')
  renderer:update(1/60,contact+.5)
+ assert(not r.idle,'landing twinkle outlived its particle lifetime')
+ assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
+  'gem should lift from its real contact point without a second landing cue')
  local hoverHeight=r.view.Position.Y
  renderer:update(1/60,contact+7)
  assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one slow bob in 6.5 seconds')
@@ -233,7 +232,10 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  renderer:update(1/60,realTime+4.24)
  local rising=false
  for i,mote in ipairs(rig.motes) do
-  if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then rising=true;assert(mote.gui.Size[1]>=.24) end
+  if mote.gui.Enabled and mote.anchor.WorldPosition.Y>moteY[i] then
+   rising=true
+   assert(mote.gui.Size[1]>0 and mote.gui.Size[1]<=.54)
+  end
  end
  assert(rising and rig.points[1].Position~=startPoint,'strand or rising motes were static')
  workspace.CurrentCamera.CFrame=CFrame.new(1.45,2,0)

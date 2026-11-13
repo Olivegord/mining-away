@@ -67,7 +67,7 @@ local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,
 late.view.Parent=fx
 crystalFrame({late},103.08)
 assert(late.view.Transparency==1 and #audio==11 and #cues==1 and #cameraKicks==1 and splitParticles==1,'a late observer replayed a prior hit')
-for frame=1,60 do crystalFrame(resources,103.23+frame/60) end
+for frame=1,120 do crystalFrame(resources,103.23+frame/60) end
 assert(#audio==14 and audio[12]=='crystal_fall_tink' and audio[14]=='crystal_fall_tink'
  and #rockDamage.feedback.pieces==0,'falling shards did not play one tink per selected contact and clean up')
 
@@ -355,8 +355,12 @@ for _,fps in ipairs({30,60,144}) do
    if piece.p.Parent then
     assert(piece.p.Material==mineral.Material and piece.p.Reflectance==mineral.Reflectance)
     assert(piece.p.Color.R>piece.p.Color.G*2,'chips lost the mineral hue')
-    if not piece.landedAt then assert(piece.p.Transparency==0,'contact chip faded before landing')
-    elseif now-piece.at-piece.landedAt<.10 then assert(piece.p.Transparency==0,'planted chip immediately disappeared') end
+    local age=now-piece.at
+    if not piece.landedAt or age-piece.landedAt<.35 then
+     assert(piece.p.Transparency==0 and (piece.p.Size-piece.size).Magnitude<1e-6,'chip changed size or opacity before its hold ended')
+    elseif age>piece.duration-.20 then
+     assert(piece.p.Size.Magnitude<piece.size.Magnitude and piece.p.Transparency<.22,'chip faded instead of shrinking')
+    end
    end
   end
  end

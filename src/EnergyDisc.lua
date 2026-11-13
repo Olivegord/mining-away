@@ -17,12 +17,13 @@ function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVa
  emitter.Size=NumberSequence.new({
   NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
   NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
-  NumberSequenceKeypoint.new(1,finish,finish*(sizeVariation or 0)),
+  NumberSequenceKeypoint.new(.67,finish,finish*(sizeVariation or 0)),
+  NumberSequenceKeypoint.new(1,0),
  })
  emitter.Transparency=NumberSequence.new({
   NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
   NumberSequenceKeypoint.new(.12,transparency),
-  NumberSequenceKeypoint.new(.52,math.min(.97,transparency+.11)),
+  NumberSequenceKeypoint.new(.78,math.min(.97,transparency+.11)),
   NumberSequenceKeypoint.new(1,1),
  })
 end
