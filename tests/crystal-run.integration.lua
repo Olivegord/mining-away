@@ -1085,7 +1085,7 @@ for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
  now+=RoleConfig.Courier.PickupHold+.01
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert(drop.part:GetAttribute('CourierCollected')==true)
- now+=.20
+ now=math.max(now+.20,emptier.oreSeatUntil)
 end
 Pro.deliveryFundsMilestone=originalMilestone
 assert(emptier.oreLoadedAt and Pro.droneCargoUnits(data(buyer),emptier.id)==4)

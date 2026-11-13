@@ -3189,7 +3189,7 @@ function W:courier(drone,record,now)
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
       slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
-      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or 1
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or .25
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
@@ -3201,7 +3201,7 @@ function W:courier(drone,record,now)
     end
     local cargo=slot.cargo
     cargo.Transparency=0
-    local cargoFrame=frame*CFrame.new(0,-.34,0)
+    local cargoFrame=frame*CFrame.new(side*.23,-.42,0)
     local position=cargoFrame.Position
     local yaw=slot.packed and 0 or side*.12
     local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or side*.09)
