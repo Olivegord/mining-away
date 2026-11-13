@@ -12,13 +12,13 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
 | Native-file SHA-256 | `84d67690cdfa6e24427e4b22c6e9f1b511b497ee172d7b0ee6ced7b49191bf21` | Denser Crystal Run fields, loose ore Emptiers and steadier large crystals. |
-| Shared Studio Sources | Team Create save **235** | Last verified shared Edit save, from the previous revision. The new canonical Sources await sync. |
+| Shared Studio Sources | Team Create save **236** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | Save **235** loads the prior full-field scatter and crystal cuts. The clustered-field and loose-ore update awaits Edit sync. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the clustered fields, loose ore collection, and crystal feedback from save **236**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
@@ -32,7 +32,7 @@ Emptiers claim distinct loose rocks and compressed blocks, load them onto their 
 
 Workshop, pickup and beam checks passed, including two full ground-ore parcels, blocked pickup handoff and independent backpack sales. Crystal contact timing and the Ramiel and Nomad fixtures also passed. The broader gadget runner reached its pre-existing client-inertia fixture error. The new visuals still need an in-game review.
 
-Canonical Sources refreshed from `55b3b58`. Shared Studio was open in the owner's Play session. That session still runs the previous build. Shared Edit Source sync, verification and save are pending. No Roblox publication.
+Gameplay revision `79830ab` refreshes the canonical Sources from `55b3b58`. After the owner returned to Edit, Script Sync installed both controllers and the canonical build check confirmed the file already contained the exact Sources. Verified place `124078027733625`, universe `10774898335`, all three sync roots, all seven managed Sources, five backup Sources, and the five authored field beds. Saved Team Create **236** and reverified the open Edit document. No native Play session was started. No Roblox publication.
 
 ## November 12 — continuous Crystal Run fields and heavier crystal breaks
 
