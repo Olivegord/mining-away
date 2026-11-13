@@ -7674,8 +7674,8 @@ local function sampleSites(source,params,seed)
       elseif variety<.90 then random:NextNumber(2.9,5.1) else random:NextNumber(5.7,8.1)
      table.insert(sites,{point=point,normal=frame:VectorToObjectSpace(hit.Normal)*size,index=index,
       band=random:NextNumber(-.54,.54),width=random:NextNumber(.065,.18),span=span,
-      phase=random:NextNumber(),period=random:NextNumber(.85,2.5),
-      pulse=random:NextNumber(.19,.39),rotation=random:NextNumber(-28,28)})
+      phase=random:NextNumber(),period=random:NextNumber(.085,.155),
+      pulse=random:NextNumber(.28,.51),rotation=random:NextNumber(-28,28)})
     end
    end
   end
@@ -7693,12 +7693,12 @@ local function response(site,normal,toward,sun)
  if tangent.Magnitude<.05 then tangent=normal:Cross(Vector3.xAxis) end
  local mirror=normal*(2*lit)-sun
  local error=math.abs((toward-mirror):Dot(tangent.Unit)-site.band)
- local flash=1-ramp(error/site.width)
+ local flash=math.clamp((1-error/site.width)*2.8,0,1)
  return gloss*(.17+.83*flash),flash
 end
 local function makeSprite(carrier)
  local sprite=EnergyDisc.sprite(carrier,'CrystalSunGlint')
- sprite.gui.MaxDistance=RANGE+8;sprite.gui.Brightness=3.4;sprite.image.Image=STAR
+ sprite.gui.MaxDistance=RANGE+8;sprite.gui.Brightness=4.5;sprite.image.Image=STAR
  return sprite
 end
 function G.new(parent,player)
@@ -7794,23 +7794,26 @@ function G.new(parent,player)
    local point=v.CFrame:PointToWorldSpace(site.point*v.Size+normal*.12)
    local strength,flash=response(site,v.CFrame:VectorToWorldSpace(normal),(position-point).Unit,sun)
    local cycle=(now/site.period+site.phase)%1
-   -- Short attack and longer falloff leave a quiet gap between glimmers.
-   local twinkle=steady and .5 or ramp(cycle/.065)*(1-ramp((cycle-.065)/site.pulse))
-   local shimmer=.23+.77*twinkle
-   local target=sprite.targetAlpha*(strength or 0)*(.37+.63*math.max(steady and .55 or (flash or 0),shimmer))
-   local speed=steady and 8 or (target>sprite.alpha and 39 or 17)
-   sprite.alpha+=(target-sprite.alpha)*(1-math.exp(-math.min(dt,.1)*speed))
+   -- Independent hard beats, with a brief trailing edge to keep a
+   -- flash readable across different render rates.
+   local twinkle=steady and 0 or math.clamp((site.pulse-cycle)*12,0,1)
+   local target=sprite.targetAlpha*strength*(steady and .63 or (.22+.78*twinkle))
+   if steady then
+    sprite.alpha+=(target-sprite.alpha)*(1-math.exp(-math.min(dt,.1)*8))
+   else
+    sprite.alpha=math.min(1,target*(1.75+.65*(flash or 0)))
+   end
    if sprite.targetAlpha==0 and sprite.alpha<.012 then release(site,sprite);continue end
    sprite.gui.Enabled=sprite.alpha>.027
    if sprite.gui.Enabled then
     sprite.anchor.WorldPosition=point
-    local bloom=steady and .82 or .55+.45*math.max((flash or 0),twinkle)
+    local bloom=1+.02*twinkle
     local size=site.span*bloom
-    local pixels=math.floor((12+site.span*5.4)*bloom+.5)
+    local pixels=math.floor(14+site.span*5.8+.5)
     sprite.gui.Size=UDim2.new(size,pixels,size,pixels)
     sprite.image.Rotation=site.rotation
     sprite.image.ImageColor3=WHITE:Lerp(r.baseColor,.06)
-    sprite.image.ImageTransparency=1-math.min(1,sprite.alpha*1.26)
+    sprite.image.ImageTransparency=1-sprite.alpha
    end
   end
  end
