@@ -18,16 +18,23 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
+local function cameraBeat(kind,position,now,weight)
+ if not CrystalImpactView.reducedMotion() then presentation:cameraBeat(kind,position,now,weight) end
+end
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
 end,function(position,strength,at)
  presentation:crystalKick(position,strength,at,false)
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
-end)
-rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism)
- presentation:crystalKick(position,strength,now,prism)
-end)
+end,cameraBeat)
+rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned)
+ if prism then
+  presentation:crystalKick(position,strength,now,true)
+ else
+  cameraBeat('Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
+ end
+end,cameraBeat)
 local previousShake=CFrame.new();local shakeCamera=nil
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
@@ -1298,6 +1305,7 @@ local function renderDrone(d,dt,now)
   local at=s:GetAttribute('PressAt') or 0
   if at>0 and now>=at+Workshop.PRESS_CONTACT and now-at<Workshop.PRESS_CONTACT+.18 and d.pressSoundAt~=at then
    d.pressSoundAt=at;soundscape:play('metal_land',d.emitter.Position,{pitch=.84,level=.68})
+   cameraBeat('CompactorPress',d.emitter.Position,now)
    presentation.work:burst(d.emitter.Position-Vector3.yAxis*.48,Vector3.yAxis,Color3.fromRGB(255,198,118),12,now)
   end
   if at>0 and now>=at+Workshop.PRESS_EJECT and now-at<Workshop.PRESS_EJECT+.18 and d.pressEjectAt~=at then

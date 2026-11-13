@@ -136,7 +136,10 @@ RoleEffectView.aim(aiming,aimTarget,110.39)
 assert(not sight.line.Enabled and sight.dot.Transparency==1)
 aimSource:Destroy();aimView:Destroy();muzzle:Destroy();aiming.source:Destroy()
 local shotAudio={}
-local observer=RoleEffectView.new({play=function(_,name,_,options) table.insert(shotAudio,{name,options}) end})
+local shotBeats={}
+local observer=RoleEffectView.new({play=function(_,name,_,options) table.insert(shotAudio,{name,options}) end},nil,nil,nil,function(kind)
+ table.insert(shotBeats,kind)
+end)
 local gunner={}
 local drones={gunner=gunner,late={}}
 local targets={live={view=r.view}}
@@ -151,7 +154,7 @@ assert(loaded.core.Size.X>gathered and loaded.core.Transparency<.35 and loaded.r
 observer:step(110.32,drones,targets)
 assert(observer.records[node].projectile and gunner.shotReceipt==node)
 assert(not observer.records[node].load and not loaded.root.Parent,'the charge stayed behind when the shot fired')
-assert(shotAudio[2][1]=='coil_fire')
+assert(shotAudio[2][1]=='coil_fire' and table.concat(shotBeats,',')=='BallFire')
 local muzzleBurst=observer.bursts[#observer.bursts]
 assert(muzzleBurst.lamp and muzzleBurst.lamp.Enabled and muzzleBurst.lamp.Brightness>0,'shot did not light nearby surfaces')
 node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
@@ -178,6 +181,7 @@ observer:step(110.61,drones,targets)
 assert(not needleBurst.lamp.Enabled,'changing reduced flashing did not suppress local shot light')
 owner:SetAttribute('ReducedFlashing',nil)
 observer:step(111.22,drones,targets)
+assert(table.concat(shotBeats,',')=='BallFire,BallHit,NeedleHit','missing or repeated camera beats on shot receipts')
 assert(#shotAudio==4 and not observer.records[node] and not wake.Parent and observer.trails==0 and observer.heads==0 and #observer.bursts==0,
  'contact replayed or shot visuals leaked')
 local prismCore=Instance.new('Part');prismCore.Parent=fx

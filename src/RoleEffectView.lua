@@ -496,7 +496,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
+function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -650,6 +650,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
       local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
       burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
       if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
+      if onCameraBeat then onCameraBeat(ball and 'BallHit' or 'NeedleHit',point,now,grade) end
       if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
     end
@@ -677,6 +678,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
      if not r.fired then
       r.fired=true
       if paused<=0 and age-windup<.12 then
+       if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',from,now) end
        burst(self,from+direction*.17,direction,color,ball,false,1,now,true)
        if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
       end

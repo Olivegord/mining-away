@@ -20,7 +20,7 @@ local function part(parent,class,name,color)
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
  return p
 end
-function V.new(parent,audio,onSplit)
+function V.new(parent,audio,onSplit,onCameraBeat)
  local variation=Random.new()
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
@@ -114,7 +114,7 @@ function V.new(parent,audio,onSplit)
    audio:play('crystal_impact',point,{level=volume*math.clamp(strength,.9,1.25)})
    audio:play('crystal_release_tink',point,{level=volume})
   end
-  if not nomad and (owned or prism) and onSplit and not reduced then onSplit(point,strength,now,prism) end
+  if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
   if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
@@ -233,6 +233,13 @@ function V.new(parent,audio,onSplit)
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
     self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
+    if onCameraBeat and not V.reducedMotion() then
+     if fractured and not shot then
+      onCameraBeat('Fracture',point,now)
+     elseif shot and not s:GetAttribute('CutProjectileFX') and (projectile=='Dart' or projectile=='Ball') then
+      onCameraBeat(heavy and 'BallHit' or 'NeedleHit',point,now,.88)
+     end
+    end
     if fractured and not shot then
      RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
     end

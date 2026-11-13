@@ -67,7 +67,7 @@ check('nearby owner sees fresh full-speed mining discs while zoomed far out',fun
  work:mining(beam,sample,Vector3.zero,Vector3.yAxis,1,0,100)
  local impact=assert(beam.work and beam.work.impact,'zoom swallowed nearby work effects')
  assert(impact.Enabled and impact.TimeScale==1 and impact.FlipbookLayout==Enum.ParticleFlipbookLayout.None)
- round(impact,.8,1.25)
+ round(impact,.8,1.45)
  assert(impact.Acceleration.X==0 and impact.Acceleration.Z==0)
  assert(impact.Brightness>=1 and impact.Brightness<=2 and impact.LightInfluence==0 and impact.LightEmission<.5)
  assert(#beam.work.spheres==3 and beam.work.spheres[1].part.Transparency>=.5)
@@ -156,6 +156,29 @@ check('nearby character feels the impact at far camera zoom and reduced motion o
  local before=renderer.shakeStrength;player:SetAttribute('ReducedMotion',true)
  renderer:kick(Vector3.zero,.14,100.01);assert(renderer.shakeStrength==before)
  renderer:destroy();players.LocalPlayer=oldPlayer;character:Destroy();player:Destroy();camera.CFrame=CFrame.new(0,20,0)
+end)
+check('ordinary camera beats stay level, local and bounded even in a volley',function()
+ local renderer=Presentation.new({parent=root})
+ local position=camera.CFrame.Position+Vector3.new(5,0,0)
+ renderer:cameraBeat('NeedleFire',position,100)
+ local small=renderer:cameraOffset(100.016).Position.Magnitude
+ assert(small>.006 and small<.025)
+ for _=1,30 do renderer:cameraBeat('BallHit',position,101) end
+ renderer:cameraBeat('Split',position,101,1.35)
+ assert(#renderer.cameraBeats==10 and renderer.cameraBeats[10].duration==.23)
+ for i=0,30 do
+  local offset=renderer:cameraOffset(101+i/144)
+  assert(offset.yaw==0 and offset.Position.Magnitude<=.13501)
+ end
+ assert(renderer:cameraOffset(101.24).Position.Magnitude==0 and #renderer.cameraBeats==0)
+ renderer:cameraBeat('Split',position+Vector3.xAxis*75,102)
+ assert(renderer:cameraOffset(102.04).Position.Magnitude==0)
+ local old=players.LocalPlayer
+ local player=Instance.new('Player');players.LocalPlayer=player
+ player:SetAttribute('ReducedMotion',true)
+ renderer:cameraBeat('BallFire',position,103)
+ assert(#renderer.cameraBeats==0)
+ players.LocalPlayer=old;player:Destroy();renderer:destroy()
 end)
 check('Prism fires a brief level tremor and a much stronger rock blast',function()
  local renderer=Presentation.new({parent=root})

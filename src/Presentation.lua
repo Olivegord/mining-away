@@ -63,7 +63,7 @@ end
 function P.new(options)
  assert(options and options.parent,'Presentation needs a local effect parent')
  return setmetatable({parent=options.parent,audio=options.audio,work=WorkEffects.new(options.parent),drones={},turrets={},fragments={},pulses={},scanCount=0,
-  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,closed=false},P)
+  maxFragments=48,maxPulses=8,maxScans=8,beamRays=0,maxBeamRays=12,beamQueue={},beamOrder=0,cameraBeats={},closed=false},P)
 end
 -- One budget per render frame; cached anchors remain in the visible part's local
 -- coordinates between queries, so a shrinking or tilted crystal carries its impact.
@@ -615,6 +615,7 @@ function P:registerDrone(drone,now)
 end
 function P:_droneDeath(drone,record,now)
  local origin=record.pose.Position;local floor=self:_floor(origin,drone.source)
+ self:cameraBeat('DroneDeath',origin,now)
  self:_pulse(origin,ICE,3.1,now,.18)
  self:_sound(origin,'death',now)
  local visible=0
@@ -694,6 +695,7 @@ function P:renderDrone(drone,_dt,now)
    self:_pulse(emitter.Position,critical and HOT or ICE,critical and 1.25 or .65,now,.13)
    if now-(source:GetAttribute('ShotAt') or 0)<.23 then
     self:_sound(emitter.Position,'shot',now)
+    self:cameraBeat('DroneShot',emitter.Position,now,critical and 1.22 or 1)
     self.work:burst(emitter.Position,emitter.CFrame.LookVector,critical and HOT or ICE,critical and 5 or 3,now)
    end
   end
@@ -720,6 +722,7 @@ function P:_sentryAudio(position,kind,now)
   sound.RollOffMinDistance=12;sound.RollOffMaxDistance=130;sound.Parent=anchor;sound:Play()
  end
  if kind=='impact' then
+  self:cameraBeat('DroneDeath',position,now,.75)
   local dust=Instance.new('ParticleEmitter');dust.Name='SlabImpactDust';dust.Rate=0
   dust.Texture='rbxasset://textures/particles/smoke_main.dds';dust.Color=ColorSequence.new(Color3.fromRGB(156,176,156))
   dust.Lifetime=NumberRange.new(.8,1.3);dust.Speed=NumberRange.new(1.5,4);dust.Drag=5
@@ -884,7 +887,9 @@ function P:renderTurret(record,dt,now)
  if event.shot then
   record.shotAt=now;self:_sound(record.eye.Position,'hit',now)
   local contact=source:GetAttribute('ShotContact')
-  if contact and now-(source:GetAttribute('ShotAt') or 0)<.2 then
+  local shotAge=now-(source:GetAttribute('ShotAt') or 0)
+  if shotAge>=0 and shotAge<.20 then self:cameraBeat('SentryShot',contact or record.eye.Position,now) end
+  if contact and shotAge<.20 then
    local incoming=record.eye.Position-contact
    if incoming.Magnitude>.01 then self.work:burst(contact,incoming.Unit,HOT,6,now) end
   end
@@ -1027,6 +1032,65 @@ function P:destroyTurret(record)
  for part,original in pairs(record.hidden) do if part.Parent then part.LocalTransparencyModifier=original end end
  record.endpoint:Destroy();record.cue:Destroy();record.view:Destroy();self.turrets[record.source]=nil
 end
+-- Short camera translations driven by the same events as sound and particles.
+-- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
+local cameraBeats={
+ NeedleFire={.025,.105,.016}, BallFire={.060,.15,.025},
+ NeedleHit={.027,.12,.019}, BallHit={.061,.165,.026},
+ Fracture={.039,.14,.023}, Split={.17,.23,.031}, CompactorPress={.043,.14,.021},
+ DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
+}
+local function cameraListener(camera,player)
+ local character=player and player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ return root and root.Position or camera.CFrame.Position
+end
+function P:cameraBeat(kind,position,now,weight)
+ local style=cameraBeats[kind]
+ local camera=workspace.CurrentCamera
+ if not style or not camera then return end
+ local player=game:GetService('Players').LocalPlayer
+ if player and (player:GetAttribute('ReducedMotion')==true or player:GetAttribute('MA_ReducedMotion')==true) then return end
+ local distance=(cameraListener(camera,player)-position).Magnitude
+ local falloff=math.clamp((47-distance)/40,0,1)^1.65
+ local amount=style[1]*falloff*(weight or 1)
+ if amount<.002 then return end
+ local localPoint=camera.CFrame:PointToObjectSpace(position)
+ local side=math.clamp(localPoint.X/8,-1,1)
+ local direction=Vector3.new(-side*.72,-.46,.38)
+ local beats=self.cameraBeats
+ for i=#beats,1,-1 do
+  local beat=beats[i]
+  if now-beat.at>=beat.duration then table.remove(beats,i) end
+ end
+ if #beats>=10 then
+  local weakest,remaining=1,math.huge
+  for i,beat in ipairs(beats) do
+   local strength=beat.amount*(1-math.clamp((now-beat.at)/beat.duration,0,1))^2
+   if strength<remaining then weakest,remaining=i,strength end
+  end
+  if remaining>=amount then return end
+  table.remove(beats,weakest)
+ end
+ table.insert(beats,{at=now,amount=amount,duration=style[2],attack=style[3],direction=direction})
+end
+function P:sampleCameraBeats(now)
+ local offset=Vector3.zero
+ for i=#self.cameraBeats,1,-1 do
+  local beat=self.cameraBeats[i]
+  local age=now-beat.at
+  if age>=beat.duration then
+   table.remove(self.cameraBeats,i)
+  elseif age>=0 then
+   local t=age/beat.duration
+   local motion=math.min(age/beat.attack,1)*(1-t)^2*math.cos(t*4.4)
+   offset+=beat.direction*(motion*beat.amount)
+  end
+ end
+ local cap=.135
+ if offset.Magnitude>cap then offset=offset.Unit*cap end
+ return offset
+end
 function P:kick(position,strength,now)
  local camera=workspace.CurrentCamera;if not camera then return end
  local player=game:GetService('Players').LocalPlayer
@@ -1110,7 +1174,11 @@ function P:cameraOffset(now)
    ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)
   end
  end
- local impactAge=now-(self.crystalShakeAt or -100)
+ local beatOffset=self:sampleCameraBeats(now)
+ local majorAge=now-(self.crystalShakeAt or -100)
+ local majorActive=self.prismShake~=nil or self.crystalShakePrism and majorAge>=0 and majorAge<(self.crystalShakeDuration or .22)
+ ordinary*=CFrame.new(beatOffset*(majorActive and .38 or 1))
+ local impactAge=majorAge
  local impactDuration=self.crystalShakeDuration or .22
  if impactAge<0 or impactAge>=impactDuration then return ordinary end
  local t=impactAge/impactDuration
