@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e0ee20b0433e0231c8eb6ffaeb5ba5379df47cc64a87d4994fc704ddd0b1be3c` | Exaggerated crystal glints and a larger mining optic star. |
-| Shared Studio Sources | Team Create save **243** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `9fab93138ccf8143b72f61e12f5de096a92dfe74f05058c5ac56348e4e2ea625` | Larger, fixed glints on multiple facets of each crystal. |
+| Shared Studio Sources | Team Create save **244** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the brighter, larger crystal glints and enlarged beam star from save **243**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the larger multi-facet glints from save **244**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — fixed glints on multiple facets
+
+The owner clarified that walking around a crystal should reveal additional glints instead of moving one sparkle across the surface. Each crystal can show up to five larger stars at fixed points sampled from its own geometry. The view angle changes which stars light up, while each star shimmers at its own pace. The pool is capped at 48 and sampling is spread over successive updates.
+
+Both bundles compiled and beam checks passed. An isolated Studio Edit check on native crystals verified five simultaneous stars on one crystal, newly enabled sites after moving the viewpoint, and unchanged anchors at sites visible from more than one viewpoint. In-game appearance still needs a Play pass. Studio started open in the owner's Play session and the owner returned it to Edit. All seven managed Sources matched the canonical file after Team Create save **244**. No publication.
 
 ## November 12 — exaggerated sun glints and larger beam star
 
