@@ -141,10 +141,10 @@ print('PASS Crystal Run pin, status transitions, reservations, recall, edge over
 
 
 -- The production spawner uses the entire bed, including former lanes.
-f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=48,10,true
+f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=60,10,true
 bed.Size=Vector3.new(108,1,64)
 seedField(f)
-assert(#f.resources==48 and #f.respawnQueue==0)
+assert(#f.resources==60 and #f.respawnQueue==0)
 local outsideFormerPads,continuousDraws=0,0
 local ground=bed.Position.Y+bed.Size.Y*.5
 local minSize,maxSize=math.huge,0
@@ -156,6 +156,11 @@ for i,r in ipairs(f.resources) do
  if math.abs(pos.Z)>15 then outsideFormerPads+=1 end
  if pos.X%1~=0 or pos.Z%1~=0 then continuousDraws+=1 end
  minSize=math.min(minSize,r.fullSize.Y);maxSize=math.max(maxSize,r.fullSize.Y)
+ if r.part:GetAttribute('SteadyCrystal') then
+  local first=Feel.groundedRockFrame(r.position,r.fullSize,ground,0,r.stageSeed,true,true,true)
+  local fractured=Feel.groundedRockFrame(r.position,r.fullSize*.6,ground,r.stageCount,r.stageSeed,true,true,true)
+  assert((first.LookVector-fractured.LookVector).Magnitude<.001,'a heavy crystal turned when its stage changed')
+ end
  for j=1,i-1 do
   local other=f.resources[j]
   local otherRadius=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
@@ -163,7 +168,7 @@ for i,r in ipairs(f.resources) do
   assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=radius+otherRadius+ResourcePlacement.GAP)
  end
 end
-assert(outsideFormerPads>=8 and continuousDraws==48 and maxSize/minSize>2)
+assert(outsideFormerPads>=8 and continuousDraws==60 and maxSize/minSize>2)
 local crewPlayer=player(98702);players.PlayerAdded:Fire(crewPlayer)
 local crew=profiles[crewPlayer.UserId]
 crewPlayer.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
@@ -182,7 +187,7 @@ retired.paid=true
 local ok,_,plan=spawnResource(f,'Crystal',true)
 assert(ok and plan.field==f.id,'grower preview must use the field with a vacancy')
 local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
-assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==48)
+assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==60)
 replacement.readyAt=now
 assert(assignOre(p,d,replacement))
 p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
@@ -325,7 +330,7 @@ do
  deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4
  deep.resources={}
  seedField(deep)
- assert(#deep.resources==48,'deep field failed to fill at mixed crystal sizes')
+ assert(#deep.resources==60,'deep field failed to fill at mixed crystal sizes')
  local low,high=math.huge,0
  for i,r in ipairs(deep.resources) do
   local base=r.part:GetAttribute('GroundY')
@@ -1057,14 +1062,42 @@ local emeraldCargo=Workshop.cargoKey('RunEmerald',300)
 local pressedCargo=Workshop.cargoKey('RunCobalt',90,true)
 local quartzCargo=Workshop.cargoKey('Quartz',10)
 data(buyer).run.cargo={[rubyCargo]=1,[emeraldCargo]=1,[pressedCargo]=1,[quartzCargo]=6}
-local hr=characterRoot(buyer);emptier.pos=hr.Position+scene.emptierOffset(1)
+local hr=characterRoot(buyer)
+local function stageGroundCargo(material,position)
+ local tier,value,packed=Workshop.crystalCargo(material)
+ scene.spawnOrePickup(f.part,{owner=shopper.UserId,runId=data(buyer).run.id,nodeId='courier-test',
+  material=material,tierMaterial=tier,value=value,units=1,raw=true,compacted=packed,floor=position.Y},
+  position,Vector3.zero,f.color)
+ local drop=pickups[pickupSerial]
+ drop.landed=true;drop.age=1
+ return drop
+end
+emptier.pos=hr.Position
+buyer.nextEmptierPlan=nil
+local originalMilestone=Pro.deliveryFundsMilestone
+Pro.deliveryFundsMilestone=function() return false end
+for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
+ local drop=stageGroundCargo(material,hr.Position-Vector3.yAxis*2.6)
+ emptier.orePickupId=pickupSerial
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ now+=RoleConfig.Courier.PickupHold+.01
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert(drop.part:GetAttribute('CourierCollected')==true)
+ now+=.20
+end
+Pro.deliveryFundsMilestone=originalMilestone
+assert(emptier.oreLoadedAt and Pro.droneCargoUnits(data(buyer),emptier.id)==4)
+local restored=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+Pro.reconcileCargo(restored,{emptier.id},true)
+assert(Pro.droneCargoUnits(restored,emptier.id)==4 and Pro.cargoUnits(restored)==9,
+ 'restoring a partly loaded Emptier moved its ore into the backpack')
 local function stepEmptier()
  scene.assignEmptierPickups(buyer);droneStep(emptier,C.Tick)
 end
 stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
 local manifest=assert(data(buyer).run.deliveries[emptier.id])
 assert(manifest.cargo[rubyCargo]==1 and manifest.cargo[emeraldCargo]==1 and manifest.cargo[pressedCargo]==1 and manifest.cargo[quartzCargo]==1)
-assert(Pro.cargoUnits(data(buyer))==5 and data(buyer).run.cargo[quartzCargo]==5)
+assert(Pro.cargoUnits(data(buyer))==9 and data(buyer).run.cargo[quartzCargo]==6)
 snapshotDrone(emptier)
 local counter=scene.packStation
 local landing=counter.CFrame:PointToObjectSpace(emptier.model:GetAttribute('SellPosition'))
@@ -1087,13 +1120,17 @@ scene.publishSquareStatus(buyer)
 assert(shopper:GetAttribute('MA_SelectorStatus')=='SurgeReady')
 table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
 -- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
-data(buyer).run.cargo={[Workshop.cargoKey('RunRuby',5,true)]=1}
-buyer.emptierBagSince=nil
-now+=3;emptier.pos=hr.Position+scene.emptierOffset(1)
-stepEmptier();assert(not emptier.pickupAt)
-now+=Workshop.EMPTIER_WAIT;stepEmptier()
-now+=1;stepEmptier();serviceDeliveries(buyer)
-assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==0)
+now+=3;emptier.pos=hr.Position
+local smallParcel=Workshop.cargoKey('RunRuby',5,true)
+local drop=stageGroundCargo(smallParcel,hr.Position-Vector3.yAxis*2.6)
+emptier.orePickupId=pickupSerial
+scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+now+=RoleConfig.Courier.PickupHold+.01
+scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+assert(drop.part:GetAttribute('CourierCollected') and not emptier.deliveryRequested)
+now+=Workshop.EMPTIER_WAIT
+stepEmptier();serviceDeliveries(buyer)
+assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==9)
 snapshotDrone(emptier)
 assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
 local saleDelay=now

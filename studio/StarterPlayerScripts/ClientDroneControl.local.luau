@@ -5,7 +5,7 @@ local EnergyDisc = (function()
 -- Shape and opacity read without relying on bloom or additive saturation.
 local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 
-function Disc.configure(emitter,diameter,transparency,startScale,endScale)
+function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
  emitter.Texture=Disc.texture
  emitter.Orientation=Enum.ParticleOrientation.FacingCamera
  emitter.Squash=NumberSequence.new(0)
@@ -15,10 +15,12 @@ function Disc.configure(emitter,diameter,transparency,startScale,endScale)
  emitter.Brightness=1.05
  emitter.WindAffectsDrag=false
  emitter.LockedToPart=false
+ local start=diameter*(startScale or .52)
+ local finish=diameter*(endScale or .28)
  emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,diameter*(startScale or .52)),
-  NumberSequenceKeypoint.new(.18,diameter,diameter*.13),
-  NumberSequenceKeypoint.new(1,diameter*(endScale or .28)),
+  NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
+  NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
+  NumberSequenceKeypoint.new(1,finish,finish*(sizeVariation or 0)),
  })
  emitter.Transparency=NumberSequence.new({
   NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),
@@ -502,9 +504,10 @@ function F.rockYaw(seed,stage,turn,reference)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference)
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn,reference),0),ground+size.Y-.06
+ local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
+ return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -2768,7 +2771,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  EnergyDisc.configure(fx.impact,.94,.47,.56,.63)
+  EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
   fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
   -- Reuse the preserved original two-ball contact glows, at the real contact.
@@ -2812,7 +2815,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=2;fx.sparks.Enabled=working
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
  local resonance=sample.style=='Resonance'
- local impactColor=resonance and (beam.tint or WHITE) or YELLOW
+ local impactColor=sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
  if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
@@ -2994,14 +2997,17 @@ function W:courier(drone,record,now)
  local mountScale=drone.view:GetScale()/.94
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
- local backpack=(state=='Pickup' or state=='Launch') and backpackPosition(source)
+ local pickupPoint
+ if slots>0 then
+  if state=='Pickup' then pickupPoint=source:GetAttribute('CourierOrePosition') end
+ elseif state=='Pickup' or state=='Launch' then pickupPoint=backpackPosition(source) end
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
  local saleAge=now-(source:GetAttribute('CourierSaleAt') or 0)
  if sale>fx.sale and typeof(sell)=='Vector3' and saleAge>=-.1 and saleAge<.7 then
   self:burst(sell+Vector3.yAxis*(slots>0 and .18 or 1),Vector3.yAxis,GOLD,slots>0 and 7 or 18,now)
  end
  fx.sale=sale
- local pickup=state=='Pickup' and backpack~=nil and (backpack-mount).Magnitude<=6 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5
+ local pickup=state=='Pickup' and typeof(pickupPoint)=='Vector3' and (pickupPoint-mount).Magnitude<=6 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5
  local unload=state=='Unload' and typeof(sell)=='Vector3'
  if unload then
   local sampleAt=paused and (source:GetAttribute('SnapshotAt') or now) or now
@@ -3024,8 +3030,8 @@ function W:courier(drone,record,now)
  if pickup then
   fx.tetherVFX=fx.tetherVFX or BeamVFX.new(fx.root,'Courier',GOLD)
   if fx.tetherVFX then
-   fx.tether.Transparency=1;BeamVFX.draw(fx.tetherVFX,mount,backpack,now,.45+.55*q,nil,nil)
-  else W.drawCylinder(fx.tether,mount,backpack,.045+.025*q,.5-.2*q) end
+   fx.tether.Transparency=1;BeamVFX.draw(fx.tetherVFX,mount,pickupPoint,now,.45+.55*q,nil,nil)
+  else W.drawCylinder(fx.tether,mount,pickupPoint,.045+.025*q,.5-.2*q) end
  else
   fx.tether.Transparency=1;BeamVFX.destroy(fx.tetherVFX);fx.tetherVFX=nil
  end
@@ -3040,9 +3046,9 @@ function W:courier(drone,record,now)
  if parcelUnits>0 then
   local position=mount
   local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
-  if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
+  if transfer<1 and slots==0 and pickupPoint and (pickupPoint-mount).Magnitude<=6 then
    local t=transfer*transfer*(3-2*transfer)
-   position=backpack:Lerp(mount,t)+Vector3.new(0,math.sin(t*math.pi)*.35,0)
+   position=pickupPoint:Lerp(mount,t)+Vector3.new(0,math.sin(t*math.pi)*.35,0)
   elseif unload then
    local t=fx.unloadProgress
    -- Hold the parcel just above the converter until the server confirms sale.
@@ -3056,7 +3062,6 @@ function W:courier(drone,record,now)
   local materials=source:GetAttribute('DeliveryMaterials') or ''
   if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
   local count=math.max(slots,math.min(parcelUnits,6))
-  local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
   for i=1,count do
    local slot=fx.mounts[i]
    if not slot then
@@ -3089,7 +3094,8 @@ function W:courier(drone,record,now)
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
      slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)
+     local variation=.86+(i*13%9)*.035
+     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)*variation
      slot.packed=packed
     end
     local cargo=slot.cargo
@@ -3097,10 +3103,7 @@ function W:courier(drone,record,now)
     local position=frame.Position-Vector3.yAxis*.28
     local yaw=slot.packed and 0 or .7+i*.28
     local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or .26)
-    if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
-     local t=math.clamp(transfer*1.3-(i-1)*.06,0,1)
-     position=backpack:Lerp(position,t*t*(3-2*t))+Vector3.yAxis*(math.sin(t*math.pi)*.35)
-    elseif unload then
+    if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
      local ease=t*t*(3-2*t)
      local finish=sell+Vector3.new(side*.38,cargo.Size.Y*.5+.015,(math.floor((i-1)/2)-1)*.60)
@@ -5683,14 +5686,15 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  else
   impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  end
+ local crystal=kind=='CrystalBreak'
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
  local style=impactStyles[kind]
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
- EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
+ EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50,crystal and .62 or .30)
  sparks.Enabled=false;sparks.Rate=0
- sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
+ sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),crystal and .10 or .22),color)
  local spread=style and style.spread or 63
  sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
@@ -5701,9 +5705,9 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
- EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
+ EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20,crystal and .55 or .32)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
- dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
+ dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),crystal and .08 or .22))
  dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4
@@ -6881,11 +6885,11 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
  local sparks=Instance.new('ParticleEmitter')
- EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64)
+ EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64,.46)
  sparks.Enabled=false;sparks.Rate=0
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
- sparks.Color=ColorSequence.new(color:Lerp(WHITE,.38),color)
+ sparks.Color=ColorSequence.new(color:Lerp(WHITE,.14),color)
  sparks.Lifetime=NumberRange.new(.23,ball and .56 or .41)
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
@@ -7326,6 +7330,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio,onSplit)
+ local variation=Random.new()
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail}
@@ -7341,12 +7346,12 @@ function V.new(parent,audio,onSplit)
    if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*(.42+i*.1) or .14+i*.055
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.12+(i%3)*.04))
+   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.14,.51)
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,variation:NextNumber(.02,.21)))
    if source then
     p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
    end
-   p.Size=Vector3.new(size*.72,size*1.45,size)
+   p.Size=Vector3.new(size*variation:NextNumber(.56,.92),size*variation:NextNumber(1.12,1.78),size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
@@ -7422,9 +7427,9 @@ function V.new(parent,audio,onSplit)
   if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
-    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
+    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(HOT,variation:NextNumber(.06,.24))
     local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
-    wing.Size=Vector3.new(.82,1.54,1.12)*strength
+    wing.Size=Vector3.new(.82,1.54,1.12)*strength*(prism and 1 or variation:NextNumber(.80,1.20))
     local origin=point+axis*side*strength*.24
     wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
     track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
@@ -7438,16 +7443,16 @@ function V.new(parent,audio,onSplit)
      RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,variation:NextNumber(.03,.27))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
-    local size=strength*(.11+.052*(i%4))
-    chip.Size=Vector3.new(size*.55,size*2.1,size)
+    local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.085,.33))
+    chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
     chip.Material=i%3==0 and Enum.Material.Neon or Enum.Material.Glass
     local origin=point+direction*.22
     chip.Position=origin
@@ -7533,7 +7538,7 @@ function V.new(parent,audio,onSplit)
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     local tilt=Vector3.new(-normal.Z,0,normal.X)
     if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
-    if shot or fractured then
+    if (shot or fractured) and not s:GetAttribute('SteadyCrystal') then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
     self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
@@ -11829,8 +11834,8 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
   rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.moteColor=record.color:Lerp(WHITE,.71)
-  local strand=ColorSequence.new(record.color:Lerp(WHITE,.72))
+  rig.moteColor=record.color:Lerp(WHITE,.14)
+  local strand=ColorSequence.new(record.color:Lerp(WHITE,.32))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end
@@ -11867,12 +11872,14 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  for i,mote in ipairs(rig.motes) do
   if reducedEffects or reducedMotion then mote.gui.Enabled=false
   else
-   local t=(now*(.53+i*.039)+i*.191+record.seed*.137)%1
+   local cycle=now*(.53+i*.039)+i*.191+record.seed*.137
+   local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)
    local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
    local envelope=math.min(t/.16,1,(1-t)/.28)
-   EnergyDisc.place(mote,position,(.24+(i%3)*.062)*scale,rig.moteColor,envelope*strength*.82)
+   local diameter=.24+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.003
+   EnergyDisc.place(mote,position,diameter*scale,rig.moteColor,envelope*strength*.82)
   end
  end
 end
@@ -12129,6 +12136,7 @@ function V:update(dt,now)
    local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
+    r.courierCollected=source:GetAttribute('CourierCollected')==true
     r.collectAt=r.processed and collectedAt or now
     r.collectFrom=r.drawPosition or r.pos
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
@@ -12147,7 +12155,7 @@ function V:update(dt,now)
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
+   local target=r.courierCollected and r.collectTarget or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)
@@ -13611,7 +13619,7 @@ openFleet=function()
   elseif role=='Courier' then
    local crystalRun=world:GetAttribute('FieldToolsEnabled')==false
    statTile(row,14,91,tileWidth,'PARCEL',tostring(crystalRun and Workshop.emptierBatch(profile) or DroneConfig.Courier.BatchUnits)..' cargo')
-   statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Sell at Workshop' or 'Haul to storage')
+   statTile(row,tileWidth+28,91,tileWidth,'JOB',crystalRun and 'Collect loose ore' or 'Haul to storage')
   elseif role=='Compactor' then
    statTile(row,14,91,tileWidth,'INPUT','Up to '..Workshop.compactorBatch(profile)..' rocks')
    statTile(row,tileWidth+28,91,tileWidth,'OUTPUT','1 equal-value block')
@@ -14139,7 +14147,7 @@ local function renderResource(r,now)
   local seed=s:GetAttribute('StageSeed') or 0
   local ground=s:GetAttribute('GroundY')
   local frame
-  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference)
+  if type(ground)=='number' then frame=Feel.groundedRockFrame(pos,displaySize,ground,stage,seed,s:GetAttribute('CubicRock')==false,reference,s:GetAttribute('SteadyCrystal')==true)
   else frame=CFrame.new(pos)*CFrame.Angles(0,seed*.01,0) end
   if junk then
    if now<readyAt then

@@ -297,14 +297,15 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  else
   impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  end
+ local crystal=kind=='CrystalBreak'
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
  local style=impactStyles[kind]
  local sparks=Instance.new('ParticleEmitter');sparks.Name='AirborneSparks'
  local diameter=math.min(2.15,(orbital and 1.40 or 1.15)*scale)
- EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50)
+ EnergyDisc.configure(sparks,diameter,residual and .57 or .46,.64,.50,crystal and .62 or .30)
  sparks.Enabled=false;sparks.Rate=0
- sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),.44),color)
+ sparks.Color=ColorSequence.new(prism and Color3.fromRGB(255,114,144) or color:Lerp(Color3.fromRGB(255,248,216),crystal and .10 or .22),color)
  local spread=style and style.spread or 63
  sparks.EmissionDirection=normal and Enum.NormalId.Front or Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(spread,spread)
  sparks.Lifetime=residual and NumberRange.new(1.3,2.6) or NumberRange.new(.36,.84)
@@ -315,9 +316,9 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end
  local dust=Instance.new('ParticleEmitter');dust.Name='DriftingDust'
- EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20)
+ EnergyDisc.configure(dust,math.min(2.5,diameter*1.27),.74,.48,1.20,crystal and .55 or .32)
  dust.Enabled=false;dust.Rate=0;dust.LightEmission=.13;dust.LightInfluence=.30
- dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),.36))
+ dust.Color=ColorSequence.new(prism and Color3.fromRGB(73,17,32) or color:Lerp(Color3.fromRGB(206,183,183),crystal and .08 or .22))
  dust.EmissionDirection=sparks.EmissionDirection;dust.SpreadAngle=Vector2.new(76,76)
  dust.Lifetime=NumberRange.new(.64,residual and 2 or 1.28)
  dust.Speed=NumberRange.new(residual and 1 or 3,residual and 4 or 7);dust.Drag=4

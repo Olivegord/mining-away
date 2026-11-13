@@ -62,8 +62,8 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   rig.outline.Adornee=record.view
   rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
   rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.moteColor=record.color:Lerp(WHITE,.71)
-  local strand=ColorSequence.new(record.color:Lerp(WHITE,.72))
+  rig.moteColor=record.color:Lerp(WHITE,.14)
+  local strand=ColorSequence.new(record.color:Lerp(WHITE,.32))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end
@@ -100,12 +100,14 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  for i,mote in ipairs(rig.motes) do
   if reducedEffects or reducedMotion then mote.gui.Enabled=false
   else
-   local t=(now*(.53+i*.039)+i*.191+record.seed*.137)%1
+   local cycle=now*(.53+i*.039)+i*.191+record.seed*.137
+   local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)
    local position=ground+Vector3.new(math.cos(angle)*reach,.21+2.24*t,math.sin(angle)*reach)*scale
    local envelope=math.min(t/.16,1,(1-t)/.28)
-   EnergyDisc.place(mote,position,(.24+(i%3)*.062)*scale,rig.moteColor,envelope*strength*.82)
+   local diameter=.24+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.003
+   EnergyDisc.place(mote,position,diameter*scale,rig.moteColor,envelope*strength*.82)
   end
  end
 end

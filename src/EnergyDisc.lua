@@ -2,7 +2,7 @@
 -- Shape and opacity read without relying on bloom or additive saturation.
 local Disc={texture='rbxasset://textures/ui/VR/circleWhite.png'}
 
-function Disc.configure(emitter,diameter,transparency,startScale,endScale)
+function Disc.configure(emitter,diameter,transparency,startScale,endScale,sizeVariation)
  emitter.Texture=Disc.texture
  emitter.Orientation=Enum.ParticleOrientation.FacingCamera
  emitter.Squash=NumberSequence.new(0)
@@ -12,10 +12,12 @@ function Disc.configure(emitter,diameter,transparency,startScale,endScale)
  emitter.Brightness=1.05
  emitter.WindAffectsDrag=false
  emitter.LockedToPart=false
+ local start=diameter*(startScale or .52)
+ local finish=diameter*(endScale or .28)
  emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,diameter*(startScale or .52)),
-  NumberSequenceKeypoint.new(.18,diameter,diameter*.13),
-  NumberSequenceKeypoint.new(1,diameter*(endScale or .28)),
+  NumberSequenceKeypoint.new(0,start,start*(sizeVariation or 0)),
+  NumberSequenceKeypoint.new(.18,diameter,diameter*(sizeVariation or .13)),
+  NumberSequenceKeypoint.new(1,finish,finish*(sizeVariation or 0)),
  })
  emitter.Transparency=NumberSequence.new({
   NumberSequenceKeypoint.new(0,math.min(.97,transparency+.20)),

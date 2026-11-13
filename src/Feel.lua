@@ -54,9 +54,10 @@ function F.rockYaw(seed,stage,turn,reference)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference)
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn,reference),0),ground+size.Y-.06
+ local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
+ return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach

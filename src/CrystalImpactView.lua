@@ -21,6 +21,7 @@ local function part(parent,class,name,color)
  return p
 end
 function V.new(parent,audio,onSplit)
+ local variation=Random.new()
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail}
@@ -36,12 +37,12 @@ function V.new(parent,audio,onSplit)
    if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
-   local size=large and scale*(.42+i*.1) or .14+i*.055
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.12+(i%3)*.04))
+   local size=large and scale*variation:NextNumber(.38,1.05) or variation:NextNumber(.14,.51)
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,variation:NextNumber(.02,.21)))
    if source then
     p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
    end
-   p.Size=Vector3.new(size*.72,size*1.45,size)
+   p.Size=Vector3.new(size*variation:NextNumber(.56,.92),size*variation:NextNumber(1.12,1.78),size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
@@ -117,9 +118,9 @@ function V.new(parent,audio,onSplit)
   if clusterSize<=5 then
    for _,side in ipairs({-1,1}) do
     if #self.pieces>=46 then break end
-    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(WARM,side==1 and .58 or .27)
+    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(HOT,variation:NextNumber(.06,.24))
     local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
-    wing.Size=Vector3.new(.82,1.54,1.12)*strength
+    wing.Size=Vector3.new(.82,1.54,1.12)*strength*(prism and 1 or variation:NextNumber(.80,1.20))
     local origin=point+axis*side*strength*.24
     wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
     track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),.76,ground,
@@ -133,16 +134,16 @@ function V.new(parent,audio,onSplit)
      RoleVisuals.Pulse(floor,prism and EMBER or r.baseColor:Lerp(WARM,.68),strength*.55,strength*(prism and 8.6 or 6.6),.58)
      if prism and clusterSize<=5 then RoleVisuals.Pulse(floor+Vector3.yAxis*.13,RED_HIGHLIGHT,strength*.23,strength*5.8,.29) end
     end
-    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor:Lerp(WARM,.59),strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
+    RoleVisuals.ImpactParticles(point,prism and EMBER or r.baseColor,strength*.83,prism and 'PrismBlast' or 'CrystalBreak')
    end
    for i=1,prism and math.clamp(math.floor(26/clusterSize),2,14) or 8 do
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,.60+.055*(i%4))
+    local chipColor=prism and (i%3==0 and RED_HIGHLIGHT or CHAR:Lerp(EMBER,.23)) or r.baseColor:Lerp(HOT,variation:NextNumber(.03,.27))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
-    local size=strength*(.11+.052*(i%4))
-    chip.Size=Vector3.new(size*.55,size*2.1,size)
+    local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.085,.33))
+    chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
     chip.Material=i%3==0 and Enum.Material.Neon or Enum.Material.Glass
     local origin=point+direction*.22
     chip.Position=origin
@@ -228,7 +229,7 @@ function V.new(parent,audio,onSplit)
     local normal=s:GetAttribute('CutContactNormal') or Vector3.yAxis
     local tilt=Vector3.new(-normal.Z,0,normal.X)
     if tilt.Magnitude<.1 then tilt=Vector3.new(.7,0,.3) end
-    if shot or fractured then
+    if (shot or fractured) and not s:GetAttribute('SteadyCrystal') then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
     self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)

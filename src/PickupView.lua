@@ -246,6 +246,7 @@ function V:update(dt,now)
    local collectedAt=processed or source:GetAttribute('CollectedAt')
    if type(collectedAt)=='number' and collectedAt>0 and now-collectedAt<.7 then
     r.processed=processed~=nil
+    r.courierCollected=source:GetAttribute('CourierCollected')==true
     r.collectAt=r.processed and collectedAt or now
     r.collectFrom=r.drawPosition or r.pos
     if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
@@ -264,7 +265,7 @@ function V:update(dt,now)
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
-   local target=(r.processed and r.collectTarget) or backpack(owner,r.collectTarget or r.collectFrom)
+   local target=r.courierCollected and r.collectTarget or backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)

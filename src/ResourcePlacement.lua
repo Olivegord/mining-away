@@ -36,8 +36,25 @@ local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  end
  return true
 end
+-- Loose pockets anchor the bias without carving the bed into fixed plots.
+-- Their spacing leaves broad gaps for the uniform share of the population.
+function P.pockets(width,depth,random)
+ local pockets={}
+ for _=1,48 do
+  local x,z=random(-width*.40,width*.40),random(-depth*.37,depth*.37)
+  local clear=true
+  for _,other in ipairs(pockets) do
+   if (x-other.x)^2+(z-other.z)^2<18^2 then clear=false;break end
+  end
+  if clear then
+   table.insert(pockets,{x=x,z=z,radius=random(6.5,10.5)})
+   if #pockets==10 then break end
+  end
+ end
+ return pockets
+end
 function P.sample(width: number,depth: number,radius: number,occupied,random,clear,preferred,reference,referenceGap,
- bounds: {minX: number,maxX: number,minZ: number,maxZ: number}?)
+ bounds: {minX: number,maxX: number,minZ: number,maxZ: number}?, pockets)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
@@ -56,7 +73,16 @@ function P.sample(width: number,depth: number,radius: number,occupied,random,cle
  for attempt=1,attempts do
   -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z else x,z=random(minX,maxX),random(minZ,maxZ) end
+  if preferred then
+   x,z=preferred.x,preferred.z
+  elseif pockets and #pockets>0 and attempt<=8 and random(0,1)<.78 then
+   local center=pockets[math.floor(random(0,#pockets))+1] or pockets[#pockets]
+   local angle=random(0,math.pi*2)
+   local distance=math.sqrt(random(0,1))*center.radius
+   x,z=center.x+math.cos(angle)*distance,center.z+math.sin(angle)*distance
+  else
+   x,z=random(minX,maxX),random(minZ,maxZ)
+  end
   local fits
   if reference then fits=fitsReference(x,z,halfX,halfZ,radius,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end

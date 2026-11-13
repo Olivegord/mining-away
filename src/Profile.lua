@@ -466,7 +466,7 @@ end
 function P.droneCargoUnits(p,id)
  return bagUnits(p.run.droneCargo[id])+P.deliveryUnits(p,id)
 end
-function P.reconcileCargo(p,eligibleDroneIds)
+function P.reconcileCargo(p,eligibleDroneIds,keepLoaded)
  local eligible={};local changed=false
  for key,value in pairs(eligibleDroneIds or {}) do
   local id=type(key)=='string' and value==true and key or value
@@ -478,7 +478,9 @@ function P.reconcileCargo(p,eligibleDroneIds)
  local retired={}
  for id in pairs(p.run.droneCargo) do table.insert(retired,id) end
  for _,id in ipairs(retired) do
-  local bag=p.run.droneCargo[id];p.run.droneCargo[id]=nil;retain(bag);changed=true
+  if not keepLoaded or not eligible[id] then
+   local bag=p.run.droneCargo[id];p.run.droneCargo[id]=nil;retain(bag);changed=true
+  end
  end
  for id,manifest in pairs(p.run.deliveries) do if not eligible[id] then
   p.run.deliveries[id]=nil;retain(manifest.cargo);changed=true
@@ -530,7 +532,7 @@ function P.deliveryQuartz(p)
  for _,manifest in pairs(p.run.deliveries) do value+=cargoQuartz(manifest.cargo) end
  return value
 end
-function P.deliveryFundsMilestone(p,batchSize)
+function P.deliveryFundsMilestone(p,batchSize,cargo)
  local run=p.run
  if run.pendingOffer then return false end
  local incoming=P.deliveryQuartz(p)
@@ -538,10 +540,20 @@ function P.deliveryFundsMilestone(p,batchSize)
  local prestigeGap=P.milestone(p).earnings-run.quartzEarnings-incoming
  local shortfall=math.min(packGap>0 and packGap or math.huge,prestigeGap>0 and prestigeGap or math.huge)
  if shortfall==math.huge then return false end
- local parcel=P.cargoUnits(p)<=batchSize and run.cargo or deliveryCargo(run.cargo,batchSize,true)
+ cargo=cargo or run.cargo
+ local parcel=bagUnits(cargo)<=batchSize and cargo or deliveryCargo(cargo,batchSize,true)
  return cargoQuartz(parcel)>=shortfall
 end
-function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst)
+function P.loadGroundCargo(p,droneId,material,units,capacity)
+ if not cargoId(p,droneId) or not Workshop.crystalCargo(material) or not integer(units) or units<1
+  or p.run.deliveries[droneId] then return false end
+ local cargo=p.run.droneCargo[droneId] or {}
+ if bagUnits(cargo)+units>capacity then return false end
+ cargo[material]=(cargo[material] or 0)+units
+ p.run.droneCargo[droneId]=cargo
+ return true
+end
+function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst,groundCargo)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid delivery ID' end
  local replay=P.receipt(p,'BeginDelivery',tx)
@@ -550,12 +562,14 @@ function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst)
  if existing then return true,{id=existing.id,droneId=droneId,runId=p.run.id,units=bagUnits(existing.cargo)} end
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
  if not integer(batchSize) or batchSize<1 or batchSize>32 then return false,'Invalid courier batch' end
- if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
- local bag=deliveryCargo(p.run.cargo,batchSize,quartzFirst)
- for material,units in pairs(p.run.cargo) do
-  local left=units-(bag[material] or 0)
-  p.run.cargo[material]=left>0 and left or nil
+ local source=if groundCargo then p.run.droneCargo[droneId] else p.run.cargo
+ if bagUnits(source)<=0 then return false,'No cargo loaded' end
+ local bag=deliveryCargo(source,batchSize,quartzFirst)
+ for material,units in pairs(bag) do
+  local left=source[material]-units
+  source[material]=left>0 and left or nil
  end
+ if groundCargo and not next(source) then p.run.droneCargo[droneId]=nil end
  p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=bag}
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(bag)}
  P.record(p,'BeginDelivery',tx,result);return true,result

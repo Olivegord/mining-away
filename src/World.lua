@@ -688,7 +688,7 @@ function W.initialize(): any
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=48,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=60,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}

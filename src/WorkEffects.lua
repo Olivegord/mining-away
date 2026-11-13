@@ -142,7 +142,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
   fx.glow.Speed=NumberRange.new(0);fx.glow.Lifetime=NumberRange.new(.5,1);fx.glow.Size=NumberSequence.new(.48)
   fx.tip=Instance.new('Attachment');fx.tip.Name='RockContact';fx.tip.Parent=beam.marker
   fx.impact=particle(fx.tip,'CuttingSparks',YELLOW)
-  EnergyDisc.configure(fx.impact,.94,.47,.56,.63)
+  EnergyDisc.configure(fx.impact,.94,.47,.56,.63,.48)
   fx.impact.Lifetime=NumberRange.new(.48,.91);fx.impact.Speed=NumberRange.new(5,11)
   fx.impact.Acceleration=Vector3.new(0,-3,0);fx.impact.SpreadAngle=Vector2.new(72,72)
   -- Reuse the preserved original two-ball contact glows, at the real contact.
@@ -186,7 +186,7 @@ function W:mining(beam,sample,point,normal,width,pulse,now)
  fx.sparks.Rate=2;fx.sparks.Enabled=working
  fx.glow.Rate=charging and 1.5 or .8;fx.glow.Enabled=working
  local resonance=sample.style=='Resonance'
- local impactColor=resonance and (beam.tint or WHITE) or YELLOW
+ local impactColor=sample.mineralColor or (resonance and (beam.tint or WHITE) or YELLOW)
  if fx.impactColor~=impactColor then fx.impactColor=impactColor;fx.impact.Color=ColorSequence.new(impactColor) end
  -- Random emission directions give individual sparks variety without a
  -- shared lateral force pushing the whole cloud like wind.
@@ -368,14 +368,17 @@ function W:courier(drone,record,now)
  local mountScale=drone.view:GetScale()/.94
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
- local backpack=(state=='Pickup' or state=='Launch') and backpackPosition(source)
+ local pickupPoint
+ if slots>0 then
+  if state=='Pickup' then pickupPoint=source:GetAttribute('CourierOrePosition') end
+ elseif state=='Pickup' or state=='Launch' then pickupPoint=backpackPosition(source) end
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
  local saleAge=now-(source:GetAttribute('CourierSaleAt') or 0)
  if sale>fx.sale and typeof(sell)=='Vector3' and saleAge>=-.1 and saleAge<.7 then
   self:burst(sell+Vector3.yAxis*(slots>0 and .18 or 1),Vector3.yAxis,GOLD,slots>0 and 7 or 18,now)
  end
  fx.sale=sale
- local pickup=state=='Pickup' and backpack~=nil and (backpack-mount).Magnitude<=6 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5
+ local pickup=state=='Pickup' and typeof(pickupPoint)=='Vector3' and (pickupPoint-mount).Magnitude<=6 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5
  local unload=state=='Unload' and typeof(sell)=='Vector3'
  if unload then
   local sampleAt=paused and (source:GetAttribute('SnapshotAt') or now) or now
@@ -398,8 +401,8 @@ function W:courier(drone,record,now)
  if pickup then
   fx.tetherVFX=fx.tetherVFX or BeamVFX.new(fx.root,'Courier',GOLD)
   if fx.tetherVFX then
-   fx.tether.Transparency=1;BeamVFX.draw(fx.tetherVFX,mount,backpack,now,.45+.55*q,nil,nil)
-  else W.drawCylinder(fx.tether,mount,backpack,.045+.025*q,.5-.2*q) end
+   fx.tether.Transparency=1;BeamVFX.draw(fx.tetherVFX,mount,pickupPoint,now,.45+.55*q,nil,nil)
+  else W.drawCylinder(fx.tether,mount,pickupPoint,.045+.025*q,.5-.2*q) end
  else
   fx.tether.Transparency=1;BeamVFX.destroy(fx.tetherVFX);fx.tetherVFX=nil
  end
@@ -414,9 +417,9 @@ function W:courier(drone,record,now)
  if parcelUnits>0 then
   local position=mount
   local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
-  if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
+  if transfer<1 and slots==0 and pickupPoint and (pickupPoint-mount).Magnitude<=6 then
    local t=transfer*transfer*(3-2*transfer)
-   position=backpack:Lerp(mount,t)+Vector3.new(0,math.sin(t*math.pi)*.35,0)
+   position=pickupPoint:Lerp(mount,t)+Vector3.new(0,math.sin(t*math.pi)*.35,0)
   elseif unload then
    local t=fx.unloadProgress
    -- Hold the parcel just above the converter until the server confirms sale.
@@ -430,7 +433,6 @@ function W:courier(drone,record,now)
   local materials=source:GetAttribute('DeliveryMaterials') or ''
   if materials~=fx.materials then fx.materials=materials;fx.load=string.split(materials,';') end
   local count=math.max(slots,math.min(parcelUnits,6))
-  local transfer=launch>0 and progress(now,launch,source:GetAttribute('CourierLaunchHold') or .25) or 1
   for i=1,count do
    local slot=fx.mounts[i]
    if not slot then
@@ -463,7 +465,8 @@ function W:courier(drone,record,now)
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
      slot.cargo.Color=rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)
+     local variation=.86+(i*13%9)*.035
+     slot.cargo.Size=packed and Vector3.new(.48,.40,.52) or Vector3.new(.38,.51,.38)*variation
      slot.packed=packed
     end
     local cargo=slot.cargo
@@ -471,10 +474,7 @@ function W:courier(drone,record,now)
     local position=frame.Position-Vector3.yAxis*.28
     local yaw=slot.packed and 0 or .7+i*.28
     local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or .26)
-    if transfer<1 and backpack and (backpack-mount).Magnitude<=6 then
-     local t=math.clamp(transfer*1.3-(i-1)*.06,0,1)
-     position=backpack:Lerp(position,t*t*(3-2*t))+Vector3.yAxis*(math.sin(t*math.pi)*.35)
-    elseif unload then
+    if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
      local ease=t*t*(3-2*t)
      local finish=sell+Vector3.new(side*.38,cargo.Size.Y*.5+.015,(math.floor((i-1)/2)-1)*.60)

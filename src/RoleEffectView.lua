@@ -435,11 +435,11 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
  local sparks=Instance.new('ParticleEmitter')
- EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64)
+ EnergyDisc.configure(sparks,math.min(2.1,(ball and (impact and 1.43 or 1.08) or .75)*grade),impact and .47 or .59,.58,.64,.46)
  sparks.Enabled=false;sparks.Rate=0
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
- sparks.Color=ColorSequence.new(color:Lerp(WHITE,.38),color)
+ sparks.Color=ColorSequence.new(color:Lerp(WHITE,.14),color)
  sparks.Lifetime=NumberRange.new(.23,ball and .56 or .41)
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)

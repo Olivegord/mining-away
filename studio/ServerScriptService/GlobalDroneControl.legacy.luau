@@ -1695,9 +1695,10 @@ function F.rockYaw(seed,stage,turn,reference)
  end
  return yaw
 end
-function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference)
+function F.groundedRockFrame(position,size,ground,stage,seed,turn,reference,steady)
  local center=Vector3.new(position.X,ground+size.Y*.5-.06,position.Z)
- return CFrame.new(center)*CFrame.Angles(0,F.rockYaw(seed,stage,turn,reference),0),ground+size.Y-.06
+ local yaw=steady and F.rockYaw(seed,0,false,false) or F.rockYaw(seed,stage,turn,reference)
+ return CFrame.new(center)*CFrame.Angles(0,yaw,0),ground+size.Y-.06
 end
 function F.inertialApproach(position,goal,velocity,maxStep60,dt,work,correction,response)
  -- Retain the original capped, distance-eased destination rule, but approach
@@ -2213,8 +2214,25 @@ local function fitsReference(x,z,halfX,halfZ,radius,occupied,gap)
  end
  return true
 end
+-- Loose pockets anchor the bias without carving the bed into fixed plots.
+-- Their spacing leaves broad gaps for the uniform share of the population.
+function P.pockets(width,depth,random)
+ local pockets={}
+ for _=1,48 do
+  local x,z=random(-width*.40,width*.40),random(-depth*.37,depth*.37)
+  local clear=true
+  for _,other in ipairs(pockets) do
+   if (x-other.x)^2+(z-other.z)^2<18^2 then clear=false;break end
+  end
+  if clear then
+   table.insert(pockets,{x=x,z=z,radius=random(6.5,10.5)})
+   if #pockets==10 then break end
+  end
+ end
+ return pockets
+end
 function P.sample(width: number,depth: number,radius: number,occupied,random,clear,preferred,reference,referenceGap,
- bounds: {minX: number,maxX: number,minZ: number,maxZ: number}?)
+ bounds: {minX: number,maxX: number,minZ: number,maxZ: number}?, pockets)
  if not finite(width) or not finite(depth) or not finite(radius) or radius<=0 then return nil,0 end
  local halfX,halfZ=width*.5-radius-P.EDGE_MARGIN,depth*.5-radius-P.EDGE_MARGIN
  if reference then halfX,halfZ=math.floor(width*.5),math.floor(depth*.5) end
@@ -2233,7 +2251,16 @@ function P.sample(width: number,depth: number,radius: number,occupied,random,cle
  for attempt=1,attempts do
   -- A grower's committed plan is rechecked exactly where it planted.
   local x,z
-  if preferred then x,z=preferred.x,preferred.z else x,z=random(minX,maxX),random(minZ,maxZ) end
+  if preferred then
+   x,z=preferred.x,preferred.z
+  elseif pockets and #pockets>0 and attempt<=8 and random(0,1)<.78 then
+   local center=pockets[math.floor(random(0,#pockets))+1] or pockets[#pockets]
+   local angle=random(0,math.pi*2)
+   local distance=math.sqrt(random(0,1))*center.radius
+   x,z=center.x+math.cos(angle)*distance,center.z+math.sin(angle)*distance
+  else
+   x,z=random(minX,maxX),random(minZ,maxZ)
+  end
   local fits
   if reference then fits=fitsReference(x,z,halfX,halfZ,radius,occupied,referenceGap or 2)
   else fits=P.fits(x,z,width,depth,radius,occupied) end
@@ -3072,7 +3099,7 @@ end
 function P.droneCargoUnits(p,id)
  return bagUnits(p.run.droneCargo[id])+P.deliveryUnits(p,id)
 end
-function P.reconcileCargo(p,eligibleDroneIds)
+function P.reconcileCargo(p,eligibleDroneIds,keepLoaded)
  local eligible={};local changed=false
  for key,value in pairs(eligibleDroneIds or {}) do
   local id=type(key)=='string' and value==true and key or value
@@ -3084,7 +3111,9 @@ function P.reconcileCargo(p,eligibleDroneIds)
  local retired={}
  for id in pairs(p.run.droneCargo) do table.insert(retired,id) end
  for _,id in ipairs(retired) do
-  local bag=p.run.droneCargo[id];p.run.droneCargo[id]=nil;retain(bag);changed=true
+  if not keepLoaded or not eligible[id] then
+   local bag=p.run.droneCargo[id];p.run.droneCargo[id]=nil;retain(bag);changed=true
+  end
  end
  for id,manifest in pairs(p.run.deliveries) do if not eligible[id] then
   p.run.deliveries[id]=nil;retain(manifest.cargo);changed=true
@@ -3136,7 +3165,7 @@ function P.deliveryQuartz(p)
  for _,manifest in pairs(p.run.deliveries) do value+=cargoQuartz(manifest.cargo) end
  return value
 end
-function P.deliveryFundsMilestone(p,batchSize)
+function P.deliveryFundsMilestone(p,batchSize,cargo)
  local run=p.run
  if run.pendingOffer then return false end
  local incoming=P.deliveryQuartz(p)
@@ -3144,10 +3173,20 @@ function P.deliveryFundsMilestone(p,batchSize)
  local prestigeGap=P.milestone(p).earnings-run.quartzEarnings-incoming
  local shortfall=math.min(packGap>0 and packGap or math.huge,prestigeGap>0 and prestigeGap or math.huge)
  if shortfall==math.huge then return false end
- local parcel=P.cargoUnits(p)<=batchSize and run.cargo or deliveryCargo(run.cargo,batchSize,true)
+ cargo=cargo or run.cargo
+ local parcel=bagUnits(cargo)<=batchSize and cargo or deliveryCargo(cargo,batchSize,true)
  return cargoQuartz(parcel)>=shortfall
 end
-function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst)
+function P.loadGroundCargo(p,droneId,material,units,capacity)
+ if not cargoId(p,droneId) or not Workshop.crystalCargo(material) or not integer(units) or units<1
+  or p.run.deliveries[droneId] then return false end
+ local cargo=p.run.droneCargo[droneId] or {}
+ if bagUnits(cargo)+units>capacity then return false end
+ cargo[material]=(cargo[material] or 0)+units
+ p.run.droneCargo[droneId]=cargo
+ return true
+end
+function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst,groundCargo)
  if expectedRun~=p.run.id or not cargoId(p,droneId) then return false,'Stale run or unknown carrier' end
  if type(tx)~='string' or #tx<1 or #tx>128 then return false,'Invalid delivery ID' end
  local replay=P.receipt(p,'BeginDelivery',tx)
@@ -3156,12 +3195,14 @@ function P.beginDelivery(p,droneId,tx,expectedRun,batchSize,quartzFirst)
  if existing then return true,{id=existing.id,droneId=droneId,runId=p.run.id,units=bagUnits(existing.cargo)} end
  for _,manifest in pairs(p.run.deliveries) do if manifest.id==tx then return false,'Delivery ID already assigned' end end
  if not integer(batchSize) or batchSize<1 or batchSize>32 then return false,'Invalid courier batch' end
- if bagUnits(p.run.cargo)<=0 then return false,'Backpack is empty' end
- local bag=deliveryCargo(p.run.cargo,batchSize,quartzFirst)
- for material,units in pairs(p.run.cargo) do
-  local left=units-(bag[material] or 0)
-  p.run.cargo[material]=left>0 and left or nil
+ local source=if groundCargo then p.run.droneCargo[droneId] else p.run.cargo
+ if bagUnits(source)<=0 then return false,'No cargo loaded' end
+ local bag=deliveryCargo(source,batchSize,quartzFirst)
+ for material,units in pairs(bag) do
+  local left=source[material]-units
+  source[material]=left>0 and left or nil
  end
+ if groundCargo and not next(source) then p.run.droneCargo[droneId]=nil end
  p.run.deliveries[droneId]={id=tx,droneId=droneId,runId=p.run.id,cargo=bag}
  local result={id=tx,droneId=droneId,runId=p.run.id,units=bagUnits(bag)}
  P.record(p,'BeginDelivery',tx,result);return true,result
@@ -6880,7 +6921,7 @@ function W.initialize(): any
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=48,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=60,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
@@ -8228,10 +8269,10 @@ end
 local function rebuildFleet(p,origin)
  for _,d in ipairs(p.drones) do release(d);spend(d);drones[d.id]=nil;d.model:Destroy() end
  p.drones={};p.vacuum=nil;p.vacuumTarget=nil;p.compactor=nil;p.compactorTarget=nil
- p.emptierPickups=nil;p.nextEmptierPlan=nil
+ p.nextEmptierPlan=nil
  local fleet=scene.runtimeFleet(p)
  local ids={};for _,owned in ipairs(fleet) do if owned.role=='Courier' then table.insert(ids,owned.id) end end
- if Pro.reconcileCargo(data(p),ids) then p.dirty=true end
+ if Pro.reconcileCargo(data(p),ids,scene.runStart~=nil) then p.dirty=true end
  for i,owned in ipairs(fleet) do spawnDrone(p,owned,i,origin) end
 end
 local function refreshStats(p)
@@ -8245,7 +8286,7 @@ end
 local function kill(d)
  if d.hp<=0 then return end
  release(d);spend(d);d.field=nil;d.autoField=nil;d.recharging=nil;d.battery=d.stats.batteryCapacity;R.reprint(d,now,C.Reprint+C.Assembly)
- d.pickupAt=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
+ d.orePickupId=nil;d.oreLoadedAt=nil;d.pickupAt=nil;d.launchAt=nil;d.unloadAt=nil;d.deliveryArrived=false;d.deliveryRequested=false
  d.repairChargeAt=nil;d.repairTarget=nil;d.healTargetId=nil;d.healUntil=0
  d.model:SetAttribute('DeathSerial',(d.model:GetAttribute('DeathSerial') or 0)+1)
 end
@@ -8323,6 +8364,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut and variant=='Spear' then fullSize*=Vector3.new(.72,1,.72)
  elseif cut and variant=='Oblique' then fullSize*=Vector3.new(.83,1,.91) end
+ local steady=field.cfg.ContinuousCrystals==true and size>=3.65
+ if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
  if reference and not field.cfg.ContinuousCrystals then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*1.5/size+.06 end
@@ -8349,12 +8392,12 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,breakHold=breakHold,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,breakHold=breakHold,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
- part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference)
+ part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady)
  if field.cfg.SelectionOnly then
   part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key)
   part:SetAttribute('BaseOre',1)
@@ -8464,6 +8507,9 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
   occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
  end
  local integerGrid=reference and not continuous
+ if continuous and not field.pockets then
+  field.pockets=ResourcePlacement.pockets(patch.Size.X,patch.Size.Z,function(a,b) return seed:NextNumber(a,b) end)
+ end
  local selected=ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,
   function(a,b)
    if integerGrid then return seed:NextInteger(a,b) end
@@ -8482,7 +8528,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
     if field.cfg.SelectionOnly and workspace:Raycast(Vector3.new(origin.X,fieldTop-.05,origin.Z),Vector3.new(0,19,0),clearance) then return false end
    end
    return true
-  end,preferred,integerGrid,nil,bounds)
+  end,preferred,integerGrid,nil,bounds,not nearPin and field.pockets or nil)
  local spot=selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if not spot then return false end
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
@@ -9028,7 +9074,9 @@ local function pickupStep(dt)
    local reach=relay and math.max(relayReach,naturalReach) or naturalReach
    if pressing then
     target=scene.pressSocket(press,socket);reach=13
-   elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and not assignedToPress and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
+   elseif hasSpace and vacuum and vacuum.hp>0 and not vacuum.carrierId and not relay and not assignedToPress
+    and not (drop.courier and drop.courier.orePickupId==id and drop.courier.hp>0 and drop.courier.model.Parent)
+    and drop.landed and drop.age>=OreDrops.SCATTER_TIME then
     local distance=(target-from).Magnitude
     local committed=id==p.previousVacuumTargetId
     local searchReach=committed and relayReach or p.vacuumReach
@@ -9301,7 +9349,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   hitSurface={point=hit and hit.Position or (shotKind and job.contact) or r.part.Position-direction*r.part.Size.Y*.32,normal=hit and hit.Normal or -direction}
  end
  r.lastHitAt=now
- if r.field.cfg.SelectionOnly and r.hardness>1 and d.squareJob then
+ if r.field.cfg.SelectionOnly and (r.hardness>1 or r.steady) and d.squareJob then
   r.lastPin=d.squareJob;r.lastPinOwner=d.owner
  end
  local tool=fractureContext and fractureContext.toolKind
@@ -9359,7 +9407,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   if not clusterFinish then
    local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
    r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
-   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
+   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
   end
  end
  r.part:SetAttribute('HP',actual)
@@ -9826,7 +9874,7 @@ function scene.regrow(r,dt)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
   r.part.Size=r.fullSize*(r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount))*Feel.rockShape(r.slice,r.heatBand)
- r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal)
+ r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
  end
  r.part:SetAttribute('HP',r.hp+10)
  if now>=(r.nextHealCue or 0) then r.nextHealCue=now+.48;r.part:SetAttribute('RegrowAt',now) end
@@ -10418,67 +10466,101 @@ end
 function scene.autoSellReady(p,profile,units)
  return Workshop.starLevel(profile,'autosell')>0 and units>=Ca.capacity(profile,previewPerks(p)) and not activeAssault(p)
 end
-function scene.emptierReady(p,profile)
- local units=Pro.cargoUnits(profile)
- if scene.autoSellReady(p,profile,units) then return false end
- if not scene.runStart then return units>0 end
- if profile.run.id~=p.emptierBagRun or units==0 then
-  p.emptierBagRun=profile.run.id;p.emptierBagSince=nil
- end
- if units>0 then p.emptierBagSince=p.emptierBagSince or now end
- local batch=Workshop.emptierBatch(profile)
- return Workshop.emptierReady(units,batch,p.emptierBagSince,now) or (units>0 and Pro.deliveryFundsMilestone(profile,batch))
-end
 function scene.emptierOffset(rank)
  return Vector3.new(rank%2==0 and 2.2 or -2.2,2.4,1)
 end
-function scene.emptierApproachTime(d,position,offset)
- local from=d.pos-position
- local reach=RoleConfig.Courier.PickupDistance
- if from.Magnitude<=reach then return 0 end
- -- The worker can start loading at the reach boundary. An approach that
- -- enters it late can be slower even when its final dock is closer.
- local path=from-offset
- local lengthSquared=path:Dot(path)
- local projection=offset:Dot(path)
- local margin=reach*reach-offset:Dot(offset)
- local remainingFraction=(math.sqrt(projection*projection+lengthSquared*margin)-projection)/lengthSquared
- return path.Magnitude*(1-remainingFraction)/(travelSpeed(d)*60)-math.log(remainingFraction)*.55
+function scene.emptierReady(d,profile)
+ if not scene.runStart then return Pro.cargoUnits(profile)>0 end
+ local units=Pro.droneCargoUnits(profile,d.id)
+ local capacity=Workshop.emptierBatch(profile)
+ return Workshop.emptierReady(units,capacity,d.oreLoadedAt or 0,now)
+  or units>0 and Pro.deliveryFundsMilestone(profile,capacity,profile.run.droneCargo[d.id])
+end
+function scene.emptierCanCollect(p,drop,id,hr)
+ if not drop or drop.owner~=p.player.UserId or drop.runId~=data(p).run.id
+  or not drop.raw or not Workshop.crystalCargo(drop.material) or not drop.landed or drop.age<OreDrops.SCATTER_TIME
+  or drop.homing or drop.pressSocket or not drop.part.Parent
+  or OreDrops.expired(drop.spawnAt,now,drop.returnUntil)
+  or (p.compactorTarget and p.compactorTarget.id==id) then return false end
+ local position=Vector3.new(drop.x,drop.y,drop.z)
+ local square=p.miningSquare
+ return (square and drop.fieldPart==square.field.part and scene.cargoInSquare(square,position))
+  or (hr.Position-position).Magnitude<=28
 end
 function scene.assignEmptierPickups(p)
  if not healthy(p) or now<(p.nextEmptierPlan or 0) then return end
- p.nextEmptierPlan=now+C.Snapshot
+ p.nextEmptierPlan=now+.20
  local hr=characterRoot(p)
+ if not hr then return end
  local profile=data(p)
- if not hr or not scene.emptierReady(p,profile) then p.emptierPickups=nil;return end
- local batch=Workshop.emptierBatch(profile)
- local loads=math.max(1,math.floor(Pro.cargoUnits(profile)/batch))
- local previous=p.emptierPickups
- local candidates,rank={},0
+ local reserved,available={},{}
+ local capacity=Workshop.emptierBatch(profile)
  for _,d in ipairs(p.drones) do
   if d.role~='Courier' then continue end
-  rank+=1
   if d.hp<=0 or d.carrierId or profile.run.deliveries[d.id]
-   or now<math.max(d.collectAfter or 0,d.pickupRetryAt or 0) then continue end
-  local assigned=previous and previous[d.id]
-  local offset=assigned or scene.emptierOffset(rank)
-  table.insert(candidates,{id=d.id,offset=offset,slot=d.slot,holding=d.pickupAt or math.huge,
-   assigned=assigned~=nil,time=scene.emptierApproachTime(d,hr.Position,offset)})
+   or now<(d.collectAfter or 0) or scene.emptierReady(d,profile) then
+   d.orePickupId=nil
+   continue
+  end
+  local id=d.orePickupId
+  if id and not reserved[id] and scene.emptierCanCollect(p,pickups[id],id,hr) then
+   reserved[id]=true
+  else
+   d.orePickupId=nil
+   table.insert(available,d)
+  end
  end
- table.sort(candidates,function(a,b)
-  if a.holding~=b.holding then return a.holding<b.holding end
-  if a.assigned~=b.assigned then return a.assigned end
-  if a.time~=b.time then return a.time<b.time end
-  return a.slot<b.slot
- end)
- local pickups={}
- for i=1,math.min(loads,#candidates,2) do
-  local c=candidates[i]
-  local offset=c.offset
-  if i==2 and offset.X==candidates[1].offset.X then offset=Vector3.new(-offset.X,offset.Y,offset.Z) end
-  pickups[c.id]=offset
+ for _,d in ipairs(available) do
+  local best,bestDistance
+  local space=capacity-Pro.droneCargoUnits(profile,d.id)
+  for id,drop in pairs(pickups) do
+   if reserved[id] or drop.units>space or not scene.emptierCanCollect(p,drop,id,hr)
+    or (d.oreBlockedId==id and now<(d.pickupRetryAt or 0)) then continue end
+   local position=Vector3.new(drop.x,drop.y,drop.z)
+   local distance=(d.pos-position).Magnitude
+   if not best or distance<bestDistance or distance==bestDistance and id<best then
+    best,bestDistance=id,distance
+   end
+  end
+  if best then d.orePickupId=best;d.pickupAt=nil;reserved[best]=true;pickups[best].courier=d end
  end
- p.emptierPickups=pickups
+end
+function scene.collectGroundCargo(d,p,hr,dt)
+ local profile=data(p)
+ d.deliveryRequested=now>=(d.oreSeatUntil or 0) and scene.emptierReady(d,profile)
+ local id=d.orePickupId
+ local drop=id and pickups[id]
+ if now<(d.oreSeatUntil or 0) then d.state='Collect';return true end
+ if d.deliveryRequested or not id or not scene.emptierCanCollect(p,drop,id,hr) then
+  d.orePickupId=nil;d.pickupAt=nil
+  return false
+ end
+ local position=Vector3.new(drop.x,drop.y,drop.z)
+ local goal=position+Vector3.yAxis*2.6
+ d.state='Collect';move(d,goal,dt)
+ if (d.pos-position).Magnitude>RoleConfig.Courier.PickupDistance then
+  d.pickupAt=nil
+  return true
+ end
+ if not los(position,d.pos,d.model,{pickupFolder,droneFolder,hr.Parent}) then
+  d.oreBlockedId=id;d.pickupRetryAt=now+1.25;d.orePickupId=nil;d.pickupAt=nil;p.nextEmptierPlan=nil
+  return true
+ end
+ d.pickupAt=d.pickupAt or now;d.state='Pickup'
+ if now-d.pickupAt<RoleConfig.Courier.PickupHold then return true end
+ if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
+  d.oreLoadedAt=d.oreLoadedAt or now
+  d.oreSeatUntil=now+.18
+  d.deliveryRequested=false
+  drop.part:SetAttribute('Units',0)
+  drop.part:SetAttribute('CourierCollected',true)
+  drop.part:SetAttribute('CollectedPosition',d.pos-Vector3.yAxis*.75)
+  drop.part:SetAttribute('CollectedAt',now)
+  drop.part.Transparency=1;Debris:AddItem(drop.part,.35);pickups[id]=nil
+  p.dirty=true;p.publishDirty=true
+ end
+ d.orePickupId=nil;d.pickupAt=nil;p.nextEmptierPlan=nil
+ return true
 end
 local function droneStep(d: any,dt: number)
  local p=profiles[d.owner];if not p then return end
@@ -10593,35 +10675,28 @@ local function droneStep(d: any,dt: number)
  end
  if d.role=='Courier' then
   d.mining=false;d.field=nil
-  if not scene.runStart and logistics:capacity(p)<=0 then
+  if scene.runStart then
+   if not scene.collectGroundCargo(d,p,hr,dt) then
+    d.state='Follow'
+    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60),dt)
+   end
+   return
+  end
+  if logistics:capacity(p)<=0 then
    d.deliveryRequested=false;d.pickupAt=nil;d.state='StorageFull'
    if scene.holdSquare(d,p,dt) then return end
    move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt);return
   end
-  local offset=scene.runStart and p.emptierPickups and p.emptierPickups[d.id]
-  if not scene.runStart and scene.emptierReady(p,data(p)) and now>=(d.collectAfter or 0) then
+  if scene.emptierReady(d,data(p)) and now>=(d.collectAfter or 0) then
    local rank=0;for _,other in ipairs(p.drones) do if other.role=='Courier' then rank+=1;if other==d then break end end end
-   offset=scene.emptierOffset(rank)
-  end
-  if offset and now>=(d.pickupRetryAt or 0) then
-   d.state='Collect';move(d,hr.Position+offset,dt)
-   local inReach=(d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance
-   if inReach and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
-    d.pickupBlockedAt=nil
+   d.state='Collect';move(d,hr.Position+scene.emptierOffset(rank),dt)
+   if (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance and los(d.pos,hr.Position,hr.Parent,{droneFolder}) then
     d.pickupAt=d.pickupAt or now;d.state='Pickup'
     d.deliveryRequested=now-d.pickupAt>=RoleConfig.Courier.PickupHold
-   else
-    d.pickupAt=nil;d.deliveryRequested=false
-    if scene.runStart and inReach then
-     d.pickupBlockedAt=d.pickupBlockedAt or now
-     if now-d.pickupBlockedAt>=.35 then d.pickupRetryAt=now+1.25;p.nextEmptierPlan=nil end
-    else d.pickupBlockedAt=nil end
-   end
+   else d.pickupAt=nil;d.deliveryRequested=false end
   else
-   d.pickupAt=nil;d.deliveryRequested=false;d.pickupBlockedAt=nil
-   d.state='Follow'
-   if not scene.runStart and scene.holdSquare(d,p,dt) then return end
-   move(d,Feel.followGoal(hr.Position,d.slot,#p.drones,now,d.owned.base.maxStep60,d.role=='Ramiel',d.role=='Nomad' and d.flightHeight or nil),dt)
+   d.pickupAt=nil;d.deliveryRequested=false
+   if not scene.holdSquare(d,p,dt) then followRole(d,p,hr,dt) end
   end
   return
  elseif d.role=='Vacuum' then
@@ -10715,18 +10790,21 @@ local function snapshotDrone(d)
   salePosition=counter.CFrame:PointToWorldSpace(Vector3.new(lane,counter.Size.Y*.5,counter.Size.Z*.22))
  end
  local deliveryId=delivery and delivery.id or ''
- if slots>0 and d.displayedDelivery~=deliveryId then
-  d.displayedDelivery=deliveryId
-  local materials,load={},{}
-  if delivery then
-   for material in pairs(delivery.cargo) do table.insert(materials,material) end
+ local load=delivery and delivery.cargo or profile.run.droneCargo[d.id]
+ local units=scene.runStart and Pro.droneCargoUnits(profile,d.id) or Pro.deliveryUnits(profile,d.id)
+ if slots>0 and (d.displayedDelivery~=deliveryId or d.displayedUnits~=units) then
+  d.displayedDelivery=deliveryId;d.displayedUnits=units
+  local materials,shown={},{}
+  if load then
+   for material in pairs(load) do table.insert(materials,material) end
    table.sort(materials)
    for _,material in ipairs(materials) do
-    for _=1,math.min(delivery.cargo[material],6-#load) do table.insert(load,material) end
+    for _=1,math.min(load[material],6-#shown) do table.insert(shown,material) end
    end
   end
-  d.deliveryMaterials=table.concat(load,';')
+  d.deliveryMaterials=table.concat(shown,';')
  end
+ local groundCargo=d.orePickupId and pickups[d.orePickupId]
  local target=d.target
  if target and (target.paid or target.hp<=0 or not target.part.Parent) then retireTarget(d);target=nil end
  local breakContact=d.mineBreakContact
@@ -10745,7 +10823,8 @@ local function snapshotDrone(d)
   RecallSerial=d.recallSerial or 0,RecallAt=d.recallAt or 0,
   BreakerDiveStart=d.breaker and d.breaker.diveStart or d.pos,BreakerImpact=d.breaker and d.breaker.impact or d.pos,BreakerPhaseAt=d.breaker and d.breaker.phaseAt or 0,BreakerDiveDuration=DroneRoles.BREAKER.diveDuration,
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
-  DeliveryUnits=Pro.deliveryUnits(profile,d.id),DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
+  DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
+  CourierOrePosition=groundCargo and Vector3.new(groundCargo.x,groundCargo.y,groundCargo.z) or Vector3.zero,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,
   CourierUnloadAt=d.unloadAt or 0,CourierUnloadHold=RoleConfig.Courier.UnloadHold,CourierSaleSerial=d.saleSerial or 0,CourierSaleAt=d.saleAt or 0,SellPosition=salePosition,
   Healing=d.hp>0 and d.healTargetId~=nil and now<(d.healUntil or 0),HealTargetId=d.healTargetId or '',
@@ -10981,20 +11060,25 @@ local function serviceDeliveries(p: any)
    return
   elseif d.role=='Courier' and d.hp>0 and d.deliveryRequested and not manifest and now>=(d.collectAfter or 0) then
    local hr=characterRoot(p)
-   if not scene.emptierReady(p,data(p)) or (d.pos-hr.Position).Magnitude>RoleConfig.Courier.PickupDistance or not d.pickupAt or now-d.pickupAt<RoleConfig.Courier.PickupHold or not los(d.pos,hr.Position,hr.Parent,{droneFolder}) then d.deliveryRequested=false;d.pickupAt=nil
+   local ready=scene.emptierReady(d,data(p))
+   if not scene.runStart then
+    ready=ready and (d.pos-hr.Position).Magnitude<=RoleConfig.Courier.PickupDistance
+     and d.pickupAt and now-d.pickupAt>=RoleConfig.Courier.PickupHold
+     and los(d.pos,hr.Position,hr.Parent,{droneFolder})
+   end
+   if not ready then d.deliveryRequested=false;d.pickupAt=nil
    else
     local tx,runId,id=Http:GenerateGUID(false),run.id,d.id
     p.nextDeliveryAction=now+1
     transact(p,'deliveryBegin:'..tx,function(copy)
-     if not scene.emptierReady(p,copy) then return nil,'Courier is waiting for cargo' end
+     if not scene.emptierReady(d,copy) then return nil,'Courier is waiting for cargo' end
      local batch=scene.runStart and Workshop.emptierBatch(copy) or d.stats.courierCapacity or RoleConfig.Courier.BatchUnits
-     local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch,scene.runStart~=nil);if ok then return result end;return nil,result
+     local ok,result=Pro.beginDelivery(copy,id,tx,runId,batch,scene.runStart~=nil,scene.runStart~=nil);if ok then return result end;return nil,result
     end,function(result)
-    p.nextEmptierPlan=nil
-     if Pro.cargoUnits(data(p))==0 then p.emptierBagSince=nil end
+     p.nextEmptierPlan=nil
      local worker=drones[id]
      if worker and worker.owner==p.player.UserId then
-      release(worker);worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
+      release(worker);worker.oreLoadedAt=nil;worker.deliveryId=result.id;worker.deliveryArrived=false;worker.state='Launch';worker.launchAt=now;worker.unloadAt=nil;worker.deliveryRequested=false
      end
      p.publishDirty=true
     end)
@@ -11018,7 +11102,7 @@ local function sellBackpack(p: any,automatic: boolean?)
   local ok,result=Pro.sell(copy,prices,tx,runId)
   if ok then return result end;return nil,result
  end,function(result)
-  p.emptierBagSince=nil;p.nextEmptierPlan=nil
+  p.nextEmptierPlan=nil
   local amounts={}
   for _,key in ipairs(Shops.ORDER) do
    local n=key=='Quartz' and result.quartz or result.cargo[key]
@@ -11229,7 +11313,7 @@ local function abilityContext(p,fieldId,operator,deployment)
   end
   for id in pairs(r.slots) do local worker=drones[id];if not worker or worker.owner~=p.player.UserId then return nil end end
   -- Gadgets survey the current health-scaled body and actual cut height.
-  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal))
+  local top=select(2,Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady))
   local click=deployment and deployment.kind=='Orbital' and deployment.targetId==r.id and deployment.position or r.position
   return {id=r.id,hp=r.hp,maxHP=r.maxHP,ground=r.part:GetAttribute('GroundY'),radius=math.max(.1,r.part.Size.X*.5),x=click.X,y=top,z=click.Z}
  end

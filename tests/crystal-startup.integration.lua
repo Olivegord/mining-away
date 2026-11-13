@@ -224,38 +224,35 @@ do
  end
  scene.publishSquareStatus(crew)
  assert(runner:GetAttribute('MA_SelectorStatus')=='Growing')
- local function approachLandedCargo()
-  local square=crew.miningSquare
-  for _,drop in pairs(pickups) do
-   if square and drop.fieldPart==square.field.part and drop.owner==runner.UserId and drop.landed and not drop.pressSocket then
-    runner.Character:PivotTo(CFrame.new(drop.x,drop.floor+3,drop.z));break
-   end
-  end
- end
- local sent,bagStarted
- for _=1,math.ceil(15/C.Tick) do
-  approachLandedCargo()
+ -- Keep the owner out of direct pickup range. The active pin lets the
+ -- crew collect while the owner waits outside the bed.
+ runner.Character:PivotTo(CFrame.new(pin+Vector3.new(0,3,-30)))
+ local sent,loadedAt
+ for _=1,math.ceil(22/C.Tick) do
   advance(C.Tick)
-  bagStarted=bagStarted or crew.emptierBagSince
+  loadedAt=loadedAt or crew.drones[8].oreLoadedAt or crew.drones[9].oreLoadedAt
   sent=next(data(crew).run.deliveries)
   if sent then break end
  end
  local manifest=assert(data(crew).run.deliveries[sent],'two mined rocks never left for the Workshop')
  local cargo=Workshop.cargoKey('Quartz',10)
- assert(manifest.cargo[cargo]==2 and not crew.compactor.pressInputs,'the press took reachable starter ore')
- assert(bagStarted and now-bagStarted<Workshop.EMPTIER_WAIT,'shipment used the normal partial-load timeout')
+ assert(Pro.cargoUnits(data(crew))==0,'courier routing moved ore through the backpack')
+ assert(loadedAt or manifest.cargo[cargo])
  scene.publishSquareStatus(crew)
  assert(runner:GetAttribute('MA_SelectorStatus')=='Hauling')
  local departure=Http:JSONDecode(runner:GetAttribute('MA_Profile'))
- assert(departure.deliveryQuartz==Workshop.PACK_BASE and departure.run.wallet.Quartz==0)
- advance(18)
+ assert(departure.deliveryQuartz>0 and departure.run.wallet.Quartz<Workshop.PACK_BASE)
+ advance(28)
  assert(data(crew).run.wallet.Quartz==Workshop.PACK_BASE and not next(data(crew).run.deliveries))
  assert(Http:JSONDecode(runner:GetAttribute('MA_Profile')).deliveryQuartz==0)
- assert(runner:GetAttribute('MA_Notice')=='+20 Quartz · Pack Counter ready')
+ assert(runner:GetAttribute('MA_Notice'):find('Pack Counter ready',1,true))
  runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
  command.OnServerEvent:Fire(runner,'BuyPack',{runId=run.id,packIndex=0,txId='earned-first-pack'})
  assert(data(crew).run.pendingOffer and data(crew).run.wallet.Quartz==0)
  scene.clearSquare(crew)
+ local left,right=crew.drones[8],crew.drones[9]
+ left.collectAfter=now+15;right.collectAfter=now+15
+ runner.Character:PivotTo(CFrame.new(pin+Vector3.new(0,3,-30)))
  local origin=pin+Vector3.new(0,1,0)
  scene.spawnOrePickup(bed,{owner=runner.UserId,runId=run.id,nodeId='settled-test',
   material=cargo,tierMaterial='Quartz',units=1,raw=true,value=10,floor=origin.Y-.75},
@@ -295,12 +292,12 @@ do
  advance(12)
  command.OnServerEvent:Fire(runner,'PlaceSelector',{runId=run.id,fieldId=ruby.id,position=rubyCenter,leadId=stone.id})
  assert(crew.miningSquare and crew.miningSquare.field==ruby)
+ runner.Character:PivotTo(CFrame.new(rubyCenter+Vector3.new(0,3,-25)))
  local function saleFromOneSlot(value,label)
   local filled,saleStarted
   for _=1,math.ceil(45/C.Tick) do
-   approachLandedCargo()
    advance(C.Tick)
-   filled=filled or crew.emptierBagSince
+   filled=filled or crew.drones[8].oreLoadedAt or crew.drones[9].oreLoadedAt
    local _,parcel=next(data(crew).run.deliveries)
    if parcel then
     saleStarted=now
@@ -310,13 +307,14 @@ do
     break
    end
   end
-  assert(filled and saleStarted and saleStarted-filled<Workshop.EMPTIER_WAIT,'milestone cargo waited for the normal timeout')
+  assert(saleStarted and (not filled or saleStarted-filled<Workshop.EMPTIER_WAIT),'milestone cargo waited for the normal timeout')
+  filled=filled or saleStarted
   for _=1,math.ceil(35/C.Tick) do
    if not next(data(crew).run.deliveries) then break end
    advance(C.Tick)
   end
   assert(not next(data(crew).run.deliveries) and runner:GetAttribute('MA_Notice')==('+'..value..' Quartz · '..label))
-  print(string.format('MODEL %s single-slot pickup %.2fs, sale %.2fs after cargo entered backpack',label,saleStarted-filled,now-filled))
+  print(string.format('MODEL %s single-slot pickup %.2fs, sale %.2fs after the courier collected cargo',label,saleStarted-filled,now-filled))
  end
  saleFromOneSlot(40,'Pack Counter ready')
  assert(stone.paid and data(crew).run.wallet.Quartz==40 and data(crew).run.quartzEarnings==60)
@@ -341,7 +339,11 @@ do
  scene.clearSquare(crew)
  local shortfall=Pro.milestone(data(crew)).earnings-data(crew).run.quartzEarnings
  local shipment=Workshop.cargoKey('RunCobalt',shortfall,true)
- assert(Pro.addCargo(data(crew),shipment,1,10)==1)
+ local position=characterRoot(crew).Position+Vector3.new(14,-3,0)
+ scene.spawnOrePickup(rubyBed,{owner=runner.UserId,runId=run.id,nodeId='prestige-shipment',
+  material=shipment,tierMaterial='RunCobalt',units=1,raw=true,compacted=true,value=shortfall,floor=position.Y},
+  position,Vector3.zero,rubyBed.Color)
+ local shipmentDrop=pickups[pickupSerial];shipmentDrop.landed=true;shipmentDrop.age=1
  saleFromOneSlot(shortfall,'Prestige ready')
  assert(Pro.prestigePreview(data(crew)).eligible)
  runner.Character:PivotTo(CFrame.new(scene.packStation.Position+Vector3.yAxis*3))
@@ -393,12 +395,9 @@ do
  assert(gestureAt and rich.paid and small.hp==small.maxHP-10 and released and released.nodeId==rich.id)
  assert(released.units==1 and released.value==math.floor(14*4*DroneCatalog.Types[picked.kind].Yield))
  print(string.format('MODEL prestige %s began its gesture after %.2fs and released %d Quartz cargo %.2fs after pinning',picked.kind,gestureAt-began,released.value,now-began))
- scene.clearSquare(crew)
+ runner.Character:PivotTo(CFrame.new(rubyCenter+Vector3.new(0,3,-27)))
  for _=1,math.ceil(35/C.Tick) do
   if data(crew).run.wallet.Quartz>=released.value then break end
-  if pickups[released.part:GetAttribute('PickupId')]==released and released.landed then
-   runner.Character:PivotTo(CFrame.new(released.x,released.floor+3,released.z))
-  end
   advance(C.Tick)
  end
  assert(data(crew).run.wallet.Quartz==released.value)
@@ -416,42 +415,45 @@ do
  local left,right=crew.drones[8],crew.drones[9]
  local at=scene.packStation.Position+Vector3.new(0,3,90)
  runner.Character:PivotTo(CFrame.new(at))
- left.pos=at+scene.emptierOffset(1);left.velocity=Vector3.zero
- right.pos=at+Vector3.new(9,3,1);right.velocity=Vector3.zero
+ local cargoPosition=at+Vector3.new(14,-3,0)
+ left.pos=cargoPosition+Vector3.new(-1,2.6,0);left.velocity=Vector3.zero
+ right.pos=cargoPosition+Vector3.new(1,2.6,0);right.velocity=Vector3.zero
+ crew.vacuum.hp=0
  local parcel=Workshop.cargoKey('Quartz',20)
  assert(Pro.addCargo(data(crew),parcel,1,10)==1)
- advance(.15)
- assert(left.state=='Pickup' and right.state=='Follow','one parcel drew two Emptiers')
- right.pos=at+scene.emptierOffset(2);right.velocity=Vector3.zero
- advance(.15)
- assert(left.pickupAt and not right.pickupAt,'the assigned Emptier lost the pickup to a closer one')
+ local function groundOre(material,position)
+  local tier,value=Workshop.crystalCargo(material)
+  scene.spawnOrePickup(scene.packStation,{owner=runner.UserId,runId=data(crew).run.id,nodeId='ground-ore',
+   material=material,tierMaterial=tier,units=1,raw=true,value=value,floor=position.Y},
+   position,Vector3.zero,Color3.new(1,0,0))
+  local drop=pickups[pickupSerial];drop.landed=true;drop.age=1
+  return pickupSerial,drop
+ end
+ local id,drop=groundOre(parcel,cargoPosition)
  local raycast=workspace.Raycast
  workspace.Raycast=function(self,from,direction,params)
-  if from.X<at.X-.5 and (from+direction-at).Magnitude<.01 then return {Instance=scene.packStation} end
+  if (from-cargoPosition).Magnitude<.01 and direction.X<0 and direction.Y>0 then return {Instance=scene.packStation} end
   return raycast(self,from,direction,params)
  end
- advance(.55)
+ advance(1.5)
  workspace.Raycast=raycast
- assert(left.state=='Follow' and left.pickupRetryAt and (right.state=='Collect' or right.state=='Pickup'),'blocked pickup did not pass to the other Emptier')
- advance(3.5)
- assert(Pro.deliveryUnits(data(crew),right.id)==1 and not data(crew).run.deliveries[left.id] and Pro.cargoUnits(data(crew))==0)
+ assert(left.oreBlockedId==id and not left.orePickupId,'blocked courier kept the ground claim')
+ assert(drop.part:GetAttribute('CourierCollected') and not pickups[id])
+ assert(Pro.deliveryUnits(data(crew),right.id)==1 and Pro.cargoUnits(data(crew))==1)
  advance(20)
- assert(data(crew).run.wallet.Quartz==20 and not next(data(crew).run.deliveries),'the passed parcel did not sell once')
-
- left.pos=at+scene.emptierOffset(1);left.velocity=Vector3.zero
- right.pos=at+scene.emptierOffset(2);right.velocity=Vector3.zero
- assert(Pro.addCargo(data(crew),Workshop.cargoKey('Quartz',10),8,10)==8)
- advance(.15)
- assert(left.state=='Pickup' and right.state=='Pickup','two full parcels did not stage both Emptiers')
- assert(left.intentGoal.X<at.X and right.intentGoal.X>at.X,'two pickups shared the same side of the bag')
- advance(2.5)
+ assert(data(crew).run.wallet.Quartz==20 and not next(data(crew).run.deliveries))
+ for i=1,8 do groundOre(Workshop.cargoKey('Quartz',5),cargoPosition+Vector3.new(0,0,i-4)) end
+ left.pos=cargoPosition+Vector3.new(-1,2.6,-2);left.velocity=Vector3.zero
+ right.pos=cargoPosition+Vector3.new(1,2.6,2);right.velocity=Vector3.zero
+ advance(5.5)
  local deliveries=data(crew).run.deliveries
  assert(deliveries[left.id] and deliveries[right.id] and deliveries[left.id].id~=deliveries[right.id].id)
- assert(Pro.deliveryUnits(data(crew),left.id)==4 and Pro.deliveryUnits(data(crew),right.id)==4 and Pro.cargoUnits(data(crew))==0)
+ assert(Pro.deliveryUnits(data(crew),left.id)==4 and Pro.deliveryUnits(data(crew),right.id)==4)
+ assert(Pro.cargoUnits(data(crew))==1,'loading loose rocks changed the backpack')
  advance(20)
- assert(data(crew).run.wallet.Quartz==100 and not next(data(crew).run.deliveries),'the two loads did not sell for their full value')
+ assert(data(crew).run.wallet.Quartz==60 and not next(data(crew).run.deliveries),'loose ore did not sell exactly once')
  players.PlayerRemoving:Fire(runner)
- print('PASS one Emptier holds a single pickup, passes a blocked job and shares the haul when both loads are full')
+ print('PASS Emptiers hand off blocked ground pickups, split full loads, and leave backpack cargo alone')
 end
 do
  local runner=player(98906);players.PlayerAdded:Fire(runner)
@@ -517,28 +519,28 @@ do
  local full=Ca.capacity(data(crew))
  assert(Pro.addCargo(data(crew),'Quartz',full-1,full)==full-1)
  advance(.15)
- assert(left.pickupAt and right.pickupAt,'Auto Sell blocked pickups from a partial bag')
- -- A final ore drop can fill the bag after an Emptier has requested its load.
- left.pickupAt=now-RoleConfig.Courier.PickupHold-.05;left.deliveryRequested=true
+ assert(not left.pickupAt and not right.pickupAt,'the backpack drew ground collectors')
  assert(Pro.addCargo(data(crew),'Quartz',1,full)==1)
- serviceDeliveries(crew)
- assert(Pro.cargoUnits(data(crew))==full and not next(data(crew).run.deliveries),'a queued Emptier took ore from a full Auto Sell bag')
  advance(.4)
  assert(Pro.cargoUnits(data(crew))==0 and data(crew).run.wallet.Quartz==full)
  assert(runner:GetAttribute('MA_Notice')=='Auto Sell · +'..full..' Quartz')
 
- local batch=Workshop.emptierBatch(data(crew))
- assert(Pro.addCargo(data(crew),'Quartz',batch,full)==batch)
+ local cargoPosition=at+Vector3.new(14,-3,0)
+ local material=Workshop.cargoKey('Quartz',20)
+ scene.spawnOrePickup(scene.packStation,{owner=runner.UserId,runId=data(crew).run.id,nodeId='auto-sell-ground',
+  material=material,tierMaterial='Quartz',units=1,raw=true,value=20,floor=cargoPosition.Y},
+  cargoPosition,Vector3.zero,Color3.new(1,0,0))
+ local drop=pickups[pickupSerial];drop.landed=true;drop.age=1
+ left.pos=cargoPosition+Vector3.yAxis*2.6;left.velocity=Vector3.zero
  advance(2)
  local loaded=data(crew).run.deliveries[left.id] or data(crew).run.deliveries[right.id]
- assert(loaded and Pro.cargoUnits(data(crew))==0,'Auto Sell prevented a later partial pickup')
+ assert(loaded and Pro.cargoUnits(data(crew))==0,'Auto Sell interfered with loose ore collection')
  assert(Pro.addCargo(data(crew),'Quartz',full,full)==full)
  advance(.4)
  assert(Pro.cargoUnits(data(crew))==0 and data(crew).run.wallet.Quartz==2*full)
- assert(runner:GetAttribute('MA_Notice')=='+'..full..' Quartz · Pack Counter ready')
  advance(20)
- assert(data(crew).run.wallet.Quartz==2*full+batch and not next(data(crew).run.deliveries),'the in-flight load failed to sell once')
+ assert(data(crew).run.wallet.Quartz==2*full+20 and not next(data(crew).run.deliveries))
  players.PlayerRemoving:Fire(runner)
- print('PASS Auto Sell takes a full bag while the Emptiers handle partial bags and finish existing loads')
+ print('PASS Auto Sell handles the backpack independently of a courier hauling loose ore')
 end
 CF.__index=cfIndex

@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,18 +11,28 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `b1640cd2faaea2a7b34596109fa00196aaff24bd60f23e2246219f76f380085d` | Continuous Crystal Run fields and varied crystal cuts, installed and saved in shared Edit. |
-| Shared Studio Sources | Team Create save **235** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `84d67690cdfa6e24427e4b22c6e9f1b511b497ee172d7b0ee6ced7b49191bf21` | Denser Crystal Run fields, loose ore Emptiers and steadier large crystals. |
+| Shared Studio Sources | Team Create save **235** | Last verified shared Edit save, from the previous revision. The new canonical Sources await sync. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load full-field scatter, the sign removal and varied crystal cuts from save **235**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | Save **235** loads the prior full-field scatter and crystal cuts. The clustered-field and loose-ore update awaits Edit sync. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — clustered fields, ground pickups and crystal feedback
+
+Crystal Run now targets 60 rocks per bed. Most placement attempts favor small pockets with randomized centers and widths. Uniform fallback, edge clearance and rock spacing give the player routes across the field. An in-place sampling check against the actual Studio field geometry reached 60 on all five beds across eight seeds each, with about a third of sampled points clearing an extra two-stud buffer around the rocks.
+
+Emptiers claim distinct loose rocks and compressed blocks, load them onto their mounts and sell at the Workshop. Manual and automatic backpack sales use the existing separate path. Loaded ore uses the profile cargo ledger before departure, with existing in-flight receipts and sale accounting. Large crystals retain one seeded facing during damage and no longer tilt on contact. Chips, sparks, break dust and floating ore motes have wider size variation and stronger mineral colors.
+
+Workshop, pickup and beam checks passed, including two full ground-ore parcels, blocked pickup handoff and independent backpack sales. Crystal contact timing and the Ramiel and Nomad fixtures also passed. The broader gadget runner reached its pre-existing client-inertia fixture error. The new visuals still need an in-game review.
+
+Canonical Sources refreshed from `55b3b58`. Shared Studio was open in the owner's Play session. That session still runs the previous build. Shared Edit Source sync, verification and save are pending. No Roblox publication.
 
 ## November 12 — continuous Crystal Run fields and heavier crystal breaks
 
