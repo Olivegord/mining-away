@@ -7625,7 +7625,7 @@ local CrystalSunGlints = (function()
 -- transfer the hit from the replicated rock to its smoothly rendered copy.
 local Lighting=game:GetService('Lighting')
 local G={}
-local RANGE,LIMIT,PROBE_LIMIT,INTERVAL=76,10,14,.10
+local RANGE,LIMIT,PROBE_LIMIT,INTERVAL=110,20,28,.14
 local STAR='rbxassetid://77624818077620'
 local WHITE=Color3.fromRGB(255,251,239)
 local PROBES={Vector2.new(0,.17),Vector2.new(-.26,.31),Vector2.new(.26,.31),
@@ -7644,7 +7644,7 @@ local function drawable(r)
 end
 local function makeSprite(parent)
  local sprite=EnergyDisc.sprite(parent,'CrystalSunGlint')
- sprite.gui.MaxDistance=RANGE+8;sprite.image.Image=STAR
+ sprite.gui.MaxDistance=RANGE+8;sprite.gui.Brightness=2.8;sprite.image.Image=STAR
  return sprite
 end
 local function reflect(r,camera,sun,params,shadow,fx,character)
@@ -7653,9 +7653,10 @@ local function reflect(r,camera,sun,params,shadow,fx,character)
  local mid=toward+sun
  if mid.Magnitude<.01 then return end
  mid=mid.Unit
- local side=mid:Cross(Vector3.yAxis)
+ local probeDirection=(toward+mid).Unit
+ local side=probeDirection:Cross(Vector3.yAxis)
  if side.Magnitude<.01 then side=Vector3.xAxis else side=side.Unit end
- local up=side:Cross(mid)
+ local up=side:Cross(probeDirection)
  local frame,scale=v.CFrame,v.Size
  local sourceFrame,sourceSize=s.CFrame,s.Size
  local extent=scale.Magnitude
@@ -7664,13 +7665,15 @@ local function reflect(r,camera,sun,params,shadow,fx,character)
  end
  params.FilterDescendantsInstances={s}
  local function probe(point)
-  local origin=toSource(point+mid*extent)
-  local hit=workspace:Raycast(origin,toSource(point-mid*extent)-origin,params)
+  local origin=toSource(point+probeDirection*extent)
+  local hit=workspace:Raycast(origin,toSource(point-probeDirection*extent)-origin,params)
   if not hit then return end
   local n=(sourceFrame:VectorToObjectSpace(hit.Normal)*sourceSize/scale).Unit
   local w=frame:VectorToWorldSpace(n)
   local lit,visible=w:Dot(sun),w:Dot(toward)
-  local strength=ramp((w:Dot(mid)-.78)/.195)*ramp(lit/.28)*ramp(visible/.35)
+  -- Broad test lobe: a sunlit shoulder can glint well before
+  -- the camera reaches the strongest mirror angle.
+  local strength=ramp((w:Dot(mid)-.48)/.46)*ramp(lit/.13)*ramp(visible/.17)
   return sourceFrame:PointToObjectSpace(hit.Position)/sourceSize,n,strength
  end
  local function width(axis)
@@ -7678,7 +7681,7 @@ local function reflect(r,camera,sun,params,shadow,fx,character)
   return math.abs(d.X)*scale.X+math.abs(d.Y)*scale.Y+math.abs(d.Z)*scale.Z
  end
  local w,h=width(side),width(up)
- local best,normal,strength,origin,offset=nil,nil,.045,nil,nil
+ local best,normal,strength,origin,offset=nil,nil,.025,nil,nil
  for _,p in ipairs(PROBES) do
   local point=v.Position+side*(p.X*w)+up*(p.Y*h)
   local hit,n,score=probe(point)
@@ -7705,13 +7708,20 @@ local function reflect(r,camera,sun,params,shadow,fx,character)
  local worldNormal=frame:VectorToWorldSpace(normal)
  shadow.FilterDescendantsInstances=character and {s,fx,character} or {s,fx}
  if workspace:Raycast(point+worldNormal*.07,sun*150,shadow) then return end
- return best+normal*.006,strength
+ -- Pull the star just off the surface toward the viewer to keep the
+ -- center readable at grazing angles. World geometry still occludes it.
+ return best+(normal*.045+frame:VectorToObjectSpace(toward)*.13)/scale,strength
 end
 function G.new(parent,player)
  local probes=RaycastParams.new();probes.FilterType=Enum.RaycastFilterType.Include
  local shadow=RaycastParams.new();shadow.FilterType=Enum.RaycastFilterType.Exclude;shadow.IgnoreWater=true
+ -- A real world part gives every billboard attachment a spatial parent.
+ local carrier=Instance.new('Part');carrier.Name='CrystalGlintAnchors'
+ carrier.Size=Vector3.one*.1;carrier.Anchored=true;carrier.Transparency=1
+ carrier.CanCollide=false;carrier.CanTouch=false;carrier.CanQuery=false;carrier.CastShadow=false
+ carrier.Parent=parent
  local self={nextAt=0,created=0,active={},pool={},candidates={}}
- function self:update(resources,now,dt,reduced)
+ function self:update(resources,now,dt,reduced,steady)
   local camera=workspace.CurrentCamera
   if not camera or reduced then
    for r,sprite in pairs(self.active) do
@@ -7745,19 +7755,20 @@ function G.new(parent,player)
      if point then
       local sprite=self.active[r] or table.remove(self.pool)
       if not sprite and self.created<LIMIT then
-       self.created+=1;sprite=makeSprite(parent)
+       self.created+=1;sprite=makeSprite(carrier)
       end
       if sprite then
        if not self.active[r] then sprite.point=point;sprite.alpha=0;self.active[r]=sprite end
        sprite.target=point
-       sprite.targetAlpha=strength*ramp((RANGE-math.sqrt(r.glintDistance))/20)*ramp((sun.Y-.015)/.07)
+       sprite.targetAlpha=(.36+.64*strength)*ramp((RANGE-math.sqrt(r.glintDistance))/26)
+        *ramp((sun.Y-.015)/.06)
       end
      end
     end
    end
   end
   local blend=1-math.exp(-math.min(dt,.1)*15)
-  local steady=player:GetAttribute('ReducedFlashing')==true
+  steady=steady or player:GetAttribute('ReducedFlashing')==true
   for r,sprite in pairs(self.active) do
    if not drawable(r) then sprite.targetAlpha=0;sprite.alpha=0 end
    local gap=sprite.target-sprite.point
@@ -7770,12 +7781,17 @@ function G.new(parent,player)
     if switching and sprite.alpha<=.035 then sprite.point=sprite.target
     elseif not switching then sprite.point=sprite.point:Lerp(sprite.target,blend) end
     local seed=r.glintSeed
-    local period=3.4+seed%7*.31
+    local period=1.85+seed%7*.22
     local wave=steady and .65 or .5+.5*math.sin((now%period)/period*(2*math.pi)+seed*1.7)
-    local size=(.36+(seed%29)*.029)*(.62+.38*wave)*(.56+.44*sprite.alpha)
+    local size=(1.35+(seed%29)*.083)*(.75+.25*wave)*(.72+.28*sprite.alpha)
     local v=r.view
-    EnergyDisc.place(sprite,v.CFrame:PointToWorldSpace(sprite.point*v.Size),size,WHITE:Lerp(r.baseColor,.12),
-     sprite.alpha*(.35+.60*wave)*(steady and .62 or 1))
+    sprite.gui.Enabled=sprite.alpha>.016
+    if sprite.gui.Enabled then
+     sprite.anchor.WorldPosition=v.CFrame:PointToWorldSpace(sprite.point*v.Size)
+     sprite.gui.Size=UDim2.new(size,10,size,10)
+     sprite.image.ImageColor3=WHITE:Lerp(r.baseColor,.09)
+     sprite.image.ImageTransparency=1-sprite.alpha*(.60+.40*wave)*(steady and .68 or 1)
+    end
    end
   end
  end
@@ -7826,8 +7842,8 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=2.55+.55*flicker
- flare.Size=UDim2.new(size,12,size,12)
+ local size=4.60+1.00*flicker
+ flare.Size=UDim2.new(size,18,size,18)
  local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
  beam.flareLight.Brightness=strength*.95
@@ -14874,7 +14890,8 @@ connect(RunService.RenderStepped,function(dt)
    rockDamage.feedback:react(r,now)
   end
  end
- rockDamage.sunGlints:update(resources,now,dt,BeamVFX.reduced())
+ rockDamage.sunGlints:update(resources,now,dt,
+  player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true,CrystalImpactView.reducedMotion())
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)

@@ -1501,7 +1501,8 @@ connect(RunService.RenderStepped,function(dt)
    rockDamage.feedback:react(r,now)
   end
  end
- rockDamage.sunGlints:update(resources,now,dt,BeamVFX.reduced())
+ rockDamage.sunGlints:update(resources,now,dt,
+  player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true,CrystalImpactView.reducedMotion())
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)
