@@ -1,6 +1,6 @@
 -- A Studio-only effects station. Its clock and geometry never feed gameplay.
 local Preview={}
-local PERIOD,RELEASE,FRONT=6.6,1.45,.86
+local PERIOD,RELEASE,FRONT=6.6,1.25,1.10
 local GOLD=Color3.fromRGB(255,171,37)
 local WHITE=Color3.fromRGB(255,248,205)
 local ICE=Color3.fromRGB(135,210,255)
@@ -20,6 +20,28 @@ local function star(parent,name,color)
  local image=Instance.new('ImageLabel');image.BackgroundTransparency=1;image.Size=UDim2.fromScale(1,1)
  image.Image=STAR;image.ImageColor3=color;image.Parent=gui
  return {gui=gui,image=image}
+end
+-- Geometry backs up the sprite so a missing or slow asset cannot hide the star.
+local function rays(parent)
+ local center=Instance.new('Attachment');center.Parent=parent
+ local result={}
+ for i=1,8 do
+  local tip=Instance.new('Attachment');tip.Parent=parent
+  local blade=Instance.new('Beam');blade.Name='CelestialStarRay';blade.Attachment0=center;blade.Attachment1=tip
+  blade.Width1=.005;blade.FaceCamera=true;blade.LightInfluence=0;blade.LightEmission=1
+  blade.Color=ColorSequence.new(WHITE,i%2==1 and GOLD or ICE);blade.Enabled=false;blade.Parent=parent
+  result[i]={tip=tip,beam=blade}
+ end
+ return result
+end
+local function drawRays(starRays,camera,span,alpha)
+ for i,r in ipairs(starRays) do
+  local angle=(i-1)*TAU/8;local main=i%2==1
+  r.tip.Position=(camera.RightVector*math.cos(angle)+camera.UpVector*math.sin(angle))*span*(main and 1 or .32)
+  r.beam.Width0=span*(main and .21 or .09)
+  r.beam.Enabled=alpha>.018
+  if r.beam.Enabled then r.beam.Transparency=NumberSequence.new(1-unit(alpha),1) end
+ end
 end
 local function glow(s,size,alpha)
  s.gui.Enabled=alpha>.01
@@ -67,8 +89,8 @@ end
 local function surface(pos,params)
  return workspace:Raycast(pos+Y*12,-Y*44,params)
 end
-function Preview.new(world,parent,player)
- local self={world=world,parent=parent,player=player,nextCheck=0}
+function Preview.new(world,parent,player,onRelease)
+ local self={world=world,parent=parent,player=player,onRelease=onRelease,nextCheck=0}
  return setmetatable(self,{__index=Preview})
 end
 function Preview:locate(now)
@@ -79,10 +101,16 @@ function Preview:locate(now)
  if typeof(home)~='Vector3' then return false end
  local params=RaycastParams.new();params.RespectCanCollide=true
  params.FilterDescendantsInstances=self.player.Character and {self.parent,self.player.Character} or {self.parent}
- local pos=home+Vector3.new(-45,0,-10)
+ local look=self.world:GetAttribute('StarterLookAt')
+ local forward=typeof(look)=='Vector3' and (look-home)*Vector3.new(1,0,1) or Vector3.new(0,0,-1)
+ if forward.Magnitude<.01 then forward=Vector3.new(0,0,-1) end
+ forward=forward.Unit
+ local side=forward:Cross(Y)
+ local pos=home+forward*22+side*12
+ self.markerAt=home+forward*6+side*5
  local hit=surface(pos,params)
  if not hit then return false end
- self.center=hit.Position;self.origin=self.center+Y*19;self.params=params
+ self.center=hit.Position;self.origin=self.center+Y*9;self.params=params
  return true
 end
 function Preview:build(now)
@@ -90,6 +118,7 @@ function Preview:build(now)
  self.root=root;self.start=now;self.strands={}
  local core=part(root,'ReleaseOrigin',self.origin)
  self.star=star(core,'GoldStar',GOLD);self.flash=star(core,'WhiteFlash',WHITE)
+ self.rays=rays(core)
  self.airLight=light(core,24)
  self.fronts={PlaneBurst.create(core,ICE),PlaneBurst.create(core,WHITE),PlaneBurst.create(core,GOLD)}
  self.glitter=emitter(core,'SuspendedGlitter',ColorSequence.new(WHITE,ICE),Enum.ParticleEmitterShape.Sphere,
@@ -100,7 +129,17 @@ function Preview:build(now)
  self.needleSpray.SpreadAngle=Vector2.new(180,180);self.needleSpray.Drag=4
  self.needleSpray.Orientation=Enum.ParticleOrientation.VelocityParallel
  self.needleSpray.Squash=NumberSequence.new(-.83);self.needleSpray.Rotation=NumberRange.new(0)
- local plaque=part(root,'CelestialRainPreviewSign',self.center+Vector3.new(0,.06,7))
+ local markerGround=surface(self.markerAt,self.params)
+ local marker=part(root,'CelestialRainSpawnMarker',(markerGround and markerGround.Position or self.markerAt)+Y*4)
+ local markerGui=Instance.new('BillboardGui');markerGui.Name='CelestialRainMarker';markerGui.Size=UDim2.fromOffset(200,44)
+ markerGui.LightInfluence=0;markerGui.AlwaysOnTop=true;markerGui.MaxDistance=34;markerGui.Parent=marker
+ local hint=Instance.new('TextLabel');hint.BackgroundTransparency=1;hint.Size=UDim2.fromScale(1,1)
+ hint.Text='✦  CELESTIAL RAIN\nSTAR BURST TEST NEARBY';hint.Font=Enum.Font.GothamBold;hint.TextSize=14
+ hint.TextColor3=WHITE;hint.TextStrokeTransparency=.22;hint.Parent=markerGui
+ local labelAnchor=part(root,'CelestialRainTestMarker',self.center+Y*2.1)
+ local targetLabel=markerGui:Clone();targetLabel.MaxDistance=95;targetLabel.AlwaysOnTop=false;targetLabel.Parent=labelAnchor
+ targetLabel:FindFirstChildWhichIsA('TextLabel').Text='✦  CELESTIAL RAIN'
+ local plaque=part(root,'CelestialRainPreviewSign',self.center+Vector3.new(0,.06,0))
  local signGround=surface(plaque.Position,self.params)
  if signGround then plaque.Position=signGround.Position+Y*.06 end
  plaque.Size=Vector3.new(12,.12,1.8);plaque.Transparency=0;plaque.Color=Color3.fromRGB(27,34,46)
@@ -133,14 +172,22 @@ function Preview:build(now)
 end
 function Preview:step(now,camera)
  if not self:locate(now) then return end
- if BeamVFX.reduced() or (camera.CFrame.Position-self.center).Magnitude>76 then self:destroy();return end
+ if (camera.CFrame.Position-self.center).Magnitude>125 then self:destroy();return end
  if not self.root then self:build(now) end
  local elapsed=now-self.start
  local cycle=math.floor(elapsed/PERIOD)
  local t=elapsed%PERIOD-RELEASE
  local prior=self.cycle==cycle and self.t or -RELEASE
  self.cycle=cycle;self.t=t
- if prior<0 and t>=0 and t<.16 then self.glitter:Emit(126);self.needleSpray:Emit(38) end
+ local reduced=BeamVFX.reduced()
+ local lowFlash=self.player:GetAttribute('ReducedFlashing')==true
+ local _,visible=camera:WorldToViewportPoint(self.origin)
+ local _,groundVisible=camera:WorldToViewportPoint(self.center)
+ if prior<0 and t>=0 and t<.16 then
+  self.glitter:Emit(reduced and 18 or 86)
+  if not reduced then self.needleSpray:Emit(45) end
+  if not lowFlash and not reduced and visible and self.onRelease then self.onRelease(self.origin) end
+ end
 
  local q=unit(t/FRONT);local wave=front(q)
  local opacity=(1-q)^2
@@ -152,12 +199,15 @@ function Preview:step(now,camera)
  end
  if t<0 then
   local charge=unit(1+t/RELEASE)
-  glow(self.star,.65+1.10*charge^3,.7+.16*math.sin(24*t)^2);glow(self.flash,.1,0)
+  drawRays(self.rays,camera.CFrame,.32+.69*charge^3,.69)
+  glow(self.star,.65+1.10*charge^3,.7);glow(self.flash,.1,0)
   self.airLight.Brightness=.1+charge*.7
  else
   local peak=math.exp(-t*8)
-  glow(self.star,.9+3.6*wave,.72*math.exp(-t*1.9));glow(self.flash,.55+3.1*wave,peak)
-  self.airLight.Brightness=5*peak
+  drawRays(self.rays,camera.CFrame,.98+4.7*wave,math.exp(-t*3.8)*(lowFlash and .43 or .94))
+  glow(self.star,1.8+8.6*wave,.82*math.exp(-t*2.5))
+  glow(self.flash,1.55+4.4*wave,(lowFlash and .25 or 1)*peak)
+  self.airLight.Brightness=(lowFlash and 1.1 or 6)*peak
  end
 
  local contacts=Vector3.zero
@@ -172,27 +222,29 @@ function Preview:step(now,camera)
    s.head.Position=s.pointAt(head)
    glow(s.glint,(i%3==0 and .75 or .44)*unit(travel*14),alpha)
   else s.glint.gui.Enabled=false end
-  if age>=0 and age<.15 and prior<s.launch+s.fall then s.splash:Emit(i%3==0 and 19 or 11) end
+  if age>=0 and age<.15 and prior<s.launch+s.fall then s.splash:Emit(reduced and 4 or i%3==0 and 17 or 9) end
   local fade=age>=0 and 1-unit(age/.48) or 0
   glow(s.flash,1+2.3*(1-fade),fade^3)
   PlaneBurst.pose(s.ring,s.normal,.22+2.4*front(1-fade),fade^2*.67,.12)
-  if age>=0 and age<.33 then
+  if age>=0 and age<.47 then
    local _,visible=camera:WorldToViewportPoint(s.point)
    local weight=visible and (1-unit((camera.CFrame.Position-s.point).Magnitude/65)) or 0
-   local hit=math.exp(-age*13)*unit(age/.026)*weight
+   local hit=math.exp(-age*9)*unit(age/.026)*weight
    contacts+=Vector3.new(math.sin(age*96+i)*.15,math.cos(age*81+i)*.22,.13)*hit
   end
  end
- if CrystalImpactView.reducedMotion() then return CLEAR end
- local _,visible=camera:WorldToViewportPoint(self.origin)
- local _,groundVisible=camera:WorldToViewportPoint(self.center)
- local weight=(visible or groundVisible) and (1-unit(facing.Magnitude/77)) or 0
+ if reduced or CrystalImpactView.reducedMotion() then return CLEAR end
+ local weight=(visible or groundVisible) and (1-unit(facing.Magnitude/91)) or 0
  -- The same two rates that expand the front drive the shove and its long release.
  local pressure=t>=0 and t<FRONT and unit(t/.035)*(1-q)*(.88*math.exp(-7*q)+.12) or 0
- local shove=normal*pressure*weight*1.75
- local jitter=Vector3.new(math.sin(t*99)*.26,math.cos(t*76)*.31,0)*pressure*weight
+ local shove=normal*pressure*weight*3.35
+ local rumble=t>=0 and t<FRONT and unit(t/.026)*(1-q)^1.4 or 0
+ local jitter=Vector3.new(math.sin(t*76)*.52,math.cos(t*61)*.45,math.sin(t*43)*.16)*rumble*weight
  contacts=contacts.Magnitude>.40 and contacts.Unit*.40 or contacts
  return CFrame.new(camera.CFrame:VectorToObjectSpace(shove)+jitter+contacts)
+end
+function Preview:resume(held)
+ if self.start and self.root then self.start+=held end
 end
 function Preview:destroy()
  if not self.root then return end

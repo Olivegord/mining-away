@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `8b0650bad0f0f8184ce6b29d803b349d346212be0b491909b7328fc83d7715a1` | Celestial Rain test loop and prior Inkbeam changes. |
-| Shared Studio Sources | Team Create save **249** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `dcbfae3e9d8de3d296e63025b550492335a0921a76251c80f233c684a945d24e` | Client impact freeze and the relocated Celestial Rain test. |
+| Shared Studio Sources | Team Create save **250** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the Celestial Rain test loop and prior Inkbeam changes from save **249**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the impact freeze, selective heavy shakes, and the relocated Celestial Rain preview from save **250**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — client impact freeze and visible Celestial Rain
+
+Nearby final breaks, selected heavy attacks and the star preview can hold the presented world for 55–115 ms, with a 0.9-second minimum between holds. The camera and local presentation loops hold, nearby characters are shown at their captured poses, and particle clocks resume at their prior rates. Server simulation stays authoritative. The universal pre-break delay is shorter; size-dependent rock compression, Ramiel's silent beat and charge rhythms remain. Major attacks have longer camera translations and selected blasts get a fast streak and slower glint layer. Reduced Motion skips the hold and camera feedback. The Studio-only Celestial Rain star sits just right of the route toward Quartz, with a spawn marker and eight geometry rays so it can read without its sprite.
+
+The beam, energy, pickup and rock damage checks passed with API doubles. The broader physical mining suite still stops at the same full-bag fixture as the previous revision. A detached Studio Edit check confirmed the star is in frame from the starting camera, all fifteen strands resolve ground contact, two bursts loop, and the camera and particle clock hold and restore. Native Trail segments use Roblox's own age, and full Play, avatar presentation and multiplayer appearance have not been checked. Studio was already open in Edit and was left there. All three Script Sync roots and seven Source hashes matched the canonical snapshot after Team Create save **250** to place **124078027733625**, universe **10774898335**. No player publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit b65f8d8`.
 
 ## November 12 — Celestial Rain loop
 

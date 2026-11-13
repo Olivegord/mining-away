@@ -1983,7 +1983,7 @@ function A.charge(owner,origin,direction,now,q,scale)
   f.phase='charge';f.firedAt=nil;f.root.Parent=workspace;active[#active+1]=f
   if not connection then
    local run=game:GetService('RunService')
-   connection=(run.RenderStepped or run.Heartbeat):Connect(function() A.step(workspace:GetServerTimeNow()) end)
+   connection=(run.RenderStepped or run.Heartbeat):Connect(function() if not A.isHeld or not A.isHeld() then A.step(workspace:GetServerTimeNow()) end end)
   end
  end
  f.root.CFrame=CFrame.new(origin);f.updatedAt=now;f.scale=math.min(scale or 1,1.5)
@@ -5746,6 +5746,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  end
  local crystal=kind=='CrystalBreak'
+ local heavy=prism or kind=='NomadBlast' or kind=='OrbitalImpact'
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
  local style=impactStyles[kind]
@@ -5769,6 +5770,16 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
   mode,sparks.EmissionDirection,fast and spread*.66 or spread)
  accent:Emit(prism and 4 or dark and 5 or 3)
+ if heavy and impactCount+prismImpactCount<=8 then
+  local white=Color3.fromRGB(255,244,197)
+  local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
+   'streak',sparks.EmissionDirection,spread*.82)
+  streak.Speed=NumberRange.new(21,38);streak.Lifetime=NumberRange.new(.18,.38)
+  streak:Emit(9)
+  local glints=EnergyDisc.accent(root,'LingeringImpactGlints',white,diameter*.35,'glint',sparks.EmissionDirection,108)
+  glints.Speed=NumberRange.new(4,11);glints.Lifetime=NumberRange.new(.52,1.15)
+  glints.Drag=2.8;glints:Emit(7)
+ end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end
@@ -7439,10 +7450,14 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
+ function self:resume(held)
+  for _,piece in ipairs(self.pieces) do piece.at+=held end
+ end
  function self:step(now)
   for i=#self.pieces,1,-1 do
    local e=self.pieces[i];local t=now-e.at
    if t>=e.duration then e.p:Destroy();table.remove(self.pieces,i)
+   elseif t<0 then continue
    elseif e.burst then
     local q=t/e.duration;local scale=1-(1-q)^3
     e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)
@@ -9160,7 +9175,7 @@ end
 local cameraBeats={
  NeedleFire={.025,.105,.016}, BallFire={.060,.15,.025},
  NeedleHit={.027,.12,.019}, BallHit={.061,.165,.026},
- Fracture={.039,.14,.023}, Split={.17,.23,.031}, CompactorPress={.043,.14,.021},
+ Fracture={.039,.14,.023}, Split={.23,.32,.024}, HeavySplit={.63,.62,.021,true}, CompactorPress={.043,.14,.021},
  DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
 }
 local function cameraListener(camera,player)
@@ -9195,10 +9210,15 @@ function P:cameraBeat(kind,position,now,weight)
   if remaining>=amount then return end
   table.remove(beats,weakest)
  end
- table.insert(beats,{at=now,amount=amount,duration=style[2],attack=style[3],direction=direction})
+ table.insert(beats,{at=now,amount=amount,duration=style[2],attack=style[3],direction=direction,heavy=style[4]})
+end
+function P:resumeCameraBeats(held)
+ for _,beat in ipairs(self.cameraBeats) do beat.at+=held end
+ if self.crystalShakeAt then self.crystalShakeAt+=held end
+ if self.shakeAt then self.shakeAt+=held end
 end
 function P:sampleCameraBeats(now)
- local offset=Vector3.zero
+ local ordinary,heavy=Vector3.zero,Vector3.zero
  for i=#self.cameraBeats,1,-1 do
   local beat=self.cameraBeats[i]
   local age=now-beat.at
@@ -9207,11 +9227,16 @@ function P:sampleCameraBeats(now)
   elseif age>=0 then
    local t=age/beat.duration
    local motion=math.min(age/beat.attack,1)*(1-t)^2*math.cos(t*4.4)
-   offset+=beat.direction*(motion*beat.amount)
+   local impulse=beat.direction*(motion*beat.amount)
+   if beat.heavy then
+    local tail=math.min(age/.024,1)*(1-t)^1.65
+    heavy+=impulse+Vector3.new(math.sin(age*68)*.35,math.sin(age*53+.5)*.28,math.sin(age*41)*.16)*(tail*beat.amount)
+   else ordinary+=impulse end
   end
  end
- local cap=.135
- if offset.Magnitude>cap then offset=offset.Unit*cap end
+ if ordinary.Magnitude>.135 then ordinary=ordinary.Unit*.135 end
+ local offset=ordinary+heavy
+ if offset.Magnitude>.52 then offset=offset.Unit*.52 end
  return offset
 end
 function P:kick(position,strength,now)
@@ -9236,13 +9261,13 @@ function P:crystalKick(position,strength,now,prism,nomad)
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
  local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
-  or prism and math.clamp((82-distance)/64,0,1)*2.65
+  or prism and math.clamp((82-distance)/64,0,1)*3.65
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
  if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
  self.crystalShakePrism=major
- self.crystalShakeDuration=nomad and .62 or major and .46 or .22
+ self.crystalShakeDuration=nomad and .86 or major and .74 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 local function prismWeight(from,to)
@@ -9291,7 +9316,7 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/math.min(.18,prism.duration*.40),0,1)
-   local pressure=.119+.013*math.sin(t*11)+.072*math.exp(-t*5)
+   local pressure=.156+.020*math.sin(t*11)+.16*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
    local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
    ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)
@@ -9508,10 +9533,107 @@ end
 return Showcase
 
 end)()
+local ImpactFreeze = (function()
+-- A brief hold of the rendered world. The server and input keep their own clocks.
+local Freeze={}
+Freeze.__index=Freeze
+local beats={
+ Split={.055,24}, HeavySplit={.085,32}, Breaker={.075,34},
+ Orbital={.105,44}, Prism={.115,46}, Nomad={.115,50}, Star={.105,52},
+}
+function Freeze.new(player)
+ return setmetatable({player=player,last=-math.huge,emitters={},hidden={}},Freeze)
+end
+function Freeze:request(kind,position)
+ local beat=beats[kind]
+ local camera=workspace.CurrentCamera
+ if not beat or not camera or self.untilAt then return end
+ local root=self.player.Character and self.player.Character:FindFirstChild('HumanoidRootPart')
+ if ((root and root.Position or camera.CFrame.Position)-position).Magnitude>beat[2] then return end
+ if (camera.CFrame.Position-position).Magnitude>beat[2]+25 then return end
+ local _,visible=camera:WorldToViewportPoint(position)
+ if not visible then return end
+ local duration=beat[1]
+ if not self.pending or duration>self.pending then self.pending=duration end
+end
+function Freeze:release()
+ if self.actors then self.actors:Destroy();self.actors=nil end
+ for part,modifier in pairs(self.hidden) do if part.Parent then part.LocalTransparencyModifier=modifier end end
+ for emitter,scale in pairs(self.emitters) do if emitter.Parent then emitter.TimeScale=scale end end
+ table.clear(self.emitters);table.clear(self.hidden)
+ self.untilAt=nil;self.cameraFrame=nil;self.focus=nil;self.fov=nil;self.camera=nil
+end
+local function actorPose(self,character)
+ local model=Instance.new('Model')
+ for _,part in ipairs(character:GetDescendants()) do
+  if not part:IsA('BasePart') or part.Transparency>=1 or part.LocalTransparencyModifier>=1 then continue end
+  local archivable=part.Archivable;part.Archivable=true
+  local pose=part:Clone();part.Archivable=archivable
+  for _,child in ipairs(pose:GetDescendants()) do
+   if child:IsA('JointInstance') or child:IsA('Constraint') or child:IsA('Attachment') and not child:IsA('Bone')
+    or child:IsA('LuaSourceContainer') or child:IsA('Sound') or child:IsA('LayerCollector')
+    or child:IsA('BasePart') or child:IsA('Light') or child:IsA('PostEffect') then child:Destroy() end
+  end
+  pose.CFrame=part.CFrame;pose.Anchored=true;pose.CanCollide=false;pose.CanTouch=false;pose.CanQuery=false
+  pose.LocalTransparencyModifier=part.LocalTransparencyModifier
+  pose.Parent=model
+  self.hidden[part]=part.LocalTransparencyModifier;part.LocalTransparencyModifier=1
+  for _,decal in ipairs(part:GetChildren()) do
+   if decal:IsA('Decal') then self.hidden[decal]=decal.LocalTransparencyModifier;decal.LocalTransparencyModifier=1 end
+  end
+ end
+ model.Parent=self.actors
+end
+function Freeze:beginFrame(now,reduced,localFX)
+ if self.untilAt then
+  if now<self.untilAt and not reduced and self.camera==workspace.CurrentCamera then return true,0 end
+  local elapsed=now-self.last
+  self:release()
+  return false,elapsed
+ end
+ local duration=self.pending;self.pending=nil
+ if not duration or reduced or now-self.last<.9 then return false,0 end
+ local camera=workspace.CurrentCamera;if not camera then return false,0 end
+ self.last=now;self.untilAt=now+duration;self.camera=camera
+ self.cameraFrame=camera.CFrame;self.focus=camera.Focus;self.fov=camera.FieldOfView
+ local function particles(part)
+  if part:IsA('ParticleEmitter') and self.emitters[part]==nil then
+   self.emitters[part]=part.TimeScale
+   part.TimeScale=0
+  end
+ end
+ for _,part in ipairs(localFX:GetDescendants()) do particles(part) end
+ for _,child in ipairs(workspace:GetChildren()) do
+  if child.Name=='DroneRoleClientEffects' or child.Name=='LaserLaunchAftermath' or child.Name=='ScrapBotPresentation' then
+   for _,part in ipairs(child:GetDescendants()) do particles(part) end
+  end
+ end
+ self.actors=Instance.new('Folder');self.actors.Name='ImpactFreezePoses'
+ for _,player in ipairs(game:GetService('Players'):GetPlayers()) do
+  local character=player.Character
+  local root=character and character:FindFirstChild('HumanoidRootPart')
+  if root and (root.Position-camera.CFrame.Position).Magnitude<140 then
+   for _,part in ipairs(character:GetDescendants()) do particles(part) end
+   actorPose(self,character)
+  end
+ end
+ self.actors.Parent=workspace
+ return true,0
+end
+function Freeze:render()
+ if not self.untilAt then return end
+ local camera=self.camera
+ camera.CFrame=self.cameraFrame;camera.Focus=self.focus;camera.FieldOfView=self.fov
+ -- The default camera's occlusion pass can update character visibility.
+ for part in pairs(self.hidden) do if part.Parent then part.LocalTransparencyModifier=1 end end
+end
+return Freeze
+
+end)()
 local CelestialRainPreview = (function()
 -- A Studio-only effects station. Its clock and geometry never feed gameplay.
 local Preview={}
-local PERIOD,RELEASE,FRONT=6.6,1.45,.86
+local PERIOD,RELEASE,FRONT=6.6,1.25,1.10
 local GOLD=Color3.fromRGB(255,171,37)
 local WHITE=Color3.fromRGB(255,248,205)
 local ICE=Color3.fromRGB(135,210,255)
@@ -9531,6 +9653,28 @@ local function star(parent,name,color)
  local image=Instance.new('ImageLabel');image.BackgroundTransparency=1;image.Size=UDim2.fromScale(1,1)
  image.Image=STAR;image.ImageColor3=color;image.Parent=gui
  return {gui=gui,image=image}
+end
+-- Geometry backs up the sprite so a missing or slow asset cannot hide the star.
+local function rays(parent)
+ local center=Instance.new('Attachment');center.Parent=parent
+ local result={}
+ for i=1,8 do
+  local tip=Instance.new('Attachment');tip.Parent=parent
+  local blade=Instance.new('Beam');blade.Name='CelestialStarRay';blade.Attachment0=center;blade.Attachment1=tip
+  blade.Width1=.005;blade.FaceCamera=true;blade.LightInfluence=0;blade.LightEmission=1
+  blade.Color=ColorSequence.new(WHITE,i%2==1 and GOLD or ICE);blade.Enabled=false;blade.Parent=parent
+  result[i]={tip=tip,beam=blade}
+ end
+ return result
+end
+local function drawRays(starRays,camera,span,alpha)
+ for i,r in ipairs(starRays) do
+  local angle=(i-1)*TAU/8;local main=i%2==1
+  r.tip.Position=(camera.RightVector*math.cos(angle)+camera.UpVector*math.sin(angle))*span*(main and 1 or .32)
+  r.beam.Width0=span*(main and .21 or .09)
+  r.beam.Enabled=alpha>.018
+  if r.beam.Enabled then r.beam.Transparency=NumberSequence.new(1-unit(alpha),1) end
+ end
 end
 local function glow(s,size,alpha)
  s.gui.Enabled=alpha>.01
@@ -9578,8 +9722,8 @@ end
 local function surface(pos,params)
  return workspace:Raycast(pos+Y*12,-Y*44,params)
 end
-function Preview.new(world,parent,player)
- local self={world=world,parent=parent,player=player,nextCheck=0}
+function Preview.new(world,parent,player,onRelease)
+ local self={world=world,parent=parent,player=player,onRelease=onRelease,nextCheck=0}
  return setmetatable(self,{__index=Preview})
 end
 function Preview:locate(now)
@@ -9590,10 +9734,16 @@ function Preview:locate(now)
  if typeof(home)~='Vector3' then return false end
  local params=RaycastParams.new();params.RespectCanCollide=true
  params.FilterDescendantsInstances=self.player.Character and {self.parent,self.player.Character} or {self.parent}
- local pos=home+Vector3.new(-45,0,-10)
+ local look=self.world:GetAttribute('StarterLookAt')
+ local forward=typeof(look)=='Vector3' and (look-home)*Vector3.new(1,0,1) or Vector3.new(0,0,-1)
+ if forward.Magnitude<.01 then forward=Vector3.new(0,0,-1) end
+ forward=forward.Unit
+ local side=forward:Cross(Y)
+ local pos=home+forward*22+side*12
+ self.markerAt=home+forward*6+side*5
  local hit=surface(pos,params)
  if not hit then return false end
- self.center=hit.Position;self.origin=self.center+Y*19;self.params=params
+ self.center=hit.Position;self.origin=self.center+Y*9;self.params=params
  return true
 end
 function Preview:build(now)
@@ -9601,6 +9751,7 @@ function Preview:build(now)
  self.root=root;self.start=now;self.strands={}
  local core=part(root,'ReleaseOrigin',self.origin)
  self.star=star(core,'GoldStar',GOLD);self.flash=star(core,'WhiteFlash',WHITE)
+ self.rays=rays(core)
  self.airLight=light(core,24)
  self.fronts={PlaneBurst.create(core,ICE),PlaneBurst.create(core,WHITE),PlaneBurst.create(core,GOLD)}
  self.glitter=emitter(core,'SuspendedGlitter',ColorSequence.new(WHITE,ICE),Enum.ParticleEmitterShape.Sphere,
@@ -9611,7 +9762,17 @@ function Preview:build(now)
  self.needleSpray.SpreadAngle=Vector2.new(180,180);self.needleSpray.Drag=4
  self.needleSpray.Orientation=Enum.ParticleOrientation.VelocityParallel
  self.needleSpray.Squash=NumberSequence.new(-.83);self.needleSpray.Rotation=NumberRange.new(0)
- local plaque=part(root,'CelestialRainPreviewSign',self.center+Vector3.new(0,.06,7))
+ local markerGround=surface(self.markerAt,self.params)
+ local marker=part(root,'CelestialRainSpawnMarker',(markerGround and markerGround.Position or self.markerAt)+Y*4)
+ local markerGui=Instance.new('BillboardGui');markerGui.Name='CelestialRainMarker';markerGui.Size=UDim2.fromOffset(200,44)
+ markerGui.LightInfluence=0;markerGui.AlwaysOnTop=true;markerGui.MaxDistance=34;markerGui.Parent=marker
+ local hint=Instance.new('TextLabel');hint.BackgroundTransparency=1;hint.Size=UDim2.fromScale(1,1)
+ hint.Text='✦  CELESTIAL RAIN\nSTAR BURST TEST NEARBY';hint.Font=Enum.Font.GothamBold;hint.TextSize=14
+ hint.TextColor3=WHITE;hint.TextStrokeTransparency=.22;hint.Parent=markerGui
+ local labelAnchor=part(root,'CelestialRainTestMarker',self.center+Y*2.1)
+ local targetLabel=markerGui:Clone();targetLabel.MaxDistance=95;targetLabel.AlwaysOnTop=false;targetLabel.Parent=labelAnchor
+ targetLabel:FindFirstChildWhichIsA('TextLabel').Text='✦  CELESTIAL RAIN'
+ local plaque=part(root,'CelestialRainPreviewSign',self.center+Vector3.new(0,.06,0))
  local signGround=surface(plaque.Position,self.params)
  if signGround then plaque.Position=signGround.Position+Y*.06 end
  plaque.Size=Vector3.new(12,.12,1.8);plaque.Transparency=0;plaque.Color=Color3.fromRGB(27,34,46)
@@ -9644,14 +9805,22 @@ function Preview:build(now)
 end
 function Preview:step(now,camera)
  if not self:locate(now) then return end
- if BeamVFX.reduced() or (camera.CFrame.Position-self.center).Magnitude>76 then self:destroy();return end
+ if (camera.CFrame.Position-self.center).Magnitude>125 then self:destroy();return end
  if not self.root then self:build(now) end
  local elapsed=now-self.start
  local cycle=math.floor(elapsed/PERIOD)
  local t=elapsed%PERIOD-RELEASE
  local prior=self.cycle==cycle and self.t or -RELEASE
  self.cycle=cycle;self.t=t
- if prior<0 and t>=0 and t<.16 then self.glitter:Emit(126);self.needleSpray:Emit(38) end
+ local reduced=BeamVFX.reduced()
+ local lowFlash=self.player:GetAttribute('ReducedFlashing')==true
+ local _,visible=camera:WorldToViewportPoint(self.origin)
+ local _,groundVisible=camera:WorldToViewportPoint(self.center)
+ if prior<0 and t>=0 and t<.16 then
+  self.glitter:Emit(reduced and 18 or 86)
+  if not reduced then self.needleSpray:Emit(45) end
+  if not lowFlash and not reduced and visible and self.onRelease then self.onRelease(self.origin) end
+ end
 
  local q=unit(t/FRONT);local wave=front(q)
  local opacity=(1-q)^2
@@ -9663,12 +9832,15 @@ function Preview:step(now,camera)
  end
  if t<0 then
   local charge=unit(1+t/RELEASE)
-  glow(self.star,.65+1.10*charge^3,.7+.16*math.sin(24*t)^2);glow(self.flash,.1,0)
+  drawRays(self.rays,camera.CFrame,.32+.69*charge^3,.69)
+  glow(self.star,.65+1.10*charge^3,.7);glow(self.flash,.1,0)
   self.airLight.Brightness=.1+charge*.7
  else
   local peak=math.exp(-t*8)
-  glow(self.star,.9+3.6*wave,.72*math.exp(-t*1.9));glow(self.flash,.55+3.1*wave,peak)
-  self.airLight.Brightness=5*peak
+  drawRays(self.rays,camera.CFrame,.98+4.7*wave,math.exp(-t*3.8)*(lowFlash and .43 or .94))
+  glow(self.star,1.8+8.6*wave,.82*math.exp(-t*2.5))
+  glow(self.flash,1.55+4.4*wave,(lowFlash and .25 or 1)*peak)
+  self.airLight.Brightness=(lowFlash and 1.1 or 6)*peak
  end
 
  local contacts=Vector3.zero
@@ -9683,27 +9855,29 @@ function Preview:step(now,camera)
    s.head.Position=s.pointAt(head)
    glow(s.glint,(i%3==0 and .75 or .44)*unit(travel*14),alpha)
   else s.glint.gui.Enabled=false end
-  if age>=0 and age<.15 and prior<s.launch+s.fall then s.splash:Emit(i%3==0 and 19 or 11) end
+  if age>=0 and age<.15 and prior<s.launch+s.fall then s.splash:Emit(reduced and 4 or i%3==0 and 17 or 9) end
   local fade=age>=0 and 1-unit(age/.48) or 0
   glow(s.flash,1+2.3*(1-fade),fade^3)
   PlaneBurst.pose(s.ring,s.normal,.22+2.4*front(1-fade),fade^2*.67,.12)
-  if age>=0 and age<.33 then
+  if age>=0 and age<.47 then
    local _,visible=camera:WorldToViewportPoint(s.point)
    local weight=visible and (1-unit((camera.CFrame.Position-s.point).Magnitude/65)) or 0
-   local hit=math.exp(-age*13)*unit(age/.026)*weight
+   local hit=math.exp(-age*9)*unit(age/.026)*weight
    contacts+=Vector3.new(math.sin(age*96+i)*.15,math.cos(age*81+i)*.22,.13)*hit
   end
  end
- if CrystalImpactView.reducedMotion() then return CLEAR end
- local _,visible=camera:WorldToViewportPoint(self.origin)
- local _,groundVisible=camera:WorldToViewportPoint(self.center)
- local weight=(visible or groundVisible) and (1-unit(facing.Magnitude/77)) or 0
+ if reduced or CrystalImpactView.reducedMotion() then return CLEAR end
+ local weight=(visible or groundVisible) and (1-unit(facing.Magnitude/91)) or 0
  -- The same two rates that expand the front drive the shove and its long release.
  local pressure=t>=0 and t<FRONT and unit(t/.035)*(1-q)*(.88*math.exp(-7*q)+.12) or 0
- local shove=normal*pressure*weight*1.75
- local jitter=Vector3.new(math.sin(t*99)*.26,math.cos(t*76)*.31,0)*pressure*weight
+ local shove=normal*pressure*weight*3.35
+ local rumble=t>=0 and t<FRONT and unit(t/.026)*(1-q)^1.4 or 0
+ local jitter=Vector3.new(math.sin(t*76)*.52,math.cos(t*61)*.45,math.sin(t*43)*.16)*rumble*weight
  contacts=contacts.Magnitude>.40 and contacts.Unit*.40 or contacts
  return CFrame.new(camera.CFrame:VectorToObjectSpace(shove)+jitter+contacts)
+end
+function Preview:resume(held)
+ if self.start and self.root then self.start+=held end
 end
 function Preview:destroy()
  if not self.root then return end
@@ -11859,7 +12033,7 @@ function View.start(options)
  end
  local scanAt=0;local nearby=false
  connect(RunService.RenderStepped,function(dt)
-  if dead then return end
+  if dead or options.held and options.held() then return end
   local now=workspace:GetServerTimeNow();local profile=options.profile()
   local hasOrbital,hasScrap=enabled(profile,'Orbital'),enabled(profile,'Scrap')
   panel.Visible=(hasOrbital or hasScrap) and nearby and not options.hidden()
@@ -12434,8 +12608,9 @@ local OreDrops = (function()
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.24,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
-O.BREAK_DELAY=.11
-O.REWARD_DELAY=.135
+-- The local impact hold supplies the old fixed dead air; size still adds a pressure beat.
+O.BREAK_DELAY=.035
+O.REWARD_DELAY=.060
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end
@@ -13891,31 +14066,48 @@ BeamVFX.onCue=function(kind,position,now)
  if kind=='launch' then presentation:kick(position,.028,now) end
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
+local impactFreeze=ImpactFreeze.new(player)
 local function cameraBeat(kind,position,now,weight)
  if not CrystalImpactView.reducedMotion() then presentation:cameraBeat(kind,position,now,weight) end
 end
 local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
  if not CrystalImpactView.reducedMotion() then presentation:prismPressure(from,to,at,duration) end
-end,function(position,strength,at)
- presentation:crystalKick(position,strength,at,false)
+end,function(position,strength)
+ if not CrystalImpactView.reducedMotion() then
+  presentation:crystalKick(position,strength,workspace:GetServerTimeNow(),false,true)
+  impactFreeze:request('Nomad',position)
+ end
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
 end,cameraBeat)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned)
  if prism then
   presentation:crystalKick(position,strength,now,true)
+  impactFreeze:request('Prism',position)
  else
-  cameraBeat('Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
+  local heavy=owned and strength>=1.35
+  cameraBeat(heavy and 'HeavySplit' or 'Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
+  if owned then impactFreeze:request(heavy and 'HeavySplit' or 'Split',position) end
  end
 end,cameraBeat)
 local previousShake=CFrame.new();local shakeCamera=nil
-local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player)
+local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player,function(position) impactFreeze:request('Star',position) end)
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
+ if impactFreeze.pending or impactFreeze.untilAt then
+  local held,elapsed=impactFreeze:beginFrame(os.clock(),CrystalImpactView.reducedMotion(),localFX)
+  if held then return end
+  if elapsed>0 then
+   presentation:resumeCameraBeats(elapsed)
+   rockDamage.feedback:resume(elapsed)
+   if celestialRain then celestialRain:resume(elapsed) end
+  end
+ end
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
 end)
 RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
+ if impactFreeze.untilAt then return end
  local camera=workspace.CurrentCamera
  local now=workspace:GetServerTimeNow()
  for source,name in pairs(roleAudio) do
@@ -13952,7 +14144,15 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   previousShake=presentation:cameraOffset(now)*(previewOffset or CFrame.new());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
+RunService:BindToRenderStep('MiningAwayImpactFreeze',Enum.RenderPriority.Last.Value,function() impactFreeze:render() end)
+LaunchAftermath.isHeld=function() return impactFreeze.untilAt~=nil end
 local function roleImpact(source)
+ if impactFreeze.untilAt then
+  impactFreeze.deferred=impactFreeze.deferred or {}
+  if #impactFreeze.deferred<40 then table.insert(impactFreeze.deferred,source) end
+  return
+ end
+ if not source.Parent then return end
  if source:IsA('BasePart') then
   local at=source:GetAttribute('AudioAt');local now=workspace:GetServerTimeNow()
   local loop=source:GetAttribute('AudioLoop')
@@ -13973,7 +14173,10 @@ local function roleImpact(source)
   local position=source:GetAttribute('Position')
   if position and AudioFeedback.fresh(source:GetAttribute('StartedAt'),now,.35) then
    soundscape:play('orbital',position)
-   if not CrystalImpactView.reducedMotion() then presentation:crystalKick(position,.85,now) end
+   if not CrystalImpactView.reducedMotion() then
+    presentation:crystalKick(position,1.12,now,false,true)
+    impactFreeze:request('Orbital',position)
+   end
   end
  end
  if source:IsA('BasePart') and source:GetAttribute('MiningImpact') then
@@ -13985,7 +14188,10 @@ local function roleImpact(source)
     presentation:kick(source.Position,.09,now)
     soundscape:play('breaker_contact',source.Position)
    else
-    presentation:kick(source.Position,impact=='Orbital' and .15 or .14,now)
+    if impact=='Breaker' or impact=='Orbital' then
+     cameraBeat('HeavySplit',source.Position,now,1.12)
+     impactFreeze:request(impact,source.Position)
+    else presentation:kick(source.Position,.14,now) end
     soundscape:play(impact=='Orbital' and 'orbital' or impact=='Breaker' and 'breaker_fracture' or 'mining',source.Position)
    end
   end
@@ -14118,7 +14324,7 @@ local packView=PackView.new({
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer' and not inspectingFleet()) end)
-connect(RunService.RenderStepped,function() packView:update(workspace:GetServerTimeNow()) end)
+connect(RunService.RenderStepped,function() if not impactFreeze.untilAt then packView:update(workspace:GetServerTimeNow()) end end)
 local function sealedPack()
  local offer=pending()
  return offer and offer.opened==false
@@ -14734,7 +14940,7 @@ connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
  end
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible,held=function() return impactFreeze.untilAt~=nil end})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
@@ -14854,6 +15060,11 @@ end
 local observed={}
 local function observe(source)
  if not source.Parent then return end
+ if impactFreeze.untilAt then
+  impactFreeze.sources=impactFreeze.sources or {}
+  impactFreeze.sources[source]=true
+  return
+ end
  if source:IsA('Decal') then
   local record=resources[source.Parent]
   if record and record.source:GetAttribute('Kind')=='Junk' then
@@ -15349,6 +15560,15 @@ local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=r
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)
 connect(RunService.RenderStepped,function(dt)
+ if impactFreeze.untilAt then return end
+ if impactFreeze.sources then
+  local sources=impactFreeze.sources;impactFreeze.sources=nil
+  for source in pairs(sources) do observe(source) end
+ end
+ if impactFreeze.deferred then
+  local deferred=impactFreeze.deferred;impactFreeze.deferred=nil
+  for _,source in ipairs(deferred) do roleImpact(source) end
+ end
  local now=workspace:GetServerTimeNow()
  local map=world:FindFirstChild('Map')
  local reserve=map and map:FindFirstChild('LiminalReserve')
@@ -15493,7 +15713,7 @@ local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones
   return touch and touch.active and touch.input.Position or nil
  end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
-connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
+connect(RunService.RenderStepped,function(dt) if not impactFreeze.untilAt then commandView:update(dt,workspace:GetServerTimeNow()) end end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end
@@ -15523,6 +15743,7 @@ local function assignField(target)
 end
 local mouse=player:GetMouse()
 connect(RunService.RenderStepped,function(dt)
+ if impactFreeze.untilAt then return end
  local camera=workspace.CurrentCamera
  local ray
  if camera and not menusVisible() then
@@ -15603,6 +15824,7 @@ end)
 local hudClock=0
 local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
+ if impactFreeze.untilAt then return end
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
  fleetButton.Visible=profile~=nil and not menusVisible()
@@ -15702,6 +15924,8 @@ connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
+ impactFreeze:release();LaunchAftermath.isHeld=nil
+ RunService:UnbindFromRenderStep('MiningAwayImpactFreeze')
  if celestialRain then celestialRain:destroy() end
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

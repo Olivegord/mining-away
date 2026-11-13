@@ -165,15 +165,21 @@ check('ordinary camera beats stay level, local and bounded even in a volley',fun
  local small=renderer:cameraOffset(100.016).Position.Magnitude
  assert(small>.006 and small<.025)
  for _=1,30 do renderer:cameraBeat('BallHit',position,101) end
- renderer:cameraBeat('Split',position,101,1.35)
- assert(#renderer.cameraBeats==10 and renderer.cameraBeats[10].duration==.23)
+ assert(#renderer.cameraBeats==10)
  for i=0,30 do
   local offset=renderer:cameraOffset(101+i/144)
   assert(offset.yaw==0 and offset.Position.Magnitude<=.13501)
  end
  assert(renderer:cameraOffset(101.24).Position.Magnitude==0 and #renderer.cameraBeats==0)
- renderer:cameraBeat('Split',position+Vector3.xAxis*75,102)
- assert(renderer:cameraOffset(102.04).Position.Magnitude==0)
+ renderer:cameraBeat('HeavySplit',position,101.4)
+ local beforeHold=renderer:cameraOffset(101.44).Position
+ renderer:resumeCameraBeats(.10)
+ assert((renderer:cameraOffset(101.54).Position-beforeHold).Magnitude<.0001,'hold ate the heavy shake')
+ local tail=renderer:cameraOffset(101.78).Position.Magnitude
+ assert(beforeHold.Magnitude>.20 and tail>.025,'heavy impact lost its punch or its tail')
+ assert(renderer:cameraOffset(102.13).Position.Magnitude==0)
+ renderer:cameraBeat('Split',position+Vector3.xAxis*75,102.2)
+ assert(renderer:cameraOffset(102.24).Position.Magnitude==0)
  local old=players.LocalPlayer
  local player=Instance.new('Player');players.LocalPlayer=player
  player:SetAttribute('ReducedMotion',true)
@@ -191,7 +197,7 @@ check('Prism fires a brief level tremor and a much stronger rock blast',function
  assert(not renderer.prismChargeShake,'the charge shake overlapped the firing beat')
  for _,time in ipairs({100.08,100.17,100.24}) do
   local offset=renderer:cameraOffset(time)
-  assert(offset.Position.Magnitude>.025 and offset.Position.Magnitude<.19 and offset.yaw==0)
+  assert(offset.Position.Magnitude>.025 and offset.Position.Magnitude<.34 and offset.yaw==0)
  end
  local crossings,previous=0,0
  for i=0,36 do
@@ -208,7 +214,7 @@ check('Prism fires a brief level tremor and a much stronger rock blast',function
   assert(offset.yaw==0,'the blast tilted the camera')
   peak=math.max(peak,offset.Position.Magnitude)
  end
- assert(peak>.48 and renderer:cameraOffset(100.97).Position.Magnitude==0,
+ assert(peak>.62 and renderer:cameraOffset(101.26).Position.Magnitude==0,
   'the rock blast lacked a strong, finite camera impulse')
  renderer:destroy()
 end)

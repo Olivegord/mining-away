@@ -99,7 +99,7 @@ function View.start(options)
  end
  local scanAt=0;local nearby=false
  connect(RunService.RenderStepped,function(dt)
-  if dead then return end
+  if dead or options.held and options.held() then return end
   local now=workspace:GetServerTimeNow();local profile=options.profile()
   local hasOrbital,hasScrap=enabled(profile,'Orbital'),enabled(profile,'Scrap')
   panel.Visible=(hasOrbital or hasScrap) and nearby and not options.hidden()

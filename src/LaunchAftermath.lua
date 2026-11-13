@@ -97,7 +97,7 @@ function A.charge(owner,origin,direction,now,q,scale)
   f.phase='charge';f.firedAt=nil;f.root.Parent=workspace;active[#active+1]=f
   if not connection then
    local run=game:GetService('RunService')
-   connection=(run.RenderStepped or run.Heartbeat):Connect(function() A.step(workspace:GetServerTimeNow()) end)
+   connection=(run.RenderStepped or run.Heartbeat):Connect(function() if not A.isHeld or not A.isHeld() then A.step(workspace:GetServerTimeNow()) end end)
   end
  end
  f.root.CFrame=CFrame.new(origin);f.updatedAt=now;f.scale=math.min(scale or 1,1.5)

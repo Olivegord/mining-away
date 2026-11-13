@@ -54,10 +54,14 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
+ function self:resume(held)
+  for _,piece in ipairs(self.pieces) do piece.at+=held end
+ end
  function self:step(now)
   for i=#self.pieces,1,-1 do
    local e=self.pieces[i];local t=now-e.at
    if t>=e.duration then e.p:Destroy();table.remove(self.pieces,i)
+   elseif t<0 then continue
    elseif e.burst then
     local q=t/e.duration;local scale=1-(1-q)^3
     e.p.Size=Vector3.new(1.5,.52,1.5)*e.size*math.max(.06,scale)

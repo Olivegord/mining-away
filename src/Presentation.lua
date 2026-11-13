@@ -1102,7 +1102,7 @@ end
 local cameraBeats={
  NeedleFire={.025,.105,.016}, BallFire={.060,.15,.025},
  NeedleHit={.027,.12,.019}, BallHit={.061,.165,.026},
- Fracture={.039,.14,.023}, Split={.17,.23,.031}, CompactorPress={.043,.14,.021},
+ Fracture={.039,.14,.023}, Split={.23,.32,.024}, HeavySplit={.63,.62,.021,true}, CompactorPress={.043,.14,.021},
  DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
 }
 local function cameraListener(camera,player)
@@ -1137,10 +1137,15 @@ function P:cameraBeat(kind,position,now,weight)
   if remaining>=amount then return end
   table.remove(beats,weakest)
  end
- table.insert(beats,{at=now,amount=amount,duration=style[2],attack=style[3],direction=direction})
+ table.insert(beats,{at=now,amount=amount,duration=style[2],attack=style[3],direction=direction,heavy=style[4]})
+end
+function P:resumeCameraBeats(held)
+ for _,beat in ipairs(self.cameraBeats) do beat.at+=held end
+ if self.crystalShakeAt then self.crystalShakeAt+=held end
+ if self.shakeAt then self.shakeAt+=held end
 end
 function P:sampleCameraBeats(now)
- local offset=Vector3.zero
+ local ordinary,heavy=Vector3.zero,Vector3.zero
  for i=#self.cameraBeats,1,-1 do
   local beat=self.cameraBeats[i]
   local age=now-beat.at
@@ -1149,11 +1154,16 @@ function P:sampleCameraBeats(now)
   elseif age>=0 then
    local t=age/beat.duration
    local motion=math.min(age/beat.attack,1)*(1-t)^2*math.cos(t*4.4)
-   offset+=beat.direction*(motion*beat.amount)
+   local impulse=beat.direction*(motion*beat.amount)
+   if beat.heavy then
+    local tail=math.min(age/.024,1)*(1-t)^1.65
+    heavy+=impulse+Vector3.new(math.sin(age*68)*.35,math.sin(age*53+.5)*.28,math.sin(age*41)*.16)*(tail*beat.amount)
+   else ordinary+=impulse end
   end
  end
- local cap=.135
- if offset.Magnitude>cap then offset=offset.Unit*cap end
+ if ordinary.Magnitude>.135 then ordinary=ordinary.Unit*.135 end
+ local offset=ordinary+heavy
+ if offset.Magnitude>.52 then offset=offset.Unit*.52 end
  return offset
 end
 function P:kick(position,strength,now)
@@ -1178,13 +1188,13 @@ function P:crystalKick(position,strength,now,prism,nomad)
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
  local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
-  or prism and math.clamp((82-distance)/64,0,1)*2.65
+  or prism and math.clamp((82-distance)/64,0,1)*3.65
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
  if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end
  self.crystalShakeAt=now;self.crystalShakeAmount=amount
  self.crystalShakePrism=major
- self.crystalShakeDuration=nomad and .62 or major and .46 or .22
+ self.crystalShakeDuration=nomad and .86 or major and .74 or .22
  self.crystalShakeSide=camera.CFrame:PointToObjectSpace(position).X<0 and 1 or -1
 end
 local function prismWeight(from,to)
@@ -1233,7 +1243,7 @@ function P:cameraOffset(now)
   elseif t>=0 then
    local attack=1-(1-math.clamp(t/.072,0,1))^3
    local cutoff=math.clamp((prism.duration-t)/math.min(.18,prism.duration*.40),0,1)
-   local pressure=.119+.013*math.sin(t*11)+.072*math.exp(-t*5)
+   local pressure=.156+.020*math.sin(t*11)+.16*math.exp(-t*5)
    local amount=attack*cutoff*prism.weight*pressure
    local lateral=.82*math.sin(t*83)+.18*math.sin(t*59+.8)
    ordinary*=CFrame.new(lateral*amount,math.sin(t*71+.4)*amount*.52,math.sin(t*56)*amount*.22)

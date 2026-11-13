@@ -298,6 +298,7 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
   impactCount+=1;root.Destroying:Connect(function() impactCount-=1 end)
  end
  local crystal=kind=='CrystalBreak'
+ local heavy=prism or kind=='NomadBlast' or kind=='OrbitalImpact'
  local residual=kind=='OrbitalFallout'
  local orbital=kind=='OrbitalImpact' or residual
  local style=impactStyles[kind]
@@ -321,6 +322,16 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
  local accent=EnergyDisc.accent(root,'ImpactAccent',accentColor,diameter*(fast and .64 or .43),
   mode,sparks.EmissionDirection,fast and spread*.66 or spread)
  accent:Emit(prism and 4 or dark and 5 or 3)
+ if heavy and impactCount+prismImpactCount<=8 then
+  local white=Color3.fromRGB(255,244,197)
+  local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
+   'streak',sparks.EmissionDirection,spread*.82)
+  streak.Speed=NumberRange.new(21,38);streak.Lifetime=NumberRange.new(.18,.38)
+  streak:Emit(9)
+  local glints=EnergyDisc.accent(root,'LingeringImpactGlints',white,diameter*.35,'glint',sparks.EmissionDirection,108)
+  glints.Speed=NumberRange.new(4,11);glints.Lifetime=NumberRange.new(.52,1.15)
+  glints.Drag=2.8;glints:Emit(7)
+ end
  local dustCount=style and style.dust or prism and 9 or orbital and 5 or 4
  Debris:AddItem(root,residual and 2.7 or 1.4)
  if dustCount==0 then return end
