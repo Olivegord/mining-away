@@ -4,7 +4,9 @@ local Plane={}
 local opacity={}
 for i=0,32 do
  local a=i/32
- opacity[i]=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.12,1-a),NumberSequenceKeypoint.new(.6,1-a*.8),NumberSequenceKeypoint.new(1,1)})
+ -- These are internal joins in one closed front, not four separate streaks.
+ -- Fade the complete circle over time without exposing its construction seams.
+ opacity[i]=NumberSequence.new({NumberSequenceKeypoint.new(0,1-a),NumberSequenceKeypoint.new(1,1-a)})
 end
 function Plane.create(parent,color)
  local f={rays={}}

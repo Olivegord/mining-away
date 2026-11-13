@@ -1,5 +1,11 @@
 # Owner requirements
 
+## November 12 — reference-led game feel in the simple abstract scene
+
+The owner says the scene is intentionally very simple and abstract. Preserve that direction; do not interpret open space or simple shapes as missing scenery/detail. The owner will handle UI. Focus on model proportions and especially effects, faithfully recreating supplied references before introducing new designs. The physical card style stays; the flattened dark-card experiment was rejected and reverted.
+
+The owner subsequently authorized applying the applicable tenets from Design Diary's [10 Ways to Improve Game Feel](https://www.youtube.com/watch?v=qCj9CZoAvFY). Use action-linked recoil, particles and lingering aftermath, local lighting, convincing surface contacts, visible hit/death reactions, selective squash/stretch and restrained screen shake where they fit this game. Preserve precise mining lasers, rigid mechanical bodies, accepted attack references and the existing simple map. The video's gun spread and platformer dashes are not blanket requirements to add those mechanics.
+
 ## November 12 — corrected rollback: one revision earlier
 
 The owner corrected the rollback: restore **`44f061c`**, the version immediately before `4bbbc70`. This supersedes the preceding visible-drone restoration selection. Use the smaller 14.2-stud hull, broad wing/ring/keel projector banks, original attack-only scanner cuts, original flight and immediate five-rock blast/mushroom effect. Do not retain the middle-teeth apertures, 2.5× enlargement, cruise scanning or larger delayed particle blast introduced by `4bbbc70`. Preserve unrelated later work.

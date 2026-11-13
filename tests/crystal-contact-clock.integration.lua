@@ -152,9 +152,12 @@ observer:step(110.32,drones,targets)
 assert(observer.records[node].projectile and gunner.shotReceipt==node)
 assert(not observer.records[node].load and not loaded.root.Parent,'the charge stayed behind when the shot fired')
 assert(shotAudio[2][1]=='coil_fire')
+local muzzleBurst=observer.bursts[#observer.bursts]
+assert(muzzleBurst.lamp and muzzleBurst.lamp.Enabled and muzzleBurst.lamp.Brightness>0,'shot did not light nearby surfaces')
 node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
 observer:step(110.53,drones,targets)
 assert(observer.records[node].projectile and #shotAudio==2,'projectile vanished or hit before contact')
+assert(not muzzleBurst.lamp.Enabled and muzzleBurst.node.Parent,'source light outlived its flash or cut the particle tail')
 observer:step(110.54,drones,targets)
 assert(not observer.records[node].projectile and shotAudio[3][1]=='coil_hit' and shotAudio[3][2].level>1)
 assert(observer.records[node].after and not observer.records[node].trail.Enabled,'shot wake disappeared with the projectile head')
@@ -167,6 +170,13 @@ roleFolder.ChildAdded:Fire(fresh)
 observer:step(110.60,drones,targets)
 assert(observer.records[node].after==wake and wake.Parent,'receipt removal cut the shot trail before it could fade')
 assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
+local needleBurst=observer.bursts[#observer.bursts]
+assert(needleBurst.flash.Shape==Enum.PartType.Ball and needleBurst.flash.Size.Z<needleBurst.flash.Size.X,
+ 'Needler contact exposed a rectangular flash or a spike through the surface')
+owner:SetAttribute('ReducedFlashing',true)
+observer:step(110.61,drones,targets)
+assert(not needleBurst.lamp.Enabled,'changing reduced flashing did not suppress local shot light')
+owner:SetAttribute('ReducedFlashing',nil)
 observer:step(111.22,drones,targets)
 assert(#shotAudio==4 and not observer.records[node] and not wake.Parent and observer.trails==0 and observer.heads==0 and #observer.bursts==0,
  'contact replayed or shot visuals leaked')
@@ -323,5 +333,46 @@ for frame=0,45 do
  priorColor=color
 end
 sustained:Destroy();cutting.view:Destroy()
+
+-- Contact debris must reach the floor before its fade, including high contacts.
+-- Test dense cuts and several display rates without changing damage or drops.
+for _,fps in ipairs({30,60,144}) do
+ local debris=CrystalImpactView.new(fx,nil)
+ local mineral=Instance.new('Part');mineral.Material=Enum.Material.Glass
+ mineral.MaterialVariant='';mineral.Reflectance=.35
+ local tint=Color3.fromRGB(205,26,63)
+ debris:chips(200,Vector3.new(0,8,0),Vector3.zAxis,tint,6,false,nil,0,mineral)
+ local chips=table.clone(debris.pieces)
+ assert(#chips==6)
+ for frame=0,fps*2 do
+  local now=200+frame/fps
+  debris:step(now)
+  for _,piece in ipairs(chips) do
+   if piece.p.Parent then
+    assert(piece.p.Material==mineral.Material and piece.p.Reflectance==mineral.Reflectance)
+    assert(piece.p.Color.R>piece.p.Color.G*2,'chips lost the mineral hue')
+    if not piece.landedAt then assert(piece.p.Transparency==0,'contact chip faded before landing')
+    elseif now-piece.at-piece.landedAt<.10 then assert(piece.p.Transparency==0,'planted chip immediately disappeared') end
+   end
+  end
+ end
+ for _,piece in ipairs(chips) do assert(piece.landedAt and not piece.p.Parent,'chip did not land and clean up') end
+ for n=1,20 do debris:chips(203,Vector3.new(0,2,0),Vector3.yAxis,tint,6,false,nil,0,mineral) end
+ assert(#debris.pieces<=28,'ordinary chips consumed the fracture reserve')
+ debris:destroy();mineral:Destroy()
+end
+
+local ring=PlaneBurst.create(fx,Color3.new(1,0,0))
+for _,normal in ipairs({Vector3.yAxis,Vector3.zAxis,Vector3.new(1,1,0).Unit}) do
+ PlaneBurst.pose(ring,normal,3,.7,.2)
+ for i,arc in ipairs(ring.rays) do
+  local nextArc=ring.rays[i%4+1]
+  assert((arc.b.Position-nextArc.a.Position).Magnitude<1e-6,'pressure front has an open geometric join')
+  local alpha=arc.beam.Transparency
+  assert(alpha[1].Value<.4 and alpha[#alpha].Value==nextArc.beam.Transparency[1].Value,
+   'internal pressure-wave seams faded into four separate arcs')
+ end
+end
+PlaneBurst.destroy(ring)
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

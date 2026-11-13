@@ -429,7 +429,7 @@ local function addRibbon(part,color,ball)
  return trail
 end
 
-local function burst(self,from,direction,color,ball,impact,grade,at)
+local function burst(self,from,direction,color,ball,impact,grade,at,lightContact)
  local camera=workspace.CurrentCamera
  if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
@@ -444,10 +444,22 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
- local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
+ local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),true,.09)
  flash.CFrame=node.CFrame
  local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
- self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
+ local lamp
+ local player=Players.LocalPlayer
+ if lightContact and not (player and player:GetAttribute('ReducedFlashing')==true) then
+  local lamps=0
+  for _,b in ipairs(self.bursts) do if b.lamp and at-b.at<(b.ball and .13 or .09) then lamps+=1 end end
+  if lamps<6 then
+   lamp=Instance.new('PointLight');lamp.Name='ShotContactLight';lamp.Color=color
+   lamp.Range=ball and 7 or 4;lamp.Brightness=(ball and 3.2 or 1.7)*grade
+   lamp.Shadows=false;lamp.Parent=node
+  end
+ end
+ self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,lamp=lamp,lightPeak=lamp and lamp.Brightness,
+  direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball,impact=impact}
 end
 local function stepBursts(self,now)
  for i=#self.bursts,1,-1 do
@@ -457,8 +469,14 @@ local function stepBursts(self,now)
   else
    local flash=1-smooth(age/(b.ball and .13 or .09))
    local player=Players.LocalPlayer
-   b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
-   b.flash.Size=(b.ball and Vector3.one*1.25 or Vector3.new(.53,.53,1.95))*math.max(.04,b.scale*(1.15-.53*flash))
+   local reducedFlash=player and player:GetAttribute('ReducedFlashing')==true
+   b.flash.Transparency=1-(reducedFlash and .23 or .82)*flash
+   local shape=b.ball and Vector3.one*1.25 or (b.impact and Vector3.new(1.1,1.1,.22) or Vector3.new(.53,.53,1.95))
+   b.flash.Size=shape*math.max(.04,b.scale*(1.15-.53*flash))
+   if b.lamp then
+    b.lamp.Enabled=not reducedFlash and flash>.01
+    b.lamp.Brightness=b.lightPeak*flash
+   end
    if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68)) end
   end
  end
@@ -630,7 +648,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
       local normal=node:GetAttribute('ContactNormal') or -travel.Unit
       local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
       local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
-      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
       if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
@@ -659,7 +677,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
      if not r.fired then
       r.fired=true
       if paused<=0 and age-windup<.12 then
-       burst(self,from+direction*.17,direction,color,ball,false,1,now)
+       burst(self,from+direction*.17,direction,color,ball,false,1,now,true)
        if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
       end
      end

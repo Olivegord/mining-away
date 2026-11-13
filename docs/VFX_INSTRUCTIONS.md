@@ -1,5 +1,15 @@
 # VFX instructions — owner feedback and implementation
 
+## November 12 — apply the supplied game-feel reference selectively
+
+Reference: Design Diary, [10 Ways to Improve Game Feel](https://www.youtube.com/watch?v=qCj9CZoAvFY), especially particles (2:29), lighting (3:29), surface impacts (4:30), hit reactions (5:25), squash/stretch (6:51) and camera shake (8:02). Its demonstration comes from [Deepnight's game-feel tool](https://deepnight.net/games/game-feel/), which isolates cosmetic feedback without replacing the mechanics.
+
+The simple abstract scene is deliberate. UI belongs to the owner. Preserve original models, precise laser paths, the existing mechanical gun recoil, projectile stretch, crystal hit reaction, final compression/split and level, reduced-motion-aware camera feedback. Do not add platformer movement, gun inaccuracy, rubber deformation to rigid drone hulls, scenery filler or global ambient-light changes to satisfy a checklist.
+
+This pass gives ordinary crystal contact chips their source material/reflectance and a stronger mineral hue; they fall, briefly settle and then fade, with room reserved for the final fracture. Needler uses a rounded muzzle streak and a thin rounded contact flash instead of a cuboid. Needler/Ballcaster briefly light nearby surfaces on release and contact, bounded to six live flash lights and disabled by reduced flashing. Shot particles and trails retain their independent tails. Circular pressure fronts retain continuous opacity across their four internal joins and fade as one circle. These changes preserve the restored `44f061c` Nomad renderer and its attack behavior.
+
+Production-code checks cover contact timing, landing before fading at 30/60/144 FPS, cleanup, fragment budgets, reduced flashing, circular joins, Nomad/Ramiel regression and the beam suite. They are not a native motion or visual-acceptance result.
+
 ## November 12 — corrected rollback: one revision earlier
 
 The owner corrected the rollback: restore **`44f061c`**, the version immediately before `4bbbc70`. This supersedes the preceding visible-drone restoration selection. Use the smaller 14.2-stud hull, broad wing/ring/keel projector banks, original attack-only scanner cuts, original flight and immediate five-rock blast/mushroom effect. Do not retain the middle-teeth apertures, 2.5× enlargement, cruise scanning or larger delayed particle blast introduced by `4bbbc70`. Preserve unrelated later work.

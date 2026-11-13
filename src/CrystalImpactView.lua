@@ -22,27 +22,35 @@ local function part(parent,class,name,color)
 end
 function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
- local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
+ local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail}
  end
- function self:chips(at,point,normal,tint,count,large,scale,ground)
+ function self:chips(at,point,normal,tint,count,large,scale,ground,source)
   if not BeamVFX.near(point,large and 92 or 60) then return end
   if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
   local sideways=normal:Cross(Vector3.yAxis)
   sideways=sideways.Magnitude>.01 and sideways.Unit or Vector3.xAxis
   local up=normal:Cross(sideways).Unit
   for i=1,count do
-   if #self.pieces>=48 then break end
+   -- Ordinary contact chips cannot consume the final fracture's fragment budget.
+   if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
    local size=large and scale*(.42+i*.1) or .14+i*.055
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.34+(i%3)*.13))
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.12+(i%3)*.04))
+   if source then
+    p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
+   end
    p.Size=Vector3.new(size*.72,size*1.45,size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   track(p,at,origin,direction*8+Vector3.yAxis*(large and 4 or 4.5),
-    large and .5 or .37,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
+   local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
+   local floor=ground or point.Y-4
+   -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
+   -- Keep the existing bounded count; a short planted tail supplies the aftermath.
+   local landing=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,origin.Y-floor)))/96
+   track(p,at,origin,velocity,landing+.40,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,.34)
   end
  end
  function self:step(now)
@@ -65,6 +73,7 @@ function V.new(parent,audio,onSplit)
     if e.weight and not e.landedAt and gravity*t>e.v.Y and pos.Y<=floor then
      local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
      e.landedAt=t
+     if e.settleTail then e.duration=t+e.settleTail end
      local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
      e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
      if e.tink and audio and t-touchAge<.13 then
@@ -76,7 +85,11 @@ function V.new(parent,audio,onSplit)
      pos=e.contact+Vector3.new(e.v.X,0,e.v.Z)*(.032*(1-skid^3))
     end
     e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
-    e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
+    if e.settleTail then
+     e.p.Transparency=e.landedAt and math.clamp((t-e.landedAt-.12)/(e.settleTail-.12),0,1) or 0
+    else
+     e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
+    end
    end
   end
  end
@@ -216,7 +229,7 @@ function V.new(parent,audio,onSplit)
     if shot or fractured then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'))
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
     if fractured and not shot then
      RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
     end

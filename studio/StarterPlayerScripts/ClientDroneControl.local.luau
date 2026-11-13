@@ -1784,7 +1784,9 @@ local Plane={}
 local opacity={}
 for i=0,32 do
  local a=i/32
- opacity[i]=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.12,1-a),NumberSequenceKeypoint.new(.6,1-a*.8),NumberSequenceKeypoint.new(1,1)})
+ -- These are internal joins in one closed front, not four separate streaks.
+ -- Fade the complete circle over time without exposing its construction seams.
+ opacity[i]=NumberSequence.new({NumberSequenceKeypoint.new(0,1-a),NumberSequenceKeypoint.new(1,1-a)})
 end
 function Plane.create(parent,color)
  local f={rays={}}
@@ -6859,7 +6861,7 @@ local function addRibbon(part,color,ball)
  return trail
 end
 
-local function burst(self,from,direction,color,ball,impact,grade,at)
+local function burst(self,from,direction,color,ball,impact,grade,at,lightContact)
  local camera=workspace.CurrentCamera
  if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
@@ -6874,10 +6876,22 @@ local function burst(self,from,direction,color,ball,impact,grade,at)
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
  sparks.Parent=node;sparks:Emit(ball and math.min(10,math.floor((impact and 7 or 4)*grade)) or (impact and 5 or 3))
- local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),ball,.09)
+ local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),true,.09)
  flash.CFrame=node.CFrame
  local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
- self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball}
+ local lamp
+ local player=Players.LocalPlayer
+ if lightContact and not (player and player:GetAttribute('ReducedFlashing')==true) then
+  local lamps=0
+  for _,b in ipairs(self.bursts) do if b.lamp and at-b.at<(b.ball and .13 or .09) then lamps+=1 end end
+  if lamps<6 then
+   lamp=Instance.new('PointLight');lamp.Name='ShotContactLight';lamp.Color=color
+   lamp.Range=ball and 7 or 4;lamp.Brightness=(ball and 3.2 or 1.7)*grade
+   lamp.Shadows=false;lamp.Parent=node
+  end
+ end
+ self.bursts[#self.bursts+1]={node=node,flash=flash,ring=ring,lamp=lamp,lightPeak=lamp and lamp.Brightness,
+  direction=direction,at=at,scale=(ball and (impact and 1 or .47) or .46)*grade,ball=ball,impact=impact}
 end
 local function stepBursts(self,now)
  for i=#self.bursts,1,-1 do
@@ -6887,8 +6901,14 @@ local function stepBursts(self,now)
   else
    local flash=1-smooth(age/(b.ball and .13 or .09))
    local player=Players.LocalPlayer
-   b.flash.Transparency=1-(player and player:GetAttribute('ReducedFlashing') and .23 or .82)*flash
-   b.flash.Size=(b.ball and Vector3.one*1.25 or Vector3.new(.53,.53,1.95))*math.max(.04,b.scale*(1.15-.53*flash))
+   local reducedFlash=player and player:GetAttribute('ReducedFlashing')==true
+   b.flash.Transparency=1-(reducedFlash and .23 or .82)*flash
+   local shape=b.ball and Vector3.one*1.25 or (b.impact and Vector3.new(1.1,1.1,.22) or Vector3.new(.53,.53,1.95))
+   b.flash.Size=shape*math.max(.04,b.scale*(1.15-.53*flash))
+   if b.lamp then
+    b.lamp.Enabled=not reducedFlash and flash>.01
+    b.lamp.Brightness=b.lightPeak*flash
+   end
    if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68)) end
   end
  end
@@ -7060,7 +7080,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
       local normal=node:GetAttribute('ContactNormal') or -travel.Unit
       local fractured=node:GetAttribute('ContactFracture') or node:GetAttribute('ContactBroken')
       local grade=fractured and 1.3 or (node:GetAttribute('ContactPowered') and 1.12 or .88)
-      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now)
+      burst(self,point+normal*(ball and .34 or .065),normal,color,ball,true,grade,now,true)
       if ball then RoleVisuals.Pulse(point+normal*.42,color,.55,3.25*grade,.37,normal,1.5) end
       if audio then audio:play(ball and 'coil_hit' or 'needle_hit',point,{level=grade,pitch=fractured and .91 or 1}) end
      end
@@ -7089,7 +7109,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge)
      if not r.fired then
       r.fired=true
       if paused<=0 and age-windup<.12 then
-       burst(self,from+direction*.17,direction,color,ball,false,1,now)
+       burst(self,from+direction*.17,direction,color,ball,false,1,now,true)
        if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
       end
      end
@@ -7293,27 +7313,35 @@ local function part(parent,class,name,color)
 end
 function V.new(parent,audio,onSplit)
  local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
- local function track(p,at,from,velocity,duration,ground,spin,weight,tink)
-  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink}
+ local function track(p,at,from,velocity,duration,ground,spin,weight,tink,settleTail)
+  self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=duration,ground=ground,spin=spin,weight=weight,tink=tink,settleTail=settleTail}
  end
- function self:chips(at,point,normal,tint,count,large,scale,ground)
+ function self:chips(at,point,normal,tint,count,large,scale,ground,source)
   if not BeamVFX.near(point,large and 92 or 60) then return end
   if BeamVFX.reduced() then count=math.min(count,large and 2 or 1) end
   local sideways=normal:Cross(Vector3.yAxis)
   sideways=sideways.Magnitude>.01 and sideways.Unit or Vector3.xAxis
   local up=normal:Cross(sideways).Unit
   for i=1,count do
-   if #self.pieces>=48 then break end
+   -- Ordinary contact chips cannot consume the final fracture's fragment budget.
+   if #self.pieces>=28 then break end
    local angle=i*2.399+at%3;local spread=sideways*math.cos(angle)+up*math.sin(angle)
    local direction=normal*.7+spread*(large and 1.25 or .66)
    local size=large and scale*(.42+i*.1) or .14+i*.055
-   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.34+(i%3)*.13))
+   local p=part(parent,'WedgePart',large and 'CrystalBreakPiece' or 'CrystalChip',tint:Lerp(HOT,.12+(i%3)*.04))
+   if source then
+    p.Material=source.Material;p.MaterialVariant=source.MaterialVariant;p.Reflectance=source.Reflectance
+   end
    p.Size=Vector3.new(size*.72,size*1.45,size)
    p.CFrame=CFrame.new(point)
    local origin=point+normal*(size*.85+.025)
    p.Position=origin
-   track(p,at,origin,direction*8+Vector3.yAxis*(large and 4 or 4.5),
-    large and .5 or .37,ground or point.Y-4,Vector3.new(i*1.3,2.6*i,.6*i))
+   local velocity=direction*8+Vector3.yAxis*(large and 4 or 4.5)
+   local floor=ground or point.Y-4
+   -- The chip's flight ends at the floor, not at an arbitrary particle timeout.
+   -- Keep the existing bounded count; a short planted tail supplies the aftermath.
+   local landing=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,origin.Y-floor)))/96
+   track(p,at,origin,velocity,landing+.40,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,.34)
   end
  end
  function self:step(now)
@@ -7336,6 +7364,7 @@ function V.new(parent,audio,onSplit)
     if e.weight and not e.landedAt and gravity*t>e.v.Y and pos.Y<=floor then
      local speed=math.sqrt(math.max(0,e.v.Y*e.v.Y+2*gravity*(e.from.Y-floor)))
      e.landedAt=t
+     if e.settleTail then e.duration=t+e.settleTail end
      local touchAge=math.clamp((e.v.Y+speed)/gravity,0,t)
      e.contact=e.from+Vector3.new(e.v.X*touchAge,floor-e.from.Y,e.v.Z*touchAge)
      if e.tink and audio and t-touchAge<.13 then
@@ -7347,7 +7376,11 @@ function V.new(parent,audio,onSplit)
      pos=e.contact+Vector3.new(e.v.X,0,e.v.Z)*(.032*(1-skid^3))
     end
     e.p.CFrame=CFrame.new(pos.X,math.max(floor,pos.Y),pos.Z)*rotation
-    e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
+    if e.settleTail then
+     e.p.Transparency=e.landedAt and math.clamp((t-e.landedAt-.12)/(e.settleTail-.12),0,1) or 0
+    else
+     e.p.Transparency=math.clamp((t/e.duration-.69)/.31,0,1)
+    end
    end
   end
  end
@@ -7487,7 +7520,7 @@ function V.new(parent,audio,onSplit)
     if shot or fractured then
      r.impactAt=now;r.kick=tilt*(heavy and .095 or projectile=='Dart' and .055 or .045)
     end
-    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'))
+    self:chips(now,point,normal,r.baseColor,heavy and 6 or fractured and 5 or 3,false,nil,s:GetAttribute('GroundY'),s)
     if fractured and not shot then
      RoleVisuals.Pulse(point+normal*.10,r.baseColor:Lerp(HOT,.55),.19,1.65,.18,normal,.78)
     end

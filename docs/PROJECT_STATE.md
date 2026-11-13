@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `fa22ab3635c1c0e0af811e34955d68816df334a55f6626a2f300535257a79b70` | Corrected Nomad restoration from `44f061c`, installed and saved in shared Edit. |
-| Shared Studio Sources | Team Create save **231** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `04fe052ca924fe739b012541df93d0999267bbac2dde68136edd09940e4f4765` | Scoped game-feel pass over the corrected Nomad restoration, installed and saved in shared Edit. |
+| Shared Studio Sources | Team Create save **232** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the earlier `44f061c` Nomad behavior from save **231**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the contact/aftermath pass and preserved `44f061c` Nomad behavior from save **232**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — apply the supplied game-feel tenets to contact and aftermath
+
+Applied the owner's [Design Diary reference](https://www.youtube.com/watch?v=qCj9CZoAvFY) to ordinary mining/projectile feedback while preserving the simple abstract scene, UI, original models and restored Nomad. Crystal chips keep their mineral hue/material, land, settle briefly and then fade; ordinary chips reserve capacity for the final break. Needler's contact flash is round and surface-oriented. Needler and Ballcaster briefly light nearby surfaces on release/contact; flash lights are bounded and respect reduced flashing. Pressure circles no longer reveal their four internal arc seams. Existing recoil, crystal reactions, projectile stretch, trail tails and level camera feedback remain.
+
+The crystal contact-clock fixture passes with added 30/60/144 FPS landing/fade, material, fragment-budget, reduced-flash and ring-join checks. The beam suite passes all 24 behavior checks plus startup, repair and client/server compilation; Nomad/Ramiel regression passes. The broader gadget runner still stops at the existing client-inertia fixture's nil `GetAttribute` error. No native Play, new preview or multiplayer visual test was started; appearance in actual gameplay remains unverified.
+
+Integrated after `424ff8a`. Refreshed `build/DRONE_GAME.rbxl` with `python3 tools/build.py --previous-commit 424ff8a`; all non-Source chunks and unrelated/backup Sources are unchanged. Script Sync updated only ClientDroneControl. Verified the exact shared place/universe, three synced roots, seven Source lengths/checksums and five preserved backups, then saved Team Create **232** and rechecked Sources. Canonical SHA-256 is `04fe052ca924fe739b012541df93d0999267bbac2dde68136edd09940e4f4765`. Studio remains open in Edit. Next Play loads this pass. No Roblox publication.
 
 ## November 12 — corrected Nomad restoration, one revision earlier
 
