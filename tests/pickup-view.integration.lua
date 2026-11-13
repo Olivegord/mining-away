@@ -163,8 +163,8 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  cargo:SetAttribute('Position',Vector3.new(r.arc.landX,r.arc.floor,r.arc.landZ))
  cargo:SetAttribute('Velocity',Vector3.zero);cargo:SetAttribute('SnapshotAt',contact-.07)
  renderer:update(1/60,contact+.045)
- assert(r.idle and r.idle.sprite.Image=='rbxassetid://6997866340' and r.idle.sprite.ImageTransparency<.12)
- assert(not r.idle.halo.AlwaysOnTop and #r.idle.halo:GetChildren()==1)
+ assert(r.idle and r.idle.emitter:IsA('ParticleEmitter') and r.idle.emitter.Texture:match('^rbxassetid://%d+$'))
+ assert(r.idle.emitter.Emitted==1 and r.idle.emitter.Rate==0)
  renderer:update(1/60,contact+.27)
  assert(not r.idle,'landing twinkle did not fade')
  assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
@@ -208,8 +208,8 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
   local record=renderer.records[source]
   if record.idle then
    lit+=1
-   assert(record.idle.anchor.Parent==record.view and record.idle.halo.Adornee==record.idle.anchor)
-   assert(record.idle.sprite.Image=='rbxassetid://6997866340' and record.idle.sprite.ImageTransparency<1)
+   assert(record.idle.anchor.Parent==record.view and record.idle.emitter.Parent==record.idle.anchor)
+   assert(record.idle.emitter.LockedToPart and record.idle.emitter.Emitted>0)
   end
   assert(record.view.Position.Y>record.view.Size.Y*.5+1.3,'gem did not hover above its landing spot')
   assert(record.motionPose==poses[i] and record.view.Size==sizes[i],'hover changed the physical pose or item size')

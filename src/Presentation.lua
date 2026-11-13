@@ -7,6 +7,34 @@ local ICE=Color3.fromRGB(126,241,221)
 local HOT=Color3.fromRGB(255,179,102)
 local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
+local Players=game:GetService('Players')
+local MINING_FLARE='rbxassetid://108650998238348'
+local function drawMiningFlare(beam,visible,width,now,ignition)
+ local flare=beam.flare
+ if not visible then
+  if flare then flare.Enabled=false end
+  return
+ end
+ if not flare then
+  flare=Instance.new('BillboardGui');flare.Name='PrismaticMiningFlare'
+  flare.Adornee=beam.origin;flare.LightInfluence=0;flare.MaxDistance=85
+  flare.StudsOffset=Vector3.new(0,0,.18)
+  local sprite=Instance.new('ImageLabel');sprite.Name='Flare'
+  sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1)
+  sprite.Image=MINING_FLARE;sprite.Parent=flare;flare.Parent=beam.holder
+  beam.flare=flare;beam.flareSprite=sprite
+ end
+ local flicker=.72
+ local player=Players.LocalPlayer
+ if not BeamVFX.reduced() and not (player and player:GetAttribute('ReducedFlashing')==true) then
+  local age=math.max(0,now-ignition)
+  flicker=.74+.16*math.sin(age*37)+.10*math.sin(age*61+1.2)
+ end
+ local size=.85+.32*flicker
+ flare.Size=UDim2.fromScale(size,size)
+ beam.flareSprite.ImageTransparency=1-width*flicker*.62
+ flare.Enabled=true
+end
 local miningLooks={
  Cutter={color=Color3.fromRGB(255,208,69),core=Color3.fromRGB(255,244,179),width0=1.05,width1=.78},
  Percussion={color=Color3.fromRGB(245,105,85),core=Color3.fromRGB(255,226,202),width0=.85,width1=.72},
@@ -363,6 +391,7 @@ function P:renderMiningBeam(beam,sample,now,noQuery)
   BeamVFX.destroy(beam.vfx);beam.vfx=nil
  end
  drawReferenceBeam(beam,reference and visible,width,sample,now)
+ drawMiningFlare(beam,reference and visible and (sample.active or predicted) and not sample.paused,width,now,ignition)
  local glow=reference and visible and sample.active and not sample.paused
  local beat=glow and F.cutBeat(now,sample.since) or 0
  if glow and not beam.referenceGlow then

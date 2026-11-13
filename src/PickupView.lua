@@ -9,8 +9,7 @@ local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/6.5,2*math.pi/14
--- Creator Store glint_3 by StylishEyepatch, resolved from decal 6997866346.
-local GEM_GLINT='rbxassetid://6997866340'
+local GEM_GLINT='rbxassetid://77624818077620'
 local function launchTrail(view,tint,halfWidth)
  local a=Instance.new('Attachment');a.Name='LaunchTrailLeft';a.Position=Vector3.new(-halfWidth,0,.04);a.Parent=view
  local b=Instance.new('Attachment');b.Name='LaunchTrailRight';b.Position=Vector3.new(halfWidth,0,.04);b.Parent=view
@@ -38,35 +37,45 @@ local function finishTrail(self,r,now)
 end
 local function makeGlint()
  local anchor=Instance.new('Attachment');anchor.Name='FacetGlint'
- local halo=Instance.new('BillboardGui');halo.Name='GemSparkle';halo.Adornee=anchor
- halo.AlwaysOnTop=false;halo.LightInfluence=0;halo.MaxDistance=58;halo.Parent=anchor
- local sprite=Instance.new('ImageLabel');sprite.Name='GlintSprite'
- sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1);sprite.Image=GEM_GLINT
- sprite.ImageTransparency=1;sprite.Parent=halo
- return {anchor=anchor,halo=halo,sprite=sprite}
+ local emitter=Instance.new('ParticleEmitter');emitter.Name='GemSparkle'
+ emitter.Texture=GEM_GLINT;emitter.Enabled=false;emitter.Rate=0
+ emitter.LightInfluence=0;emitter.LightEmission=.76
+ emitter.Speed=NumberRange.new(0);emitter.Lifetime=NumberRange.new(.24)
+ emitter.LockedToPart=true;emitter.Rotation=NumberRange.new(-18,18)
+ emitter.ZOffset=.08;emitter.Parent=anchor
+ return {anchor=anchor,emitter=emitter}
 end
 local function removeIdle(self,r)
  if not r.idle then return end
+ r.idle.emitter:Clear()
  r.idle.anchor.Parent=nil;table.insert(self.idlePool,r.idle);r.idle=nil
  self.idleCount-=1
 end
-local function updateGlint(self,r,age,strength)
- local phase=age<.5 and age or (age-.5+r.seed*.61)%2.65
- -- Reach peak brightness before a nearby player can collect the landed gem.
- local t=math.clamp(math.min(phase/.045,(.24-phase)/.195),0,1)
- local alpha=t*t*(3-2*t)*strength*.92
- if alpha<.025 then removeIdle(self,r);return end
- if not r.idle then
-  if self.idleCount>=GLINT_LIMIT then return end
-  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
-  local size=r.view.Size
-  local side=r.seed%2==0 and 1 or -1
-  r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.56,-side*size.Z*.08)
-  local width=r.physical and 1.35 or .96
-  r.idle.halo.Size=UDim2.fromScale(width,width)
-  r.idle.anchor.Parent=r.view
+local function updateGlint(self,r,age,strength,now)
+ if r.idle then
+  if now<r.glintUntil then return end
+  removeIdle(self,r)
  end
- r.idle.sprite.ImageTransparency=1-alpha
+ local clock=age-.5+r.seed*.61
+ local cycle=age<.5 and -1 or math.floor(clock/2.65)
+ local phase=age<.5 and age or clock%2.65
+ if phase>=.16 or strength<.04 or r.glintCycle==cycle or self.idleCount>=GLINT_LIMIT then return end
+ r.glintCycle=cycle;r.glintUntil=now+.24
+ r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
+ local size=r.view.Size
+ local side=r.seed%2==0 and 1 or -1
+ r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.56,-side*size.Z*.08)
+ local width=r.physical and 1.35 or .96
+ local emitter=r.idle.emitter
+ emitter.Size=NumberSequence.new(width)
+ emitter.Transparency=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,1),
+  NumberSequenceKeypoint.new(.16,1-strength*.92),
+  NumberSequenceKeypoint.new(.55,1-strength*.54),
+  NumberSequenceKeypoint.new(1,1),
+ })
+ r.idle.anchor.Parent=r.view
+ emitter:Emit(1)
 end
 local function displayOrder(a,b)
  if a.displayDistance==b.displayDistance then return a.seed<b.seed end
@@ -397,11 +406,10 @@ function V:update(dt,now)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
-   local landingGlint=landingAge and landingAge<.24 and (live or r.collectAt)
-   if r.arc and landingAge>=0 and not reducedEffects and cameraPosition
-    and (landingGlint or live and not seated and not pulling) then
+   local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
+   if r.arc and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((58-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
-    updateGlint(self,r,landingAge,glintStrength*distanceFade*opacity)
+    updateGlint(self,r,landingAge,canGlint and glintStrength*distanceFade*opacity or 0,now)
    else removeIdle(self,r) end
    if (r.physical or r.hasArc) and cameraPosition then
     local offset=r.drawPosition-cameraPosition
