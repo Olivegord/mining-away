@@ -614,12 +614,13 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
        if typeof(ground)=='Vector3' then RoleVisuals.PrismWave(ground,radius,hold) end
        if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
+       local normal=node:GetAttribute('ContactNormal') or -travel.Unit
+       RoleVisuals.PrismImpact(point,normal)
        if not reduced then
         local camera=workspace.CurrentCamera
         local distance=camera and (camera.CFrame.Position-origin).Magnitude or math.huge
         if distance<90 and now-contactAt<.14 then releaseLighting(self,contactAt,1-smooth((distance-31)/59)) end
         burst(self,origin,travel.Unit,PRISM_RED,true,false,1.82,now)
-        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
         burst(self,point+normal*.22,normal,PRISM_RED,true,true,1.60,now)
         for i=1,math.clamp(node:GetAttribute('PrismHits') or 0,0,3) do
          local contact=node:GetAttribute('PrismHit'..i)

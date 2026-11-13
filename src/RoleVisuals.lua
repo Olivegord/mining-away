@@ -9,6 +9,7 @@ local animations={}
 local beamTimelines={}
 local chargeTimelines={}
 local orbitalTimelines={}
+local ORBITAL_HEIGHT=260
 local pulseTimelines={}
 local pulseCount=0
 local eventAt=nil
@@ -87,6 +88,7 @@ local function prismScorch(parent,point,normal,travel,at)
 end
 function Effects.step(now)
  ImpactRubble.step(now)
+ HeavyBeamFX.step(now)
  for root,mark in pairs(scorchTimelines) do
   local age=now-mark.at
   if not root.Parent or age>=17 then
@@ -120,6 +122,7 @@ function Effects.step(now)
     local opacity=remaining^.98
     BeamVFX.draw(rig,t.from,t.to,now,.64+.36*opacity,nil,age,t.scale)
     BeamVFX.fadePrism(rig,opacity)
+    HeavyBeamFX.poseSurface(t.surface,t.from,t.to,rig.body.Width0,age,opacity)
     if t.spill and t.spill.impact.Parent then stepPrismSpill(t.spill,remaining^1.55) end
    else
     local expansion=math.min(1,age/.035)
@@ -146,6 +149,13 @@ function Effects.step(now)
  for group,t in pairs(orbitalTimelines) do
   if not group.Parent or group:GetAttribute('EndedAt') then
    for _,ring in ipairs(t.rings) do ring.root:Destroy() end
+   table.clear(t.rings)
+   if group.Parent and t.surface and t.surfaceBase then
+    local endAge=now-group:GetAttribute('EndedAt')
+    local fade=math.clamp(1-endAge/.42,0,1)^2
+    HeavyBeamFX.poseSurface(t.surface,t.surfaceTop,t.surfaceBase,t.surfaceWidth*fade,now-t.at,fade)
+    if fade>.01 then continue end
+   end
    orbitalTimelines[group]=nil
   else
    local age=math.max(0,now-t.at)
@@ -160,6 +170,13 @@ function Effects.step(now)
    end
    local position=group:GetAttribute('Position')
    if position then
+    local base=Vector3.new(position.X,t.floor,position.Z)
+    t.surfaceTop=base+Vector3.yAxis*ORBITAL_HEIGHT
+    t.surfaceBase=base
+    t.surfaceWidth=t.widths[1]*(settle+.23)
+    local visible=not group:GetAttribute('Suspended') and BeamVFX.near(base,165)
+    HeavyBeamFX.poseSurface(t.surface,t.surfaceTop,base,t.surfaceWidth,age,visible and 1 or 0)
+    if not visible then t.surfaceBase=nil end
     for i,ring in ipairs(t.rings) do
      local phase=(age*2.6+(i-1)*.5)%1
      ring.root.Position=Vector3.new(position.X,t.floor+1+(1-phase)*14,position.Z)
@@ -187,7 +204,6 @@ function Effects.step(now)
 end
 local MAX_LIVE = 256
 local live = 0
-local ORBITAL_HEIGHT=260
 local ORBITAL_COLOR=Color3.fromRGB(248,241,255)
 local ORBITAL_VIOLET=Color3.fromRGB(170,102,255)
 local ORBITAL_PINK=Color3.fromRGB(238,144,255)
@@ -241,8 +257,10 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	if style=='Prism' and groundNormal then prismScorch(folder(),to,groundNormal,delta.Unit,at) end
 	local rig=BeamVFX.new(folder(),style or 'Lance',color,style~='Prism')
 	if rig then
+	 local prism=style=='Prism'
 	 beamTimelines[rig]={at=at,duration=duration,from=from,to=to,scale=thickness/profile.body,
-	  spill=style=='Prism' and prismSpill(rig.root,from,to,color,groundNormal) or nil}
+	  spill=prism and prismSpill(rig.root,from,to,color,groundNormal) or nil,
+	  surface=prism and HeavyBeamFX.surface(rig.root,false) or nil}
 	elseif now-at<duration then
 	 -- Saturated cosmetic budget retains a simple readable shot.
 	 local value=part();if not value then return end
@@ -252,6 +270,11 @@ function Effects.Beam(from: Vector3, to: Vector3, color: Color3, width: number?,
 	 animate(value,fadeTime,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=1})
 	 Debris:AddItem(value,math.max(.01,duration-(now-at))+.05)
 	end
+end
+
+function Effects.PrismImpact(point: Vector3,normal: Vector3)
+ local at=clock()
+ if workspace:GetServerTimeNow()-at<.18 then HeavyBeamFX.impact(folder(),point,normal,.82,at,false) end
 end
 
 function Effects.Pulse(position: Vector3, color: Color3, startSize: number?, endSize: number?, lifetime: number?, normal: Vector3?, stroke: number?)
@@ -505,7 +528,7 @@ local function clearBurn(owner: any)
    embers.Parent=trail;embers:Emit(25)
   end
  end
- for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalResidualColumn' then
+ for _,value in ipairs(old:GetChildren()) do if value:IsA('BasePart') and value:GetAttribute('BurnTransparency')~=nil then
   local size=value.Name=='MeltContact' and Vector3.one*.03 or Vector3.new(value.Size.X,.015,.015)
   animate(value,.48,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Size=size,Transparency=1})
  end end
@@ -582,7 +605,7 @@ local function sustainedStrike(owner: any,event: any)
    local core=index==#widths
    value.Name=core and 'MeltCore' or index==1 and 'MeltHalo' or 'MeltSheath';value.Shape=Enum.PartType.Cylinder
    value.Color=core and ORBITAL_COLOR or index==1 and ORBITAL_VIOLET or ORBITAL_PINK
-   value.Transparency=core and .10 or index==1 and .86 or .59
+   value.Transparency=core and .10 or index==1 and .93 or .72
    value.Size=Vector3.new(ORBITAL_HEIGHT,width,width);value.Parent=group;columns[index]=value
    value:SetAttribute('BurnTransparency',value.Transparency)
   end
@@ -608,11 +631,16 @@ local function sustainedStrike(owner: any,event: any)
    sparks.Acceleration=Vector3.new(0,-.4,0);sparks.EmissionDirection=Enum.NormalId.Top;sparks.SpreadAngle=Vector2.new(60,60)
    sparks.Rate=8;sparks.Parent=tip
   end
-  orbitalTimelines[group]={at=event.startedAt or clock(),columns=columns,widths=widths,rings=rings,radius=radius,floor=floor.Y,light=light}
+  local surfaceMount=prismPart(group,'OrbitalSurface')
+  local surface=HeavyBeamFX.surface(surfaceMount,true)
+  orbitalTimelines[group]={at=event.startedAt or clock(),columns=columns,widths=widths,rings=rings,radius=radius,
+   floor=floor.Y,light=light,surface=surface}
   group:SetAttribute('Position',location(event.target));group:SetAttribute('ContactAt',clock())
   group.Parent=folder();watchBurn(owner,group)
+  if age<.18 then HeavyBeamFX.impact(folder(),location(event.target),Vector3.yAxis,math.clamp(scale,.95,1.55),event.startedAt or clock(),true) end
  end
  local position=location(event.target)
+ local base=Vector3.new(position.X,group:GetAttribute('Ground'),position.Z)
  group:SetAttribute('Position',position);group:SetAttribute('ContactAt',clock())
  local fresh=workspace:GetServerTimeNow()-clock()<=.3
  local suspended=not fresh
@@ -620,8 +648,8 @@ local function sustainedStrike(owner: any,event: any)
   group:SetAttribute('Suspended',suspended)
   for _,v in ipairs(group:GetDescendants()) do if v:IsA('ParticleEmitter') then v.Enabled=fresh end end
  end
- for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') and value.Name~='OrbitalCompressionRing' then
-  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(position+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
+ for _,value in ipairs(group:GetChildren()) do if value:IsA('BasePart') and value:GetAttribute('BurnTransparency')~=nil then
+  local pose=value.Name=='MeltContact' and CFrame.new(position) or CFrame.new(base+Vector3.new(0,ORBITAL_HEIGHT*.5,0))*CFrame.Angles(0,0,math.pi/2)
   value.CFrame=pose
   value.Transparency=not fresh and 1 or (value:GetAttribute('BurnTransparency') or value.Transparency)
  end end

@@ -66,6 +66,7 @@ function Instance.new(class)
  end
  return i
 end
+function IM:SetTextureOffset(offset) self.TextureOffset=offset end
 function IM:Play() self.Playing=true end
 function IM:TakeDamage(amount) self.Health=math.max(0,self.Health-amount) end
 function IM:ApplyImpulse(force) self.LastImpulse=force end

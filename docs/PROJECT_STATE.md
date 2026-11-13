@@ -11,18 +11,30 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `d6bd3d7ea1818a043ba8fc527f02176017ea9ed9e3447438285b08915bb16f89` | Continuous Emptier pickup motion. |
-| Shared Studio Sources | Team Create save **260** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `6c01a9760926cf9a9590644662548d3cb77166619d52e6fa956b790792ee777e` | Textured Orbital and Ramiel effects, refreshed in the preserved local native file. |
+| Shared Studio Sources | Team Create save **263** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the eased approach, claw closure and takeoff from save **260**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the textured Orbital and Ramiel effects from save **263**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — organic Orbital and Ramiel beam surfaces
+
+Both attacks have independently scrolling Roblox flame and vortex textures, with dark filaments, a hot core and a cooler fringe. Ramiel stays narrow and crimson and starts fading at fire. Orbital carries violet and pink over a grounded column. Both impacts add a short white flash, tapered strokes with different curved paths, textured smoke and small gold, cyan and pink sparks. Smoke and stroke clocks continue after the shot. The effects use the existing contact receipts and honor Reduced Effects and Reduced Flashing.
+
+The beam suite passed 27 behavior checks with API doubles and both bundles compiled. The Orbital body and new texture layers now share the same ground endpoint as the contact point moves down. The broader animation suite advances past its former grounding failure and still fails at a pre-existing target-sight assertion. A detached Studio Edit component check confirmed all three built-in textures loaded, a contact stroke curved, and the aftermath outlived the flash. Gameplay rendering and multiplayer appearance remain unverified. The three native Script Sync roots were connected, and all seven Sources matched the canonical file after Team Create save **263** in place **124078027733625**, universe **10774898335**. No player release was issued. Studio was opened for the shared Edit save. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 97e5655` from the pre-refresh local Studio save. The refresh preserved every non-Source chunk of that local file.
+
+## November 13 — lighting comparison (preview only)
+
+Captured 24 native gameplay frames in one local Studio Play session: the current lighting and seven alternatives, each with matched cameras at active Emerald mining, the Crystal Run approach, and the depot. Toybox Day uses a bright sky and almost no bloom; Stormlight keeps the cloudy sky, adds stronger bloom and tests pools of light around existing stations. No preset was selected or installed. Studio was initially closed; the local Play session ended in Edit and Studio closed.
+
+The gallery used the working copy of `build/DRONE_GAME.rbxl` on checkout `e97cc3ddf7217d86bdcdaedd945820218f557f9c`. This local document had place/universe `0/0` and was already modified at open (SHA-256 `67b2ca5a96d303fa2443f5a480cca1853cdf10c195d19a920d25fdd64c60750d`). Studio saved the local document on close (SHA-256 `c96a4a401e230fca34b9cfcb84c5e4a642bf1e8381205b14700a0162f8f0862e`). The two controller bundles in the local file differ from the tracked revision; five other managed Sources match. The comparisons used client-only overrides and did not touch shared Edit. The DRONEREVOLUTION destination remains place **124078027733625**, universe **10774898335**; no new shared save or Roblox publication was made. Shared Studio Play will use the existing saved lighting. Mobile and multiplayer visuals were not tested.
 
 ## November 13 — smooth Emptier pickup motion
 
