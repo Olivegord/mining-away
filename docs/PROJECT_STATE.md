@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. From Ruby onward, larger crystals take longer to cut and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
+**Current implementation:** New Crystal Run players start with three Laser Miners, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,18 +11,26 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `04fe052ca924fe739b012541df93d0999267bbac2dde68136edd09940e4f4765` | Scoped game-feel pass over the corrected Nomad restoration, installed and saved in shared Edit. |
-| Shared Studio Sources | Team Create save **232** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `b1640cd2faaea2a7b34596109fa00196aaff24bd60f23e2246219f76f380085d` | Continuous Crystal Run fields and varied crystal cuts, installed and saved in shared Edit. |
+| Shared Studio Sources | Team Create save **235** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the contact/aftermath pass and preserved `44f061c` Nomad behavior from save **232**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load full-field scatter, the sign removal and varied crystal cuts from save **235**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — continuous Crystal Run fields and heavier crystal breaks
+
+All five fields sample the full 108 × 64 stud bed with random positions, reserved edge and turn clearance, and a target of 48 rocks each. The physical selector still works across the bed. Cleared active pins can regrow up to two nearby rocks after the normal cooldown; later replacements refill the wider field. The original cut remains alongside Needle, Crown and two sharper shapes, Spear and Oblique. Size predicts work, cargo value, fracture count and the final pause. Ordinary breaks hold for 0.11–0.56 seconds on the server and launch the one-slot reward immediately after the split. Nomad and Ramiel keep their separate attack timing.
+
+Archived 15 obsolete invisible patch markers and nine sign/fixture roots to ServerStorage in shared Edit and the canonical file, preserving the beds, routes, charger and shop signage. The scoped [Studio stage](../tools/studio_crystal_run_fields.lua) verified 75 bed contacts; the [background saver](../tools/refresh_crystal_run_fields.py) mirrors just those moves. All five reusable cuts produced native solids in an Edit-only geometry check. Workshop and beam suites passed; the crystal contact clock and Nomad/Ramiel fixtures passed before the broader gadget runner reached the pre-existing client-inertia nil `GetAttribute` failure. No native Play or multiplayer test was started.
+
+Integrated from `9c75d26`. After the scoped map mirror, ran `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 9c75d26`. Verified shared Edit at place `124078027733625`, universe `10774898335`, three synced roots and all seven matching managed Sources. Saved Team Create **235** and left the already open Studio document in Edit. No Roblox publication.
 
 ## November 12 — apply the supplied game-feel tenets to contact and aftermath
 

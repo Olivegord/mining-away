@@ -16,6 +16,19 @@ function C.planes(name)
   plane(p,.26,1.55,0,1,.43,0);plane(p,.26,1.55,0,-1,.85,0)
   plane(p,0,1.48,-.13,0,.44,1);plane(p,0,1.48,-.13,0,.62,-1)
   plane(p,.03,-1.62,0,-1,-.37,.12)
+ elseif name=='Spear' or name=='Oblique' then
+  -- Four steep facets meet at a single tip. Shift the apex for a second
+  -- silhouette without widening the footprint or using a tilted collision box.
+  local lean=name=='Oblique'
+  local x,z=lean and .68 or -.17,lean and -.58 or .16
+  bevel(p,.69,-.28,.69,.08)
+  plane(p,x,1.91,z,1,lean and .27 or .50,0)
+  plane(p,x,1.91,z,-1,lean and .79 or .41,0)
+  plane(p,x,1.91,z,0,lean and .79 or .47,1)
+  plane(p,x,1.91,z,0,lean and .20 or .43,-1)
+  plane(p,.46,-1.73,-.11,1,-.70,0)
+  plane(p,-.61,-1.70,.08,-1,-.72,.13)
+  plane(p,.16,-1.79,.49,0,-.63,1)
  elseif name=='Crown' then
   bevel(p,.71,0,.71,-.08)
   plane(p,0,1.04,0,-.46,1,-.17);plane(p,0,1.33,0,.48,1,.36)

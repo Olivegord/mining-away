@@ -85,6 +85,20 @@ function M.deepCrystal(roll: number,hardness: number,baseOre: number)
   ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
  }
 end
+function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages: number)
+ -- Most deposits stay close to the familiar size. The upper tail makes
+ -- occasional outcrops worth choosing when cargo slots are the bottleneck.
+ local fraction=math.clamp((roll-50)/50,0,1)
+ local size=1.85+3.35*fraction^1.55
+ local mineral=M.deepCrystal(roll,hardness,baseOre)
+ local stageBonus=if size>=4.35 then 3 elseif size>=3.65 then 2 elseif size>=2.85 then 1 else 0
+ mineral.size=size
+ -- Keep the established seven-stage ceiling while reserving extra stages
+ -- for the largest rocks at every depth.
+ mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
+ mineral.breakHold=.45*math.clamp((size-2.85)/(5.20-2.85),0,1)
+ return mineral
+end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number

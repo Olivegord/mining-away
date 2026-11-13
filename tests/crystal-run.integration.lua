@@ -140,56 +140,55 @@ status(nil)
 print('PASS Crystal Run pin, status transitions, reservations, recall, edge overlap, committed work, regrowth, charging, full-bag mining and Star Shop effects')
 
 
--- Exercise the larger route's population budget and station geometry with
--- the production spawner. A busy patch must not shift its rocks into a lane.
-f.cfg.Count,f.cfg.Ore=48,10
-f.clusters={}
-for i,x in ipairs({0,-34,34}) do
- f.clusters[i]=World.part(zone,'Patch'..i,Vector3.new(x,4.512,-68),Vector3.new(30,2,30),f.color)
-end
+-- The production spawner uses the entire bed, including former lanes.
+f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=48,10,true
+bed.Size=Vector3.new(108,1,64)
 seedField(f)
 assert(#f.resources==48 and #f.respawnQueue==0)
-local counts,positions={},{}
-for _,r in ipairs(f.resources) do
- local patch=r.cluster;local pos=r.position-patch.Position
- assert(math.abs(pos.X)<=15 and math.abs(pos.Z)<=15 and pos.X%1==0 and pos.Z%1==0)
- assert(math.abs(pos.Y-3)<.001)
- local key=string.format('%d,%d',r.position.X,r.position.Z)
- assert(not positions[key],'coincident reference crystals');positions[key]=true
- counts[patch]=(counts[patch] or 0)+1
- assert(math.abs((Feel.mineGoal(r.position,1,false,r.fullSize,r.referenceCrystal)-r.position).Y-7)<.001)
+local outsideFormerPads,continuousDraws=0,0
+local ground=bed.Position.Y+bed.Size.Y*.5
+local minSize,maxSize=math.huge,0
+for i,r in ipairs(f.resources) do
+ local pos=bed.CFrame:PointToObjectSpace(r.position)
+ local radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true)
+ assert(math.abs(pos.X)+radius<54 and math.abs(pos.Z)+radius<32)
+ assert(math.abs(r.part.Position.Y-r.fullSize.Y*.5-ground+.06)<.001)
+ if math.abs(pos.Z)>15 then outsideFormerPads+=1 end
+ if pos.X%1~=0 or pos.Z%1~=0 then continuousDraws+=1 end
+ minSize=math.min(minSize,r.fullSize.Y);maxSize=math.max(maxSize,r.fullSize.Y)
+ for j=1,i-1 do
+  local other=f.resources[j]
+  local otherRadius=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
+  local delta=r.position-other.position
+  assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=radius+otherRadius+ResourcePlacement.GAP)
+ end
 end
-for _,patch in ipairs(f.clusters) do assert(counts[patch]==16) end
+assert(outsideFormerPads>=8 and continuousDraws==48 and maxSize/minSize>2)
 local crewPlayer=player(98702);players.PlayerAdded:Fire(crewPlayer)
 local crew=profiles[crewPlayer.UserId]
 crewPlayer.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
 command.OnServerEvent:Fire(crewPlayer,'PlaceSelector',{runId=data(crew).run.id,fieldId=f.id,position=Vector3.new(0,5.5,-68)})
-assert(#crew.drones==3 and crew.miningSquare.half*2==f.clusters[1].Size.X)
-for _,r in ipairs(f.resources) do
- if r.cluster==f.clusters[1] then
-  assert(Mining.selectorTouches(crew.miningSquare.center,crew.miningSquare.half,r.part.CFrame,r.part.Size))
- end
- r.readyAt=now
-end
+assert(#crew.drones==3 and crew.miningSquare.half*2==30)
+for _,r in ipairs(f.resources) do r.readyAt=now end
 local reserved={}
 for _,worker in ipairs(crew.drones) do
  droneStep(worker,C.Tick)
- assert(worker.target and worker.target.cluster==f.clusters[1] and not reserved[worker.target])
+ assert(worker.target and Mining.selectorTouches(crew.miningSquare.center,crew.miningSquare.half,worker.target.part.CFrame,worker.target.part.Size) and not reserved[worker.target])
  reserved[worker.target]=true
 end
 players.PlayerRemoving:Fire(crewPlayer)
 local retired=f.resources[23]
 retired.paid=true
 local ok,_,plan=spawnResource(f,'Crystal',true)
-assert(ok and plan.cluster==retired.cluster,'grower preview must use the patch with a vacancy')
+assert(ok and plan.field==f.id,'grower preview must use the field with a vacancy')
 local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
-assert(planted and replacement.cluster==retired.cluster and nodeUsage(f)==48)
+assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==48)
 replacement.readyAt=now
 assert(assignOre(p,d,replacement))
 p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
 d.squareJob=p.miningSquare;d.lingerUntil=nil
 d.pos=committedStation(d,replacement);d.velocity=Vector3.zero
-assert(math.abs(d.pos.Y-replacement.cluster.Position.Y-10)<.001)
+assert(math.abs(d.pos.Y-replacement.position.Y-7)<.001)
 local before=replacement.hp
 step(1);assert(d.state=='Warmup' and replacement.hp==before)
 snapshotDrone(d)
@@ -200,17 +199,14 @@ step(math.ceil(.4/C.Tick));assert(d.mining and replacement.hp<before,'the charge
 release(d)
 p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
 d.pos=Vector3.new(0,14.5,-68)
-assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-f.clusters[1].Position.Y-10)<.001)
-print('PASS full reference-sized patch populations, refill locality, mining and standby heights')
+assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-p.miningSquare.center.Y-9)<.001)
+print('PASS continuous field population, clearance, grower placement, mining and standby heights')
 
 do
  local refillZone=Instance.new('Folder');refillZone.Name='RefillTest';refillZone.Parent=run
  local surface=World.part(refillZone,'Field',Vector3.new(0,3.74,158),Vector3.new(108,.6,64),f.color)
- local centerPlot=World.part(refillZone,'Patch1',Vector3.new(0,3.052,147),Vector3.new(30,2,30),f.color)
- local leftPlot=World.part(refillZone,'Patch2',Vector3.new(-34,3.052,163),Vector3.new(30,2,30),f.color)
- local rightPlot=World.part(refillZone,'Patch3',Vector3.new(34,3.052,152),Vector3.new(30,2,30),f.color)
  local field={id=#patches+1,cfg=table.clone(f.cfg),part=surface,model=refillZone,center=surface.Position,color=f.color,
-  clusters={centerPlot,leftPlot,rightPlot},resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+  resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
  field.cfg.Count=1;field.e.phase='Safe';patches[field.id]=field
  local refillDelay=C.MinimumRockRespawn+field.cfg.Respawn
  local tester=player(98689);players.PlayerAdded:Fire(tester)
@@ -220,15 +216,20 @@ do
  local previousStart,previousCounter=scene.runStart,scene.packStation
  scene.runStart=surface.Position
  scene.packStation=World.part(refillZone,'PackStation',Vector3.new(-38,5.5,32),Vector3.new(4,1,4),f.color)
- local pinCenter=Vector3.new(0,4.04,172)
+ local pinCenter=Vector3.new(0,4.04,180)
  local function advance(seconds)
   for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
  end
  local function breakRockAt(x)
-  local old=makeResource(field,centerPlot.Position+Vector3.new(x,0,12),'Crystal',75,10,3,3)
-  old.readyAt=now;old.cluster=centerPlot
+  local mineral=Mining.fieldCrystal(100,1,10,3)
+  local old=makeResource(field,Vector3.new(x,surface.Position.Y,180),'Crystal',mineral.work+10,mineral.ore,mineral.size,mineral.stages,nil,mineral.breakHold)
+  old.readyAt=now
   assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
   assert(hitResource(worker,old,1000) and old.paid)
+  assert(math.abs(old.part:GetAttribute('CrystalSplitAt')-now-.56)<.001)
+  local cargo=pickups[pickupSerial]
+  assert(cargo.nodeId==old.id and cargo.units==1 and cargo.value==mineral.ore)
+  assert(math.abs(cargo.launchAt-old.splitAt-(OreDrops.REWARD_DELAY-OreDrops.BREAK_DELAY))<.001)
  end
  local function pin()
   tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
@@ -261,8 +262,8 @@ do
  advance(refillDelay-.35)
  assert(nodeUsage(field)==0,'a pinned vacancy grew before the normal delay')
  local replacement=refillWithCenteredDraw()
- assert(replacement.cluster==centerPlot and Mining.selectorTouches(square.center,square.half,replacement.part.CFrame,replacement.part.Size),
-  'replacement left the depleted side of the plot')
+ assert(Mining.selectorTouches(square.center,square.half,replacement.part.CFrame,replacement.part.Size),
+  'replacement left the depleted mining pin')
  assert(replacement.readyAt-replacement.spawnAt==2 and not next(replacement.slots) and scene.idleSquareStatus(team,square)=='Growing')
  advance(2.25)
  local returning
@@ -276,19 +277,19 @@ do
  command.OnServerEvent:Fire(tester,'Recall')
  advance(refillDelay-.2)
  local ordinary=refillWithCenteredDraw()
- assert(not team.miningSquare and ordinary.position.Z==centerPlot.Position.Z,'recall kept a cancelled preference')
+ assert(not team.miningSquare and ordinary.position.Z==surface.Position.Z,'recall kept a cancelled preference')
  resources[ordinary.id]=nil;ordinary.part:Destroy();field.resources={}
  breakLastRock()
  advance(refillDelay-.2)
  local raycast=workspace.Raycast
  function workspace:Raycast(origin,direction,params)
-  if direction.Y<-10 and origin.Z>=157 and table.find(params.FilterDescendantsInstances,refillZone) then return {Instance=surface} end
+  if direction.Y<-10 and origin.Z>162 and table.find(params.FilterDescendantsInstances,refillZone) then return {Instance=surface} end
   return raycast(self,origin,direction,params)
  end
  local fallback=refillWithCenteredDraw()
  workspace.Raycast=raycast
- assert(fallback.position.Z==centerPlot.Position.Z and scene.idleSquareStatus(team,team.miningSquare)=='NoCrystals',
-  'blocked local growth must still refill the wider plot')
+ assert(fallback.position.Z==surface.Position.Z and not Mining.selectorTouches(square.center,square.half,fallback.part.CFrame,fallback.part.Size),
+  'blocked local growth must still refill the wider field')
  print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after a %d-second cooldown',replacement.position.Z,ordinary.position.Z,refillDelay))
 
  resources[fallback.id]=nil;fallback.part:Destroy();field.resources={}
@@ -306,12 +307,12 @@ do
  end
  assert(nodeUsage(field)==3 and #field.respawnQueue==0 and #inside==2,'the cleared pin should regrow two of the three replacements')
  for _,rock in ipairs(inside) do
-  assert(rock.cluster==centerPlot and rock.readyAt==rock.spawnAt+2 and not next(rock.slots))
+  assert(rock.readyAt==rock.spawnAt+2 and not next(rock.slots))
  end
  advance(2.1)
  local firstWorker,secondWorker=next(inside[1].slots),next(inside[2].slots)
  assert(firstWorker and secondWorker and firstWorker~=secondWorker,'the two replacements did not give the returning miners separate cuts')
- print('PASS a cleared Quartz pin grows two local replacements on the original schedule, leaving the third for another plot')
+ print('PASS a cleared Quartz pin grows two local replacements on the original schedule, leaving the third for the wider field')
  scene.runStart,scene.packStation=previousStart,previousCounter
  players.PlayerRemoving:Fire(tester)
  for _,rock in ipairs(field.resources) do resources[rock.id]=nil end
@@ -324,21 +325,22 @@ do
  deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4
  deep.resources={}
  seedField(deep)
- assert(#deep.resources==48,'deep patches failed to fill at mixed crystal sizes')
+ assert(#deep.resources==48,'deep field failed to fill at mixed crystal sizes')
  local low,high=math.huge,0
  for i,r in ipairs(deep.resources) do
   local base=r.part:GetAttribute('GroundY')
-  assert(math.abs(base-(r.cluster.Position.Y+Feel.ReferenceCrystalPivot-1.5+.06))<.001)
+  assert(math.abs(base-(deep.part.Position.Y+deep.part.Size.Y*.5))<.001)
   assert(r.part:GetAttribute('OreValue')==r.ore*deep.cfg.Value)
   low=math.min(low,r.ore);high=math.max(high,r.ore)
   for j=1,i-1 do
    local other=deep.resources[j]
-   if r.cluster~=other.cluster then continue end
    local a=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true)
    local b=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
    local delta=r.position-other.position
    assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=a+b,'deep deposits overlapped their turn clearance')
-   assert((r.hp-other.hp)*(r.fullSize.Y-other.fullSize.Y)>=0,'size did not predict work')
+   local sizeOrder=r.fullSize.Y-other.fullSize.Y
+   assert((r.hp-other.hp)*sizeOrder>=0 and (r.stageCount-other.stageCount)*sizeOrder>=0
+    and (r.breakHold-other.breakHold)*sizeOrder>=0,'size did not predict work, fractures and hold')
   end
   resources[r.id]=nil;r.part:Destroy()
  end
@@ -479,7 +481,7 @@ local count,queued=nodeUsage(f),#f.respawnQueue
  assert(not planter.growPlan and nodeUsage(f)==count,'planter bypassed the minimum cooldown')
  realTime=vacancy.regrowAt;now=realTime
 growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
-assert(planter.growPlan and planter.growPlan.cluster==f.clusters[1],'planter picked another patch')
+assert(planter.growPlan and planter.growPlan.field==f.id,'planter picked another field')
 planter.pos=planter.intentGoal
 for _=1,100 do
  realTime+=C.Tick;now=realTime;growerDrone(planter,buyer,characterRoot(buyer),C.Tick)

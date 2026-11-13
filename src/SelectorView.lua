@@ -99,16 +99,12 @@ function V:canReachStarterPlot()
  local character=o.player.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  if not bed or not root then return false end
- for _,plot in quartz:GetChildren() do
-  if not plot:IsA('BasePart') or not plot:GetAttribute('CrystalCluster') then continue end
-  local localPosition=plot.CFrame:PointToObjectSpace(root.Position)
-  local edge=plot.CFrame:PointToWorldSpace(Vector3.new(
-   math.clamp(localPosition.X,-plot.Size.X*.5,plot.Size.X*.5),0,
-   math.clamp(localPosition.Z,-plot.Size.Z*.5,plot.Size.Z*.5)))
-  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
-  if point and Mining.selectorInRange(root.Position,point) then return true end
- end
- return false
+ local localPosition=bed.CFrame:PointToObjectSpace(root.Position)
+ local edge=bed.CFrame:PointToWorldSpace(Vector3.new(
+  math.clamp(localPosition.X,-bed.Size.X*.5,bed.Size.X*.5),0,
+  math.clamp(localPosition.Z,-bed.Size.Z*.5,bed.Size.Z*.5)))
+ local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+ return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 function V:commit(ray)
  local point,id,leadId=self:aim(ray)

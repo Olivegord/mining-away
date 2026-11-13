@@ -97,7 +97,9 @@ function V.new(parent,audio,onSplit)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local fullSize=s:GetAttribute('FullSize') or v.Size
+  local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+   else math.clamp(fullSize.Magnitude*.24,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
@@ -250,9 +252,9 @@ function V.new(parent,audio,onSplit)
    if not r.restPose then r.lastBreakAt=breakAt;return end
    if now<release then
     local nearby=BeamVFX.near(v.Position,92)
-    -- Finish the compression first, then hold the complete pose for 90 ms.
+    -- Heavier crystals spend more of the extra beat under visible pressure.
     -- The server can already dispatch the crew's next target during this beat.
-    local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
+    local load=math.clamp((now-breakAt)/math.max(.025,(release-breakAt)*.52),0,1)
     load=1-(1-load)^3
     if nearby and not prism and not nomad and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true

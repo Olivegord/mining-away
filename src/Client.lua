@@ -1347,7 +1347,7 @@ local function renderDrone(d,dt,now)
  local finalAt=s:GetAttribute('MineBreakAt') or 0
  local finalUntil=s:GetAttribute('MineBreakUntil') or 0
  if alive and not motionPaused and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('MineBreakSerial') or 0)>0
-  and now>=finalAt and now<math.min(finalUntil,finalAt+.3) then
+  and now>=finalAt and now<math.min(finalUntil,finalAt+.75) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
   if finalPart then

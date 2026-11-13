@@ -687,17 +687,11 @@ function W.initialize(): any
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
-    local clusters={}
-    for _,child in ipairs(model:GetChildren()) do
-     if child:IsA('BasePart') and child:GetAttribute('CrystalCluster') then table.insert(clusters,child) end
-    end
-    table.sort(clusters,function(a,b) return a.Name<b.Name end)
-    assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=48,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
-    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
     runStart=runStart or part.Position
    end
    chargingStation=run:FindFirstChild('ChargingStation')

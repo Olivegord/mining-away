@@ -961,6 +961,20 @@ function M.deepCrystal(roll: number,hardness: number,baseOre: number)
   ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
  }
 end
+function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages: number)
+ -- Most deposits stay close to the familiar size. The upper tail makes
+ -- occasional outcrops worth choosing when cargo slots are the bottleneck.
+ local fraction=math.clamp((roll-50)/50,0,1)
+ local size=1.85+3.35*fraction^1.55
+ local mineral=M.deepCrystal(roll,hardness,baseOre)
+ local stageBonus=if size>=4.35 then 3 elseif size>=3.65 then 2 elseif size>=2.85 then 1 else 0
+ mineral.size=size
+ -- Keep the established seven-stage ceiling while reserving extra stages
+ -- for the largest rocks at every depth.
+ mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
+ mineral.breakHold=.45*math.clamp((size-2.85)/(5.20-2.85),0,1)
+ return mineral
+end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
@@ -7388,7 +7402,9 @@ function V.new(parent,audio,onSplit)
   local v,s=r.view,r.source
   local frame=r.restPose
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
-  local strength=math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+  local fullSize=s:GetAttribute('FullSize') or v.Size
+  local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
+   else math.clamp(fullSize.Magnitude*.24,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
   local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
@@ -7541,9 +7557,9 @@ function V.new(parent,audio,onSplit)
    if not r.restPose then r.lastBreakAt=breakAt;return end
    if now<release then
     local nearby=BeamVFX.near(v.Position,92)
-    -- Finish the compression first, then hold the complete pose for 90 ms.
+    -- Heavier crystals spend more of the extra beat under visible pressure.
     -- The server can already dispatch the crew's next target during this beat.
-    local load=math.clamp((now-breakAt)/math.max(.025,release-breakAt-.09),0,1)
+    local load=math.clamp((now-breakAt)/math.max(.025,(release-breakAt)*.52),0,1)
     load=1-(1-load)^3
     if nearby and not prism and not nomad and now>=breakAt then
      r.finalLoad=load;self.tints[r]=true
@@ -7601,7 +7617,7 @@ local function finalContact(sample,now)
  if sample.breakContactAt==nil then return sample,false end
  local at,untilAt=sample.breakContactAt,sample.breakContactUntil
  local valid=type(at)=='number' and type(untilAt)=='number' and at==at and untilAt==untilAt
-  and now>=at and now<math.min(untilAt,at+.3) and sample.alive and not sample.paused
+  and now>=at and now<math.min(untilAt,at+.75) and sample.alive and not sample.paused
   and sample.part and sample.part.Parent and sample.part.Transparency<1
  if valid then return sample,true end
  local expired=table.clone(sample);expired.active=false;expired.key=nil;expired.part=nil
@@ -12887,16 +12903,12 @@ function V:canReachStarterPlot()
  local character=o.player.Character
  local root=character and character:FindFirstChild('HumanoidRootPart')
  if not bed or not root then return false end
- for _,plot in quartz:GetChildren() do
-  if not plot:IsA('BasePart') or not plot:GetAttribute('CrystalCluster') then continue end
-  local localPosition=plot.CFrame:PointToObjectSpace(root.Position)
-  local edge=plot.CFrame:PointToWorldSpace(Vector3.new(
-   math.clamp(localPosition.X,-plot.Size.X*.5,plot.Size.X*.5),0,
-   math.clamp(localPosition.Z,-plot.Size.Z*.5,plot.Size.Z*.5)))
-  local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
-  if point and Mining.selectorInRange(root.Position,point) then return true end
- end
- return false
+ local localPosition=bed.CFrame:PointToObjectSpace(root.Position)
+ local edge=bed.CFrame:PointToWorldSpace(Vector3.new(
+  math.clamp(localPosition.X,-bed.Size.X*.5,bed.Size.X*.5),0,
+  math.clamp(localPosition.Z,-bed.Size.Z*.5,bed.Size.Z*.5)))
+ local point=Mining.selectorCenter(edge,bed.CFrame,bed.Size)
+ return point~=nil and Mining.selectorInRange(root.Position,point)
 end
 function V:commit(ray)
  local point,id,leadId=self:aim(ray)
@@ -14381,7 +14393,7 @@ local function renderDrone(d,dt,now)
  local finalAt=s:GetAttribute('MineBreakAt') or 0
  local finalUntil=s:GetAttribute('MineBreakUntil') or 0
  if alive and not motionPaused and s:GetAttribute('WorkPaused')~=true and (s:GetAttribute('MineBreakSerial') or 0)>0
-  and now>=finalAt and now<math.min(finalUntil,finalAt+.3) then
+  and now>=finalAt and now<math.min(finalUntil,finalAt+.75) then
   local primaryId=s:GetAttribute('MineBreakPrimaryId')
   local finalPart,finalSource,finalResource=resolveRenderedTarget('resource',primaryId,true)
   if finalPart then

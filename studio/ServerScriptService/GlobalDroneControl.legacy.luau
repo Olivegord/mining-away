@@ -2092,6 +2092,20 @@ function M.deepCrystal(roll: number,hardness: number,baseOre: number)
   ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
  }
 end
+function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages: number)
+ -- Most deposits stay close to the familiar size. The upper tail makes
+ -- occasional outcrops worth choosing when cargo slots are the bottleneck.
+ local fraction=math.clamp((roll-50)/50,0,1)
+ local size=1.85+3.35*fraction^1.55
+ local mineral=M.deepCrystal(roll,hardness,baseOre)
+ local stageBonus=if size>=4.35 then 3 elseif size>=3.65 then 2 elseif size>=2.85 then 1 else 0
+ mineral.size=size
+ -- Keep the established seven-stage ceiling while reserving extra stages
+ -- for the largest rocks at every depth.
+ mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
+ mineral.breakHold=.45*math.clamp((size-2.85)/(5.20-2.85),0,1)
+ return mineral
+end
 -- Cumulative base ore released by real layer fractures. The rest belongs to
 -- the final collapse; crossing several layers at once never duplicates ore.
 function M.extractedOre(ore: number,stage: number,count: number,bonus: number?): number
@@ -2313,6 +2327,19 @@ function C.planes(name)
   plane(p,.26,1.55,0,1,.43,0);plane(p,.26,1.55,0,-1,.85,0)
   plane(p,0,1.48,-.13,0,.44,1);plane(p,0,1.48,-.13,0,.62,-1)
   plane(p,.03,-1.62,0,-1,-.37,.12)
+ elseif name=='Spear' or name=='Oblique' then
+  -- Four steep facets meet at a single tip. Shift the apex for a second
+  -- silhouette without widening the footprint or using a tilted collision box.
+  local lean=name=='Oblique'
+  local x,z=lean and .68 or -.17,lean and -.58 or .16
+  bevel(p,.69,-.28,.69,.08)
+  plane(p,x,1.91,z,1,lean and .27 or .50,0)
+  plane(p,x,1.91,z,-1,lean and .79 or .41,0)
+  plane(p,x,1.91,z,0,lean and .79 or .47,1)
+  plane(p,x,1.91,z,0,lean and .20 or .43,-1)
+  plane(p,.46,-1.73,-.11,1,-.70,0)
+  plane(p,-.61,-1.70,.08,-1,-.72,.13)
+  plane(p,.16,-1.79,.49,0,-.63,1)
  elseif name=='Crown' then
   bevel(p,.71,0,.71,-.08)
   plane(p,0,1.04,0,-.46,1,-.17);plane(p,0,1.33,0,.48,1,.36)
@@ -6852,17 +6879,11 @@ function W.initialize(): any
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
-    local clusters={}
-    for _,child in ipairs(model:GetChildren()) do
-     if child:IsA('BasePart') and child:GetAttribute('CrystalCluster') then table.insert(clusters,child) end
-    end
-    table.sort(clusters,function(a,b) return a.Name<b.Name end)
-    assert(#clusters==3,'Missing Mining Away patches in '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,Count=16*#clusters,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=48,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
-    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model,clusters=clusters}
+    fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
     runStart=runStart or part.Position
    end
    chargingStation=run:FindFirstChild('ChargingStation')
@@ -8083,7 +8104,7 @@ local function recallFromField(p)
   if delta.X*delta.X+delta.Z*delta.Z<=Mining.SELECTOR_LEASH^2 and math.abs(delta.Y)<=32 then return end
   -- Depot visits leave the crew working, including the shops beyond the Pack Counter.
   local floor=scene.depotFloor
-  if scene.runStart and square.field.clusters and scene.packStation
+  if scene.runStart and square.field.cfg.SelectionOnly and scene.packStation
    and Mining.onSelectorDepotRoute(hr.Position,square.center,scene.packStation.Position,floor and floor.CFrame,floor and floor.Size) then return end
  end
  local hasOrders=p.workField~=nil or #(p.oreQueue or {})>0
@@ -8253,11 +8274,14 @@ scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=ho
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 RoleConfig.prepareRamielHull(RS)
 if scene.runStart and scene.classicCrystal then
- scene.crystalCuts={}
- -- Build the three ore cuts once per server.
- for _,name in ipairs({'Needle','Crown','Gem'}) do
+ scene.crystalCuts={variants={'Original'}}
+ -- Build the reusable crystal cuts once per server.
+ for _,name in ipairs({'Needle','Crown','Spear','Oblique','Gem'}) do
   local shape=CrystalCuts.build(name)
-  if shape then scene.crystalCuts[name]=shape end
+  if shape then
+   scene.crystalCuts[name]=shape
+   if name~='Gem' then table.insert(scene.crystalCuts.variants,name) end
+  end
  end
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
@@ -8279,13 +8303,13 @@ local function respawnRate(field: any)
  local tuning=RoleConfig.Mining
  return math.min(tuning.RespawnRateMaximum,tuning.RespawnRateBase+math.max(0,count-1)*tuning.RespawnRatePerDrone),count
 end
-local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk)
+local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk,breakHold)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
  local variant=original and field.cfg.SelectionOnly and scene.crystalCuts and
-  (resourceSerial%5==2 and 'Needle' or resourceSerial%5==4 and 'Crown')
+  scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
  local cut=variant and scene.crystalCuts[variant]
  local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
  if cut then part:SetAttribute('CrystalCut',variant) end
@@ -8297,9 +8321,11 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
+ if cut and variant=='Spear' then fullSize*=Vector3.new(.72,1,.72)
+ elseif cut and variant=='Oblique' then fullSize*=Vector3.new(.83,1,.91) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
- if reference then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*1.5/size+.06 end
+ if reference and not field.cfg.ContinuousCrystals then ground=position.Y+Feel.ReferenceCrystalPivot-fullSize.Y*1.5/size+.06 end
  local start=Vector3.new(position.X,ground,position.Z)
  local finish=Vector3.new(position.X,ground+fullSize.Y*.5-.06,position.Z)
  part.Name=junk and junk.name or kind;part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=not junk;part.Size=fullSize;part.Position=finish
@@ -8323,7 +8349,7 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,breakHold=breakHold,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
@@ -8389,7 +8415,7 @@ function scene.replenishJunk(field)
   end
  end
 end
-local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,onlyCluster)
+local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
@@ -8400,99 +8426,69 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,onlyCluste
  for _,player in ipairs(Players:GetPlayers()) do if player.Character then table.insert(excluded,player.Character) end end
  clearance.FilterDescendantsInstances=excluded
  local fieldTop=field.part.Position.Y+field.part.Size.Y/2
- local deep=reference and field.cfg.SelectionOnly and (field.cfg.Hardness or 1)>1
+ local continuous=reference and field.cfg.ContinuousCrystals
  local mineral=plan and plan.mineral
  if not mineral then
   local roll=seed:NextInteger(50,100)
-  mineral=deep and Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore) or Mining.resource(roll,kind,field.cfg.Hardness)
+  mineral=if continuous then Mining.fieldCrystal(roll,field.cfg.Hardness,field.cfg.Ore,field.cfg.Cracks or 3)
+   elseif reference and field.cfg.SelectionOnly and field.cfg.Hardness>1 then Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
+   else Mining.resource(roll,kind,field.cfg.Hardness)
  end
- local visualSize=reference and not deep and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local visualSize=reference and not continuous and (not field.cfg.SelectionOnly or field.cfg.Hardness<=1) and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
- local function sample(patch,neighbors,inset)
-  local preferred,bounds
-  if plan then local p=patch.CFrame:PointToObjectSpace(plan.spot);preferred={x=p.X,z=p.Z} end
-  if nearPin and not preferred then
-   local frame=patch.CFrame
-   local center=frame:PointToObjectSpace(nearPin.center)
-   local right,look=frame.RightVector,frame.LookVector
-   local padding=onlyCluster and 0 or radius
-   local x=nearPin.half*(math.abs(right.X)+math.abs(right.Z))+padding
-   local z=nearPin.half*(math.abs(look.X)+math.abs(look.Z))+padding
-   bounds={minX=center.X-x,maxX=center.X+x,minZ=center.Z-z,maxZ=center.Z+z}
-  end
-  local selected=ResourcePlacement.sample(patch.Size.X-inset,patch.Size.Z-inset,radius,neighbors,
-   function(a,b)
-    if reference then return seed:NextInteger(a,b) end
-    return seed:NextNumber(a,b)
-   end,function(x,z)
+ local patch=field.part
+ local preferred,bounds
+ if plan then
+  local p=patch.CFrame:PointToObjectSpace(plan.spot)
+  preferred={x=p.X,z=p.Z}
+ end
+ if nearPin and not preferred then
+  local frame=patch.CFrame
+  local center=frame:PointToObjectSpace(nearPin.center)
+  local right,look=frame.RightVector,frame.LookVector
+  local padding=insidePin and 0 or radius
+  local x=nearPin.half*(math.abs(right.X)+math.abs(right.Z))+padding
+  local z=nearPin.half*(math.abs(look.X)+math.abs(look.Z))+padding
+  bounds={minX=center.X-x,maxX=center.X+x,minZ=center.Z-z,maxZ=center.Z+z}
+ end
+ local occupied={}
+ for _,r in ipairs(field.resources) do if not r.paid or (r.splitAt or 0)>now then
+  local p=patch.CFrame:PointToObjectSpace(r.position)
+  local reserved=(not reference or continuous or field.cfg.SelectionOnly and field.cfg.Hardness>1) and ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference) or nil
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=reserved}
+ end end
+ for _,t in ipairs(field.turrets) do
+  local p=patch.CFrame:PointToObjectSpace(t.body.Position)
+  occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
+ end
+ local integerGrid=reference and not continuous
+ local selected=ResourcePlacement.sample(patch.Size.X,patch.Size.Z,radius,occupied,
+  function(a,b)
+   if integerGrid then return seed:NextInteger(a,b) end
+   return seed:NextNumber(a,b)
+  end,function(x,z)
    local candidate=patch.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
    if nearPin then
-    if onlyCluster then
-     local delta=candidate-nearPin.center
-     if math.abs(delta.X)>nearPin.half or math.abs(delta.Z)>nearPin.half then return false end
+    if insidePin then
+     if math.abs(candidate.X-nearPin.center.X)>nearPin.half or math.abs(candidate.Z-nearPin.center.Z)>nearPin.half then return false end
     elseif not Mining.selectorTouches(nearPin.center,nearPin.half,CFrame.new(candidate),dimensions) then return false end
    end
-    -- Check the footprint and flight space against authored trees/fixtures.
-    for _,offset in ipairs({Vector3.zero,Vector3.new(-.45,0,-.45),Vector3.new(.45,0,-.45),Vector3.new(-.45,0,.45),Vector3.new(.45,0,.45)}) do
-     local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*visualSize
-     if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
-     if field.cfg.SelectionOnly then
-      local low=Vector3.new(origin.X,fieldTop-.05,origin.Z)
-      if workspace:Raycast(low,Vector3.new(0,19,0),clearance) then return false end
-     end
-    end
-    return true
-   end,preferred,reference,field.clusters and 1 or nil,bounds)
-  return selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
- end
- local spot,cluster
- if field.clusters then
-  local choices={}
-  for _,patch in ipairs(field.clusters) do
-   if onlyCluster and patch~=onlyCluster then continue end
-   local neighbors={}
-   for _,r in ipairs(field.resources) do if not r.paid and r.cluster==patch then
-    local p=patch.CFrame:PointToObjectSpace(r.position)
-    local reserved=deep and ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true) or nil
-    table.insert(neighbors,{x=p.X,z=p.Z,radius=reserved})
-   end end
-   if #neighbors<16 and (not plan or plan.cluster==patch) and (not nearPin or Mining.selectorTouches(nearPin.center,nearPin.half,patch.CFrame,patch.Size)) then
-    table.insert(choices,{patch=patch,neighbors=neighbors})
+   -- Sample the rock's turn clearance against authored fixtures and scenery.
+   for _,offset in ipairs({Vector3.zero,Vector3.new(-.707,0,-.707),Vector3.new(.707,0,-.707),Vector3.new(-.707,0,.707),Vector3.new(.707,0,.707)}) do
+    local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*radius
+    if workspace:Raycast(origin,Vector3.new(0,fieldTop+.05-origin.Y,0),clearance) then return false end
+    if field.cfg.SelectionOnly and workspace:Raycast(Vector3.new(origin.X,fieldTop-.05,origin.Z),Vector3.new(0,19,0),clearance) then return false end
    end
-  end
-  table.sort(choices,function(a,b)
-   if nearPin then
-    local distanceA=(a.patch.Position-nearPin.center).Magnitude
-    local distanceB=(b.patch.Position-nearPin.center).Magnitude
-    if distanceA~=distanceB then return distanceA<distanceB end
-   end
-   return #a.neighbors<#b.neighbors or #a.neighbors==#b.neighbors and a.patch.Name<b.patch.Name
-  end)
-  for _,choice in ipairs(choices) do
-   cluster=choice.patch;spot=sample(cluster,choice.neighbors,0)
-   if spot then break end
-  end
- else
-  local occupied={}
-  for _,r in ipairs(field.resources) do if not r.paid then
-   local p=field.part.CFrame:PointToObjectSpace(r.position)
-   local reserved=(not reference or deep) and ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,reference and r.kind=='Crystal') or nil
-   occupied[#occupied+1]={x=p.X,z=p.Z,radius=reserved}
-  end end
-  for _,t in ipairs(field.turrets) do
-   local p=field.part.CFrame:PointToObjectSpace(t.body.Position)
-   occupied[#occupied+1]={x=p.X,z=p.Z,radius=math.max(4,ResourcePlacement.radius(t.body.Size.X,t.body.Size.Y,t.body.Size.Z))}
-  end
-  spot=sample(field.part,occupied,field.cfg.SelectionOnly and 8 or 0)
- end
+   return true
+  end,preferred,integerGrid,nil,bounds)
+ local spot=selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
  if not spot then return false end
- if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,cluster=cluster} end
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
- local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or field.cfg.Cracks or 3)
- resource.cluster=cluster
+ local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,mineral.breakHold)
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
@@ -8503,8 +8499,7 @@ function scene.replacementSquare(field,vacancy)
  local owner=vacancy.owner and profiles[vacancy.owner]
  local square=owner and not owner.leaving and owner.miningSquare
  if square and square.field==field
-  and Mining.selectorTouches(square.center,square.half,vacancy.frame,vacancy.size)
-  and Mining.selectorTouches(square.center,square.half,vacancy.cluster.CFrame,vacancy.cluster.Size) then return square end
+  and Mining.selectorTouches(square.center,square.half,vacancy.frame,vacancy.size) then return square end
  return nil
 end
 function scene.spawnReplacement(field,kind,vacancy)
@@ -8519,7 +8514,7 @@ function scene.spawnReplacement(field,kind,vacancy)
     if now>=r.readyAt or growing>=2 then return spawnResource(field,kind) end
    end
   end
-  local spawned,cost=spawnResource(field,kind,false,nil,square,vacancy.cluster)
+  local spawned,cost=spawnResource(field,kind,false,nil,square,true)
   if spawned then return true,cost end
  end
  return spawnResource(field,kind)
@@ -8530,7 +8525,11 @@ local function seedField(field)
   resources[r.id]=nil;r.part:Destroy()
  end
  field.resources={};field.respawnQueue={};field.respawnClock=now
- for _=1,field.cfg.Count do if not spawnResource(field) then break end end
+ local budget=field.cfg.Count*(field.cfg.ContinuousCrystals and 2 or 1)
+ for _=1,budget do
+  if nodeUsage(field)>=field.cfg.Count then break end
+  if not spawnResource(field) and not field.cfg.ContinuousCrystals then break end
+ end
  -- A blocked initial sampling pass must not permanently strand a safe field.
  -- Reserve one retry token for each missing unit of the population budget;
  -- geodes already count as five units through nodeUsage.
@@ -8572,7 +8571,7 @@ local function publishTurretHealth(t: any)
 end
 for _,f in ipairs(scene.fields) do
  local settings=table.clone(C);settings.EncounterPrefix=instanceId..':field:'..f.id
- local field={id=f.id,cfg=f.cfg,center=f.center,part=f.part,model=f.model,clusters=f.clusters,color=Color3.fromRGB(unpack(f.cfg.Color)),resources={},turrets={},respawnQueue={},e=R.newEncounter(settings)}
+ local field={id=f.id,cfg=f.cfg,center=f.center,part=f.part,model=f.model,color=Color3.fromRGB(unpack(f.cfg.Color)),resources={},turrets={},respawnQueue={},e=R.newEncounter(settings)}
  field.model:SetAttribute('Hardness',f.cfg.Hardness or 1);field.model:SetAttribute('OreValue',f.cfg.Value)
  for n=1,f.cfg.Turrets do
   local pos=f.center+Vector3.new((n-(f.cfg.Turrets+1)/2)*17,f.part.Size.Y/2+.5,-f.part.Size.Z*.32)
@@ -9374,7 +9373,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
    r.part:SetAttribute('CrystalBreakOwner',recipient.owner)
-   r.part:SetAttribute('CrystalSplitAt',now+(clusterFinish and 0 or OreDrops.BREAK_DELAY))
+   r.splitAt=now+(clusterFinish and 0 or OreDrops.BREAK_DELAY+(r.breakHold or 0))
+   r.part:SetAttribute('CrystalSplitAt',r.splitAt)
    r.part:SetAttribute('CrystalBreakAt',now)
   end
  end
@@ -9416,8 +9416,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     -- The legacy field clock can run faster with more drones. Keep the
     -- minimum delay on the server clock for both natural and planted rocks.
     local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn}
-    if r.cluster and d.squareJob and d.squareJob==p.miningSquare then
-     vacancy.owner=d.owner;vacancy.cluster=r.cluster;vacancy.frame=CFrame.new(r.position);vacancy.size=r.fullSize
+    if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then
+     vacancy.owner=d.owner;vacancy.frame=CFrame.new(r.position);vacancy.size=r.fullSize
     end
     table.insert(r.field.respawnQueue,vacancy)
    end
@@ -9447,7 +9447,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    -- This short record is presentation only: scalar IDs/timestamps, no target,
    -- reservation, damage permission or resource reference survives retirement.
    d.mineBreakSerial=d.mineBreakSerial+1
-   d.mineBreakContact={at=now,untilTime=now+.3,primaryId=r.id,secondaryId=secondaryId or '',beamSince=d.beamSince}
+   d.mineBreakContact={at=now,untilTime=math.max(now+.3,(r.splitAt or now)+.19),primaryId=r.id,secondaryId=secondaryId or '',beamSince=d.beamSince}
   end
   r.processingPrimary=nil
  end
@@ -9463,7 +9463,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
      -- Cutting drones keep their last visible contact while the broken
      -- crystal finishes its pose. The reservation still retires immediately.
      worker.mineBreakSerial+=1
-     worker.mineBreakContact={at=now,untilTime=now+.3,primaryId=r.id,secondaryId='',beamSince=worker.beamSince}
+     worker.mineBreakContact={at=now,untilTime=math.max(now+.3,(r.splitAt or now)+.19),primaryId=r.id,secondaryId='',beamSince=worker.beamSince}
      keepContact=true
     end
     if worker.specialJob and not special then
@@ -9992,9 +9992,9 @@ function scene.holdSquare(d,p,dt)
  local limit=math.max(0,square.half-2)
  if offset.Magnitude>limit then offset=offset.Unit*limit end
  local height=(d.flightHeight or Feel.FollowHeight)+(d.role=='Ramiel' and 0 or Feel.hover(now,d.owned.base.maxStep60))
- if d.role=='Striker' and square.field.clusters then
+ if d.role=='Striker' and square.field.cfg.SelectionOnly then
   -- Park at the same low working altitude instead of rising after each cut.
-  height=square.field.clusters[1].Position.Y+Feel.WorkHeight-square.center.Y
+  height=Feel.WorkHeight-1
  end
  d.mining=false;d.state='HoldSelector'
  move(d,square.center+offset+Vector3.new(0,height,0),dt)
@@ -10106,7 +10106,7 @@ end
 function scene.miningWarmup(d,r)
  -- Leave enough time for the emitter buildup to show across several snapshots.
  -- Ignition upgrades still shorten it, with a small floor for readability.
- if r and r.cluster and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
+ if r and r.field.cfg.ContinuousCrystals and d.role=='Striker' then return math.max(.24,d.stats.warmup*2) end
  local definition=DroneCatalog.Types[d.role]
  if r and (d.role=='Ramiel' or d.role=='Nomad') then return .08 end
  if r and definition and definition.Projectile then return math.max(.08,d.stats.warmup*.52) end

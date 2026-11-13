@@ -20,7 +20,7 @@ local function finalContact(sample,now)
  if sample.breakContactAt==nil then return sample,false end
  local at,untilAt=sample.breakContactAt,sample.breakContactUntil
  local valid=type(at)=='number' and type(untilAt)=='number' and at==at and untilAt==untilAt
-  and now>=at and now<math.min(untilAt,at+.3) and sample.alive and not sample.paused
+  and now>=at and now<math.min(untilAt,at+.75) and sample.alive and not sample.paused
   and sample.part and sample.part.Parent and sample.part.Transparency<1
  if valid then return sample,true end
  local expired=table.clone(sample);expired.active=false;expired.key=nil;expired.part=nil
