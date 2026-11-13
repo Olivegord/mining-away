@@ -35,7 +35,7 @@ local function verifyRing()
   local radius=Vector3.new(delta.X,0,delta.Z).Magnitude
   assert(d.state=='Follow' and math.abs(radius-10)<.2,('slot %d, state %s, radius %.2f'):format(i,d.state,radius))
   assert(d.model:GetAttribute('FormationSlot')==i and d.model:GetAttribute('FleetCount')==#p.drones)
-  local goal=Feel.followGoal(center,i,#p.drones,now,d.owned.base.maxStep60)
+  local goal=Feel.followGoal(center,i,#p.drones,now,d.owned.base.maxStep60,false,Feel.quarryFollowHeight(d.role,now,d.owned.base.maxStep60))
   assert((d.pos-goal).Magnitude<.4,'did not converge to follow slot '..i)
  end
 end
@@ -222,7 +222,7 @@ do
  assert(runner:GetAttribute('MA_SelectorStatus')=='NoCrystals')
  local emptier=crew.drones[8]
  droneStep(emptier,C.Tick)
- assert(emptier.state=='Follow' and (emptier.intentGoal-Feel.followGoal(characterRoot(crew).Position,8,#crew.drones,now,emptier.owned.base.maxStep60)).Magnitude<.001)
+ assert(emptier.state=='Follow' and (emptier.intentGoal-scene.followGoal(emptier,characterRoot(crew).Position,#crew.drones)).Magnitude<.001)
  for _,x in ipairs({-4,4}) do
   local crystal=makeResource(field,bed.Position+Vector3.new(x,0,0),'Crystal',75,10,3,3)
   crystal.readyAt=now+1
