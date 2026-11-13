@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `23c59bd3142d689ceecac58befe3deb7479889219a5571d2be1f32947f1e43d8` | Inkbeam starter and varied attack accents. |
-| Shared Studio Sources | Team Create save **248** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `8b0650bad0f0f8184ce6b29d803b349d346212be0b491909b7328fc83d7715a1` | Celestial Rain test loop and prior Inkbeam changes. |
+| Shared Studio Sources | Team Create save **249** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Inkbeam and the attack effects from save **248**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the Celestial Rain test loop and prior Inkbeam changes from save **249**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — Celestial Rain loop
+
+The [Celestial Rain reference](https://www.youtube.com/watch?v=rLwXdIO5Yro&t=24s) inspired a Studio-only test next to the depot's Effects Preview. Every 6.6 seconds the held gold star releases glitter and thin blue needles behind a flare that expands quickly and then slows. Fifteen thin gold filaments curve down and land in a stagger, with local sparks and a separate, smaller camera shake on contact. The preview uses the existing camera offset pass, respects reduced settings, and has no effect on mining, fleets, or rewards.
+
+Both production bundles compiled, and the beam regression suite passed with API doubles. A detached Studio Edit component check using the authored ground confirmed all fifteen endpoints, both camera beats, cleanup, and reuse through the next cycle. Full Play and visual tuning remain unverified. The owner ended their Play session; Studio remained open in Edit. The three Script Sync roots and seven Source fingerprints matched after Team Create save **249** to DRONEREVOLUTION (place **124078027733625**, universe **10774898335**). No publication. Reproduce the native refresh with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ec47aeb`.
 
 ## November 12 — Inkbeam and layered attack effects
 

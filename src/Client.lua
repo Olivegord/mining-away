@@ -37,6 +37,7 @@ rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,s
  end
 end,cameraBeat)
 local previousShake=CFrame.new();local shakeCamera=nil
+local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player)
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
@@ -74,8 +75,9 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
    end
   end
  end
+ local previewOffset=camera and celestialRain and celestialRain:step(now,camera)
  if camera and not CrystalImpactView.reducedMotion() then
-  previousShake=presentation:cameraOffset(workspace:GetServerTimeNow());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
+  previousShake=presentation:cameraOffset(now)*(previewOffset or CFrame.new());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
 local function roleImpact(source)
@@ -1828,6 +1830,7 @@ connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
+ if celestialRain then celestialRain:destroy() end
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end
  orbitalBurns={}
