@@ -51,9 +51,9 @@ local function fadeCurves(foot,middle,sky)
  end
  return curves
 end
-local SHEET_ALPHA=fadeCurves(.79,.90,.984)
-local CORE_ALPHA=fadeCurves(.10,.37,.965)
-local HALO_ALPHA=fadeCurves(.50,.76,.998)
+local SHEET_ALPHA=fadeCurves(.79,.91,.87)
+local CORE_ALPHA=fadeCurves(.10,.46,.22)
+local HALO_ALPHA=fadeCurves(.50,.79,.60)
 local SHEET_COLOR=ColorSequence.new(BLUE,DEEP)
 local CORE_COLOR=ColorSequence.new(ICE,CYAN)
 local HALO_COLOR=ColorSequence.new(BLUE,DEEP)
@@ -68,10 +68,10 @@ local function scanLine(root,isSheet)
  return {a=a,b=b,main=main,halo=halo,alpha=alpha}
 end
 
-local function paintLine(line,foot,sky,across,width,gain,skyAcross,skyWidth)
+local function paintLine(line,foot,sky,across,width,gain)
  line.a.WorldCFrame=CFrame.fromMatrix(foot,VERTICAL,across)
- line.b.WorldCFrame=CFrame.fromMatrix(sky,VERTICAL,skyAcross or across)
- line.main.Width0=width;line.main.Width1=skyWidth or width
+ line.b.WorldCFrame=CFrame.fromMatrix(sky,VERTICAL,across)
+ line.main.Width0=width;line.main.Width1=width
  local grade=math.clamp(math.round(gain*16),0,16)
  line.main.Transparency=line.alpha[grade]
  line.main.Enabled=grade>0
@@ -162,6 +162,28 @@ local function scanStage(q)
  end
 end
 
+-- The old cruise clock is independent of travel distance. Keep cycling while
+-- approaching, then play the keel -> two filaments -> blackout ending once.
+local SCAN_SECONDS=6.30
+local function patternAt(age,windup)
+ local cutoff=windup-1.8
+ if age>=cutoff then return BLACKOUT,#SCAN_STAGES+1,age-cutoff end
+ local closing=SCAN_STAGES[5].at
+ local closeAt=math.max(0,cutoff-(Feel.NomadBeamCutoff-closing)*SCAN_SECONDS)
+ local q,phaseAge
+ if age>=closeAt then
+  phaseAge=age-closeAt
+  q=closing+phaseAge/SCAN_SECONDS
+ else
+  phaseAge=age%(Feel.NomadBeamCutoff*SCAN_SECONDS)
+  q=phaseAge/SCAN_SECONDS
+ end
+ local stage,index=scanStage(q)
+ local stageAge=age>=closeAt and phaseAge-(stage.at-closing)*SCAN_SECONDS
+  or phaseAge-stage.at*SCAN_SECONDS
+ return stage,index,stageAge
+end
+
 local function hideLine(line)
  line.main.Enabled=false
  if line.halo then line.halo.Enabled=false end
@@ -175,19 +197,7 @@ local function groundPoint(top,height)
  return Vector3.new(top.X,height,top.Z)
 end
 
--- The floor stays in the quarry. Correct the decorative upper endpoint so a
--- camera looking up or down does not fan the columns into a trapezoid.
-local function straightTop(view,foot,sky)
- if not view then return sky end
- local base=view:PointToObjectSpace(foot)
- local top=view:PointToObjectSpace(sky)
- if base.Z>=-1 or top.Z>=-1 then return sky end
- local shift=base.X*top.Z/base.Z-top.X
- local weight=math.clamp((-math.max(base.Z,top.Z)-1)/4,0,1)
- return sky+view.RightVector*(shift*weight)
-end
-
-local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash,view)
+local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
  local virtualHull=groundPoint(center,ground+SCAN_HEIGHT)-bearing*KEEL_OFFSET
  local frame=CFrame.lookAt(virtualHull,virtualHull+bearing)
  local floor=ground+.065
@@ -200,21 +210,18 @@ local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash,vie
    topA,topB=frame:PointToWorldSpace(mount.a),frame:PointToWorldSpace(mount.b)
    a,b=groundPoint(topA,floor),groundPoint(topB,floor)
    across=(b-a).Unit
-   topA,topB=straightTop(view,a,topA),straightTop(view,b,topB)
   end
   if mount and not stage.pins then
    if reduced then hideLine(pane.sheet)
    else
-    local topSpan=topB-topA
-    paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84,
-     topSpan.Magnitude>.001 and topSpan.Unit or across,math.max(.001,topSpan.Magnitude))
+    paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84)
    end
    paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
    paintLine(pane.edges[2],b,topB,across,.069,gain)
    paintRail(pane.feet[1],a,b,.062,gain*.87)
    local topC=mount.c and frame:PointToWorldSpace(mount.c)
    local c=topC and groundPoint(topC,floor)
-   if c and not reduced then paintLine(pane.edges[3],c,straightTop(view,c,topC),across,.035,gain*.70)
+   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
    else hideLine(pane.edges[3]) end
    if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
    pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
@@ -409,18 +416,17 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
  local airborne=not landed and progress>=0 and progress<1.12
  local paused=(node:GetAttribute('PausedAt') or 0)>0
  if scanning and near then
-  local q,scanClock=Feel.nomadScanProgress(age,windup)
-  local stage,index=scanStage(q)
-  local shift=from-scanFrom
-  local flat=Vector3.new(shift.X,0,shift.Z)
-  local bearing=flat.Magnitude>1 and flat.Unit or Vector3.zAxis
+  local q=Feel.nomadScanProgress(age,windup)
+  local stage,index,stageAge=patternAt(age,windup)
+  -- Quarry fields share a long X axis. Keep the wide projector banks across
+  -- that axis; side-entry travel must not turn the curtains edge-on.
+  local bearing=Vector3.zAxis
   local center=Feel.nomadPass(scanFrom,from,q)
   local soundPoint=Vector3.new(center.X,to.Y+5,center.Z)
   if stage.banks then
    r.scan=r.scan or newScanner(camera)
-   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash,camera.CFrame) end
+   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash) end
   elseif r.scan then r.scan.folder:Destroy();r.scan=nil end
-  local stageAge=age-(stage.at or Feel.NomadBeamCutoff)*scanClock
   if audio and index~=r.stage and not paused and stageAge<.16 then
    if stage.banks then audio:play('nomad_scan_cut',soundPoint,{level=index==1 and 1.1 or .83,pitch=stage.pitch})
    else audio:play('nomad_scan_off',soundPoint) end

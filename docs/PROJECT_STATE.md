@@ -11,18 +11,28 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `bfe28598ecf113db2b4c1f496c7dd6496d09dce9d69b93a108f027d1aab0e79d` | Pre-teeth Nomad scanner with camera perspective correction. |
-| Shared Studio Sources | Team Create save **224** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `e7ec17e9ac0361e57dea2c26672cffa311044dcde8a404157c88ab7a8d6837e8` | Rigid broad Nomad banks with restored repeated cycling. |
+| Shared Studio Sources | Team Create save **229** | All seven managed Sources matched the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's camera-corrected scan in save **224**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load Nomad's rigid broad scanner and repeated cycle in save **229**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — restore rigid Nomad curtains and independent cycling
+
+The owner rejected save 224 as skewed and no longer cycling like the earlier version. The renderer now removes camera-dependent upper-end displacement and tapering, restores `44f061c`'s original glow, and repeats the old 6.30-second phase clock independently of approach speed (the visible six-stage loop spans 4.87 seconds). Its broad projector banks stay aligned with the quarry fields' long X axis; side-entry travel no longer turns the whole layout edge-on. The final keel sheets, two filaments and exactly 1.8 seconds of darkness run once before release. Patrol, server damage and delayed field shatter remain unchanged.
+
+One agent-started Studio Play session inspected the installed candidate and replayed the final production Nomad renderer after the orientation correction. The first replay exposed edge-on overlapping banks. The corrected replay showed broad rigid sheets across the field from level and pitched cameras; normal perspective remains, with no camera-driven deformation. A real-time replay observed outer-bank restarts at 4.90 and 9.75 seconds, final blackout at 13.750 and rocket appearance at 15.548 seconds (1.798 seconds apart at sampled frame times), then the particle plume. The replay used a cosmetic receipt and did not mine rocks or alter progression; full server-dispatched gameplay, multiplayer, and audio listening are not newly verified. Focused production client/server tests and the beam suite passed. The added approach-direction regression checks four entry bearings.
+
+The temporary replay and camera override were cleared, the agent-started test ended, and Studio was left open in Edit. All seven managed Sources and all five unrelated backup Sources were verified after Team Create save **229**, with all three sync roots connected. Canonical SHA-256 is `e7ec17e9ac0361e57dea2c26672cffa311044dcde8a404157c88ab7a8d6837e8`; non-Source chunks remain byte-identical. Reproduce the full refresh from the prior committed baseline with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit b36a748`. No publication.
+
+Inspection recovery: the owner authorized restarting the already-open Studio. An inspection script repeatedly accessed the entire Source property inside a byte loop and blocked Studio. The safe verification reads `local source = script.Source` once, hashes the local string, and yields between scripts. This was a diagnostic mistake, not a gameplay-script failure. Use the cached-source form in future checks.
 
 ## November 12 — correct Nomad's on-screen lean
 

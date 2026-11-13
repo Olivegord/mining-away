@@ -4,7 +4,7 @@ local function checkNomadView()
  local side=from+Vector3.new(53,0,0)
  local windup,flight=Feel.nomadWindup((side-from).Magnitude,9,6.4),1.44
  local beamOff=windup-1.8
- local _,scanClock=Feel.nomadScanProgress(0,windup)
+ local scanClock=6.30 -- Original cruise rhythm, independent of travel time.
  node:SetAttribute('ScanFrom',side)
  node:SetAttribute('BlastRadius',32)
  local record={}
@@ -30,7 +30,7 @@ local function checkNomadView()
   local top,bottom=line.b.WorldCFrame.Position,line.a.WorldCFrame.Position
   assert(top.Y>37 and top.Y<38 and bottom.Y<.10 and top.X==bottom.X and top.Z==bottom.Z)
  end
- local forward=(from-side).Unit
+ local forward=Vector3.zAxis
  local function oldPort(line,age,x,y,z)
   local center=Feel.nomadPass(side,from,Feel.nomadScanProgress(age,windup))
   local origin=Vector3.new(center.X,38,center.Z)-forward*1.4290527
@@ -123,14 +123,45 @@ local function checkNomadView()
    local top=edge.b.WorldCFrame.Position
    local a,b=view:PointToObjectSpace(foot),view:PointToObjectSpace(top)
    assert((foot-feet[i]).Magnitude<.0001,'camera moved the ground anchors')
-   assert(math.abs(a.X/a.Z-b.X/b.Z)<.00001,'camera pitch skewed the scanner on screen')
+   assert(top.X==foot.X and top.Z==foot.Z,'camera pitch moved a beam out of world vertical')
   end
   local sheet=comparison.scan.panes[1].sheet
   assert(math.abs(sheet.main.Width1-(edges[2].b.WorldCFrame.Position-edges[1].b.WorldCFrame.Position).Magnitude)<.0001)
  end
  camera.CFrame=savedCamera
+ for _,entry in ipairs({Vector3.new(53,420,0),Vector3.new(-53,420,0),Vector3.new(0,420,53),Vector3.new(0,420,-53)}) do
+  fixture:SetAttribute('ScanFrom',entry)
+  sample()
+  local bank=comparison.scan.panes[1]
+  local span=bank.edges[2].a.WorldCFrame.Position-bank.edges[1].a.WorldCFrame.Position
+  assert(math.abs(span.X)>4 and math.abs(span.Z)<1,'side entry turned the broad bank edge-on')
+ end
+ local cycle=Feel.NomadBeamCutoff*6.30
+ local cycleNode=Instance.new('Folder');cycleNode:SetAttribute('ScanFrom',side)
+ local cycleRecord={}
+ local longWindup=25
+ local function cycleAt(t)
+  NomadView.step(cycleRecord,cycleNode,t,from,target,t,longWindup,(t-longWindup)/flight)
+ end
+ for lap=0,3 do
+  cycleAt(lap*cycle+.01)
+  assert(filaments(cycleRecord.scan)==6,'approach did not return to the outer banks')
+  cycleAt(lap*cycle+.28*6.30)
+  assert(filaments(cycleRecord.scan)==9,'approach cycle failed to switch to middle banks')
+  cycleAt(lap*cycle+.60*6.30)
+  assert(filaments(cycleRecord.scan)==4,'approach cycle failed to switch to keel banks')
+ end
+ cycleAt(longWindup-1.8-.10)
+ assert(filaments(cycleRecord.scan)==2,'shutdown must finish on two filaments')
+ cycleAt(longWindup-1.8)
+ assert(not cycleRecord.scan and not cycleRecord.rocket)
+ cycleAt(longWindup-.001)
+ assert(not cycleRecord.scan and not cycleRecord.rocket)
+ cycleAt(longWindup)
+ assert(cycleRecord.rocket,'release must follow blackout by 1.8 seconds')
+ NomadView.clear(cycleRecord);cycleNode:Destroy()
  NomadView.clear(comparison);fixture:Destroy()
  print('PASS Nomad pre-teeth apertures, original bank widths, stage-synced audio and 1.8-second blackout')
- print('PASS Nomad camera pitch keeps the scanner straight on screen and its floor anchors fixed')
+ print('PASS Nomad camera motion leaves physical columns vertical and constant-width')
 end
 checkNomadView()
