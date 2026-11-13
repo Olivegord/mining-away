@@ -2,7 +2,7 @@
 
 ## November 12 — shrink on one curve
 
-When an effect shrinks away, use one continuous size curve from the start of its lifetime. Keep the rock shards' bounce and ground motion while their size changes. Dropped ore should bob slowly and send larger motes higher. Use the four-point star on the active mining laser with local light and normal world occlusion.
+When an effect shrinks away, use one continuous size curve from the start of its lifetime. Keep the rock shards' bounce and ground motion while their size changes. Dropped ore should bob on a stable 1.4-second cycle and send larger motes higher. Use the four-point star as the active mining laser's flare texture, with local light and normal world occlusion.
 
 ## November 12 — apply the supplied game-feel reference selectively
 

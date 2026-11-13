@@ -8,7 +8,7 @@ local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
 local GLINT_LIMIT=12
 local DISPLAY_RANGE,DISPLAY_LIMIT=62,12
 local DISPLAY_TAIL=.28
-local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/10,2*math.pi/26
+local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
 local function launchTrail(view,tint,halfWidth)
@@ -373,10 +373,14 @@ function V:update(dt,now)
    local landingAge=r.landAge and age-r.landAge
    local hoverAge=landingAge and landingAge-(r.arc and 0 or PickupMotion.SETTLE_TIME)
    local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
-   local hovering=(resting or arcLanded) and not seated and hoverAge>=0
+   -- Once a landed gem starts hovering, transient stationary snapshot changes
+   -- must not restart its lift. Only an actual pickup or socket ends the hover.
+   local hovering=live and not seated and not pulling and hoverAge and hoverAge>=0
+    and (r.hoverStartedAt~=nil or resting or arcLanded)
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
-    local t=math.clamp(hoverAge/.85,0,1)
+    r.hoverStartedAt=r.hoverStartedAt or (now-hoverAge)
+    local t=math.clamp((now-r.hoverStartedAt)/.85,0,1)
     r.hoverAlpha=t*t*(3-2*t)
     r.hoverTime=reducedMotion and 0 or hoverAge
    elseif wasHovering then
@@ -384,13 +388,15 @@ function V:update(dt,now)
     r.hoverAlpha*=math.exp(-math.min(dt,.1)*18)
     if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
    end
+   if not hovering then r.hoverStartedAt=nil end
    if newPose or hovering or wasHovering then
     local pose=r.motionPose
     if r.hoverAlpha then
      local t=r.hoverTime
      local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
-     local yaw=(t*HOVER_TURN_RATE+math.pi)%(2*math.pi)-math.pi
-     pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(.22*r.hoverAlpha,yaw*r.hoverAlpha,-.32*r.hoverAlpha)
+     local yaw=t*HOVER_TURN_RATE
+     pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(0,yaw,0)
+      *CFrame.Angles(.22*r.hoverAlpha,0,-.32*r.hoverAlpha)
     end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end

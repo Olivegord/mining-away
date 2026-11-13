@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `67447fdd63b68cc2050a0c3686493ffd431b84c51d9d1ac369cfb3f18c37ee27` | Occluded laser star, continuous shrink and slower ore hover. |
-| Shared Studio Sources | Team Create save **240** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `485d14f4b6cb0191e510d6bf2a54ffc49a030b4d79cb54dc9a3855ef87b4a2f2` | Four-point laser flare and stable 1.4-second ore bob. |
+| Shared Studio Sources | Team Create save **241** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the laser star, revised shrink and ore hover from save **240**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the four-point flare and 1.4-second ore bob from save **241**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — four-point laser flare and stable ore bob
+
+The mining optic uses the four-point star as its sole flare texture. World geometry can occlude the star, and its local light casts shadows. Grounded ore bobs every 1.4 seconds and keeps its hover through the handoff from the launch arc to replicated motion.
+
+Beam and pickup checks passed, including the selected flare texture, bob period and hover handoff. Script Sync and the canonical refresh from `1bb7729` matched all seven Sources after shared Edit save **241**. In-game appearance still needs a Play check. No place publication.
 
 ## November 12 — occluded laser star, continuous shrink and slower ore hover
 

@@ -367,6 +367,10 @@ check('actual mining envelope surface contact target life and paused work remain
  assert(not b.reference and b.vfx and b.vfx.rich and not b.vfx.body.Enabled,'ordinary miner charge lost its startup or showed a premature beam')
  p:beginFrame();p:renderMiningBeam(b,s,300)
  local inner,outer=unpack(b.reference)
+ assert(b.flare and b.flare.Enabled and not b.flare.AlwaysOnTop)
+ assert(#b.flare:GetChildren()==1 and b.flareStar.Image=='rbxassetid://77624818077620',
+  'active mining optic must render the four-point star as its only flare texture')
+ assert(b.flareLight.Shadows,'mining flare glow must respect shadows')
  assert(outer.Enabled and not inner.Enabled and outer.Attachment0==b.origin and outer.Attachment1.Parent==b.endpoint)
  near(outer.Width0,.5)
  assert(not b.vfx.body.Enabled,'charge rig drew a second beam on top of the original')

@@ -174,8 +174,13 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  assert(#audio.calls==sounds+1 and r.view.Position.Y>landed.Position.Y+.25 and (r.motionPose.Position-landed.Position).Magnitude<1e-8,
   'gem should lift from its real contact point without a second landing cue')
  local hoverHeight=r.view.Position.Y
- renderer:update(1/60,contact+11)
- assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one slow bob in 10 seconds')
+ renderer:update(1/60,contact+2.4)
+ assert(math.abs(r.view.Position.Y-hoverHeight)<1e-8,'resting ore did not complete one bob in 1.4 seconds')
+ cargo:SetAttribute('CargoArcEnded',true)
+ cargo:SetAttribute('Velocity',Vector3.new(.001,0,0))
+ cargo:SetAttribute('SnapshotAt',contact+2.5)
+ renderer:update(1/60,contact+2.6)
+ assert(r.hoverAlpha==1,'arc handoff restarted the settled hover')
  renderer:destroy();cargo:Destroy();workspace.CurrentCamera=camera
 end)
 check('resting gems hover with a bounded swirl, rising motes, ground glow and outline',function()

@@ -8,7 +8,6 @@ local HOT=Color3.fromRGB(255,179,102)
 local WHITE=Color3.fromRGB(255,249,230)
 local RUIN=Color3.fromRGB(34,61,67)
 local Players=game:GetService('Players')
-local MINING_FLARE='rbxassetid://108650998238348'
 local MINING_STAR='rbxassetid://77624818077620'
 local function drawMiningFlare(beam,visible,width,now,ignition,point)
  local flare=beam.flare
@@ -21,19 +20,16 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
   anchor.Size=Vector3.one*.05;anchor.Transparency=1;anchor.Anchored=true
   anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false
   anchor.Parent=beam.holder;beam.flareAnchor=anchor
-  flare=Instance.new('BillboardGui');flare.Name='PrismaticMiningFlare'
+  flare=Instance.new('BillboardGui');flare.Name='MiningStarFlare'
   flare.Adornee=beam.flareAnchor;flare.LightInfluence=0;flare.MaxDistance=100
   flare.AlwaysOnTop=false;flare.Brightness=2.8
-  local sprite=Instance.new('ImageLabel');sprite.Name='Flare'
-  sprite.BackgroundTransparency=1;sprite.Size=UDim2.fromScale(1,1)
-  sprite.Image=MINING_FLARE;sprite.Parent=flare;flare.Parent=beam.holder
-  local star=Instance.new('ImageLabel');star.Name='FourPointStar';star.ZIndex=2
-  star.BackgroundTransparency=1;star.AnchorPoint=Vector2.new(.5,.5)
-  star.Position=UDim2.fromScale(.5,.5);star.Size=UDim2.fromScale(.93,.93)
+  local star=Instance.new('ImageLabel');star.Name='FourPointStar'
+  star.BackgroundTransparency=1;star.Size=UDim2.fromScale(1,1)
   star.Image=MINING_STAR;star.Parent=flare
+  flare.Parent=anchor
   local light=Instance.new('PointLight');light.Name='MiningStarGlow'
   light.Color=Color3.fromRGB(212,230,255);light.Range=6;light.Shadows=true;light.Parent=anchor
-  beam.flare=flare;beam.flareSprite=sprite;beam.flareStar=star;beam.flareLight=light
+  beam.flare=flare;beam.flareStar=star;beam.flareLight=light
  end
  local flicker=.72
  local player=Players.LocalPlayer
@@ -43,10 +39,9 @@ local function drawMiningFlare(beam,visible,width,now,ignition,point)
  end
  local origin=beam.origin.WorldPosition
  beam.flareAnchor.Position=origin:Lerp(point,math.min(.25,.65/math.max(.01,(point-origin).Magnitude)))
- local size=1.75+.65*flicker
- flare.Size=UDim2.new(size,8,size,8)
- local strength=math.min(1,width*2)*flicker
- beam.flareSprite.ImageTransparency=1-strength*.64
+ local size=2.55+.55*flicker
+ flare.Size=UDim2.new(size,12,size,12)
+ local strength=math.min(1,width*2)*(.5+.5*flicker)
  beam.flareStar.ImageTransparency=1-strength
  beam.flareLight.Brightness=strength*.95
  beam.flareLight.Enabled=BeamVFX.near(beam.flareAnchor.Position,50)
