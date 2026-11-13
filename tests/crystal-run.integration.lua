@@ -1084,9 +1084,12 @@ local function grabGroundCargo(drop)
  local x,y,z=Workshop.courierClawOffset(slot)
  local center=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
  emptier.yaw=0;emptier.pos=center-Vector3.new(x,y,z)+Vector3.yAxis*Workshop.COURIER_CLEARANCE
+ emptier.pos+=Vector3.new(.10,0,0)
  emptier.velocity=Vector3.zero
+ local approachStart=emptier.pos
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert(emptier.oreDock and emptier.state=='Pickup' and not drop.part:GetAttribute('CourierCollected'))
+ assert((emptier.pos-approachStart).Magnitude<.02,'the descent snapped to its entry point')
  now+=Workshop.COURIER_LOWER+.04
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert((emptier.pos-emptier.oreDock).Magnitude<.001 and not drop.part:GetAttribute('CourierCollected'))

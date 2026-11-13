@@ -34,18 +34,20 @@ W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
 W.COURIER_LIFT=.38
 W.COURIER_CLEARANCE=1.45
 W.COURIER_APPROACH_RESPONSE=1.85
+W.COURIER_RENDER_DELAY=.10
 function W.courierClawOffset(slot)
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
 end
 local function easeClaw(t)
  t=math.clamp(t,0,1)
- return t*t*(3-2*t)
+ return t*t*t*(10+t*(-15+6*t))
 end
 function W.courierStroke(age)
- local close=math.clamp((age-W.COURIER_LOWER)/W.COURIER_CLOSE,0,1)
+ local lower=easeClaw(age/W.COURIER_LOWER)
+ local close=easeClaw((age-W.COURIER_LOWER)/W.COURIER_CLOSE)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
- return W.COURIER_CLEARANCE*(1-easeClaw(age/W.COURIER_LOWER)+lift),close*close
+ return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={1.64,.97,1.47}
 W.BLOCK_SIZE={1.45,.90,1.22}

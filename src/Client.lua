@@ -1221,6 +1221,14 @@ local function renderDrone(d,dt,now)
  local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
  local docking=typeof(dock)=='Vector3'
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
+ local stroke=docking and s:GetAttribute('CourierPickupAt')
+ local loadedAt=docking and (s:GetAttribute('CourierLoadedAt') or 0)
+ local dockClock=now-Workshop.COURIER_RENDER_DELAY
+ if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
+ local pickupAge=stroke and dockClock-stroke
+ if docking and not pickupAge then docking=false end
+ if docking and loadedAt<stroke then pickupAge=math.min(pickupAge,Workshop.COURIER_CONTACT) end
+ d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -1233,12 +1241,17 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
  elseif docking then
-  local at=s:GetAttribute('CourierPickupAt') or now
-  local clock=s:GetAttribute('WorkPaused') and (s:GetAttribute('SnapshotAt') or now) or now
-  local age=clock-at
-  if (s:GetAttribute('CourierLoadedAt') or 0)<at then age=math.min(age,Workshop.COURIER_CONTACT) end
-  local height=Workshop.courierStroke(age)
-  d.pos=dock+Vector3.yAxis*height;d.velocity=Vector3.zero
+  local height,_,entryWeight=Workshop.courierStroke(pickupAge)
+  local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
+  if d.lastDock~=dock then
+   d.lastDock=dock
+   d.dockCorrection=d.pos-desired
+   d.dockCorrectionAt=pickupAge
+  end
+  local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
+  local blend=correctionTime*correctionTime*(3-2*correctionTime)
+  d.pos=desired+d.dockCorrection*(1-blend)*entryWeight
+  d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before
@@ -1263,7 +1276,7 @@ local function renderDrone(d,dt,now)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
   end
  end
- if docking then d.yaw=type(dockYaw)=='number' and dockYaw or d.yaw
+ if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
  elseif not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
@@ -1281,9 +1294,11 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=(docking or state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
+ if not docking then d.lastDock=nil end
+ if docking then desiredBank=0 end
+ d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=docking or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

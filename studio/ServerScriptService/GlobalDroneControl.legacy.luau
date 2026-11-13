@@ -37,18 +37,20 @@ W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
 W.COURIER_LIFT=.38
 W.COURIER_CLEARANCE=1.45
 W.COURIER_APPROACH_RESPONSE=1.85
+W.COURIER_RENDER_DELAY=.10
 function W.courierClawOffset(slot)
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
 end
 local function easeClaw(t)
  t=math.clamp(t,0,1)
- return t*t*(3-2*t)
+ return t*t*t*(10+t*(-15+6*t))
 end
 function W.courierStroke(age)
- local close=math.clamp((age-W.COURIER_LOWER)/W.COURIER_CLOSE,0,1)
+ local lower=easeClaw(age/W.COURIER_LOWER)
+ local close=easeClaw((age-W.COURIER_LOWER)/W.COURIER_CLOSE)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
- return W.COURIER_CLEARANCE*(1-easeClaw(age/W.COURIER_LOWER)+lift),close*close
+ return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={1.64,.97,1.47}
 W.BLOCK_SIZE={1.45,.90,1.22}
@@ -10606,18 +10608,18 @@ function scene.collectGroundCargo(d,p,hr,dt)
  end
  if not d.oreDock then
   if (d.pos-overhead).Magnitude>.22 then return true end
-  d.oreDock=dock;d.pickupAt=now
+  d.oreDock=dock;d.oreEntryOffset=d.pos-overhead;d.pickupAt=now
   drop.part:SetAttribute('CourierDocking',d.id)
   drop.part:SetAttribute('CourierDockYaw',yaw+gripYaw)
  end
  local age=now-d.pickupAt
- local height=Workshop.courierStroke(age)
+ local height,_,entryWeight=Workshop.courierStroke(age)
  d.state='Pickup';d.yaw=yaw
- d.pos=d.oreDock+Vector3.yAxis*height;d.goal=d.pos;d.velocity=Vector3.zero
+ d.pos=d.oreDock+Vector3.yAxis*height+d.oreEntryOffset*entryWeight;d.goal=d.pos;d.velocity=Vector3.zero
  if age<Workshop.COURIER_CONTACT then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreLoadedAt=d.oreLoadedAt or now
-  d.oreSeatUntil=d.pickupAt+Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT
+  d.oreSeatUntil=d.pickupAt+Workshop.COURIER_CONTACT+Workshop.COURIER_LIFT+Workshop.COURIER_RENDER_DELAY
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
@@ -10904,6 +10906,7 @@ local function snapshotDrone(d)
   BreakerContactSerial=d.contactSerial or 0,BreakerContactAt=d.contactAt or 0,ImpactAt=d.impactAt or 0,
   DeliveryUnits=units,DeliveryId=deliveryId,DeliverySlots=slots,DeliveryMaterials=d.deliveryMaterials or '',AutoFieldId=d.autoField or 0,
   CourierDock=d.oreDock or false,CourierDockYaw=d.oreYaw or false,
+  CourierEntryOffset=d.oreDock and d.oreEntryOffset or Vector3.zero,
   CourierPacked=groundCargo and groundCargo.compacted==true or false,
   CourierLoadedOre=d.oreLoadedId or 0,CourierLoadedMaterial=d.oreLoadedMaterial or '',CourierLoadedAt=d.oreLoadedVisualAt or 0,
   CourierPickupAt=d.pickupAt or 0,CourierPickupHold=RoleConfig.Courier.PickupHold,CourierLaunchAt=d.launchAt or 0,CourierLaunchHold=RoleConfig.Courier.LaunchHold,

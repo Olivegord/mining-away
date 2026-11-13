@@ -124,18 +124,20 @@ W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
 W.COURIER_LIFT=.38
 W.COURIER_CLEARANCE=1.45
 W.COURIER_APPROACH_RESPONSE=1.85
+W.COURIER_RENDER_DELAY=.10
 function W.courierClawOffset(slot)
  local side=slot%2==1 and -1 or 1
  return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
 end
 local function easeClaw(t)
  t=math.clamp(t,0,1)
- return t*t*(3-2*t)
+ return t*t*t*(10+t*(-15+6*t))
 end
 function W.courierStroke(age)
- local close=math.clamp((age-W.COURIER_LOWER)/W.COURIER_CLOSE,0,1)
+ local lower=easeClaw(age/W.COURIER_LOWER)
+ local close=easeClaw((age-W.COURIER_LOWER)/W.COURIER_CLOSE)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
- return W.COURIER_CLEARANCE*(1-easeClaw(age/W.COURIER_LOWER)+lift),close*close
+ return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={1.64,.97,1.47}
 W.BLOCK_SIZE={1.45,.90,1.22}
@@ -3195,7 +3197,8 @@ function W:courier(drone,record,now)
   end
   local docking=state=='Pickup' and typeof(source:GetAttribute('CourierDock'))=='Vector3'
   local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
-  local _,grip=Workshop.courierStroke(dockClock-pickupAt)
+  local pickupAge=drone.pickupAge or dockClock-pickupAt
+  local _,grip=Workshop.courierStroke(pickupAge)
   local speed=drone.velocity and drone.velocity.Magnitude or 0
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
@@ -3229,9 +3232,11 @@ function W:courier(drone,record,now)
    local cargoFrame=pivot*CFrame.new(x,y,z)*CFrame.Angles(0,yaw,0)
    local size=slot.cargo and slot.cargo.Size or cargoRawSize
    local closed=i<=parcelUnits and 1 or .72
+   local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
    if i==loadingSlot then
-    if loadAge>=0 and fx.closedOre~=loadedId then
+    if beforeContact then closed=grip end
+    if not beforeContact and loadAge>=0 and fx.closedOre~=loadedId then
      fx.closedOre=loadedId
      if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
@@ -3270,7 +3275,7 @@ function W:courier(drone,record,now)
      slot.packed=packed
     end
     local cargo=slot.cargo
-    cargo.Transparency=0
+    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or 0
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
     size=cargo.Size
@@ -3283,7 +3288,7 @@ function W:courier(drone,record,now)
      rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
     end
     cargo.CFrame=CFrame.new(position)*rotation
-    if i==loadingSlot then
+    if i==loadingSlot and not beforeContact then
      local mount=fx.loadingMount or {}
      fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame
      drone.cargoMount=mount
@@ -15487,6 +15492,14 @@ local function renderDrone(d,dt,now)
  local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
  local docking=typeof(dock)=='Vector3'
  local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
+ local stroke=docking and s:GetAttribute('CourierPickupAt')
+ local loadedAt=docking and (s:GetAttribute('CourierLoadedAt') or 0)
+ local dockClock=now-Workshop.COURIER_RENDER_DELAY
+ if docking and s:GetAttribute('WorkPaused') then dockClock=(s:GetAttribute('SnapshotAt') or now)-Workshop.COURIER_RENDER_DELAY end
+ local pickupAge=stroke and dockClock-stroke
+ if docking and not pickupAge then docking=false end
+ if docking and loadedAt<stroke then pickupAge=math.min(pickupAge,Workshop.COURIER_CONTACT) end
+ d.pickupAge=docking and pickupAge or nil
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -15499,12 +15512,17 @@ local function renderDrone(d,dt,now)
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
  elseif docking then
-  local at=s:GetAttribute('CourierPickupAt') or now
-  local clock=s:GetAttribute('WorkPaused') and (s:GetAttribute('SnapshotAt') or now) or now
-  local age=clock-at
-  if (s:GetAttribute('CourierLoadedAt') or 0)<at then age=math.min(age,Workshop.COURIER_CONTACT) end
-  local height=Workshop.courierStroke(age)
-  d.pos=dock+Vector3.yAxis*height;d.velocity=Vector3.zero
+  local height,_,entryWeight=Workshop.courierStroke(pickupAge)
+  local desired=dock+Vector3.yAxis*height+(s:GetAttribute('CourierEntryOffset') or Vector3.zero)*entryWeight
+  if d.lastDock~=dock then
+   d.lastDock=dock
+   d.dockCorrection=d.pos-desired
+   d.dockCorrectionAt=pickupAge
+  end
+  local correctionTime=math.clamp((pickupAge-d.dockCorrectionAt)/.16,0,1)
+  local blend=correctionTime*correctionTime*(3-2*correctionTime)
+  d.pos=desired+d.dockCorrection*(1-blend)*entryWeight
+  d.velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before
@@ -15529,7 +15547,7 @@ local function renderDrone(d,dt,now)
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
   end
  end
- if docking then d.yaw=type(dockYaw)=='number' and dockYaw or d.yaw
+ if docking and type(dockYaw)=='number' then d.yaw=Feel.approachYaw(d.yaw,dockYaw,dt)
  elseif not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
@@ -15547,9 +15565,11 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=(docking or state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
+ if not docking then d.lastDock=nil end
+ if docking then desiredBank=0 end
+ d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=docking or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=docking or role=='Courier' and state=='Collect' or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

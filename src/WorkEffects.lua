@@ -499,7 +499,8 @@ function W:courier(drone,record,now)
   end
   local docking=state=='Pickup' and typeof(source:GetAttribute('CourierDock'))=='Vector3'
   local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
-  local _,grip=Workshop.courierStroke(dockClock-pickupAt)
+  local pickupAge=drone.pickupAge or dockClock-pickupAt
+  local _,grip=Workshop.courierStroke(pickupAge)
   local speed=drone.velocity and drone.velocity.Magnitude or 0
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
@@ -533,9 +534,11 @@ function W:courier(drone,record,now)
    local cargoFrame=pivot*CFrame.new(x,y,z)*CFrame.Angles(0,yaw,0)
    local size=slot.cargo and slot.cargo.Size or cargoRawSize
    local closed=i<=parcelUnits and 1 or .72
+   local beforeContact=docking and pickupAge<Workshop.COURIER_CONTACT
    local receiving=docking and i==parcelUnits+1 and not loadingSlot
    if i==loadingSlot then
-    if loadAge>=0 and fx.closedOre~=loadedId then
+    if beforeContact then closed=grip end
+    if not beforeContact and loadAge>=0 and fx.closedOre~=loadedId then
      fx.closedOre=loadedId
      if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
@@ -574,7 +577,7 @@ function W:courier(drone,record,now)
      slot.packed=packed
     end
     local cargo=slot.cargo
-    cargo.Transparency=0
+    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or 0
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
     size=cargo.Size
@@ -587,7 +590,7 @@ function W:courier(drone,record,now)
      rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
     end
     cargo.CFrame=CFrame.new(position)*rotation
-    if i==loadingSlot then
+    if i==loadingSlot and not beforeContact then
      local mount=fx.loadingMount or {}
      fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame
      drone.cargoMount=mount

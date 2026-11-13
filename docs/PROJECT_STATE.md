@@ -11,18 +11,24 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `594f422d70a91830ec578c500c043007b8e295048a78ee0624dac1cdef2cdc1a` | Cubic starter miners and direct Emptier pickup. |
-| Shared Studio Sources | Team Create save **258** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `d6bd3d7ea1818a043ba8fc527f02176017ea9ed9e3447438285b08915bb16f89` | Continuous Emptier pickup motion. |
+| Shared Studio Sources | Team Create save **260** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the cubic starters and ground-first claw pickup from save **258**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the eased approach, claw closure and takeoff from save **260**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — smooth Emptier pickup motion
+
+The descent starts at the actual approach position and eases the remaining lateral offset away before contact. Descent, finger closure and lift use a shared quintic curve with zero velocity and acceleration at the phase boundaries. The observer blends into the descent from the last rendered pose and uses one slightly delayed clock for the fingers, hull and cargo. An early cargo receipt cannot show the carried rock before the fingers reach their closed pose. The server still owns collection, and the full-size rock still stays grounded until the grip closes.
+
+Beam and Workshop checks passed using API doubles, including a displaced approach and an early cargo receipt. A detached Studio Edit component check confirmed the grip closes once and the full-size rock follows the lift. Full Play, audible latch and multiplayer appearance remain unverified. Team Create save **260** and all seven matching Sources were verified in place **124078027733625**, universe **10774898335**. No Roblox publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 97e5655`.
 
 ## November 13 — cubic starters and direct claw pickup
 

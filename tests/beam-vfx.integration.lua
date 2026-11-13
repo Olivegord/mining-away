@@ -547,6 +547,10 @@ check('courier claws close at ground contact without a tether and snap once',fun
  source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliveryMaterials','Rock:Quartz:10')
  source:SetAttribute('CourierLoadedOre',19);source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10')
  source:SetAttribute('CourierLoadedAt',720.56)
+ drone.pickupAge=Workshop.COURIER_CONTACT-.04
+ assert(not work:courier(drone,record,720.57))
+ assert(slot.cargo.Transparency==1 and not drone.cargoMount,'early cargo receipt jumped ahead of the animated fingers')
+ drone.pickupAge=Workshop.COURIER_CONTACT+.01
  assert(work:courier(drone,record,720.57))
  assert(slot.cargo.Transparency==0 and drone.cargoMount.id==19)
  assert(not work:courier(drone,record,720.58))
