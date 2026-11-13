@@ -511,6 +511,7 @@ check('physical courier cargo settles above the table and waits for its receipt'
  local mounts=record.courier.mounts
  assert(mounts[1].cargo:IsA('UnionOperation') and not mounts[1].cargo:FindFirstChildWhichIsA('BillboardGui'))
  assert(mounts[2].cargo:IsA('Part') and mounts[2].cargo.Material==Enum.Material.Metal)
+ assert(#mounts[1].fingers==4 and mounts[1].cargo.Size.X==Workshop.ROCK_SIZE[1])
  assert(mounts[1].cargo.Position.Z>mounts[5].cargo.Position.Z,'the shipment unloaded all at once')
  work:courier(drone,record,700.65)
  for i,slot in ipairs(mounts) do
@@ -528,6 +529,25 @@ check('physical courier cargo settles above the table and waits for its receipt'
  assert(mounts[1].cargo.Transparency==1)
  near(work.bursts[1].part.Position.Y,7.18)
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy();original:Destroy()
+end)
+check('courier claws close at the lift handoff and emit one latch cue',function()
+ local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Collect')
+ source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliverySlots',4)
+ source:SetAttribute('DeliveryMaterials','Rock:Quartz:10');source:SetAttribute('CourierLoadedOre',19)
+ source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10');source:SetAttribute('CourierLoadedAt',720)
+ source:SetAttribute('SnapshotAt',720);source.Parent=root
+ local model=Instance.new('Model');model.Parent=root
+ local emitter=Instance.new('Part');emitter.Position=Vector3.new(0,5,0);emitter.Parent=model;model.PrimaryPart=emitter
+ local drone={source=source,view=model,emitter=emitter,pos=emitter.Position,hasCargoPickup=function() return true end}
+ local record={events={dead=false}};local work=WorkEffects.new(root)
+ assert(not work:courier(drone,record,720.10))
+ local slot=record.courier.mounts[1]
+ local open=slot.fingers[1][2].Position
+ assert(slot.cargo.Transparency==1 and slot.fingers[1][2].Transparency==0 and drone.cargoMount.id==19)
+ assert(work:courier(drone,record,720.33))
+ assert(slot.cargo.Transparency==0 and (open-slot.fingers[1][2].Position).Magnitude>.20)
+ assert(not work:courier(drone,record,720.34))
+ work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
 root:Destroy()
 print(checks..' production VFX behavior checks; API doubles, Studio visuals UNVERIFIED')

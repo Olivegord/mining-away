@@ -11,7 +11,6 @@ local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
-local COURIER_LIFT=.32
 local function liftDust(view,tint)
  local emitter=Instance.new('ParticleEmitter')
  emitter.Name='OreTransferDust';emitter.Enabled=false;emitter.Rate=14
@@ -278,42 +277,38 @@ function V:update(dt,now)
     r.collectFrom=r.drawPosition or r.pos
     if r.courierCollected then
      r.courierId=source:GetAttribute('CourierDroneId')
-     r.liftFrom=r.view.CFrame;r.liftSize=r.view.Size
+     r.liftFrom=r.view.CFrame
     end
-    if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
-  local opacity,scale,glow,done=1,1,0,false
+  local opacity,glow,done=1,0,false
   local liftPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
-   local ease,shrink=PickupMotion.collection(close)
+   local ease=PickupMotion.collection(close)
    r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
-   scale=math.max(.045,(r.pressScale or .48)*shrink)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt and r.courierCollected then
-   local t=math.clamp((now-r.collectAt)/COURIER_LIFT,0,1)
-   local mount,size
-   if self.cargoMount then mount,size=self.cargoMount(r.courierId,r.seed) end
+   local t=math.clamp((now-r.collectAt)/Workshop.COURIER_LIFT,0,1)
+   local mount
+   if self.cargoMount then mount=self.cargoMount(r.courierId,r.seed) end
    mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
    local eased=t*t*(3-2*t)
    liftPose=r.liftFrom:Lerp(mount,eased)
    if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
    r.pos=liftPose.Position
-   scale=r.liftSize.Y/r.size.Y
-   scale+=((size and size.Y/r.size.Y or .57)-scale)*eased
    done=t>=1
   elseif r.collectAt then
-   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)
-   scale=math.max(.04,shrink*(1+.24*lift));glow=.55*lift;done=t>=1
+   glow=.55*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
    -- late to replay a sound. A streamed/stalled observer must still settle.
@@ -348,7 +343,6 @@ function V:update(dt,now)
    local pulling=live and latest and latest.homing
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
-   local socketScale=seated and .48 or 1
    -- Regular ore fragments and large workshop cargo both land. Wait for the
    -- contact position/speed to replicate before consuming this one-shot cue.
    if r.hasArc and r.landAge and age>=r.landAge and not r.landCue and (live or r.arc) then
@@ -377,13 +371,9 @@ function V:update(dt,now)
       r.pos=r.pos:Lerp(Vector3.new(ax,ay,az),arcMix)
      end
     end
-    r.socketScale=(r.socketScale or 1)+(socketScale-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
-    if math.abs(r.socketScale-socketScale)<.001 then r.socketScale=socketScale end
     local targetPull=pulling and 1 or 0
     r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
     if r.pull<.001 then r.pull=0 end
-    local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
-    scale*=pile*(1+.14*r.pull)*r.socketScale
     glow=math.max(glow,.34*r.pull)
     local rx,ry,rz
     if r.arc then
@@ -395,15 +385,14 @@ function V:update(dt,now)
     end
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
-     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
+     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
      local raised=math.max(latest.floor+support-.22,position.Y)
-     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
+     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
-    if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
-    r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
+    r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
    end
    local landingAge=r.landAge and age-r.landAge

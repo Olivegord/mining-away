@@ -35,7 +35,7 @@ check('confirmed collection arrives at the visible backpack instead of the torso
  realTime+=.3;source:SetAttribute('CollectedAt',realTime);source:SetAttribute('CollectedPosition',torso.Position)
  view:update(1/60,realTime)
  view:update(1/60,realTime+.11)
- assert(r.pos.Z>.3 and r.pos.Y>1 and r.view.Size.Y<.58)
+ assert(r.pos.Z>.3 and r.pos.Y>1 and r.view.Size.Y==.58)
  view:update(1/60,realTime+.25)
  assert(view.records[source]==nil and view.byId[1]==nil and not r.view.Parent)
 end)
@@ -257,7 +257,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  local first=renderer.records[sources[2]]
  sources[2]:SetAttribute('Units',4)
  renderer:update(1/60,realTime+6)
- assert(first.view.Size.X>sizes[2].X,'combining a settled pile did not refresh the pose')
+ assert(first.view.Size.X==sizes[2].X,'combining a settled pile resized the ore')
  reducedMotion=true
  renderer:update(1/60,realTime+6.1)
  assert(math.abs(first.view.Position.Y-first.view.Size.Y*.5-1.52)<1e-8,'reduced motion did not hold a steady hover')
@@ -308,7 +308,7 @@ check('courier lift keeps the rock visible until it reaches the moving rack',fun
  local mount=CFrame.new(1,3,0)
  renderer.cargoMount=function(id,pickupId)
   assert(id=='courier' and pickupId==40)
-  return mount,source.Size*.57
+  return mount
  end
  source:SetAttribute('CourierDroneId','courier');source:SetAttribute('CourierCollected',true)
  source:SetAttribute('CollectedAt',realTime);source:SetAttribute('CollectedPosition',mount.Position)
@@ -316,7 +316,7 @@ check('courier lift keeps the rock visible until it reaches the moving rack',fun
  assert((r.view.Position-start).Magnitude<1e-6 and r.liftDust.Enabled)
  mount=CFrame.new(2,3,0)
  renderer:update(1/60,realTime+.16)
- assert(r.view.Position.X>.95 and r.view.Position.X<1.05 and r.view.Size.X>1 and r.view.Transparency==0)
+ assert(r.view.Position.X>.95 and r.view.Position.X<1.05 and r.view.Size.X==source.Size.X and r.view.Transparency==0)
  renderer:update(1/60,realTime+.33)
  assert(r.view.Transparency==1 and not r.liftDust.Enabled and r.view.Parent)
  renderer:update(1/60,realTime+.8)

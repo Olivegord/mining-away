@@ -765,7 +765,8 @@ function P:renderDrone(drone,_dt,now)
    end
   end
  end
- self.work:courier(drone,record,now)
+ local clawSnap=self.work:courier(drone,record,now)
+ if clawSnap then self:_sound(clawSnap,'claw_snap',now) end
  self.work:repair(drone,record,now)
  if source:GetAttribute('Role')~='Striker' then self.work:flight(drone,record,_dt,now) end
  if not record.events.dead then record.pose=pose end

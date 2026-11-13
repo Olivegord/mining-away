@@ -11,18 +11,26 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `076d8919046c905078eba14b5226894a47e01bd82757b4bbc43d9fb23ee6d1c2` | Drone hull, scale, cargo and Crew camera pass. |
-| Shared Studio Sources | Team Create save **254** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `d33a2de32a949867d8d8c6e124749edb706f4d53dec208734012947d85b39331` | Simplified hulls, fixed-size ore and the Emptier claw. |
+| Shared Studio Sources | Team Create save **256** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the remodeled crew, revised heights, cargo handoff and Crew camera transition from save **254**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the simplified crew and full-size four-finger cargo grips from save **256**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — simpler hulls and full-size ore
+
+Seven worker designs now use fewer silhouette parts. The original square Laser Miner and Inkbeam shell is 2.15 studs across and 1.16 studs tall before the optic and top panel. The other updated unloaded hulls measure 2.50–2.75 studs across. Needler uses one rail, Ballcaster an open fork, Vacuum a two-sided intake, Compactor a bridge and jaws, Breaker one ram, Medic a repair disc and Emptier a compact yoke.
+
+Collectible ore keeps its starting dimensions while it flies, enters the backpack, seats in the Compactor, or transfers to an Emptier and unloads. Each occupied Emptier position uses four closing fingers and a short spatial latch sound triggered once when the rock seats. The rack opens again during unloading. The grip positions accommodate full-size raw and compacted cargo. The Compactor takes full-size inputs and ejects a new block after processing. Inventory, haul capacity and sale values retain their existing rules.
+
+Both bundles compiled. Pickup and beam regressions passed, including fixed dimensions through pickup and the one-shot claw latch. A detached Studio Edit check measured the hulls, four loaded rocks and four fingers, and checked the closure position and one-shot cue. The rendered Play scene, audible cue and multiplayer appearance still need a Play check. Studio was already open and remains in Edit. Team Create save **256** and all seven matching Sources were verified in place **124078027733625**, universe **10774898335**. No player publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 292c0f2`.
 
 ## November 13 — drone proportions, working silhouettes and ore transport
 

@@ -799,7 +799,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (drop.compacted and Vector3.new(1.45,.90,1.22) or Vector3.new(1.64,.97,1.47)) or Vector3.new(.71,.54,.65)
+ chip.Size=drop.raw and (Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE))) or Vector3.new(.71,.54,.65)
  chip.Position=position;chip.Color=color
  -- Use the smooth finish for a strong native sky reflection on the cut faces.
  if drop.arc then chip.Material=Enum.Material.SmoothPlastic;chip.MaterialVariant='';chip.Reflectance=1 end
@@ -943,7 +943,7 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
 end
 function scene.pressSocket(press,slot)
  local pose=CFrame.new(press.pos)*CFrame.Angles(0,press.yaw or 0,0)
- return pose:PointToWorldSpace(RoleConfig.PressSockets[slot]*press.model:GetScale())
+ return pose:PointToWorldSpace(RoleConfig.PressSockets[slot])
 end
 function scene.resetPress(press)
  for _,id in ipairs(press.pressInputs or {}) do
@@ -2661,7 +2661,7 @@ function scene.collectGroundCargo(d,p,hr,dt)
  if now-d.pickupAt<RoleConfig.Courier.PickupHold then return true end
  if Pro.loadGroundCargo(profile,d.id,drop.material,drop.units,Workshop.emptierBatch(profile)) then
   d.oreLoadedAt=d.oreLoadedAt or now
-  d.oreSeatUntil=now+.32
+  d.oreSeatUntil=now+Workshop.COURIER_LIFT
   d.oreLoadedId=id;d.oreLoadedMaterial=drop.material;d.oreLoadedVisualAt=now
   d.deliveryRequested=false
   drop.part:SetAttribute('Units',0)
@@ -2911,10 +2911,18 @@ local function snapshotDrone(d)
   if load then
    for material in pairs(load) do table.insert(materials,material) end
    table.sort(materials)
+   local remaining=table.clone(load)
+   -- Preserve each occupied grip when a differently colored rock arrives.
+   for _,material in ipairs(d.displayedMaterials or {}) do
+    if (remaining[material] or 0)>0 and #shown<6 then
+     table.insert(shown,material);remaining[material]-=1
+    end
+   end
    for _,material in ipairs(materials) do
-    for _=1,math.min(load[material],6-#shown) do table.insert(shown,material) end
+    for _=1,math.min(remaining[material],6-#shown) do table.insert(shown,material) end
    end
   end
+  d.displayedMaterials=shown
   d.deliveryMaterials=table.concat(shown,';')
  end
  local groundCargo=d.orePickupId and pickups[d.orePickupId]

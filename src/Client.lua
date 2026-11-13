@@ -164,7 +164,7 @@ local droneIndex={}
 pickupView.cargoMount=function(droneId,pickupId)
  local drone=droneIndex[droneId]
  local mount=drone and drone.cargoMount
- if mount and mount.id==pickupId then return mount.frame,mount.size end
+ if mount and mount.id==pickupId then return mount.frame end
 end
 local turretIndex={}
 local hiddenParts={}
@@ -968,11 +968,6 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
-  for _,side in ipairs({-1,1}) do
-   local skid=localPart(clone,'MinerSidePod',pivot.Position)
-   skid.Size=Vector3.new(.19,.32,1.42);skid.Transparency=0;skid.Material=Enum.Material.Metal;skid.Color=emitter.Color
-   skid.CFrame=pivot.CFrame*CFrame.new(side*(pivot.Size.X*.5-.03),-.39,.16)
-  end
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.

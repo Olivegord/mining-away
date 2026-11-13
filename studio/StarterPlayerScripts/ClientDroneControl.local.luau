@@ -118,6 +118,9 @@ W.VACUUM_ENABLED=false
 W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
+W.COURIER_LIFT=.32
+W.ROCK_SIZE={1.64,.97,1.47}
+W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
 W.COMPACTOR_WAIT=5
@@ -1443,6 +1446,7 @@ local CUES = {
  dive={id='9118941667',volume=.21,duration=.55,pitch=.65,cooldown=.1,fallback='action_get_up.mp3'},
  heal={id='91735091370012',volume=.12,duration=.8,pitch=1.4,cooldown=.15,fallback='volume_slider.ogg'},
  plant={id='91735091370012',volume=.15,duration=.9,pitch=.85,cooldown=.18,fallback='volume_slider.ogg'},
+ claw_snap={id='9126066421',volume=.24,duration=.29,pitch=1.29,cooldown=.08,instant=true,fallback='action_get_up.mp3'},
  parcel_latch={id='9126066421',volume=.18,duration=.5,pitch=.8,cooldown=.1,fallback='action_get_up.mp3'},
  unload={id='9118941971',volume=.15,duration=.55,pitch=.9,cooldown=.15,fallback='action_jump_land.mp3'},
  courier_sale={id='91735091370012',volume=.1,duration=.8,pitch=1.15,cooldown=.2,fallback='volume_slider.ogg'},
@@ -2734,10 +2738,28 @@ local function cargoDust(cargo)
  dust.Acceleration=Vector3.new(0,-4.5,0);dust.SpreadAngle=Vector2.new(50,50)
  return dust
 end
-local cargoRawSize=Vector3.new(1.64,.97,1.47)*.57
-local cargoBlockSize=Vector3.new(1.45,.90,1.22)*.58
--- Three concentric sphere Parts, not orbiting rings. Different phases keep
--- the nested glow breathing without sudden size or transparency changes.
+local cargoRawSize=Vector3.new(table.unpack(Workshop.ROCK_SIZE))
+local cargoBlockSize=Vector3.new(table.unpack(Workshop.BLOCK_SIZE))
+local function drawClaw(slot,frame,size,closed,visible)
+ slot.hub.CFrame=frame*CFrame.new(0,.56,0)
+ slot.hub.Transparency=visible and 0 or 1
+ for i,finger in ipairs(slot.fingers) do
+  local x=i%2==1 and -1 or 1
+  local z=i<3 and -1 or 1
+  local hinge=Vector3.new(x*.22,.52,z*.19)
+  local spread=(1-closed)*.21
+  local elbow=Vector3.new(x*(size.X*.5+.055+spread),.09,z*(size.Z*.27+spread))
+  local tip=Vector3.new(x*(size.X*.36+spread),-.20+spread*.4,z*(size.Z*.24+spread))
+  for j,segment in ipairs(finger) do
+   local a,b=hinge,elbow
+   if j==2 then a,b=elbow,tip end
+   segment.Size=Vector3.new(.12,.12,(b-a).Magnitude+.07)
+   segment.CFrame=frame*CFrame.lookAt((a+b)*.5,b)
+   segment.Transparency=visible and 0 or 1
+  end
+ end
+end
+-- Three concentric spheres breathe at different rates.
 local function spheres(parent,color)
  local out={}
  for index,size in ipairs({.24,.46,.76}) do
@@ -3042,6 +3064,7 @@ function W:repair(drone,record,now)
 end
 function W:courier(drone,record,now)
  local source=drone.source;local state=source:GetAttribute('State')
+ local snapPosition
  drone.cargoMount=nil
  local enabled=source:GetAttribute('Role')=='Courier' and not record.events.dead and cameraNear(drone.pos,200)
  local fx=record.courier
@@ -3067,7 +3090,7 @@ function W:courier(drone,record,now)
    trail.Color=ColorSequence.new(GOLD);trail.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.6),NumberSequenceKeypoint.new(1,1)})
    trail.Enabled=false;trail.Parent=root;table.insert(trails,trail)
   end end
-  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,mounts={},spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
+  fx={root=root,anchor=anchor,contact=contact,tether=tether,parcel=parcel,band=band,drive=drive,trails=trails,mounts={},spheres=detailed and spheres(anchor,GOLD) or {},detailed=detailed,closedOre=0,sale=source:GetAttribute('CourierSaleSerial') or 0,loadId=source:GetAttribute('DeliveryId') or '',lastAt=now}
   if detailed then
    fx.sparks=particle(anchor,'CourierSparks',GOLD);fx.sparks.Brightness=1.2;fx.sparks.LightEmission=.65;self.courierCount+=1
   end
@@ -3157,20 +3180,48 @@ function W:courier(drone,record,now)
   local speed=drone.velocity and drone.velocity.Magnitude or 0
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
+  if count>4 and not fx.rackExtensions then
+   fx.rackExtensions={}
+   for i=1,2 do
+    local rail=part(fx.root,'ClawRackExtension');rail.Size=Vector3.new(.19,.20,2.1)
+    rail.Material=Enum.Material.Metal;rail.Color=Color3.fromRGB(58,68,80)
+    fx.rackExtensions[i]=rail
+   end
+  end
+  for i,rail in ipairs(fx.rackExtensions or {}) do
+   rail.CFrame=pivot*CFrame.new(i==1 and -.98 or .98,-.38,-1.74)
+   rail.Transparency=count>4 and 0 or 1
+  end
   for i=1,count do
    local slot=fx.mounts[i]
    if not slot then
-    local tray=part(fx.root,'CargoMount');tray.Size=Vector3.new(.49,.18,.73)
-    tray.Material=Enum.Material.Metal;tray.Color=Color3.fromRGB(105,121,136)
-    local latch=part(fx.root,'CargoGrip');latch.Size=Vector3.new(.13,.37,.49)
-    latch.Material=Enum.Material.Metal;latch.Color=Color3.fromRGB(59,69,77)
-    slot={tray=tray,latch=latch};fx.mounts[i]=slot
+    local hub=part(fx.root,'ClawHub');hub.Size=Vector3.new(.63,.23,.60)
+    hub.Material=Enum.Material.Metal;hub.Color=Color3.fromRGB(75,84,93)
+    slot={hub=hub,fingers={}};fx.mounts[i]=slot
+    for j=1,4 do
+     local link=part(fx.root,'ClawFinger');link.Material=Enum.Material.Metal;link.Color=Color3.fromRGB(119,133,145)
+     local tip=part(fx.root,'ClawTip');tip.Material=Enum.Material.Metal;tip.Color=Color3.fromRGB(66,78,90)
+     slot.fingers[j]={link,tip}
+    end
    end
    local side=i%2==1 and -1 or 1
    local row=math.floor((i-1)/2)
-   local frame=pivot*CFrame.new(side*.66,-.55,.88-row*.88)
-   slot.tray.CFrame=frame;slot.tray.Transparency=0
-   slot.latch.CFrame=frame*CFrame.new(-side*.17,-.16,0);slot.latch.Transparency=0
+   local yaw=side*.06
+   local cargoFrame=pivot*CFrame.new(side*.98,-1.14,.86-row*1.72)*CFrame.Angles(0,yaw,0)
+   local size=slot.cargo and slot.cargo.Size or cargoRawSize
+   local closed=i<=parcelUnits and 1 or .72
+   if i==loadingSlot then
+    local t=math.clamp((loadAge-Workshop.COURIER_LIFT*.63)/(Workshop.COURIER_LIFT*.37),0,1)
+    closed=t*t
+    if t>=1 and fx.closedOre~=loadedId then
+     fx.closedOre=loadedId
+     if loadAge<Workshop.COURIER_LIFT+.14 then snapPosition=cargoFrame.Position end
+    end
+   elseif pickup and i==parcelUnits+1 then
+    closed=.72*(1-q)
+   elseif unload then
+    closed=1-math.clamp((fx.unloadProgress-(i-1)*.045)/.19,0,1)
+   end
    if i<=parcelUnits then
     local material=fx.load[i] or ''
     if slot.material~=material then
@@ -3201,14 +3252,13 @@ function W:courier(drone,record,now)
     end
     local cargo=slot.cargo
     cargo.Transparency=0
-    local cargoFrame=frame*CFrame.new(side*.23,-.42,0)
     local position=cargoFrame.Position
-    local yaw=slot.packed and 0 or side*.12
-    local rotation=pivot.Rotation*CFrame.Angles(0,yaw,slot.packed and 0 or side*.09)
+    local rotation=cargoFrame.Rotation
+    size=cargo.Size
     if unload then
      local t=math.clamp((fx.unloadProgress-(i-1)*.045)/.64,0,1)
      local ease=t*t*(3-2*t)
-     local finish=sell+Vector3.new(side*.54,cargo.Size.Y*.5+.015,(row-1)*.88)
+     local finish=sell+Vector3.new(side*.93,cargo.Size.Y*.5+.015,row*1.65-.8)
      position=position:Lerp(finish,ease)
      if not reduced then position+=Vector3.yAxis*(math.sin(t*math.pi)*.32) end
      rotation=rotation:Lerp(CFrame.Angles(0,yaw,0),ease)
@@ -3216,9 +3266,9 @@ function W:courier(drone,record,now)
     cargo.CFrame=CFrame.new(position)*rotation
     if i==loadingSlot then
      local mount=fx.loadingMount or {}
-     fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame;mount.size=cargo.Size
+     fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame
      drone.cargoMount=mount
-     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<.32 then cargo.Transparency=1 end
+     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<Workshop.COURIER_LIFT then cargo.Transparency=1 end
     end
     if slot.dust then
      slot.dust.Enabled=moving and cargo.Transparency<1 and i<=4
@@ -3228,14 +3278,17 @@ function W:courier(drone,record,now)
     slot.cargo.Transparency=saleAge>=0 and saleAge<.21 and math.clamp(saleAge/.21,0,1) or 1
     if slot.dust then slot.dust.Enabled=false end
    end
-   if i>slots and i>parcelUnits then slot.tray.Transparency=1;slot.latch.Transparency=1 end
+   local receiving=pickup and i==parcelUnits+1
+   drawClaw(slot,cargoFrame,size,closed,i<=parcelUnits or receiving)
   end
   for i=count+1,#fx.mounts do
-   local slot=fx.mounts[i];slot.tray.Transparency=1;slot.latch.Transparency=1
+   local slot=fx.mounts[i];slot.hub.Transparency=1
+   for _,finger in ipairs(slot.fingers) do for _,segment in ipairs(finger) do segment.Transparency=1 end end
    if slot.cargo then slot.cargo.Transparency=1 end
    if slot.dust then slot.dust.Enabled=false end
   end
  end
+ return snapPosition
 end
 -- A monochrome beam with alternating opaque/clear bands. Shift the sequence
 -- along its normalized length, so the pulse remains fast at every frame rate.
@@ -8894,7 +8947,8 @@ function P:renderDrone(drone,_dt,now)
    end
   end
  end
- self.work:courier(drone,record,now)
+ local clawSnap=self.work:courier(drone,record,now)
+ if clawSnap then self:_sound(clawSnap,'claw_snap',now) end
  self.work:repair(drone,record,now)
  if source:GetAttribute('Role')~='Striker' then self.work:flight(drone,record,_dt,now) end
  if not record.events.dead then record.pose=pose end
@@ -12994,7 +13048,6 @@ local DISPLAY_TAIL=.28
 local HOVER_BOB_RATE,HOVER_TURN_RATE=2*math.pi/1.4,2*math.pi/26
 local GEM_GLINT='rbxassetid://77624818077620'
 local GLINT_LIFETIME=.46
-local COURIER_LIFT=.32
 local function liftDust(view,tint)
  local emitter=Instance.new('ParticleEmitter')
  emitter.Name='OreTransferDust';emitter.Enabled=false;emitter.Rate=14
@@ -13261,42 +13314,38 @@ function V:update(dt,now)
     r.collectFrom=r.drawPosition or r.pos
     if r.courierCollected then
      r.courierId=source:GetAttribute('CourierDroneId')
-     r.liftFrom=r.view.CFrame;r.liftSize=r.view.Size
+     r.liftFrom=r.view.CFrame
     end
-    if r.processed then r.pressScale=r.view.Size.Y/math.max(.01,r.size.Y) end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
-  local opacity,scale,glow,done=1,1,0,false
+  local opacity,glow,done=1,0,false
   local liftPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
-   local ease,shrink=PickupMotion.collection(close)
+   local ease=PickupMotion.collection(close)
    r.pos=r.collectFrom:Lerp(r.collectTarget,ease)
-   scale=math.max(.045,(r.pressScale or .48)*shrink)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt and r.courierCollected then
-   local t=math.clamp((now-r.collectAt)/COURIER_LIFT,0,1)
-   local mount,size
-   if self.cargoMount then mount,size=self.cargoMount(r.courierId,r.seed) end
+   local t=math.clamp((now-r.collectAt)/Workshop.COURIER_LIFT,0,1)
+   local mount
+   if self.cargoMount then mount=self.cargoMount(r.courierId,r.seed) end
    mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
    local eased=t*t*(3-2*t)
    liftPose=r.liftFrom:Lerp(mount,eased)
    if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
    r.pos=liftPose.Position
-   scale=r.liftSize.Y/r.size.Y
-   scale+=((size and size.Y/r.size.Y or .57)-scale)*eased
    done=t>=1
   elseif r.collectAt then
-   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease,shrink=PickupMotion.collection(t)
+   local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
    local target=backpack(owner,r.collectTarget or r.collectFrom)
    local lift=math.sin(math.clamp(t,0,1)*math.pi)
    r.pos=r.collectFrom:Lerp(target,ease)+Vector3.new(0,lift*.52,0)
    opacity=1-math.clamp((t-.7)/.3,0,1)
-   scale=math.max(.04,shrink*(1+.24*lift));glow=.55*lift;done=t>=1
+   glow=.55*lift;done=t>=1
   elseif source.Parent and not r.removedAt then
    -- Landing pose is persistent state, even when its timestamp arrives too
    -- late to replay a sound. A streamed/stalled observer must still settle.
@@ -13331,7 +13380,6 @@ function V:update(dt,now)
    local pulling=live and latest and latest.homing
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
-   local socketScale=seated and .48 or 1
    -- Regular ore fragments and large workshop cargo both land. Wait for the
    -- contact position/speed to replicate before consuming this one-shot cue.
    if r.hasArc and r.landAge and age>=r.landAge and not r.landCue and (live or r.arc) then
@@ -13360,13 +13408,9 @@ function V:update(dt,now)
       r.pos=r.pos:Lerp(Vector3.new(ax,ay,az),arcMix)
      end
     end
-    r.socketScale=(r.socketScale or 1)+(socketScale-(r.socketScale or 1))*(1-math.exp(-math.min(dt,.1)*22))
-    if math.abs(r.socketScale-socketScale)<.001 then r.socketScale=socketScale end
     local targetPull=pulling and 1 or 0
     r.pull=(r.pull or 0)+(targetPull-(r.pull or 0))*(1-math.exp(-math.min(dt,.1)*18))
     if r.pull<.001 then r.pull=0 end
-    local pile=1+math.min(.45,math.max(0,math.sqrt(r.units or 1)-1)*.11)
-    scale*=pile*(1+.14*r.pull)*r.socketScale
     glow=math.max(glow,.34*r.pull)
     local rx,ry,rz
     if r.arc then
@@ -13378,15 +13422,14 @@ function V:update(dt,now)
     end
     local position=r.pos
     if not seated and not r.collectAt and latest and latest.floor then
-     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)*scale
+     local support=PickupMotion.supportHeight(r.size.X,r.size.Y,r.size.Z,rx,ry,rz)
      local raised=math.max(latest.floor+support-.22,position.Y)
-     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5*scale-.22) end
+     if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
-    if scale~=r.drawScale then r.drawScale=scale;r.view.Size=r.size*scale end
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
-    r.restSample=resting and r.pull==0 and r.socketScale==socketScale and latest or nil
+    r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
    end
    local landingAge=r.landAge and age-r.landAge
@@ -14367,7 +14410,7 @@ local droneIndex={}
 pickupView.cargoMount=function(droneId,pickupId)
  local drone=droneIndex[droneId]
  local mount=drone and drone.cargoMount
- if mount and mount.id==pickupId then return mount.frame,mount.size end
+ if mount and mount.id==pickupId then return mount.frame end
 end
 local turretIndex={}
 local hiddenParts={}
@@ -15171,11 +15214,6 @@ local function registerDrone(source)
   optic.Shape=Enum.PartType.Cylinder;optic.Size=Vector3.new(.20,ink and .98 or .82,ink and .98 or .82)
   optic.Transparency=0;optic.Material=Enum.Material.Metal;optic.Color=emitter.Color
   optic.CFrame=pivot.CFrame*CFrame.new(0,-pivot.Size.Y*.5-.07,0)*CFrame.Angles(0,0,math.pi/2)
-  for _,side in ipairs({-1,1}) do
-   local skid=localPart(clone,'MinerSidePod',pivot.Position)
-   skid.Size=Vector3.new(.19,.32,1.42);skid.Transparency=0;skid.Material=Enum.Material.Metal;skid.Color=emitter.Color
-   skid.CFrame=pivot.CFrame*CFrame.new(side*(pivot.Size.X*.5-.03),-.39,.16)
-  end
  elseif typeColor and not clone:GetAttribute('RoleGeometry') then
   pivot.Color=Color3.fromRGB(111,120,123):Lerp(typeColor,.18)
   -- Keep the authored shell/emitter; small case seams make its type readable in flight.
