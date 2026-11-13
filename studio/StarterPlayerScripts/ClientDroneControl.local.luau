@@ -7620,6 +7620,170 @@ end
 return V
 
 end)()
+local CrystalSunGlints = (function()
+-- Camera-local reflections. Probe the crystal's native collision facets, then
+-- transfer the hit from the replicated rock to its smoothly rendered copy.
+local Lighting=game:GetService('Lighting')
+local G={}
+local RANGE,LIMIT,PROBE_LIMIT,INTERVAL=76,10,14,.10
+local STAR='rbxassetid://77624818077620'
+local WHITE=Color3.fromRGB(255,251,239)
+local PROBES={Vector2.new(0,.17),Vector2.new(-.26,.31),Vector2.new(.26,.31),
+ Vector2.new(-.34,-.02),Vector2.new(.34,-.02),Vector2.new(0,.51)}
+local function ramp(t)
+ t=math.clamp(t,0,1);return t*t*(3-2*t)
+end
+local function rank(a,b)
+ if a.glintDistance==b.glintDistance then return a.id<b.id end
+ return a.glintDistance<b.glintDistance
+end
+local function drawable(r)
+ return r.view.Parent and r.source.Parent and r.source.CanQuery and r.view.Transparency<.65
+  and not r.visual.broken and not r.finalLoad and not r.damageScale
+  and not r.source:GetAttribute('ClusterBlackAt')
+end
+local function makeSprite(parent)
+ local sprite=EnergyDisc.sprite(parent,'CrystalSunGlint')
+ sprite.gui.MaxDistance=RANGE+8;sprite.image.Image=STAR
+ return sprite
+end
+local function reflect(r,camera,sun,params,shadow,fx,character)
+ local v,s=r.view,r.source
+ local toward=(camera-v.Position).Unit
+ local mid=toward+sun
+ if mid.Magnitude<.01 then return end
+ mid=mid.Unit
+ local side=mid:Cross(Vector3.yAxis)
+ if side.Magnitude<.01 then side=Vector3.xAxis else side=side.Unit end
+ local up=side:Cross(mid)
+ local frame,scale=v.CFrame,v.Size
+ local sourceFrame,sourceSize=s.CFrame,s.Size
+ local extent=scale.Magnitude
+ local function toSource(point)
+  return sourceFrame:PointToWorldSpace(frame:PointToObjectSpace(point)/scale*sourceSize)
+ end
+ params.FilterDescendantsInstances={s}
+ local function probe(point)
+  local origin=toSource(point+mid*extent)
+  local hit=workspace:Raycast(origin,toSource(point-mid*extent)-origin,params)
+  if not hit then return end
+  local n=(sourceFrame:VectorToObjectSpace(hit.Normal)*sourceSize/scale).Unit
+  local w=frame:VectorToWorldSpace(n)
+  local lit,visible=w:Dot(sun),w:Dot(toward)
+  local strength=ramp((w:Dot(mid)-.78)/.195)*ramp(lit/.28)*ramp(visible/.35)
+  return sourceFrame:PointToObjectSpace(hit.Position)/sourceSize,n,strength
+ end
+ local function width(axis)
+  local d=frame:VectorToObjectSpace(axis)
+  return math.abs(d.X)*scale.X+math.abs(d.Y)*scale.Y+math.abs(d.Z)*scale.Z
+ end
+ local w,h=width(side),width(up)
+ local best,normal,strength,origin,offset=nil,nil,.045,nil,nil
+ for _,p in ipairs(PROBES) do
+  local point=v.Position+side*(p.X*w)+up*(p.Y*h)
+  local hit,n,score=probe(point)
+  if hit and score>strength+.009 then
+   best,normal,strength,origin,offset=hit,n,score,point,p
+  end
+ end
+ if not origin then return end
+ -- Walk toward a ridge on the selected facet, staying on the lit side
+ -- of the change in surface normal. The probe basis rotates with the viewer.
+ local outward=(side*(offset.X*1.8)+up*.52).Unit
+ local lo,hi=0,math.min(w,h)*.46
+ local hit,n=probe(origin+outward*hi)
+ if not hit or n:Dot(normal)<.984 then
+  for _=1,4 do
+   local distance=(lo+hi)*.5
+   hit,n=probe(origin+outward*distance)
+   if hit and n:Dot(normal)>.984 then lo=distance;best=hit else hi=distance end
+  end
+ else
+  best=hit
+ end
+ local point=frame:PointToWorldSpace(best*scale)
+ local worldNormal=frame:VectorToWorldSpace(normal)
+ shadow.FilterDescendantsInstances=character and {s,fx,character} or {s,fx}
+ if workspace:Raycast(point+worldNormal*.07,sun*150,shadow) then return end
+ return best+normal*.006,strength
+end
+function G.new(parent,player)
+ local probes=RaycastParams.new();probes.FilterType=Enum.RaycastFilterType.Include
+ local shadow=RaycastParams.new();shadow.FilterType=Enum.RaycastFilterType.Exclude;shadow.IgnoreWater=true
+ local self={nextAt=0,created=0,active={},pool={},candidates={}}
+ function self:update(resources,now,dt,reduced)
+  local camera=workspace.CurrentCamera
+  if not camera or reduced then
+   for r,sprite in pairs(self.active) do
+    sprite.gui.Enabled=false;table.insert(self.pool,sprite);self.active[r]=nil
+   end
+   self.nextAt=0;return
+  end
+  if now>=self.nextAt then
+   self.nextAt=now+INTERVAL
+   local sun=Lighting:GetSunDirection()
+   local position=camera.CFrame.Position
+   local candidates=self.candidates;table.clear(candidates)
+   for _,sprite in pairs(self.active) do sprite.targetAlpha=0 end
+   if sun.Y>.015 and Lighting.Brightness>.05 then
+    for _,r in pairs(resources) do
+     if r.cutFeedback and drawable(r) then
+      local delta=r.view.Position-position
+      local distance=delta:Dot(delta)
+      if distance<RANGE^2 and distance>1 then
+       local _,visible=camera:WorldToViewportPoint(r.view.Position)
+       if visible then
+        r.glintDistance=distance;table.insert(candidates,r)
+       end
+      end
+     end
+    end
+    table.sort(candidates,rank)
+    for i=1,math.min(PROBE_LIMIT,#candidates) do
+     local r=candidates[i]
+     local point,strength=reflect(r,position,sun,probes,shadow,parent,player.Character)
+     if point then
+      local sprite=self.active[r] or table.remove(self.pool)
+      if not sprite and self.created<LIMIT then
+       self.created+=1;sprite=makeSprite(parent)
+      end
+      if sprite then
+       if not self.active[r] then sprite.point=point;sprite.alpha=0;self.active[r]=sprite end
+       sprite.target=point
+       sprite.targetAlpha=strength*ramp((RANGE-math.sqrt(r.glintDistance))/20)*ramp((sun.Y-.015)/.07)
+      end
+     end
+    end
+   end
+  end
+  local blend=1-math.exp(-math.min(dt,.1)*15)
+  local steady=player:GetAttribute('ReducedFlashing')==true
+  for r,sprite in pairs(self.active) do
+   if not drawable(r) then sprite.targetAlpha=0;sprite.alpha=0 end
+   local gap=sprite.target-sprite.point
+   local switching=gap:Dot(gap)>.075
+   local target=switching and sprite.alpha>.035 and 0 or sprite.targetAlpha
+   sprite.alpha+=(target-sprite.alpha)*blend
+   if target==0 and sprite.targetAlpha==0 and sprite.alpha<.012 then
+    sprite.gui.Enabled=false;self.active[r]=nil;table.insert(self.pool,sprite)
+   elseif r.view.Parent then
+    if switching and sprite.alpha<=.035 then sprite.point=sprite.target
+    elseif not switching then sprite.point=sprite.point:Lerp(sprite.target,blend) end
+    local seed=r.glintSeed
+    local period=3.4+seed%7*.31
+    local wave=steady and .65 or .5+.5*math.sin((now%period)/period*(2*math.pi)+seed*1.7)
+    local size=(.36+(seed%29)*.029)*(.62+.38*wave)*(.56+.44*sprite.alpha)
+    local v=r.view
+    EnergyDisc.place(sprite,v.CFrame:PointToWorldSpace(sprite.point*v.Size),size,WHITE:Lerp(r.baseColor,.12),
+     sprite.alpha*(.35+.60*wave)*(steady and .62 or 1))
+   end
+  end
+ end
+ return self
+end
+return G
+
+end)()
 local Presentation = (function()
 -- Client-only animation and cosmetic debris. No remotes, damage or rewards.
 -- Feedback is bundled immediately before this module by tools/build.py.
@@ -11770,7 +11934,7 @@ local OreDrops = (function()
 -- Pure authoritative pickup trajectory. Uncollected world ore is owner/run bound;
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
- GEM_GRAVITY=178,GEM_CONTACT_HOLD=.16,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
+ GEM_GRAVITY=178,GEM_CONTACT_HOLD=.24,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
 O.BREAK_DELAY=.11
 O.REWARD_DELAY=.135
 function O.partition(units,limit)
@@ -12003,6 +12167,10 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   if reducedEffects or reducedMotion then mote.gui.Enabled=false
   else
    local cycle=now*(.53+i*.039)+i*.191+record.seed*.137
+   if record.displayLandedAt then
+    -- Start the first motes at the floor, staggered through the contact beat.
+    cycle=math.max(0,now-record.displayLandedAt-(i-1)*.038)*(.61+i*.065)
+   end
    local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)
@@ -12344,7 +12512,7 @@ function V:update(dt,now)
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.physical and 1 or .82),
+      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end
     end
@@ -12392,7 +12560,7 @@ function V:update(dt,now)
     r.restUnits=r.units
    end
    local landingAge=r.landAge and age-r.landAge
-   local hoverAge=landingAge and landingAge-(r.arc and 0 or PickupMotion.SETTLE_TIME)
+   local hoverAge=landingAge and landingAge-(r.arc and OreDrops.GEM_CONTACT_HOLD or PickupMotion.SETTLE_TIME)
    local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
    -- Once a landed gem starts hovering, transient stationary snapshot changes
    -- must not restart its lift. Only an actual pickup or socket ends the hover.
@@ -12401,7 +12569,7 @@ function V:update(dt,now)
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
     r.hoverStartedAt=r.hoverStartedAt or (now-hoverAge)
-    local t=math.clamp((now-r.hoverStartedAt)/.85,0,1)
+    local t=math.clamp((now-r.hoverStartedAt)/.72,0,1)
     r.hoverAlpha=t*t*(3-2*t)
     r.hoverTime=reducedMotion and 0 or hoverAge
    elseif wasHovering then
@@ -12428,6 +12596,7 @@ function V:update(dt,now)
     local distance=(ground-cameraPosition).Magnitude
     if distance<DISPLAY_RANGE then
      r.displayGround=ground
+     if r.arc then r.displayLandedAt=now-landingAge end
      -- Use the landing point to rank displays. A hovering pose must never
      -- move its glow and outline to another gem across adjacent render frames.
      r.displayDistance=distance-(r.displayRig and 2.5 or 0)
@@ -13216,6 +13385,7 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local rockDamage=RockDamage.new()
+rockDamage.sunGlints=CrystalSunGlints.new(localFX,player)
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
 BeamVFX.onCue=function(kind,position,now)
@@ -14170,6 +14340,7 @@ local function registerResource(source)
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
+ resources[source].glintSeed=source:GetAttribute('StageSeed') or 0
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -14703,6 +14874,7 @@ connect(RunService.RenderStepped,function(dt)
    rockDamage.feedback:react(r,now)
   end
  end
+ rockDamage.sunGlints:update(resources,now,dt,BeamVFX.reduced())
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)

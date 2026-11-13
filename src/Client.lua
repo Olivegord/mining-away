@@ -12,6 +12,7 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local rockDamage=RockDamage.new()
+rockDamage.sunGlints=CrystalSunGlints.new(localFX,player)
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
 BeamVFX.onCue=function(kind,position,now)
@@ -966,6 +967,7 @@ local function registerResource(source)
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
+ resources[source].glintSeed=source:GetAttribute('StageSeed') or 0
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -1499,6 +1501,7 @@ connect(RunService.RenderStepped,function(dt)
    rockDamage.feedback:react(r,now)
   end
  end
+ rockDamage.sunGlints:update(resources,now,dt,BeamVFX.reduced())
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)

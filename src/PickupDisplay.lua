@@ -101,6 +101,10 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
   if reducedEffects or reducedMotion then mote.gui.Enabled=false
   else
    local cycle=now*(.53+i*.039)+i*.191+record.seed*.137
+   if record.displayLandedAt then
+    -- Start the first motes at the floor, staggered through the contact beat.
+    cycle=math.max(0,now-record.displayLandedAt-(i-1)*.038)*(.61+i*.065)
+   end
    local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)

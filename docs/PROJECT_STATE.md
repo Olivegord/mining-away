@@ -11,18 +11,24 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `485d14f4b6cb0191e510d6bf2a54ffc49a030b4d79cb54dc9a3855ef87b4a2f2` | Four-point laser flare and stable 1.4-second ore bob. |
-| Shared Studio Sources | Team Create save **241** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | `8a4cd2e46a31a4ff634eee302814883464eea3827be7fa0434a0a95f23cbfd83` | View-dependent crystal sun glints and a distinct gem touchdown. |
+| Shared Studio Sources | Team Create save **242** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the four-point flare and 1.4-second ore bob from save **241**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the crystal sun glints and gem touchdown from save **242**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — crystal sun glints and gem touchdown
+
+Nearby Crystal Run facets catch small four-point glints with varied sizes and slow, independent shimmer. The highlights track the local view angle along illuminated ridges and fade as the angle or sunlight changes. Gems clink at contact and start their ground effects while planted. After a 0.24-second contact beat they ease into the existing 1.4-second hover.
+
+Pickup logic and renderer checks passed, including visible particles before lift and one clink. Both bundles compiled. An isolated Studio Edit check against native crystal unions found six persistent glints changed position when the viewpoint moved, and the pool stayed at ten. This did not test in-game appearance or audio. Studio was already open in Play, and the owner stopped it. All three Script Sync roots and all seven Source hashes matched the canonical file after Team Create save **242**. No Roblox publication.
 
 ## November 12 — four-point laser flare and stable ore bob
 

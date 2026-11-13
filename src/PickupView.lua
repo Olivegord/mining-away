@@ -323,7 +323,7 @@ function V:update(dt,now)
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
      if self.audio then
-      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.physical and 1 or .82),
+      self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end
     end
@@ -371,7 +371,7 @@ function V:update(dt,now)
     r.restUnits=r.units
    end
    local landingAge=r.landAge and age-r.landAge
-   local hoverAge=landingAge and landingAge-(r.arc and 0 or PickupMotion.SETTLE_TIME)
+   local hoverAge=landingAge and landingAge-(r.arc and OreDrops.GEM_CONTACT_HOLD or PickupMotion.SETTLE_TIME)
    local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
    -- Once a landed gem starts hovering, transient stationary snapshot changes
    -- must not restart its lift. Only an actual pickup or socket ends the hover.
@@ -380,7 +380,7 @@ function V:update(dt,now)
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
     r.hoverStartedAt=r.hoverStartedAt or (now-hoverAge)
-    local t=math.clamp((now-r.hoverStartedAt)/.85,0,1)
+    local t=math.clamp((now-r.hoverStartedAt)/.72,0,1)
     r.hoverAlpha=t*t*(3-2*t)
     r.hoverTime=reducedMotion and 0 or hoverAge
    elseif wasHovering then
@@ -407,6 +407,7 @@ function V:update(dt,now)
     local distance=(ground-cameraPosition).Magnitude
     if distance<DISPLAY_RANGE then
      r.displayGround=ground
+     if r.arc then r.displayLandedAt=now-landingAge end
      -- Use the landing point to rank displays. A hovering pose must never
      -- move its glow and outline to another gem across adjacent render frames.
      r.displayDistance=distance-(r.displayRig and 2.5 or 0)

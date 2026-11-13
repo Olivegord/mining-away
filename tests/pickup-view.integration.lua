@@ -165,6 +165,10 @@ check('a finished gem stays hidden until release, then hits the ground with one 
  renderer:update(1/60,contact+.045)
  assert(r.idle and r.idle.emitter:IsA('ParticleEmitter') and r.idle.emitter.Texture:match('^rbxassetid://%d+$'))
  assert(r.idle.emitter.Emitted==1 and r.idle.emitter.Rate==0)
+ assert(display.motes[1].gui.Enabled and (r.view.Position-landed.Position).Magnitude<1e-8,
+  'ground particles should be visible while the gem is still planted')
+ renderer:update(1/60,contact+OreDrops.GEM_CONTACT_HOLD-.005)
+ assert((r.view.Position-landed.Position).Magnitude<1e-8,'gem lifted before the contact beat finished')
  assert(r.ribbon==ribbon and ribbon.trail.Parent==r.view)
  renderer:update(1/60,contact+.31)
  assert(not r.ribbon and not ribbon.trail.Parent,'landing trail outlived its fade')
