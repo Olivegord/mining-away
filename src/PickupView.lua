@@ -277,13 +277,12 @@ function V:update(dt,now)
     r.collectFrom=r.drawPosition or r.pos
     if r.courierCollected then
      r.courierId=source:GetAttribute('CourierDroneId')
-     r.liftFrom=r.view.CFrame
     end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity,glow,done=1,0,false
-  local liftPose
+  local heldPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
@@ -292,15 +291,10 @@ function V:update(dt,now)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt and r.courierCollected then
-   local t=math.clamp((now-r.collectAt)/Workshop.COURIER_LIFT,0,1)
-   local mount
-   if self.cargoMount then mount=self.cargoMount(r.courierId,r.seed) end
-   mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
-   local eased=t*t*(3-2*t)
-   liftPose=r.liftFrom:Lerp(mount,eased)
-   if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
-   r.pos=liftPose.Position
-   done=t>=1
+   -- Keep the grounded copy until the closed claw's replicated cargo arrives.
+   done=(self.cargoMount and self.cargoMount(r.courierId,r.seed)~=nil) or now-r.collectAt>=.23
+   heldPose=r.view.CFrame
+   r.pos=heldPose.Position
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
@@ -327,7 +321,7 @@ function V:update(dt,now)
   local latest=r.samples[#r.samples]
   local dust=not done and not reducedEffects and r.physical and cameraPosition
    and (r.pos-cameraPosition).Magnitude<75
-   and (liftPose~=nil or not r.collectAt and source.Parent and latest and latest.dronePull)
+   and not r.collectAt and source.Parent and latest and latest.dronePull
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
@@ -341,6 +335,7 @@ function V:update(dt,now)
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
+   local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
    -- Regular ore fragments and large workshop cargo both land. Wait for the
@@ -390,7 +385,7 @@ function V:update(dt,now)
      if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
-    r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
@@ -400,7 +395,7 @@ function V:update(dt,now)
    local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
    -- Once a landed gem starts hovering, transient stationary snapshot changes
    -- must not restart its lift. Only an actual pickup or socket ends the hover.
-   local hovering=live and not seated and not pulling and hoverAge and hoverAge>=0
+   local hovering=live and not seated and not pulling and not docking and hoverAge and hoverAge>=0
     and (r.hoverStartedAt~=nil or resting or arcLanded)
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
@@ -414,15 +409,23 @@ function V:update(dt,now)
     if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
    end
    if not hovering then r.hoverStartedAt=nil end
-   if newPose or hovering or wasHovering then
+   if newPose or hovering or wasHovering or docking or r.dockFrom then
     local pose=r.motionPose
-    if r.hoverAlpha and not liftPose then
+    if r.hoverAlpha and not heldPose then
      local t=r.hoverTime
      local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
      local yaw=t*HOVER_TURN_RATE
      pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(0,yaw,0)
       *CFrame.Angles(.22*r.hoverAlpha,0,-.32*r.hoverAlpha)
     end
+    if docking then
+     if not r.dockFrom then r.dockFrom=r.view.CFrame;r.dockAt=now end
+     local t=math.clamp((now-r.dockAt)/.26,0,1)
+     local ground=latest.floor or r.pos.Y
+     local target=CFrame.new(r.pos.X,ground-.22+r.size.Y*.5,r.pos.Z)
+      *CFrame.Angles(0,source:GetAttribute('CourierDockYaw') or 0,0)
+     pose=r.dockFrom:Lerp(target,t*t*(3-2*t))
+    else r.dockFrom=nil end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    local floor=arcLanded and r.arc.floor or latest.floor

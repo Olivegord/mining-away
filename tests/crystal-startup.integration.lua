@@ -423,6 +423,7 @@ do
  local cargoPosition=at+Vector3.new(14,-3,0)
  left.pos=cargoPosition+Vector3.new(-1,2.6,0);left.velocity=Vector3.zero
  right.pos=cargoPosition+Vector3.new(1,2.6,0);right.velocity=Vector3.zero
+ left.yaw=math.pi;right.yaw=0
  crew.vacuum.hp=0
  local parcel=Workshop.cargoKey('Quartz',20)
  assert(Pro.addCargo(data(crew),parcel,1,10)==1)
@@ -437,23 +438,28 @@ do
  local id,drop=groundOre(parcel,cargoPosition)
  local raycast=workspace.Raycast
  workspace.Raycast=function(self,from,direction,params)
-  if (from-cargoPosition).Magnitude<.01 and direction.X<0 and direction.Y>0 then return {Instance=scene.packStation} end
+ if (from-cargoPosition).Magnitude<.01 and direction.X<0 and direction.Y>0 then return {Instance=scene.packStation} end
   return raycast(self,from,direction,params)
  end
- advance(1.5)
+ advance(2.4)
  workspace.Raycast=raycast
  assert(left.oreBlockedId==id and not left.orePickupId,'blocked courier kept the ground claim')
  assert(drop.part:GetAttribute('CourierCollected') and not pickups[id])
- assert(Pro.deliveryUnits(data(crew),right.id)==1 and Pro.cargoUnits(data(crew))==1)
+ assert(Pro.droneCargoUnits(data(crew),right.id)==1 and Pro.cargoUnits(data(crew))==1)
  advance(20)
  assert(data(crew).run.wallet.Quartz==20 and not next(data(crew).run.deliveries))
  for i=1,8 do groundOre(Workshop.cargoKey('Quartz',5),cargoPosition+Vector3.new(0,0,i-4)) end
  left.pos=cargoPosition+Vector3.new(-1,2.6,-2);left.velocity=Vector3.zero
  right.pos=cargoPosition+Vector3.new(1,2.6,2);right.velocity=Vector3.zero
- advance(5.5)
- local deliveries=data(crew).run.deliveries
- assert(deliveries[left.id] and deliveries[right.id] and deliveries[left.id].id~=deliveries[right.id].id)
- assert(Pro.deliveryUnits(data(crew),left.id)==4 and Pro.deliveryUnits(data(crew),right.id)==4)
+ local manifests={}
+ for _=1,40 do
+  advance(.5)
+  for id,manifest in pairs(data(crew).run.deliveries) do manifests[manifest.id]=id end
+  if data(crew).run.wallet.Quartz==60 then break end
+ end
+ local couriers={}
+ for _,id in pairs(manifests) do couriers[id]=true end
+ assert(couriers[left.id] and couriers[right.id],'the two Emptiers did not share the loose cargo')
  assert(Pro.cargoUnits(data(crew))==1,'loading loose rocks changed the backpack')
  advance(20)
  assert(data(crew).run.wallet.Quartz==60 and not next(data(crew).run.deliveries),'loose ore did not sell exactly once')
@@ -537,7 +543,10 @@ do
   cargoPosition,Vector3.zero,Color3.new(1,0,0))
  local drop=pickups[pickupSerial];drop.landed=true;drop.age=1
  left.pos=cargoPosition+Vector3.yAxis*2.6;left.velocity=Vector3.zero
- advance(2)
+ for _=1,16 do
+  if next(data(crew).run.deliveries) then break end
+  advance(.25)
+ end
  local loaded=data(crew).run.deliveries[left.id] or data(crew).run.deliveries[right.id]
  assert(loaded and Pro.cargoUnits(data(crew))==0,'Auto Sell interfered with loose ore collection')
  assert(Pro.addCargo(data(crew),'Quartz',full,full)==full)

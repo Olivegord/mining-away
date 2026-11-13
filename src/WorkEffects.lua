@@ -425,9 +425,7 @@ function W:courier(drone,record,now)
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local pickupPoint
- if slots>0 then
-  if state=='Pickup' then pickupPoint=source:GetAttribute('CourierOrePosition') end
- elseif state=='Pickup' or state=='Launch' then pickupPoint=backpackPosition(source) end
+ if slots==0 and (state=='Pickup' or state=='Launch') then pickupPoint=backpackPosition(source) end
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
  local saleAge=now-(source:GetAttribute('CourierSaleAt') or 0)
  if sale>fx.sale and typeof(sell)=='Vector3' and saleAge>=-.1 and saleAge<.7 then
@@ -499,6 +497,9 @@ function W:courier(drone,record,now)
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
   end
+  local docking=state=='Pickup' and typeof(source:GetAttribute('CourierDock'))=='Vector3'
+  local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
+  local _,grip=Workshop.courierStroke(dockClock-pickupAt)
   local speed=drone.velocity and drone.velocity.Magnitude or 0
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
@@ -528,19 +529,19 @@ function W:courier(drone,record,now)
    end
    local side=i%2==1 and -1 or 1
    local row=math.floor((i-1)/2)
-   local yaw=side*.06
-   local cargoFrame=pivot*CFrame.new(side*.98,-1.14,.86-row*1.72)*CFrame.Angles(0,yaw,0)
+   local x,y,z,yaw=Workshop.courierClawOffset(i)
+   local cargoFrame=pivot*CFrame.new(x,y,z)*CFrame.Angles(0,yaw,0)
    local size=slot.cargo and slot.cargo.Size or cargoRawSize
    local closed=i<=parcelUnits and 1 or .72
+   local receiving=docking and i==parcelUnits+1 and not loadingSlot
    if i==loadingSlot then
-    local t=math.clamp((loadAge-Workshop.COURIER_LIFT*.63)/(Workshop.COURIER_LIFT*.37),0,1)
-    closed=t*t
-    if t>=1 and fx.closedOre~=loadedId then
+    if loadAge>=0 and fx.closedOre~=loadedId then
      fx.closedOre=loadedId
-     if loadAge<Workshop.COURIER_LIFT+.14 then snapPosition=cargoFrame.Position end
+     if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
-   elseif pickup and i==parcelUnits+1 then
-    closed=.72*(1-q)
+   elseif receiving then
+    closed=grip
+    size=source:GetAttribute('CourierPacked') and cargoBlockSize or cargoRawSize
    elseif unload then
     closed=1-math.clamp((fx.unloadProgress-(i-1)*.045)/.19,0,1)
    end
@@ -590,7 +591,6 @@ function W:courier(drone,record,now)
      local mount=fx.loadingMount or {}
      fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame
      drone.cargoMount=mount
-     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<Workshop.COURIER_LIFT then cargo.Transparency=1 end
     end
     if slot.dust then
      slot.dust.Enabled=moving and cargo.Transparency<1 and i<=4
@@ -600,7 +600,6 @@ function W:courier(drone,record,now)
     slot.cargo.Transparency=saleAge>=0 and saleAge<.21 and math.clamp(saleAge/.21,0,1) or 1
     if slot.dust then slot.dust.Enabled=false end
    end
-   local receiving=pickup and i==parcelUnits+1
    drawClaw(slot,cargoFrame,size,closed,i<=parcelUnits or receiving)
   end
   for i=count+1,#fx.mounts do

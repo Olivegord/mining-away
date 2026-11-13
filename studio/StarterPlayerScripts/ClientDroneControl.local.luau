@@ -118,7 +118,25 @@ W.VACUUM_ENABLED=false
 W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
-W.COURIER_LIFT=.32
+W.COURIER_LOWER=.38
+W.COURIER_CLOSE=.18
+W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
+W.COURIER_LIFT=.38
+W.COURIER_CLEARANCE=1.45
+W.COURIER_APPROACH_RESPONSE=1.85
+function W.courierClawOffset(slot)
+ local side=slot%2==1 and -1 or 1
+ return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
+end
+local function easeClaw(t)
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
+function W.courierStroke(age)
+ local close=math.clamp((age-W.COURIER_LOWER)/W.COURIER_CLOSE,0,1)
+ local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
+ return W.COURIER_CLEARANCE*(1-easeClaw(age/W.COURIER_LOWER)+lift),close*close
+end
 W.ROCK_SIZE={1.64,.97,1.47}
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
@@ -3103,9 +3121,7 @@ function W:courier(drone,record,now)
  local pivot=drone.view:GetPivot();local mount=pivot:PointToWorldSpace(Vector3.new(0,-.86,0)*mountScale)
  for _,trail in ipairs(fx.trails) do trail.Enabled=not reduced and state=='Deliver' and parcelUnits>0 and not paused and now-(source:GetAttribute('SnapshotAt') or 0)<.5 end
  local pickupPoint
- if slots>0 then
-  if state=='Pickup' then pickupPoint=source:GetAttribute('CourierOrePosition') end
- elseif state=='Pickup' or state=='Launch' then pickupPoint=backpackPosition(source) end
+ if slots==0 and (state=='Pickup' or state=='Launch') then pickupPoint=backpackPosition(source) end
  local sale=source:GetAttribute('CourierSaleSerial') or 0;local sell=source:GetAttribute('SellPosition')
  local saleAge=now-(source:GetAttribute('CourierSaleAt') or 0)
  if sale>fx.sale and typeof(sell)=='Vector3' and saleAge>=-.1 and saleAge<.7 then
@@ -3177,6 +3193,9 @@ function W:courier(drone,record,now)
     if fx.load[i]==loadedMaterial then loadingSlot=i;break end
    end
   end
+  local docking=state=='Pickup' and typeof(source:GetAttribute('CourierDock'))=='Vector3'
+  local dockClock=paused and (source:GetAttribute('SnapshotAt') or now) or now
+  local _,grip=Workshop.courierStroke(dockClock-pickupAt)
   local speed=drone.velocity and drone.velocity.Magnitude or 0
   local moving=fx.detailed and not reduced and not paused and not unload and speed>2.4
    and now-(source:GetAttribute('SnapshotAt') or 0)<.5
@@ -3206,19 +3225,19 @@ function W:courier(drone,record,now)
    end
    local side=i%2==1 and -1 or 1
    local row=math.floor((i-1)/2)
-   local yaw=side*.06
-   local cargoFrame=pivot*CFrame.new(side*.98,-1.14,.86-row*1.72)*CFrame.Angles(0,yaw,0)
+   local x,y,z,yaw=Workshop.courierClawOffset(i)
+   local cargoFrame=pivot*CFrame.new(x,y,z)*CFrame.Angles(0,yaw,0)
    local size=slot.cargo and slot.cargo.Size or cargoRawSize
    local closed=i<=parcelUnits and 1 or .72
+   local receiving=docking and i==parcelUnits+1 and not loadingSlot
    if i==loadingSlot then
-    local t=math.clamp((loadAge-Workshop.COURIER_LIFT*.63)/(Workshop.COURIER_LIFT*.37),0,1)
-    closed=t*t
-    if t>=1 and fx.closedOre~=loadedId then
+    if loadAge>=0 and fx.closedOre~=loadedId then
      fx.closedOre=loadedId
-     if loadAge<Workshop.COURIER_LIFT+.14 then snapPosition=cargoFrame.Position end
+     if loadAge<.23 then snapPosition=cargoFrame.Position end
     end
-   elseif pickup and i==parcelUnits+1 then
-    closed=.72*(1-q)
+   elseif receiving then
+    closed=grip
+    size=source:GetAttribute('CourierPacked') and cargoBlockSize or cargoRawSize
    elseif unload then
     closed=1-math.clamp((fx.unloadProgress-(i-1)*.045)/.19,0,1)
    end
@@ -3268,7 +3287,6 @@ function W:courier(drone,record,now)
      local mount=fx.loadingMount or {}
      fx.loadingMount=mount;mount.id=loadedId;mount.frame=cargo.CFrame
      drone.cargoMount=mount
-     if drone.hasCargoPickup and drone.hasCargoPickup(loadedId) and loadAge<Workshop.COURIER_LIFT then cargo.Transparency=1 end
     end
     if slot.dust then
      slot.dust.Enabled=moving and cargo.Transparency<1 and i<=4
@@ -3278,7 +3296,6 @@ function W:courier(drone,record,now)
     slot.cargo.Transparency=saleAge>=0 and saleAge<.21 and math.clamp(saleAge/.21,0,1) or 1
     if slot.dust then slot.dust.Enabled=false end
    end
-   local receiving=pickup and i==parcelUnits+1
    drawClaw(slot,cargoFrame,size,closed,i<=parcelUnits or receiving)
   end
   for i=count+1,#fx.mounts do
@@ -13314,13 +13331,12 @@ function V:update(dt,now)
     r.collectFrom=r.drawPosition or r.pos
     if r.courierCollected then
      r.courierId=source:GetAttribute('CourierDroneId')
-     r.liftFrom=r.view.CFrame
     end
     r.collectTarget=source:GetAttribute(r.processed and 'ProcessedPosition' or 'CollectedPosition')
    end
   end
   local opacity,glow,done=1,0,false
-  local liftPose
+  local heldPose
   if r.collectAt and r.processed and r.collectTarget then
    local t=math.clamp((now-r.collectAt)/Workshop.PRESS_CONTACT,0,1)
    local close=math.clamp((t-.18)/.82,0,1)^2
@@ -13329,15 +13345,10 @@ function V:update(dt,now)
    opacity=1-math.clamp((close-.82)/.18,0,1)
    glow=.48*close;done=t>=1
   elseif r.collectAt and r.courierCollected then
-   local t=math.clamp((now-r.collectAt)/Workshop.COURIER_LIFT,0,1)
-   local mount
-   if self.cargoMount then mount=self.cargoMount(r.courierId,r.seed) end
-   mount=mount or CFrame.new(r.collectTarget or r.collectFrom)*r.liftFrom.Rotation
-   local eased=t*t*(3-2*t)
-   liftPose=r.liftFrom:Lerp(mount,eased)
-   if not reducedMotion then liftPose=CFrame.new(0,math.sin(t*math.pi)*.22,0)*liftPose end
-   r.pos=liftPose.Position
-   done=t>=1
+   -- Keep the grounded copy until the closed claw's replicated cargo arrives.
+   done=(self.cargoMount and self.cargoMount(r.courierId,r.seed)~=nil) or now-r.collectAt>=.23
+   heldPose=r.view.CFrame
+   r.pos=heldPose.Position
   elseif r.collectAt then
    local t=(now-r.collectAt)/(r.physical and .18 or .22);local ease=PickupMotion.collection(t)
    local owner=Players:GetPlayerByUserId(r.owner)
@@ -13364,7 +13375,7 @@ function V:update(dt,now)
   local latest=r.samples[#r.samples]
   local dust=not done and not reducedEffects and r.physical and cameraPosition
    and (r.pos-cameraPosition).Magnitude<75
-   and (liftPose~=nil or not r.collectAt and source.Parent and latest and latest.dronePull)
+   and not r.collectAt and source.Parent and latest and latest.dronePull
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
@@ -13378,6 +13389,7 @@ function V:update(dt,now)
    local live=source.Parent~=nil and not r.collectAt and not r.removedAt
    local seated=live and source:GetAttribute('PressSocket')~=nil
    local pulling=live and latest and latest.homing
+   local docking=live and source:GetAttribute('CourierDocking')~=nil
    if r.arc and not r.arcExit and (pulling or seated or source:GetAttribute('CargoArcEnded')) then r.arcExit=latest.at end
    local age=math.max(0,displayAt-r.born)
    -- Regular ore fragments and large workshop cargo both land. Wait for the
@@ -13427,7 +13439,7 @@ function V:update(dt,now)
      if r.arc then raised=math.max(raised,position.Y+r.size.Y*.5-.22) end
      position=Vector3.new(position.X,raised,position.Z)
     end
-    r.motionPose=liftPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
+    r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
     if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
@@ -13437,7 +13449,7 @@ function V:update(dt,now)
    local arcLanded=live and r.arc and not r.arcExit and landingAge>=0
    -- Once a landed gem starts hovering, transient stationary snapshot changes
    -- must not restart its lift. Only an actual pickup or socket ends the hover.
-   local hovering=live and not seated and not pulling and hoverAge and hoverAge>=0
+   local hovering=live and not seated and not pulling and not docking and hoverAge and hoverAge>=0
     and (r.hoverStartedAt~=nil or resting or arcLanded)
    local wasHovering=r.hoverAlpha~=nil
    if hovering then
@@ -13451,15 +13463,23 @@ function V:update(dt,now)
     if not live or seated or r.hoverAlpha<.003 then r.hoverAlpha=nil end
    end
    if not hovering then r.hoverStartedAt=nil end
-   if newPose or hovering or wasHovering then
+   if newPose or hovering or wasHovering or docking or r.dockFrom then
     local pose=r.motionPose
-    if r.hoverAlpha and not liftPose then
+    if r.hoverAlpha and not heldPose then
      local t=r.hoverTime
      local lift=(r.physical and 1.52 or 1.04)+(reducedMotion and 0 or .045*math.sin(t*HOVER_BOB_RATE+r.seed))
      local yaw=t*HOVER_TURN_RATE
      pose=CFrame.new(0,lift*r.hoverAlpha,0)*pose*CFrame.Angles(0,yaw,0)
       *CFrame.Angles(.22*r.hoverAlpha,0,-.32*r.hoverAlpha)
     end
+    if docking then
+     if not r.dockFrom then r.dockFrom=r.view.CFrame;r.dockAt=now end
+     local t=math.clamp((now-r.dockAt)/.26,0,1)
+     local ground=latest.floor or r.pos.Y
+     local target=CFrame.new(r.pos.X,ground-.22+r.size.Y*.5,r.pos.Z)
+      *CFrame.Angles(0,source:GetAttribute('CourierDockYaw') or 0,0)
+     pose=r.dockFrom:Lerp(target,t*t*(3-2*t))
+    else r.dockFrom=nil end
     r.drawPosition=pose.Position;r.view.CFrame=pose
    end
    local floor=arcLanded and r.arc.floor or latest.floor
@@ -15230,7 +15250,6 @@ local function registerDrone(source)
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
- if role=='Courier' then d.hasCargoPickup=function(id) return pickupView.byId[id]~=nil end end
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -15465,6 +15484,9 @@ local function renderDrone(d,dt,now)
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
+ local docking=typeof(dock)=='Vector3'
+ local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -15476,6 +15498,13 @@ local function renderDrone(d,dt,now)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
+ elseif docking then
+  local at=s:GetAttribute('CourierPickupAt') or now
+  local clock=s:GetAttribute('WorkPaused') and (s:GetAttribute('SnapshotAt') or now) or now
+  local age=clock-at
+  if (s:GetAttribute('CourierLoadedAt') or 0)<at then age=math.min(age,Workshop.COURIER_CONTACT) end
+  local height=Workshop.courierStroke(age)
+  d.pos=dock+Vector3.yAxis*height;d.velocity=Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before
@@ -15495,11 +15524,16 @@ local function renderDrone(d,dt,now)
   if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
-  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,heavyFlight and heavyFlight.response or nil) end
+  else
+   local response=state=='Collect' and type(dockYaw)=='number' and Workshop.COURIER_APPROACH_RESPONSE or heavyFlight and heavyFlight.response or nil
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
+  end
  end
- if not motionPaused then
+ if docking then d.yaw=type(dockYaw)=='number' and dockYaw or d.yaw
+ elseif not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
   if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
@@ -15513,9 +15547,9 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
+ d.bank=(docking or state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=docking or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

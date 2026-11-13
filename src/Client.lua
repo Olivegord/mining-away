@@ -984,7 +984,6 @@ local function registerDrone(source)
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
  if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
- if role=='Courier' then d.hasCargoPickup=function(id) return pickupView.byId[id]~=nil end end
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
  if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
@@ -1219,6 +1218,9 @@ local function renderDrone(d,dt,now)
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local dock=state=='Pickup' and role=='Courier' and s:GetAttribute('CourierDock')
+ local docking=typeof(dock)=='Vector3'
+ local dockYaw=role=='Courier' and s:GetAttribute('CourierDockYaw')
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
@@ -1230,6 +1232,13 @@ local function renderDrone(d,dt,now)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
+ elseif docking then
+  local at=s:GetAttribute('CourierPickupAt') or now
+  local clock=s:GetAttribute('WorkPaused') and (s:GetAttribute('SnapshotAt') or now) or now
+  local age=clock-at
+  if (s:GetAttribute('CourierLoadedAt') or 0)<at then age=math.min(age,Workshop.COURIER_CONTACT) end
+  local height=Workshop.courierStroke(age)
+  d.pos=dock+Vector3.yAxis*height;d.velocity=Vector3.zero
  elseif not motionPaused and (state=='BreakerDive' or state=='BreakerImpact') then
   -- A powered fall accelerates all the way into the surface. Evaluate the
   -- authoritative stroke directly: destination smoothing here brakes before
@@ -1249,11 +1258,16 @@ local function renderDrone(d,dt,now)
   if referenceMiner and world:GetAttribute('FieldToolsEnabled')==false then
    d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,1.35)
   elseif referenceMiner then d.pos,d.velocity=Feel.referenceFlight(d.pos,goal,maxStep,math.min(dt,.1),correction)
-  else d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,heavyFlight and heavyFlight.response or nil) end
+  else
+   local response=state=='Collect' and type(dockYaw)=='number' and Workshop.COURIER_APPROACH_RESPONSE or heavyFlight and heavyFlight.response or nil
+   d.pos,d.velocity=Feel.inertialApproach(d.pos,goal,d.velocity,maxStep,math.min(dt,.1),workTravel,correction,response)
+  end
  end
- if not motionPaused then
+ if docking then d.yaw=type(dockYaw)=='number' and dockYaw or d.yaw
+ elseif not motionPaused then
   local targetYaw=referenceMiner and state=='Follow' and Feel.referenceYaw(previousPosition,goal,maxStep,hr and hr.CFrame.LookVector,d.yaw)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
+  if state=='Collect' and type(dockYaw)=='number' then targetYaw=dockYaw end
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
   if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
@@ -1267,9 +1281,9 @@ local function renderDrone(d,dt,now)
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
+ d.bank=(docking or state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
- local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
+ local grounded=docking or heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
  -- The server issues one silent recall cue. A short lift and settling nod
  -- communicate the return before the familiar inertial following takes over.

@@ -295,7 +295,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(not rig.record and not rig.outline.Enabled and not rig.surface.Enabled,'the display lingered after its fade')
  renderer:destroy();assert(not rig.base.Parent);visuals:Destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
-check('courier lift keeps the rock visible until it reaches the moving rack',function()
+check('courier handoff keeps a full-size rock grounded until the claw owns it',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local pile=Instance.new('Folder');pile.DescendantAdded=signal();pile.DescendantRemoving=signal();pile.Parent=workspace
  local source=fixturePart(pile,'RawCrystalCargo',Vector3.new(0,.6,0),Vector3.new(1.64,.97,1.47))
@@ -305,22 +305,20 @@ check('courier lift keeps the rock visible until it reaches the moving rack',fun
  local r=assert(renderer.byId[40])
  renderer:update(1/60,realTime)
  local start=r.view.Position
- local mount=CFrame.new(1,3,0)
+ local mount
  renderer.cargoMount=function(id,pickupId)
   assert(id=='courier' and pickupId==40)
   return mount
  end
  source:SetAttribute('CourierDroneId','courier');source:SetAttribute('CourierCollected',true)
- source:SetAttribute('CollectedAt',realTime);source:SetAttribute('CollectedPosition',mount.Position)
+ source:SetAttribute('CollectedAt',realTime);source:SetAttribute('CollectedPosition',start)
  renderer:update(1/60,realTime)
- assert((r.view.Position-start).Magnitude<1e-6 and r.liftDust.Enabled)
+ assert((r.view.Position-start).Magnitude<1e-6 and r.view.Transparency==0)
+ renderer:update(1/60,realTime+.10)
+ assert((r.view.Position-start).Magnitude<1e-6 and r.view.Size.X==source.Size.X)
  mount=CFrame.new(2,3,0)
- renderer:update(1/60,realTime+.16)
- assert(r.view.Position.X>.95 and r.view.Position.X<1.05 and r.view.Size.X==source.Size.X and r.view.Transparency==0)
- renderer:update(1/60,realTime+.33)
- assert(r.view.Transparency==1 and not r.liftDust.Enabled and r.view.Parent)
- renderer:update(1/60,realTime+.8)
- assert(not r.view.Parent)
+ renderer:update(1/60,realTime+.12)
+ assert(not r.view.Parent or r.view.Transparency==1)
  renderer:destroy();pile:Destroy();workspace.CurrentCamera=camera
 end)
 print(checks..' production PickupView checks with API doubles; native presentation NOT VERIFIED')

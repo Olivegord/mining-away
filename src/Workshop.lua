@@ -28,7 +28,25 @@ W.VACUUM_ENABLED=false
 W.ORE_REACH_SCALE=.28
 W.STARTER_SPECIALISTS={'Needler','Ballcaster','Vacuum','Compactor'}
 W.EMPTIER_BATCH=4
-W.COURIER_LIFT=.32
+W.COURIER_LOWER=.38
+W.COURIER_CLOSE=.18
+W.COURIER_CONTACT=W.COURIER_LOWER+W.COURIER_CLOSE
+W.COURIER_LIFT=.38
+W.COURIER_CLEARANCE=1.45
+W.COURIER_APPROACH_RESPONSE=1.85
+function W.courierClawOffset(slot)
+ local side=slot%2==1 and -1 or 1
+ return side*.98,-1.14,.86-math.floor((slot-1)/2)*1.72,side*.06
+end
+local function easeClaw(t)
+ t=math.clamp(t,0,1)
+ return t*t*(3-2*t)
+end
+function W.courierStroke(age)
+ local close=math.clamp((age-W.COURIER_LOWER)/W.COURIER_CLOSE,0,1)
+ local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
+ return W.COURIER_CLEARANCE*(1-easeClaw(age/W.COURIER_LOWER)+lift),close*close
+end
 W.ROCK_SIZE={1.64,.97,1.47}
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6

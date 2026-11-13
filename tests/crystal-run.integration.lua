@@ -1078,14 +1078,29 @@ emptier.pos=hr.Position
 buyer.nextEmptierPlan=nil
 local originalMilestone=Pro.deliveryFundsMilestone
 Pro.deliveryFundsMilestone=function() return false end
-for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
- local drop=stageGroundCargo(material,hr.Position-Vector3.yAxis*2.6)
+local function grabGroundCargo(drop)
  emptier.orePickupId=pickupSerial
+ local slot=Pro.droneCargoUnits(data(buyer),emptier.id)+1
+ local x,y,z=Workshop.courierClawOffset(slot)
+ local center=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
+ emptier.yaw=0;emptier.pos=center-Vector3.new(x,y,z)+Vector3.yAxis*Workshop.COURIER_CLEARANCE
+ emptier.velocity=Vector3.zero
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
- now+=RoleConfig.Courier.PickupHold+.01
+ assert(emptier.oreDock and emptier.state=='Pickup' and not drop.part:GetAttribute('CourierCollected'))
+ now+=Workshop.COURIER_LOWER+.04
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert((emptier.pos-emptier.oreDock).Magnitude<.001 and not drop.part:GetAttribute('CourierCollected'))
+ now+=Workshop.COURIER_CLOSE
  scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
  assert(drop.part:GetAttribute('CourierCollected')==true)
- now=math.max(now+.20,emptier.oreSeatUntil)
+ assert((emptier.pos-emptier.oreDock).Magnitude<.1)
+ now=emptier.oreSeatUntil
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert(not emptier.oreDock and emptier.pos.Y>center.Y+2.5)
+end
+for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
+ local drop=stageGroundCargo(material,hr.Position-Vector3.yAxis*2.6)
+ grabGroundCargo(drop)
 end
 Pro.deliveryFundsMilestone=originalMilestone
 assert(emptier.oreLoadedAt and Pro.droneCargoUnits(data(buyer),emptier.id)==4)
@@ -1125,11 +1140,7 @@ table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2))
 now+=3;emptier.pos=hr.Position
 local smallParcel=Workshop.cargoKey('RunRuby',5,true)
 local drop=stageGroundCargo(smallParcel,hr.Position-Vector3.yAxis*2.6)
-emptier.orePickupId=pickupSerial
-scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
-now+=RoleConfig.Courier.PickupHold+.01
-scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
-assert(drop.part:GetAttribute('CourierCollected') and not emptier.deliveryRequested)
+grabGroundCargo(drop)
 now+=Workshop.EMPTIER_WAIT
 stepEmptier();serviceDeliveries(buyer)
 assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==9)

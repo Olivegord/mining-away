@@ -530,23 +530,26 @@ check('physical courier cargo settles above the table and waits for its receipt'
  near(work.bursts[1].part.Position.Y,7.18)
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy();original:Destroy()
 end)
-check('courier claws close at the lift handoff and emit one latch cue',function()
- local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Collect')
- source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliverySlots',4)
- source:SetAttribute('DeliveryMaterials','Rock:Quartz:10');source:SetAttribute('CourierLoadedOre',19)
- source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10');source:SetAttribute('CourierLoadedAt',720)
- source:SetAttribute('SnapshotAt',720);source.Parent=root
+check('courier claws close at ground contact without a tether and snap once',function()
+ local source=Instance.new('Folder');source:SetAttribute('Role','Courier');source:SetAttribute('State','Pickup')
+ source:SetAttribute('DeliverySlots',4);source:SetAttribute('CourierDock',Vector3.new(0,5,0))
+ source:SetAttribute('CourierPickupAt',720);source:SetAttribute('SnapshotAt',720);source.Parent=root
  local model=Instance.new('Model');model.Parent=root
  local emitter=Instance.new('Part');emitter.Position=Vector3.new(0,5,0);emitter.Parent=model;model.PrimaryPart=emitter
- local drone={source=source,view=model,emitter=emitter,pos=emitter.Position,hasCargoPickup=function() return true end}
+ local drone={source=source,view=model,emitter=emitter,pos=emitter.Position}
  local record={events={dead=false}};local work=WorkEffects.new(root)
  assert(not work:courier(drone,record,720.10))
  local slot=record.courier.mounts[1]
  local open=slot.fingers[1][2].Position
- assert(slot.cargo.Transparency==1 and slot.fingers[1][2].Transparency==0 and drone.cargoMount.id==19)
- assert(work:courier(drone,record,720.33))
- assert(slot.cargo.Transparency==0 and (open-slot.fingers[1][2].Position).Magnitude>.20)
- assert(not work:courier(drone,record,720.34))
+ assert(not slot.cargo and slot.fingers[1][2].Transparency==0 and not record.courier.tetherVFX)
+ assert(not work:courier(drone,record,720.48))
+ assert((open-slot.fingers[1][2].Position).Magnitude>.02 and not slot.cargo)
+ source:SetAttribute('DeliveryUnits',1);source:SetAttribute('DeliveryMaterials','Rock:Quartz:10')
+ source:SetAttribute('CourierLoadedOre',19);source:SetAttribute('CourierLoadedMaterial','Rock:Quartz:10')
+ source:SetAttribute('CourierLoadedAt',720.56)
+ assert(work:courier(drone,record,720.57))
+ assert(slot.cargo.Transparency==0 and drone.cargoMount.id==19)
+ assert(not work:courier(drone,record,720.58))
  work:destroyDrone(record);work:destroy();model:Destroy();source:Destroy()
 end)
 root:Destroy()

@@ -672,10 +672,6 @@ function DroneConfig.fitBody(model: Model, visibleRole: string?)
  if span<=.01 then return end
  local targetSpan=prominent and prominent.span or (role and DroneConfig.HullSpans[role]) or 2.75
  model:ScaleTo(originalScale*targetSpan/span)
- if role=='Striker' and not model:GetAttribute('RoleGeometry') then
-  local shell=model.PrimaryPart
-  if shell then shell.Size=Vector3.new(shell.Size.X,shell.Size.Y*.54,shell.Size.Z) end
- end
  if model:GetAttribute('RoleGeometry')=='Compactor' then
   -- The authoritative ore flight still ends at the original input sockets.
   for i,position in ipairs(DroneConfig.PressSockets) do
