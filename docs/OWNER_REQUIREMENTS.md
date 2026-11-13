@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 12 — explicitly restore the visible Nomad
+
+The owner confirmed restoring Nomad from `4bbbc70f830f0b4009955b1319df67571b525208`: visible above the regular drones, slow wide arcs, a stop above its target, the original hull-mounted cycling scanner, and the larger particle explosion with delayed cluster death and white flash. This explicitly supersedes the later off-screen whole-field patrol, broad field-fixed scanner revisions and 1.8-second blackout request for Nomad. Preserve unrelated later work.
+
 For the consolidated beam/VFX direction, critique-to-implementation record and superseded experiments, read [VFX_INSTRUCTIONS.md](VFX_INSTRUCTIONS.md). Later explicit owner instructions take precedence.
 
 ## November 11 follow-up — put Nomad on a high world patrol

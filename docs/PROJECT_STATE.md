@@ -11,8 +11,8 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `e7ec17e9ac0361e57dea2c26672cffa311044dcde8a404157c88ab7a8d6837e8` | Rigid broad Nomad banks with restored repeated cycling. |
-| Shared Studio Sources | Team Create save **229** | All seven managed Sources matched the canonical file after saving. |
+| Native-file SHA-256 | `3f3a93b98b9289681f12dbe4d74012333a9a8cba1221841c30cf4d31ad034cba` | Visible Nomad restoration from `4bbbc70`; shared Edit sync pending owner ending Play. |
+| Shared Studio Sources | Team Create save **229** | Previous revision `8b8b1cc`; the newly restored canonical Sources are not yet installed. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
@@ -23,6 +23,14 @@ Last substantive handoff: **November 12, 2026, America/Los_Angeles**. Read this 
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 12 — restore the historical visible Nomad (installation pending)
+
+The owner explicitly confirmed the visible-drone version from `4bbbc70f830f0b4009955b1319df67571b525208`. Nomad's renderer is byte-for-byte restored from that revision, alongside its model/projector configuration, slow wide arc routes, capped speed/turning, cruise scanning, missile clock and delayed up-to-five-rock cluster strike. Later off-screen patrol and scanner experiments are removed. Later unrelated Ramiel, ordinary attacks, economy, UI and map edits remain.
+
+Focused production-code API-double tests pass for Nomad's continuous cruise scan, launch cutoff, particle plume/flash, confirmed shatter, flight speed/turn limits, reservations, delayed ore/rewards and permanent ownership. Ramiel cluster regression and the beam suite pass; changed client/server modules compile. These checks are not a Studio visual or multiplayer playtest.
+
+The canonical native file was refreshed with `python3 tools/build.py --previous-commit 8b8b1cc`; all non-Source chunks and unrelated/backup Sources are byte-identical. SHA-256: `3f3a93b98b9289681f12dbe4d74012333a9a8cba1221841c30cf4d31ad034cba`. **Shared Edit installation/save is pending:** the owner-started Play session remains running, and the owner has been asked to end it when ready. Do not claim the next Play loads this restoration until native Script Sync, all seven Source comparisons and shared save are complete. No Roblox publication.
 
 ## November 12 — restore rigid Nomad curtains and independent cycling
 

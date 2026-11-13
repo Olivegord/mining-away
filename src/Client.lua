@@ -878,8 +878,6 @@ local function registerDrone(source)
  if not source:IsA('Model') then return false end
  local id=source:GetAttribute('DroneId');local pos=source:GetAttribute('Position');local kind=source:GetAttribute('Type')
  if not id or typeof(pos)~='Vector3' or not colors[kind] or type(source:GetAttribute('Role'))~='string' then return false end
- local role=source:GetAttribute('Role')
- if role=='Nomad' then hideModel(source);pendingDroneSources[source]=nil;return true end
  pendingDroneSources[source]=true
  -- Render from the complete preserved asset, never a partially streamed gameplay model.
  -- The historical drone is a Part body plus its nested emitter; it has no SpecialMesh.
@@ -897,6 +895,7 @@ local function registerDrone(source)
  if source:GetAttribute('RamielHullAvailable') and not RS:FindFirstChild('RamielHull') then return false end
  local clone=template:Clone();if not clone then return false end;clone.Name='View_'..tostring(id);sanitize(clone)
  clone.PrimaryPart=clone.PrimaryPart or clone:FindFirstChild('Mesh') or clone:FindFirstChildWhichIsA('BasePart',true)
+ local role=source:GetAttribute('Role')
  local referenceMiner=role=='Striker'
  if not referenceMiner then DroneConfig.decorate(clone,role,nil,true) end
  DroneConfig.fitBody(clone)
@@ -932,11 +931,12 @@ local function registerDrone(source)
   if child:IsA('Decal') and child.Face==Enum.NormalId.Front then child:Destroy() end
  end
  local face=Instance.new('Decal');face.Name='Smile';face.Face=Enum.NormalId.Front
- if role~='Ramiel' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
+ if role~='Ramiel' and role~='Nomad' then face.Texture='rbxasset://textures/face.png';face.Parent=pivot else face:Destroy() end
  local d={source=source,view=clone,emitter=emitter,pos=pos,velocity=source:GetAttribute('Velocity') or Vector3.zero,yaw=source:GetAttribute('Yaw') or 0,life=source:GetAttribute('Life'),parts=parts,lastState=source:GetAttribute('State'),beam=createBeam(clone,emitter)}
  d.shotMuzzle=clone:FindFirstChild('ShotMuzzle',true)
  d.specialMotion=SpecialDroneMotion.new(clone,source:GetAttribute('Role'))
- if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone) end
+ if role=='Ramiel' then d.ramiel=DroneConfig.ramielRig(clone)
+ elseif role=='Nomad' then d.nomadProjectors=clone:FindFirstChild('NomadProjectors') end
  drones[source]=d;droneIndex[tostring(id)]=d
  clone:PivotTo(CFrame.new(pos)*CFrame.Angles(0,d.yaw,0))
  TacticalHUD.attachHealth(clone,source,typeColor or colors.Blue)
@@ -1022,6 +1022,7 @@ local function destroyDrone(d)
  if d.healMuzzle then d.healMuzzle:Destroy() end
  if d.healTarget then d.healTarget:Destroy() end
  presentation:destroyDrone(d)
+ NomadView.clearCruise(d)
  presentation:destroyMiningBeam(d.beam);d.view:Destroy()
 end
 connect(world.DescendantRemoving,function(source)
@@ -1152,7 +1153,8 @@ local function renderDrone(d,dt,now)
  local s=d.source;local state=s:GetAttribute('State') or 'Follow'
  local role=s:GetAttribute('Role')
  local isRamiel=role=='Ramiel'
- local heavyFlight=isRamiel and DroneConfig.Prominent.Ramiel
+ local isNomad=role=='Nomad'
+ local heavyFlight=(isRamiel or isNomad) and DroneConfig.Prominent[role]
  local referenceMiner=role=='Striker'
  local logical=s:GetAttribute('Position');local goal=s:GetAttribute('Goal') or logical
  if typeof(logical)~='Vector3' or typeof(goal)~='Vector3' then return end
@@ -1160,12 +1162,13 @@ local function renderDrone(d,dt,now)
  local life=s:GetAttribute('Life');local maxStep=s:GetAttribute('MaxStep60') or .35
  if life~=d.life then d.life=life;d.pos=logical;d.velocity=s:GetAttribute('Velocity') or Vector3.zero end
  local motionPaused=s:GetAttribute('MotionPaused')==true
+ local nomadApproach=isNomad and s:GetAttribute('NomadApproach')==true and state=='Travel'
  local owner=(referenceMiner or state=='Follow') and Players:GetPlayerByUserId(s:GetAttribute('Owner') or 0)
  local hr=owner and owner.Character and owner.Character:FindFirstChild('HumanoidRootPart')
  if state=='Follow' and not motionPaused then
   local slot=s:GetAttribute('FormationSlot');local count=s:GetAttribute('FleetCount')
   if hr and slot and count then
-   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel)
+   goal=Feel.followGoal(hr.Position,slot,count,now,(s:GetAttribute('PhaseSeed') or maxStep*200)/200,isRamiel,isNomad and heavyFlight.altitude or nil)
   end
  end
  if state=='Destroyed' or state=='Reprinting' then d.pos=logical;d.velocity=Vector3.zero
@@ -1181,6 +1184,11 @@ local function renderDrone(d,dt,now)
    -- The impact plane is a hard stop, followed by the server-owned weight hold.
    d.pos=impact;d.velocity=Vector3.zero
   end
+ elseif not motionPaused and nomadApproach then
+  local velocity=s:GetAttribute('Velocity') or Vector3.zero
+  local ahead=s:GetAttribute('WorkPaused') and 0 or math.clamp(now-(s:GetAttribute('SnapshotAt') or now),0,.12)
+  local blend=1-math.exp(-math.min(dt,.1)*14)
+  d.pos=d.pos:Lerp(logical+velocity*ahead,blend);d.velocity=d.velocity:Lerp(velocity,blend)
  elseif not motionPaused then
   local workTravel=state=='ToCharge' or state=='Charging' or state=='Deliver' or state=='BreakerDive' or state=='BreakerRecover' or state=='Recover' or state=='Plant' or state=='GrowApproach' or (s:GetAttribute('TargetId') or '')~=''
   local error=logical-d.pos
@@ -1195,17 +1203,22 @@ local function renderDrone(d,dt,now)
    or Feel.flightYaw(d.pos,goal,d.velocity,d.yaw)
   if state=='Mine' and referenceMiner then targetYaw=d.workingYaw or d.yaw;d.workingYaw=targetYaw
   else d.workingYaw=nil end
-  if d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
+  if nomadApproach or isNomad and state=='Travel' and (s:GetAttribute('TargetId') or '')~='' then targetYaw=s:GetAttribute('Yaw') or d.yaw
+  elseif d.shotMuzzle and (state=='Warmup' or state=='SpecialMine') then
    local aim=s:GetAttribute('TargetPosition')
-   if typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
+   if isNomad then targetYaw=s:GetAttribute('Yaw') or d.yaw
+   elseif typeof(aim)=='Vector3' then targetYaw=Feel.levelYaw(d.pos,aim,d.yaw) end
   end
-  local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
-  d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  if isNomad then d.yaw=Feel.nomadYaw(d.yaw,targetYaw,math.min(dt,.1))
+  else
+   local difference=math.atan2(math.sin(targetYaw-d.yaw),math.cos(targetYaw-d.yaw))
+   d.yaw=d.yaw+difference*Feel.turnAlpha(math.min(dt,.1)*(heavyFlight and heavyFlight.turn or 1))
+  end
  end
  local velocity=dt>0 and (d.pos-previousPosition)/dt or Vector3.zero
  local sideVelocity=CFrame.Angles(0,d.yaw,0):VectorToObjectSpace(velocity).X
  local desiredBank=(isRamiel or referenceMiner or state=='Mine' or state=='SpecialMine' or state=='BreakerDive' or state=='BreakerImpact' or state=='Destroyed' or state=='Reprinting' or motionPaused) and 0 or math.clamp(-sideVelocity*.005,-math.rad(3),math.rad(3))
- d.bank=state=='BreakerImpact' and 0
+ d.bank=(state=='BreakerImpact' or isNomad and (state=='Warmup' or state=='SpecialMine')) and 0
   or (d.bank or 0)+(desiredBank-(d.bank or 0))*(1-math.exp(-math.min(dt,.1)*5))
  local grounded=heavyFlight or state=='BreakerDive' or state=='BreakerImpact' or (s:GetAttribute('Role')=='Compactor' and (state=='Intake' or state=='Press'))
  local drift=(referenceMiner or state=='Destroyed' or state=='Reprinting' or motionPaused or grounded) and 0 or math.sin(now*1.6+(s:GetAttribute('PhaseSeed') or 0))*((state=='Mine' or state=='SpecialMine') and .05 or .10)
@@ -1277,6 +1290,7 @@ local function renderDrone(d,dt,now)
   end
  end
  d.view:PivotTo(visiblePose)
+ if d.nomadProjectors then NomadView.cruise(d,now,world) end
  if d.specialMotion then
   local target=resourceIndex[tostring(s:GetAttribute('TargetId') or '')]
   SpecialDroneMotion.step(d.specialMotion,s,target and target.source,now,dt,d.shotReceipt)

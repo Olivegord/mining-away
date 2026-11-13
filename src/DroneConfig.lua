@@ -178,7 +178,7 @@ for _,name in ipairs(specialOrder) do
 end
 local fieldTestRoles={
  Ramiel={label='Ramiel',color=Color3.fromRGB(93,203,255),detail='Locks into a five-pointed glass star and fires one red beam.'},
- Nomad={label='Nomad',color=Color3.fromRGB(101,194,255),detail='Patrols out of sight and shatters exposed crystals across a field.'},
+ Nomad={label='Nomad',color=Color3.fromRGB(101,194,255),detail='Sweeps the field from high above and shatters clusters with a tiny rocket.'},
  Needler={label='Needler',color=Color3.fromRGB(255,195,94),detail='Fires quick darts. Hits exposed deep cores 25% harder.'},
  Ballcaster={label='Ballcaster',color=Color3.fromRGB(150,124,255),detail='Deals 50% more damage through the first two layers of deep crystals.'},
  Vacuum={label='Vacuum',color=Color3.fromRGB(95,226,184),detail='Flies to loose ore, pulls it in and sends it to your backpack.'},
@@ -624,9 +624,25 @@ end
 
 DroneConfig.Prominent={
  Ramiel={span=11.25,lift=15.0,speed=.55,response=.52,turn=.34},Orbiter={span=3.30,lift=1.5},
- Nomad={span=14.2},
+ Nomad={span=35.5,lift=0,altitude=45,speed=.46,maxStep60=.15,response=.65},
  Singularity={span=3.18,lift=1.3},Halver={span=3.06,lift=1.0},
 }
+
+-- Each slit is cut into a fixed part of Nomad's underside. The endpoints
+-- also serve as projector apertures on the visible model.
+local nomadSlits={
+ OuterLeft={a=Vector3.new(-.38,-.37,-.57),b=Vector3.new(-1.34,-.37,-.38),returnDepth=-.20},
+ OuterRight={a=Vector3.new(.38,-.37,-.57),b=Vector3.new(1.34,-.37,-.38),returnDepth=-.20},
+ MidLeft={a=Vector3.new(-1.18,-.39,-.62),b=Vector3.new(-.43,-.39,-.71),returnDepth=.22},
+ Bridge={a=Vector3.new(-.67,-.42,-.31),b=Vector3.new(.67,-.42,-.31),returnDepth=.16},
+ MidRight={a=Vector3.new(.43,-.39,-.71),b=Vector3.new(1.18,-.39,-.62),returnDepth=-.22},
+ RearLeft={a=Vector3.new(-1.18,-.34,-.14),b=Vector3.new(-.43,-.34,-.23),returnDepth=.22},
+ RearRight={a=Vector3.new(.43,-.34,-.23),b=Vector3.new(1.18,-.34,-.14),returnDepth=-.22},
+ KeelLeft={a=Vector3.new(-.76,-.43,-.47),b=Vector3.new(-.19,-.43,-.96),returnDepth=0},
+ KeelRight={a=Vector3.new(.76,-.43,-.47),b=Vector3.new(.19,-.43,-.96),returnDepth=0},
+}
+DroneConfig.NomadDropOffset=Vector3.new(6.625,-2.125,.425)
+DroneConfig.NomadKeelOffset=3.575
 
 -- Fit the visible idle hull. Hidden mining mounts and opened effect poses
 -- must not set the size of an otherwise small drone.
@@ -841,6 +857,26 @@ function DroneConfig.decorate(model: Model, role: string, finishColor: Color3?, 
    hardware('KeelStrut',Vector3.new(.18,.25,1.05),CFrame.new(side*.39,-.34,-.70)*CFrame.Angles(-.52,side*.37,0),dark,metal)
    hardware('ScannerShoulder',Vector3.new(1.10,.21,.76),CFrame.new(side*.90,-.25,-.40)*CFrame.Angles(0,side*.12,0),dark,metal)
    hardware('KeelTooth',Vector3.new(.24,.43,.29),CFrame.new(side*.22,-.38,-.96),dark,metal)
+  end
+  local projectors=Instance.new('Folder');projectors.Name='NomadProjectors';projectors.Parent=model
+  for name,slit in pairs(nomadSlits) do
+   local a,b,returnDepth=slit.a,slit.b,slit.returnDepth
+   local length=(b-a).Magnitude
+   local frame=CFrame.lookAt((a+b)*.5,b)
+   local mount=hardware(name,Vector3.new(.10,.085,length),frame,dark,metal)
+   mount.Parent=projectors
+   for _,endpoint in ipairs({'A','B'}) do
+    local port=Instance.new('Attachment');port.Name=endpoint
+    port.Position=Vector3.new(0,-.048,length*(endpoint=='A' and .5 or -.5))*scale
+    port.Parent=mount
+   end
+   if returnDepth~=0 then
+    local offset=Vector3.new(returnDepth,0,-length*.5)
+    local lens=hardware('ReturnLens',Vector3.new(.12,.085,.12),frame*CFrame.new(offset),dark,metal)
+    lens.Parent=mount
+    local port=Instance.new('Attachment');port.Name='C'
+    port.Position=(offset-Vector3.yAxis*.048)*scale;port.Parent=mount
+   end
   end
   local bay=hardware('DropBay',Vector3.new(.39,.40,.56),CFrame.new(1.78,-.39,.115),dark,metal)
   shotMuzzle(bay,Vector3.new(0,-.18,0)*scale)

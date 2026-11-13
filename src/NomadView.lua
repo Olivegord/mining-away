@@ -9,7 +9,7 @@ local GOLD=Color3.fromRGB(255,218,146)
 local VERTICAL=Vector3.yAxis
 local BLAST_TAIL=4.8
 local live={}
-local leases={NomadTracker=4,NomadRocket=10,NomadBlast=4}
+local leases={NomadTracker=4,NomadCruiseTracker=4,NomadRocket=10,NomadBlast=4}
 
 local function smooth(t)
  t=math.clamp(t,0,1)
@@ -99,89 +99,42 @@ local function paintRail(line,a,b,width,opacity)
  line.core.Transparency=1-opacity;line.halo.Transparency=1-opacity*.27
 end
 
-local function newScanner(parent)
- local folder=group(parent,'NomadTracker')
+local function newScanner(parent,projectors,cruise)
+ local folder=group(parent,cruise and 'NomadCruiseTracker' or 'NomadTracker')
  if not folder then return nil end
  local root=part(folder,'TrackerAnchor',BLUE,Vector3.one*.05)
- local scan={folder=folder,panes={},seams={rail(folder,'Join'),rail(folder,'Join')}}
+ local scan={folder=folder,projectors=projectors,panes={},mounts={},seams={rail(folder,'Join'),rail(folder,'Join')}}
+ for _,mount in ipairs(projectors:GetChildren()) do
+  scan.mounts[mount.Name]={a=mount:FindFirstChild('A'),b=mount:FindFirstChild('B'),c=mount:FindFirstChild('C'),width=mount.Size.Z}
+ end
+ scan.glint=part(folder,'ReleaseGlint',GOLD,Vector3.one*.19,Enum.PartType.Ball)
  for i=1,3 do
-  local pane={sheet=scanLine(root,true),edges={},feet={},ends={}}
+  local pane={sheet=scanLine(root,true),edges={},feet={},ends={},contour={}}
   for j=1,3 do pane.edges[j]=scanLine(root,false) end
   for j=1,2 do
    pane.feet[j]=rail(folder,'FootRail')
    pane.ends[j]=part(folder,'FootGlint',ICE,Vector3.one*.17,Enum.PartType.Ball)
   end
+  for j=1,8 do pane.contour[j]=rail(folder,'CrystalScanEdge') end
   scan.panes[i]=pane
  end
  return scan
 end
-
--- Original wing, ring and keel slits from 44f061c, measured at the fitted hull scale.
--- The off-screen patrol carries this same layout over the field at its old visible height.
-local PROJECTOR_SCALE=1.4885967
-local SCAN_HEIGHT=38
-local ROCKET_REVEAL_HEIGHT=34
-local KEEL_OFFSET=.96*PROJECTOR_SCALE
-local projectors={}
-local function projector(name,ax,ay,az,bx,bz,returnDepth)
- local a=Vector3.new(ax,ay-.048,az)*PROJECTOR_SCALE
- local b=Vector3.new(bx,ay-.048,bz)*PROJECTOR_SCALE
- local delta=b-a
- local c=returnDepth and b+delta.Unit:Cross(VERTICAL)*(returnDepth*PROJECTOR_SCALE)
- projectors[name]={a=a,b=b,c=c,width=delta.Magnitude}
-end
-projector('OuterLeft',-1.23,-.14,.11,-4.42,.61,-.35)
-projector('OuterRight',1.23,-.14,.11,4.42,.61,-.35)
-projector('MidLeft',-3.85,-.17,.24,-1.17,-.12,.48)
-projector('Bridge',-1.22,-.18,.48,1.22,.48,.42)
-projector('MidRight',1.17,-.17,-.12,3.85,.24,-.48)
-projector('RearLeft',-3.85,-.17,.70,-1.17,.34,.48)
-projector('RearRight',1.17,-.17,.34,3.85,.70,-.48)
-projector('KeelLeft',-.76,-.43,-.47,-.19,-.96)
-projector('KeelRight',.76,-.43,-.47,.19,-.96)
 
 local OUTER={'OuterLeft','OuterRight'}
 local MIDDLE={'MidLeft','Bridge','MidRight'}
 local REAR={'RearLeft','Bridge','RearRight'}
 local JOINED={'OuterLeft','Bridge','OuterRight'}
 local KEEL={'KeelLeft','KeelRight'}
-local SCAN_STAGES={
- {at=0,banks=OUTER,pitch=.64,gain=.64},
- {at=.269,banks=MIDDLE,pitch=.82,gain=.82},
- {at=.335,banks=REAR,pitch=.70,gain=.70},
- {at=.470,banks=JOINED,pitch=1.04,gain=.90},
- {at=.592,banks=KEEL,pitch=1.21,gain=1},
- {at=.729,banks=KEEL,pitch=1.34,gain=.31,pins=true},
-}
-
-local BLACKOUT={}
+-- Hard switches at the clip's visible cuts. Scale the sequence to the shot clock.
 local function scanStage(q)
- if q>=Feel.NomadBeamCutoff then return BLACKOUT,#SCAN_STAGES+1 end
- for i=#SCAN_STAGES,1,-1 do
-  if q>=SCAN_STAGES[i].at then return SCAN_STAGES[i],i end
- end
-end
-
--- The old cruise clock is independent of travel distance. Keep cycling while
--- approaching, then play the keel -> two filaments -> blackout ending once.
-local SCAN_SECONDS=6.30
-local function patternAt(age,windup)
- local cutoff=windup-1.8
- if age>=cutoff then return BLACKOUT,#SCAN_STAGES+1,age-cutoff end
- local closing=SCAN_STAGES[5].at
- local closeAt=math.max(0,cutoff-(Feel.NomadBeamCutoff-closing)*SCAN_SECONDS)
- local q,phaseAge
- if age>=closeAt then
-  phaseAge=age-closeAt
-  q=closing+phaseAge/SCAN_SECONDS
- else
-  phaseAge=age%(Feel.NomadBeamCutoff*SCAN_SECONDS)
-  q=phaseAge/SCAN_SECONDS
- end
- local stage,index=scanStage(q)
- local stageAge=age>=closeAt and phaseAge-(stage.at-closing)*SCAN_SECONDS
-  or phaseAge-stage.at*SCAN_SECONDS
- return stage,index,stageAge
+ if q<.269 then return OUTER end
+ if q<.335 then return MIDDLE end
+ if q<.470 then return REAR end
+ if q<.592 then return JOINED end
+ if q<.729 then return KEEL end
+ if q<.773 then return KEEL,true end
+ return nil
 end
 
 local function hideLine(line)
@@ -193,54 +146,115 @@ local function hideRail(line)
  line.core.Transparency=1;line.halo.Transparency=1
 end
 
+local function traceCrystal(pane,a,b,ground,params)
+ local last
+ for i=0,8 do
+  local base=a:Lerp(b,i/8)
+  local hit=workspace:Raycast(base+VERTICAL*10,-VERTICAL*10,params)
+  local point=hit and hit.Instance:GetAttribute('ResourceId') and hit.Position.Y>ground+.16
+   and hit.Position+VERTICAL*.08 or nil
+  if i>0 then
+   local edge=pane.contour[i]
+   if point and last and math.abs(last.Y-point.Y)<2 then
+    paintRail(edge,last,point,.068,.89)
+   else
+    paintRail(edge,base,base,0,0)
+   end
+  end
+  last=point
+ end
+end
+
 local function groundPoint(top,height)
  return Vector3.new(top.X,height,top.Z)
 end
 
-local function drawScanner(scan,stage,center,bearing,ground,reduced,lowFlash)
- local virtualHull=groundPoint(center,ground+SCAN_HEIGHT)-bearing*KEEL_OFFSET
- local frame=CFrame.lookAt(virtualHull,virtualHull+bearing)
- local floor=ground+.065
+local function drawScanner(scan,stage,pins,ground,now,target,reduced,lowFlash)
+ local trace
+ if stage and not pins and not reduced and target and target.source.Parent
+  and (stage~=scan.lastStage or now>=(scan.nextTrace or 0)) then
+  scan.nextTrace=now+.071
+  trace=RaycastParams.new();trace.FilterType=Enum.RaycastFilterType.Include
+  trace.FilterDescendantsInstances={target.source.Parent}
+ end
  local gain=lowFlash and .68 or 1
- local previous
+ local lastInside
  for i,pane in ipairs(scan.panes) do
-  local mount=projectors[stage.banks[i]]
-  local a,b,topA,topB,across
-  if mount then
-   topA,topB=frame:PointToWorldSpace(mount.a),frame:PointToWorldSpace(mount.b)
-   a,b=groundPoint(topA,floor),groundPoint(topB,floor)
+  local mount=stage and scan.mounts[stage[i]]
+  local a,b,c,topA,topB,across
+  if mount and mount.a and mount.b then
+   topA,topB=mount.a.WorldPosition,mount.b.WorldPosition
+   a,b=groundPoint(topA,ground+.065),groundPoint(topB,ground+.065)
    across=(b-a).Unit
+   if mount.c then c=groundPoint(mount.c.WorldPosition,ground+.065) end
   end
-  if mount and not stage.pins then
+  if a and not pins then
    if reduced then hideLine(pane.sheet)
-   else
-    paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84)
-   end
+   else paintLine(pane.sheet,(a+b)*.5,(topA+topB)*.5,across,mount.width,gain*.84) end
    paintLine(pane.edges[1],a,topA,across,.052,gain*.9)
    paintLine(pane.edges[2],b,topB,across,.069,gain)
-   paintRail(pane.feet[1],a,b,.062,gain*.87)
-   local topC=mount.c and frame:PointToWorldSpace(mount.c)
-   local c=topC and groundPoint(topC,floor)
-   if c and not reduced then paintLine(pane.edges[3],c,topC,across,.035,gain*.70)
+   if c and not reduced then paintLine(pane.edges[3],c,mount.c.WorldPosition,across,.035,gain*.70)
    else hideLine(pane.edges[3]) end
+   paintRail(pane.feet[1],a,b,.062,gain*.87)
    if c then paintRail(pane.feet[2],b,c,.048,gain*.72) else hideRail(pane.feet[2]) end
    pane.ends[1].Position=a;pane.ends[1].Transparency=1-gain*.65
    pane.ends[2].Position=b;pane.ends[2].Transparency=1-gain*.86
   else
-   hideLine(pane.sheet)
-   hideLine(pane.edges[1]);hideLine(pane.edges[3])
-   if b and stage.pins then paintLine(pane.edges[2],b,topB,across,.043,gain*.67)
+   hideLine(pane.sheet);hideLine(pane.edges[1]);hideLine(pane.edges[3])
+   if b and pins then paintLine(pane.edges[2],b,topB,across,.043,gain*.67)
    else hideLine(pane.edges[2]) end
    for _,foot in ipairs(pane.feet) do hideRail(foot) end
    for _,glint in ipairs(pane.ends) do glint.Transparency=1 end
   end
+  if a and trace then traceCrystal(pane,a,b,ground,trace)
+  elseif not a or pins or reduced or not target or not target.source.Parent or stage~=scan.lastStage then
+   for _,edge in ipairs(pane.contour) do hideRail(edge) end
+  end
   if i>1 then
    local seam=scan.seams[i-1]
-   if a and previous and stage.banks==JOINED then paintRail(seam,previous,a,.046,gain*.60)
+   if a and lastInside and stage==JOINED then paintRail(seam,lastInside,a,.046,gain*.60)
    else hideRail(seam) end
   end
-  previous=i==1 and a or b
+  lastInside=i==1 and a or b
  end
+ scan.lastStage=stage
+end
+
+function N.clearCruise(drone)
+ if not drone.nomadCruise then return end
+ drone.nomadCruise.folder:Destroy();drone.nomadCruise=nil
+end
+
+function N.cruise(drone,now,world)
+ local camera=workspace.CurrentCamera
+ local state=drone.source:GetAttribute('State')
+ local shot=drone.shotReceipt
+ local contact=shot and shot.Parent and shot:GetAttribute('ContactAt')
+ local active=shot and shot.Parent and shot:GetAttribute('Shape')=='Nomad' and (not contact or now<contact+.50)
+ local position=drone.view:GetPivot().Position
+ if not camera or active or state=='Destroyed' or state=='Reprinting' or state=='Docked' or state=='Charging'
+  or not BeamVFX.near(position,205) then N.clearCruise(drone);return end
+ local scan=drone.nomadCruise
+ if not scan then
+  scan=newScanner(camera,drone.nomadProjectors,true)
+  if not scan then return end
+  drone.nomadCruise=scan
+  local query=RaycastParams.new();query.FilterType=Enum.RaycastFilterType.Include;query.RespectCanCollide=true
+  query.FilterDescendantsInstances={workspace.Terrain,world:FindFirstChild('Map')}
+  scan.groundQuery=query
+ end
+ if now>=(scan.nextGround or 0) then
+  scan.nextGround=now+.09
+  local hit=workspace:Raycast(position,-VERTICAL*110,scan.groundQuery)
+  scan.ground=hit and hit.Position.Y or position.Y-(drone.source:GetAttribute('FlightHeight') or 45)
+ end
+ local slot=drone.source:GetAttribute('FormationSlot') or 1
+ local q=((now+slot*.39)/6.30)%.773
+ local stage,pins=scanStage(q)
+ local player=game:GetService('Players').LocalPlayer
+ local reduced=BeamVFX.reduced()
+ drawScanner(scan,stage,pins,math.min(scan.ground,position.Y-3.5),now,nil,reduced,
+  reduced or (player and player:GetAttribute('ReducedFlashing')==true))
 end
 
 local function newRocket(parent,reduced)
@@ -343,7 +357,7 @@ local function newBlast(parent,ground,radius,reduced,lowFlash,at)
  if not folder then return nil end
  local root=part(folder,'PlumeOrigin',HEAT,Vector3.one*.05)
  root.Position=ground+VERTICAL*.24
- local scale=math.clamp(radius/13,1,2.8)
+ local scale=radius/13
  local blast={root=folder,skirt={},cap={},capAt=at+.25,untilAt=at+BLAST_TAIL,reduced=reduced}
  blast.stem=plumeEmitter(root,'RisingFireAndSmoke',VERTICAL*.58,nil,STEM,scale)
  if not lowFlash then
@@ -352,13 +366,11 @@ local function newBlast(parent,ground,radius,reduced,lowFlash,at)
   light.Range=math.min(48,radius*3.3);light.Brightness=0;light.Parent=root;blast.light=light
  end
  local count=reduced and 4 or 8
- local reach=math.clamp(radius/20,1,1.45)
  for i=1,count do
   local a=(i-1)*math.pi*2/count
   local radial=Vector3.new(math.cos(a),0,math.sin(a))
   local direction=(radial+VERTICAL*.22).Unit
   blast.skirt[i]=plumeEmitter(root,'GroundDust',radial*.94+VERTICAL*.24,direction,SKIRT,scale)
-  blast.skirt[i].Speed=NumberRange.new(SKIRT.speed.Min*reach,SKIRT.speed.Max*reach)
   blast.cap[i]=plumeEmitter(root,'RollingSmokeCap',radial*(1.7*scale)+VERTICAL*((10.8+(i%3)*.97)*scale),direction,CAP,scale)
  end
  if not reduced then
@@ -400,63 +412,51 @@ function N.clear(r)
  end
 end
 
-function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
+function N.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onImpact,onFlash)
  local camera=workspace.CurrentCamera
+ local ground=node:GetAttribute('ScanGround') or to.Y-1
  local contactAt=node:GetAttribute('ContactAt')
  local landed=contactAt and now>=contactAt
- local radius=node:GetAttribute('BlastRadius') or 24
- local waveRadius=math.min(54,radius)
- local near=camera and BeamVFX.near(to,math.max(160,120+radius))
+ local near=camera and BeamVFX.near(Vector3.new(to.X,ground,to.Z),150)
  local player=game:GetService('Players').LocalPlayer
  local reduced=BeamVFX.reduced()
  local steady=game:GetService('GuiService').ReducedMotionEnabled or (player and player:GetAttribute('ReducedMotion')==true)
  local lowFlash=reduced or (player and player:GetAttribute('ReducedFlashing')==true)
- local scanFrom=node:GetAttribute('ScanFrom')
- local scanning=not landed and age>=0 and age<windup and typeof(scanFrom)=='Vector3'
- local airborne=not landed and progress>=0 and progress<1.12
- local paused=(node:GetAttribute('PausedAt') or 0)>0
- if scanning and near then
-  local q=Feel.nomadScanProgress(age,windup)
-  local stage,index,stageAge=patternAt(age,windup)
-  -- Quarry fields share a long X axis. Keep the wide projector banks across
-  -- that axis; side-entry travel must not turn the curtains edge-on.
-  local bearing=Vector3.zAxis
-  local center=Feel.nomadPass(scanFrom,from,q)
-  local soundPoint=Vector3.new(center.X,to.Y+5,center.Z)
-  if stage.banks then
-   r.scan=r.scan or newScanner(camera)
-   if r.scan then drawScanner(r.scan,stage,center,bearing,to.Y,reduced,lowFlash) end
+ local projectors=drone and drone.nomadProjectors
+ local muzzle=drone and drone.shotMuzzle
+ if muzzle and (muzzle.WorldPosition-from).Magnitude>2.5 then muzzle=nil end
+ if not landed and age>=0 and age<windup and near then
+  local q=age/windup
+  local stage,pins=scanStage(q)
+  if projectors and projectors.Parent then
+   N.clearCruise(drone)
+   if r.scan and r.scan.projectors~=projectors then r.scan.folder:Destroy();r.scan=nil end
+   r.scan=r.scan or newScanner(camera,projectors)
+   if r.scan then
+    drawScanner(r.scan,stage,pins,ground,now,target,reduced,lowFlash)
+    local glint=r.scan.glint
+    if muzzle and q>=.916 then
+     local rise=smooth((q-.916)/.026)
+     glint.Position=muzzle.WorldPosition
+     glint.Transparency=1-(lowFlash and .49 or .85)*rise
+    else glint.Transparency=1 end
+   end
   elseif r.scan then r.scan.folder:Destroy();r.scan=nil end
-  if audio and index~=r.stage and not paused and stageAge<.16 then
-   if stage.banks then audio:play('nomad_scan_cut',soundPoint,{level=index==1 and 1.1 or .83,pitch=stage.pitch})
-   else audio:play('nomad_scan_off',soundPoint) end
-  end
-  r.stage=index
-  if audio and audio.setLoop and stage.banks and not paused then
-   local pulse=math.sin(age*math.pi*2*6)
-   audio:setLoop(node,'nomad_scan',soundPoint,stage.gain*(.86+.14*pulse),stage.pitch*(1+.045*pulse))
-  elseif audio and audio.stopLoop then audio:stopLoop(node,true) end
+  if audio and audio.setLoop and stage and (node:GetAttribute('PausedAt') or 0)<=0 then
+   audio:setLoop(node,'orbital_charge',Vector3.new(to.X,ground+4,to.Z),pins and .24 or .23+.42*smooth(q),.58+.52*q)
+  elseif audio and audio.stopLoop then audio:stopLoop(node,stage==nil) end
  else
   if r.scan then r.scan.folder:Destroy();r.scan=nil end
-  if not (airborne and near and not paused) and audio and audio.stopLoop then audio:stopLoop(node,true) end
+  if audio and audio.stopLoop then audio:stopLoop(node) end
  end
- if airborne and near and not (r.rocket and r.rocket.tailAt) then
-  local t=math.clamp(progress,0,1)
-  local start=to:Lerp(from,math.min(1,ROCKET_REVEAL_HEIGHT/(from-to).Magnitude))
+ if not landed and progress>=0 and progress<1.12 and near and not (r.rocket and r.rocket.tailAt) then
   if not r.fired then
    r.fired=true
-   if not paused and audio and progress<.12 then audio:play('nomad_release',start) end
-  end
-  if not r.screeched and progress>=.10 then
-   r.screeched=true
-   if not paused and audio and progress<.24 then audio:play('nomad_screech',start) end
-  end
-  if not paused and audio and audio.setLoop then
-   local audible=start:Lerp(to,t*(.28+.72*t))+VERTICAL*3
-   audio:setLoop(node,'nomad_descent',audible,.34+.94*t,1.34-.46*t)
+   r.launchFrom=muzzle and muzzle.WorldPosition or from
+   if audio and progress<.20 then audio:play('coil_fire',r.launchFrom,{pitch=1.32,level=.79}) end
   end
   r.rocket=r.rocket or newRocket(camera,reduced)
-  if r.rocket then drawRocket(r.rocket,start,to,t,steady) end
+  if r.rocket then drawRocket(r.rocket,r.launchFrom,to,math.min(progress,1),steady) end
  elseif r.rocket then
   stopRocket(r.rocket,now)
   if now-r.rocket.tailAt>=.25 then r.rocket.root:Destroy();r.rocket=nil end
@@ -465,11 +465,12 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
  local ageSince=now-contactAt
  local floor=node:GetAttribute('BlastGround')
  if typeof(floor)~='Vector3' then return end
+ local radius=node:GetAttribute('BlastRadius') or 13
  if not r.impacted then
   r.impacted=true
   if ageSince<.20 and near then
    RoleVisuals.setTime(contactAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,waveRadius*2.1,.67,VERTICAL,2.45)
+   RoleVisuals.Pulse(floor+VERTICAL*.10,GOLD,1.2,radius*2.64,.67)
    if audio then audio:play('nomad_impact',floor) end
    if onFlash and not lowFlash then onFlash(floor,contactAt) end
    if onImpact and not steady then onImpact(floor,2.7,contactAt) end
@@ -489,10 +490,9 @@ function N.step(r,node,now,from,to,age,windup,progress,audio,onImpact,onFlash)
  local shatterAt=node:GetAttribute('ShatterAt')
  if shatterAt and now>=shatterAt and not r.shattered then
   r.shattered=true
-  RoleVisuals.Crater(floor,math.min(34,radius*.96),'Nomad',shatterAt)
   if now-shatterAt<.24 and near then
    RoleVisuals.setTime(shatterAt)
-   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,waveRadius*.46,waveRadius*2.24,.82,VERTICAL,2.2)
+   RoleVisuals.Pulse(floor+VERTICAL*.18,COPPER,radius*.46,radius*3.06,.82)
    if r.blast then
     for _,emitter in ipairs(r.blast.skirt) do emitter:Emit(reduced and 2 or 3) end
     if r.blast.sparks then r.blast.sparks:Emit(20) end

@@ -1,22 +1,39 @@
 local function checkNomadView()
- local node=Instance.new('Folder')
- local from,target=Vector3.new(0,420,0),Vector3.zero
- local side=from+Vector3.new(53,0,0)
- local windup,flight=Feel.nomadWindup((side-from).Magnitude,9,6.4),1.44
- local beamOff=windup-1.8
- local scanClock=6.30 -- Original cruise rhythm, independent of travel time.
- node:SetAttribute('ScanFrom',side)
- node:SetAttribute('BlastRadius',32)
+ local hull=Instance.new('Model');hull.Parent=workspace
+ local ports=Instance.new('Folder');ports.Parent=hull
+ local function slit(name,x,z,width,returned)
+  local part=Instance.new('Part');part.Name=name;part.Size=Vector3.new(.1,.1,width);part.Parent=ports
+  local function mount(name,offset)
+   local a=Instance.new('Attachment');a.Name=name;a.WorldPosition=Vector3.new(x,38,z)+offset;a.Parent=part;return a
+  end
+  local a=mount('A',Vector3.zero);local b=mount('B',Vector3.new(width,0,0))
+  if returned then mount('C',Vector3.new(width,0,1)) end
+  return a,b
+ end
+ local outer=slit('OuterLeft',-6,0,4,true)
+ slit('OuterRight',2,0,4,true)
+ local middle=slit('MidLeft',-5,-1,3,true)
+ local rear=slit('RearLeft',-5,1,3,true)
+ slit('Bridge',-2,0,4,true)
+ slit('MidRight',2,-1,3,true)
+ slit('RearRight',2,1,3,true)
+ local keelA,keelB=slit('KeelLeft',-1.25,-1,1)
+ local _,keelRight=slit('KeelRight',.25,-1,1)
+ local muzzle=Instance.new('Attachment');muzzle.WorldPosition=Vector3.new(2.65,37.15,.17);muzzle.Parent=hull
+ local drone={nomadProjectors=ports,shotMuzzle=muzzle,view=hull,source=hull}
+ local node=Instance.new('Folder');node:SetAttribute('ScanGround',0)
  local record={}
- local loop,flashes=nil,0
+ local windup=4.05
+ local launches,cutAudio,flashes=0,0,0
  local impactBeats,played={},{}
- local audio={
-  setLoop=function(_,_,name,point,level,pitch) loop={name=name,point=point,level=level,pitch=pitch} end,
-  play=function(_,cue) played[#played+1]=cue end,
-  stopLoop=function() loop=nil end,
- }
- local function at(age)
-  NomadView.step(record,node,age,from,target,age,windup,(age-windup)/flight,audio,
+ local audio={setLoop=function() end,play=function(_,cue)
+  if cue=='coil_fire' then launches+=1 else played[#played+1]=cue end
+ end,
+  stopLoop=function(_,_,immediate) if immediate then cutAudio+=1 end end}
+ local target=Vector3.new(0,2,0)
+ local function at(q)
+  local age=q*windup
+  NomadView.step(record,node,age,muzzle.WorldPosition,target,age,windup,(age-windup)/.95,drone,nil,audio,
    function(_,strength) impactBeats[#impactBeats+1]=strength end,function() flashes+=1 end)
  end
  local function filaments(scan)
@@ -26,142 +43,55 @@ local function checkNomadView()
   end
   return count
  end
- local function straight(line)
+ local function straight(line,port)
   local top,bottom=line.b.WorldCFrame.Position,line.a.WorldCFrame.Position
-  assert(top.Y>37 and top.Y<38 and bottom.Y<.10 and top.X==bottom.X and top.Z==bottom.Z)
+  assert((top-port.WorldPosition).Magnitude<1e-5 and top.X==bottom.X and top.Z==bottom.Z)
  end
- local forward=Vector3.zAxis
- local function oldPort(line,age,x,y,z)
-  local center=Feel.nomadPass(side,from,Feel.nomadScanProgress(age,windup))
-  local origin=Vector3.new(center.X,38,center.Z)-forward*1.4290527
-  local frame=CFrame.lookAt(origin,origin+forward)
-  local actual=frame:PointToObjectSpace(line.b.WorldCFrame.Position)
-  assert((actual-Vector3.new(x,y,z)).Magnitude<.001,'projection differs from the pre-teeth hull aperture')
-  straight(line)
+ for i=1,240 do
+  NomadView.cruise(drone,i/60,workspace)
+  assert(filaments(drone.nomadCruise)>0,'the cruise pattern blacked out')
  end
- at(.01)
- local scan=assert(record.scan)
+ at(.10)
+ assert(not drone.nomadCruise)
+ local scan=record.scan
  local first=scan.panes[1]
- local width=first.sheet.main.Width0
- local originalWidth=4.8066006 -- Measured on the fitted hull at 44f061c.
- assert(first.sheet.main.Enabled and math.abs(width-originalWidth)<.001 and width==first.sheet.main.Width1)
+ assert(first.sheet.main.Enabled and first.sheet.main.Width0==4 and first.sheet.main.Width1==4)
  assert(filaments(scan)==6 and not scan.panes[3].sheet.main.Enabled)
- assert(played[1]=='nomad_scan_cut' and loop.name=='nomad_scan' and loop.point.X>52)
- oldPort(first.edges[1],.01,-1.830974,-.279856,.163746)
- oldPort(first.edges[3],.01,-6.498919,-.279856,1.422769)
- oldPort(scan.panes[2].edges[3],.01,6.660275,-.279856,.393320)
- at(.268*scanClock);assert(first.sheet.main.Width0==width)
- local before=first.edges[1].b.WorldCFrame.Position
- at(.270*scanClock)
- assert((first.edges[1].b.WorldCFrame.Position-before).Magnitude>2.5 and played[2]=='nomad_scan_cut' and loop.pitch>.78)
- oldPort(first.edges[1],.270*scanClock,-5.731097,-.324514,.357263)
- oldPort(scan.panes[2].edges[3],.270*scanClock,1.816088,-.339400,1.339737)
- assert(filaments(scan)==9 and scan.seams[1].core.Transparency==1)
- before=first.edges[1].b.WorldCFrame.Position
- at(.336*scanClock)
- assert((first.edges[1].b.WorldCFrame.Position-before).Magnitude>1.6 and first.sheet.main.Width0<width and played[3]=='nomad_scan_cut')
- oldPort(first.edges[1],.336*scanClock,-5.731097,-.324514,1.042018)
- at(.471*scanClock);assert(scan.seams[1].core.Transparency<1 and played[4]=='nomad_scan_cut')
- oldPort(scan.panes[3].edges[1],.471*scanClock,1.830974,-.279856,.163746)
- at(.593*scanClock);assert(filaments(scan)==4 and not scan.panes[3].sheet.main.Enabled and played[5]=='nomad_scan_cut')
- oldPort(first.edges[2],.593*scanClock,-.282833,-.711549,-1.429053)
- at(.728*scanClock);assert(first.sheet.main.Enabled and first.feet[1].core.Transparency<1)
- at(.730*scanClock);assert(not first.sheet.main.Enabled and filaments(scan)==2 and first.feet[1].core.Transparency==1)
- oldPort(scan.panes[2].edges[2],.730*scanClock,.282833,-.711549,-1.429053)
- assert(played[6]=='nomad_scan_cut')
- at(beamOff-.001);assert(record.scan and filaments(scan)==2)
- at(beamOff);assert(not record.scan and not loop and played[7]=='nomad_scan_off')
- at(windup-.001);assert(not record.scan and not record.rocket and #played==7)
- at(windup);assert(not record.scan and record.rocket and loop.name=='nomad_descent' and played[8]=='nomad_release')
- assert(record.rocket.body.CFrame.Position.Y==34,'the payload started out of sight at patrol altitude')
- local altitude=loop.point.Y
- at(windup+.16);assert(played[9]=='nomad_screech')
- at(windup+.8);assert(loop.point.Y<altitude and #played==9)
- local impactAt=windup+flight
- node:SetAttribute('ContactAt',impactAt);node:SetAttribute('BlastGround',target)
- at(impactAt+.02)
+ straight(first.edges[1],outer)
+ at(.268);straight(first.edges[1],outer);assert(first.sheet.main.Width0==4)
+ at(.270);straight(first.edges[1],middle);assert(first.sheet.main.Width0==3 and filaments(scan)==9)
+ at(.334);straight(first.edges[1],middle)
+ at(.336);straight(first.edges[1],rear);assert(first.sheet.main.Width0==3)
+ at(.471);straight(first.edges[1],outer);assert(scan.seams[1].core.Transparency<1)
+ at(.593);straight(first.edges[1],keelA);assert(first.sheet.main.Width0==1 and filaments(scan)==4)
+ at(.728);assert(first.sheet.main.Enabled and first.feet[1].core.Transparency<1)
+ at(.730)
+ assert(not first.sheet.main.Enabled and filaments(scan)==2 and first.feet[1].core.Transparency==1)
+ straight(first.edges[2],keelB);straight(scan.panes[2].edges[2],keelRight)
+ at(.772);assert(filaments(scan)==2 and scan.glint.Transparency==1)
+ at(.774);assert(filaments(scan)==0 and scan.glint.Transparency==1 and cutAudio==1)
+ at(.900);assert(filaments(scan)==0 and scan.glint.Transparency==1 and not record.rocket)
+ at(.946);assert(filaments(scan)==0 and scan.glint.Position==muzzle.WorldPosition and scan.glint.Transparency<1 and not record.rocket)
+ at(1)
+ assert(not record.scan and record.rocket and launches==1 and (record.launchFrom-muzzle.WorldPosition).Magnitude<1e-5)
+ node:SetAttribute('ContactAt',5);node:SetAttribute('BlastGround',Vector3.zero);node:SetAttribute('BlastRadius',13)
+ at(5.02/windup)
  local blast=assert(record.blast)
- assert(not loop and flashes==1 and #impactBeats==1 and played[10]=='nomad_impact' and RoleVisuals.pulses==1)
+ assert(flashes==1 and #impactBeats==1 and played[1]=='nomad_impact' and RoleVisuals.pulses==1)
  assert(blast.stem.Emitted==18 and not blast.cap[1].Emitted and blast.fire.Emitted==14)
- at(impactAt+.28)
+ at(5.28/windup)
  assert(blast.cap[1].Emitted==5 and blast.stem.Emitted==26 and not record.rocket)
- assert(blast.cap[1].Size[2].Value>22 and blast.cap[1].Lifetime.Max>3)
+ assert(blast.cap[1].Size[2].Value>12 and blast.cap[1].Lifetime.Max>3)
  assert(blast.root:GetChildren()[1].Transparency==1,'the plume used visible geometry')
- at(impactAt+.49)
- assert(#impactBeats==1 and not record.shattered and RoleVisuals.craters==0)
- node:SetAttribute('ShatterAt',impactAt+.50)
- at(impactAt+.51)
- assert(impactBeats[2]>impactBeats[1] and RoleVisuals.pulses==2 and played[11]=='nomad_shatter')
- at(impactAt+.52)
- assert(#impactBeats==2 and flashes==1 and RoleVisuals.craters==1 and not NomadView.detach(record,impactAt+2))
- assert(RoleVisuals.craterAt==impactAt+.50)
- assert(NomadView.detach(record,impactAt+5) and not blast.root.Parent)
+ at(5.49/windup)
+ assert(#impactBeats==1 and not record.shattered)
+ node:SetAttribute('ShatterAt',5.50)
+ at(5.51/windup)
+ assert(impactBeats[2]>impactBeats[1] and RoleVisuals.pulses==2 and played[2]=='nomad_shatter')
+ at(5.52/windup)
+ assert(#impactBeats==2 and flashes==1 and not NomadView.detach(record,7))
+ assert(NomadView.detach(record,10) and not blast.root.Parent)
  NomadView.clear(record)
-
- local camera=workspace.CurrentCamera
- local fixture=Instance.new('Folder');fixture:SetAttribute('ScanFrom',side)
- local comparison={}
- local age=.55*scanClock
- local function sample()
-  NomadView.step(comparison,fixture,age,from,target,age,windup,(age-windup)/flight)
- end
- sample()
- local edges=comparison.scan.panes[1].edges
- local feet={edges[1].a.WorldCFrame.Position,edges[2].a.WorldCFrame.Position,edges[3].a.WorldCFrame.Position}
- local savedCamera=camera.CFrame
- for _,pitch in ipairs({.17,-.22}) do
-  local c,s=math.cos(pitch),math.sin(pitch)
-  local eye=Vector3.new(5,4,55)
-  local view={RightVector=Vector3.xAxis,PointToObjectSpace=function(_,point)
-   local d=point-eye
-   return Vector3.new(d.X,d.Y*c+d.Z*s,-d.Y*s+d.Z*c)
-  end}
-  camera.CFrame=view
-  sample()
-  for i,edge in ipairs(edges) do
-   local foot=edge.a.WorldCFrame.Position
-   local top=edge.b.WorldCFrame.Position
-   local a,b=view:PointToObjectSpace(foot),view:PointToObjectSpace(top)
-   assert((foot-feet[i]).Magnitude<.0001,'camera moved the ground anchors')
-   assert(top.X==foot.X and top.Z==foot.Z,'camera pitch moved a beam out of world vertical')
-  end
-  local sheet=comparison.scan.panes[1].sheet
-  assert(math.abs(sheet.main.Width1-(edges[2].b.WorldCFrame.Position-edges[1].b.WorldCFrame.Position).Magnitude)<.0001)
- end
- camera.CFrame=savedCamera
- for _,entry in ipairs({Vector3.new(53,420,0),Vector3.new(-53,420,0),Vector3.new(0,420,53),Vector3.new(0,420,-53)}) do
-  fixture:SetAttribute('ScanFrom',entry)
-  sample()
-  local bank=comparison.scan.panes[1]
-  local span=bank.edges[2].a.WorldCFrame.Position-bank.edges[1].a.WorldCFrame.Position
-  assert(math.abs(span.X)>4 and math.abs(span.Z)<1,'side entry turned the broad bank edge-on')
- end
- local cycle=Feel.NomadBeamCutoff*6.30
- local cycleNode=Instance.new('Folder');cycleNode:SetAttribute('ScanFrom',side)
- local cycleRecord={}
- local longWindup=25
- local function cycleAt(t)
-  NomadView.step(cycleRecord,cycleNode,t,from,target,t,longWindup,(t-longWindup)/flight)
- end
- for lap=0,3 do
-  cycleAt(lap*cycle+.01)
-  assert(filaments(cycleRecord.scan)==6,'approach did not return to the outer banks')
-  cycleAt(lap*cycle+.28*6.30)
-  assert(filaments(cycleRecord.scan)==9,'approach cycle failed to switch to middle banks')
-  cycleAt(lap*cycle+.60*6.30)
-  assert(filaments(cycleRecord.scan)==4,'approach cycle failed to switch to keel banks')
- end
- cycleAt(longWindup-1.8-.10)
- assert(filaments(cycleRecord.scan)==2,'shutdown must finish on two filaments')
- cycleAt(longWindup-1.8)
- assert(not cycleRecord.scan and not cycleRecord.rocket)
- cycleAt(longWindup-.001)
- assert(not cycleRecord.scan and not cycleRecord.rocket)
- cycleAt(longWindup)
- assert(cycleRecord.rocket,'release must follow blackout by 1.8 seconds')
- NomadView.clear(cycleRecord);cycleNode:Destroy()
- NomadView.clear(comparison);fixture:Destroy()
- print('PASS Nomad pre-teeth apertures, original bank widths, stage-synced audio and 1.8-second blackout')
- print('PASS Nomad camera motion leaves physical columns vertical and constant-width')
+ print('PASS Nomad continuous cruise scan, launch cutoff, particle plume, one white flash and confirmed shatter beat')
 end
 checkNomadView()
