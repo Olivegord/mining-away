@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — reference-inspired gem volume and release particles
+
+The owner selected https://www.pinterest.com/pin/968344357402992555/ as the primary gem reference. Fixed interior specks must keep their local positions as the gem turns. The implemented loose ruby uses one cached client mesh with individually shaded, gradient-colored facets, translucent emissive faces and 26 small embedded inclusions. Original pickups are the fallback when mesh creation is unavailable. Ordinary crystal breaks add a brief glint spray and slower colored discs. Pickup glints have a fast expansion and eased-looking decay, and rising motes drift laterally while cooling toward violet. Native Edit samples verified the geometry and finish. Gameplay motion and multiplayer remain unverified.
+
 ## November 14 — modifiers preserve mineral color
 
 Keep the original mineral color, material and crystal silhouette for rocks and loose ore. A Frosted ruby remains red. Use native Roblox Highlights with transparent fill and layered ground outlines instead of attached pieces. The white selector highlight is confined to the live aiming preview. Charged sparks use tiny, fast, opaque rectangles that disappear at expiry. Cold vapor and rock dust are larger, softer background particles. Let the short arc, fracture spray and lingering smoke read as separate beats. [Riot Games’ visual effects guide](https://www.riotgames.com/en/artedu/visual-effects) · [Roblox ParticleEmitter reference](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter)

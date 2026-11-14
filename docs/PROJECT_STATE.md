@@ -4,6 +4,14 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
+## November 14 — Pinterest gem volume and release particles
+
+Based on owner-selected pin https://www.pinterest.com/pin/968344357402992555/, loose ruby pickups now use a cached client mesh with contrasting ruby/rose/violet facets, gradients, translucent emissive faces and 26 fixed interior white inclusions. This pass chooses the ruby palette for the existing red loose ore. Mesh creation failure retains the original pickup. Pressed cargo uses its existing model. Crystal breaks add a short glint spray and slower colored discs, while rising pickup motes drift smoothly and shift toward violet. The runtime mesh is local, shared among pickup clones, and uses 152 triangles. The module is bundled inside PickupView to stay within the client’s 200-register limit.
+
+Studio was already open in shared Edit at place **124078027733625**, universe **10774898335**. Script Sync delivered the client. All three roots were connected and all seven installed SHA-256 hashes matched the canonical snapshot after saving. The Studio log records **Saved new changes in DRONEREVOLUTION to Roblox** at **1:38:35 PM Pacific**, November 14 (Save to Roblox, publishType=2). This was a shared Edit save. No player release was requested or issued. Native snapshot SHA-256 is **69d8c6bfe2a926aff1f033797739ed3f746fbc9377214aceb1654d82e4e44928**. The temporary Edit sample was removed before saving. Next Play loads this gem/particle pass.
+
+Pickup trajectory and production renderer checks, 28 VFX behavior checks, full client/server compilation and native preservation verification passed. Native Edit samples verified mesh construction, visible internal inclusions and the final finish. These are component samples. Gameplay motion, low-graphics appearance and multiplayer remain unverified. Reproduce with `python3 tools/script_sync.py`, then `python3 tools/build.py --previous-commit cf86d81` against the prior canonical snapshot. The Git commit containing this section is the exact revision for this pass.
+
 ## Identity and delivery state
 
 | Item | Exact value | Verified meaning |
@@ -11,7 +19,7 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 3092da2fd3a1b5ec20252d251151f412987f1f92d3b84e5eaf72701bca281f34 | Modifier outlines and particles, with temporary selector preview highlights. |
+| Native-file SHA-256 | 69d8c6bfe2a926aff1f033797739ed3f746fbc9377214aceb1654d82e4e44928 | Modifier outlines and particles, with temporary selector preview highlights. |
 | Shared Studio Sources | Team Create save **296**, November 14 at 1:27 PM Pacific | All three Script Sync roots are connected and all seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |

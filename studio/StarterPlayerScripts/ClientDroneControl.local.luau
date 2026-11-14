@@ -6272,6 +6272,22 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    mode,sparks.EmissionDirection,fast and spread*.66 or spread)
   accent:Emit(prism and 4 or dark and 5 or 3)
  end
+ if crystal then
+  -- A sharp release, drifting colored discs and lingering dust have separate tails.
+  local glints=EnergyDisc.accent(root,'CrystalFacetSparks',color:Lerp(Color3.fromRGB(255,217,240),.64),
+   diameter*.38,'glint',Enum.NormalId.Top,88)
+  glints.Speed=NumberRange.new(9,19);glints.Drag=4.5
+  glints.Acceleration=Vector3.new(0,-13,0);glints.Lifetime=NumberRange.new(.24,.65)
+  glints:Emit(5)
+  local motes=Instance.new('ParticleEmitter');motes.Name='CrystalAfterglow'
+  EnergyDisc.configure(motes,diameter*.33,.30,1,0,.48)
+  motes.Enabled=false;motes.Rate=0
+  motes.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,color:Lerp(Color3.fromRGB(255,210,231),.5)),
+   ColorSequenceKeypoint.new(.45,color),ColorSequenceKeypoint.new(1,color:Lerp(Color3.fromRGB(88,36,141),.32))})
+  motes.Speed=NumberRange.new(2,6);motes.Drag=3
+  motes.Acceleration=Vector3.new(0,1.8,0);motes.SpreadAngle=Vector2.new(85,85)
+  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(6)
+ end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
@@ -13719,11 +13735,13 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local t=cycle%1
    local angle=record.seed*.97+i*2.399963+t*1.05
    local reach=(.40+(i%3)*.31)*(1-.30*t)
+   angle+=.24*math.sin(t*math.pi*2+i)
    local position=ground+Vector3.new(math.cos(angle)*reach,.30+4.3*t,math.sin(angle)*reach)*scale
    local diameter=.45+((record.seed*17+i*73+math.floor(cycle)*41)%101)*.004
    local remaining=1-t
+   local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining,rig.moteColor,opacity)
+   EnergyDisc.place(mote,position,diameter*scale*remaining,tint,opacity)
   end
  end
 end
@@ -13736,6 +13754,89 @@ local PickupView = (function()
 -- neither a magnet animation nor a disappearing view can grant backpack units.
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
+local GemAppearance=(function()
+-- One shared local mesh gives loose gems hard normals and colored internal facets.
+-- Keep the original replicated pickup as the authoritative source and fallback.
+local Gem={}
+local template,mesh,attempted
+function Gem.prepare()
+ if attempted then return end
+ attempted=true
+ local ok,result=pcall(function()
+  local assets=game:GetService('AssetService')
+  mesh=assert(assets:CreateEditableMesh())
+  local positions,ids={},{}
+  local function vertex(p)
+   positions[#positions+1]=p;ids[#ids+1]=mesh:AddVertex(p)
+   return #ids
+  end
+  local rings={}
+  for level,spec in ipairs({{.24,.5},{.5,.12},{.47,.04}}) do
+   rings[level]={}
+   for i=1,8 do
+    local angle=(i-1)*math.pi/4+math.pi/8
+    rings[level][i]=vertex(Vector3.new(math.cos(angle)*spec[1],spec[2],math.sin(angle)*spec[1]))
+   end
+  end
+  local top=vertex(Vector3.new(0,.5,0))
+  local tip=vertex(Vector3.new(.04,-.5,-.02))
+  local palette={Color3.fromRGB(255,145,181),Color3.fromRGB(190,24,72),Color3.fromRGB(102,9,52),
+   Color3.fromRGB(238,48,104),Color3.fromRGB(255,202,205),Color3.fromRGB(143,12,74),
+   Color3.fromRGB(239,76,155),Color3.fromRGB(76,8,43)}
+  local colors={}
+  for i,color in ipairs(palette) do colors[i]=mesh:AddColor(color:Lerp(Color3.new(0,0,0),.48),.72) end
+  local function triangle(a,b,c,color,gradient)
+   local normal=(positions[b]-positions[a]):Cross(positions[c]-positions[a])
+   local center=(positions[a]+positions[b]+positions[c])/3
+   if normal:Dot(center)<0 then b,c=c,b;normal=-normal end
+   local face=mesh:AddTriangle(ids[a],ids[b],ids[c])
+   local n=mesh:AddNormal(normal.Unit)
+   mesh:SetFaceNormals(face,{n,n,n})
+   mesh:SetFaceColors(face,{colors[color],colors[gradient or color],colors[color]})
+  end
+  for i=1,8 do
+   local j=i%8+1
+   triangle(top,rings[1][i],rings[1][j],1)
+   triangle(rings[1][i],rings[2][i],rings[2][j],i,(i+2)%8+1)
+   triangle(rings[1][i],rings[2][j],rings[1][j],j)
+   triangle(rings[2][i],rings[3][i],rings[3][j],5)
+   triangle(rings[2][i],rings[3][j],rings[2][j],5)
+   triangle(rings[3][i],tip,rings[3][j],(i+3)%8+1,i)
+  end
+  -- Tiny solid inclusions have stable local positions and true depth/parallax.
+  -- They share the gem mesh, so rotation never turns them into orbiting sparkles.
+  colors[9]=mesh:AddColor(Color3.fromRGB(255,243,255),1)
+  local random=Random.new(593)
+  for i=1,26 do
+   local y=random:NextNumber(-.24,.30)
+   local radius=(.38-math.abs(y)*.55)*math.sqrt(random:NextNumber())
+   local angle=random:NextNumber(0,math.pi*2)
+   local center=Vector3.new(math.cos(angle)*radius,y,math.sin(angle)*radius)
+   local size=random:NextNumber(.003,.006)
+   local a=vertex(center+Vector3.new(size,size,size))
+   local b=vertex(center+Vector3.new(-size,-size,size))
+   local c=vertex(center+Vector3.new(-size,size,-size))
+   local d=vertex(center+Vector3.new(size,-size,-size))
+   triangle(a,b,c,9);triangle(a,d,b,9);triangle(a,c,d,9);triangle(b,d,c,9)
+  end
+  local part=assets:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box})
+  part.Name='FacetedRuby';part.Anchored=true;part.Color=Color3.new(1,1,1)
+  part.Material=Enum.Material.Neon;part.Transparency=.22;part.Reflectance=0;part.DoubleSided=true
+  part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
+  return part
+ end)
+ if ok then template=result
+ elseif mesh then mesh:Destroy();mesh=nil end
+end
+function Gem.clone(source)
+ if not template or source.Name=='PressedCargo' then return source:Clone(),false end
+ local part=template:Clone();part.Size=source.Size;part.CFrame=source.CFrame
+ for key,value in pairs(source:GetAttributes()) do part:SetAttribute(key,value) end
+ return part,true
+end
+return Gem
+
+end)()
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
@@ -13811,11 +13912,13 @@ local function updateGlint(self,r,age,strength,now)
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
  local size=r.view.Size
  local side=r.seed%2==0 and 1 or -1
- r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.67,-side*size.Z*.08)
- local width=r.physical and 2.85 or 1.8
+ r.idle.anchor.Position=Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
+ local width=r.physical and 1.95 or 1.35
  local emitter=r.idle.emitter
  emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,width),
+  NumberSequenceKeypoint.new(0,width*.24),
+  NumberSequenceKeypoint.new(.12,width),
+  NumberSequenceKeypoint.new(.38,width*.62),
   NumberSequenceKeypoint.new(1,0),
  })
  emitter.Transparency=NumberSequence.new({
@@ -13909,6 +14012,7 @@ local function sample(r,source,now)
  while #r.samples>5 do table.remove(r.samples,1) end
 end
 function V.new(root,parent,audio,reducedMotion)
+ GemAppearance.prepare()
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
@@ -13917,12 +14021,11 @@ function V.new(root,parent,audio,reducedMotion)
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
   if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
-  local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
+  local view,faceted=GemAppearance.clone(source);view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
-  if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={view=view,faceted=faceted,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -14126,7 +14229,7 @@ function V:update(dt,now)
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
-    if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
+    if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.faceted and Color3.new(1,1,1) or r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
    end
@@ -14185,7 +14288,7 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .78 or 1);r.opacity=opacity end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24

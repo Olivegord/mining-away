@@ -2,6 +2,7 @@
 -- neither a magnet animation nor a disappearing view can grant backpack units.
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
+local GemAppearance=require('./GemAppearance')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
@@ -77,11 +78,13 @@ local function updateGlint(self,r,age,strength,now)
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
  local size=r.view.Size
  local side=r.seed%2==0 and 1 or -1
- r.idle.anchor.Position=Vector3.new(side*size.X*.17,size.Y*.67,-side*size.Z*.08)
- local width=r.physical and 2.85 or 1.8
+ r.idle.anchor.Position=Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
+ local width=r.physical and 1.95 or 1.35
  local emitter=r.idle.emitter
  emitter.Size=NumberSequence.new({
-  NumberSequenceKeypoint.new(0,width),
+  NumberSequenceKeypoint.new(0,width*.24),
+  NumberSequenceKeypoint.new(.12,width),
+  NumberSequenceKeypoint.new(.38,width*.62),
   NumberSequenceKeypoint.new(1,0),
  })
  emitter.Transparency=NumberSequence.new({
@@ -175,6 +178,7 @@ local function sample(r,source,now)
  while #r.samples>5 do table.remove(r.samples,1) end
 end
 function V.new(root,parent,audio,reducedMotion)
+ GemAppearance.prepare()
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
@@ -183,12 +187,11 @@ function V.new(root,parent,audio,reducedMotion)
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
   if (source:GetAttribute('CollectedAt') or 0)>0 or (source:GetAttribute('ProcessedAt') or 0)>0 then return end
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
-  local view=source:Clone();view.Name='CollectibleOre';view.LocalTransparencyModifier=0
+  local view,faceted=GemAppearance.clone(source);view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
-  if view.Material==Enum.Material.Glass then view.Material=Enum.Material.SmoothPlastic;view.MaterialVariant='' end
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={view=view,faceted=faceted,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -392,7 +395,7 @@ function V:update(dt,now)
      position=Vector3.new(position.X,raised,position.Z)
     end
     r.motionPose=heldPose or CFrame.new(position)*CFrame.Angles(rx,ry,rz)
-    if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
+    if glow~=(r.glow or 0) then r.glow=glow;r.view.Color=r.faceted and Color3.new(1,1,1) or r.color:Lerp(PICKUP_HIGHLIGHT,glow) end
     r.restSample=resting and r.pull==0 and latest or nil
     r.restUnits=r.units
    end
@@ -451,7 +454,7 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .78 or 1);r.opacity=opacity end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24

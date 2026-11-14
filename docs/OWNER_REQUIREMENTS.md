@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — Pinterest particles and volumetric gems
+
+Apply the Mines board’s particle palettes, shapes and smooth eased motion. The owner especially favors pin 968344357402992555 for gem volume, color gradients, luminous edges and white inclusions with fixed positions inside the stone. Aim toward that reference in Roblox. The loose gems should feel crystalline and internally detailed. The owner authorized implementation after the reference review.
+
 ## November 12 — Inkbeam and varied attacks
 
 Replace one of the three starter Laser Miners with Inkbeam. Match the supplied still's tapered yellow-to-cyan beam, juxtaposed near-black organic curves and sharp cuts, and different sizes, shapes and colors of particles. Apply the layering principles to the rest of the attack effects while keeping motion smooth and each attack distinct. Keep existing permanent fleets and base traits.

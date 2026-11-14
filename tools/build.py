@@ -103,6 +103,9 @@ def module_bundle(names):
    # Keep World helpers scoped to World; the game controller is near Luau's local limit.
    biome=(ROOT/'src/QuarryBiomes.lua').read_text()
    code=code.replace("require('./QuarryBiomes')",'(function()\n'+biome+'\nend)()')
+  if name=='PickupView':
+   appearance=(ROOT/'src/GemAppearance.lua').read_text()
+   code=code.replace("local GemAppearance=require('./GemAppearance')",'local GemAppearance=(function()\n'+appearance+'\nend)()')
   if name=='CrystalCuts':
    geometry=(ROOT/'src/CrystalGeometry.lua').read_text()
    code=code.replace("local CrystalGeometry=require('./CrystalGeometry')",'local CrystalGeometry=(function()\n'+geometry+'\nend)()')

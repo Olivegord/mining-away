@@ -348,6 +348,22 @@ function Effects.ImpactParticles(position: Vector3,color: Color3,scale: number,k
    mode,sparks.EmissionDirection,fast and spread*.66 or spread)
   accent:Emit(prism and 4 or dark and 5 or 3)
  end
+ if crystal then
+  -- A sharp release, drifting colored discs and lingering dust have separate tails.
+  local glints=EnergyDisc.accent(root,'CrystalFacetSparks',color:Lerp(Color3.fromRGB(255,217,240),.64),
+   diameter*.38,'glint',Enum.NormalId.Top,88)
+  glints.Speed=NumberRange.new(9,19);glints.Drag=4.5
+  glints.Acceleration=Vector3.new(0,-13,0);glints.Lifetime=NumberRange.new(.24,.65)
+  glints:Emit(5)
+  local motes=Instance.new('ParticleEmitter');motes.Name='CrystalAfterglow'
+  EnergyDisc.configure(motes,diameter*.33,.30,1,0,.48)
+  motes.Enabled=false;motes.Rate=0
+  motes.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,color:Lerp(Color3.fromRGB(255,210,231),.5)),
+   ColorSequenceKeypoint.new(.45,color),ColorSequenceKeypoint.new(1,color:Lerp(Color3.fromRGB(88,36,141),.32))})
+  motes.Speed=NumberRange.new(2,6);motes.Drag=3
+  motes.Acceleration=Vector3.new(0,1.8,0);motes.SpreadAngle=Vector2.new(85,85)
+  motes.Lifetime=NumberRange.new(.65,1.3);motes.Parent=root;motes:Emit(6)
+ end
  if heavy and impactCount+prismImpactCount<=8 then
   local white=Color3.fromRGB(255,244,197)
   local streak=EnergyDisc.accent(root,'FastImpactStreaks',color:Lerp(white,.46),diameter*.78,
