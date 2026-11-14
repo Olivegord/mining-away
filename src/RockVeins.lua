@@ -1,5 +1,5 @@
--- Thin shell openings reveal one luminous mineral core. Bundles of native
--- Beams project light out of the crack; no emissive line geometry on the skin.
+-- Thin shell openings reveal one luminous mineral core. Short textured native
+-- Beams soften light escaping the crack; no emissive line geometry on the skin.
 local V={}
 local active=0
 local LIMIT,RANGE=14,80
@@ -17,39 +17,32 @@ local function make(record)
  local state={root=root,rays={},vents={},seed=record.source:GetAttribute('StageSeed') or 1}
  local color=record.baseColor
  local white=Color3.fromRGB(244,255,248)
- local core=template:Clone();core.Name='LuminousCore';core.Color=color:Lerp(white,.34);core.Transparency=0;core.Parent=root;state.core=core
- local random=Random.new(state.seed)
+ local core=template:Clone();core.Name='LuminousCore';core.Color=color:Lerp(white,.12);core.Transparency=0;core.Parent=root;state.core=core
+ -- One short, soft shaft per opening. Repeated thin rays alias into a fence.
  for _,path in ipairs(paths) do
-  for i=1,#path.points-1 do
-   local a,b=path.points[i],path.points[i+1]
-   local p0,p1=Vector3.new(a[1],a[2],a[3]),Vector3.new(b[1],b[2],b[3])
-   local normal=Vector3.new(a[4],a[5],a[6])
-   for j=1,2 do
-    local point=p0:Lerp(p1,j==1 and .24 or .72)
-    local anchor=Instance.new('Attachment');anchor.Name='CrackRayOrigin';anchor.Parent=view
-    local tip=Instance.new('Attachment');tip.Name='CrackRayEnd';tip.Parent=view
-    local beam=Instance.new('Beam');beam.Name='CoreLightRay';beam.FaceCamera=true
-    beam.Attachment0=anchor;beam.Attachment1=tip;beam.Segments=1
-    beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.35
-    beam.Color=ColorSequence.new(white:Lerp(color,.20),color)
-    beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.17,.52),NumberSequenceKeypoint.new(.65,.86),NumberSequenceKeypoint.new(1,1)})
-    beam.Parent=anchor
-    local fan=normal+Vector3.new(.42+random:NextNumber(-.035,.035),-.27+random:NextNumber(-.025,.025),0)
-    state.rays[#state.rays+1]={a=anchor,b=tip,beam=beam,point=point,normal=normal,fan=fan,length=random:NextNumber(.95,1.65),width=random:NextNumber(.003,.007)}
-    if i==3 and j==1 then
-     local wash=beam:Clone();wash.Name='CoreLightWash';wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.79),NumberSequenceKeypoint.new(.40,.94),NumberSequenceKeypoint.new(1,1)});wash.Parent=anchor
-     state.rays[#state.rays+1]={a=anchor,b=tip,beam=wash,point=point,normal=normal,fan=fan,length=1,width=.10,wash=true}
-     local dust=Instance.new('ParticleEmitter');dust.Name='EscapingCoreMotes'
-     dust.Texture='rbxasset://textures/ui/VR/circleWhite.png';dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1.3
-     dust.Color=ColorSequence.new(white,color);dust.Rate=1.6
-     dust.Lifetime=NumberRange.new(1.6,2.7);dust.Speed=NumberRange.new(.30,.65);dust.Drag=.6
-     dust.Acceleration=Vector3.new(0,.22,0);dust.SpreadAngle=Vector2.new(14,14)
-     dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.055),NumberSequenceKeypoint.new(.25,.08),NumberSequenceKeypoint.new(1,0)})
-     dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(.6,.5),NumberSequenceKeypoint.new(1,1)})
-     dust.Enabled=false;dust.Parent=anchor;state.vents[#state.vents+1]=dust
-    end
-   end
-  end
+  local i=math.max(1,math.floor(#path.points/2))
+  local a,b=path.points[i],path.points[i+1]
+  local normal=Vector3.new(a[4],a[5],a[6])
+  local point=Vector3.new(a[1],a[2],a[3]):Lerp(Vector3.new(b[1],b[2],b[3]),.5)
+  local anchor=Instance.new('Attachment');anchor.Name='CrackRayOrigin';anchor.Parent=view
+  local tip=Instance.new('Attachment');tip.Name='CrackRayEnd';tip.Parent=view
+  local beam=Instance.new('Beam');beam.Name='CoreLightWash';beam.FaceCamera=true
+  beam.Attachment0=anchor;beam.Attachment1=tip;beam.Segments=1
+  beam.Texture='rbxasset://textures/ui/AvatarExperience/glowLight.png'
+  beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
+  beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=.8
+  beam.Color=ColorSequence.new(color:Lerp(white,.18),color)
+  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(.35,.82),NumberSequenceKeypoint.new(1,1)})
+  beam.Parent=anchor
+  state.rays[#state.rays+1]={a=anchor,b=tip,beam=beam,point=point,normal=normal,fan=normal+Vector3.new(.08,.18,0),length=.26,width=.055,wash=true}
+  local dust=Instance.new('ParticleEmitter');dust.Name='EscapingCoreMotes'
+  dust.Texture='rbxasset://textures/ui/VR/circleWhite.png';dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1
+  dust.Color=ColorSequence.new(white,color);dust.Rate=.8
+  dust.Lifetime=NumberRange.new(1.3,2);dust.Speed=NumberRange.new(.12,.25);dust.Drag=.8
+  dust.Acceleration=Vector3.new(0,.16,0);dust.SpreadAngle=Vector2.new(18,18)
+  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.035),NumberSequenceKeypoint.new(.2,.055),NumberSequenceKeypoint.new(1,0)})
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(.2,.2),NumberSequenceKeypoint.new(1,1)})
+  dust.Enabled=false;dust.Parent=anchor;state.vents[#state.vents+1]=dust
  end
  active+=1
  root.Destroying:Once(function()
@@ -82,7 +75,7 @@ function V.update(record,now,reducedEffects,reducedMotion)
    local point=ray.point*size+ray.normal*.012
    local across=ray.normal:Cross(Vector3.yAxis).Unit
    ray.a.CFrame=CFrame.fromMatrix(point,across,ray.normal,across:Cross(ray.normal))
-   ray.b.Position=point+ray.fan*math.clamp(scale*ray.length,1.5,4.8)
+   ray.b.Position=point+ray.fan*math.clamp(scale*ray.length,.25,.85)
    ray.beam.Width0=scale*ray.width
    ray.beam.Width1=scale*ray.width*(ray.wash and 3.4 or 1.9)
   end

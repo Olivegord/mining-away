@@ -3456,21 +3456,21 @@ function V.carve(source)
   local path={}
   local drift=random:NextNumber(-.09,.03)
   for i=1,6 do
-   local y=(-.32+(i-1)*.12)*size.Y
-   drift=math.clamp(drift+random:NextNumber(-.045,.055),-.16,.16)
+   local y=(-.24+(i-1)*.095)*size.Y
+   drift=math.clamp(drift+random:NextNumber(-.10,.11),-.16,.16)
    local point=Vector3.new(drift*size.X,y,normal.Z*size.Z*1.4)
    local hit=world:Raycast(frame:PointToWorldSpace(point),frame:VectorToWorldSpace(-normal*size.Magnitude*2))
    if hit then path[#path+1]={point=hit.Position,normal=frame:VectorToWorldSpace(normal)} end
   end
   if #path>=4 then
-   local width=math.min(size.X,size.Z)*.024
+   local width=math.min(size.X,size.Z)*.017
    for i=1,#path-1 do
     local a,b=path[i],path[i+1]
     local tangent=(b.point-a.point).Unit
     local across=tangent:Cross(a.normal).Unit
     local n=across:Cross(tangent).Unit
     local cutter=Instance.new('Part');cutter.Anchored=true
-    cutter.Size=Vector3.new(width*(i%2==0 and .72 or 1),(b.point-a.point).Magnitude+width,size.Z*.8)
+    cutter.Size=Vector3.new(width*((i==1 or i==#path-1) and .42 or i%2==0 and .7 or 1),(b.point-a.point).Magnitude+width,size.Z*.8)
     cutter.CFrame=CFrame.fromMatrix((a.point+b.point)*.5-a.normal*size.Z*.32,across,tangent,n)
     cutters[#cutters+1]=cutter
    end

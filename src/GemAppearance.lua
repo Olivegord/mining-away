@@ -9,7 +9,6 @@ local function build(key)
  local data=Geometry.describe(key)
  local assets=game:GetService('AssetService')
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
- local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  for _,f in ipairs(data.faces) do
   local ids={}
   for i=1,3 do ids[i]=mesh:AddVertex(f[i]) end
@@ -18,6 +17,19 @@ local function build(key)
   mesh:SetFaceNormals(face,{n,n,n})
   mesh:SetFaceColors(face,{mesh:AddColor(f[4],.88),mesh:AddColor(f[5],.88),mesh:AddColor(f[6],.88)})
  end
+ local function part(m,name)
+  -- Release the large dynamic allocation before building the next mineral.
+  local fixed=assert(assets:CreateEditableMeshAsync(Content.fromObject(m),{FixedSize=true}))
+  for i,item in ipairs(meshes) do if item==m then meshes[i]=fixed;break end end
+  m:Destroy()
+  local p=assets:CreateMeshPartAsync(Content.fromObject(fixed),{CollisionFidelity=Enum.CollisionFidelity.Box})
+  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
+  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+  return p
+ end
+ local shell=part(mesh,'Faceted'..key)
+ if #data.grains>0 then
+  local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
  local white=core:AddColor(Color3.new(1,1,1),1)
  for _,grain in ipairs(data.grains) do
@@ -33,14 +45,6 @@ local function build(key)
    local f=core:AddTriangle(v[x],v[y],v[z]);core:SetFaceColors(f,{white,white,white})
   end
  end
- local function part(m,name)
-  local p=assets:CreateMeshPartAsync(Content.fromObject(m),{CollisionFidelity=Enum.CollisionFidelity.Box})
-  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
-  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
-  return p
- end
- local shell=part(mesh,'Faceted'..key)
- if #data.grains>0 then
   local grains=part(core,'FixedInclusions')
   grains:SetAttribute('SizeRatio',(coreMax-coreMin)/data.extents)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)

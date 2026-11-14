@@ -2868,7 +2868,6 @@ local function build(key)
  local data=Geometry.describe(key)
  local assets=game:GetService('AssetService')
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
- local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  for _,f in ipairs(data.faces) do
   local ids={}
   for i=1,3 do ids[i]=mesh:AddVertex(f[i]) end
@@ -2877,6 +2876,19 @@ local function build(key)
   mesh:SetFaceNormals(face,{n,n,n})
   mesh:SetFaceColors(face,{mesh:AddColor(f[4],.88),mesh:AddColor(f[5],.88),mesh:AddColor(f[6],.88)})
  end
+ local function part(m,name)
+  -- Release the large dynamic allocation before building the next mineral.
+  local fixed=assert(assets:CreateEditableMeshAsync(Content.fromObject(m),{FixedSize=true}))
+  for i,item in ipairs(meshes) do if item==m then meshes[i]=fixed;break end end
+  m:Destroy()
+  local p=assets:CreateMeshPartAsync(Content.fromObject(fixed),{CollisionFidelity=Enum.CollisionFidelity.Box})
+  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
+  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+  return p
+ end
+ local shell=part(mesh,'Faceted'..key)
+ if #data.grains>0 then
+  local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
  local white=core:AddColor(Color3.new(1,1,1),1)
  for _,grain in ipairs(data.grains) do
@@ -2892,14 +2904,6 @@ local function build(key)
    local f=core:AddTriangle(v[x],v[y],v[z]);core:SetFaceColors(f,{white,white,white})
   end
  end
- local function part(m,name)
-  local p=assets:CreateMeshPartAsync(Content.fromObject(m),{CollisionFidelity=Enum.CollisionFidelity.Box})
-  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
-  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
-  return p
- end
- local shell=part(mesh,'Faceted'..key)
- if #data.grains>0 then
   local grains=part(core,'FixedInclusions')
   grains:SetAttribute('SizeRatio',(coreMax-coreMin)/data.extents)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)
@@ -2943,8 +2947,8 @@ return Gem
 
 end)()
 local Veins=(function()
--- Thin shell openings reveal one luminous mineral core. Bundles of native
--- Beams project light out of the crack; no emissive line geometry on the skin.
+-- Thin shell openings reveal one luminous mineral core. Short textured native
+-- Beams soften light escaping the crack; no emissive line geometry on the skin.
 local V={}
 local active=0
 local LIMIT,RANGE=14,80
@@ -2962,39 +2966,32 @@ local function make(record)
  local state={root=root,rays={},vents={},seed=record.source:GetAttribute('StageSeed') or 1}
  local color=record.baseColor
  local white=Color3.fromRGB(244,255,248)
- local core=template:Clone();core.Name='LuminousCore';core.Color=color:Lerp(white,.34);core.Transparency=0;core.Parent=root;state.core=core
- local random=Random.new(state.seed)
+ local core=template:Clone();core.Name='LuminousCore';core.Color=color:Lerp(white,.12);core.Transparency=0;core.Parent=root;state.core=core
+ -- One short, soft shaft per opening. Repeated thin rays alias into a fence.
  for _,path in ipairs(paths) do
-  for i=1,#path.points-1 do
-   local a,b=path.points[i],path.points[i+1]
-   local p0,p1=Vector3.new(a[1],a[2],a[3]),Vector3.new(b[1],b[2],b[3])
-   local normal=Vector3.new(a[4],a[5],a[6])
-   for j=1,2 do
-    local point=p0:Lerp(p1,j==1 and .24 or .72)
-    local anchor=Instance.new('Attachment');anchor.Name='CrackRayOrigin';anchor.Parent=view
-    local tip=Instance.new('Attachment');tip.Name='CrackRayEnd';tip.Parent=view
-    local beam=Instance.new('Beam');beam.Name='CoreLightRay';beam.FaceCamera=true
-    beam.Attachment0=anchor;beam.Attachment1=tip;beam.Segments=1
-    beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=1.35
-    beam.Color=ColorSequence.new(white:Lerp(color,.20),color)
-    beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.22),NumberSequenceKeypoint.new(.17,.52),NumberSequenceKeypoint.new(.65,.86),NumberSequenceKeypoint.new(1,1)})
-    beam.Parent=anchor
-    local fan=normal+Vector3.new(.42+random:NextNumber(-.035,.035),-.27+random:NextNumber(-.025,.025),0)
-    state.rays[#state.rays+1]={a=anchor,b=tip,beam=beam,point=point,normal=normal,fan=fan,length=random:NextNumber(.95,1.65),width=random:NextNumber(.003,.007)}
-    if i==3 and j==1 then
-     local wash=beam:Clone();wash.Name='CoreLightWash';wash.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.79),NumberSequenceKeypoint.new(.40,.94),NumberSequenceKeypoint.new(1,1)});wash.Parent=anchor
-     state.rays[#state.rays+1]={a=anchor,b=tip,beam=wash,point=point,normal=normal,fan=fan,length=1,width=.10,wash=true}
-     local dust=Instance.new('ParticleEmitter');dust.Name='EscapingCoreMotes'
-     dust.Texture='rbxasset://textures/ui/VR/circleWhite.png';dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1.3
-     dust.Color=ColorSequence.new(white,color);dust.Rate=1.6
-     dust.Lifetime=NumberRange.new(1.6,2.7);dust.Speed=NumberRange.new(.30,.65);dust.Drag=.6
-     dust.Acceleration=Vector3.new(0,.22,0);dust.SpreadAngle=Vector2.new(14,14)
-     dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.055),NumberSequenceKeypoint.new(.25,.08),NumberSequenceKeypoint.new(1,0)})
-     dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.15),NumberSequenceKeypoint.new(.6,.5),NumberSequenceKeypoint.new(1,1)})
-     dust.Enabled=false;dust.Parent=anchor;state.vents[#state.vents+1]=dust
-    end
-   end
-  end
+  local i=math.max(1,math.floor(#path.points/2))
+  local a,b=path.points[i],path.points[i+1]
+  local normal=Vector3.new(a[4],a[5],a[6])
+  local point=Vector3.new(a[1],a[2],a[3]):Lerp(Vector3.new(b[1],b[2],b[3]),.5)
+  local anchor=Instance.new('Attachment');anchor.Name='CrackRayOrigin';anchor.Parent=view
+  local tip=Instance.new('Attachment');tip.Name='CrackRayEnd';tip.Parent=view
+  local beam=Instance.new('Beam');beam.Name='CoreLightWash';beam.FaceCamera=true
+  beam.Attachment0=anchor;beam.Attachment1=tip;beam.Segments=1
+  beam.Texture='rbxasset://textures/ui/AvatarExperience/glowLight.png'
+  beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
+  beam.LightEmission=1;beam.LightInfluence=0;beam.Brightness=.8
+  beam.Color=ColorSequence.new(color:Lerp(white,.18),color)
+  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.65),NumberSequenceKeypoint.new(.35,.82),NumberSequenceKeypoint.new(1,1)})
+  beam.Parent=anchor
+  state.rays[#state.rays+1]={a=anchor,b=tip,beam=beam,point=point,normal=normal,fan=normal+Vector3.new(.08,.18,0),length=.26,width=.055,wash=true}
+  local dust=Instance.new('ParticleEmitter');dust.Name='EscapingCoreMotes'
+  dust.Texture='rbxasset://textures/ui/VR/circleWhite.png';dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1
+  dust.Color=ColorSequence.new(white,color);dust.Rate=.8
+  dust.Lifetime=NumberRange.new(1.3,2);dust.Speed=NumberRange.new(.12,.25);dust.Drag=.8
+  dust.Acceleration=Vector3.new(0,.16,0);dust.SpreadAngle=Vector2.new(18,18)
+  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.035),NumberSequenceKeypoint.new(.2,.055),NumberSequenceKeypoint.new(1,0)})
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.5),NumberSequenceKeypoint.new(.2,.2),NumberSequenceKeypoint.new(1,1)})
+  dust.Enabled=false;dust.Parent=anchor;state.vents[#state.vents+1]=dust
  end
  active+=1
  root.Destroying:Once(function()
@@ -3027,7 +3024,7 @@ function V.update(record,now,reducedEffects,reducedMotion)
    local point=ray.point*size+ray.normal*.012
    local across=ray.normal:Cross(Vector3.yAxis).Unit
    ray.a.CFrame=CFrame.fromMatrix(point,across,ray.normal,across:Cross(ray.normal))
-   ray.b.Position=point+ray.fan*math.clamp(scale*ray.length,1.5,4.8)
+   ray.b.Position=point+ray.fan*math.clamp(scale*ray.length,.25,.85)
    ray.beam.Width0=scale*ray.width
    ray.beam.Width1=scale*ray.width*(ray.wash and 3.4 or 1.9)
   end
@@ -14058,24 +14055,35 @@ local MineralLineup=(function()
 -- Authored specimens remain in Edit. Play substitutes the exact drop renderer,
 -- with no pickup IDs, rewards, attraction or expiry.
 local L={}
-function L.new(parent,gems,finish)
+function L.new(parent,add,finish)
  local map=workspace:FindFirstChild('MiningAway')
  map=map and map:FindFirstChild('Map')
  local root=map and map:FindFirstChild('MineralLineup')
- local self={records={},gems=gems,finish=finish}
+ local self={sources={},hidden={},finish=finish}
  if not root then return self end
- for _,model in ipairs(root:GetChildren()) do
-  local anchor=model:FindFirstChild('SpecimenAnchor')
+ local born=workspace:GetServerTimeNow()-10
+ for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+  local model=root:FindFirstChild(key)
+  local anchor=model and model:FindFirstChild('SpecimenAnchor')
   if anchor then
-   local view,faceted=gems.clone(anchor)
-   if faceted then
-    view.Name='MineralDisplay';view.Parent=parent
-    local record={view=view,frame=anchor.CFrame,hidden={}}
-    for _,p in ipairs(model.PreviewGeometry:GetDescendants()) do
-     if p:IsA('BasePart') then p.LocalTransparencyModifier=1;record.hidden[#record.hidden+1]=p end
-    end
-    self.records[#self.records+1]=record
-   else view:Destroy() end
+   -- Feed inert local samples through PickupView.add and its entire update
+   -- path: mesh, opacity, pose, ground glow, strand, motes and glints.
+   local source=anchor:Clone();source.Name='RawCrystalCargo'
+   source.Size=Vector3.new(table.unpack(Workshop.ROCK_SIZE))
+   local floor=model.DisplayPad.Position.Y+model.DisplayPad.Size.Y*.5+.22
+   local position=Vector3.new(anchor.Position.X,floor,anchor.Position.Z)
+   source.Position=position;source.Transparency=0
+   for name,value in pairs({PickupId=-i,PhysicalCargo=true,Units=1,Mineral=key,
+    Position=position,Velocity=Vector3.zero,FloorY=floor,SnapshotAt=born+2,SpawnAt=born,
+    GroundImpactAt=born+1,GroundImpactPosition=position,GroundImpactSpeed=0,
+    OreLaunchOrigin=position+Vector3.yAxis,OreLaunchVelocity=Vector3.new(.01,1,0),CleanCargoArc=true}) do
+    source:SetAttribute(name,value)
+   end
+   source.Parent=parent;self.sources[#self.sources+1]=source
+   add(source)
+   for _,p in ipairs(model.PreviewGeometry:GetDescendants()) do
+    if p:IsA('BasePart') then p.LocalTransparencyModifier=1;self.hidden[#self.hidden+1]=p end
+   end
   end
  end
  local specimen=root:FindFirstChild('CoreSpecimen')
@@ -14094,18 +14102,11 @@ function L.new(parent,gems,finish)
  return self
 end
 function L.update(self,now,reducedMotion,reducedEffects)
- for i,r in ipairs(self.records) do
-  local t=reducedMotion and 0 or now
-  r.view.CFrame=r.frame*CFrame.Angles(0,t*2*math.pi/30,0)+Vector3.yAxis*(.045*math.sin(t*2*math.pi/1.4+i))
-  self.gems.update(r.view,1)
- end
  if self.core then self.finish.veins(self.core,now,reducedEffects,reducedMotion) end
 end
 function L.destroy(self)
- for _,r in ipairs(self.records) do
-  r.view:Destroy()
-  for _,p in ipairs(r.hidden) do if p.Parent then p.LocalTransparencyModifier=0 end end
- end
+ for _,source in ipairs(self.sources) do source:Destroy() end
+ for _,p in ipairs(self.hidden) do if p.Parent then p.LocalTransparencyModifier=0 end end
  if self.core then self.core.view:Destroy() end
  for p,enabled in pairs(self.coreFX or {}) do if p.Parent then p.Enabled=enabled end end
  for _,p in ipairs(self.coreHidden or {}) do if p.Parent then p.LocalTransparencyModifier=0 end end
@@ -14292,7 +14293,6 @@ function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
- self.lineup=MineralLineup.new(parent,GemAppearance,RockFinish)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -14322,6 +14322,7 @@ function V.new(root,parent,audio,reducedMotion)
   if not r.arc and type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
+ self.lineup=MineralLineup.new(parent,add,RockFinish)
  for _,source in ipairs(root:GetDescendants()) do add(source) end
  table.insert(self.connections,root.DescendantAdded:Connect(function(source) task.defer(add,source) end))
  table.insert(self.connections,root.DescendantRemoving:Connect(function(source)
@@ -15151,7 +15152,7 @@ local function setVisibility(side,opacity)
   f.Parent.Enabled=opacity>0
  end
 end
-local function showWalls(mark,point,width,color,dt,instant,playerPosition,reveal)
+local function showWalls(mark,point,width,color,dt,instant,cameraPosition,reveal)
  if not point then
   for _,side in ipairs(mark.sides) do setVisibility(side,0) end
   mark.point=nil
@@ -15163,19 +15164,17 @@ local function showWalls(mark,point,width,color,dt,instant,playerPosition,reveal
  local remaining=instant and 0 or 1-math.min(1,mark.age/riseTime)
  local height=.08+(wallHeight-.08)*math.sqrt(1-remaining^2)
  local sizeChanged=height~=mark.height or width~=mark.width
- local opacity=0
- if playerPosition then
-  local delta=playerPosition-point
-  local x=math.max(0,math.abs(delta.X)-width*.5)
-  local z=math.max(0,math.abs(delta.Z)-width*.5)
-  local distance=math.sqrt(x*x+z*z)
-  local fade=math.clamp(distance/54,0,1)
-  opacity=.53*(1-fade*fade*(3-2*fade))
- end
+ -- The camera determines legibility. Close-up mining stays unobstructed,
+ -- including the initial reveal; zooming out smoothly reveals the boundary.
+ local distance=cameraPosition and (cameraPosition-point).Magnitude or 0
+ local far=math.clamp((distance-42)/28,0,1)
+ far=far*far*(3-2*far)
+ local opacity=.53
  if reveal and mark.age<riseTime+revealFadeTime then
   local t=math.clamp((mark.age-riseTime)/revealFadeTime,0,1)
   opacity=.84+(opacity-.84)*t*t*(3-2*t)
  end
+ opacity*=far
  opacity=math.round(opacity*128)/128
  for i,side in ipairs(mark.sides) do
   local plane=side.part
@@ -15273,9 +15272,8 @@ function V:showAim(dt,ray)
  -- Keep the already extended walls when the current pin becomes the old one.
  if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
  local instant=o.reducedMotion()
- local character=o.player.Character
- local root=character and character:FindFirstChild('HumanoidRootPart')
- local position=root and root.Position
+ local camera=workspace.CurrentCamera
+ local position=camera and camera.CFrame.Position
  showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
  showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
   o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)

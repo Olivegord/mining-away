@@ -183,7 +183,6 @@ function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
- self.lineup=MineralLineup.new(parent,GemAppearance,RockFinish)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -213,6 +212,7 @@ function V.new(root,parent,audio,reducedMotion)
   if not r.arc and type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
  end
+ self.lineup=MineralLineup.new(parent,add,RockFinish)
  for _,source in ipairs(root:GetDescendants()) do add(source) end
  table.insert(self.connections,root.DescendantAdded:Connect(function(source) task.defer(add,source) end))
  table.insert(self.connections,root.DescendantRemoving:Connect(function(source)

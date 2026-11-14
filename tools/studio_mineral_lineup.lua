@@ -2,7 +2,10 @@
 assert(game.PlaceId==124078027733625 and game.GameId==10774898335)
 assert(not game:GetService('RunService'):IsRunning())
 local map=workspace.MiningAway.Map
-assert(not map:FindFirstChild('MineralLineup') and not shared.MineralLineupStage)
+assert(not shared.MineralLineupStage)
+local previous=map:FindFirstChild('MineralLineup')
+local archive=Instance.new('Folder');archive.Name='MineralLineupArchive'
+assert(not game.ServerStorage:FindFirstChild(archive.Name))
 local root=Instance.new('Folder');root.Name='MineralLineup'
 local gems=RockFinish.Gems
 local geo=gems.geometry
@@ -51,31 +54,46 @@ for i,key in ipairs(geo.order) do
  anchor.Transparency=1;anchor:SetAttribute('Mineral',key)
  local preview=Instance.new('Folder');preview.Name='PreviewGeometry';preview.Parent=model
  local function point(p) return frame:PointToWorldSpace((p-data.center)/data.extents*size) end
- if #data.boxes>0 then
-  -- Geometric bismuth rails can be authored directly and survive native saves.
-  for _,box in ipairs(data.boxes) do
-   local ratio=size/data.extents
-   -- Use the same triangle description for tilted anisotropic boxes.
-   -- Their component bases stay readable as square terraces.
-   local localCenter=point(box.frame.Position)
-   local step=part('Part','BismuthStep',box.size*ratio,CFrame.new(localCenter)*frame.Rotation*box.frame.Rotation,box.color,preview)
-   step.Material=Enum.Material.Metal;step.Reflectance=.18
+ -- Bake the same transformed triangles and interpolated facet colors used
+ -- by GemAppearance. Box scaling before rotation distorted the old bismuth.
+ local alpha=1-(key=='Emerald' and .96 or key=='Cobalt' and 1 or .76)*.88
+ for index,f in ipairs(data.faces) do
+  local a,b,c=point(f[1]),point(f[2]),point(f[3])
+  if key=='Cobalt' then triangle(a,b,c,f[4],preview,alpha)
+  else
+   local ab,bc,ca=(a+b)*.5,(b+c)*.5,(c+a)*.5
+   triangle(a,ab,ca,f[4]:Lerp(f[5],1/6):Lerp(f[6],1/6),preview,alpha)
+   triangle(ab,b,bc,f[5]:Lerp(f[4],1/6):Lerp(f[6],1/6),preview,alpha)
+   triangle(ca,bc,c,f[6]:Lerp(f[4],1/6):Lerp(f[5],1/6),preview,alpha)
+   triangle(ab,bc,ca,f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),preview,alpha)
   end
- else
-  local alpha=key=='Emerald' and .04 or .24
-  for _,f in ipairs(data.faces) do
-   local a,b,c=point(f[1]),point(f[2]),point(f[3])
-   if key=='Emerald' or key=='Violet' then
-    local ab,bc,ca=(a+b)*.5,(b+c)*.5,(c+a)*.5
-    triangle(a,ab,ca,f[4]:Lerp(f[5],.16):Lerp(f[6],.16),preview,alpha)
-    triangle(ab,b,bc,f[5]:Lerp(f[4],.16):Lerp(f[6],.16),preview,alpha)
-    triangle(ca,bc,c,f[6]:Lerp(f[4],.16):Lerp(f[5],.16),preview,alpha)
-    triangle(ab,bc,ca,f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),preview,alpha)
-   else triangle(a,b,c,f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),preview,alpha) end
+  if index%150==0 then task.wait() end
+ end
+ if key=='Cobalt' then
+  for _,facet in ipairs(preview:GetChildren()) do facet.Material=Enum.Material.Metal;facet.Reflectance=.18 end
+ end
+ for _,grain in ipairs(data.grains) do
+  local radius=grain[2]
+  local v={}
+  for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do v[#v+1]=point(grain[1]+d*radius) end
+  for _,f in ipairs({{1,3,5},{5,3,2},{2,3,6},{6,3,1},{1,5,4},{5,2,4},{2,6,4},{6,1,4}}) do
+   triangle(v[f[1]],v[f[2]],v[f[3]],Color3.new(1,1,1),preview,0)
   end
-  for _,grain in ipairs(data.grains) do
-   local p=part('Part','FixedGrain',Vector3.one*grain[2]*2.1*size.Y,CFrame.new(point(grain[1])),Color3.new(1,1,1),preview)
-   p.Shape=Enum.PartType.Ball
+ end
+ -- Consolidate the durable Edit approximation into one shell and one grain
+ -- object. Thousands of temporary wedges must not remain in the live map.
+ local groups={{},{}}
+ for _,p in ipairs(preview:GetChildren()) do local group=p.Transparency==0 and groups[2] or groups[1];group[#group+1]=p end
+ for index,pieces in ipairs(groups) do
+  if #pieces>0 then
+   local first=table.remove(pieces,1)
+   local result=game:GetService('GeometryService'):UnionAsync(first,pieces,{CollisionFidelity=Enum.CollisionFidelity.Box,RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false})
+   assert(#result==1,'specimen consolidation failed')
+   local combined=result[1];combined.Name=index==1 and 'FacetShell' or 'FixedInclusions'
+   combined.UsePartColor=false;combined.Anchored=true;combined.CanCollide=false;combined.CanTouch=false;combined.CanQuery=false;combined.CastShadow=false
+   combined.Material=first.Material;combined.Reflectance=first.Reflectance;combined.Transparency=first.Transparency
+   combined.Parent=preview;first:Destroy();for _,p in ipairs(pieces) do p:Destroy() end
+   task.wait()
   end
  end
  counts[key]=#preview:GetChildren()
@@ -101,9 +119,11 @@ assert(record.veinFX,'missing core light rig')
 local serializer,encoding=game:GetService('SerializationService'),game:GetService('EncodingService')
 local bytes=serializer:SerializeInstancesAsync({root})
 local encoded=buffer.tostring(encoding:Base64Encode(encoding:CompressBuffer(bytes,Enum.CompressionAlgorithm.Zstd)))
-shared.MineralLineupStage={root=root,snapshot={scenery=encoded},counts=counts,
+local archived=buffer.tostring(encoding:Base64Encode(encoding:CompressBuffer(serializer:SerializeInstancesAsync({archive}),Enum.CompressionAlgorithm.Zstd)))
+shared.MineralLineupStage={root=root,snapshot={scenery=encoded,archive=archived},counts=counts,
  apply=function()
-  assert(not map:FindFirstChild('MineralLineup'))
+  assert(map:FindFirstChild('MineralLineup')==previous)
+  if previous then archive.Parent=game.ServerStorage;previous.Parent=archive end
   root.Parent=map
   return {path=root:GetFullName(),specimens=5,core=true}
  end}

@@ -36,7 +36,7 @@ local ok,err=xpcall(function()
   local record={source=shell,view=shell,baseColor=Color3.fromRGB(60,160,240),visual={broken=false}}
   RockFinish.veins(record,1,false,false)
   local state=assert(record.veinFX)
-  assert(#state.rays>=14 and #state.vents==2,'missing beam-ray fans')
+  assert(#state.rays==2 and #state.vents==2,'missing short core glow')
   -- The core must be visible THROUGH the shell: cast along the opening and
   -- check that at least one interior sample reaches the smaller core first.
   local world=Instance.new('WorldModel');world.Parent=root

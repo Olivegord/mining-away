@@ -79,7 +79,7 @@ local function setVisibility(side,opacity)
   f.Parent.Enabled=opacity>0
  end
 end
-local function showWalls(mark,point,width,color,dt,instant,playerPosition,reveal)
+local function showWalls(mark,point,width,color,dt,instant,cameraPosition,reveal)
  if not point then
   for _,side in ipairs(mark.sides) do setVisibility(side,0) end
   mark.point=nil
@@ -91,19 +91,17 @@ local function showWalls(mark,point,width,color,dt,instant,playerPosition,reveal
  local remaining=instant and 0 or 1-math.min(1,mark.age/riseTime)
  local height=.08+(wallHeight-.08)*math.sqrt(1-remaining^2)
  local sizeChanged=height~=mark.height or width~=mark.width
- local opacity=0
- if playerPosition then
-  local delta=playerPosition-point
-  local x=math.max(0,math.abs(delta.X)-width*.5)
-  local z=math.max(0,math.abs(delta.Z)-width*.5)
-  local distance=math.sqrt(x*x+z*z)
-  local fade=math.clamp(distance/54,0,1)
-  opacity=.53*(1-fade*fade*(3-2*fade))
- end
+ -- The camera determines legibility. Close-up mining stays unobstructed,
+ -- including the initial reveal; zooming out smoothly reveals the boundary.
+ local distance=cameraPosition and (cameraPosition-point).Magnitude or 0
+ local far=math.clamp((distance-42)/28,0,1)
+ far=far*far*(3-2*far)
+ local opacity=.53
  if reveal and mark.age<riseTime+revealFadeTime then
   local t=math.clamp((mark.age-riseTime)/revealFadeTime,0,1)
   opacity=.84+(opacity-.84)*t*t*(3-2*t)
  end
+ opacity*=far
  opacity=math.round(opacity*128)/128
  for i,side in ipairs(mark.sides) do
   local plane=side.part
@@ -201,9 +199,8 @@ function V:showAim(dt,ray)
  -- Keep the already extended walls when the current pin becomes the old one.
  if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
  local instant=o.reducedMotion()
- local character=o.player.Character
- local root=character and character:FindFirstChild('HumanoidRootPart')
- local position=root and root.Position
+ local camera=workspace.CurrentCamera
+ local position=camera and camera.CFrame.Position
  showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
  showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
   o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)
