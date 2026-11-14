@@ -91,3 +91,7 @@ The November 14 owner-requested specimens are authored in Workspace.MiningAway.M
 ### Refreshing the mineral row
 
 For revision 387e854, tools/studio_mineral_lineup.lua stages a replacement row and a MineralLineupArchive folder. Export both shared.MineralLineupStage.snapshot.scenery and .archive. Check with `python3 tools/refresh_mineral_lineup.py <directory> --baseline-sha256 <hash>`, apply the stage in Edit, then run with `--write`. The scoped saver archives only the old row in ServerStorage, appends the new row, and preserves every old instance/property and all 50 Sources. The current visible row has 59 descendants; the baked shell/grain previews are consolidated unions. Runtime comparison uses PickupView itself. Use tools/studio_mineral_preview_checks.lua for the native sample/drop comparison and clean shared.MineralPreviewCheck.close() afterward. These are Edit component checks, not Play sessions.
+
+### Amber / Quartz / Diamond row refresh
+
+The current row uses `tools/studio_rock_variety.lua` and `tools/refresh_rock_variety.py`. Bundle RockFinish and studio_bake_gem.lua before the stage, extract its scenery/archive sections, check the exact preceding native SHA, apply, then write. This archives the previous row as `ServerStorage.RockVarietyArchive.MineralLineup` and preserves the existing map and Sources. The runtime order comes from GemGeometry.order; production tier economics come from Workshop.CRYSTAL_TIERS. Keep legacy cargo entries in CRYSTAL_BY_MATERIAL so saved cargo is neither discarded nor revalued.
