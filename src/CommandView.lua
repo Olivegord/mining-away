@@ -104,25 +104,17 @@ function V:update(dt,now)
   end
  end
  for index=used+1,#self.pool do self.pool[index].Enabled=false end
- -- One contextual readout, never a field of floating health bars.
  local focused=hovered or (ordered and records[ordered])
  if focused and visible and focused.view.Parent and (focused.source:GetAttribute('HP') or 0)>0 then
   if not self.meter then
-   local gui=Instance.new('BillboardGui');gui.Name='FocusedRock';gui.Size=UDim2.fromOffset(132,34)
+   local gui=Instance.new('BillboardGui');gui.Name='FocusedRock'
    gui.AlwaysOnTop=true;gui.MaxDistance=100;gui.Parent=ctx.parent
    local title=Instance.new('TextLabel');title.Name='Mineral';title.Size=UDim2.new(1,0,0,22)
    title.BackgroundTransparency=1;title.Font=Enum.Font.GothamBold;title.TextSize=13
    title.TextColor3=Color3.new(1,1,1);title.TextStrokeColor3=Color3.fromRGB(20,25,32);title.TextStrokeTransparency=.1;title.Parent=gui
-   local track=Instance.new('Frame');track.Name='Health';track.Position=UDim2.fromOffset(5,24);track.Size=UDim2.new(1,-10,0,7)
-   track.BackgroundColor3=Color3.fromRGB(25,31,38);track.BorderSizePixel=0;track.Parent=gui
-   local round=Instance.new('UICorner');round.CornerRadius=UDim.new(0,4);round.Parent=track
-   local fill=Instance.new('Frame');fill.Name='Remaining';fill.BorderSizePixel=0;fill.BackgroundColor3=GREEN;fill.Parent=track
-   round:Clone().Parent=fill
-   local work=title:Clone();work.Name='Work';work.Text='';work.TextSize=12
-   work.TextXAlignment=Enum.TextXAlignment.Right;work.Position=UDim2.new(1,-57,0,20);work.Size=UDim2.fromOffset(52,15);work.Parent=gui
-   local pair=work:Clone();pair.Name='Pair';pair.Text='2 lasers';pair.TextColor3=GOLD
-   pair.TextXAlignment=Enum.TextXAlignment.Left;pair.Position=UDim2.fromOffset(5,20);pair.Parent=gui
-   self.meter=gui;self.title=title;self.track=track;self.health=fill;self.work=work;self.pair=pair
+   local status=title:Clone();status.Name='Order';status.TextSize=12
+   status.Position=UDim2.fromOffset(0,20);status.Size=UDim2.new(1,0,0,15);status.Parent=gui
+   self.meter=gui;self.title=title;self.order=status
   end
   local s=focused.source;local usedSlots=s:GetAttribute('SlotsUsed') or 0;local capacity=s:GetAttribute('SlotCapacity') or 1
   self.meter.Adornee=focused.view;self.meter.StudsOffsetWorldSpace=Vector3.new(0,focused.view.Size.Y*.65+.8,0);self.meter.Enabled=true
@@ -131,30 +123,19 @@ function V:update(dt,now)
   local ore=s:GetAttribute('BaseOre')
   local value=s:GetAttribute('OreValue')
   local extracted=(s:GetAttribute('ExtractedOre') or 0)>0
-  self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,34)
   self.title.TextSize=value and 16 or 13
   local label=if value then (extracted and ' · Ore released' or ' · '..value..' Quartz')
    elseif ore then ' · '..ore..' base ore'
    elseif capacity>1 then ' · '..usedSlots..'/'..capacity
    else ''
   self.title.Text=tostring(name)..label
-  local hp=s:GetAttribute('HP') or 0
-  local maxHP=s:GetAttribute('MaxHP') or 1
   local order=if ordered and focused==records[ordered] then orderText[phase] else nil
   local pair=not order and value~=nil and lasers>=2 and usedSlots==0 and not extracted and now>=(s:GetAttribute('ReadyAt') or 0)
    and (s:GetAttribute('Hardness') or 0)>=Workshop.PAIRED_CUT_HARDNESS
   local showOrder=order~=nil or pair
-  self.work.Visible=value~=nil
-  self.pair.Visible=showOrder;self.pair.Text=order or '2 lasers'
-  self.pair.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
-  self.track.Position=UDim2.fromOffset(showOrder and 56 or 5,24)
-  self.track.Size=UDim2.new(1,showOrder and -116 or value and -65 or -10,0,7)
-  if value then
-   -- Crystal snapshots include the reference game's 10 HP break floor.
-   hp=math.max(0,hp-10);maxHP-=10
-   self.work.Text=math.ceil(hp)..' HP'
-  end
-  self.health.Size=UDim2.fromScale(math.clamp(hp/math.max(1,maxHP),0,1),1)
+  self.meter.Size=UDim2.fromOffset(value and 188 or ore and 176 or 132,showOrder and 35 or 22)
+  self.order.Visible=showOrder;self.order.Text=order or '2 lasers'
+  self.order.TextColor3=order and (phase=='Cutting' and GREEN or phase=='Claimed' and RED or GOLD) or GOLD
  elseif self.meter then self.meter.Enabled=false end
 end
 function V:destroy()

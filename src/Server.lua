@@ -417,15 +417,23 @@ scene.hazards=ToolRules.Hazards.new({players=profiles,root=characterRoot,home=ho
 scene.classicCrystal=game:GetService('ServerStorage'):FindFirstChild('MiningAwayCrystal')
 RoleConfig.prepareRamielHull(RS)
 if scene.runStart and scene.classicCrystal then
- scene.crystalCuts={variants={'Original'}}
- -- Build the reusable crystal cuts once per server.
- for _,name in ipairs({'Needle','Crown','Spear','Oblique','Gem'}) do
-  local shape=CrystalCuts.build(name)
+ scene.crystalCuts={variants={}}
+ local fractures=folder(net,'CrystalFractures')
+ for _,name in ipairs(CrystalCuts.variants) do
+  local shape=CrystalCuts.build(name,scene.crystalCuts)
   if shape then
    scene.crystalCuts[name]=shape
-   if name~='Gem' then table.insert(scene.crystalCuts.variants,name) end
+   local halves=CrystalCuts.split(shape,name)
+   if halves then
+    halves.Parent=fractures
+    table.insert(scene.crystalCuts.variants,name)
+   end
   end
  end
+ local originalHalves=CrystalCuts.splitOriginal(scene.classicCrystal)
+ if originalHalves then originalHalves.Parent=fractures end
+ table.insert(scene.crystalCuts.variants,'Original')
+ scene.crystalCuts.Gem=CrystalCuts.build('Gem')
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
  for _,child in ipairs(cargoShape:GetChildren()) do child:Destroy() end
@@ -446,16 +454,25 @@ local function respawnRate(field: any)
  local tuning=RoleConfig.Mining
  return math.min(tuning.RespawnRateMaximum,tuning.RespawnRateBase+math.max(0,count-1)*tuning.RespawnRatePerDrone),count
 end
-local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk,breakHold)
+function scene.poseResource(r)
+ local cfg,part=r.field.cfg,r.part
+ local scale=cfg.ContinuousCrystals and Feel.crystalStageShape(r.stage,r.stageCount,r.fullSize)
+  or cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
+ part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
+ part.CFrame=Feel.groundedRockFrame(r.position,part.Size,part:GetAttribute('GroundY'),r.stage,r.stageSeed,part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
+ if r.cutOffset then part.CFrame*=CFrame.new(-part.Size*r.cutOffset) end
+end
+local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
- local variant=original and field.cfg.SelectionOnly and scene.crystalCuts and
+ local variant=original and field.cfg.ContinuousCrystals and scene.crystalCuts and
   scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
  local cut=variant and scene.crystalCuts[variant]
  local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
- if cut then part:SetAttribute('CrystalCut',variant) end
+ if variant then part:SetAttribute('CrystalCut',variant) end
+ if field.cfg.ContinuousCrystals then part:SetAttribute('QuarryCrystal',true) end
  if part:IsA('Part') then
   part.Shape=Enum.PartType.Block
   part.TopSurface=Enum.SurfaceType.Smooth;part.BottomSurface=Enum.SurfaceType.Smooth
@@ -464,9 +481,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local reference=field.cfg.ReferenceCrystals==true and kind=='Crystal'
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
- if cut and variant=='Spear' then fullSize*=Vector3.new(.72,1,.72)
- elseif cut and variant=='Oblique' then fullSize*=Vector3.new(.83,1,.91) end
- local steady=field.cfg.ContinuousCrystals==true and size>=1.70+2.10*1.80/3.35
+ if cut then fullSize*=CrystalCuts.proportions(cut,original) end
+ local steady=field.cfg.ContinuousCrystals==true and size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35
  if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
@@ -494,12 +510,17 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  if part:IsA('PartOperation') then part.UsePartColor=true end
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
-  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,breakHold=breakHold,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+  slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
  end
  part.CFrame=Feel.groundedRockFrame(finish,fullSize,ground,0,r.stageSeed,original~=nil and original~=false,reference,steady)
+ if cut then
+  r.cutOffset=cut.ExtentsCFrame.Position/cut.Size
+  part.CFrame*=CFrame.new(-fullSize*r.cutOffset)
+  part:SetAttribute('CrystalCutOffset',r.cutOffset)
+ end
  if field.cfg.SelectionOnly then
   part:SetAttribute('ZoneName',field.cfg.Name or field.cfg.Key)
   part:SetAttribute('BaseOre',1)
@@ -636,7 +657,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
  if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
- local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,mineral.breakHold)
+ local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3)
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
@@ -779,8 +800,8 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  pickupSerial+=1
  local launchAt=now
  if drop.finishing then
-  local splitAt=template:GetAttribute('CrystalSplitAt') or now+OreDrops.BREAK_DELAY
-  launchAt=splitAt+(OreDrops.REWARD_DELAY-OreDrops.BREAK_DELAY)
+  local splitAt=template:GetAttribute('CrystalSplitAt') or now
+  launchAt=splitAt+OreDrops.REWARD_DELAY
  end
  drop.launchAt=launchAt
  if drop.oreArc and not drop.compacted then
@@ -799,10 +820,9 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  local chip=template:Clone();for _,child in ipairs(chip:GetChildren()) do child:Destroy() end
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
- chip.Size=drop.raw and (Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE))) or Vector3.new(.71,.54,.65)
+ chip.Size=drop.raw and Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE)) or Vector3.new(.97,.73,.88)
  chip.Position=position;chip.Color=color
- -- Use the smooth finish for a strong native sky reflection on the cut faces.
- if drop.arc then chip.Material=Enum.Material.SmoothPlastic;chip.MaterialVariant='';chip.Reflectance=1 end
+ if not drop.compacted then chip.Material=Enum.Material.Neon;chip.MaterialVariant='';chip.Reflectance=0 end
  if drop.raw then
   if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
   chip:SetAttribute('PhysicalCargo',true)
@@ -1514,11 +1534,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  r.stage=nextStage
  if r.stage~=previous or shapeChanged then
   r.part:SetAttribute('Stage',r.stage)
-  if not clusterFinish then
-   local scale=r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount)
-   r.part.Size=r.fullSize*scale*Feel.rockShape(r.slice,r.heatBand)
-   r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
-  end
+  if not clusterFinish then scene.poseResource(r) end
  end
  r.part:SetAttribute('HP',actual)
  if (r.field.cfg.SelectionOnly or clusterFinish) and hitSurface then
@@ -1531,7 +1547,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
   r.part:SetAttribute('CutIsShot',isShot==true);r.part:SetAttribute('CutContactAt',now)
   if broken then
    r.part:SetAttribute('CrystalBreakOwner',recipient.owner)
-   r.splitAt=now+(clusterFinish and 0 or OreDrops.BREAK_DELAY+(r.breakHold or 0))
+   r.splitAt=now
    r.part:SetAttribute('CrystalSplitAt',r.splitAt)
    r.part:SetAttribute('CrystalBreakAt',now)
   end
@@ -1619,7 +1635,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     local keepContact=contact~=nil and contact.primaryId==r.id and contact.at==now
     if not keepContact and r.field.cfg.SelectionOnly and worker.state=='Mine' and worker.mining then
      -- Cutting drones keep their last visible contact while the broken
-     -- crystal finishes its pose. The reservation still retires immediately.
+     -- crystal is held on screen. The reservation still retires immediately.
      worker.mineBreakSerial+=1
      worker.mineBreakContact={at=now,untilTime=math.max(now+.3,(r.splitAt or now)+.19),primaryId=r.id,secondaryId='',beamSince=worker.beamSince}
      keepContact=true
@@ -1983,8 +1999,7 @@ function scene.regrow(r,dt)
  r.stage=Feel.stage(r.hp+10,r.maxHP,r.stageCount)
  if r.stage~=previous then
   r.part:SetAttribute('Stage',r.stage)
-  r.part.Size=r.fullSize*(r.field.cfg.SelectionOnly and Feel.crystalStageShape(r.stage,r.stageCount) or Feel.stageScale(r.stage,r.stageCount))*Feel.rockShape(r.slice,r.heatBand)
- r.part.CFrame=Feel.groundedRockFrame(r.position,r.part.Size,r.part:GetAttribute('GroundY'),r.stage,r.stageSeed,r.part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
+  scene.poseResource(r)
  end
  r.part:SetAttribute('HP',r.hp+10)
  if now>=(r.nextHealCue or 0) then r.nextHealCue=now+.48;r.part:SetAttribute('RegrowAt',now) end

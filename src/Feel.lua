@@ -293,13 +293,17 @@ function F.stagesCrossed(previous,hp,maxHP)
  return result
 end
 function F.stageScale(stage,count) count=math.clamp(count or 3,1,7);return 1-math.clamp(stage,0,count)/(count+1) end
-function F.crystalStageShape(stage,count)
+function F.crystalStageShape(stage,count,fullSize)
  local loss=1-F.stageScale(stage,count)
- return Vector3.new(1-loss*.62,1-loss*.81,1-loss*.46)
+ local shape=Vector3.new(1-loss*.62,1-loss*.81,1-loss*.46)
+ -- Add one stud at the final stage, keeping the intact silhouette and
+ -- spreading the extra volume across the preceding fractures.
+ local progress=math.clamp(stage/math.max(1,count or 3),0,1)
+ return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
 end
-function F.crystalShade(hp,maxHP,stage,count)
- local period=F.stageScale(stage,count)
- return math.clamp(hp/math.max(1,maxHP)/period-(1-period)/4,0,1)
+function F.crystalDarkness(hp,maxHP)
+ local spent=1-math.clamp((hp-10)/math.max(1,maxHP-10),0,1)
+ return 1-(1-spent^1.28)^1.25
 end
 function F.junkDarkness(hp,maxHP,stage,count)
  local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)

@@ -30,8 +30,7 @@ assert(record.settled and record.visual.broken and record.view.Transparency==1)
 assert(#cues==1,'final break must be silent')
 before=reads;for frame=1,3600 do renderResource(record,66+frame/60) end
 assert(reads==before and #cues==1)
--- Mining Away shades the current health band. A crack retains that shade
--- through the size change, and the next accepted hit uses the new band.
+-- Damage stays darker across a stage seam and reconstructs on late join.
 local fixed=source:Clone()
 fixed:SetAttribute('ReferenceCrystal',true)
 fixed.Color=Color3.fromRGB(255,0,0)
@@ -41,23 +40,25 @@ local fixedRecord={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=t
 renderResource(fixedRecord,70)
 local originalSize=fixedRecord.view.Size
 assert(originalSize.X==3 and fixedRecord.view.Color.R==1 and not fixedRecord.settled)
-local beforeCrack={.75,.50/.75-.0625,.25/.50-.125}
-local afterCrack={.74/.75-.0625,.49/.50-.125,.24/.25-.1875}
+local previous=fixedRecord.view.Color.R
 for stage,hp in ipairs({75,50,25}) do
  local at=72+stage
  local oldDirection=fixedRecord.view.CFrame.LookVector
  fixed:SetAttribute('HP',hp+1);fixedRecord.dirty=true
  renderResource(fixedRecord,at-.1)
  assert(fixedRecord.view.Size.X==originalSize.X*(1-(stage-1)*.25))
- assert(fixedRecord.view.Color.R>beforeCrack[stage] and fixedRecord.view.Color.R<afterCrack[stage])
+ assert(fixedRecord.view.Color.R<previous)
+ local beforeCrack=fixedRecord.view.Color.R
  fixed:SetAttribute('HP',hp);fixed:SetAttribute('Stage',stage);fixedRecord.dirty=true
  renderResource(fixedRecord,at)
- assert(math.abs(fixedRecord.view.Color.R-beforeCrack[stage])<1e-7)
+ assert(fixedRecord.view.Color.R<beforeCrack and beforeCrack-fixedRecord.view.Color.R<.03)
  assert(fixedRecord.view.Size.X==originalSize.X*(1-stage*.25))
  assert((fixedRecord.view.CFrame.LookVector-oldDirection).Magnitude>.2)
+ local afterCrack=fixedRecord.view.Color.R
  fixed:SetAttribute('HP',hp-1);fixedRecord.dirty=true
  renderResource(fixedRecord,at+.05)
- assert(math.abs(fixedRecord.view.Color.R-afterCrack[stage])<1e-7)
+ assert(fixedRecord.view.Color.R<afterCrack)
+ previous=fixedRecord.view.Color.R
 end
 local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=true,visual=Feel.newStagePresentation(3,false,76,3)}
 renderResource(lateFixed,76)

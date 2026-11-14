@@ -85,12 +85,14 @@ function M.deepCrystal(roll: number,hardness: number,baseOre: number)
   ore=math.max(1,math.floor(baseOre*(.65+.9*sizeRoll)+.5)),
  }
 end
+M.FIELD_CRYSTAL_MIN_SIZE=2.10
+M.FIELD_CRYSTAL_SIZE_RANGE=2.30
 function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages: number)
  -- Most deposits stay close to the familiar size. The upper tail makes
  -- occasional outcrops worth choosing when cargo slots are the bottleneck.
  local fraction=math.clamp((roll-50)/50,0,1)
  local growth=fraction^1.55
- local size=1.70+2.10*growth
+ local size=M.FIELD_CRYSTAL_MIN_SIZE+M.FIELD_CRYSTAL_SIZE_RANGE*growth
  local mineral=M.deepCrystal(roll,hardness,baseOre)
  -- Preserve the rolled work/reward ladder when adjusting the display scale.
  local stageBonus=if growth>=2.50/3.35 then 3 elseif growth>=1.80/3.35 then 2 elseif growth>=1/3.35 then 1 else 0
@@ -98,7 +100,6 @@ function M.fieldCrystal(roll: number,hardness: number,baseOre: number,baseStages
  -- Keep the established seven-stage ceiling while reserving extra stages
  -- for the largest rocks at every depth.
  mineral.stages=math.min(7,math.min(5,baseStages)+stageBonus)
- mineral.breakHold=.45*math.clamp((growth-1/3.35)/(2.35/3.35),0,1)
  return mineral
 end
 -- Cumulative base ore released by real layer fractures. The rest belongs to

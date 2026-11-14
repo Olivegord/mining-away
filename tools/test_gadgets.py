@@ -17,14 +17,16 @@ mock = (ROOT / 'tests/mock-roblox.lua').read_text()
 client = (ROOT / 'src/Client.lua').read_text()
 render = client[client.index('local function renderDrone(d,dt,now)'):client.index('-- Every observer draws repair beams', client.index('local function renderDrone(d,dt,now)'))]
 resource_render = client[client.index('local function renderResource(r,now)'):client.index('local function resolveRenderedTarget', client.index('local function renderResource(r,now)'))]
-crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  local dirty=r.dirty'):client.index(' selectorView:updateHealing(now)')]
+crystal_frame = client[client.index(' for _,r in pairs(resources) do\n  if impactFreeze:holds(r)'):client.index(' rockDamage.sunGlints:update(resources,now,dt,')] + '\n rockDamage.feedback:step(now)'
 crystal_clock_setup = """
 local BeamVFX={near=function() return true end,reduced=function() return false end}
 local splitParticles=0
-local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end,
+local RoleVisuals={setTime=function() end,step=function() end,destroy=function() end,Pulse=function() end,PrismImpact=function() end,
  ImpactParticles=function(_,_,_,kind) if kind=='CrystalBreak' then splitParticles+=1 end end}
 local NumberRange={new=function(a,b) return {Min=a,Max=b or a} end}
 local NumberSequenceKeypoint={new=function(t,v) return {Time=t,Value=v} end}
+local NumberSequence={new=function(a,b) return b and {NumberSequenceKeypoint.new(0,a),NumberSequenceKeypoint.new(1,b)} or a end}
+local ColorSequence={new=function(a,b) return b and {ColorSequenceKeypoint.new(0,a),ColorSequenceKeypoint.new(1,b)} or a end}
 function IM:Emit(count) self.Emitted=(self.Emitted or 0)+count end
 local nativeType=typeof
 local function typeof(value) return getmetatable(value)==VM and 'Vector3' or nativeType(value) end
@@ -39,8 +41,8 @@ with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
         'resource-render': mock + '\n' + module_bundle(('Feel',)) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('BeamVFX','Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'crystal-clock': mock + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + crystal_clock_setup +
-        module_bundle(('Feel', 'Feedback', 'PickupMotion', 'CrystalImpactView', 'DroneCatalog', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
-        '\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
+        module_bundle(('Feel', 'Feedback', 'PickupMotion', 'ImpactFreeze', 'CrystalImpactView', 'DroneCatalog', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
+        '\nlocal impactFreeze=ImpactFreeze.new({})\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'prism-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/prism-server.integration.lua').read_text(),
         'nomad-view': mock + '\n' + (ROOT / 'tests/nomad-view.setup.lua').read_text() + '\n' + module_bundle(('Feel','EnergyDisc','NomadView')) + '\n' + (ROOT / 'tests/nomad-view.integration.lua').read_text(),

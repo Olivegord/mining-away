@@ -1,6 +1,30 @@
--- A few solid cuts, built once per Crystal Run server from convex planes.
--- They share the original footprint and grounding contract, not its mesh.
-local C={}
+-- Crystal Run templates and their fracture halves are built once per server.
+local CrystalGeometry=require('./CrystalGeometry')
+local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
+local clusters={
+ Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},
+ Fan={core='Oblique',width=.72,height=.92, feet={{-.54,.05,.79,-.53},{.56,.13,.63,.43},{.17,-.56,.29,.28}}},
+ Terrace={core='Crown',width=1.12,height=.67, feet={{.57,.29,.45,.31},{-.52,.23,.35,-.44},{.12,-.59,.24,.14}}},
+ Outcrop={core='Needle',width=.89,height=.83, feet={{-.55,-.03,.64,-.43},{.42,-.40,.49,.33},{.43,.37,.32,.21},{-.16,.59,.22,-.26}}},
+}
+local function box(size,frame)
+ local p=Instance.new('Part');p.Anchored=true;p.Size=size;p.CFrame=frame
+ p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
+ return p
+end
+local function clean(part,name)
+ part.Name=name;part.PivotOffset=CFrame.new();part.Anchored=true
+ part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+ part.Material=Enum.Material.SmoothPlastic;part.MaterialVariant='';part.Reflectance=0
+ if part:IsA('PartOperation') then part.UsePartColor=true end
+ return part
+end
+local function solid(results)
+ if type(results)~='table' then return nil end
+ if #results==1 and results[1]:IsA('BasePart') then return results[1] end
+ for _,part in ipairs(results) do part:Destroy() end
+ return nil
+end
 local function plane(list,x,y,z,nx,ny,nz)
  list[#list+1]={Vector3.new(x,y,z),Vector3.new(nx,ny,nz).Unit}
 end
@@ -46,11 +70,30 @@ function C.planes(name)
  end
  return p
 end
-function C.build(name)
- local function box(size,frame)
-  local p=Instance.new('Part');p.Anchored=true;p.Size=size;p.CFrame=frame
-  p.TopSurface=Enum.SurfaceType.Smooth;p.BottomSurface=Enum.SurfaceType.Smooth
-  return p
+function C.build(name,cuts)
+ local cluster=clusters[name]
+ if cluster then
+  if not cuts[cluster.core] or not cuts.Oblique or not cuts.Crown then return nil end
+  local core=cuts[cluster.core]:Clone();core.CFrame=CFrame.new()
+  core.Size*=Vector3.new(cluster.width,cluster.height,cluster.width)
+  local feet={}
+  for i,spec in ipairs(cluster.feet) do
+   local x,z,height,lean=table.unpack(spec)
+   local foot=(i%2==0 and cuts.Crown or cuts.Oblique):Clone()
+   foot.Size=Vector3.new(.82+.20*height,core.Size.Y*height,.88+.28*height)
+   local turn=CFrame.Angles(0,i*1.63,0)*CFrame.Angles(0,0,lean)
+   local support=math.abs(turn.RightVector.Y)*foot.Size.X+math.abs(turn.UpVector.Y)*foot.Size.Y+math.abs(turn.LookVector.Y)*foot.Size.Z
+   foot.CFrame=CFrame.new(x,-core.Size.Y*.5+support*.5,z)*turn
+   feet[#feet+1]=foot
+  end
+  local ok,parts=pcall(function()
+   return game:GetService('GeometryService'):UnionAsync(core,feet,{
+    CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false,
+   })
+  end)
+  core:Destroy();for _,foot in ipairs(feet) do foot:Destroy() end
+  local merged=ok and solid(parts)
+  return merged and clean(merged,name) or nil
  end
  local size=Vector3.new(2,4,2)
  local base=box(size,CFrame.new());local tools={}
@@ -70,8 +113,61 @@ function C.build(name)
   for _,p in ipairs(result) do p:Destroy() end
   return nil,'Expected one solid cut'
  end
- local part=result[1];part.Name=name;part.PivotOffset=CFrame.new();part.UsePartColor=true
- part.Material=Enum.Material.SmoothPlastic
- return part
+ return clean(result[1],name)
+end
+function C.split(template,name)
+ local base=template:Clone();base.CFrame=CFrame.new()
+ local size=base.Size
+ local container=Instance.new('Folder');container.Name=name
+ container:SetAttribute('HingeY',base.ExtentsCFrame.Position.Y/size.Y-.5)
+ local halfSpan=size.Magnitude*1.1
+ for index,side in ipairs({-1,1}) do
+  local clip=box(Vector3.one*(2*halfSpan),CFrame.new(side*halfSpan,0,0))
+  local ok,result=pcall(function()
+   return game:GetService('GeometryService'):IntersectAsync(base,{clip},{
+    CollisionFidelity=Enum.CollisionFidelity.Box,RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false,
+   })
+  end)
+  clip:Destroy()
+  local half=ok and solid(result)
+  if not half or math.abs(half.Size.Y-size.Y)>size.Y*.46 or half.Size.X>size.X*.68 then
+   if half then half:Destroy() end
+   base:Destroy();container:Destroy();return nil
+  end
+  clean(half,index==1 and 'Left' or 'Right')
+  half.Color=Color3.new(0,0,0);half.CastShadow=false
+  half:SetAttribute('SizeRatio',half.Size/size)
+  -- CSG extents may sit off-center from the returned part's CFrame. Account
+  -- for the mesh-local offset when applying non-uniform stage dimensions.
+  half:SetAttribute('CenterRatio',half.ExtentsCFrame.Position/size-(half.ExtentsCFrame.Position-half.Position)/half.Size)
+  half.Parent=container
+ end
+ base:Destroy()
+ return container
+end
+function C.proportions(cut,original)
+ local native,custom=original.Size,cut.Size
+ local aspect=(custom/custom.Y)/(native/native.Y)
+ return Vector3.new(math.clamp(aspect.X,.67,1),1,math.clamp(aspect.Z,.62,1))
+end
+function C.splitOriginal(original)
+ local halves=C.split(original,'Original')
+ if halves or not CrystalGeometry then return halves end
+ -- The old URL-backed union can lose its geometry in a boolean operation.
+ -- Its recovered collision surface follows the original silhouette.
+ local assets=game:GetService('AssetService')
+ local mesh
+ local ok,part=pcall(function()
+  mesh=assert(assets:CreateEditableMesh())
+  local ids={}
+  for i,v in ipairs(CrystalGeometry.vertices) do
+   ids[i]=mesh:AddVertex(Vector3.new(v[1],v[2],v[3])*original.Size)
+  end
+  for _,tri in ipairs(CrystalGeometry.triangles) do mesh:AddTriangle(ids[tri[1]],ids[tri[2]],ids[tri[3]]) end
+  return assets:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box})
+ end)
+ if ok then halves=C.split(part,'Original');part:Destroy() end
+ if mesh then mesh:Destroy() end
+ return halves
 end
 return C

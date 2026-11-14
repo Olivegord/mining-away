@@ -479,7 +479,12 @@ check('heavy beam texture loops advance independently and impact strokes outlive
  realTime=550
  RoleVisuals.setTime(realTime)
  RoleVisuals.Beam(from,to,color,1.52,.25,'Prism')
- RoleVisuals.PrismImpact(to,Vector3.yAxis)
+ local raycast=workspace.Raycast
+ workspace.Raycast=function(_,origin)
+  return {Position=Vector3.new(origin.X,-2,origin.Z)}
+ end
+ RoleVisuals.PrismImpact(to,Vector3.yAxis,Vector3.new(0,-5,0))
+ workspace.Raycast=raycast
  RoleVisuals.setTime(nil);RoleVisuals.step(550.03)
  local effects=workspace.DroneRoleClientEffects
  local rig=assert(effects:FindFirstChild('BeamVFX'))
@@ -490,7 +495,7 @@ check('heavy beam texture loops advance independently and impact strokes outlive
  local flameOffset,foldOffset=flame.TextureOffset,fold.TextureOffset
  local impact=assert(effects:FindFirstChild('RamielImpactArtwork'))
  local ray=assert(impact:FindFirstChild('ImpactFlashRay'))
- local stroke=assert(impact:FindFirstChild('PeelingImpactStroke'))
+ local stroke=assert(impact:FindFirstChild('GroundingImpactTendril'))
  local smoke=assert(impact:FindFirstChild('RollingSmoke'))
  assert(ray.Enabled and stroke.Enabled and stroke.CurveSize0>0 and smoke.Emitted==8)
  local tip=stroke.Attachment1.WorldCFrame.Position
@@ -499,6 +504,14 @@ check('heavy beam texture loops advance independently and impact strokes outlive
  assert((stroke.Attachment1.WorldCFrame.Position-tip).Magnitude>.2)
  RoleVisuals.step(550.30)
  assert(not rig.Parent and impact.Parent and stroke.Enabled and not ray.Enabled)
+ local crest=stroke.Attachment1.WorldCFrame.Position
+ assert(crest.Y>8,'tendril did not rise far above the impact')
+ RoleVisuals.step(550.57)
+ local landing=stroke.Attachment1.WorldCFrame.Position
+ near(landing.Y,-1.87)
+ assert(landing.Magnitude>17 and stroke.Enabled,'tendril did not reach the ground at full length')
+ near((stroke.Attachment0.WorldCFrame.Position-impact.Position).Magnitude,0)
+ RoleVisuals.step(550.92);assert(not stroke.Enabled)
  RoleVisuals.step(552)
  assert(not impact.Parent)
  local player=Instance.new('Player');players.LocalPlayer=player

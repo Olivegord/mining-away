@@ -2,9 +2,8 @@
 -- only a server-confirmed arrival may put its conserved units in the backpack.
 local O={MAGNET_RANGE=6,CARGO_REACH=9,PICKUP_DISTANCE=2.2,SCATTER_TIME=.72,MAX_NODES=16,LIFETIME=24,CARGO_MAX_AGE=180,GRAVITY=70,
  GEM_GRAVITY=178,GEM_CONTACT_HOLD=.24,AIR_DRAG=.9,GROUND_DRAG=18,RESTITUTION=.22}
--- The local impact hold supplies the old fixed dead air; size still adds a pressure beat.
-O.BREAK_DELAY=.035
-O.REWARD_DELAY=.060
+-- Ore begins just after the authoritative split. Client interpolation is separate.
+O.REWARD_DELAY=.025
 function O.partition(units,limit)
  local out={};local count=math.min(4,units,limit or 4)
  if count<1 then return out end

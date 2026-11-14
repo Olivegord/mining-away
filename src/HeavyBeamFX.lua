@@ -86,13 +86,40 @@ end
 
 local contacts={}
 local contactCount=0
+local UP=Vector3.yAxis
 local arcs={
- -- Angle, reach, bend, lifetime and thickness. Each stroke keeps its own arc.
- {.11,6.6, .42,.68,.29}, {1.10,4.4,-.36,.44,.14},
- {2.03,6.0, .56,.62,.23}, {2.85,3.9,-.22,.34,.12},
- {3.74,7.0,-.46,.71,.31}, {4.56,4.7, .31,.49,.16},
- {5.34,5.6, .52,.56,.22},
+ -- Heading, ground reach, lift, sideways curl, flight time, width.
+ {.14,20,12, 5.0,.57,.61}, {1.10,13, 8,-3.8,.43,.34},
+ {2.04,18,17, 4.1,.62,.53}, {2.86,11, 9,-3.2,.47,.31},
+ {3.68,23,13,-5.4,.66,.72}, {4.57,14, 7, 3.6,.46,.33},
+ {5.39,17,10, 4.2,.53,.47},
 }
+local function groundQuery()
+ local world=workspace:FindFirstChild('MiningAway')
+ local map=world and world:FindFirstChild('Map')
+ local terrain=workspace:FindFirstChildOfClass('Terrain')
+ local surfaces={}
+ if map then surfaces[#surfaces+1]=map end
+ if terrain then surfaces[#surfaces+1]=terrain end
+ if #surfaces==0 then return nil end
+ local query=RaycastParams.new()
+ query.FilterType=Enum.RaycastFilterType.Include
+ query.FilterDescendantsInstances=surfaces
+ query.RespectCanCollide=true
+ return query
+end
+local function trajectory(start,floor,shape,scale,query)
+ local radial=Vector3.new(math.cos(shape[1]),0,math.sin(shape[1]))
+ local side=UP:Cross(radial)
+ local aim=floor+radial*shape[2]*scale
+ local hit=query and workspace:Raycast(aim+UP*24,-UP*60,query)
+ local last=(hit and hit.Position or aim)+UP*.13
+ local height=shape[3]*scale
+ local curl=side*shape[4]*scale
+ local firstControl=start+radial*shape[2]*scale*.09+UP*height*1.48+curl*.58
+ local lastControl=last-radial*shape[2]*scale*.22+UP*height*.98+curl
+ return {start,firstControl,lastControl,last}
+end
 local flashAngles={.21,1.49,2.81,3.91,5.11}
 local flashLengths={1.45,3.3,1.6,1.4,2.7}
 local function tangentFrame(point,tangent)
@@ -116,7 +143,7 @@ local function emitSmoke(root,p,scale)
  end
 end
 
-function FX.impact(parent,point,normal,scale,at,orbital)
+function FX.impact(parent,point,normal,scale,at,orbital,ground)
  if contactCount>=8 or BeamVFX.reduced() or not BeamVFX.near(point,125) then return end
  local p=palette(orbital)
  local root=Instance.new('Part');root.Name=orbital and 'OrbitalImpactArtwork' or 'RamielImpactArtwork'
@@ -124,7 +151,7 @@ function FX.impact(parent,point,normal,scale,at,orbital)
  root.Size=Vector3.one*.025;root.Transparency=1
  local center=point+normal*.24
  root.CFrame=CFrame.lookAt(center,center+normal);root.Parent=parent
- local state={center=center,at=at,scale=scale,arcs={},flash={},normal=normal,
+ local state={center=center,at=at,scale=scale,arcs={},flash={},
   glow=EnergyDisc.sprite(root,'ContactWhiteFlash')}
  local ref=math.abs(normal.Y)>.95 and Vector3.zAxis or Vector3.yAxis
  state.right=normal:Cross(ref).Unit;state.up=state.right:Cross(normal)
@@ -139,11 +166,19 @@ function FX.impact(parent,point,normal,scale,at,orbital)
    state.flash[i]=ribbon(root,'ImpactFlashRay',ColorSequence.new(WHITE,i%2==0 and p.ember or p.cold),1)
   end
  end
- for i=1,#arcs do
-  local tip=i%3==0 and p.cold or p.ember
-  local stroke=ribbon(root,'PeelingImpactStroke',ColorSequence.new(p.hot,tip),.82)
-  stroke.beam.Segments=14
-  state.arcs[i]=stroke
+ if ground then
+  local query=groundQuery()
+  for i,shape in ipairs(arcs) do
+   local tip=i%3==0 and p.cold or p.ember
+   local colors=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,p.edge),ColorSequenceKeypoint.new(.56,p.hot),
+    ColorSequenceKeypoint.new(.90,tip),ColorSequenceKeypoint.new(1,WHITE),
+   })
+   local stroke=ribbon(root,'GroundingImpactTendril',colors,.86)
+   stroke.beam.Segments=22
+   stroke.points=trajectory(center,ground,shape,scale,query)
+   state.arcs[i]=stroke
+  end
  end
  emitSmoke(root,p,scale)
  for i,hue in ipairs({p.ember,p.hot,p.cold}) do
@@ -179,31 +214,32 @@ function FX.step(now)
   end
   for i,line in ipairs(state.arcs) do
    local shape=arcs[i]
-   local q=math.clamp(age/shape[4],0,1)
-   line.beam.Enabled=q<1
-   if q>=1 then continue end
-   local angle=shape[1]
-   local radial=state.right*math.cos(angle)+state.up*math.sin(angle)
-   local tangent=-state.right*math.sin(angle)+state.up*math.cos(angle)
-   local curve=tangent*shape[3]-radial*.26
-   local lift=state.normal*(.55+.16*(i%3))
-   local reach=shape[2]*scale
-   local head=1-(1-q)^2.25
-   local tail=math.max(0,head-(.14+.51*(1-q)))
+   local flight=shape[5]
+   local launch=(i-1)*.012
+   local elapsed=age-launch
+   local decay=math.clamp((elapsed-flight)/.32,0,1)
+   line.beam.Enabled=elapsed>0 and decay<1
+   if not line.beam.Enabled then continue end
+   local progress=math.clamp(elapsed/flight,0,1)
+   local head=progress*progress*(3-2*progress)
+   local tail=.97*decay
    local span=head-tail
-   -- Exact cubic sub-curve between the moving head and its shorter-lived tail.
+   local start,first,last,finish=table.unpack(line.points)
+   -- Tangents at the clipped endpoints preserve the exact cubic curve.
    local function frame(u)
-    local point=state.center+reach*(radial*u+curve*u^3+lift*u*(1-u))
-    local derivative=reach*(radial+curve*(3*u*u)+lift*(1-2*u))
+    local v=1-u
+    local point=start*(v^3)+first*(3*v*v*u)+last*(3*v*u*u)+finish*(u^3)
+    local derivative=(first-start)*(3*v*v)+(last-first)*(6*v*u)+(finish-last)*(3*u*u)
     return tangentFrame(point,derivative),derivative.Magnitude*span/3
    end
-   local first,c0=frame(tail)
-   local last,c1=frame(head)
-   line.a.WorldCFrame=first;line.b.WorldCFrame=last
-   local fade=(1-q)^.68
+   local from,c0=frame(tail)
+   local to,c1=frame(head)
+   line.a.WorldCFrame=from;line.b.WorldCFrame=to
+   local fade=(1-decay)^1.3
+   local width=scale*shape[6]*fade
    line.beam.CurveSize0=c0;line.beam.CurveSize1=c1
-   line.beam.Width0=scale*shape[5]*fade;line.beam.Width1=.012*scale*fade
-   line.beam.Transparency=opacity(1,1-fade*.86,1-fade*.96,1-fade*.44)
+   line.beam.Width0=width;line.beam.Width1=width*.12
+   line.beam.Transparency=opacity(1-fade*.57,1-fade*.89,1-fade*.97,1-fade*.75)
   end
  end
 end

@@ -1,11 +1,8 @@
 -- Local-only feedback. Rest poses and reward objects belong to other systems.
 local V={}
-function V.releaseAt(source,breakAt)
- return (source:GetAttribute('CrystalSplitAt') or breakAt)+PickupMotion.DELAY
-end
 local WARM=Color3.fromRGB(255,218,139)
 local HOT=Color3.fromRGB(255,249,216)
-local CHAR=Color3.fromRGB(12,9,10)
+local CHAR=Color3.new(0,0,0)
 local EMBER=Color3.fromRGB(255,27,59)
 local RED_HIGHLIGHT=Color3.fromRGB(255,119,145)
 local Players=game:GetService('Players')
@@ -20,9 +17,9 @@ local function part(parent,class,name,color)
  p.CanTouch=false;p.CastShadow=false;p.Material=Enum.Material.SmoothPlastic;p.Color=color;p.Parent=parent
  return p
 end
-function V.new(parent,audio,onSplit,onCameraBeat)
+function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  local variation=Random.new()
- local self={pieces={},tints={},clusterTargets={},parent=parent,audio=audio}
+ local self={pieces={},sparks={},fractures={},tints={},parent=parent,audio=audio}
  local function track(p,at,from,velocity,ground,spin,weight,tink,groundTail)
   local flight=(velocity.Y+math.sqrt(velocity.Y^2+192*math.max(0,from.Y-ground)))/96
   self.pieces[#self.pieces+1]={p=p,at=at,from=from,v=velocity,duration=flight+groundTail,
@@ -54,10 +51,65 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    track(p,at,origin,velocity,floor,Vector3.new(i*1.3,2.6*i,.6*i),.85,nil,1.05)
   end
  end
- function self:resume(held)
-  for _,piece in ipairs(self.pieces) do piece.at+=held end
+ local function releaseSparks(point,ground,color,strength,now)
+  local player=Players.LocalPlayer
+  local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
+  local heading=variation:NextNumber(0,2*math.pi)
+  for i=1,8 do
+   if #self.sparks>=32 then break end
+   local streak=i<=5
+   local angle=heading+i*2.39996+variation:NextNumber(-.70,.70)
+   local direction=Vector3.new(math.cos(angle),0,math.sin(angle))
+   local drift=Vector3.new(-direction.Z,0,direction.X)
+   local spark=part(parent,'Part',streak and 'CrystalFireworkStreak' or 'CrystalDriftingEmber',color:Lerp(HOT,variation:NextNumber(.35,.88)))
+   if not lowFlash then spark.Material=Enum.Material.Neon end
+   if not streak then spark.Shape=Enum.PartType.Ball end
+   spark.Transparency=1;spark.Size=Vector3.one*.045;spark.Position=point
+   self.sparks[#self.sparks+1]={
+    p=spark,at=now+variation:NextNumber(0,streak and .09 or .21),from=point,ground=ground,streak=streak,
+    duration=streak and variation:NextNumber(1.05,1.85) or variation:NextNumber(2.1,3.2),
+    v=direction*variation:NextNumber(streak and 8 or 2.5,streak and 19 or 6),
+    lift=variation:NextNumber(streak and 5.5 or 7.5,streak and 14 or 12),
+    drift=drift*variation:NextNumber(.32,.88),phase=variation:NextNumber(0,2*math.pi),frequency=variation:NextNumber(3.8,9.5),
+    size=math.sqrt(strength)*variation:NextNumber(.085,.19),lowFlash=lowFlash,
+   }
+  end
+ end
+ local function sparkPosition(s,t)
+  local travel=(1-math.exp(-2.4*t))/2.4
+  local bend=math.sin(s.phase+t*s.frequency)-math.sin(s.phase)
+  local lift=s.lift*(1-math.exp(-1.8*t))/1.8-1.2*t*t
+  local p=s.from+s.v*travel+s.drift*(bend*math.min(t,.65))+Vector3.yAxis*lift
+  return Vector3.new(p.X,math.max(s.ground+.08,p.Y),p.Z)
  end
  function self:step(now)
+  for i=#self.fractures,1,-1 do
+   local half=self.fractures[i];local age=now-half.at
+   if age>=1.06 then half.p:Destroy();table.remove(self.fractures,i)
+   else
+    local open=1-(1-math.clamp(age/.24,0,1))^3
+    local settle=math.clamp((age-.24)/.38,0,1)
+    local side=half.side
+    half.p.CFrame=half.hinge*CFrame.new(side*open*half.gap,0,0)
+     *CFrame.Angles(0,side*open*.13,-side*(open*half.angle+(half.reduced and 0 or settle*.10)))*CFrame.new(half.offset)
+    half.p.Transparency=math.clamp((age-.67)/.39,0,1)^2
+   end
+  end
+  for i=#self.sparks,1,-1 do
+   local s=self.sparks[i];local t=now-s.at
+   if t>=s.duration then s.p:Destroy();table.remove(self.sparks,i)
+   elseif t>=0 then
+    local q=t/s.duration
+    local pos=sparkPosition(s,t)
+    local tail=sparkPosition(s,math.max(0,t-.075))
+    local length=(pos-tail).Magnitude
+    local width=s.size*(1-.70*q^2)
+    local flicker=s.lowFlash and 0 or .16*(.5+.5*math.sin(s.phase+t*s.frequency*2.1))
+    s.p.Transparency=1-math.min(1,t/.025)*(1-q^2)*(1-(s.lowFlash and .44 or .14)-flicker)
+    s.p.Size=Vector3.new(width,width,s.streak and math.max(width,length) or width)
+    s.p.CFrame=s.streak and length>.001 and CFrame.lookAt(pos:Lerp(tail,.5),pos) or CFrame.new(pos)
+   end
+  end
   for i=#self.pieces,1,-1 do
    local e=self.pieces[i];local t=now-e.at
    if t>=e.duration then e.p:Destroy();table.remove(self.pieces,i)
@@ -101,17 +153,38 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    end
   end
  end
+ local function openHalves(r,frame,size,now,reduced)
+  local cut=r.source:GetAttribute('CrystalCut')
+  local template=cut and findFracture and findFracture(cut)
+  if not template then return end
+  local left,right=template:FindFirstChild('Left'),template:FindFirstChild('Right')
+  if not left or not right then return end
+  -- Both halves share the lower seam and open outward around it.
+  local foot=Vector3.yAxis*((template:GetAttribute('HingeY') or -.5)*size.Y)
+  local hinge=frame*CFrame.new(foot)
+  for index,original in ipairs({left,right}) do
+   if #self.fractures>=32 then table.remove(self.fractures,1).p:Destroy() end
+   local half=original:Clone()
+   local side=index==1 and -1 or 1
+   local center=original:GetAttribute('CenterRatio')*size
+   half.Size=original:GetAttribute('SizeRatio')*size
+   half.CFrame=frame*CFrame.new(center);half.Parent=parent
+   self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
+    offset=center-foot,gap=math.clamp(size.X*.19,.18,.70),angle=index==1 and .46 or .63}
+  end
+ end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
-  local frame=r.restPose
-  local ground=s:GetAttribute('GroundY') or frame.Position.Y-v.Size.Y*.5
+  local frame=r.splitPose or r.restPose
+  local size=r.splitSize or v.Size
+  local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
   local fullSize=s:GetAttribute('FullSize') or v.Size
+  if type(fullSize)=='number' then fullSize=Vector3.one*fullSize end
   local strength=if prism or nomad then math.clamp(v.Size.Magnitude*.30,1.08,2.10)*(prism and 1.30 or 1)
-   else math.clamp(fullSize.Magnitude*.24,.9,2.45)
+   else math.clamp(fullSize.Magnitude*.21,.9,2.45)
   local clusterSize=prism and (s:GetAttribute('BlastClusterSize') or 1) or 1
   local prismReceipt=prism and s:GetAttribute('CutProjectileFX')==true
-  local point=Vector3.new(frame.Position.X,ground+math.max(.8,v.Size.Y*.60),frame.Position.Z)
-  local axis=frame.RightVector
+  local point=Vector3.new(frame.Position.X,ground+math.max(.8,size.Y*.60),frame.Position.Z)
   local reduced=BeamVFX.reduced() or V.reducedMotion()
   local player=Players.LocalPlayer
   local owned=player and s:GetAttribute('CrystalBreakOwner')==player.UserId
@@ -122,19 +195,9 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    audio:play('crystal_release_tink',point,{level=volume})
   end
   if not nomad and onSplit and not V.reducedMotion() then onSplit(point,strength,now,prism,owned) end
-  if clusterSize<=5 then
-   for _,side in ipairs({-1,1}) do
-    if #self.pieces>=46 then break end
-    local wingColor=prism and CHAR:Lerp(EMBER,side==1 and .29 or .15) or r.baseColor:Lerp(HOT,variation:NextNumber(.06,.24))
-    local wing=part(parent,'WedgePart','CrystalSplitFace',wingColor)
-    wing.Size=Vector3.new(.82,1.54,1.12)*strength*(prism and 1 or variation:NextNumber(.80,1.20))
-    local origin=point+axis*side*strength*.24
-    wing.CFrame=CFrame.new(origin)*CFrame.Angles(0,side*.5,side*.2)
-    track(wing,now,origin,axis*side*(7.4+strength)+Vector3.yAxis*(8.3+strength),ground,
-     Vector3.new(side*.7,side*.5,side*.2),.48,side==1 and (owned and .85 or .51) or nil,.94)
-   end
-  end
+  openHalves(r,frame,size,now,reduced)
   if not reduced then
+   if not prism and not nomad then releaseSparks(point,ground,r.baseColor,strength,now) end
    if RoleVisuals and not nomad then
     local floor=Vector3.new(point.X,ground+.085,point.Z)
     if not prismReceipt then
@@ -155,7 +218,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
     if not prism then chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance end
     local origin=point+direction*.22
     chip.Position=origin
-    track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
+   track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
      ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
      (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
@@ -167,49 +230,73 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    end
   end
  end
+ local function darkness(r,now)
+  local blend=math.clamp((now-(r.shadeAt or now))/.11,0,1)
+  local target=r.targetDarkness or 0
+  return target+((r.fromDarkness or target)-target)*(1-blend)^2
+ end
+ function self:shade(r,color,target,now)
+  if r.mineralColor~=color then r.mineralColor=color;self.tints[r]=true end
+  if r.targetDarkness~=target then
+   local from=r.targetDarkness and darkness(r,now) or target
+   r.fromDarkness=not V.reducedMotion() and from or target
+   r.targetDarkness=target;r.shadeAt=now
+   self.tints[r]=true
+  end
+ end
  function self:cut(r,now,beat)
   r.cutPulse=r.cutPulseAt==now and math.max(r.cutPulse,beat) or beat
   r.cutPulseAt=now;self.tints[r]=true
-  local hp=r.source:GetAttribute('HP') or 10
-  local cap=math.max(1,(r.source:GetAttribute('MaxHP') or 10)-10)
-  if hp>0 then
-   local heat=1-math.clamp(((hp-10)/cap-.035)/.25,0,1)
-   r.pressure=heat*heat
-  end
  end
- function self:forget(r) self.tints[r]=nil;r.pressure=nil;r.finalLoad=nil end
+ function self:forget(r) self.tints[r]=nil end
  function self:applyTints(now)
   local player=Players.LocalPlayer
   local reduced=player and (player:GetAttribute('ReducedFlashing')==true or player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true)
   for r in pairs(self.tints) do
    local view=r.view
-   if not view.Parent or view.Transparency>=1 or not r.restColor then
+   if not view.Parent or view.Transparency>=1 then
     self:forget(r)
    else
+    local charAt=r.clusterAt
+    local charred=charAt and now>=charAt
+    local shade=charred and 1 or darkness(r,now)
+    r.visibleDarkness=shade
     local age=r.flashAt and now-r.flashAt or math.huge
     local duration=r.flashDuration or .28
     local attack=math.clamp(age/.026,0,1)
     local initial=Feedback.impactWhite(age,duration)*(r.flashStrength or 0)*attack
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.18)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))
-    local pressure=(r.pressure or 0)*afterglow
-    local load=r.finalLoad or 0
-    white=math.max(white,load*(reduced and .045 or .14))
-    local warm=math.max(pressure*(.16+.05*pulse),load*.46)
-    view.Color=r.restColor:Lerp(WARM,warm*(reduced and .27 or 1)):Lerp(HOT,white)
+    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))*(1-shade)
+    view.Color=(r.mineralColor or r.baseColor):Lerp(CHAR,shade):Lerp(HOT,white)
     if age>=duration then r.flashAt=nil end
-    if not r.flashAt and afterglow<=0 and not r.finalLoad then self:forget(r) end
+    if not r.flashAt and afterglow<=0 and now>=(r.shadeAt or 0)+.11 and (not charAt or charred) then self:forget(r) end
    end
   end
-  for r,blackAt in pairs(self.clusterTargets) do
-   if not r.view.Parent or r.view.Transparency>=1 then self.clusterTargets[r]=nil
-   elseif now>=blackAt then r.view.Color=CHAR end
+ end
+ function self:requestBreakHold(r,now,request)
+  if r.visual.broken or not r.restPose or V.reducedMotion() then return end
+  local source=r.source
+  local at=source:GetAttribute('CrystalBreakAt') or 0
+  if at<=0 or now<at or now-at>=.25 or at<=math.max(r.lastBreakAt or 0,r.breakHoldRequestedAt or 0) then return end
+  if (source:GetAttribute('BreakSerial') or 0)==0 then return end
+  r.breakHoldRequestedAt=at
+  local projectile=source:GetAttribute('CutProjectile')
+  local kind
+  if projectile=='Prism' then return end -- Ramiel already has a post-beam hold.
+  if projectile=='Nomad' then kind=projectile
+  else
+   local player=Players.LocalPlayer
+   if not player or source:GetAttribute('CrystalBreakOwner')~=player.UserId then return end
+   local full=source:GetAttribute('FullSize')
+   kind=typeof(full)=='Vector3' and full.Magnitude*.21>=1.35 and 'HeavySplit' or 'Split'
   end
+  request(kind,r)
  end
  function self:react(r,now)
   local s,v=r.source,r.view
-  self.clusterTargets[r]=s:GetAttribute('ClusterBlackAt')
+  local clusterAt=s:GetAttribute('ClusterBlackAt')
+  if clusterAt~=r.clusterAt then r.clusterAt=clusterAt;self.tints[r]=true end
   local impact=s:GetAttribute('CutContactAt') or 0
   local broken=(s:GetAttribute('BreakSerial') or 0)>0
   local projectile=s:GetAttribute('CutProjectile')
@@ -225,7 +312,7 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    local at=now-impact
    local shot=s:GetAttribute('CutIsShot')
    local fractured=s:GetAttribute('CutFractured')
-   if not prism and not nomad and at<.21 and BeamVFX.near(v.Position,95) and (shot or not broken and (fractured or now>=(r.chipGate or 0))) then
+   if not broken and not prism and not nomad and at<.21 and BeamVFX.near(v.Position,95) and (shot or fractured or now>=(r.chipGate or 0)) then
     local heavy=projectile=='Ball'
     r.chipGate=now+.12
     if shot or fractured or impact-previousContact>.30 then
@@ -264,28 +351,10 @@ function V.new(parent,audio,onSplit,onCameraBeat)
    if not broken and now-cue.at<.10 then audio:play('crystal_chip',cue.point,{pitch=cue.pitch}) end
   end
   if broken and breakAt>0 and breakAt>(r.lastBreakAt or 0) then
-   local release=V.releaseAt(s,breakAt)
-   if not r.restPose then r.lastBreakAt=breakAt;return end
-   if now<release then
-    local nearby=BeamVFX.near(v.Position,92)
-    -- Heavier crystals spend more of the extra beat under visible pressure.
-    -- The server can already dispatch the crew's next target during this beat.
-    local load=math.clamp((now-breakAt)/math.max(.025,(release-breakAt)*.52),0,1)
-    load=1-(1-load)^3
-    if nearby and not prism and not nomad and now>=breakAt then
-     r.finalLoad=load;self.tints[r]=true
-     if not BeamVFX.reduced() and not V.reducedMotion() then
-      r.breakSize=r.breakSize or v.Size
-      local squash=r.breakSize*Vector3.new(1+.10*load,1-.27*load,1+.10*load)
-      v.Size=squash;v.CFrame=r.restPose*CFrame.new(0,-(r.breakSize.Y-squash.Y)*.5,0)
-     end
-    end
-   else
-    r.lastBreakAt=breakAt
-    if r.breakSize then v.Size=r.breakSize;r.breakSize=nil end
-    if now-release<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism,nomad) end
-    v.Transparency=1;self:forget(r)
-   end
+   if now<breakAt then return end
+   r.lastBreakAt=breakAt
+   if r.restPose and now-breakAt<.38 and BeamVFX.near(r.restPose.Position,92) then split(self,r,now,prism,nomad) end
+   v.Transparency=1;self:forget(r)
    return
   end
   if r.restPose and r.kick then
@@ -298,7 +367,10 @@ function V.new(parent,audio,onSplit,onCameraBeat)
   end
  end
  function self:destroy()
-  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces);table.clear(self.tints);table.clear(self.clusterTargets)
+  for _,e in ipairs(self.pieces) do e.p:Destroy() end;table.clear(self.pieces)
+  for _,s in ipairs(self.sparks) do s.p:Destroy() end;table.clear(self.sparks)
+  for _,half in ipairs(self.fractures) do half.p:Destroy() end;table.clear(self.fractures)
+  table.clear(self.tints)
  end
  return self
 end

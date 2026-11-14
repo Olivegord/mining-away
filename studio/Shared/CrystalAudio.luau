@@ -12,7 +12,7 @@ function CrystalAudio.new(parent: Instance, soundGroup: SoundGroup?)
  local folder = Instance.new('Folder')
  folder.Name = 'CrystalAudio'; folder.Parent = parent
  task.spawn(function() pcall(function() ContentProvider:PreloadAsync({CRACK}) end) end)
- return setmetatable({folder=folder,soundGroup=soundGroup,voices=0,closed=false},CrystalAudio)
+ return setmetatable({folder=folder,soundGroup=soundGroup,voices=0,closed=false,random=Random.new()},CrystalAudio)
 end
 
 function CrystalAudio:playCrack(position: Vector3)
@@ -28,7 +28,7 @@ function CrystalAudio:playCrack(position: Vector3)
  sound.Name = 'RockCrack'
  sound.SoundId = CRACK
  sound.Volume = .05
- sound.PlaybackSpeed = 1
+ sound.PlaybackSpeed = self.random:NextNumber(.93,1.07)
  sound.RollOffMode = Enum.RollOffMode.Inverse
  -- Match the captured Sound itself; the local voice/distance budget above
  -- limits instances without changing their falloff curve.

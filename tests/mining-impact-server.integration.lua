@@ -57,9 +57,9 @@ check('cubic boulders offer three work slots and seven monotonic size changes',f
 end)
 check('ordinary and large layers darken toward black and fracture without duplicate cues',function()
  for _,count in ipairs({3,7}) do
-  assert(Feel.crystalShade(100,100,0,count)==1)
+  assert(Feel.crystalDarkness(100,100)==0 and Feel.crystalDarkness(10,100)==1)
   local boundary=100/(count+1)
-  assert(Feel.crystalShade(boundary,100,count,count)>Feel.crystalShade(boundary,100,count-1,count))
+  assert(Feel.crystalDarkness(boundary-1,100)>Feel.crystalDarkness(boundary,100))
   local visual=Feel.newStagePresentation(0,false,0,count);local scorch,crack,broken=0,0,0
   for n=0,150 do
    local event=Feel.updateStagePresentation(visual,count,true,n*.02,count)

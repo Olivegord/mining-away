@@ -225,7 +225,10 @@ function Soundscape:_voice(name,position,looped)
  end
  if not ready then sound.SoundId='rbxasset://sounds/'..(cue.fallback or 'action_get_up.mp3') end
  sound.Volume=0
- sound.PlaybackSpeed=(cue.pitch or 1)*(position and self.random:NextNumber(.96,1.04) or 1)
+ -- Sample a voice once so live charge bends don't pick up frame-to-frame jitter.
+ local spread=looped and (cue.softLaser and .02 or .04) or (cue.softLaser and .03 or .08)
+ local pitchFactor=self.random:NextNumber(1-spread,1+spread)
+ sound.PlaybackSpeed=(cue.pitch or 1)*pitchFactor
  sound.Looped=looped;sound.PlayOnRemove=false
  local anchor
  if position then
@@ -241,7 +244,7 @@ function Soundscape:_voice(name,position,looped)
   self.active[sound]=nil;self.voices=math.max(0,self.voices-1)
   self.cueVoices[name]=math.max(0,(self.cueVoices[name] or 0)-1)
  end)
- return sound,anchor
+ return sound,anchor,pitchFactor
 end
 function Soundscape:play(name,position,options)
  local cue=CUES[name];local now=os.clock()
@@ -283,15 +286,15 @@ function Soundscape:setLoop(key,name,position,level,pitch)
    self:stopLoop(worstKey)
   end
   if self.voices>=(cue.reserved and 25 or 22) then return end
-  local sound,anchor=self:_voice(name,position,true);if not sound then return end
-  loop={sound=sound,anchor=anchor,name=name,seen=now,step=now};self.loops[key]=loop;self.loopCount+=1
+  local sound,anchor,pitchFactor=self:_voice(name,position,true);if not sound then return end
+  loop={sound=sound,anchor=anchor,name=name,seen=now,step=now,pitchFactor=pitchFactor};self.loops[key]=loop;self.loopCount+=1
   sound:Play()
  end
  local dt=math.clamp(now-loop.step,1/240,.1);loop.step=now;loop.seen=now
  if loop.anchor then loop.anchor.Position=position end
  local volume=cue.volume*(level or 1)/math.sqrt(1+self.loopCount*.12)
  loop.sound.Volume+=(volume-loop.sound.Volume)*(1-math.exp(-dt*(cue.reserved and 21 or cue.softLaser and 8 or 14)))
- loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)
+ loop.sound.PlaybackSpeed=(cue.pitch or 1)*(pitch or 1)*loop.pitchFactor
 end
 function Soundscape:update()
  if self.closed then return end

@@ -141,10 +141,10 @@ print('PASS Crystal Run pin, status transitions, reservations, recall, edge over
 
 
 -- The production spawner uses the entire bed, including former lanes.
-f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=60,10,true
+f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=78,10,true
 bed.Size=Vector3.new(108,1,64)
 seedField(f)
-assert(#f.resources==60 and #f.respawnQueue==0)
+assert(#f.resources==78 and #f.respawnQueue==0)
 local outsideFormerPads,continuousDraws=0,0
 local ground=bed.Position.Y+bed.Size.Y*.5
 local minSize,maxSize=math.huge,0
@@ -168,7 +168,7 @@ for i,r in ipairs(f.resources) do
   assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=radius+otherRadius+ResourcePlacement.GAP)
  end
 end
-assert(outsideFormerPads>=8 and continuousDraws==60 and maxSize/minSize>2)
+assert(outsideFormerPads>=8 and continuousDraws==78 and maxSize/minSize>2)
 local crewPlayer=player(98702);players.PlayerAdded:Fire(crewPlayer)
 local crew=profiles[crewPlayer.UserId]
 crewPlayer.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
@@ -187,7 +187,7 @@ retired.paid=true
 local ok,_,plan=spawnResource(f,'Crystal',true)
 assert(ok and plan.field==f.id,'grower preview must use the field with a vacancy')
 local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
-assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==60)
+assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==f.cfg.Count)
 replacement.readyAt=now
 assert(assignOre(p,d,replacement))
 p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
@@ -229,14 +229,17 @@ do
  end
  local function breakRockAt(x)
   local mineral=Mining.fieldCrystal(100,1,10,3)
-  local old=makeResource(field,Vector3.new(x,surface.Position.Y,180),'Crystal',mineral.work+10,mineral.ore,mineral.size,mineral.stages,nil,mineral.breakHold)
+  local old=makeResource(field,Vector3.new(x,surface.Position.Y,180),'Crystal',mineral.work+10,mineral.ore,mineral.size,mineral.stages)
   old.readyAt=now
   assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
   assert(hitResource(worker,old,1000) and old.paid)
-  assert(math.abs(old.part:GetAttribute('CrystalSplitAt')-now-OreDrops.BREAK_DELAY-mineral.breakHold)<.001)
+  assert(old.part:GetAttribute('CrystalSplitAt')==now,'large crystals must split on the finishing hit clock')
   local cargo=pickups[pickupSerial]
   assert(cargo.nodeId==old.id and cargo.units==1 and cargo.value==mineral.ore)
-  assert(math.abs(cargo.launchAt-old.splitAt-(OreDrops.REWARD_DELAY-OreDrops.BREAK_DELAY))<.001)
+  assert(cargo.part.Material==Enum.Material.Neon and cargo.part.Size.X>2,'raw reward lost its larger neon silhouette')
+  assert(old.part.Size.Y>old.fullSize.Y*Feel.crystalStageShape(old.stage,old.stageCount).Y+.999,
+   'the finishing hit failed to use the taller last stage')
+  assert(math.abs(cargo.launchAt-old.splitAt-OreDrops.REWARD_DELAY)<.001)
  end
  local function pin()
   tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
@@ -332,7 +335,7 @@ do
  deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4
  deep.resources={}
  seedField(deep)
- assert(#deep.resources==60,'deep field failed to fill at mixed crystal sizes')
+ assert(#deep.resources==deep.cfg.Count,'deep field failed to fill at mixed crystal sizes')
  local low,high=math.huge,0
  for i,r in ipairs(deep.resources) do
   local base=r.part:GetAttribute('GroundY')
@@ -346,8 +349,8 @@ do
    local delta=r.position-other.position
    assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=a+b,'deep deposits overlapped their turn clearance')
    local sizeOrder=r.fullSize.Y-other.fullSize.Y
-   assert((r.hp-other.hp)*sizeOrder>=0 and (r.stageCount-other.stageCount)*sizeOrder>=0
-    and (r.breakHold-other.breakHold)*sizeOrder>=0,'size did not predict work, fractures and hold')
+   assert((r.hp-other.hp)*sizeOrder>=0 and (r.stageCount-other.stageCount)*sizeOrder>=0,
+    'size did not predict work and fractures')
   end
   resources[r.id]=nil;r.part:Destroy()
  end

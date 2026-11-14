@@ -1101,9 +1101,9 @@ end
 -- Short camera translations driven by the same events as sound and particles.
 -- Keep routine feedback in its own budget so clustered hits cannot drown out a blast.
 local cameraBeats={
- NeedleFire={.025,.105,.016}, BallFire={.060,.15,.025},
- NeedleHit={.027,.12,.019}, BallHit={.061,.165,.026},
- Fracture={.039,.14,.023}, Split={.23,.32,.024}, HeavySplit={.63,.62,.021,true}, CompactorPress={.043,.14,.021},
+ NeedleFire={.030,.105,.016}, BallFire={.073,.15,.025},
+ NeedleHit={.030,.12,.019}, BallHit={.080,.165,.026},
+ Fracture={.032,.14,.023}, Split={.18,.29,.024}, HeavySplit={.49,.52,.021,true}, CompactorPress={.043,.14,.021},
  DroneShot={.039,.13,.020}, SentryShot={.060,.17,.027}, DroneDeath={.093,.21,.034},
 }
 local function cameraListener(camera,player)
@@ -1189,7 +1189,7 @@ function P:crystalKick(position,strength,now,prism,nomad)
  local distance=((root and root.Position or camera.CFrame.Position)-position).Magnitude
  if not major then distance=math.max(distance,(camera.CFrame.Position-position).Magnitude) end
  local amount=nomad and math.clamp((118-distance)/99,0,1)*strength
-  or prism and math.clamp((82-distance)/64,0,1)*3.65
+  or prism and math.clamp((82-distance)/64,0,1)*3.0
   or math.clamp((39-distance)/32,0,1)*math.clamp(strength*.64,.65,1)
  if amount<=.02 then return end
  if major and age==0 and amount<=(self.crystalShakeAmount or 0) then return end

@@ -432,6 +432,8 @@ end
 local function burst(self,from,direction,color,ball,impact,grade,at,lightContact)
  local camera=workspace.CurrentCamera
  if not camera or #self.bursts>=BURST_LIMIT or BeamVFX.reduced() or not BeamVFX.near(from,76) then return end
+ local player=Players.LocalPlayer
+ local lowFlash=player and player:GetAttribute('ReducedFlashing')==true
  local node=shotPart(camera,'ShotSparks',Vector3.one*.025,color,false,1)
  node.CFrame=CFrame.lookAt(from,from+direction)
  local sparks=Instance.new('ParticleEmitter')
@@ -439,7 +441,15 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  sparks.Enabled=false;sparks.Rate=0
  local spread=impact and (ball and 76 or 37) or (ball and 34 or 17)
  sparks.EmissionDirection=Enum.NormalId.Front;sparks.SpreadAngle=Vector2.new(spread,spread)
- sparks.Color=ColorSequence.new(color:Lerp(WHITE,.14),color)
+ sparks.Color=ColorSequence.new({
+  ColorSequenceKeypoint.new(0,lowFlash and color:Lerp(WHITE,.42) or WHITE),
+  ColorSequenceKeypoint.new(.24,color:Lerp(WHITE,.30)),
+  ColorSequenceKeypoint.new(1,color:Lerp(Color3.new(0,0,0),.22)),
+ })
+ sparks.Transparency=NumberSequence.new({
+  NumberSequenceKeypoint.new(0,lowFlash and .55 or impact and .18 or .30),NumberSequenceKeypoint.new(.28,.42),
+  NumberSequenceKeypoint.new(.76,.70),NumberSequenceKeypoint.new(1,1),
+ })
  sparks.Lifetime=NumberRange.new(.23,ball and .56 or .41)
  sparks.Speed=NumberRange.new(impact and 7 or 4,(ball and 13 or 15)*grade);sparks.Drag=ball and 4.8 or 6
  sparks.Acceleration=Vector3.new(0,-5,0)
@@ -452,10 +462,9 @@ local function burst(self,from,direction,color,ball,impact,grade,at,lightContact
  accent:Emit(ball and (impact and 4 or 3) or (impact and 4 or 2))
  local flash=shotPart(node,'ShotFlash',Vector3.one*.04,color:Lerp(WHITE,.57),true,.09)
  flash.CFrame=node.CFrame
- local ring=(ball or impact) and PlaneBurst.create(node,color) or nil
+ local ring=PlaneBurst.create(node,color)
  local lamp
- local player=Players.LocalPlayer
- if lightContact and not (player and player:GetAttribute('ReducedFlashing')==true) then
+ if lightContact and not lowFlash then
   local lamps=0
   for _,b in ipairs(self.bursts) do if b.lamp and at-b.at<(b.ball and .13 or .09) then lamps+=1 end end
   if lamps<6 then
@@ -483,7 +492,7 @@ local function stepBursts(self,now)
     b.lamp.Enabled=not reducedFlash and flash>.01
     b.lamp.Brightness=b.lightPeak*flash
    end
-   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68)) end
+   if b.ring then PlaneBurst.draw(b.ring,b.direction,age/(b.ball and .29 or .14),b.scale*(b.ball and 1.15 or .68),true,reducedFlash) end
   end
  end
 end
@@ -502,7 +511,7 @@ local function clearProjectile(self,r,now,carryTail)
  r.projectile=nil
 end
 
-function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
+function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat,holdNomad)
  local self={records={},connections={},root=nil,trails=0,heads=0,loads=0,bursts={}}
  local function attach(root)
   if self.root==root then return end
@@ -553,6 +562,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
     local anchor=node:GetAttribute('TargetAnchor')
     local target=resources and resources[node:GetAttribute('TargetId') or '']
     if shape=='Nomad' then
+     if landed and holdNomad and holdNomad(contactAt) then continue end
      NomadView.step(r,node,now,from,to,age,windup,progress,drone,target,audio,onNomadImpact)
      continue
     end
@@ -615,7 +625,7 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
        if onPrism then onPrism(origin,endpoint,contactAt,hold) end
        if now-contactAt>=.18 then continue end
        local normal=node:GetAttribute('ContactNormal') or -travel.Unit
-       RoleVisuals.PrismImpact(point,normal)
+       RoleVisuals.PrismImpact(point,normal,ground)
        if not reduced then
         local camera=workspace.CurrentCamera
         local distance=camera and (camera.CFrame.Position-origin).Magnitude or math.huge
@@ -635,6 +645,16 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
     end
     local muzzle=drone and drone.shotMuzzle and drone.shotMuzzle.WorldPosition
     if muzzle and ((muzzle-from).Magnitude>=2.5 or (to-muzzle).Magnitude<=1) then muzzle=nil end
+    if progress>=0 and not r.fired then
+     r.fired=true
+     if not landed and paused<=0 and age-windup<.12 then
+      local origin=muzzle or from
+      local travel=to-origin
+      if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',origin,now) end
+      if travel.Magnitude>.01 then burst(self,origin+travel.Unit*.17,travel.Unit,color,ball,false,1,now,true) end
+      if audio then audio:play(ball and 'coil_fire' or 'needle_fire',origin) end
+     end
+    end
     if age>=0 and progress<0 and not landed then
      local q=age/windup
      if not r.loaded then
@@ -682,14 +702,6 @@ function View.new(audio,onPrism,onNomadImpact,onPrismCharge,onCameraBeat)
      local delta=to-from
      if delta.Magnitude<.01 then continue end
      local direction=delta.Unit
-     if not r.fired then
-      r.fired=true
-      if paused<=0 and age-windup<.12 then
-       if onCameraBeat then onCameraBeat(ball and 'BallFire' or 'NeedleFire',from,now) end
-       burst(self,from+direction*.17,direction,color,ball,false,1,now,true)
-       if audio then audio:play(ball and 'coil_fire' or 'needle_fire',from) end
-      end
-     end
      if not value then continue end
      local t=math.clamp(progress,0,1)
      local lead=t*(.52+.48*(2*t-t*t))

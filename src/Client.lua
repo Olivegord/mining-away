@@ -20,6 +20,10 @@ BeamVFX.onCue=function(kind,position,now)
 end
 local pickupView=PickupView.new(world,localFX,soundscape,CrystalImpactView.reducedMotion)
 local impactFreeze=ImpactFreeze.new(player)
+local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
+local function requestCrystalHold(kind,record)
+ impactFreeze:request(kind,record)
+end
 local function cameraBeat(kind,position,now,weight)
  if not CrystalImpactView.reducedMotion() then presentation:cameraBeat(kind,position,now,weight) end
 end
@@ -28,39 +32,29 @@ local roleEffectView=RoleEffectView.new(soundscape,function(from,to,at,duration)
 end,function(position,strength)
  if not CrystalImpactView.reducedMotion() then
   presentation:crystalKick(position,strength,workspace:GetServerTimeNow(),false,true)
-  impactFreeze:request('Nomad',position)
  end
 end,function(from,to,level,now)
  if not CrystalImpactView.reducedMotion() then presentation:prismChargePressure(from,to,level,now) end
-end,cameraBeat)
+end,cameraBeat,function(at) return impactFreeze:holdsNomad(at) end)
 rockDamage.feedback=CrystalImpactView.new(localFX,soundscape,function(position,strength,now,prism,owned)
  if prism then
   presentation:crystalKick(position,strength,now,true)
-  impactFreeze:request('Prism',position)
  else
   local heavy=owned and strength>=1.35
   cameraBeat(heavy and 'HeavySplit' or 'Split',position,now,math.clamp(strength*.58,.60,1.35)*(owned and 1 or .62))
-  if owned then impactFreeze:request(heavy and 'HeavySplit' or 'Split',position) end
  end
-end,cameraBeat)
+end,cameraBeat,function(name)
+ local folder=command.Parent:FindFirstChild('CrystalFractures')
+ return folder and folder:FindFirstChild(name)
+end)
 local previousShake=CFrame.new();local shakeCamera=nil
-local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player,function(position) impactFreeze:request('Star',position) end)
+local celestialRain=RunService:IsStudio() and CelestialRainPreview.new(world,localFX,player)
 local orbitalBurns={};local roleAudio={};local impactCues=setmetatable({},{__mode='k'})
 RunService:BindToRenderStep('MiningAwayCameraRestore',Enum.RenderPriority.Camera.Value-1,function()
- if impactFreeze.pending or impactFreeze.untilAt then
-  local held,elapsed=impactFreeze:beginFrame(os.clock(),CrystalImpactView.reducedMotion(),localFX)
-  if held then return end
-  if elapsed>0 then
-   presentation:resumeCameraBeats(elapsed)
-   rockDamage.feedback:resume(elapsed)
-   if celestialRain then celestialRain:resume(elapsed) end
-  end
- end
  if shakeCamera and workspace.CurrentCamera==shakeCamera then shakeCamera.CFrame=shakeCamera.CFrame*previousShake:Inverse() end
  previousShake=CFrame.new();shakeCamera=nil
 end)
-RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+1,function()
- if impactFreeze.untilAt then return end
+RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camera.Value+2,function()
  local camera=workspace.CurrentCamera
  local now=workspace:GetServerTimeNow()
  for source,name in pairs(roleAudio) do
@@ -97,14 +91,7 @@ RunService:BindToRenderStep('MiningAwayCameraFeedback',Enum.RenderPriority.Camer
   previousShake=presentation:cameraOffset(now)*(previewOffset or CFrame.new());shakeCamera=camera;camera.CFrame=camera.CFrame*previousShake
  end
 end)
-RunService:BindToRenderStep('MiningAwayImpactFreeze',Enum.RenderPriority.Last.Value,function() impactFreeze:render() end)
-LaunchAftermath.isHeld=function() return impactFreeze.untilAt~=nil end
 local function roleImpact(source)
- if impactFreeze.untilAt then
-  impactFreeze.deferred=impactFreeze.deferred or {}
-  if #impactFreeze.deferred<40 then table.insert(impactFreeze.deferred,source) end
-  return
- end
  if not source.Parent then return end
  if source:IsA('BasePart') then
   local at=source:GetAttribute('AudioAt');local now=workspace:GetServerTimeNow()
@@ -128,7 +115,6 @@ local function roleImpact(source)
    soundscape:play('orbital',position)
    if not CrystalImpactView.reducedMotion() then
     presentation:crystalKick(position,1.12,now,false,true)
-    impactFreeze:request('Orbital',position)
    end
   end
  end
@@ -143,7 +129,6 @@ local function roleImpact(source)
    else
     if impact=='Breaker' or impact=='Orbital' then
      cameraBeat('HeavySplit',source.Position,now,1.12)
-     impactFreeze:request(impact,source.Position)
     else presentation:kick(source.Position,.14,now) end
     soundscape:play(impact=='Orbital' and 'orbital' or impact=='Breaker' and 'breaker_fracture' or 'mining',source.Position)
    end
@@ -159,7 +144,6 @@ end)
 local existingRoleFX=workspace:FindFirstChild('DroneRoleClientEffects')
 if existingRoleFX then for _,source in ipairs(existingRoleFX:GetChildren()) do roleImpact(source) end end
 
-local drones,resources,resourceIndex,turrets,connections={},{},{},{},{}
 local droneIndex={}
 pickupView.cargoMount=function(droneId,pickupId)
  local drone=droneIndex[droneId]
@@ -282,7 +266,7 @@ local packView=PackView.new({
  hidden=menusVisible,busy=function() return not profile or profile.pendingTransaction or player:GetAttribute('MA_InAssault') end,
 })
 connect(modal:GetPropertyChangedSignal('Visible'),function() packView:setFocus(modal.Visible and modalMode=='offer' and not inspectingFleet()) end)
-connect(RunService.RenderStepped,function() if not impactFreeze.untilAt then packView:update(workspace:GetServerTimeNow()) end end)
+connect(RunService.RenderStepped,function() packView:update(workspace:GetServerTimeNow()) end)
 local function sealedPack()
  local offer=pending()
  return offer and offer.opened==false
@@ -898,7 +882,7 @@ connect(player.PlayerGui:GetAttributeChangedSignal('MA_OfferReceipt'),function()
  end
 end)
 
-local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible,held=function() return impactFreeze.untilAt~=nil end})
+local abilityView=AbilityView.start({interface=U,parent=safeRoot,command=command,droneConfig=DroneConfig,audio=soundscape,profile=function() return profile end,hidden=menusVisible})
 local crystalAudio=require(RS.Shared:WaitForChild('CrystalAudio')).new(localFX,soundscape.crystalGroup)
 local function sanitize(model)
  for _,v in ipairs(model:GetDescendants()) do
@@ -1022,11 +1006,6 @@ end
 local observed={}
 local function observe(source)
  if not source.Parent then return end
- if impactFreeze.untilAt then
-  impactFreeze.sources=impactFreeze.sources or {}
-  impactFreeze.sources[source]=true
-  return
- end
  if source:IsA('Decal') then
   local record=resources[source.Parent]
   if record and record.source:GetAttribute('Kind')=='Junk' then
@@ -1118,7 +1097,7 @@ local function renderResource(r,now)
   if broken then
    local breakAt=s:GetAttribute('CrystalBreakAt') or s:GetAttribute('CutContactAt') or 0
    if breakAt<=0 and s:GetAttribute('ClusterBlackAt') then r.dirty=true;return end
-   if breakAt>0 and CrystalImpactView.releaseAt(s,breakAt)>now then r.dirty=true;return end
+   if breakAt>now or (s:GetAttribute('CrystalBreakAt') or 0)>0 and (s:GetAttribute('BreakSerial') or 0)==0 then r.dirty=true;return end
   elseif authoritativeStage>r.visual.knownStage and s:GetAttribute('CutIsShot') then
    local contact=s:GetAttribute('CutContactAt') or 0
    if contact>now then r.dirty=true;return end
@@ -1131,7 +1110,7 @@ local function renderResource(r,now)
  local healed=s:GetAttribute('RegrowAt') or 0
  if not broken and healed>0 then
   if authoritativeStage<r.visual.knownStage then
-   r.visual=Feel.newStagePresentation(authoritativeStage,false,now,stageCount);r.crackHealth=nil
+   r.visual=Feel.newStagePresentation(authoritativeStage,false,now,stageCount)
   end
   if healed~=(r.lastHeal or 0) and now-healed<.4 then selectorView:heal(view,now) end
   r.lastHeal=healed
@@ -1139,10 +1118,14 @@ local function renderResource(r,now)
  local event=Feel.updateStagePresentation(r.visual,authoritativeStage,broken,now,stageCount)
  local stage=r.visual.stage
  local period=Feel.stageScale(stage,stageCount)
+ local cut=s:GetAttribute('CrystalCut')
+ local quarry=s:GetAttribute('QuarryCrystal')
+ local cutOffset=cut and s:GetAttribute('CrystalCutOffset') or Vector3.zero
  if not r.visual.broken then
   view.Transparency=s:GetAttribute('Kind')=='Geode' and .04 or s.Transparency
   local heat=s:GetAttribute('MeltBand') or 0
-  local shape=s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
+  local shape=quarry and Feel.crystalStageShape(stage,stageCount,full)
+   or s:GetAttribute('ZoneName') and Feel.crystalStageShape(stage,stageCount) or period
   local displaySize=full*math.max(.005,growth)*shape*Feel.rockShape(s:GetAttribute('SliceScale'),heat)
   view.Size=displaySize*(r.damageScale or Vector3.one)
   local start=s:GetAttribute('StartPosition') or Vector3.new(final.X,final.Y-2-full.Y/2,final.Z)
@@ -1158,26 +1141,32 @@ local function renderResource(r,now)
     if now<spawnAt then view.Transparency=1 end
    end
   end
-  view.CFrame=frame*CFrame.new(displaySize*(r.damageOffset or Vector3.zero))
+  view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11)
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
-   -- Mining Away changes the size stage first and applies its new shade on the next hit.
-   if event=='stage' then r.crackHealth=health end
-   local shadeStage=r.crackHealth==health and stage-1 or stage
-   local shadeHealth=shadeStage<stage and math.max(health,maxHealth*period) or health
-   view.Color=color:Lerp(Color3.new(0,0,0),1-Feel.crystalShade(shadeHealth,maxHealth,shadeStage,stageCount))
+   if r.cutFeedback then
+    r.cutFeedback:shade(r,color,Feel.crystalDarkness(health,maxHealth),now)
+   else view.Color=color:Lerp(Color3.new(0,0,0),Feel.crystalDarkness(health,maxHealth)) end
   end
- else view.Transparency=1 end
+ else
+  if event=='break' and cut then
+   r.splitSize=full*Feel.crystalStageShape(stageCount,stageCount,quarry and full or nil)*Feel.rockShape(s:GetAttribute('SliceScale'),s:GetAttribute('MeltBand'))
+   local ground=s:GetAttribute('GroundY')
+   local center=Vector3.new(final.X,ground+r.splitSize.Y*.5-.06,final.Z)
+   r.splitPose=CFrame.new(center)*(r.restPose and r.restPose.Rotation or view.CFrame.Rotation)*CFrame.new(-r.splitSize*cutOffset)
+  end
+  view.Transparency=1
+ end
  if junk then
   for _,decal in ipairs(view:GetChildren()) do
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
  end
  if not r.visual.broken then
-  r.restPose=view.CFrame;r.restColor=view.Color
+  r.restPose=view.CFrame
  end
  if event=='stage' then
   -- The source plays from Crystal.Primary, not the visible union.
@@ -1553,17 +1542,12 @@ local specialMiningFX=DroneFX.new(world,{resolve=function(source) local record=r
  focus=function() local hr=player.Character and player.Character:FindFirstChild('HumanoidRootPart');return hr and hr.Position end})
 local laserShowcase=LaserShowcase.new(world,localFX,DroneConfig)
 local chargerView=ChargerView.new(world,localFX,CrystalImpactView.reducedMotion)
-connect(RunService.RenderStepped,function(dt)
- if impactFreeze.untilAt then return end
- if impactFreeze.sources then
-  local sources=impactFreeze.sources;impactFreeze.sources=nil
-  for source in pairs(sources) do observe(source) end
- end
- if impactFreeze.deferred then
-  local deferred=impactFreeze.deferred;impactFreeze.deferred=nil
-  for _,source in ipairs(deferred) do roleImpact(source) end
- end
+RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Camera.Value+1,function(dt)
  local now=workspace:GetServerTimeNow()
+ for _,r in pairs(resources) do
+  if r.dirty then rockDamage.feedback:requestBreakHold(r,now,requestCrystalHold) end
+ end
+ impactFreeze:beginFrame(os.clock(),dt,CrystalImpactView.reducedMotion())
  local map=world:FindFirstChild('Map')
  local reserve=map and map:FindFirstChild('LiminalReserve')
  local clouds=reserve and reserve:FindFirstChild('CloudBlocks')
@@ -1583,9 +1567,10 @@ connect(RunService.RenderStepped,function(dt)
  presentation:beginFrame()
  chargerView:update(dt)
  for _,r in pairs(resources) do
+  if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
   renderResource(r,now)
-  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.breakSize or r.finalLoad or r.chipTail then
+  if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
  end
@@ -1707,7 +1692,7 @@ local commandView=CommandView.new({parent=localFX,resources=resourceIndex,drones
   return touch and touch.active and touch.input.Position or nil
  end,
  blocks=function(point) return tacticalHUD:blocksPoint(point-game:GetService('GuiService'):GetGuiInset()) end})
-connect(RunService.RenderStepped,function(dt) if not impactFreeze.untilAt then commandView:update(dt,workspace:GetServerTimeNow()) end end)
+connect(RunService.RenderStepped,function(dt) commandView:update(dt,workspace:GetServerTimeNow()) end)
 connect(gui.Parent:GetAttributeChangedSignal('MA_CommandState'),function()
  local ok,state=pcall(Http.JSONDecode,Http,gui.Parent:GetAttribute('MA_CommandState') or '')
  if not ok or type(state)~='table' then return end
@@ -1737,7 +1722,6 @@ local function assignField(target)
 end
 local mouse=player:GetMouse()
 connect(RunService.RenderStepped,function(dt)
- if impactFreeze.untilAt then return end
  local camera=workspace.CurrentCamera
  local ray
  if camera and not menusVisible() then
@@ -1818,7 +1802,6 @@ end)
 local hudClock=0
 local availabilitySignature=''
 connect(RunService.Heartbeat,function(dt)
- if impactFreeze.untilAt then return end
  hudClock=hudClock+dt;if hudClock<.2 then return end;hudClock=0
  local view=viewport();local l=currentLayout();local touch=UIS.TouchEnabled and not UIS.KeyboardEnabled
  fleetButton.Visible=profile~=nil and not menusVisible()
@@ -1918,8 +1901,7 @@ connect(gui.Destroying,function()
  local controls=player.PlayerGui:FindFirstChild('TouchGui');if controls and previousTouchEnabled~=nil then controls.Enabled=previousTouchEnabled end
  fleetView:destroy();packView:destroy();commandView:destroy();selectorView:destroy();pickupView:destroy();rockDamage:destroy();roleEffectView:destroy();impactConnection:Disconnect()
  specialMiningFX:destroy();laserShowcase:destroy();logisticsView:destroy();chargerView:destroy()
- impactFreeze:release();LaunchAftermath.isHeld=nil
- RunService:UnbindFromRenderStep('MiningAwayImpactFreeze')
+ RunService:UnbindFromRenderStep('MiningAwayWorldPresentation')
  if celestialRain then celestialRain:destroy() end
  rockDamage.feedback:destroy()
  for _,record in pairs(orbitalBurns) do record.connection:Disconnect() end

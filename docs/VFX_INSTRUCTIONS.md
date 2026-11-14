@@ -1,5 +1,18 @@
 # VFX instructions — owner feedback and implementation
 
+## November 13 — rock opening and damage shade
+
+At the release beat, show the last-stage silhouette opening from its foot into two black halves. Keep the existing chips, fireworks, and landing tails. Smooth the main rock shade toward black from the authoritative remaining work, and attenuate white hit flashes as the surface darkens. Keep discrete launch and hit feedback small. Reduce the stronger split shakes and let Ballcaster and Needler launch cues play even when their projectile head is outside the visual budget. Make the loose reward larger and neon.
+
+## November 13 — local hitstop and bullet gradients
+
+Hold the intact rock while the camera, characters, and surrounding action continue. Use about 17 ms for ordinary breaks, 33 ms for heavy breaks, and 55 ms for Nomad's cluster. Ramiel uses the 55 ms post-beam beat on its own. Release the split sound and fireworks with the actual break. Open projectile rings at fully opaque white, then transition through a continuous color and opacity gradient. Soften the initial flash when Reduced Flashing is enabled. Vary cue pitch around the authored pitch, with a smaller stable variation on sustained work loops.
+
+
+## November 13 — Orbital and Ramiel ground-landing tendrils
+
+The large strokes in the reference launch at impact, arc upward in world space, and bend back down to the ground. Let the glowing head draw the full trail before its tail starts to retract. Vary the height, reach, sideways hooks and arrival times. The thin impact flash and scattered sparks have their own timing.
+
 ## November 12 — layered silhouettes and particle variety
 
 Use the supplied still for Inkbeam's visual composition: a warm luminous taper that ends in lime/cyan, a dark asymmetric sweep with broken angular offshoots, occasional bright contact glints and loose turquoise circles. Draw smooth changes in the underlying motion while letting individual silhouettes keep hard corners. Maintain the working point on the real crystal. Reuse the principle of distinct light, shadow, and particles on other attacks in their own palettes and rhythms. Preserve the regular mining sequence, the physical crystal break, and the restored specialist sequences.

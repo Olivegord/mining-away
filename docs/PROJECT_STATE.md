@@ -2,7 +2,7 @@
 
 Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this with [owner requirements](OWNER_REQUIREMENTS.md) and [AGENTS.md](../AGENTS.md). Later verified changes should update this file, not create a competing project.
 
-**Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages, hold longer before bursting, and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
+**Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
 ## Identity and delivery state
 
@@ -11,18 +11,108 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | `6c01a9760926cf9a9590644662548d3cb77166619d52e6fa956b790792ee777e` | Textured Orbital and Ramiel effects, refreshed in the preserved local native file. |
-| Shared Studio Sources | Team Create save **264** | All seven managed Sources match the canonical file after saving. |
+| Native-file SHA-256 | ca7435ece0e2a5b6d1932e986c92172668672c68465c7c9904a80b19f2a4ac46 | Crystal cracking, larger ore and the existing local hitstop installed. |
+| Shared Studio Sources | Save 285 | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the textured beams and the restored depot interactions from save **264**. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the larger and denser Crystal Run rocks, black opening halves, revised shake and neon drops. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — rock cracking and neon drops
+
+Crystal Run targets 78 rocks per bed, up from 60. Intact size rolls read about 16–24% larger, with one additional stud of height distributed across fracture stages and fully present at the last stage. Four new multi-spire outcrops join the original and four individual cuts. The final model opens from the base into two black halves, including on finishing shots that cross multiple stages. Existing release chips, sparks and impact cues still play. Remaining health drives a short continuous darkening transition, while cluster contact keeps its synchronized blackout. Large breaks have gentler shake. Ballcaster and Needler fire cues are independent of their visible projectile head. Removed rock health bars and numeric HP from the contextual rock readout. Loose ore is larger and neon, with existing pickup arcs and collection. Work, payouts per rock and regrowth timing retain their existing tuning.
+
+Studio was open in Edit at DRONEREVOLUTION place **124078027733625**, universe **10774898335**. Server Source arrived via Script Sync. StarterPlayerScripts still reported `Errored`, so the exact client bundle was installed against checked old and new hashes. Team Create save **285** succeeded. All seven shared Edit Sources matched the canonical `build/DRONE_GAME.rbxl` after the save. The Source refresh preserved the authored map and other scripts. This save was not published for players.
+
+Native Edit checks built the eight custom cuts and checked the original silhouette fallback. The Crystal Run, startup, pickup, beam, resource-render and contact-clock checks used API doubles. The broader gadget suite still stops at the pre-existing courier-delay fixture. There was no native Play session or visual, audio or multiplayer acceptance pass. Reproduce the exact seven Sources with `python3 tools/script_sync.py`, and verify the committed canonical file with `python3 tools/build.py`.
+
+## November 13 — local hitstop, pitched cues, and bullet gradients
+
+The camera, avatar, unrelated drones, HUD, and particles continue through hitstop. Nearby ordinary and heavy breaks hold their rock for about 17 and 33 ms. Nomad holds the cluster and its matching blast for 55 ms. Ramiel uses one 55 ms post-beam beat before the authoritative shatter. Removed the full-world camera lock, avatar copies, and emitter scans. Needler and Ballcaster rings open opaque white and expand into graded attack color and opacity. Their sparks fade from a bright core into a darker tail. Reduced Flashing softens the opening. One-shot and interface cues vary around authored pitches, and sustained sounds choose a smaller stable offset when they start. The original crystal crack has its own subtle pitch variation.
+
+Shared Edit save **284** succeeded for DRONEREVOLUTION place **124078027733625**, universe **10774898335**. All seven managed Sources matched the canonical `build/DRONE_GAME.rbxl` after save. ServerScriptService and Shared Sources arrived via Script Sync. StarterPlayerScripts still reported an error, so the client bundle was installed against checked before and after hashes. Studio was already open. The owner ended Play before the save. No player publication.
+
+Focused crystal timing, Ramiel and Nomad regressions and 27 beam checks passed with API doubles. A detached Studio Edit check verified opaque white birth, continuous color and opacity at ring joins, and varied pitch across 12 UI voices. Broader gadget and audio suites stop at the courier-delay and full-backpack pickup fixtures. No live rendering, listening, or multiplayer playtest. The Source-only build preserved native scenery and backup Sources. Working tree based on `ce4fb0cb2852641e0782116bdb4bc636b2783be4`.
+
+## November 13 — crystal break timing and fireworks sparks
+
+A finishing hit holds the intact, low-health crystal through the existing local screen freeze. The first frame back hides the rock and plays the split sound, camera feedback and burst together. Removed the size-based pressure wait and squash. Directional streaks flare and curl for about 1–2 seconds and sparse embers drift for 2.1–3.2 seconds. The existing short burst carries most of the particles. Spark motion freezes with the rest of the local effect and respects reduced effects, motion and flashing settings.
+
+DRONEREVOLUTION place **124078027733625**, universe **10774898335** was already open. Team Create save **283** succeeded, and all seven managed Sources matched the canonical `build/DRONE_GAME.rbxl` after the save. The server and Shared roots were connected. StarterPlayerScripts reported an error, so the client was refreshed with the checked baseline and final Source hashes. It remains in Edit. No player publication.
+
+The crystal timing, spark cleanup, workshop/Crystal Run, pickup and beam checks passed with API doubles. The broader gadget suite stops on its courier-delay fixture and the physical mining suite reproduces a baseline full-bag fixture failure. No agent-started Play or multiplayer test. Reproduce the canonical refresh with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-payload <verified prior seven-Source payload>`. The refresh preserved non-Source data and backup Sources. Working tree based on `ce4fb0cb2852641e0782116bdb4bc636b2783be4`.
+
+## November 13 — mystery cube experiment shelved
+
+Owner requested removal. Removed mystery model spawning, client animation, particle suppression branches and the MysteryCubeView bundle entry. Regular ore visuals and their existing particles are restored. Moved the authored preview out of Workspace into ServerStorage.MysteryReferenceArchive in shared Edit and the canonical file; retained experimental source/assets for later. All seven managed Sources verified; shared Edit save 282 contains the removal and all seven verified Sources. The owner then started Play; a final disk-only trailing-blank-line cleanup remains unsynced (no behavior difference). No save 283 occurred; Play was left running. No Play started; 32 pickup logic checks passed. Next Play uses regular ore drops. Uncommitted changes based on ce4fb0c; canonical build/DRONE_GAME.rbxl; destination DRONEREVOLUTION place 124078027733625 / universe 10774898335; no publication.
+
+## November 13 — closed blue shell and stable mesh outlines
+
+Replaced the intersecting, face-discontinuous transparent blue wave with approved model `102944845615230`, mesh `122366836117897`. The generator `tools/generate_mystery_wave.py` evaluates one continuous field across all faces, reverses triangle winding and normals, and uses a smaller displacement. Blue, white, cyan and dark shells now stay opaque, single-sided and concentrically spaced; white remains a dedicated MeshPart (`103339107169758`), enlarged for a distinct border. Geometry stays opaque during collection instead of entering the transparency sorting pass; the print and halo still fade.
+
+Installed exact client Source after verifying the existing Source matched the earlier baseline. All seven shared Edit Sources match the canonical payload. Scoped model export mirrored into `build/DRONE_GAME.rbxl`, preserving other Sources and map content and archiving the old model. Shared Edit save **281** succeeded for DRONEREVOLUTION place **124078027733625**, universe **10774898335**. Next Play loads these changes. Native compilation and 32 pickup logic checks passed; an angled Edit capture shows the repaired surfaces and separate white border. Continuous motion/flicker acceptance still needs the owner’s next Play; no agent Play started. No game publication. Uncommitted working tree based on `ce4fb0c`.
+
+## November 13 — halo depth, print sizing and outline correction
+
+MysteryCubeView now uses hollow circular UIStroke rings for the halo, leaving the center empty even when translucent meshes sort. The halo is positioned farther from the camera than the cube center. Both UI billboards use pixel sizes calculated from WorldToViewportPoint at the cube center, removing the competing stud-size/pixel-size compensation. The text and dots share that projection. Hidden when behind the camera. Dark, cyan and white inverted shells are enforced single-sided and opaque.
+
+Applied the correction to the current running Client with a final render-step override and a descendant observer for new drops. Verified one current model's halo is farther from the camera, all halo centers transparent, and the three outline shells single-sided/opaque. The owner remains in Play. The persistent module and canonical Sources are updated; the authored Edit halo and shared save still await the owner ending Play. Last confirmed save remains 278. Local compile and diff checks passed. Camera-angle visual acceptance remains pending. No publication; working tree based on ce4fb0c.
+
+## November 13 — centered circular black glow
+
+Changed every halo falloff layer to a full circle (UICorner radius 0.5) while keeping equal width/height, centered anchors, and camera-facing depth compensation. Applied to all 24 current halo layers in the owner's running Client without stopping Play. Updated MysteryCubeView and mirrored the managed Sources to the canonical file. Patched only the four serialized radius properties for the 24 authored halo corners, copying the existing circular dot encoding in the same native class.
+
+Canonical SHA-256 is 41278d0ac703733f1a6996d770c26c57405656bc9fd280aea1691cdafe1efb3a. Compilation and diff checks passed. Shared Edit install/save remains pending until the owner ends Play; last confirmed save remains 278. No publication. Working tree based on ce4fb0c.
+
+## November 13 — mystery scaling, motion and isolated effects
+
+Enlarged the preview from scale 0.48 to 1.056 and rock drops from 0.24 to 0.528, exactly 2.2×. Fixed print sizing using camera projection rather than BillboardGui.AbsoluteSize. The camera-facing print moves beyond the full rotating cube silhouette and compensates for that depth offset. Replaced the halo image with layered black UI falloff, verified visible in an Edit capture. The shared slow tumble and bob were sampled at two times and showed changing rotation and height.
+
+Mystery pickups suppress launch trails, glints, lift dust, and the ordinary ground glow/strand/mote display. Their inherited particle/trail/beam descendants are removed. Regular ore retains its effects. Existing server-owned reward/collection behavior remains.
+
+Save **278** succeeded for place 124078027733625 / universe 10774898335. All seven Sources match the canonical file. Script Sync remains disconnected, so refreshed the exact bundled client with ScriptEditorService after checking both installed and replacement SHA-256 values. Local compilation and 32 pickup checks passed. No Play session was started; runtime/multiplayer visual validation remains pending. No publication. Working tree based on ce4fb0c.
+
+## November 13 — reference layer order and restored halftone
+
+Added approved wavy shell asset 125450017429177 / mesh 123067929976612. The visible order is teal core, larger pale-blue undulating shell, white inverted shell, thick cyan rim and dark outline. Removed the violet/neon intermediary layers. Rebuilt dense radial dots with scale coordinates, added a black halo and larger outlined question mark. Layers share rotation and keep the earlier tumble, bob and ore-drop behavior.
+
+Shared Edit save **277** succeeded for DRONEREVOLUTION, place 124078027733625 / universe 10774898335. All seven managed Sources match the canonical snapshot. The reopened Studio had stale client Source and its sync-root assertion failed, so the exact verified disk bundle was refreshed with ScriptEditorService after checking the installed baseline hash. Native Script Sync reconnection remains pending; future exporters must verify actual arrival. Client compilation and all 32 pickup checks passed. Inspected the final Edit image. Runtime motion, halo visibility and multiplayer remain unverified. No publication. Uncommitted working tree based on ce4fb0c.
+
+## November 13 — aligned mystery drops and motion
+
+Aligned every mesh layer to the same rotation and converted the halftone/question mark to a camera-facing BillboardGui. The authored preview is scaled to 0.48. Physical ore pickups use the same geometry at scale 0.24 (about 1.08 studs across), with at most twelve rich cube visuals per client and existing ore visuals beyond that budget. This uses ordinary server-owned ore rewards, trajectories, collection and expiry. It adds no new reward type or drop lottery.
+
+MysteryCubeView applies a continuous slow tumble with sinusoidal angular variation, bobbing, and cyan-to-pink colors. Reduced motion holds the pose and palette steady. The print anchor follows the camera-facing side of the spinning cube. Pickup views clean up with their owning ore view.
+
+The canonical file includes the geometry and latest Sources. SHA-256 is `23739d99e24888421aa41cb1abcd9f298350c5e60eba4c8c15a5e9b72ebe92fd`. The initial alignment/billboard revision matched all seven shared Sources and the three roots in Edit, and compiled there. Studio then closed the place before final save and verification. The final budget/color revision has been exported to Script Sync and mirrored locally but its arrival in shared Edit is unverified. The connected Studio now reports “Place is not open.” Last confirmed shared save remains 272. No publication.
+
+Local client compilation and all 32 existing pickup checks passed. Those tests cover trajectory, receipts and the existing renderer with doubles; they do not visually test the new cube, billboard, or multiplayer. Working tree remains based on ce4fb0c. Reopen DRONEREVOLUTION (124078027733625 / 10774898335), reconcile and verify final shared Edit Sources and save before claiming the next Play is ready.
+
+## November 13 — uploaded inverted mesh layers
+
+Uploaded all seven layers through Open Cloud as approved model asset **78430356529326** owned by user **2481980029**. Operation **3a15b849-c619-47e5-83ae-a3e932040b57** completed successfully. Applied the imported MeshParts to the live preview, preserving its colors, transforms, dimensions, materials and single-sided rendering. A serialization round trip retained all seven MeshIds. Team Create save **272** succeeded for place **124078027733625**, universe **10774898335**. Mirrored the persistent model into the canonical file and moved the rejected panel cube into the existing MysterySlabArchive. Game publication was not performed.
+
+The geometry upload is complete. The existing client color animation still targets the rejected panel cube and needs adapting to InvertedMysteryCube. Visual matching and runtime testing remain pending. Working tree based on ce4fb0c.
+
+## November 13 — rounded mystery cube
+
+Replaced the slab beside the Legendary Pack preview stand with a rounded cube measuring 4.72 studs along each model axis. All six faces have physical dark outer outlines, four-piece colored rims, white lips, and darker recessed panels with raised diagonal segments. The front face carries the halftone and outlined question mark. The previous preview is stored under `ServerStorage.MysterySlabArchive`.
+
+Team Create save **269** succeeded in Edit for place **124078027733625**, universe **10774898335**. Verified the body, depth, and front print in an angled Edit capture. All seven managed Source hashes matched the canonical file and all three Script Sync roots were connected. The bundled client compiled. The next Play session loads the geometry and cyan-to-pink color cycle. Runtime animation remains visually unverified. Studio remains open in Edit. No player publication. Working tree based on `ce4fb0c`.
+
+Stage the print and solid geometry by running [studio_mystery_effect.lua](../tools/studio_mystery_effect.lua) followed by [studio_mystery_shell.lua](../tools/studio_mystery_shell.lua) in shared Edit. Export `shared.MysteryCube.data` and `.archive` into `cube.b64` and `archive.b64`. Run [the scoped saver](../tools/refresh_mystery_cube.py) against the prior canonical hash, apply the stage in Edit, then run the saver with `--write` and refresh the managed Sources.
+
+## November 13 — Orbital and Ramiel ground-landing tendrils
+
+Seven tapered strokes launch from the impact with staggered timing and different heights, ranges and hooks. Their heads extend upward and then descend to landing positions sampled on the authored map or terrain. The trail stays connected to the impact through touchdown, then retracts and fades over 0.32 seconds.
+
+The beam suite passed 27 behavior checks with API doubles, and both bundles compiled. A detached component check against the live Quartz floor measured a representative Ramiel arc at 12 studs above touchdown and 19 studs of horizontal travel. The Orbital sample measured 15 and 23 studs respectively. Both landed within the intended 0.13-stud offset above the raycast surface. This measured geometry without adding visible objects to the owner's session. Full gameplay appearance remains unverified. The canonical file was refreshed while the owner played. Shared Edit sync and save are pending. No Roblox publication.
 
 ## November 13 — remove saved drone preview and restore prompt startup
 

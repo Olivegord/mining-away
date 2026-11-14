@@ -49,7 +49,7 @@ function W.courierStroke(age)
  local lift=easeClaw((age-W.COURIER_CONTACT)/W.COURIER_LIFT)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
-W.ROCK_SIZE={1.64,.97,1.47}
+W.ROCK_SIZE={2.16,1.28,1.94}
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3

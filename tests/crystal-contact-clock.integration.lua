@@ -9,12 +9,19 @@ local audio={}
 local cameraKicks={}
 local owner=Instance.new('Player');owner.UserId=42
 game:GetService('Players').LocalPlayer=owner
+local halves=Instance.new('Folder')
+for index,name in ipairs({'Left','Right'}) do
+ local half=Instance.new('Part');half.Name=name;half.Color=Color3.new(0,0,0)
+ half:SetAttribute('SizeRatio',Vector3.new(.5,1,1));half:SetAttribute('CenterRatio',Vector3.new((index*2-3)*.25,0,0))
+ half.Parent=halves
+end
 rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert(audio,name) end},function(_,_,at)
  table.insert(cameraKicks,at)
-end)
+end,nil,function(name) if name=='Original' then return halves end end)
 local source=Instance.new('UnionOperation');source.Parent=workspace
 for k,v in pairs({Kind='Crystal',ZoneName='Ruby',FullSize=Vector3.one*3,FullPosition=Vector3.new(0,1.5,0),
- ReferenceCrystal=true,SpawnAt=95,ReadyAt=97,MaxHP=300,HP=300,Stage=0,StageCount=3,GroundY=0}) do source:SetAttribute(k,v) end
+ ReferenceCrystal=true,CrystalCut='Original',QuarryCrystal=true,StageSeed=4,SpawnAt=95,ReadyAt=97,
+ MaxHP=300,HP=300,Stage=0,StageCount=3,GroundY=0}) do source:SetAttribute(k,v) end
 local r={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,100,3)}
 r.view.Parent=fx
@@ -44,32 +51,46 @@ assert(r.visual.stage==0 and r.flashAt==102.01 and #audio==5,'fracture skipped t
 crystalFrame(resources,102.06)
 assert(r.visual.stage==1 and #cues==1 and audio[6]=='crystal_chip','the retained contact did not crack once')
 
+local holds={}
+local function requestHold(kind) table.insert(holds,kind) end
+local heldSize,heldPose=r.view.Size,r.view.CFrame
 shot(103.01,0,3)
-source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.12);source:SetAttribute('CrystalBreakOwner',42)
+source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.01);source:SetAttribute('CrystalBreakOwner',42)
+rockDamage.feedback:requestBreakHold(r,103,requestHold)
 crystalFrame(resources,103)
-assert(r.view.Transparency==0 and not r.visual.broken and #audio==6,'break hid before the shot landed')
-crystalFrame(resources,103.01)
-assert(r.view.Transparency==0 and r.breakSize and #audio==8,'finishing hit did not show its brief hold')
-local height=r.view.Size.Y
-crystalFrame(resources,103.14)
-local held=r.view.Size
-crystalFrame(resources,103.205)
-assert(r.view.Transparency==0 and held.Y<height*.8 and (r.view.Size-held).Magnitude<1e-6 and not r.visual.broken,
- 'the compressed rock moved during the hold')
-assert(#audio==8 and #cameraKicks==0 and splitParticles==0,'release cues ran during the hold')
-crystalFrame(resources,103.23)
-assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==11 and #cues==1,
- 'split failed to play its impact and crystal tink once')
-assert(audio[9]=='crystal_split' and audio[10]=='crystal_impact' and audio[11]=='crystal_release_tink'
- and #cameraKicks==1 and cameraKicks[1]==103.23 and splitParticles==1)
+assert(r.view.Transparency==0 and not r.visual.broken and #audio==6 and #holds==0,'break ran before the shot landed')
+rockDamage.feedback:requestBreakHold(r,103.01,requestHold)
+rockDamage.feedback:requestBreakHold(r,103.02,requestHold)
+assert(#holds==1 and holds[1]=='Split' and r.view.Size==heldSize and r.view.CFrame==heldPose,
+ 'the finishing hit did not request exactly one hold of the intact pose')
+assert(#audio==6 and #cameraKicks==0 and splitParticles==0,'release cues ran before the hold ended')
+crystalFrame(resources,103.07)
+assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==9 and #cues==1,
+ 'the first frame back did not split and play the impact sounds')
+assert(audio[7]=='crystal_split' and audio[8]=='crystal_impact' and audio[9]=='crystal_release_tink'
+ and #cameraKicks==1 and cameraKicks[1]==103.07 and splitParticles==1)
+local split=rockDamage.feedback.fractures
+assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Color.R==0 and split[2].p.Color.R==0,
+ 'a shot that skipped stages failed to open the black final-stage model')
+local startGap=(split[2].p.Position-split[1].p.Position).Magnitude
+rockDamage.feedback:step(103.23)
+assert((split[2].p.Position-split[1].p.Position).Magnitude>startGap+.15,'the halves did not separate')
 local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}
 late.view.Parent=fx
+rockDamage.feedback:requestBreakHold(late,103.08,requestHold)
 crystalFrame({late},103.08)
-assert(late.view.Transparency==1 and #audio==11 and #cues==1 and #cameraKicks==1 and splitParticles==1,'a late observer replayed a prior hit')
-for frame=1,120 do crystalFrame(resources,103.23+frame/60) end
-assert(#audio==14 and audio[12]=='crystal_fall_tink' and audio[14]=='crystal_fall_tink'
- and #rockDamage.feedback.pieces==0,'falling shards did not play one tink per selected contact and clean up')
+assert(late.view.Transparency==1 and #holds==1 and #audio==9 and #cues==1 and #cameraKicks==1 and splitParticles==1,
+ 'a late observer replayed a prior hit')
+for frame=10,120 do crystalFrame(resources,103.07+frame/60) end
+assert(#audio==11 and audio[10]=='crystal_fall_tink' and audio[11]=='crystal_fall_tink'
+ and #rockDamage.feedback.pieces==0 and #split==0,'falling shards did not play one tink per selected contact and clean up')
+assert(#rockDamage.feedback.sparks==3,'only the slow ember layer should remain after two seconds')
+for _,spark in ipairs(rockDamage.feedback.sparks) do
+ assert(spark.p.Name=='CrystalDriftingEmber' and spark.p.Transparency<1)
+end
+rockDamage.feedback:step(107)
+assert(#rockDamage.feedback.sparks==0,'long sparks did not clean up')
 
 local prismParticles=0
 local impactParticles=RoleVisuals.ImpactParticles
@@ -85,24 +106,50 @@ target.view.Parent=fx
 crystalFrame({target},104)
 local beforeChar,size=target.view.Color,target.view.Size
 crystalFrame({target},104.33)
-assert(target.view.Color==beforeChar and #audio==14,'the target reacted before beam contact')
+assert(target.view.Color==beforeChar and #audio==11,'the target reacted before beam contact')
 crystalFrame({target},104.35)
 rockDamage.feedback:applyTints(104.35)
-assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==14,'beam contact did not blacken the rock in place')
+assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==11,'beam contact did not blacken the rock in place')
 for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=104.84,CrystalBreakAt=104.84,CrystalSplitAt=104.84,CutProjectile='Prism'}) do
  charred:SetAttribute(key,value)
 end
 target.dirty=true
-crystalFrame({target},104.85)
-assert(target.view.Transparency==0 and not target.breakSize and #audio==14,'the prism break compressed or popped early')
-crystalFrame({target},104.951)
-assert(target.view.Transparency==1 and audio[15]=='prism_blast' and #audio==17 and prismParticles==1,'the charred target did not explode once')
-crystalFrame({target},104.96)
-assert(#audio==17,'the prism explosion replayed')
+rockDamage.feedback:requestBreakHold(target,104.84,requestHold)
+assert(#holds==1 and target.view.Transparency==0 and target.view.Size==size and #audio==11,
+ 'Ramiel queued a second hold after its post-beam beat')
+crystalFrame({target},104.84)
+assert(target.view.Transparency==1 and audio[12]=='prism_blast' and #audio==14 and prismParticles==1,'the charred target did not explode once')
+crystalFrame({target},104.97)
+assert(#audio==14,'the prism explosion replayed')
 charred:Destroy();target.view:Destroy()
 
 workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
 workspace.ChildAdded=signal()
+do
+ local camera=workspace.CurrentCamera
+ camera.WorldToViewportPoint=function() return Vector3.zero,true end
+ local frame=camera.CFrame
+ local held={restPose=CFrame.new(),source=source,breakHoldRequestedAt=150}
+ for kind,frames in pairs({Split=1,HeavySplit=2,Nomad=4}) do
+  local stop=ImpactFreeze.new(owner)
+  stop:request(kind,held)
+  for i=0,frames do
+   stop:beginFrame(150+i/60,1/60,false)
+   assert((stop:holds(held)==true)==(i<frames),'incorrect rendered hold length for '..kind)
+   assert(not stop:holds({}) and camera.CFrame==frame,'hitstop affected the camera or an unrelated resource')
+  end
+ end
+ local stop=ImpactFreeze.new(owner)
+ local neighbor={restPose=CFrame.new(),source=source,breakHoldRequestedAt=151}
+ source:SetAttribute('CutProjectile','Nomad')
+ held.breakHoldRequestedAt=151
+ stop:request('Nomad',held);stop:beginFrame(151,1/60,false)
+ assert(stop:holds(neighbor) and stop:holdsNomad(151) and not stop:holdsNomad(151.2),'Nomad release lost its common clock')
+ stop:beginFrame(151.08,1/60,false)
+ assert(not stop:holds(neighbor) and not stop:holdsNomad(151),'Nomad hold outlived its release')
+ stop:request('Split',held);stop:beginFrame(152,1/60,true)
+ assert(not stop:holds(held),'reduced motion must skip hitstop')
+end
 local roleFolder=Instance.new('Folder');roleFolder.Name='DroneRoleState';roleFolder.ChildAdded=signal();roleFolder.Parent=workspace
 local function receipt(actor,start,shape,windup)
  local node=Instance.new('Folder');node.Parent=roleFolder
@@ -380,6 +427,17 @@ for _,normal in ipairs({Vector3.yAxis,Vector3.zAxis,Vector3.new(1,1,0).Unit}) do
    'internal pressure-wave seams faded into four separate arcs')
  end
 end
+PlaneBurst.draw(ring,Vector3.yAxis,0,1,true,false)
+for _,arc in ipairs(ring.rays) do
+ assert(arc.beam.Enabled and arc.beam.Transparency[1].Value==0 and arc.beam.Transparency[2].Value==0
+  and (arc.beam.Color[1].Value-Vector3.one).Magnitude<1e-6,
+  'bullet ring must open fully opaque white')
+end
+PlaneBurst.draw(ring,Vector3.yAxis,.42,1,true,false)
+assert(ring.rays[2].beam.Transparency[2].Value>ring.rays[1].beam.Transparency[1].Value)
+assert(ring.rays[2].beam.Color[2].Value.G<.9,'ring did not take on its attack color')
+PlaneBurst.draw(ring,Vector3.yAxis,0,1,true,true)
+assert(ring.rays[1].beam.Transparency[1].Value>=.5,'reduced flashing did not soften the opening')
 PlaneBurst.destroy(ring)
 observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
 print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

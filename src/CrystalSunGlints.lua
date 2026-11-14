@@ -20,7 +20,8 @@ local function brightFirst(a,b)
 end
 local function drawable(r)
  return r.view.Parent and r.source.Parent and r.source.CanQuery and r.view.Transparency<.65
-  and not r.visual.broken and not r.finalLoad and not r.damageScale
+  and not r.visual.broken and not r.damageScale
+  and (r.visibleDarkness or 0)<.96
   and not r.source:GetAttribute('ClusterBlackAt')
 end
 local function sampleSites(source,params,seed)
@@ -207,7 +208,7 @@ function G.new(parent,player)
    -- A quick, irregular shimmer rides on the reflection. Viewing angle
    -- supplies the larger changes in brightness and apparent size.
    local shimmer=steady and 1 or .91+.09*math.clamp(math.noise(now*site.frequency%2048,site.phase)*2,-1,1)
-   local target=sprite.targetAlpha*math.min(1,strength*1.42)
+   local target=sprite.targetAlpha*math.min(1,strength*1.42)*(1-(r.visibleDarkness or 0))
    if steady then target*=.72 end
    sprite.alpha+=(target-sprite.alpha)*(steady and 1-math.exp(-math.min(dt,.1)*8) or blend)
    if sprite.targetAlpha==0 and sprite.alpha<.012 then release(site,sprite);continue end
