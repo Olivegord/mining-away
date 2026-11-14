@@ -1,0 +1,30 @@
+{
+  "cylinders": {
+    "maxCylinders": 6,
+    "maxExhaust": 5,
+    "ranges": {
+      "MiningSphere3": {
+        "min": 0.4969635009765625,
+        "max": 0.8814001679420471
+      },
+      "MiningSphere1": {
+        "min": 0.15969698131084442,
+        "max": 0.27836549282073975
+      },
+      "MiningSphere2": {
+        "min": 0.3138343095779419,
+        "max": 0.5335941314697266
+      }
+    },
+    "maxTrails": 8,
+    "samples": 90,
+    "maxSpheres": 9,
+    "badVertical": 0
+  },
+  "repairs": {
+    "cylinders": 16,
+    "charge": 7,
+    "heal": 9,
+    "errors": []
+  }
+}

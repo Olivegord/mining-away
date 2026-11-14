@@ -1,0 +1,29 @@
+{
+  "fonts": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"compact\":{\"scope\":\"Native production CardView rendering and font metrics; sample choices, no purchase or gameplay test\",\"failures\":[],\"catalog\":45,\"texts\":90},\"desktop\":{\"scope\":\"Native production CardView rendering and font metrics; sample choices, no purchase or gameplay test\",\"failures\":[],\"catalog\":45,\"texts\":90}}"
+      }
+    ],
+    "isError": false
+  },
+  "nativeInstallation": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"sourceBytes\":270484,\"checksum\":1280208766,\"matched\":true}"
+      }
+    ],
+    "isError": false
+  },
+  "threeD": {
+    "enabledFaces": 3,
+    "restingSideTiltDegrees": 2,
+    "focusedCenterTiltDegrees": 3,
+    "restingBorderPixels": 3,
+    "focusedBorderPixels": 4
+  },
+  "scope": "Native production CardView with sample choices. Not purchase or multiplayer evidence.",
+  "simulatorReset": true
+}

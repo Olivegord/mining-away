@@ -1,0 +1,52 @@
+{
+  "place_id": 136098934779395,
+  "mode": "Edit",
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": {
+      "before_sha256": "b5a6cbdb08b39beaaa8a8cef1fc9f61226f01065fc882d093eee211b5e172a46",
+      "after_sha256": "b5a6cbdb08b39beaaa8a8cef1fc9f61226f01065fc882d093eee211b5e172a46",
+      "bytes": 11454,
+      "changed": false
+    },
+    "ServerScriptService.DroneRoleEffects": {
+      "before_sha256": "c5e426c5e60b436b210722f49a54f839bfcbc9e0d17105a19fda93832de431ac",
+      "after_sha256": "ebbbec45e6647c0e6cf4c667fdc1be5ec76809242d404026d4e58f72e1b0f74b",
+      "bytes": 11965,
+      "changed": true
+    },
+    "ReplicatedStorage.Shared.CrystalAudio": {
+      "before_sha256": "5057652b3cb85998aa7840e53b6a12edf0b73d08361998523f17c36e7d706b68",
+      "after_sha256": "b7c5d5fc9296978ddd7d742a16a75a53fb91a65db55b324b1a976505eb36d88d",
+      "bytes": 5118,
+      "changed": true
+    },
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": {
+      "before_sha256": "0033a51270d02f6a49b1c383f878ecf6ad5c40f7934934f4a583c69137b835b8",
+      "after_sha256": "35a27e924507f2d8e6082b1f3b80d65d3003ad8eed0d2408d3603739f989a241",
+      "bytes": 243067,
+      "changed": true
+    },
+    "ReplicatedStorage.Shared.TacticalHUD": {
+      "before_sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a",
+      "after_sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a",
+      "bytes": 20189,
+      "changed": false
+    },
+    "ServerScriptService.MiningDiscoveries": {
+      "before_sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719",
+      "after_sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719",
+      "bytes": 7317,
+      "changed": false
+    },
+    "ServerScriptService.GlobalDroneControl": {
+      "before_sha256": "7f1057035e2afe6196c0e0cedad2049f734a632c49cd9a7bb00c21ed7be9eedc",
+      "after_sha256": "4f592d61ea7448895753988998bbcbdf74a128a4be405db245059988e7bf2311",
+      "bytes": 308881,
+      "changed": true
+    }
+  },
+  "preserved_other_sources": 39,
+  "http_enabled_after": false,
+  "grounding_math_max_extent_error": 1.60251138137113e-07,
+  "validation": "Exact prior Source guards; all seven final Sources read back byte-for-byte. Four allowlisted Sources changed from the prior commit. Other script Sources preserved. Native local export saved. No Play session or publishing."
+}

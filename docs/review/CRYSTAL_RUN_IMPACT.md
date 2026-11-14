@@ -1,0 +1,17 @@
+# Crystal Run mining impact
+
+November 11, 2026. The goal is to make mining readable and satisfying from the first shot to the first sale, with particular attention to Needler and Ballcaster.
+
+[Lin et al.](https://arxiv.org/abs/2208.06155) identified sound coherence and impact timing as likely contributors to impact feel in action games. [Kao et al.](https://people.csail.mit.edu/dkao/pdf/3613904.3642656.pdf) found that feedback tied to real success helped in their action RPG experiment, while turning up all feedback did not. [Vlambeer's demonstration](https://www.youtube.com/watch?v=AJdEqssNZ-U) shows the value of separating a shot's release, the target's response and the aftermath. We applied that separation without freezing the swarm or shaking the player's camera. Spatial cues use [Roblox sound rolloff](https://create.roblox.com/docs/sound/objects), and the [particle guidance](https://create.roblox.com/docs/effects/particle-emitters) informed short, capped bursts. These sources guide the design; they do not show that this build is enjoyable.
+
+| Beat | Change |
+| --- | --- |
+| Needler | Short rail stroke, dry metal release, thin fast tracer, sharp contact. Its base shot cycle is 0.66 seconds instead of 0.82, and its flight is 0.16 seconds instead of 0.25. It gets +25% damage against deep cores after the first two layers. |
+| Ballcaster | The orb visibly builds before a 0.26-second flight. A low launch sound, brief wake, pressure front aligned to the impact surface and stronger planted rock movement distinguish the heavy shot. The 1.62-second base cycle and +50% damage on the first two deep layers remain. |
+| Cutting and cargo | Continuous cuts keep the original fine beam, buildup and crack sound. An actual layer fracture gets a small spray and short pulse. A physical cargo drop gets a quiet clink at the owner's displayed first landing. The final breakup remains silent after the contact. |
+
+The server samples the incoming surface before changing crystal size or facing. Shot receipts report accepted contact, powered layers and fractures; a stalled observer can play a fresh contact even if it missed the flight. An obstructed or canceled shot produces no impact. A full effects budget cannot change damage. Reduced effects and reduced flashing still apply. Ore yield, haul rules, card costs and the authored map are unchanged.
+
+The production fixtures covered the live mining logic with Roblox API doubles, including deep role bonuses, obstruction and battery cutoff, pre-fracture contact, delayed observers, one reward, and cargo landing timing. A detached Studio Edit fixture constructed real beams, trails and parts and checked phase order and cleanup. All six reused audio assets loaded in Studio Edit; this was not a listening test. The broader gadget and audio suites still stop on the baseline client inertia and owner-only pickup fixtures. Native motion, sound balance, multiplayer and owner acceptance remain unverified.
+
+For the next manual check, pin a fresh Quartz cluster and follow one dart, one ball and one cargo drop from start to finish. In Ruby or deeper, watch the Ballcaster open thick layers and the Needler finish chipped crystals; the two jobs should be distinguishable even with sound muted. With audio on, check that the heavy hit reads above ordinary shots without drowning out the original crack. Check a busy field at low graphics for overlaps and washed-out crystals.

@@ -1,0 +1,187 @@
+Final candidate. Production logic/API doubles and binary preservation, not a native long-session improvement claim.
+
+PASS gadget shop/permanent unlock is required and failures never hit
+PASS gadget unknown gadget, NaN time and locked plot are rejected
+PASS gadget full backpack does not prevent sustained mining abilities
+PASS gadget largest grown eligible crystal is selected with stable ID tie break
+PASS gadget server timing rejects premature and expired input without spending cooldown
+PASS gadget unrecognized/replayed tokens cannot fire twice
+PASS gadget ordinary orbital melts one biggest rock over four seconds
+PASS gadget precision burn fractures one neighbor on completion, never during charge
+PASS gadget lost target cancels and first blocked contact refunds cooldown
+PASS gadget burn loss of eligibility and save pauses cannot catch up damage
+PASS gadget cycle upgrade changes the orbital cooldown only
+PASS gadget saved cooldown hydrates without aliasing and reconnect cannot refresh a strike
+PASS gadget scrap deploys four bots or six on precision for ten seconds
+PASS gadget scrap bots must physically travel and charge before any mining hits
+PASS gadget gadget tick work is bounded and does not catch up a long frame
+PASS gadget scrap pairs cooperate on weak rocks and late-field chips remain capped
+PASS gadget leaving field and expiry tear down bots; filling backpack preserves work
+PASS gadget scrap duration stays ten seconds even with a retired combo flag
+PASS gadget run changes clear charges, swarms and runtime cooldowns
+PASS gadget view publishes complete current state without target or client mutation rights
+PASS gadget storage pauses preserve charge windows and ten seconds of working swarm time
+PASS gadget tiny miners also accelerate continuously when targets change
+22 production gadget domain checks passed; not Studio or multiplayer evidence
+PASS role only the ordinary miner grants a continuous mining capability
+PASS role only the miner and breaker accept ordinary rock jobs or combat
+PASS role each support role has one explicit job and hardware ability
+PASS role legacy color identities map to existing jobs without erasing ownership
+PASS role unknown and missing roles fail closed
+PASS role grower never selects or damages existing mineable rocks
+PASS role breaker prioritizes a reachable shell over ordinary work
+PASS role target selection excludes paid growing denied and malformed nodes
+PASS role target tie breaks remain deterministic across list order
+PASS role breaker cannot wind up before actually arriving
+PASS role windup dive impact recovery each emit exactly once
+PASS role a missed dive recovers without ever emitting an impact
+PASS role startup upgrades alter actual windup timing and pose together
+PASS role invalid or changed targets cancel any phase without damage
+PASS role backward or nonfinite clocks cannot skip phases
+PASS role poses give bounded anticipation dive and recovery without movement authority
+16 production role capability/phase checks passed; not engine motion or multiplayer evidence
+PASS ore partition conserves every integer reward without zero fragments
+PASS ore scatter has a visible delay before collection
+PASS ore magnet catches a player moving at walking speed at 30 60 and 144 FPS
+PASS ore blocked or out-of-range pickups cannot arrive and never fall through bed
+4 production ore trajectory checks; not engine physics
+PASS production resource renderer: idle fast path, live HP invalidation, queued black/shrink/break animation, no duplicate effects over 7200 stable frames
+PASS contact render actual tip sparks, save pause and final cleanup (API doubles; not native rendering)
+PASS swarm isolated drones have zero avoidance and preserve original capped travel
+PASS swarm exact overlaps escape with equal opposite deterministic steering
+PASS swarm head-on approach anticipates contact before positional crowding
+PASS swarm parallel co-moving neighbors do not invent a collision
+PASS swarm pair avoidance conserves center and chooses opposite passing lanes
+PASS swarm settled mining can disable steering and retain exact overhead station
+PASS swarm steering pressure smoothing is continuous and rate-correct at 30/60/144Hz
+PASS swarm frozen grid ignores sequential updates and caller iteration order
+PASS swarm large stacked crowds remain bounded, finite and reproducible
+PASS swarm destroyed neighbors exert no pressure
+PASS swarm flight thrust bounds acceleration from rest and through a reversal
+PASS swarm decreasing cruise speed brakes without discarding momentum
+PASS swarm flight settles over the target at 30 60 and 144 Hz
+PASS swarm zero time and long frame stalls do not invent unbounded catch-up
+PASS swarm replication correction shares the same thrust limit
+15 production steering checks passed using Vector API doubles; not a Studio collision/visual playtest
+PASS client inertia launch and replicated goal reversals retain continuous velocity
+PASS client inertia a delayed authoritative position is corrected through thrust
+PASS client inertia save pause freezes the pose and resumes with retained momentum
+PASS client inertia reprint resets motion and a new life seeds authoritative velocity
+PASS client inertia healers retain their trailing goal with the same finite acceleration
+5 production client inertia checks with API doubles; engine motion/network quality not verified
+PASS gadget server locked gadgets and stale runs cannot create an authoritative charge
+PASS gadget server actual command strike breaks largest node through normal reward path once
+PASS gadget server foreign worker reservations are excluded from selection and reject direct gadget hits
+PASS gadget server leaving plot rejects contact while a full backpack permits mining
+PASS gadget server no living mining worker prevents gadget deployment
+PASS gadget server scrap mining uses real hit path and persistence-busy periods preserve deployment
+PASS gadget server successful gadget cooldown is saved and rehydrated runtime rejects immediate reuse
+7 actual server gadget integration checks passed with API doubles; not Studio visual/multiplayer evidence
+PASS pickups server break scatters conserved owner-only ore and cannot pay twice
+PASS pickups server another nearby player cannot attract or steal the owners fragments
+PASS pickups server a full backpack leaves real fragments until selling makes space
+PASS pickups server save uncertainty pauses pickup without mutating or deleting rewards
+PASS pickups server walls block attraction and collection until an unobstructed route exists
+PASS pickups server old-run or disconnected drops cannot enter a later profile
+PASS pickups server new resources are grounded with health independent of their footprint
+7 production pickup server checks with API doubles; not Studio validation
+PASS mining impact full bag accepts manual orders and continues actual miner damage
+PASS mining impact ground rewards stay bounded and conserve ore after many full-bag breaks
+PASS mining impact test field is always open beside Quartz and all rock work is exactly tenfold
+PASS mining impact boulders preserve original crystal identity and seven monotonic size changes
+PASS mining impact each ordinary and large layer becomes black before shrinking, without duplicate cues
+PASS mining impact powered dive accelerates downwards at every render rate and stops at contact
+6 actual mining impact server/helper checks passed with API doubles; not native acceptance
+PASS role server Studio starts exactly eight active roles but still owns one permanent drone
+PASS role server ore queue and direct assignments cannot give specialists ordinary mining jobs
+PASS role server grower plants a real replacement with normal health yield growth and bounded population
+PASS role server recall cancels planting and two growers cannot overlap or exceed replacement tokens
+PASS role server only the miner performs a continuous cutting beam after real warmup
+PASS role server breaker arrives winds up dives hits once and recovers even after a killing strike
+PASS role server recall and busy storage cancel or pause breaker and grower work
+PASS role server two backpack emptiers own separate real parcels and sell each only once
+PASS role server orbital hardware automatically strikes a largest rock and persists its cooldown
+PASS role server swarm hardware deploys four physical mini miners for exactly ten seconds
+PASS role server healer preserves real ally repair and never acquires mining
+PASS role server finished mining releases its reservation and lingers before choosing new work
+PASS role server storage pauses preserve the remaining post-mining recovery time
+PASS role server a new explicit order cancels the completed-rock linger
+PASS role server hardware shop upgrades change only their intended real role stats
+PASS role server rock clicks confirm work queue and cancellation without replacing a busy job
+16 actual production server role checks passed using API doubles; engine motion/multiplayer not verified
+PASS gadget source compilation + production domain/steering/server logic using API doubles. Studio visual/multiplayer/fun not verified.
+
+PASS shops new player has one permanent drone, only Quartz, zero separate balances
+PASS shops mixed backpack sells into matching mineral wallets with no exchange
+PASS shops sale receipt does not duplicate currencies or sell the next bag
+PASS shops mixed deposit failure is atomic and preserves the whole backpack
+PASS shops unknown currencies cannot clear a backpack
+PASS shops courier deposits exactly its real eight-unit parcel once
+PASS shops Quartz buys Ruby access and cannot jump straight to Cobalt
+PASS shops rich Quartz wallet cannot pay a Ruby upgrade
+PASS shops shop distance/combat context and server level quote are mandatory
+PASS shops duplicate purchase and stale level never charge another level
+PASS shops transaction collision and stale-run purchase are rejected
+PASS shops capacity and targeting purchases apply through real card stat calculation
+PASS shops guaranteed shop upgrades refuse redundant card automation and capped backpacks
+PASS shops Emerald pack press works on its own and never requires another upgrade
+PASS shops pack discount affects future Quartz price, never paid offer or choices
+PASS shops legacy universal counter cannot buy packs without Quartz
+PASS shops wide relay and rapid orbital work without prerequisite upgrades
+PASS shops cooldowns and shop state survive a valid profile reload
+PASS shops v4 migration preserves fleet, cargo and credits without inventing Ruby
+PASS shops corrupt future wallet, unlock chain and cooldown fail closed
+PASS shops prestige resets shops, currencies, cooldowns and cards; keeps actual fleet and guards
+PASS shops new specialized permanent roles are awarded without rerolling existing drones
+PASS shops packs grant standalone abilities without any combo prerequisite
+PASS shops retired paid combo offers refund exactly once and selected combos become standalone
+PASS shops every mineral shop offers standalone hardware upgrades with correct role isolation
+25 production shop/profile/card checks passed (not Studio visual/multiplayer evidence)
+PASS mining field hardness changes effective work while preserving authored footprint
+PASS mining harder fields increase mineral value per equivalent mining work
+PASS mining percussion only pays charged active intervals at all supported rates
+PASS mining cutter and resonance retain continuous base output; fracture echoes have finite bounds
+PASS mining autonomous priorities value real work and a payable core instead of a free shell reward
+PASS mining all mineral work is three times the former health without inflating meshes
+6 mining rules checks passed; not Studio results
+PASS persistence fresh profile acquires locked durable session
+PASS persistence duplicate server load rejected and active foreign session blocked
+PASS persistence bounded ordered retries preserve exact candidate
+PASS persistence UpdateAsync callback retries do not reroll prepared mutation
+PASS persistence transaction is durable before local state is exposed
+PASS persistence duplicate transaction returns original result without callback
+PASS persistence mutation rejection and invalid staged schema never save
+PASS persistence save and reentrant operations share one serialization gate
+PASS persistence transient response loss reconciles same receipt exactly once
+PASS persistence uncertain committed write freezes until durable reconciliation
+PASS persistence confirmed uncommitted failure preserves pre-transaction dirty cargo
+PASS persistence failed initial load never creates or overwrites defaults
+PASS persistence malformed future and foreign profile refuse migration without data loss
+PASS persistence explicit legacy migration retains owned fleet and progress
+PASS persistence lease expiry permits takeover and fences old stale writes
+PASS persistence unexpected profile revision cannot overwrite concurrent durable state
+PASS persistence autosave renews lease and persists latest legitimate progress
+PASS persistence release saves and clears lock atomically before a new server loads
+PASS persistence ambiguous release is reconciled even after its lock was removed
+PASS persistence receipt ledger stays bounded and current retry remains available
+PASS persistence serializability finite values and invalid identity fail safely
+PASS persistence preview storage is explicitly labeled and namespace isolated
+PASS persistence crash after commit reloads the durable result without repeating the grant
+PASS persistence failed final save keeps lock and previous data until reconciled
+PASS persistence corrupt lock cannot be interpreted as an unlocked valid profile
+PASS persistence actual Profile missing-target migration refund is durable before presentation
+PASS persistence actual Profile prestige crash retains identities and exactly one permanent grant
+PASS persistence signed Studio identities are accepted only by explicit isolated preview adapter
+28 FINAL persistence tests passed (deterministic storage adapter; live DataStore not executed)
+PASS shop server spawn and real character respawns face the centrally placed nearest Quartz field
+PASS shop server baked field layouts are stable on replay and keep original field instances
+PASS shop server all five named counters are grounded and visible near the original depot
+PASS shop server mounting counters again preserves live handler references and original assets
+PASS shop server counter feet use the real hub-pad top rather than an embedded machine bottom
+PASS shop server remote cannot purchase away from its actual kiosk
+PASS shop server kiosk purchase is saved once and updates real drone targeting stats
+PASS shop server shop access does not bypass the real Cobalt guard gate
+PASS shop server locked field commands cannot enroll a fleet into its encounter
+9 actual server shop integration checks passed using API doubles; not Studio evidence
+PASS active capture: deterministic build, exact seven Source paths, all other chunks and backup Sources preserved; not Studio evidence
+PASS current shop domain/server checks, all source and bundle syntax, deterministic live-capture preservation. Not Studio visual/multiplayer QA.

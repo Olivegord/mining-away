@@ -1,0 +1,58 @@
+{
+  "mining": {
+    "miningFrames": 141,
+    "failures": 0,
+    "frames": 269,
+    "states": {
+      "Mine": true,
+      "Warmup": true,
+      "Travel": true
+    }
+  },
+  "unlock": {
+    "visible": [
+      "Quartz",
+      "Ruby"
+    ],
+    "size": "160, 72",
+    "unlocked": {
+      "Quartz": true,
+      "Ruby": true
+    },
+    "wallet": {
+      "Quartz": 20,
+      "Ruby": 0,
+      "Cobalt": 0,
+      "Emerald": 0,
+      "Violet": 0
+    }
+  },
+  "initialHUD": {
+    "visible": [
+      "Quartz"
+    ],
+    "size": "160, 48",
+    "walletBackgroundTransparency": 1,
+    "walletUIStrokes": 0
+  },
+  "sync": {
+    "afterResume": "All three roots SyncedAsRoot",
+    "afterFollowingHUDExport": "All three roots still SyncedAsRoot; final side anchor reached Studio",
+    "cause": "Code 25 cause not established; no claim of durable repair",
+    "remaining": "Repeated unattended sync, Studio-origin conflict recovery and restart checks deferred after owner requested stopping Studio activity"
+  },
+  "stopped": {
+    "play": "Edit verified",
+    "device": "default",
+    "memory": "Owner reported 4 GB and explicitly chose Leave Studio open. A subsequent read-only Stats snapshot confirmed 4179 MB idle; no Play/profiler/menu was opened."
+  },
+  "idleMemoryMb": {
+    "total": 4179.1,
+    "Internal": 1067.1,
+    "LuaHeap": 643.2,
+    "Script": 244.2,
+    "GraphicsTexture": 78.4,
+    "Instances": 68.1,
+    "Gui": 49.8
+  }
+}

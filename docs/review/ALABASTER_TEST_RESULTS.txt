@@ -1,0 +1,263 @@
+PASS feel 60Hz trajectory is the original .03 capped equation
+PASS feel 30 60 120 144Hz paths preserve cap/easing transition scale
+PASS feel uncapped paths match elapsed time at all render frequencies
+PASS feel 60Hz yaw blend equals original .1 and other rates match
+PASS feel zero dt and reached goals never drift or NaN
+PASS feel first six fleet sizes form stable radius10 ring
+PASS feel hover amplitude and six second period preserve original
+PASS feel exact quarter thresholds and every crossed stage
+PASS feel growth is original 2 second Quad.Out and latejoin reconstructs
+PASS feel one stud server arrival gate blocks approach and growing rocks
+PASS feel station is directly overhead and geode slots stay over footprint
+PASS feel coalesced three quarters and break remain visible in order
+PASS feel each ordinary quarter retains a minimum display dwell
+PASS feel late join initializes current stage and break without replay
+PASS feel duplicate snapshots cannot duplicate cracks or break
+PASS feel break arriving before stage attribute still presents every quarter
+PASS feel presentation stall does not consume unreadable quarter stages
+PASS feel stale lower stages do not rewind presentation
+18 original-equation feel tests passed; not Studio visual parity
+PASS feedback late join initializes death and old shots silently
+PASS feedback one death across reordered HP and state snapshots
+PASS feedback damage and server shot serials trigger once per new snapshot
+PASS feedback new life and encounter serial resets do not replay old shots
+PASS feedback continuous authoritative damage does not require local timers
+PASS feedback reconstruction is timestamp based including mid print joins
+PASS feedback hit and shot envelopes return cleanly at every frame rate
+PASS feedback fragment trajectories land once and never sink or bounce forever
+PASS 8 cosmetic lifecycle/envelope tests (engine rendering still requires Studio)
+PASS sentry idle patrol has visible sweep, pauses, seamless loop and independent phases
+PASS sentry late join reconstructs absolute idle and charge without replaying a shot
+PASS sentry brief staggered idle blinks never obscure a live charge or shot
+PASS sentry stale server Aim cannot stop the idle after cooldown or reset
+PASS sentry charge acquires target and shot follow through releases back to patrol
+PASS sentry heading wraps by the shortest arc
+PASS sentry shell stays continuous when the eye crosses the heading wrap seam
+PASS sentry death suppresses aim and cannot leave charge active
+PASS sentry tracking converges consistently at 30 60 120 and 144 FPS
+PASS sentry shell has a travelling idle and stronger charge anticipation without moving plinth
+PASS sentry all eye parts share one transform; recoil and flinch settle
+PASS sentry long stalls are bounded and pose never integrates displacement
+PASS 12 sentry animation logic tests (visuals require Studio)
+PASS finite input validation rejects malformed values
+PASS ownership and destroyed/reprinting states reject commands
+PASS concurrent geode shell death is one atomic transition
+PASS invalid damage cannot heal or prematurely reward
+PASS concurrent crystal finish rewards exactly one hit
+PASS concurrent shell finish creates one set of child rewards
+PASS new profile encounter accepts one drone and does not expect three
+PASS finite cooperative roster locks user run and life identity
+PASS roster enrollment snapshots stats rather than mutable card state
+PASS empty or wholly invalid enrollment does not spend user join
+PASS foreign owned and duplicate life records cannot be enrolled
+PASS muster duration does not begin damage early
+PASS replacement before muster locks cannot replace enrolled life
+PASS wipe beats simultaneous last turret death and revokes entitlements
+PASS staggered free deaths cannot reinforce a friends active assault
+PASS even without spent marker a new generation is not original life
+PASS retreat spends participation permanently and cannot kite rejoin
+PASS hard assault deadline bounds kiting even with continuous contact
+PASS abandonment timeout performs one cleanup and guarded cooldown
+PASS same identity reconnect remains spent during friends assault
+PASS full reset signal restores even previously killed defense in adapter
+PASS clear event and entitlement issue exactly once
+PASS no contribution no entitlement even with forged defeated flag
+PASS outsider late arrival cannot inherit another crew clear
+PASS contributing run entitlement rejects old run and encounter token
+PASS prestige removes only its players shared expedition entitlement
+PASS prestige removes only its players active combat slots
+PASS removed contributors receive no stale victory entitlement
+PASS noncontributors do not ride along for free mining clearance
+PASS active expedition lasts indefinitely while entitled crew works
+PASS last entitled crew leaving begins documented grace then reset
+PASS temporary empty cleared field allows entitled crew within grace
+PASS new expedition has new token and cannot retain stale entitlement
+PASS free reprint preserves permanent identity and current run modifiers
+PASS custom timer values are data driven and clear timeout is ignored
+35 deterministic encounter/resource rule tests passed
+PASS profile fresh profile owns exactly one permanent Blue with separate empty run
+PASS profile base identity and type deterministic over loads
+PASS profile failed malformed future and foreign loads never create defaults
+PASS profile supported v1 migrates without rerolling permanent traits
+PASS profile cargo cap, material sale value and earned progress exact
+PASS profile duplicate sale receipt cannot sell the next cargo a second time
+PASS profile unknown material and invalid cargo cannot erase inventory
+PASS profile prestige gate requires cumulative earnings and real clear
+PASS profile pending offer or own assault blocks prestige without mutation
+PASS profile prestige adds one, preserves IDs and resets every run channel
+PASS profile duplicate prestige and stale old-run request never grant extra drones
+PASS profile failed durable working-copy transition leaves old profile usable
+PASS profile six permanent units retained and deterministic type sequence
+PASS profile bounded receipts and monotonic run reject evicted prestige replay
+14 profile tests passed
+PASS profile missing-target paid offer migration refunds once without reroll
+15 FINAL profile tests passed
+PASS profile foreign or mismatched permanent identity cannot load into another fleet
+PASS profile isolated Studio preview supports negative test user IDs
+17 FINAL ownership/profile tests passed
+PASS profile saved pending choices reject invalid scopes unknown effects and nonfinite modifiers
+18 COMPLETE profile tests passed
+PASS cards first six prices and explicit pack index
+PASS cards purchase creates three distinct resolved useful choices and debits once
+PASS cards new purchase IDs while pending cannot reroll or charge
+PASS cards reconnect exact offer and random target replay
+PASS cards choose exactly one, conflicting selection rejects, duplicate selection replays
+PASS cards invalid selection and own combat reject without closing offer
+PASS cards Blue wide speed affects all only Blue at additive base
+PASS cards named startup halves warmup alone, never active damage
+PASS cards run mods remain on same permanent ID through reprint/reload
+PASS cards all final modifier caps, positive startup floor and combined DPS cap
+PASS cards spent packs never reduce cumulative sale prestige progress
+PASS cards stale paid offer cannot apply after prestige
+PASS cards no absent type, no duplicate card, no inaccessible combat option
+PASS cards offer protection never produces three offers without combat
+PASS cards exhausted caps never debit for useless choices
+PASS cards bounded receipt eviction cannot replay stale purchase pack index
+PASS cards choice effects are frozen rather than looked up in changed catalog
+17 cards tests passed
+PASS cards individual target randomness is persisted across six owned identities
+PASS cards owned stack limits and per-drone unique cards excluded
+19 FINAL cards tests passed
+PASS cards signature upgrades expose bounded distinct mechanics and survive saved offers
+20 TOTAL cards tests passed
+PASS cards every fresh visible pack offers combat economy and an early signature mechanic
+PASS cards combo builds change finite stats with explicit costs and one target
+PASS cards saved content v2 offer keeps original weaker numbers through catalog upgrade
+PASS cards unused secondary reach does not qualify as a useful upgrade
+PASS cards every negative effect is disclosed in the saved tradeoff field
+25 UPGRADE cards tests passed
+PASS cards Burst Splash trades arc fraction for direct damage at useful paired-guard reach
+26 ARC cards tests passed
+PASS cards fleet preview selects a changed drone when the first fleet member is capped
+27 PREVIEW cards tests passed
+PASS persistence fresh profile acquires locked durable session
+PASS persistence duplicate server load rejected and active foreign session blocked
+PASS persistence bounded ordered retries preserve exact candidate
+PASS persistence UpdateAsync callback retries do not reroll prepared mutation
+PASS persistence transaction is durable before local state is exposed
+PASS persistence duplicate transaction returns original result without callback
+PASS persistence mutation rejection and invalid staged schema never save
+PASS persistence save and reentrant operations share one serialization gate
+PASS persistence transient response loss reconciles same receipt exactly once
+PASS persistence uncertain committed write freezes until durable reconciliation
+PASS persistence confirmed uncommitted failure preserves pre-transaction dirty cargo
+PASS persistence failed initial load never creates or overwrites defaults
+PASS persistence malformed future and foreign profile refuse migration without data loss
+PASS persistence explicit legacy migration retains owned fleet and progress
+PASS persistence lease expiry permits takeover and fences old stale writes
+PASS persistence unexpected profile revision cannot overwrite concurrent durable state
+PASS persistence autosave renews lease and persists latest legitimate progress
+PASS persistence release saves and clears lock atomically before a new server loads
+PASS persistence ambiguous release is reconciled even after its lock was removed
+PASS persistence receipt ledger stays bounded and current retry remains available
+PASS persistence serializability finite values and invalid identity fail safely
+PASS persistence preview storage is explicitly labeled and namespace isolated
+PASS persistence crash after commit reloads the durable result without repeating the grant
+PASS persistence failed final save keeps lock and previous data until reconciled
+PASS persistence corrupt lock cannot be interpreted as an unlocked valid profile
+PASS persistence actual Profile missing-target migration refund is durable before presentation
+PASS persistence actual Profile prestige crash retains identities and exactly one permanent grant
+PASS persistence signed Studio identities are accepted only by explicit isolated preview adapter
+28 FINAL persistence tests passed (deterministic storage adapter; live DataStore not executed)
+PASS progression ten fixed seeds complete first prestige then a full two-drone second run
+PASS progression safe field retains productive zero-card path and richer mineral values
+PASS progression combat card changes finite Cobalt outcome while pure mining does not
+PASS progression signature model resolves finishers, one eligible arc, and bounded built-in kill repair
+PASS progression ten weak attempts reset all finite defenses without protected earnings
+PASS progression mixed Burst Splash and pure Arc Relay both reach the real paired-guard spacing
+MODEL RUN 1 FIRST_PACK_SECONDS min=52.70 median=54.95 max=57.69 PRESTIGE_SECONDS min=389.77 median=415.93 max=505.96 PACK_COUNT min=4 median=6 max=6
+MODEL RUN 2 FIRST_PACK_SECONDS min=33.79 median=34.88 max=38.07 PRESTIGE_SECONDS min=681.09 median=744.33 max=810.15 PACK_COUNT min=8 median=8 max=10
+MODEL SEED 1 RUN 1 FIRST_PACK=55.76 PRESTIGE=453.94 PICKS=D09@Blue 1,D08@Blue 1,D17@Blue 1,F06,D01@Blue 1,F02
+MODEL SEED 1 RUN 2 FIRST_PACK=37.81 PRESTIGE=769.92 PICKS=F01,F01,T03,F11,D01@Red 2,T04,F11,D20@Red 2
+MODEL SEED 2 RUN 1 FIRST_PACK=56.99 PRESTIGE=415.93 PICKS=D08@Blue 1,D02@Blue 1,T03,D01@Blue 1,C02
+MODEL SEED 2 RUN 2 FIRST_PACK=37.60 PRESTIGE=810.15 PICKS=F08,D11@Blue 1,D03@Red 2,F08,F06,F07,F07,T01,F06,T03
+MODEL SEED 3 RUN 1 FIRST_PACK=56.40 PRESTIGE=412.20 PICKS=D03@Blue 1,T03,F06,F06
+MODEL SEED 3 RUN 2 FIRST_PACK=34.88 PRESTIGE=800.65 PICKS=T01,C02,C01,T04,D01@Red 2,F11,F11,F01,F01,F07
+MODEL SEED 4 RUN 1 FIRST_PACK=54.51 PRESTIGE=505.96 PICKS=T02,F10,F09,F07,T03,F11
+MODEL SEED 4 RUN 2 FIRST_PACK=34.30 PRESTIGE=789.43 PICKS=T01,F11,F08,F07,T04,C02,F11,D19@Blue 1,F03,D15@Blue 1
+MODEL SEED 5 RUN 1 FIRST_PACK=54.95 PRESTIGE=408.81 PICKS=F07,D17@Blue 1,D18@Blue 1,D04@Blue 1,F07,C02
+MODEL SEED 5 RUN 2 FIRST_PACK=34.12 PRESTIGE=681.09 PICKS=F06,F08,C02,F01,F06,D19@Blue 1,T03,D01@Red 2
+MODEL SEED 6 RUN 1 FIRST_PACK=56.44 PRESTIGE=470.16 PICKS=D13@Blue 1,F03,D17@Blue 1,F06,F06,F01
+MODEL SEED 6 RUN 2 FIRST_PACK=34.06 PRESTIGE=741.80 PICKS=D05@Blue 1,D06@Blue 1,C02,D20@Red 2,F08,T03,F11,F06,F06
+MODEL SEED 7 RUN 1 FIRST_PACK=52.70 PRESTIGE=439.56 PICKS=D17@Blue 1,T02,C02,F08,F05,D06@Blue 1
+MODEL SEED 7 RUN 2 FIRST_PACK=35.27 PRESTIGE=734.32 PICKS=D06@Red 2,T01,F06,F08,T03,F06,D10@Blue 1,F05
+MODEL SEED 8 RUN 1 FIRST_PACK=54.14 PRESTIGE=394.57 PICKS=D12@Blue 1,T02,F01,T03,D05@Blue 1
+MODEL SEED 8 RUN 2 FIRST_PACK=33.79 PRESTIGE=717.52 PICKS=F11,F11,D06@Red 2,D01@Blue 1,T03,F07,F06,D05@Red 2
+MODEL SEED 9 RUN 1 FIRST_PACK=53.29 PRESTIGE=389.77 PICKS=D02@Blue 1,F07,F08,F01,C02
+MODEL SEED 9 RUN 2 FIRST_PACK=38.07 PRESTIGE=744.33 PICKS=C01,F11,D05@Blue 1,T04,F06,C02,F02,F11,C03
+MODEL SEED 10 RUN 1 FIRST_PACK=57.69 PRESTIGE=473.02 PICKS=D09@Blue 1,D17@Blue 1,D19@Blue 1,F01,F09,T03
+MODEL SEED 10 RUN 2 FIRST_PACK=35.64 PRESTIGE=751.36 PICKS=C01,F06,T01,F06,D11@Red 2,C02,T04,T03
+MODEL FLEET 1 RUBY_FIRST_HOLD_SECONDS=49.12 CREDITS=240 PRESTIGE_SALES=2000 REQUIREMENT=Cobalt:1
+MODEL NAKED_COMBAT FLEET=1 FIELD=Cobalt WIN=false SECONDS=15.20 HULL_LEFT=0.00 TURRET_HP_LEFT=116.00
+MODEL NAKED_COMBAT FLEET=1 FIELD=Violet WIN=false SECONDS=7.40 HULL_LEFT=0.00 TURRET_HP_LEFT=732.00
+MODEL NAKED_COMBAT FLEET=1 FIELD=Emerald WIN=false SECONDS=7.30 HULL_LEFT=0.00 TURRET_HP_LEFT=1252.00
+MODEL FLEET 2 RUBY_FIRST_HOLD_SECONDS=35.78 CREDITS=240 PRESTIGE_SALES=5000 REQUIREMENT=Cobalt:2
+MODEL NAKED_COMBAT FLEET=2 FIELD=Cobalt WIN=true SECONDS=13.60 HULL_LEFT=84.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=2 FIELD=Violet WIN=false SECONDS=12.60 HULL_LEFT=0.00 TURRET_HP_LEFT=610.56
+MODEL NAKED_COMBAT FLEET=2 FIELD=Emerald WIN=false SECONDS=11.60 HULL_LEFT=0.00 TURRET_HP_LEFT=1141.60
+MODEL FLEET 3 RUBY_FIRST_HOLD_SECONDS=29.12 CREDITS=240 PRESTIGE_SALES=11000 REQUIREMENT=Violet:1
+MODEL NAKED_COMBAT FLEET=3 FIELD=Cobalt WIN=true SECONDS=10.40 HULL_LEFT=183.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=3 FIELD=Violet WIN=false SECONDS=17.80 HULL_LEFT=0.00 TURRET_HP_LEFT=446.40
+MODEL NAKED_COMBAT FLEET=3 FIELD=Emerald WIN=false SECONDS=15.92 HULL_LEFT=0.00 TURRET_HP_LEFT=1004.80
+MODEL FLEET 4 RUBY_FIRST_HOLD_SECONDS=26.50 CREDITS=240 PRESTIGE_SALES=22000 REQUIREMENT=Violet:2
+MODEL NAKED_COMBAT FLEET=4 FIELD=Cobalt WIN=true SECONDS=8.80 HULL_LEFT=282.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=4 FIELD=Violet WIN=false SECONDS=33.40 HULL_LEFT=0.00 TURRET_HP_LEFT=40.56
+MODEL NAKED_COMBAT FLEET=4 FIELD=Emerald WIN=false SECONDS=20.22 HULL_LEFT=0.00 TURRET_HP_LEFT=803.20
+MODEL FLEET 5 RUBY_FIRST_HOLD_SECONDS=25.21 CREDITS=240 PRESTIGE_SALES=42000 REQUIREMENT=Emerald:1
+MODEL NAKED_COMBAT FLEET=5 FIELD=Cobalt WIN=true SECONDS=8.00 HULL_LEFT=362.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=5 FIELD=Violet WIN=true SECONDS=19.20 HULL_LEFT=216.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=5 FIELD=Emerald WIN=false SECONDS=30.22 HULL_LEFT=0.00 TURRET_HP_LEFT=415.76
+MODEL FLEET 6 RUBY_FIRST_HOLD_SECONDS=23.30 CREDITS=240 PRESTIGE_SALES=73500 REQUIREMENT=Emerald:2
+MODEL NAKED_COMBAT FLEET=6 FIELD=Cobalt WIN=true SECONDS=7.20 HULL_LEFT=461.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=6 FIELD=Violet WIN=true SECONDS=15.20 HULL_LEFT=352.00 TURRET_HP_LEFT=0.00
+MODEL NAKED_COMBAT FLEET=6 FIELD=Emerald WIN=true SECONDS=35.20 HULL_LEFT=46.00 TURRET_HP_LEFT=0.00
+6 progression model checks passed; not Studio results
+PASS server signature combat uses threshold, bounded chain, kill repair and authoritative shot events
+PASS server core drill only boosts geodes and split range does not bypass mining gates
+PASS server fresh profile is one permanent Blue with replicated complete state
+PASS server map binds the original named construct and never generic turret box
+PASS server random field crystals use variable health scaled original union and two-second growth
+PASS server ordinary mining rejects growth and any station farther than one stud
+PASS server beam and damage start only after exact overhead arrival and warmup
+PASS server all quarter stages and one final reward execute on production resource path
+PASS server geode concurrency opens one core set without shell or duplicate rewards
+PASS server single crystal and three-slot shell selectors honor reservations
+PASS server sell is invoker-owned at actual Converter and advances cumulative earnings
+PASS server pack debit three saved choices replay stable target and choose exactly one
+PASS server reconnect restores exact pending offer no UI-close reroll or extra debit
+PASS server same-run free reprint preserves permanent identity and targeted startup modifier
+PASS server prestige creates second-run two permanent drones and resets every run card
+PASS server pending paid offer blocks prestige and stale offer cannot affect new run
+PASS server uncertain committed prestige rebuilds world fleet exactly once after reconciliation
+PASS server failed precommit prestige leaves old run and fleet usable without grant
+PASS server committed card response loss refreshes effective world stats once
+PASS server guarded damage and cargo blocked without current run entitlement
+PASS server cooperative victory gives contributor run entitlements but no outsider inheritance
+PASS server reassigning a cleared field preserves that run expedition entitlement
+PASS server prestige removes only owner entitlement while teammate expedition continues
+PASS server same-run reprint and reconnect cannot reinforce an active shared roster
+PASS server ten weak repeated wipe attempts restore every turret and earn no protected ore
+PASS server clear during yielding owner save queues and applies win after commit
+PASS server invalid and stale commands reject without modifying authoritative economy
+PASS server server LOS blocks combat attacks and telegraphed turret damage
+PASS server timed evade can move away from fixed telegraph without stat purchases
+PASS server joining during mining and reprint receives current snapshot without replayed rewards
+PASS server leave saves durable run and removes all server models and reservations
+PASS server large frame stall runs bounded movement steps rather than unlimited catchup
+PASS server failed runtime profile load spawns no replacement defaults and writes no profile
+PASS server speed modifiers do not reroll the permanent original hover phase
+PASS server geode replenishment consumes its full five-node budget without growing retry backlog
+PASS server resource placement rejects solid map obstruction without reserving node budget
+36 actual production server integration tests passed using API doubles; Roblox engine/network/rendering remain untested
+PASS all source Luau syntax checks
+PASS bundled server/client standalone lint with explicit any-typed Roblox host bindings (not API type validation)
+PASS binary deterministic build
+PASS binary all asset, hierarchy and other property chunks byte-identical
+PASS binary only new server and client entrypoints enabled, sources round-trip
+PASS binary unverified input rejected
+4 binary build tests passed
+PASS geometry original asset checksum
+PASS geometry exact seven original construct meshes and full authored editor history preserved in source
+PASS geometry original animation, crystal union, drone emitter and beam assets retained
+PASS geometry original map landmarks present for integration
+4 original-geometry structural tests passed; not Studio asset loading

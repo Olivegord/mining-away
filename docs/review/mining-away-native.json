@@ -1,0 +1,63 @@
+{
+  "map": {
+    "crystal": "UnionOperation",
+    "trees": 12,
+    "sky": "http://www.roblox.com/asset/?id=4495864450",
+    "previewRemoved": true,
+    "clock": "17:36:00",
+    "oldIslandArchived": true,
+    "baseplate": "rbxassetid://6372755229",
+    "archivedDisplay": 125
+  },
+  "universeId": 10774898335,
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "7f8578cff07c5fec1cc46645d262f7d275772b791735de21c9fcb12d7b4bb690",
+    "ReplicatedStorage.Shared.CrystalAudio": "dc47ebf29dd9062fd0e0980aa42e6ef2c2b20d1eaf26aab951d84a35a8028a74",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "58365c96fe4060b5caaa8cfe8cd492f604ed95fcd400090ce1bf7fa9c73402f7",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "c8f3c5833bd7c370d1871d70f17f96146dd677214926972578243baa84a324c1"
+  },
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "running": false,
+  "loadedVersion": 90,
+  "date": "2026-11-08",
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "d69a8b3eb7c1f577afa1d02bc940212d746b3b7bdb97e655cc8785ac80e909a0",
+  "baselineGit": "9b8520944afd4ee0a3de96aef8dc6b58b58d0187",
+  "artApply": {
+    "archiveBranches": 24,
+    "loweredDecorations": 0,
+    "place": 124078027733625,
+    "groveChildren": 12,
+    "supportSamples": 1040,
+    "universe": 10774898335,
+    "version": 90,
+    "displayParts": 125,
+    "pointsWithOverlays": 12,
+    "fields": 6,
+    "finish": 117
+  },
+  "assetCheck": {
+    "queryHits": 3,
+    "assets": 3
+  },
+  "reference": {
+    "name": "mining away",
+    "placeId": 14302916915,
+    "universeId": 4945273529,
+    "loadedVersion": 1229
+  },
+  "publication": {
+    "performed": false
+  },
+  "play": {
+    "starts": 0
+  }
+}

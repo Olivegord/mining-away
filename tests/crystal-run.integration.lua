@@ -1,0 +1,1445 @@
+-- Real command dispatch, movement/work, pickup ledger, and charge state with
+-- Roblox API doubles. Native fixture collision is verified separately in Edit.
+local cfIndex=CF.__index
+CF.__index=function(c,k)
+ if k=='RightVector' then return Vector3.new(math.cos(c.yaw),0,-math.sin(c.yaw)) end
+ return cfIndex(c,k)
+end
+local run=Instance.new('Folder');run.Name='CrystalRun';run.Parent=scene.map
+local zone=Instance.new('Folder');zone.Name='TestZone';zone.Parent=run
+local bed=World.part(zone,'Field',Vector3.new(0,5,-68),Vector3.new(68,1,48),Color3.new(1,1,1))
+scene.chargingStation=World.part(run,'ChargingStation',Vector3.new(0,5,-41),Vector3.new(4,1,4),Color3.new(1,1,1))
+local f={id=#patches+1,cfg={Key='Quartz',Value=1,SelectionOnly=true,AlwaysUnlocked=true,ReferenceCrystals=true,Hardness=1,Count=3,Ore=20,Turrets=0,Respawn=8},
+ part=bed,model=zone,center=bed.Position,color=Color3.new(1,0,0),resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+f.e.phase='Safe';patches[f.id]=f
+local pl=player(98700);players.PlayerAdded:Fire(pl)
+local p=profiles[pl.UserId];local d=p.drones[1]
+for i=2,#p.drones do p.drones[i].hp=0 end
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+local function rock(x,hp)
+ local r=makeResource(f,f.center+Vector3.new(x,0,0),'Crystal',hp,20,3,3)
+ r.readyAt=now
+ return r
+end
+local a,b,edge=rock(-10,175),rock(13,100),rock(29,100)
+local function pin(x)
+ command.OnServerEvent:Fire(pl,'PlaceSelector',{runId=data(p).run.id,fieldId=f.id,position=Vector3.new(x,5.5,-68)})
+end
+local function step(n)
+ for _=1,n do realTime+=C.Tick;now=realTime;droneStep(d,C.Tick) end
+end
+local function status(expected)
+ scene.publishSquareStatus(p)
+ local actual=pl:GetAttribute('MA_SelectorStatus')
+ assert(actual==expected,'selector status: expected '..tostring(expected)..', got '..tostring(actual))
+end
+pin(200);assert(not p.miningSquare,'out-of-range pin accepted')
+status(nil)
+pin(-34.5);assert(not p.miningSquare,'off-field point snapped back into the field')
+pin(-9.4);assert(p.miningSquare and p.miningSquare.center.X==-10 and p.miningSquare.half==15)
+assert(pl:GetAttribute('MA_SelectorStatus')=='Waiting','initial status must publish with the pin')
+status('Waiting')
+d.carrierId='carrier-test';status('NoMiners');d.carrierId=nil
+local pinned=p.miningSquare
+pin(-10.6);assert(p.miningSquare==pinned,'same grid cell restarted the order')
+step(1);assert(d.target==a);status('Moving')
+d.pos=Feel.mineGoal(a.position,1,false,a.fullSize,a.referenceCrystal)
+step(32);assert(d.mining,'worker never began its real cut')
+status('Working');assert(pl:GetAttribute('MA_SelectorWorking')==true)
+p.busy=true;status('Paused');assert(d.target==a);p.busy=false
+status('Working')
+local other=player(98701);players.PlayerAdded:Fire(other)
+local rival=profiles[other.UserId]
+other.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+command.OnServerEvent:Fire(other,'PlaceSelector',{runId=data(rival).run.id,fieldId=f.id,position=Vector3.new(-10,5.5,-68)})
+droneStep(rival.drones[1],C.Tick)
+assert(rival.miningSquare and not rival.drones[1].target,'overlapping selector stole another crew’s reservation')
+scene.publishSquareStatus(rival);assert(other:GetAttribute('MA_SelectorStatus')=='Claimed')
+players.PlayerRemoving:Fire(other)
+pin(13.3);assert(p.miningSquare.center.X==14)
+assert(pl:GetAttribute('MA_SelectorStatus')=='FinishingCut' and pl:GetAttribute('MA_SelectorWorking')==false)
+assert(pl:GetAttribute('MA_SelectorPrevious')==pinned.center and pl:GetAttribute('MA_SelectorPreviousWidth')==30)
+assert(pl:GetAttribute('MA_SelectorTransition')=='Finishing')
+step(1);assert(d.target==a,'moving the square interrupted a live cut')
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
+for _=1,600 do step(1);if a.paid then break end end
+assert(a.paid,'first committed target did not finish')
+local approachSteps=0
+while not d.target and approachSteps<30 do step(1);approachSteps+=1 end
+assert(d.target==b and not scene.committedWork(d))
+scene.publishSquareStatus(p)
+assert(pl:GetAttribute('MA_SelectorPrevious')==pinned.center and pl:GetAttribute('MA_SelectorTransition')=='Moving')
+step(80-approachSteps);assert(d.target==b,'the crew did not keep working at the moved square after the player left')
+assert(scene.rockInSquare(p.miningSquare,edge),'a center on the line counts')
+assert(not scene.rockInSquare(p.miningSquare,a))
+
+-- Mining regenerates health and restores its stage, with a single ore ledger.
+d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
+local previousWarm=d.warmAt;d.warmAt=now
+scene.publishSquareStatus(p)
+d.warmAt=previousWarm
+assert(pl:GetAttribute('MA_SelectorPrevious')==nil and pl:GetAttribute('MA_SelectorTransition')==nil)
+local originalSeed=seed;seed=Random.new(119)
+local outside=rock(29.5,100)
+seed=originalSeed
+assert(outside.position.X-outside.part.Size.X*.5<edge.position.X and not scene.rockInSquare(p.miningSquare,outside),
+ 'an overlapping body with its center outside must be excluded')
+local beforeOutside=outside.hp
+assert(not hitResource(d,outside,10,true,20,nil,'Aftershock') and outside.hp==beforeOutside)
+assert(not clusterEligible(d,p,outside,f) and clusterEligible(d,p,edge,f))
+local previousPosition=pl.Character:GetPivot()
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+local targetCtx=abilityContext(p,f.id,d)
+assert(targetCtx.target(outside.id,f.id)==nil and targetCtx.target(edge.id,f.id))
+pl.Character:PivotTo(previousPosition)
+outside.part:Destroy();resources[outside.id]=nil
+table.remove(f.resources,table.find(f.resources,outside))
+assert(hitResource(d,b,65,false));local paid=b.extractedOre;assert(paid==nil,'a crack duplicated the ordinary final cargo reward')
+release(d)
+local stage=b.stage
+for _=1,15 do now+=.23;scene.regrow(b,.23) end
+assert(b.hp==b.maxHP-10 and b.stage==0 and b.stage<stage and b.extractedOre==paid)
+step(15);assert(d.target==b)
+d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
+b.hardness=3
+assert(hitResource(d,b,65,false));assert(b.extractedOre==paid,'regrowth duplicated layer payout')
+
+-- A depleted worker drops the reservation, physically approaches the pad,
+-- charges there and resumes against the latest pin.
+d.battery=0
+step(1);assert(d.state=='ToCharge' and d.recharging and not d.target)
+assert(d.resumeResourceId==b.id and not next(b.slots),'the interrupted cut must remain available to other crews')
+status('Recharging')
+local beforeNudge=p.miningSquare
+pl.Character:PivotTo(CFrame.new(Vector3.new(13,8,-68)))
+pin(16)
+assert(p.miningSquare~=beforeNudge and p.miningSquare.center.X==16)
+local interruptedHP=b.hp
+now+=5;scene.regrow(b,.23)
+assert(b.hp==interruptedHP,'an overlapping pin healed the interrupted cut')
+assert(d.resumePin==p.miningSquare and d.resumeResourceId==b.id,'an overlapping pin lost the returning worker')
+local nearer=rock(4,100)
+nearer.lastPin=p.miningSquare;nearer.lastPinOwner=d.owner;nearer.hp=nearer.maxHP-15
+for _=1,1200 do step(1);if not d.recharging then break end end
+assert(not d.recharging and d.battery==d.stats.batteryCapacity,'failed to recharge at the pad')
+step(1);assert(d.target==b and d.squareJob==p.miningSquare,'charged worker picked a different unfinished cut')
+assert(d.state=='Travel' and travelSpeed(d)==d.stats.maxStep60*1.5,'return to the field lost the charger travel speed')
+local beforeTravelNudge=p.miningSquare
+pin(18)
+step(1)
+assert(p.miningSquare~=beforeTravelNudge and d.squareJob==p.miningSquare and d.target==b and b.slots[d.id],
+ 'an overlapping pin dropped the returning worker reservation')
+assert(travelSpeed(d)==d.stats.maxStep60*1.5,'an overlapping pin slowed the return flight')
+resources[nearer.id]=nil;nearer.part:Destroy()
+release(d);d.field=nil
+local profile=data(p)
+local full=Ca.capacity(profile)
+Pro.addCargo(profile,'Quartz',full,full)
+local oreBefore=pendingOre(p)
+step(30);local overflowTarget=assert(d.target,'full backpack prevented a new mining job')
+assert(d.squareJob==p.miningSquare)
+d.pos=committedStation(d,overflowTarget);d.velocity=Vector3.zero
+for _=1,100 do step(1);if d.mining then break end end
+assert(d.mining);status('BagFull')
+for _=1,600 do step(1);if overflowTarget.paid then break end end
+assert(overflowTarget.paid and pendingOre(p)>oreBefore,'mining a full bag did not leave collectible ore')
+assert(Pro.cargoUnits(profile)==10 and full==10)
+profile.run.stars=8
+local function star(id,tx)
+ command.OnServerEvent:Fire(pl,'BuyStarUpgrade',{runId=data(p).run.id,upgradeId=id,level=0,txId=tx})
+end
+star('autosell','remote')
+assert(Workshop.starLevel(data(p),'autosell')==0,'remote Star Shop purchase succeeded')
+pl.Character:PivotTo(CFrame.new(shopStations.Ruby.Position+Vector3.new(0,3,0)))
+star('autosell','autofull');star('walk','fast')
+assert(data(p).run.stars==0 and Workshop.starLevel(data(p),'autosell')==1)
+assert(pl.Character:FindFirstChildOfClass('Humanoid').WalkSpeed==18,'walk speed upgrade was not applied')
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+local earnings=data(p).run.quartzEarnings
+for _=1,4 do realTime+=.13;heartbeat:Fire(.13) end
+assert(Pro.cargoUnits(data(p))<full and data(p).run.quartzEarnings==earnings+full,'Auto Sell did not sell the full bag exactly once')
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
+command.OnServerEvent:Fire(pl,'Recall');step(1)
+assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
+assert(pl:GetAttribute('MA_Selector')==nil and pl:GetAttribute('MA_SelectorWorking')==nil)
+status(nil)
+print('PASS Crystal Run pin, handoff, reservations, recall, center boundary, committed work, regrowth, charging, full-bag mining and Star Shop effects')
+
+
+-- The production spawner uses the entire bed, including former lanes.
+f.cfg.Count,f.cfg.Ore,f.cfg.ContinuousCrystals=78,10,true
+bed.Size=Vector3.new(108,1,64)
+seedField(f)
+assert(#f.resources==78 and #f.respawnQueue==0)
+local outsideFormerPads,continuousDraws=0,0
+local ground=bed.Position.Y+bed.Size.Y*.5
+local minSize,maxSize=math.huge,0
+for i,r in ipairs(f.resources) do
+ local pos=bed.CFrame:PointToObjectSpace(r.position)
+ local radius=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true)
+ assert(math.abs(pos.X)+radius<54 and math.abs(pos.Z)+radius<32)
+ assert(math.abs(r.part.Position.Y-r.fullSize.Y*.5-ground+.06)<.001)
+ if math.abs(pos.Z)>15 then outsideFormerPads+=1 end
+ if pos.X%1~=0 or pos.Z%1~=0 then continuousDraws+=1 end
+ minSize=math.min(minSize,r.fullSize.Y);maxSize=math.max(maxSize,r.fullSize.Y)
+ if r.part:GetAttribute('SteadyCrystal') then
+  local first=Feel.groundedRockFrame(r.position,r.fullSize,ground,0,r.stageSeed,true,true,true)
+  local fractured=Feel.groundedRockFrame(r.position,r.fullSize*.6,ground,r.stageCount,r.stageSeed,true,true,true)
+  assert((first.LookVector-fractured.LookVector).Magnitude<.001,'a heavy crystal turned when its stage changed')
+ end
+ for j=1,i-1 do
+  local other=f.resources[j]
+  local otherRadius=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
+  local delta=r.position-other.position
+  assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=radius+otherRadius+ResourcePlacement.GAP)
+ end
+end
+assert(outsideFormerPads>=8 and continuousDraws==78 and maxSize/minSize>2)
+local crewPlayer=player(98702);players.PlayerAdded:Fire(crewPlayer)
+local crew=profiles[crewPlayer.UserId]
+crewPlayer.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+command.OnServerEvent:Fire(crewPlayer,'PlaceSelector',{runId=data(crew).run.id,fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+assert(#crew.drones==3 and crew.miningSquare.half*2==30)
+for _,r in ipairs(f.resources) do r.readyAt=now end
+local reserved={}
+for _,worker in ipairs(crew.drones) do
+ droneStep(worker,C.Tick)
+ assert(worker.target and scene.rockInSquare(crew.miningSquare,worker.target) and not reserved[worker.target])
+ reserved[worker.target]=true
+end
+players.PlayerRemoving:Fire(crewPlayer)
+local retired=f.resources[23]
+retired.paid=true
+local ok,_,plan=spawnResource(f,'Crystal',true)
+assert(ok and plan.field==f.id,'grower preview must use the field with a vacancy')
+local planted,_,replacement=spawnResource(f,'Crystal',false,plan)
+assert(planted and replacement.position.X==plan.spot.X and replacement.position.Z==plan.spot.Z and nodeUsage(f)==f.cfg.Count)
+replacement.readyAt=now
+assert(assignOre(p,d,replacement))
+p.miningSquare={field=f,center=Vector3.new(replacement.position.X,5.5,replacement.position.Z),half=7}
+d.squareJob=p.miningSquare;d.lingerUntil=nil
+d.pos=committedStation(d,replacement);d.velocity=Vector3.zero
+local tip=replacement.position.Y+replacement.fullSize.Y*.5
+local ground=replacement.part:GetAttribute('GroundY')
+assert(math.abs(d.pos.Y-math.max(tip+3.1,ground+6.94))<.001)
+local before=replacement.hp
+step(1);assert(d.state=='Warmup' and replacement.hp==before)
+snapshotDrone(d)
+local warmup=d.model:GetAttribute('WarmupDuration')
+assert(warmup==.8 and d.model:GetAttribute('WarmupStart')==d.warmAt)
+step(math.floor(.5/C.Tick));assert(d.state=='Warmup' and replacement.hp==before)
+step(math.ceil(.4/C.Tick));assert(d.mining and replacement.hp<before,'the charged laser did not start cutting')
+release(d)
+p.miningSquare={field=f,center=Vector3.new(0,5.5,-68),half=7}
+d.pos=Vector3.new(0,14.5,-68)
+assert(scene.holdSquare(d,p,C.Tick) and math.abs(d.intentGoal.Y-p.miningSquare.center.Y-7)<.001)
+print('PASS continuous field population, clearance, grower placement, mining and standby heights')
+
+do
+ local refillZone=Instance.new('Folder');refillZone.Name='RefillTest';refillZone.Parent=run
+ local surface=World.part(refillZone,'Field',Vector3.new(0,3.74,158),Vector3.new(108,.6,64),f.color)
+ local field={id=#patches+1,cfg=table.clone(f.cfg),part=surface,model=refillZone,center=surface.Position,color=f.color,
+  resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.cfg.Count=1;field.e.phase='Safe';patches[field.id]=field
+ local refillDelay=C.MinimumRockRespawn+field.cfg.Respawn
+ local tester=player(98689);players.PlayerAdded:Fire(tester)
+ local team=profiles[tester.UserId]
+ local worker=team.drones[1]
+ for i=2,#team.drones do team.drones[i].hp=0 end
+ local previousStart,previousCounter=scene.runStart,scene.packStation
+ scene.runStart=surface.Position
+ scene.packStation=World.part(refillZone,'PackStation',Vector3.new(-38,5.5,32),Vector3.new(4,1,4),f.color)
+ local pinCenter=Vector3.new(0,4.04,180)
+ local function advance(seconds)
+  for _=1,math.floor(seconds/C.Tick+.5) do realTime+=C.Tick;heartbeat:Fire(C.Tick) end
+ end
+ local function breakRockAt(x)
+  local mineral=Mining.fieldCrystal(100,1,10,3)
+  local old=makeResource(field,Vector3.new(x,surface.Position.Y,180),'Crystal',mineral.work+10,mineral.ore,mineral.size,mineral.stages)
+  old.readyAt=now
+  assert(assignOre(team,worker,old));worker.squareJob=team.miningSquare;worker.pos=committedStation(worker,old)
+  assert(hitResource(worker,old,1000) and old.paid)
+  assert(old.part:GetAttribute('CrystalSplitAt')==now,'large crystals must split on the finishing hit clock')
+  local cargo=pickups[pickupSerial]
+  assert(cargo.nodeId==old.id and cargo.units==1 and cargo.value==mineral.ore)
+  assert(cargo.part.Material==Enum.Material.SmoothPlastic and cargo.part.Size.X>2 and cargo.part.Reflectance==Workshop.RAW_CRYSTAL_REFLECTANCE,
+   'raw reward lost its larger polished finish')
+  assert(cargo.part.Color.R>.75 and cargo.part.Color.R>cargo.part.Color.G*4,'raw reward lost its red color')
+  assert(old.part.Size.Y>old.fullSize.Y*Feel.crystalStageShape(old.stage,old.stageCount).Y+.999,
+   'the finishing hit failed to use the taller last stage')
+  assert(math.abs(cargo.launchAt-old.splitAt-OreDrops.REWARD_DELAY)<.001)
+ end
+ local function pin()
+  tester.Character:PivotTo(CFrame.new(pinCenter+Vector3.yAxis*3))
+  command.OnServerEvent:Fire(tester,'PlaceSelector',{runId=data(team).run.id,fieldId=field.id,position=pinCenter})
+ end
+ local function breakLastRock()
+  pin();breakRockAt(0)
+  assert(#field.respawnQueue==1 and nodeUsage(field)==0)
+ end
+ local function refillWithCenteredDraw()
+  local original=seed
+  seed={NextInteger=function(_,a,b) return math.floor((a+b)/2) end,NextNumber=function(_,a,b) return a and b and (a+b)/2 or .5 end}
+  advance(.5)
+  seed=original
+  assert(nodeUsage(field)==1 and #field.respawnQueue==0,'one vacancy must produce one replacement')
+  return field.resources[1]
+ end
+ breakLastRock()
+ local square=team.miningSquare
+ assert(scene.idleSquareStatus(team,square)=='Refilling')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(0,8,65)))
+ advance(.15)
+ assert(team.miningSquare==square,'the walk along the return lane dropped the pin')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(-38,8,32)))
+ local cargo=Workshop.cargoKey('Quartz',10)
+ local soldBefore=data(team).run.quartzEarnings
+ Pro.addCargo(data(team),cargo,1,Ca.capacity(data(team)))
+ command.OnServerEvent:Fire(tester,'Sell')
+ assert(data(team).run.quartzEarnings==soldBefore+10 and Pro.cargoUnits(data(team))==0,'the test depot sale did not complete')
+ advance(refillDelay-.35)
+ assert(nodeUsage(field)==0,'a pinned vacancy grew before the normal delay')
+ local replacement=refillWithCenteredDraw()
+ assert(scene.rockInSquare(square,replacement),
+  'replacement left the depleted mining pin')
+ assert(replacement.readyAt-replacement.spawnAt==2 and not next(replacement.slots) and scene.idleSquareStatus(team,square)=='Growing')
+ advance(2.25)
+ local returning
+ for _,drone in ipairs(team.drones) do if drone.target==replacement then returning=drone;break end end
+ assert(returning,'the crew did not resume from the same pin while the owner was at the depot')
+ tester.Character:PivotTo(CFrame.new(Vector3.new(120,8,32)))
+ advance(.15)
+ assert(not team.miningSquare and not returning.target,'going away from the depot route must still recall the crew')
+ release(worker);resources[replacement.id]=nil;replacement.part:Destroy();field.resources={}
+ breakLastRock()
+ command.OnServerEvent:Fire(tester,'Recall')
+ advance(refillDelay-.2)
+ local ordinary=refillWithCenteredDraw()
+ assert(not team.miningSquare and ordinary.position.Z==surface.Position.Z,'recall kept a cancelled preference')
+ resources[ordinary.id]=nil;ordinary.part:Destroy();field.resources={}
+ breakLastRock()
+ advance(refillDelay-.2)
+ local raycast=workspace.Raycast
+ function workspace:Raycast(origin,direction,params)
+  if direction.Y<-10 and origin.Z>162 and table.find(params.FilterDescendantsInstances,refillZone) then return {Instance=surface} end
+  return raycast(self,origin,direction,params)
+ end
+ local fallback=refillWithCenteredDraw()
+ workspace.Raycast=raycast
+ assert(fallback.position.Z==surface.Position.Z and not scene.rockInSquare(square,fallback),
+  'blocked local growth must still refill the wider field')
+ print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after a %d-second cooldown',replacement.position.Z,ordinary.position.Z,refillDelay))
+
+ resources[fallback.id]=nil;fallback.part:Destroy();field.resources={}
+ field.cfg.Count=3
+ pin();breakRockAt(-6);breakRockAt(0);breakRockAt(6)
+ assert(#field.respawnQueue==3 and nodeUsage(field)==0)
+ advance(refillDelay-.3)
+ assert(nodeUsage(field)==0,'a second replacement shortened the refill cooldown')
+ local originalSeed=seed;seed=Random.new(828)
+ advance(.55)
+ seed=originalSeed
+ local inside={}
+ for _,rock in ipairs(field.resources) do
+  if not rock.paid and scene.rockInSquare(team.miningSquare,rock) then table.insert(inside,rock) end
+ end
+ assert(nodeUsage(field)==3 and #field.respawnQueue==0 and #inside==2,'the cleared pin should regrow two of the three replacements')
+ for _,rock in ipairs(inside) do
+  assert(rock.readyAt==rock.spawnAt+2 and not next(rock.slots))
+ end
+ advance(2.1)
+ local firstWorker,secondWorker=next(inside[1].slots),next(inside[2].slots)
+ assert(firstWorker and secondWorker and firstWorker~=secondWorker,'the two replacements did not give the returning miners separate cuts')
+ print('PASS a cleared Quartz pin grows two local replacements on the original schedule, leaving the third for the wider field')
+ scene.runStart,scene.packStation=previousStart,previousCounter
+ players.PlayerRemoving:Fire(tester)
+ for _,rock in ipairs(field.resources) do resources[rock.id]=nil end
+ refillZone:Destroy();patches[field.id]=nil
+end
+
+do
+ local deep=table.clone(f)
+ deep.cfg=table.clone(f.cfg)
+ deep.cfg.Key='Ruby';deep.cfg.Material='RunRuby';deep.cfg.Hardness=3;deep.cfg.Value=4
+ deep.resources={}
+ seedField(deep)
+ assert(#deep.resources==deep.cfg.Count,'deep field failed to fill at mixed crystal sizes')
+ local low,high=math.huge,0
+ for i,r in ipairs(deep.resources) do
+  local base=r.part:GetAttribute('GroundY')
+  assert(math.abs(base-(deep.part.Position.Y+deep.part.Size.Y*.5))<.001)
+  assert(r.part:GetAttribute('OreValue')==r.ore*deep.cfg.Value)
+  low=math.min(low,r.ore);high=math.max(high,r.ore)
+  for j=1,i-1 do
+   local other=deep.resources[j]
+   local a=ResourcePlacement.radius(r.fullSize.X,r.fullSize.Y,r.fullSize.Z,r.kind,true)
+   local b=ResourcePlacement.radius(other.fullSize.X,other.fullSize.Y,other.fullSize.Z,other.kind,true)
+   local delta=r.position-other.position
+   assert(Vector3.new(delta.X,0,delta.Z).Magnitude>=a+b,'deep deposits overlapped their turn clearance')
+   local sizeOrder=r.fullSize.Y-other.fullSize.Y
+   assert((r.hp-other.hp)*sizeOrder>=0 and (r.stageCount-other.stageCount)*sizeOrder>=0,
+    'size did not predict work and fractures')
+  end
+  resources[r.id]=nil;r.part:Destroy()
+ end
+ assert(low<=8 and high>=14,'deep field never offered both short and rich cuts')
+ print('PASS deep fields expose work and sale value through planted crystal size and keep separate turn clearance')
+end
+
+-- Earn a first pack at the Workshop, then exercise all three actual choices.
+local shopper=player(98703);players.PlayerAdded:Fire(shopper)
+scene.runStart=f.center
+local buyer=profiles[shopper.UserId];scene.syncRuntimeFleet(buyer)
+local miner=buyer.drones[1]
+local function moveBuyer(position)
+ shopper.Character:PivotTo(CFrame.new(position+Vector3.new(0,3,0)))
+end
+local function input(action,tx,fields)
+ buyer.tokens=7;buyer.bucketAt=now
+ local payload=fields or {};payload.txId=tx;payload.runId=data(buyer).run.id
+ command.OnServerEvent:Fire(shopper,action,payload)
+end
+Pro.addCargo(data(buyer),Workshop.cargoKey('Quartz',10),2,10)
+moveBuyer(f.center);input('Sell','remote')
+assert(Pro.cargoUnits(data(buyer))==2 and data(buyer).run.wallet.Quartz==0,'sale worked away from the depot')
+moveBuyer(shopStations.Quartz.Position);input('Sell','sale')
+assert(Pro.cargoUnits(data(buyer))==0 and data(buyer).run.wallet.Quartz==20 and data(buyer).run.quartzEarnings==20)
+moveBuyer(scene.packStation.Position)
+input('BuyPack','first',{packIndex=0})
+local first=assert(data(buyer).run.pendingOffer)
+assert(first.packTier==2 and data(buyer).run.wallet.Quartz==0)
+for i,id in ipairs(Workshop.FIRST_PACK) do assert(first.choices[i].cardId==id and #first.choices[i].preview>0) end
+local resumed=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+assert(resumed.run.pendingOffer.id==first.id and resumed.run.pendingOffer.choices[1].cardId=='Q_DOUBLE_BEAM')
+assert(not resumed.run.pendingOffer.choices[1].targetDroneId,'paid offer preassigned the part')
+local delivery=assert(buyer.packDelivery)
+realTime+=Packs.DeliveryTime+.1;now=realTime;packDelivery:step(buyer,now);moveBuyer(delivery.part.Position)
+delivery.prompt.PromptButtonHoldBegan:Fire(shopper)
+realTime+=delivery.prompt.HoldDuration;now=realTime;packDelivery:step(buyer,now)
+delivery.prompt.Triggered:Fire(shopper)
+local opened=Pro.clone(data(buyer));assert(opened.run.pendingOffer.opened)
+local otherMiner=buyer.drones[2]
+local baselineDPS=miner.stats.miningDPS
+moveBuyer(scene.packStation.Position)
+input('ChooseCard','no-target',{offerId=first.id,index=1})
+input('ChooseCard','foreign-target',{offerId=first.id,index=1,targetDroneId='98700:drone:1'})
+assert(data(buyer).run.pendingOffer and data(buyer).run.stars==0,'invalid fit consumed a paid pack')
+input('ChooseCard','first-choice',{offerId=first.id,index=1,targetDroneId=miner.id})
+local installed=data(buyer).run.cards[1]
+assert(data(buyer).run.stars==2 and #data(buyer).run.cards==1 and installed.targetDroneId==miner.id)
+assert(miner.stats.doubleBeam==1 and miner.stats.miningDPS==2*baselineDPS and otherMiner.stats.doubleBeam==0)
+local saved=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+assert(saved.run.cards[1].targetDroneId==miner.id)
+input('ChooseCard','first-choice',{offerId=first.id,index=1,targetDroneId=otherMiner.id})
+assert(#data(buyer).run.cards==1 and data(buyer).run.stars==2 and otherMiner.stats.doubleBeam==0)
+snapshotDrone(miner);snapshotDrone(otherMiner)
+assert(miner.model:GetAttribute('DoubleBeam')==true and otherMiner.model:GetAttribute('DoubleBeam')==false)
+
+local function isolate()
+ release(miner)
+ for _,r in ipairs(f.resources) do r.paid=true;r.hp=0 end
+end
+local function fitLegacyPart(id)
+ local copy=Pro.clone(opened)
+ copy.run.pendingOffer.choices[2]=Workshop.card(Workshop.BY_ID[id],2,0)
+ assert(Pro.validate(copy,shopper.UserId))
+ assert(Ca.select(copy,first.id,2,'test-variant-'..id,copy.run.id,{atDepot=true,targetDroneId=miner.id}))
+ buyer.session.data=copy;refreshStats(buyer)
+end
+local function hit(r,amount)
+ assert(assignOre(buyer,miner,r));miner.pos=committedStation(miner,r)
+ assert(hitResource(miner,r,amount))
+end
+local function timedCut()
+ isolate()
+ local rock=rock(0,1000)
+ assert(assignOre(buyer,miner,rock));miner.pos=committedStation(miner,rock);miner.velocity=Vector3.zero
+ mineDrone(miner,buyer,f,C.Tick)
+ miner.warmAt=now-10
+ local hp=rock.hp
+ for _=1,20 do realTime+=C.Tick;now=realTime;mineDrone(miner,buyer,f,C.Tick) end
+ return hp-rock.hp
+end
+local doubleDamage=timedCut()
+buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+local singleDamage=timedCut()
+assert(singleDamage>0 and math.abs(doubleDamage-2*singleDamage)<1e-8,'production laser ticks did not deal 2× damage')
+fitLegacyPart('Q_TURBO_ROTOR');snapshotDrone(miner)
+assert(travelSpeed(miner)==2*miner.owned.base.maxStep60 and miner.model:GetAttribute('TwinThrusters')==true)
+assert(not miner.model:GetAttribute('DoubleBeam') and otherMiner.stats.twinThrusters==0)
+fitLegacyPart('Q_ORE_DUPLICATOR');snapshotDrone(miner);isolate()
+local oreBefore=pendingOre(buyer)
+local rich=rock(0,100)
+hit(rich,40)
+miner.state='Mine';miner.mining=true;miner.beamSince=now-.8
+assert(hitResource(miner,rich,200))
+snapshotDrone(miner)
+assert(miner.target==nil and next(rich.slots)==nil and miner.model:GetAttribute('MineBreakPrimaryId')==rich.id
+ and miner.model:GetAttribute('MineBreakUntil')>rich.part:GetAttribute('CrystalSplitAt')+.10,
+ 'a plain cutter stopped drawing before the impact pause ended')
+assert(miner.model:GetAttribute('OreDuplicator')==true and otherMiner.stats.oreDuplicator==0)
+assert(pendingOre(buyer)-oreBefore==1,'one crystal created more than one reward object')
+local reward=assert(pickups[pickupSerial])
+assert(reward.value==2*rich.ore and reward.units==1 and rich.part:GetAttribute('CrystalBreakAt')==now,
+ 'double value and immediate break receipt must accompany one cargo')
+
+moveBuyer(f.center)
+input('PlaceSelector','pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+assert(buyer.miningSquare)
+moveBuyer(f.center+Vector3.new(80,0,0));recallFromField(buyer)
+assert(buyer.miningSquare,'nearby selling trip lost the pin')
+moveBuyer(f.center+Vector3.new(101,0,0));recallFromField(buyer)
+assert(not buyer.miningSquare and not miner.target and miner.state=='Follow','distant player did not get the crew back')
+
+moveBuyer(f.center)
+input('PlaceSelector','charger-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_FIELD_CHARGE,3))
+publish(buyer)
+miner.battery=0
+droneStep(miner,C.Tick)
+assert(miner.recharging and (miner.intentGoal-buyer.miningSquare.center).Magnitude<10,'Field Charger still sent the drone to the depot')
+miner.pos=miner.intentGoal;droneStep(miner,C.Tick)
+assert(miner.battery>0 and miner.state=='Charging' and miner.chargeSite=='Field')
+print('PASS paid hardware draft, durable miner target, exact double primary damage/flight limit/ore, field charging and distance recall')
+
+moveBuyer(shopStations.Ruby.Position)
+input('BuyStarUpgrade','hire-vacuum',{upgradeId='vacuum',level=0})
+input('BuyStarUpgrade','hire-planter',{upgradeId='cultivator',level=0})
+assert(data(buyer).run.stars==2 and not buyer.vacuum and #buyer.drones==5)
+data(buyer).run.starUpgrades.vacuum=1;data(buyer).run.starUpgrades.cultivator=1
+buyer.session.data=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+scene.syncRuntimeFleet(buyer)
+local planter=buyer.drones[7]
+assert(planter.role=='Dart' and buyer.vacuum and #data(buyer).fleet==3 and Pro.validate(data(buyer),shopper.UserId))
+moveBuyer(f.center)
+local count,queued=nodeUsage(f),#f.respawnQueue
+ local vacancy=assert(f.respawnQueue[1])
+ vacancy.regrowAt=now+C.MinimumRockRespawn
+ growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+ assert(not planter.growPlan and nodeUsage(f)==count,'planter bypassed the minimum cooldown')
+ realTime=vacancy.regrowAt;now=realTime
+growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+assert(planter.growPlan and planter.growPlan.field==f.id,'planter picked another field')
+planter.pos=planter.intentGoal
+for _=1,100 do
+ realTime+=C.Tick;now=realTime;growerDrone(planter,buyer,characterRoot(buyer),C.Tick)
+ if nodeUsage(f)>count then break end
+end
+assert(nodeUsage(f)==count+1 and #f.respawnQueue==queued-1,'planter did not consume one actual vacancy')
+print('PASS Star purchases cannot grant drones; saved legacy automation still works')
+
+inStudio=true
+function runService:IsStudio() return true end
+local tester=player(98704);players.PlayerAdded:Fire(tester)
+local testCrew=profiles[tester.UserId]
+tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
+assert(#testCrew.drones==9 and #data(testCrew).fleet==7 and Ca.capacity(data(testCrew),previewPerks(testCrew))==10)
+local starterActors={}
+for _,actor in ipairs(testCrew.drones) do starterActors[actor.role]=actor end
+for _,role in ipairs(Workshop.STARTER_SPECIALISTS) do assert(starterActors[role],'missing starter role '..role) end
+local saved=assert(Pro.migrate(Pro.clone(data(testCrew)),tester.UserId))
+assert(#saved.fleet==7 and Workshop.hasCompactor(saved) and not testCrew.testFleet)
+saved.run.quartzEarnings=360
+local choice=Pro.prestigePreview(saved).droneChoices[1]
+assert(Pro.prestige(saved,'mixed-starter-prestige',saved.run.id,{confirmed=true,atDepot=true,droneType=choice.kind}))
+assert(#saved.fleet==8 and Pro.validate(saved,tester.UserId))
+for i,role in ipairs({'Needler','Ballcaster'}) do
+ local actor=starterActors[role];local target=rock(i*4,150)
+ if i==1 then target.hp=10;target.stage=3;target.part:SetAttribute('HP',20);target.part:SetAttribute('Stage',3) end
+ assert(assignOre(testCrew,actor,target))
+ local station=committedStation(actor,target)
+ local offset=station-target.position
+ assert(math.abs(Vector3.new(offset.X,0,offset.Z).Magnitude-9)<.001,'projectile was not aimed from the side')
+ actor.pos=station
+ local before,serial=target.hp,pickupSerial
+ for _=1,50 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  if actor.specialJob then break end
+ end
+ assert(actor.specialJob and actor.specialJob.projectile and target.hp==before,'shot damaged before it traveled')
+ local job=actor.specialJob
+ local receipt=job.projectile
+ actor.battery=.01
+ for _=1,60 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  assert(not actor.recharging,'battery cutoff cancelled a launched shot')
+  if target.hp<before then break end
+ end
+ assert(target.hp<before and actor.battery==0,'projectile failed to apply authoritative work on its last charge')
+ assert(target.part:GetAttribute('CutIsShot') and target.part:GetAttribute('CutContactAt')==now)
+ assert(receipt.Parent and receipt:GetAttribute('ContactAt')==now)
+ if i==1 then assert(target.paid and pickupSerial==serial+1 and pickups[pickupSerial].nodeId==target.id) end
+ local hp=target.hp
+ for _=1,120 do
+  realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+  if actor.recharging then break end
+ end
+ assert(actor.recharging and target.hp==hp and not actor.specialJob and target.specialSerial==job.serial,'the depleted worker must charge before a second shot')
+ release(actor);actor.recharging=nil;actor.battery=actor.stats.batteryCapacity
+end
+do
+ local shooter=starterActors.Needler
+ local target=rock(-5,1000)
+ local function aim()
+  assert(assignOre(testCrew,shooter,target))
+  shooter.pos=committedStation(shooter,target);shooter.velocity=Vector3.zero
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+ end
+ aim()
+ assert(shooter.warmAt and not shooter.specialJob)
+ shooter.battery=.01
+ realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+ assert(shooter.recharging and not shooter.specialJob and target.hp==990,'empty warmup launched a free shot')
+ release(shooter);shooter.recharging=nil;shooter.battery=shooter.stats.batteryCapacity
+ aim()
+ for _=1,80 do
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+  if shooter.specialJob then break end
+ end
+ local receipt=assert(shooter.specialJob).projectile
+ shooter.battery=.01
+ local raycast=workspace.Raycast
+ workspace.Raycast=function() return {Instance=bed} end
+ for _=1,80 do
+  realTime+=C.Tick;now=realTime;droneStep(shooter,C.Tick)
+  if shooter.recharging then break end
+ end
+ workspace.Raycast=raycast
+ assert(shooter.recharging and not receipt.Parent and not receipt:GetAttribute('ContactAt') and target.hp==990,'an obstructed final shot paid work')
+ release(shooter);shooter.recharging=nil;shooter.battery=shooter.stats.batteryCapacity
+ print('PASS final Needler and Ballcaster shots resolve once before charging, while a blocked shot and depleted warmup pay nothing')
+end
+do
+ local breaker=spawnDrone(testCrew,{id=tester.UserId..':fixture:breaker',name='Breaker',role='Charger',type='Red',
+  base=Pro.clone(RoleConfig.StudioRoles.Charger.base)},#testCrew.drones+1)
+ local target=rock(-7,1100)
+ assert(assignOre(testCrew,breaker,target))
+ breaker.pos=committedStation(breaker,target)+Vector3.yAxis*2;breaker.velocity=Vector3.zero
+ for _=1,math.ceil((breaker.stats.warmup+2)/C.Tick) do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if breaker.breaker and breaker.breaker.phase=='Dive' then break end
+ end
+ assert(breaker.breaker and breaker.breaker.phase=='Dive')
+ breaker.battery=.01
+ local hp=target.hp
+ for _=1,140 do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if (breaker.impactSerial or 0)>0 then break end
+ end
+ assert(breaker.battery==0 and not breaker.recharging and breaker.breaker.phase=='Recover' and target.hp<hp)
+ assert(breaker.impactSerial==1 and now-breaker.contactAt>=DroneRoles.BREAKER.impactHold)
+ hp=target.hp
+ for _=1,140 do
+  realTime+=C.Tick;now=realTime;droneStep(breaker,C.Tick)
+  if breaker.recharging then break end
+ end
+ assert(breaker.recharging and not breaker.breaker and target.hp==hp and breaker.impactSerial==1)
+ release(breaker);breaker.model:Destroy();drones[breaker.id]=nil;table.remove(testCrew.drones)
+ print('PASS a depleted Breaker finishes its dive, contact hold and recovery before charging')
+end
+do
+ local deep=table.clone(f)
+ deep.id=#patches+1;deep.cfg=table.clone(f.cfg);deep.cfg.Hardness=9
+ deep.resources={};deep.respawnQueue={};patches[deep.id]=deep
+ local small=makeResource(deep,f.center+Vector3.new(-6,0,0),'Crystal',400,8,2.3,3)
+ local large=makeResource(deep,f.center+Vector3.new(6,0,0),'Crystal',910,15,3.7,3)
+ small.readyAt=now;large.readyAt=now
+ small.hp=90;small.stage=3
+ local pin={field=deep,center=f.center,half=15}
+ local needler,ballcaster=starterActors.Needler,starterActors.Ballcaster
+ needler.pos=f.center;ballcaster.pos=f.center
+ assert(chooseResource(needler,deep,pin)==small,'Needler did not pick the quick finish')
+ release(needler)
+ assert(chooseResource(ballcaster,deep,pin)==large,'Ballcaster did not pick the thick shell')
+ ballcaster.field=deep.id
+ local station=committedStation(ballcaster,large)
+ assert(station.X<large.position.X,'Ballcaster flew past the rock for its opening shot')
+ ballcaster.pos=station;ballcaster.velocity=Vector3.zero
+ local base=DroneCatalog.cycle('Ballcaster',ballcaster.owned.base.miningDPS,ballcaster.stats.miningDPS).damage
+ local function shot()
+  local before=large.hp
+  for _=1,120 do
+   realTime+=C.Tick;now=realTime;droneStep(ballcaster,C.Tick)
+   if large.hp<before then return before-large.hp end
+  end
+  error('Ballcaster missed a committed deep shot')
+ end
+ assert(math.abs(shot()-base*1.5)<1e-6,'a landed ball did not gain its shell damage')
+ for _=1,12 do if large.stage<2 then shot() else break end end
+ assert(large.stage==2 and math.abs(shot()-base)<1e-6,'the shell bonus stayed on an exposed core')
+ release(ballcaster);ballcaster.field=nil
+ local cut=makeResource(deep,f.center,'Crystal',1000,40,4,3)
+ cut.readyAt=now;cut.stage=2;cut.hp=cut.maxHP*.25
+ local function dart(render)
+  assert(assignOre(testCrew,needler,cut));needler.field=deep.id
+  needler.pos=committedStation(needler,cut);needler.velocity=Vector3.zero
+  local old=RoleEffects.Projectile
+  if not render then RoleEffects.Projectile=function() return nil end end
+  for _=1,60 do
+   realTime+=C.Tick;now=realTime;droneStep(needler,C.Tick)
+   if needler.specialJob then break end
+  end
+  RoleEffects.Projectile=old
+  local job=assert(needler.specialJob)
+  local before=cut.hp;local size=cut.part.Size
+  local hitPoint=cut.part.Position+Vector3.xAxis*size.X*.5
+  local ray=workspace.Raycast
+  workspace.Raycast=function(_,origin,delta,params)
+   if params and params.FilterType==Enum.RaycastFilterType.Include then
+    assert(cut.part.Size==size,'contact ray sampled the already fractured shell')
+    return {Instance=cut.part,Position=hitPoint,Normal=Vector3.xAxis}
+   end
+   return ray(workspace,origin,delta,params)
+  end
+  for _=1,60 do
+   realTime+=C.Tick;now=realTime;droneStep(needler,C.Tick)
+   if cut.hp<before then break end
+  end
+  workspace.Raycast=ray
+  assert(math.abs(before-cut.hp-job.damage*1.25)<1e-6,'exposed-core bonus depended on cosmetic receipt capacity')
+  if render then
+   assert(cut.stage==3 and job.projectile:GetAttribute('ContactFracture') and job.projectile:GetAttribute('ContactPowered'))
+   assert((job.projectile:GetAttribute('ContactPoint')-hitPoint).Magnitude<1e-6,'projectile did not confirm the pre-fracture contact')
+  else
+   assert(not job.projectile and cut.part:GetAttribute('CutProjectileFX')==false)
+  end
+  release(needler);needler.field=nil
+ end
+ dart(true);dart(false)
+ for _,r in ipairs(deep.resources) do resources[r.id]=nil;r.part:Destroy() end
+ patches[deep.id]=nil
+ print('PASS gun drones pick different deep targets, hit the original surface, and keep real layer bonuses when FX receipts are full')
+end
+for id,drop in pairs(pickups) do
+ if drop.owner==tester.UserId then drop.part:Destroy();pickups[id]=nil end
+end
+do
+ local square={field=f,center=f.center,half=15}
+ testCrew.miningSquare=square
+ local position=f.center+Vector3.new(0,.7,0)
+ local part=World.part(pickupFolder,'PackedOreForPickup',position,Vector3.one,Color3.new(1,1,1))
+ pickups[-2]={part=part,owner=tester.UserId,runId=data(testCrew).run.id,material=Workshop.cargoKey('Quartz',20,true),
+  units=1,raw=true,compacted=true,fieldPart=bed,spawnAt=now,age=1,x=position.X,y=position.Y,z=position.Z,
+  vx=0,vy=0,vz=0,floor=position.Y,landed=true,firstLandedAge=.65}
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(68,2,0)))
+ pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
+ assert(tester:GetAttribute('MA_SelectorStatus')=='LooseOre' and not testCrew.vacuumTarget)
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(11,2,0)))
+ pickupStep(C.Tick);assert(not pickups[-2].homing and not testCrew.vacuumTarget)
+ tester.Character:PivotTo(CFrame.new(position+Vector3.new(3,2,0)))
+ pickupStep(C.Tick);scene.publishSquareStatus(testCrew)
+ assert(pickups[-2].homing and not testCrew.vacuumTarget,'Vacuum intercepted ore already on its way to the bag')
+ assert(tester:GetAttribute('MA_SelectorStatus')~='LooseOre','pickup hint survived after the player reached the ore')
+ part:Destroy();pickups[-2]=nil
+ scene.clearSquare(testCrew)
+ tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(0,3,0)))
+ print('PASS settled cargo beyond the Vacuum prompts a walk; reachable ore goes straight to the backpack')
+end
+Workshop.VACUUM_ENABLED=true -- Exercise the retained relay separately from the disabled runtime default.
+local dropPosition=characterRoot(testCrew).Position+Vector3.new(40,-2,0)
+local dropPart=World.part(pickupFolder,'VacuumTest',dropPosition,Vector3.one,Color3.new(1,1,1))
+pickups[-1]={part=dropPart,owner=tester.UserId,runId=data(testCrew).run.id,material='Quartz',units=2,spawnAt=now,age=1,
+ x=dropPosition.X,y=dropPosition.Y,z=dropPosition.Z,vx=0,vy=0,vz=0,floor=dropPosition.Y,landed=true}
+pickupStep(C.Tick)
+assert(testCrew.vacuumTarget and testCrew.vacuumTarget.id==-1 and not pickups[-1].homing)
+testCrew.vacuum.pos=testCrew.vacuumTarget.position
+local relayed=false
+for _=1,200 do
+ realTime+=C.Tick;now=realTime;pickupStep(C.Tick)
+ if not pickups[-1] then break end
+ if pickups[-1].relayUntil then relayed=true end
+end
+assert(relayed and not pickups[-1] and Pro.cargoUnits(data(testCrew))==2,string.format('vacuum relay=%s, drop=%s, backpack=%d',tostring(relayed),tostring(pickups[-1]),Pro.cargoUnits(data(testCrew))))
+assert(Pro.validate(data(testCrew),tester.UserId))
+print('PASS curated starter fleet, stable prestige ownership, projectile flight and vacuum relay')
+
+do
+ local previousPosition=characterRoot(testCrew).Position
+ local previousCargo=Pro.clone(data(testCrew).run.cargo)
+ local at=f.center+Vector3.new(0,.72,0)
+ local wall=World.part(zone,'OreBank',at+Vector3.new(5,2,0),Vector3.new(1,4,8),f.color)
+ local raycast=workspace.Raycast
+ local height=5
+ function workspace:Raycast(from,direction,params)
+  if math.abs(direction.X)>1e-6 then
+   local t=(at.X+5-from.X)/direction.X
+   if t>0 and t<1 and from.Y+direction.Y*t<at.Y+height then return {Instance=wall} end
+  end
+  return raycast(self,from,direction,params)
+ end
+ local function spawnCargo(id)
+  local part=World.part(pickupFolder,'OreByBank',at,Vector3.one,f.color)
+  local drop={part=part,owner=tester.UserId,runId=data(testCrew).run.id,material=Workshop.cargoKey('Quartz',10),
+   units=1,raw=true,tierMaterial='Quartz',value=10,fieldPart=bed,spawnAt=now,age=1,x=at.X,y=at.Y,z=at.Z,
+   vx=0,vy=0,vz=0,floor=at.Y,landed=true,firstLandedAge=.65}
+  pickups[id]=drop;return drop
+ end
+ local function tick()
+  realTime+=C.Tick;now=realTime;pickupStep(C.Tick);droneStep(testCrew.vacuum,C.Tick)
+ end
+ testCrew.miningSquare={field=f,center=f.center,half=15}
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(22,3,0)))
+ testCrew.vacuum.pos=at+Vector3.yAxis*3.2;testCrew.vacuum.velocity=Vector3.zero
+ local units=Pro.cargoUnits(data(testCrew))
+ local low=spawnCargo(-2)
+ for _=1,math.ceil(4/C.Tick) do tick();if not pickups[-2] then break end end
+ assert(low.relayUntil and not pickups[-2] and Pro.cargoUnits(data(testCrew))==units+1,'Vacuum failed to lift cargo over the low bank')
+ assert(low.y>at.Y+2,'the relay did not lift the ore')
+ height=20
+ local high=spawnCargo(-3)
+ tick();scene.publishSquareStatus(testCrew)
+ assert(not testCrew.vacuumTarget and not high.relayUntil and tester:GetAttribute('MA_SelectorStatus')=='LooseOre',
+  'the Vacuum started a relay with no clear path')
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(-2,3,0)))
+ for _=1,math.ceil(1/C.Tick) do tick();if not pickups[-3] then break end end
+ assert(not pickups[-3] and not high.relayUntil and Pro.cargoUnits(data(testCrew))==units+2)
+ workspace.Raycast=raycast;wall:Destroy()
+ print('PASS Vacuum lifts ore over a low bank, leaves a blocked path alone and allows direct pickup from the clear side')
+
+ local walking=spawnCargo(-4)
+ local spare=spawnCargo(-5)
+ spare.x=at.X+10;spare.part.Position=Vector3.new(spare.x,spare.y,spare.z)
+ tester.Character:PivotTo(CFrame.new(at+Vector3.new(62,3,0)))
+ testCrew.vacuum.pos=at+Vector3.new(-8,3.2,0);testCrew.vacuum.velocity=Vector3.zero
+ tick();assert(testCrew.vacuumTarget.id==-4)
+ for frame=1,math.ceil(4/C.Tick) do
+  tester.Character:PivotTo(CFrame.new(at+Vector3.new(math.min(68,62+16*frame*C.Tick),3,0)))
+  tick()
+  if not pickups[-4] then break end
+  if not walking.relayUntil then assert(testCrew.vacuumTarget and testCrew.vacuumTarget.id==-4,'walking away displaced a committed Vacuum pickup') end
+ end
+ assert(walking.relayUntil and not pickups[-4] and Pro.cargoUnits(data(testCrew))>=units+3)
+ if pickups[-5] then spare.part:Destroy();pickups[-5]=nil end
+ scene.clearSquare(testCrew)
+ tester.Character:PivotTo(CFrame.new(previousPosition))
+ data(testCrew).run.cargo=previousCargo
+ print('PASS Vacuum finishes its first pickup as the owner walks past its search range')
+end
+Workshop.VACUUM_ENABLED=false
+
+do
+ buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+ moveBuyer(scene.packStation.Position)
+ input('ChooseCard','loose-seams',{offerId=first.id,index=2})
+ local seams=data(buyer).run.cards[1]
+ assert(seams.cardId=='Q_EARLY_DROP' and seams.effects.earlyDrop==.25 and not data(buyer).run.pendingOffer)
+
+ local field=table.clone(f)
+ field.id=#patches+1;field.cfg=table.clone(f.cfg);field.cfg.Hardness=3;field.cfg.Material='RunRuby'
+ field.resources={};field.respawnQueue={};patches[field.id]=field
+ local halver=spawnDrone(testCrew,{id=tester.UserId..':fixture:halver',name='Halver',role='Halver',type='Halver',
+  base=Pro.clone(RoleConfig.StudioRoles.Halver.base)},#testCrew.drones+1)
+ local function removeRock(r)
+  resources[r.id]=nil;r.part:Destroy();table.remove(field.resources,table.find(field.resources,r))
+ end
+ local committed=makeResource(field,field.center,'Crystal',1100,10,3,3)
+ committed.readyAt=now
+ assert(assignOre(testCrew,halver,committed))
+ halver.pos=committedStation(halver,committed);halver.velocity=Vector3.zero
+ for _=1,100 do
+  realTime+=C.Tick;now=realTime;droneStep(halver,C.Tick)
+  if halver.specialJob then break end
+ end
+ local gesture=assert(halver.specialJob)
+ halver.battery=.01
+ for _=1,300 do
+  realTime+=C.Tick;now=realTime;droneStep(halver,C.Tick)
+  if halver.recharging then break end
+ end
+ assert(halver.recharging and gesture.impacted and committed.hp<1090 and committed.specialSerial==gesture.serial)
+ assert(now>=gesture.startedAt+gesture.duration,'depletion interrupted the grinder recovery')
+ release(halver);halver.recharging=nil;halver.battery=halver.stats.batteryCapacity;removeRock(committed)
+ local function runCut(actor)
+  local r=makeResource(field,field.center,'Crystal',270,10,3,3);r.readyAt=now
+  assert(assignOre(testCrew,actor,r))
+  actor.pos=committedStation(actor,r);actor.velocity=Vector3.zero;actor.battery=actor.stats.batteryCapacity
+  local before,began=pickupSerial,now
+  local releasedAt,workLeft
+  for _=1,math.ceil(45/C.Tick) do
+   realTime+=C.Tick;now=realTime;droneStep(actor,C.Tick)
+   if pickupSerial>before and not releasedAt then releasedAt=now-began;workLeft=r.hp end
+   if r.paid then break end
+  end
+  assert(r.paid and pickupSerial==before+1 and releasedAt,'one cut must pay exactly one cargo item')
+  local drop=assert(pickups[pickupSerial]);assert(drop.nodeId==r.id and drop.units==1 and drop.raw)
+  local value=drop.value
+  drop.part:Destroy();pickups[pickupSerial]=nil;release(actor);removeRock(r)
+  return releasedAt,workLeft,value
+ end
+ local actors={starterActors.Needler,starterActors.Ballcaster,halver}
+ local ordinary={}
+ for i,actor in ipairs(actors) do
+  local elapsed,work,value=runCut(actor)
+  assert(work==0 and value==(actor==halver and 60 or 40))
+  ordinary[i]=elapsed
+ end
+ table.insert(data(testCrew).run.cards,Pro.clone(seams));refreshStats(testCrew)
+ for i,actor in ipairs(actors) do
+  local elapsed,work,value=runCut(actor)
+  assert(work>0 and work<=65+1e-7 and value==(actor==halver and 60 or 40),'Loose Seams lost early cargo or the specialist payout')
+  assert(elapsed<ordinary[i],'Loose Seams did not pay before the unmodified cut')
+  print(string.format('MODEL Loose Seams %s drops %d Quartz %.2fs before its ordinary finish',actor.role,value,ordinary[i]-elapsed))
+ end
+
+ local spent=makeResource(field,field.center,'Crystal',270,10,3,3)
+ local fresh=makeResource(field,field.center+Vector3.xAxis*8,'Crystal',270,10,3,3)
+ spent.readyAt=now;spent.hp=10;spent.stage=3;spent.cargoProduced=true;fresh.readyAt=now
+ local square={field=field,center=field.center,half=15}
+ spent.lastPin=square;spent.lastPinOwner=tester.UserId
+ local needler=starterActors.Needler
+ needler.pos=spent.position
+ assert(chooseResource(needler,field,square)==fresh,'idle miner chased an empty shell before an ore-bearing rock')
+ release(needler);removeRock(fresh)
+ assert(chooseResource(needler,field,square)==spent,'empty shell never gets cleared when it is the last job')
+ release(needler);removeRock(spent)
+
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2));refreshStats(testCrew)
+ local primary=makeResource(field,field.center,'Crystal',400,10,3,3)
+ local ally=makeResource(field,field.center+Vector3.xAxis*5,'Crystal',270,10,3,3)
+ primary.readyAt=now;ally.readyAt=now;ally.hp=100;ally.stage=2
+ local laser=testCrew.drones[1]
+ assert(assignOre(testCrew,halver,ally) and assignOre(testCrew,laser,primary))
+ laser.pos=committedStation(laser,primary)
+ local before=pickupSerial
+ assert(hitResource(laser,primary,120) and ally.cargoProduced and not ally.paid and halver.target==ally)
+ local assisted=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and assisted.nodeId==ally.id and assisted.value==60,'Aftershock stripped the allied specialist cargo bonus')
+ assisted.part:Destroy();pickups[before+1]=nil
+ release(laser);release(halver);halver.model:Destroy();drones[halver.id]=nil;table.remove(testCrew.drones)
+ removeRock(primary);removeRock(ally);patches[field.id]=nil
+ table.remove(data(testCrew).run.cards);table.remove(data(testCrew).run.cards);refreshStats(testCrew)
+ print('PASS Loose Seams applies to projectile and chunk jobs, keeps one cargo per rock and leaves empty shells as fallback work')
+end
+
+buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+moveBuyer(scene.packStation.Position)
+input('ChooseCard','aftershock',{offerId=first.id,index=3})
+isolate()
+local source,neighbor,farther=rock(0,1000),rock(5,1000),rock(9,1000)
+hit(source,270)
+assert(math.abs(neighbor.hp-(990-990*.12))<1e-8 and farther.hp==990,'Aftershock must reach exactly one neighbor')
+assert(hitResource(miner,source,1) and math.abs(neighbor.hp-(990-990*.12))<1e-8,'Aftershock procced without a crack')
+
+do
+ isolate()
+ local primary,shell,intact,weak=rock(0,1000),rock(2,1000),rock(4,1000),rock(7,1000)
+ shell.hp=20;shell.cargoProduced=true;weak.hp=110
+ local before=pickupSerial
+ hit(primary,270)
+ assert(weak.paid and shell.hp==20 and intact.hp==990,'Aftershock spent the fracture on a shell instead of finishing payable ore')
+ local cargo=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and cargo.nodeId==weak.id and cargo.units==1)
+ cargo.part:Destroy();pickups[before+1]=nil
+
+ isolate()
+ table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_EARLY_DROP,1));refreshStats(buyer)
+ primary=rock(0,1000)
+ local small,large=rock(4,240),rock(7,1000)
+ small.hp=155;large.hp=300
+ before=pickupSerial
+ hit(primary,270)
+ assert(large.cargoProduced and not large.paid and small.hp==155,'Aftershock missed the nearest Loose Seams payout')
+ cargo=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and cargo.nodeId==large.id and cargo.units==1)
+ cargo.part:Destroy();pickups[before+1]=nil
+ table.remove(data(buyer).run.cards);refreshStats(buyer)
+ print('PASS Aftershock favors payable ore and can trigger Loose Seams on a more advanced neighboring cut')
+end
+
+do
+ isolate()
+ local laser,needler=testCrew.drones[1],starterActors.Needler
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_AFTERSHOCK,2))
+ table.insert(data(testCrew).run.cards,Workshop.card(Workshop.BY_ID.Q_RECLAIM,1));refreshStats(testCrew)
+ local primary,foreign,ally,spare=rock(0,1000),rock(3,1000),rock(5,200),rock(9,1000)
+ assert(assignOre(buyer,miner,foreign))
+ assert(assignOre(testCrew,needler,ally))
+ assert(assignOre(testCrew,laser,primary));laser.pos=committedStation(laser,primary)
+ assert(not hitResource(laser,ally,118.8,true,9,nil,'Aftershock'),'a hit without a primary fracture was accepted')
+ assert(hitResource(laser,primary,270))
+ assert(foreign.hp==990 and spare.hp==990 and math.abs(ally.hp-71.2)<1e-8,'shock missed the allied Needler or hit another crew')
+ assert(ally.slots[needler.id]==1 and next(ally.slots,needler.id)==nil and needler.target==ally)
+ assert(laser.forkTargetId==ally.id,'the impact did not reach the existing branch renderer')
+ local previous=select(2,pendingOre(testCrew))
+ laser.battery=50;needler.battery=50
+ assert(hitResource(laser,primary,240) and ally.paid and needler.target==nil)
+ assert(laser.battery==50 and needler.battery==56,'an assisted finish should recharge the allied worker')
+ assert(select(2,pendingOre(testCrew))==previous+1 and foreign.hp==990 and spare.hp==990)
+ assert(not hitResource(needler,ally,30) and select(2,pendingOre(testCrew))==previous+1,'the assisted finish paid twice')
+ release(laser);release(miner)
+ table.remove(data(testCrew).run.cards);table.remove(data(testCrew).run.cards);refreshStats(testCrew)
+ print('PASS Aftershock helps an allied Needler without taking its slot, respects foreign claims, and pays an assisted finish once')
+end
+
+buyer.session.data=Pro.clone(opened);refreshStats(buyer)
+data(buyer).run.pendingOffer.choices[3]=Workshop.card(Workshop.BY_ID.Q_COMPACTOR,2,0)
+input('ChooseCard','hire-press',{offerId=first.id,index=3})
+local press=assert(buyer.compactor)
+assert(press.role=='Compactor' and #data(buyer).fleet==3 and #buyer.drones==8)
+input('ChooseCard','hire-press',{offerId=first.id,index=3})
+assert(#buyer.drones==8 and Workshop.hasCompactor(assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))))
+moveBuyer(f.center+Vector3.new(33,0,0))
+input('PlaceSelector','press-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)})
+assert(buyer.miningSquare)
+for id,drop in pairs(pickups) do if drop.owner==shopper.UserId then drop.part:Destroy();pickups[id]=nil end end
+local floor=f.center+Vector3.new(0,.75,0)
+local function pressOre(material,value,owner,position,modifiers)
+ scene.spawnOrePickup(bed,{owner=owner or shopper.UserId,runId=data(buyer).run.id,nodeId='press-test',
+  material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,raw=true,units=1,
+  floor=floor.Y,fieldPart=bed,modifiers=modifiers},position or floor,Vector3.zero,Color3.new(1,0,0))
+ local drop=pickups[pickupSerial];drop.age=1;drop.landed=true
+ return drop
+end
+tester.Character:PivotTo(CFrame.new(f.center+Vector3.new(-130,3,0)))
+local foreign=pressOre('Quartz',70,tester.UserId);foreign.runId=data(testCrew).run.id
+Pro.addCargo(data(buyer),'Quartz',10,10)
+press.pos=floor+Vector3.new(0,3.2,0)
+local function pressTicks(count)
+ for _=1,count do realTime+=C.Tick;now=realTime;pickupStep(C.Tick) end
+end
+local lone=pressOre('Quartz',5)
+local remote=pressOre('Quartz',6,nil,floor+Vector3.new(20,0,0))
+pressTicks(20)
+assert(not buyer.compactorTarget and not lone.pressSocket and not remote.pressSocket,'isolated rocks started a batch')
+local relaying=pressOre('Quartz',7)
+relaying.relayUntil=now+1
+pressTicks(20)
+assert(not buyer.compactorTarget and not relaying.pressSocket,'press interrupted an in-flight Vacuum relay')
+for _,drop in ipairs({lone,remote,relaying}) do
+ pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy()
+end
+local raw={pressOre('Quartz',10,nil,nil,2),pressOre('Quartz',12,nil,nil,4),pressOre('Quartz',14,nil,nil,1),pressOre('Quartz',16)}
+for _=1,50 do
+ pressTicks(1)
+ if raw[2].pressSocket then break end
+end
+assert(raw[1].pressSocket==1 and raw[2].pressSocket==2 and not raw[3].pressSocket)
+assert(raw[1].x~=raw[2].x or raw[1].z~=raw[2].z,'press inputs overlapped')
+local beforeNudge=buyer.miningSquare
+input('PlaceSelector','nudge-press',{fieldId=f.id,position=f.center+Vector3.xAxis*2})
+pressTicks(1)
+assert(buyer.miningSquare~=beforeNudge and press.pressSquare==buyer.miningSquare and raw[1].pressSocket==1 and raw[2].pressSocket==2,
+ 'nudging the pin released the loaded press')
+pressTicks(70)
+local pressedOre=pickups[pickupSerial]
+assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
+assert(pressedOre.value==36,'press lost value or minted Quartz')
+assert(pressedOre.modifiers==7 and pressedOre.part:GetAttribute('RockModifiers')==7)
+pressTicks(math.ceil(1.5/C.Tick))
+assert(not raw[4].pressSocket and raw[4].part.Parent and not buyer.compactorTarget,'a single rock was trapped')
+assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
+
+pressOre('RunEmerald',2560);pressOre('RunEmerald',2700)
+pressTicks(math.ceil(2.75/C.Tick))
+local deepBlock=pickups[pickupSerial]
+assert(deepBlock.tierMaterial=='RunEmerald' and deepBlock.compacted and deepBlock.units==1 and deepBlock.value==5260)
+assert(pressedOre.part.Parent and pressedOre.units==1,'already compacted cargo entered the press again')
+print('PASS Compactor leaves isolated rocks and Vacuum relays alone, and ejects two-rock batches sooner')
+
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_BATCH_PRESS,3));publish(buyer)
+pressOre('RunRuby',40);pressOre('RunRuby',41)
+pressTicks(90+math.ceil(Workshop.PRESS_EJECT/C.Tick))
+local upgraded=pickups[pickupSerial]
+assert(upgraded.tierMaterial=='RunRuby' and upgraded.units==1 and upgraded.value==81)
+
+local legacyPress=table.remove(data(buyer).run.cards)
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_DENSER_PACK,3));publish(buyer)
+assert(buyer.compactorBatch==5)
+for value=50,54 do pressOre('RunCobalt',value) end
+pressTicks(150+math.ceil(Workshop.PRESS_EJECT/C.Tick))
+local dense=pickups[pickupSerial]
+assert(dense.tierMaterial=='RunCobalt' and dense.compacted and dense.units==1 and dense.value==260,
+ 'a partial timer fired before the five-rock batch finished')
+table.remove(data(buyer).run.cards);table.insert(data(buyer).run.cards,legacyPress);publish(buyer)
+
+do
+ local first,second=pressOre('RunRuby',38),pressOre('RunRuby',42)
+ for _=1,50 do pressTicks(1);if second.pressSocket then break end end
+ assert(first.pressSocket and second.pressSocket)
+ local before=pickupSerial
+ local dock=press.pos
+ input('PlaceSelector','move-past-press',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
+ pressTicks(1)
+ assert(not press.pressSquare and press.model:GetAttribute('PressAt') and not pickups[first.part:GetAttribute('PickupId')]
+  and not pickups[second.part:GetAttribute('PickupId')],'a loaded Compactor dropped its batch on a distant repin')
+ local startedAt=press.model:GetAttribute('PressAt')
+ while now+C.Tick<startedAt+Workshop.PRESS_EJECT do
+  pressTicks(1)
+  assert(pickupSerial==before,'pressed cargo appeared before the jaws reached the ejection beat')
+ end
+ for _=1,math.ceil(.2/C.Tick) do pressTicks(1);if pickupSerial>before then break end end
+ local output=assert(pickups[before+1])
+ assert(pickupSerial==before+1 and output.compacted and output.units==1 and output.value==80)
+ assert((output.part.Position-dock).Magnitude<4,'the pressed block did not eject at the old dock')
+ pressTicks(math.ceil(.7/C.Tick))
+ assert(pickupSerial==before+1,'the old load ejected twice')
+ input('PlaceSelector','return-to-press-field',{fieldId=f.id,position=f.center})
+ local lone,pair=pressOre('RunRuby',34),pressOre('RunRuby',39)
+ local beforeSingle=pickupSerial
+ for _=1,70 do pressTicks(1);if lone.pressSocket then break end end
+ assert(lone.pressSocket and not pair.pressSocket)
+ input('PlaceSelector','move-with-one-rock',{fieldId=f.id,position=f.center+Vector3.xAxis*32})
+ pressTicks(1)
+ assert(not lone.pressSocket and not press.pressSquare and pickupSerial==beforeSingle and lone.part.Parent,
+  'a distant repin did not release the lone input without an output')
+ for _,drop in ipairs({lone,pair}) do pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy() end
+ input('PlaceSelector','return-after-single',{fieldId=f.id,position=f.center})
+ print('PASS a distant repin finishes one loaded Compactor batch at its old dock and releases a lone rock')
+end
+
+-- Actual movement consumes one parcel and unloads its manifest exactly once.
+local emptier=buyer.drones[4]
+assert(emptier.role=='Courier')
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_SHIFT_RELAY,3));publish(buyer)
+local rubyCargo=Workshop.cargoKey('RunRuby',40)
+local emeraldCargo=Workshop.cargoKey('RunEmerald',300)
+local pressedCargo=Workshop.cargoKey('RunCobalt',90,true)
+local quartzCargo=Workshop.cargoKey('Quartz',10)
+data(buyer).run.cargo={[rubyCargo]=1,[emeraldCargo]=1,[pressedCargo]=1,[quartzCargo]=6}
+local hr=characterRoot(buyer)
+local function stageGroundCargo(material,position)
+ local tier,value,packed=Workshop.crystalCargo(material)
+ scene.spawnOrePickup(f.part,{owner=shopper.UserId,runId=data(buyer).run.id,nodeId='courier-test',
+  material=material,tierMaterial=tier,value=value,units=1,raw=true,compacted=packed,floor=position.Y},
+  position,Vector3.zero,f.color)
+ local drop=pickups[pickupSerial]
+ drop.landed=true;drop.age=1
+ return drop
+end
+emptier.pos=hr.Position
+buyer.nextEmptierPlan=nil
+local originalMilestone=Pro.deliveryFundsMilestone
+Pro.deliveryFundsMilestone=function() return false end
+local function grabGroundCargo(drop)
+ emptier.orePickupId=pickupSerial
+ local slot=Pro.droneCargoUnits(data(buyer),emptier.id)+1
+ local x,y,z=Workshop.courierClawOffset(slot)
+ local center=Vector3.new(drop.x,drop.floor-.22+drop.part.Size.Y*.5,drop.z)
+ emptier.yaw=0;emptier.pos=center-Vector3.new(x,y,z)+Vector3.yAxis*Workshop.COURIER_CLEARANCE
+ emptier.pos+=Vector3.new(.10,0,0)
+ emptier.velocity=Vector3.zero
+ local approachStart=emptier.pos
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert(emptier.oreDock and emptier.state=='Pickup' and not drop.part:GetAttribute('CourierCollected'))
+ assert((emptier.pos-approachStart).Magnitude<.02,'the descent snapped to its entry point')
+ now+=Workshop.COURIER_LOWER+.04
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert((emptier.pos-emptier.oreDock).Magnitude<.001 and not drop.part:GetAttribute('CourierCollected'))
+ now+=Workshop.COURIER_CLOSE
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert(drop.part:GetAttribute('CourierCollected')==true)
+ assert((emptier.pos-emptier.oreDock).Magnitude<.1)
+ now=emptier.oreSeatUntil
+ scene.collectGroundCargo(emptier,buyer,hr,C.Tick)
+ assert(not emptier.oreDock and emptier.pos.Y>center.Y+2.5)
+end
+for _,material in ipairs({rubyCargo,emeraldCargo,pressedCargo,quartzCargo}) do
+ local drop=stageGroundCargo(material,hr.Position-Vector3.yAxis*2.6)
+ grabGroundCargo(drop)
+end
+Pro.deliveryFundsMilestone=originalMilestone
+assert(emptier.oreLoadedAt and Pro.droneCargoUnits(data(buyer),emptier.id)==4)
+local restored=assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId))
+Pro.reconcileCargo(restored,{emptier.id},true)
+assert(Pro.droneCargoUnits(restored,emptier.id)==4 and Pro.cargoUnits(restored)==9,
+ 'restoring a partly loaded Emptier moved its ore into the backpack')
+local function stepEmptier()
+ scene.assignEmptierPickups(buyer);droneStep(emptier,C.Tick)
+end
+stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
+local manifest=assert(data(buyer).run.deliveries[emptier.id])
+assert(manifest.cargo[rubyCargo]==1 and manifest.cargo[emeraldCargo]==1 and manifest.cargo[pressedCargo]==1 and manifest.cargo[quartzCargo]==1)
+assert(Pro.cargoUnits(data(buyer))==9 and data(buyer).run.cargo[quartzCargo]==6)
+snapshotDrone(emptier)
+local counter=scene.packStation
+local landing=counter.CFrame:PointToObjectSpace(emptier.model:GetAttribute('SellPosition'))
+assert(math.abs(landing.Y-counter.Size.Y*.5)<.001 and math.abs(landing.Z-counter.Size.Z*.22)<.001)
+local secondEmptier=buyer.drones[5]
+assert(secondEmptier.role=='Courier')
+snapshotDrone(secondEmptier)
+local otherLanding=counter.CFrame:PointToObjectSpace(secondEmptier.model:GetAttribute('SellPosition'))
+assert(math.abs(landing.X+otherLanding.X)<.001 and math.abs(landing.X)>1,'both couriers unloaded into the same lane')
+assert(Pro.validate(assert(Pro.migrate(Pro.clone(data(buyer)),shopper.UserId)),shopper.UserId))
+now+=1;emptier.pos=scene.packStation.Position
+stepEmptier();emptier.pos=emptier.goal
+stepEmptier();now+=1;stepEmptier()
+local prior=data(buyer).run.quartzEarnings
+serviceDeliveries(buyer);serviceDeliveries(buyer)
+assert(not data(buyer).run.deliveries[emptier.id] and data(buyer).run.quartzEarnings==prior+440)
+assert(data(buyer).run.wallet.Ruby==0 and data(buyer).run.wallet.Quartz==440 and Pro.prestigePreview(data(buyer)).eligible)
+assert(scene.shiftReady(buyer) and not buyer.shiftUntil,'sale spent the surge before the crew cut')
+scene.publishSquareStatus(buyer)
+assert(shopper:GetAttribute('MA_SelectorStatus')=='SurgeReady')
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_CARGO_RACK,2));publish(buyer)
+-- This parcel funds neither the next pack nor prestige, so wait for the batch timer.
+now+=3;emptier.pos=hr.Position
+local smallParcel=Workshop.cargoKey('RunRuby',5,true)
+local drop=stageGroundCargo(smallParcel,hr.Position-Vector3.yAxis*2.6)
+grabGroundCargo(drop)
+now+=Workshop.EMPTIER_WAIT
+stepEmptier();serviceDeliveries(buyer)
+assert(Pro.deliveryUnits(data(buyer),emptier.id)==1 and Pro.cargoUnits(data(buyer))==9)
+snapshotDrone(emptier)
+assert(emptier.model:GetAttribute('DeliverySlots')==5 and emptier.model:GetAttribute('DeliveryMaterials')=='Block:RunRuby:5')
+local saleDelay=now
+now+=20
+scene.clearSquare(buyer)
+assert(scene.shiftReady(buyer),'a paid surge expired while the crew was between pins')
+input('PlaceSelector','surge-cut',{fieldId=f.id,position=f.center})
+isolate()
+local boosted=rock(0,1000)
+assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare
+miner.pos=boosted.position+Vector3.yAxis*25
+assert(not hitResource(miner,boosted,10) and scene.shiftReady(buyer) and not buyer.shiftUntil,'rejected contact consumed the surge')
+miner.pos=committedStation(miner,boosted);miner.mining=true
+assert(hitResource(miner,boosted,10) and boosted.hp==975)
+assert(buyer.shiftUntil==now+12 and buyer.shiftSquare==buyer.miningSquare and not scene.shiftReady(buyer) and now-saleDelay>=20)
+scene.publishSquareStatus(buyer)
+assert(shopper:GetAttribute('MA_SelectorStatus')=='Surge')
+now=buyer.shiftUntil;assert(hitResource(miner,boosted,10) and boosted.hp==965)
+
+-- A delivery can prime the crew while it is between assignments.
+release(miner);scene.clearSquare(buyer)
+emptier.pos=scene.packStation.Position
+stepEmptier();emptier.pos=emptier.goal
+stepEmptier();now+=1;stepEmptier();serviceDeliveries(buyer)
+assert(not data(buyer).run.deliveries[emptier.id] and scene.shiftReady(buyer) and not buyer.shiftUntil)
+input('PlaceSelector','next-surge-cut',{fieldId=f.id,position=f.center})
+assert(assignOre(buyer,miner,boosted));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,boosted)
+assert(hitResource(miner,boosted,10) and boosted.hp==950 and not scene.shiftReady(buyer))
+now=buyer.shiftUntil
+
+isolate()
+local deep=rock(0,Mining.resource(75,'Crystal',81).maxHP)
+deep.hardness=81
+assert(assignOre(buyer,miner,deep));miner.squareJob=buyer.miningSquare;miner.pos=committedStation(miner,deep)
+assert(hitResource(miner,deep,100));local hp=deep.hp
+buyer.player.Character:PivotTo(CFrame.new(f.center+Vector3.yAxis*3))
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(2,0,0)})
+assert(miner.squareJob==buyer.miningSquare and miner.target==deep and deep.slots[miner.id],'overlapping pin interrupted the committed cut')
+assert(hitResource(miner,deep,10));hp=deep.hp
+release(miner);now+=5;scene.regrow(deep,.23)
+assert(deep.hp==hp,'work after a pin move recorded the old pin')
+local fresh=rock(1,deep.maxHP);fresh.hardness=81;miner.pos=fresh.position
+assert(chooseResource(miner,f,buyer.miningSquare)==deep,'returning drone ignored its unfinished deep cut')
+release(miner)
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(24,0,0)})
+scene.placeSquare(buyer,{runId=data(buyer).run.id,fieldId=f.id,position=f.center+Vector3.new(2,0,0)})
+now+=5;scene.regrow(deep,.23)
+assert(deep.hp>hp,'leaving and returning to the same area incorrectly kept the old cut protected')
+scene.clearSquare(buyer)
+table.insert(data(buyer).run.cards,Workshop.card(Workshop.BY_ID.Q_LIVE_WIRE,3));refreshStats(buyer)
+local live=rock(0,1000)
+miner.battery=miner.stats.batteryCapacity;hit(live,10)
+assert(live.hp==975,'Live Wire did not amplify a high-battery hit')
+miner.battery=miner.stats.batteryCapacity*.5
+assert(hitResource(miner,live,10) and live.hp==965,'Live Wire activated below its battery threshold')
+print('PASS Aftershock, Live Wire, Compactor conversion, durable Emptier sales, Shift Relay timing and deep-cut recharge')
+
+do
+ local tester=player(98691);players.PlayerAdded:Fire(tester)
+ local crew=profiles[tester.UserId];local worker=crew.drones[1]
+ table.insert(data(crew).run.cards,Workshop.card(Workshop.BY_ID.Q_RECLAIM,1));refreshStats(crew)
+ tester.Character:PivotTo(CFrame.new(f.center+Vector3.yAxis*3))
+ local crystal=makeResource(f,f.center,'Crystal',810,10,3,7)
+ crystal.hardness=81;crystal.readyAt=now
+ local function strike(r,damage)
+  if worker.target~=r then assert(assignOre(crew,worker,r)) end
+  worker.pos=committedStation(worker,r)
+  assert(hitResource(worker,r,damage))
+ end
+ worker.battery=40;strike(crystal,50)
+ assert(crystal.stage==0 and worker.battery==40,'ordinary chip recharged the battery')
+ strike(crystal,65)
+ assert(crystal.stage==1 and worker.battery==46,'first Emerald fracture did not recharge')
+ release(worker)
+ for _=1,20 do now+=.25;scene.regrow(crystal,.25) end
+ assert(crystal.stage==0 and crystal.hp==800)
+ strike(crystal,115)
+ assert(crystal.stage==1 and worker.battery==46,'a regrown layer paid twice')
+ strike(crystal,220)
+ assert(crystal.stage==3 and worker.battery==52,'a single hit crossing several layers should recharge once')
+ worker.battery=worker.stats.batteryCapacity-2
+ strike(crystal,1500)
+ assert(crystal.paid and worker.battery==worker.stats.batteryCapacity,'the last break must recharge and respect capacity')
+ local cobalt=makeResource(f,f.center,'Crystal',810,10,3,3)
+ cobalt.hardness=9;cobalt.readyAt=now;worker.battery=40
+ strike(cobalt,250)
+ assert(cobalt.stage==1 and worker.battery==40,'Cobalt intermediate fractures should use the ordinary rule')
+ strike(cobalt,1500)
+ assert(cobalt.paid and worker.battery==46,'ordinary crystal breaks no longer recharge')
+ players.PlayerRemoving:Fire(tester)
+ for _,r in ipairs({crystal,cobalt}) do resources[r.id]=nil;r.part:Destroy() end
+ print('PASS Reclaim recharges at new deep fractures, does not farm regrowth and keeps ordinary final-break recovery')
+end
+
+do
+ local tester=player(98692);players.PlayerAdded:Fire(tester)
+ local other=player(98693);players.PlayerAdded:Fire(other)
+ local crew,rival=profiles[tester.UserId],profiles[other.UserId]
+ local worker=crew.drones[1]
+ local center=bed.Position+Vector3.new(0,.5,12)
+ local quick=makeResource(f,center+Vector3.new(0,0,-2),'Crystal',75,7,2.2,3)
+ local rich=makeResource(f,center+Vector3.new(0,0,9),'Crystal',200,15,3.7,3)
+ local third=makeResource(f,center+Vector3.new(8,0,9),'Crystal',145,12,3,3)
+ quick.readyAt=now;rich.readyAt=now;third.readyAt=now
+ tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ worker.pos=quick.position+Vector3.yAxis*4
+ local function request(leadId,position)
+  scene.placeSquare(crew,{runId=data(crew).run.id,fieldId=f.id,position=position or center,leadId=leadId})
+ end
+ local function focus(phase,rock)
+  scene.publishSquareStatus(crew)
+  assert(tester:GetAttribute('MA_SelectorFocus')==(phase and phase..':'..rock.id or nil),'focus did not show the current order')
+ end
+ local outside=makeResource(f,center+Vector3.new(25,0,0),'Crystal',100,10,3,3)
+ request(outside.id)
+ assert(crew.miningSquare and not crew.miningSquare.leadId,'an out-of-square target became the lead')
+ focus(nil)
+ request(rich.id,center+Vector3.new(0,0,66))
+ assert(not crew.miningSquare.leadId,'remote focus bypassed pin range')
+ rich.slots[rival.drones[1].id]=1
+ request(rich.id)
+ assert(not crew.miningSquare.leadId,'a claimed target became the lead')
+ focus(nil)
+ rich.slots[rival.drones[1].id]=nil
+ local current=crew.miningSquare
+ scene.squareStep(crew,worker)
+ assert(worker.target==quick,'fixture did not start an automatic approach')
+ local available=crew.drones[2]
+ request(rich.id)
+ assert(worker.target==quick,'the order redirected a flight despite another worker being free')
+ scene.squareStep(crew,available)
+ assert(available.target==rich and worker.target==quick,'the free worker did not take the new order')
+ release(available)
+ for i=2,#crew.drones do crew.drones[i].hp=0 end
+ worker.chargedPin=current
+ request(rich.id)
+ assert(crew.miningSquare==current and current.leadId==rich.id,'same-cell focus did not update the pin')
+ assert(not worker.target and not next(quick.slots),'the only available miner kept an obsolete approach')
+ assert(worker.chargedPin==current,'redirecting a freshly charged miner lost its travel boost')
+ assert(tester:GetAttribute('MA_SelectorFocus')=='Queued:'..rich.id,'the accepted order did not confirm until the next snapshot')
+ scene.squareStep(crew,worker)
+ assert(worker.target==rich and not current.leadId and rich.slots[worker.id],'the selected valuable crystal did not get one real assignment')
+ focus('Travel',rich)
+ worker.warmAt=now
+ focus('Starting',rich)
+ worker.mining=true;focus('Cutting',rich)
+ crew.busy=true;focus('Paused',rich);crew.busy=false
+ request(third.id)
+ scene.squareStep(crew,worker)
+ assert(worker.target==rich and worker.warmAt and current.leadId==third.id,'a same-cell lead interrupted an active cut')
+ focus('Queued',third)
+ third.slots[rival.drones[1].id]=1;focus('Claimed',third);third.slots[rival.drones[1].id]=nil
+ release(worker)
+ now+=.25
+ scene.squareStep(crew,worker)
+ assert(worker.target==third and not current.leadId,'the next free worker did not take the new lead')
+ focus('Travel',third)
+ worker.pos=committedStation(worker,third)
+ assert(hitResource(worker,third,1000));focus(nil)
+ release(worker)
+ worker.pos=quick.position+Vector3.yAxis*4
+ now+=.25
+ scene.squareStep(crew,worker)
+ assert(worker.target==quick,'the consumed lead changed ordinary square dispatch')
+ request(quick.id);focus('Travel',quick)
+ request(nil);focus(nil)
+ request(quick.id);scene.clearSquare(crew)
+ assert(not tester:GetAttribute('MA_SelectorFocus'),'recall left a stale target on the HUD')
+ players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
+ for _,r in ipairs({quick,rich,third,outside}) do resources[r.id]=nil;r.part:Destroy() end
+end
+print('PASS direct crystal focus redirects an obsolete approach when needed and preserves free-worker dispatch, charge speed and active cuts')
+
+do
+ local tester=player(98694);players.PlayerAdded:Fire(tester)
+ local other=player(98695);players.PlayerAdded:Fire(other)
+ local crew,rival=profiles[tester.UserId],profiles[other.UserId]
+ local first,second,third=table.unpack(crew.drones,1,3)
+ local folder=Instance.new('Folder');folder.Name='DeepPair';folder.Parent=run
+ local surface=World.part(folder,'Field',Vector3.new(80,5,-68),Vector3.new(48,1,48),Color3.new(0,1,0))
+ local field={id=#patches+1,cfg={Key='Emerald',Material='RunEmerald',Value=256,Hardness=81,SelectionOnly=true,
+  AlwaysUnlocked=true,ReferenceCrystals=true,Turrets=0,Respawn=8},part=surface,model=folder,center=surface.Position,
+  color=surface.Color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ local center=surface.Position+Vector3.yAxis*.5
+ local primary=makeResource(field,center,'Crystal',3900,9,2.8,7)
+ local neighbor=makeResource(field,center+Vector3.new(9,0,0),'Crystal',4500,10,3,7)
+ primary.readyAt=now;neighbor.readyAt=now
+ tester.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ other.Character:PivotTo(CFrame.new(center+Vector3.yAxis*3))
+ local function pin(p,leadId,position)
+  scene.placeSquare(p,{runId=data(p).run.id,fieldId=field.id,position=position or center,leadId=leadId})
+ end
+ first.pos=primary.position
+ pin(crew);local square=crew.miningSquare
+ scene.squareStep(crew,first)
+ assert(first.target==primary and not square.pairId)
+ scene.squareStep(crew,second)
+ assert(second.target==neighbor and not second.warmAt)
+ first.warmAt=now
+ pin(rival,primary.id)
+ assert(rival.miningSquare and not rival.miningSquare.pairId,'a second crew paired with a foreign cut')
+ pin(crew,primary.id,center+Vector3.xAxis*2)
+ assert(crew.miningSquare~=square and first.warmAt==now)
+ square=crew.miningSquare
+ assert(square.pairId==primary.id and second.target==neighbor and second.squareJob==square,'a free laser should join without redirecting another overlapping approach')
+ scene.squareStep(crew,second);scene.squareStep(crew,third)
+ assert(third.target==primary and third.targetSlot==2 and second.target==neighbor,'pair did not use exactly two slots')
+ first.pos=committedStation(first,primary);third.pos=committedStation(third,primary)
+ assert(math.abs((first.pos-third.pos).Magnitude-3.2)<.001,'two laser stations overlapped')
+ first.mining=true;third.mining=true
+ scene.publishSquareStatus(crew)
+ assert(tester:GetAttribute('MA_SelectorStatus')=='PairCut')
+ pin(crew,nil,square.center)
+ assert(crew.miningSquare==square and not square.pairId and first.target==primary and third.target==primary,'ground pin cut off committed lasers')
+ assert(hitResource(first,primary,50) and hitResource(third,primary,50) and primary.hp==3790)
+ assert(hitResource(third,primary,10000) and primary.paid and not next(primary.slots))
+ assert(not hitResource(first,primary,10000) and pendingOre(crew)==1,'paired finish granted cargo twice')
+ players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
+end
+print('PASS two lasers can share a selected deep cut with separate stations, one reward and no foreign slot')
+
+do
+ local tester=player(98697);players.PlayerAdded:Fire(tester)
+ local crew=profiles[tester.UserId]
+ local worker=crew.drones[1]
+ local folder=Instance.new('Folder');folder.Parent=run
+ local surface=World.part(folder,'Field',Vector3.new(-180,5,-50),Vector3.new(68,1,48),f.color)
+ local field={id=#patches+1,cfg={Key='Quartz',Material='Quartz',Value=1,Hardness=1,SelectionOnly=true,RockModifiers=true,
+  ContinuousCrystals=true,AlwaysUnlocked=true,ReferenceCrystals=true,Count=2,Respawn=8,Ore=10,Turrets=0},
+  part=surface,model=folder,center=surface.Position,color=f.color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ local bits=Mining.ROCK_MODIFIERS
+ local roll=0
+ local random=scene.modifierRandom
+ scene.modifierRandom={NextNumber=function(_,a,b) if a then return (a+b)*.5 end;return roll end}
+ local spawned,_,massive=spawnResource(field,'Crystal')
+ assert(spawned and massive.modifiers==bits.Massive)
+ assert(massive.part:GetAttribute('RockModifiers')==bits.Massive)
+ local mineral=Mining.fieldCrystal(75,1,10,3)
+ local planned={spot=surface.Position+Vector3.xAxis*19,mineral=mineral,massive=false}
+ local _,_,plain=spawnResource(field,'Crystal',false,planned)
+ assert(plain and not plain.modifiers)
+ massive.readyAt=now;plain.readyAt=now
+ tester.Character:PivotTo(CFrame.new(massive.position+Vector3.yAxis*3))
+ -- Keep the one eligible rock beside its owner when each event arrives.
+ plain.readyAt=now+100
+ scene.stepRockModifiers(field);assert(field.nextModifierAt>now and not massive.part:GetAttribute('ChargedAt'))
+ now=field.nextModifierAt
+ scene.stepRockModifiers(field)
+ assert(massive.part:GetAttribute('ChargedAt')==now and massive.modifiers==3)
+ roll=.9;now=field.nextModifierAt
+ scene.stepRockModifiers(field)
+ assert(massive.part:GetAttribute('FrostedAt')==now and massive.modifiers==7)
+ assert(not plain.modifiers)
+ crew.miningSquare={field=field,center=massive.position,half=15}
+ assert(assignOre(crew,worker,massive));worker.squareJob=crew.miningSquare;worker.pos=committedStation(worker,massive)
+ assert(hitResource(worker,massive,1000) and massive.paid)
+ local drop=pickups[pickupSerial]
+ assert(drop.nodeId==massive.id and drop.units==1 and drop.value==massive.ore and drop.part:GetAttribute('RockModifiers')==7)
+ assert(drop.launchAt==massive.splitAt+OreDrops.REWARD_DELAY)
+ players.PlayerRemoving:Fire(tester);scene.modifierRandom=random
+end
+print('PASS Massive spawn, two stacked field events and one authoritative modified ore drop')

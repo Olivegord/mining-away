@@ -1,39 +1,55 @@
-# Mining Away
+# DRONEREVOLUTION
 
-One Roblox game, one source repository: **https://github.com/Olivegord/mining-away**.
+**One shared repository:** [Olivegord/mining-away](https://github.com/Olivegord/mining-away). The current integration branch is **`codex/restore-feel-prestige`**.
 
-The repository owns editable code, the original asset place, design requirements, build tooling, and tests. `build/mining-away.rbxl` is a generated review artifact of this game. It is not a separate project or a new published Roblox experience.
+**Normal test entry** is the existing shared **DRONEREVOLUTION** Studio Edit session. The latest verified Team Create save is 247. Its seven managed Sources match `studio/` and [`build/DRONE_GAME.rbxl`](build/DRONE_GAME.rbxl), the canonical map and recovery snapshot. See [project state](docs/PROJECT_STATE.md) for verification and publication status.
 
-## Current work
+**Existing shared Roblox game:** [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625), place **124078027733625**, universe **10774898335**. MideDibber has Playtest and Edit access, verified November 6, 2026. Publication of the latest local file to that game is **not yet verified**. GitHub updates do not publish Roblox.
 
-The first cloud implementation is imported as a development baseline. Its movement, crystal generation, mining presentation, and UI were rejected by the owner. Do not treat its visuals or behavior as the desired reference. The original source under `reference/original/src/` defines the feel to restore.
+**Drone Blower revolution** (place **136098934779395**) is a separate older Roblox experience. It supplied the historical reference capture. It is not another name for the shared game.
 
-The next update must restore near parity with the original smooth drone movement, directly overhead mining, three fracture stages, random crystal placement, and two-second crystal growth. It then adds a one-drone start, run-only choice-of-three card packs, permanent drones earned through prestige, enemy turret progression, and a simple-shape alien map using the existing segmented pyramid as a turret.
+## Start here with Codex
 
-The latest owner requirements in `docs/OWNER_REQUIREMENTS.md` override the older design document and the first cloud build. The supporting parity, card, progression, and acceptance documents are in `docs/`.
+Open this same repository in Codex and start with:
 
-## Editable files and build
+> Read AGENTS.md, docs/OWNER_REQUIREMENTS.md, docs/PROJECT_STATE.md and docs/COLLABORATION.md. Continue this existing game. Verify the current revision and canonical file before making changes. Do not create another game or publish to Roblox.
 
-- `src/`: editable server, client, world, config, and rule source.
-- `assets/mining-away-base.rbxl`: immutable original asset/hierarchy baseline; SHA-256 `480ce776e7e7c5bda5be57666490c8c9e203b35f8d9fa462de894230494ef78b`.
-- `reference/original/src/`: extracted original controllers for visual and motion parity. These are reference data, not extra runtime entrypoints.
-- `reference/cloud-v1/`: audit notes and checks from the first, rejected cloud presentation.
-- `tools/`: deterministic, asset-preserving builder and validation.
-- `tests/`: rule, server, and asset-preservation checks.
-- `build/mining-away.rbxl`: generated from the files above, ignored by Git.
+[Project state and prior decisions](docs/PROJECT_STATE.md) records the current implementation, exact native-file checksum, accepted direction, rejected approaches and remaining verification. [Collaboration](docs/COLLABORATION.md) explains shared access, contributions and native-file ownership. Codex's repository instructions live in [AGENTS.md](AGENTS.md).
+
+## Current gameplay
+
+The current candidate connects **mine Quartz → sell → buy a pack with one pick included → stack upgrades → prestige → grow your permanent fleet**:
+
+- Crystal Run starts with three Laser Miners, Needler, Ballcaster, Vacuum and Compactor as permanent units, plus two run Emptiers. Existing saved fleets remain intact. The backpack starts with ten physical cargo slots.
+- Pin a square over crystals. Miners finish their cuts, release physical ore, and preserve the current deep-field hardness and distinct attacks. Raw cargo homes from nine studs after landing; Emptiers sell real parcels at the counter.
+- Buy a pack at the physical Pack Counter for 20, 27, 36, 49, 66… Quartz. Open the delivered crate and choose one of three saved upgrades; selection is included in the pack price. Repeat purchases stack eligible owned upgrades at increasing prices.
+- The first three prestige goals are **160, 400 and 1,000 Quartz sold**. Buying packs never reduces that progress. Later existing thresholds are retained. The beacon previews three distinct permanent choices before eligibility and favors unowned roles when available.
+- Prestige preserves the owned fleet, adds exactly one chosen permanent drone, and resets run cards, Stars, cargo and balances. The first three prestiges each add 50 percentage points of permanent base mining power; later prestiges add 25 points. Existing drone base traits and profile records are preserved.
+- A compact `Next drone` readout shows sale progress. The initial view faces Crystal Run, and hulls fade locally when they obscure the avatar. The existing map, attack effects, pack reveal and original drone movement remain in place.
+- Loose earned cargo receives bounded return-trip grace during depot visits, even with a partially filled bag. This uses the existing 180-second maximum rather than an unlimited stash.
+
+See [this progression pass and verification limits](docs/review/PROGRESSION_OVERHAUL.md), [historical Quartz design and test evidence](docs/review/QUARTZ_POOL.md), [mining satisfaction criteria](docs/MINING_SATISFACTION.md), and [consolidated VFX direction](docs/VFX_INSTRUCTIONS.md). Implemented behavior and passing tests do not establish that the owner finds the game fun.
+
+## Work on the same file
+
+Edit the readable Luau in `src/`. Only seven allowlisted native Sources are refreshed into `build/DRONE_GAME.rbxl`; authored geometry, assets and backup scripts remain intact. `assets/*.rbxl` are immutable historical references, not playable alternatives. Follow the [single-game workflow](docs/SINGLE_GAME_WORKFLOW.md).
+
+For Python tooling use Python 3.9+ and a Zstandard decoder (`zstd` or the Python `zstandard` package). Tests use official Luau 0.744 tools, pinned in [CI](.github/workflows/validate.yml).
 
 ```sh
-python3 tools/build.py assets/mining-away-base.rbxl --output build/mining-away.rbxl
-python3 tests/binary.spec.py
-# With official Luau binaries installed:
-python3 tools/test.py /path/to/luau-binaries
+python3 tools/build.py
+python3 tools/test_workshop.py /path/to/luau-tools
+python3 tests/single-game.spec.py
 ```
 
-Open the generated place in Studio. Edit source in this repository and rebuild; avoid editing a second standalone place and letting it drift. The original asset file must never be overwritten by a generated build. Until live Studio sync is added, source changes require a rebuild and reopen. GitHub alone does not live-sync an open Studio session.
+`build.py` validates the tracked native document against current Sources. After changing Sources, reconcile Studio-origin edits, run `python3 tools/script_sync.py`, verify actual Source arrival and root status in shared Edit, then refresh the canonical file using the exact previous installed commit or payload. Unknown native edits must be reconciled. Stop Play at handoff; leave Studio open if it was already open, otherwise close the session you started.
 
-## Working and reviewing
+After committing, `python3 tools/release.py` packages exactly that native file, source text and revision/preservation reports in `build/drone-blower-revolution-review.zip`. The historical ZIP name is an artifact name, not a Roblox destination. The command does not publish Roblox.
 
-Use `main` for a known source checkpoint and `codex/restore-feel-prestige` for the next update. Include the exact commit in build metadata and downloadable review packages. Do not publish a Roblox place or create another Roblox experience as part of an overnight update.
+## Sharing and publishing
 
-Preserve existing models and base-world identity. Report engine/visual tests honestly. Pure Luau tests and API doubles cannot establish that the game looks good or that real networking works.
+Share **this repository's URL** for code, context and the current `.rbxl`. Public visibility allows reading; direct contributions to the shared repository require a GitHub collaborator invitation. Roblox permissions and GitHub permissions are independent.
 
+Publish only when the owner asks for a release. Reconcile newer collaborator edits, verify the selected shared document's place **124078027733625** and universe **10774898335**, then publish that existing document. Verify direct publication evidence without using Version History, and update [project state](docs/PROJECT_STATE.md). The [collaboration guide](docs/COLLABORATION.md) covers recovery from the canonical snapshot. Do not create a new experience/place or delete either cloud game as part of ordinary synchronization.
+
+Additional references: [architecture](docs/game/architecture.md), [persistence](docs/PERSISTENCE.md), [original-feel parity](docs/ORIGINAL_FEEL_PARITY.md), [game handbook](docs/game/README.md), [Studio acceptance](docs/STUDIO_ACCEPTANCE.md).

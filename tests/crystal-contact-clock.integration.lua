@@ -1,0 +1,464 @@
+-- Production crystal frame and projectile observer with API doubles.
+local previousIndex=CF.__index
+CF.__index=function(frame,key)
+ if key=='RightVector' then return Vector3.new(math.cos(frame.yaw),0,-math.sin(frame.yaw)) end
+ return previousIndex(frame,key)
+end
+local fx=Instance.new('Folder');fx.Parent=workspace
+local audio={}
+local cameraKicks={}
+local owner=Instance.new('Player');owner.UserId=42
+game:GetService('Players').LocalPlayer=owner
+local halves=Instance.new('Folder')
+for index,name in ipairs({'Left','Right'}) do
+ local half=Instance.new('Part');half.Name=name;half.Color=Color3.new(0,0,0)
+ half:SetAttribute('SizeRatio',Vector3.new(.5,1,1));half:SetAttribute('CenterRatio',Vector3.new((index*2-3)*.25,0,0))
+ half.Parent=halves
+end
+rockDamage.feedback=CrystalImpactView.new(fx,{play=function(_,name) table.insert(audio,name) end},function(_,_,at)
+ table.insert(cameraKicks,at)
+end,nil,function(name) if name=='Original' then return halves end end)
+local source=Instance.new('UnionOperation');source.Parent=workspace
+source.Color=Color3.fromRGB(89,150,234)
+for k,v in pairs({Kind='Crystal',ZoneName='Ruby',FullSize=Vector3.one*3,FullPosition=Vector3.new(0,1.5,0),
+ ReferenceCrystal=true,CrystalCut='Original',QuarryCrystal=true,StageSeed=4,SpawnAt=95,ReadyAt=97,
+ MaxHP=300,HP=300,Stage=0,StageCount=3,GroundY=0}) do source:SetAttribute(k,v) end
+local r={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,100,3)}
+r.view.Parent=fx
+r.stoneColor,r.stoneGradient=RockFinish.apply(r.view,source.Color)
+assert(r.view.Material==Enum.Material.Concrete and r.view.Reflectance==0 and #r.stoneGradient==4 and r.stoneColor.R<.65)
+local resources={r}
+crystalFrame(resources,100)
+local function shot(at,hp,stage)
+ source:SetAttribute('CutContactPoint',Vector3.new(0,2,1));source:SetAttribute('CutContactNormal',Vector3.zAxis)
+ source:SetAttribute('CutIsShot',true);source:SetAttribute('CutContactAt',at)
+ source:SetAttribute('HP',hp);source:SetAttribute('Stage',stage);r.dirty=true
+end
+shot(101.01,285,0)
+crystalFrame(resources,101)
+assert(not r.dirty and r.lastContactAt==0 and r.nextContactAt==101.01 and #audio==0,'future contact was consumed on a settled rock')
+crystalFrame(resources,101.02)
+assert(r.lastContactAt==101.01 and r.flashAt==101.02 and #audio==2,'settled rock lost the scheduled shot')
+assert(audio[1]=='crystal_snap' and audio[2]=='crystal_electric')
+local shaving=rockDamage.feedback.pieces[1].p
+assert(shaving.Material==r.view.Material and shaving.Reflectance==0 and shaving.Color.R<.65,
+ 'impact shavings still used the replicated rock finish')
+crystalFrame(resources,101.075)
+assert(audio[3]=='crystal_chip')
+crystalFrame(resources,101.25)
+assert(#audio==3)
+
+shot(102.01,220,1)
+crystalFrame(resources,102)
+assert(r.visual.stage==0 and #cues==0 and #audio==3,'fracture ran before the shot')
+crystalFrame(resources,102.01)
+assert(r.visual.stage==0 and r.flashAt==102.01 and #audio==5,'fracture skipped the contact hold')
+crystalFrame(resources,102.06)
+assert(r.visual.stage==1 and #cues==1 and audio[6]=='crystal_chip','the retained contact did not crack once')
+
+local holds={}
+local function requestHold(kind) table.insert(holds,kind) end
+local heldSize,heldPose=r.view.Size,r.view.CFrame
+shot(103.01,0,3)
+source:SetAttribute('BreakSerial',1);source:SetAttribute('CrystalBreakAt',103.01);source:SetAttribute('CrystalSplitAt',103.01);source:SetAttribute('CrystalBreakOwner',42)
+rockDamage.feedback:requestBreakHold(r,103,requestHold)
+crystalFrame(resources,103)
+assert(r.view.Transparency==0 and not r.visual.broken and #audio==6 and #holds==0,'break ran before the shot landed')
+rockDamage.feedback:requestBreakHold(r,103.01,requestHold)
+rockDamage.feedback:requestBreakHold(r,103.02,requestHold)
+assert(#holds==1 and holds[1]=='Split' and r.view.Size==heldSize and r.view.CFrame==heldPose,
+ 'the finishing hit did not request exactly one hold of the intact pose')
+assert(#audio==6 and #cameraKicks==0 and splitParticles==0,'release cues ran before the hold ended')
+crystalFrame(resources,103.07)
+assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==9 and #cues==1,
+ 'the first frame back did not split and play the impact sounds')
+assert(audio[7]=='crystal_split' and audio[8]=='crystal_impact' and audio[9]=='crystal_release_tink'
+ and #cameraKicks==1 and cameraKicks[1]==103.07 and splitParticles==1)
+for _,gradient in ipairs(r.stoneGradient) do
+ assert(gradient.LocalTransparencyModifier==1,'a rock gradient remained visible after the split')
+end
+local split=rockDamage.feedback.fractures
+local streaks=0
+for _,entry in ipairs(rockDamage.feedback.sparks) do
+ if entry.p.Name=='CrystalFireworkStreak' then
+  streaks+=1
+  assert(entry.p.Color==source.Color,'the flying rectangles lost their ore tint')
+ end
+end
+assert(streaks==5,'the split lost its flying rectangles')
+assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Material==Enum.Material.Concrete
+ and split[1].p.Color.R>.18 and split[2].p.Color.R>.18,
+ 'a shot that skipped stages failed to open the visible final-stage stone model')
+local startGap=(split[2].p.Position-split[1].p.Position).Magnitude
+rockDamage.feedback:step(103.23)
+assert((split[2].p.Position-split[1].p.Position).Magnitude>startGap+.15,'the halves did not separate')
+local late={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=103.01,lastBreakAt=103.01,visual=Feel.newStagePresentation(3,true,103.08,3)}
+late.view.Parent=fx
+rockDamage.feedback:requestBreakHold(late,103.08,requestHold)
+crystalFrame({late},103.08)
+assert(late.view.Transparency==1 and #holds==1 and #audio==9 and #cues==1 and #cameraKicks==1 and splitParticles==1,
+ 'a late observer replayed a prior hit')
+for frame=10,120 do crystalFrame(resources,103.07+frame/60) end
+assert(#audio==11 and audio[10]=='crystal_fall_tink' and audio[11]=='crystal_fall_tink'
+ and #rockDamage.feedback.pieces==0 and #split==0,'falling shards did not play one tink per selected contact and clean up')
+assert(#rockDamage.feedback.sparks==3,'only the slow ember layer should remain after two seconds')
+for _,spark in ipairs(rockDamage.feedback.sparks) do
+ assert(spark.p.Name=='CrystalDriftingEmber' and spark.p.Transparency<1)
+ assert(spark.p.Color==source.Color and spark.p.Size.X<.15,'lingering dust lost its small size or ore tint')
+end
+rockDamage.feedback:step(107)
+assert(#rockDamage.feedback.sparks==0,'long sparks did not clean up')
+
+local prismParticles=0
+local impactParticles=RoleVisuals.ImpactParticles
+RoleVisuals.ImpactParticles=function(point,color,strength,kind)
+ if kind=='PrismBlast' then prismParticles+=1 end
+ impactParticles(point,color,strength,kind)
+end
+local charred=source:Clone();charred.Parent=workspace
+for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,ClusterBlackAt=104.34,BlastClusterSize=7}) do charred:SetAttribute(key,value) end
+local target={source=charred,view=charred:Clone(),baseColor=charred.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,104,3)}
+target.view.Parent=fx
+target.stoneColor,target.stoneGradient=RockFinish.apply(target.view,target.baseColor)
+crystalFrame({target},104)
+local beforeChar,size=target.view.Color,target.view.Size
+crystalFrame({target},104.33)
+assert(target.view.Color==beforeChar and #audio==11,'the target reacted before beam contact')
+crystalFrame({target},104.35)
+rockDamage.feedback:applyTints(104.35)
+assert(target.view.Color.R>.20 and target.view.Color.R<beforeChar.R*.65 and (target.view.Size-size).Magnitude<.001 and #audio==11,
+ 'beam contact failed to darken the rock in place while keeping its stone color')
+for _,gradient in ipairs(target.stoneGradient) do assert(gradient.Color3.R>0,'the gradient went fully black') end
+for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=104.84,CrystalBreakAt=104.84,CrystalSplitAt=104.84,CutProjectile='Prism'}) do
+ charred:SetAttribute(key,value)
+end
+target.dirty=true
+rockDamage.feedback:requestBreakHold(target,104.84,requestHold)
+assert(#holds==1 and target.view.Transparency==0 and target.view.Size==size and #audio==11,
+ 'Ramiel queued a second hold after its post-beam beat')
+crystalFrame({target},104.84)
+assert(target.view.Transparency==1 and audio[12]=='prism_blast' and #audio==14 and prismParticles==1,'the charred target did not explode once')
+crystalFrame({target},104.97)
+assert(#audio==14,'the prism explosion replayed')
+charred:Destroy();target.view:Destroy()
+
+workspace.CurrentCamera=Instance.new('Camera');workspace.CurrentCamera.Parent=workspace
+workspace.ChildAdded=signal()
+do
+ local camera=workspace.CurrentCamera
+ camera.WorldToViewportPoint=function() return Vector3.zero,true end
+ local frame=camera.CFrame
+ local held={restPose=CFrame.new(),source=source,breakHoldRequestedAt=150}
+ for kind,frames in pairs({Split=1,HeavySplit=2,Nomad=4}) do
+  local stop=ImpactFreeze.new(owner)
+  stop:request(kind,held)
+  for i=0,frames do
+   stop:beginFrame(150+i/60,1/60,false)
+   assert((stop:holds(held)==true)==(i<frames),'incorrect rendered hold length for '..kind)
+   assert(not stop:holds({}) and camera.CFrame==frame,'hitstop affected the camera or an unrelated resource')
+  end
+ end
+ local stop=ImpactFreeze.new(owner)
+ local neighbor={restPose=CFrame.new(),source=source,breakHoldRequestedAt=151}
+ source:SetAttribute('CutProjectile','Nomad')
+ held.breakHoldRequestedAt=151
+ stop:request('Nomad',held);stop:beginFrame(151,1/60,false)
+ assert(stop:holds(neighbor) and stop:holdsNomad(151) and not stop:holdsNomad(151.2),'Nomad release lost its common clock')
+ stop:beginFrame(151.08,1/60,false)
+ assert(not stop:holds(neighbor) and not stop:holdsNomad(151),'Nomad hold outlived its release')
+ stop:request('Split',held);stop:beginFrame(152,1/60,true)
+ assert(not stop:holds(held),'reduced motion must skip hitstop')
+end
+local roleFolder=Instance.new('Folder');roleFolder.Name='DroneRoleState';roleFolder.ChildAdded=signal();roleFolder.Parent=workspace
+local function receipt(actor,start,shape,windup)
+ local node=Instance.new('Folder');node.Parent=roleFolder
+ for k,v in pairs({Kind='MiningShot',Shape=shape or 'Ball',Actor=actor,StartedAt=start,Windup=windup or 0,Duration=.25,
+  From=Vector3.new(0,2,0),Position=Vector3.new(0,2,8),Color=Color3.new(1,1,1),TargetId='live'}) do node:SetAttribute(k,v) end
+ return node
+end
+local node=receipt('gunner',110,'Ball',.28)
+local muzzle=Instance.new('Attachment');muzzle.WorldPosition=Vector3.new(0,2,0)
+local aiming={source=Instance.new('Model'),shotMuzzle=muzzle,beam={holder=fx}}
+local aimView=Instance.new('Part');aimView.Parent=fx;aimView.Position=Vector3.new(0,2,8)
+local aimSource=Instance.new('Part');aimSource:SetAttribute('HP',80)
+local aimTarget={id='live',view=aimView,source=aimSource}
+RoleEffectView.aim(aiming,aimTarget,110)
+local sight=assert(aiming.sight)
+local initial=sight.line.Attachment1.WorldPosition.Z
+assert(sight.line.Enabled and initial>1 and initial<3 and sight.dot.Transparency==1)
+node:SetAttribute('TargetAnchor',Vector3.new(.30,0,-.48));aiming.shotReceipt=node
+aimView.Position=Vector3.new(1,2,7)
+RoleEffectView.aim(aiming,aimTarget,110.16)
+assert(sight.dot.Position.X>1.2 and sight.line.Attachment0==muzzle,'sight missed the moving receipt anchor')
+assert(sight.dot.Transparency<1 and sight.line.Attachment1.WorldPosition.Z>initial+3)
+local dash=sight.line.Transparency[2].Time*sight.length
+local alpha=sight.line.Transparency[3].Value
+aimView.Position=Vector3.new(1,2,5)
+RoleEffectView.aim(aiming,aimTarget,110.16)
+assert(math.abs(sight.line.Transparency[2].Time*sight.length-dash)<1e-6,'dash stretched with target range')
+RoleEffectView.aim(aiming,aimTarget,110.23)
+assert(math.abs(sight.line.Transparency[3].Value-alpha)>.005,'dash pattern did not move in a hold')
+RoleEffectView.aim(aiming,aimTarget,110.39)
+assert(not sight.line.Enabled and sight.dot.Transparency==1)
+aimSource:Destroy();aimView:Destroy();muzzle:Destroy();aiming.source:Destroy()
+local shotAudio={}
+local shotBeats={}
+local observer=RoleEffectView.new({play=function(_,name,_,options) table.insert(shotAudio,{name,options}) end},nil,nil,nil,function(kind)
+ table.insert(shotBeats,kind)
+end)
+local gunner={}
+local drones={gunner=gunner,late={}}
+local targets={live={view=r.view}}
+observer:step(110.03,drones,targets)
+assert(not observer.records[node].projectile and gunner.shotReceipt==node and shotAudio[1][1]=='coil_load')
+observer:step(110.16,drones,targets)
+local loaded=assert(observer.records[node].load)
+local gathered=loaded.core.Size.X
+observer:step(110.26,drones,targets)
+assert(loaded.core.Size.X>gathered and loaded.core.Transparency<.35 and loaded.ring.rays[1].beam.Enabled,
+ 'the loading pose did not build a visible charge')
+observer:step(110.32,drones,targets)
+assert(observer.records[node].projectile and gunner.shotReceipt==node)
+assert(not observer.records[node].load and not loaded.root.Parent,'the charge stayed behind when the shot fired')
+assert(shotAudio[2][1]=='coil_fire' and table.concat(shotBeats,',')=='BallFire')
+local muzzleBurst=observer.bursts[#observer.bursts]
+assert(muzzleBurst.lamp and muzzleBurst.lamp.Enabled and muzzleBurst.lamp.Brightness>0,'shot did not light nearby surfaces')
+node:SetAttribute('ContactAt',110.54);node:SetAttribute('ContactFracture',true)
+observer:step(110.53,drones,targets)
+assert(observer.records[node].projectile and #shotAudio==2,'projectile vanished or hit before contact')
+assert(not muzzleBurst.lamp.Enabled and muzzleBurst.node.Parent,'source light outlived its flash or cut the particle tail')
+observer:step(110.54,drones,targets)
+assert(not observer.records[node].projectile and shotAudio[3][1]=='coil_hit' and shotAudio[3][2].level>1)
+assert(observer.records[node].after and not observer.records[node].trail.Enabled,'shot wake disappeared with the projectile head')
+local wake=observer.records[node].after
+node:Destroy()
+local old=receipt('late',110.01);old:SetAttribute('ContactAt',110.27)
+roleFolder.ChildAdded:Fire(old)
+local fresh=receipt('late',110.33,'Dart');fresh:SetAttribute('ContactAt',110.59)
+roleFolder.ChildAdded:Fire(fresh)
+observer:step(110.60,drones,targets)
+assert(observer.records[node].after==wake and wake.Parent,'receipt removal cut the shot trail before it could fade')
+assert(#shotAudio==4 and shotAudio[4][1]=='needle_hit' and not drones.late.shotReceipt,'fresh receipt without a projectile lost impact or old contact replayed')
+local needleBurst=observer.bursts[#observer.bursts]
+assert(needleBurst.flash.Shape==Enum.PartType.Ball and needleBurst.flash.Size.Z<needleBurst.flash.Size.X,
+ 'Needler contact exposed a rectangular flash or a spike through the surface')
+owner:SetAttribute('ReducedFlashing',true)
+observer:step(110.61,drones,targets)
+assert(not needleBurst.lamp.Enabled,'changing reduced flashing did not suppress local shot light')
+owner:SetAttribute('ReducedFlashing',nil)
+observer:step(111.22,drones,targets)
+assert(table.concat(shotBeats,',')=='BallFire,BallHit,NeedleHit','missing or repeated camera beats on shot receipts')
+assert(#shotAudio==4 and not observer.records[node] and not wake.Parent and observer.trails==0 and observer.heads==0 and #observer.bursts==0,
+ 'contact replayed or shot visuals leaked')
+local prismCore=Instance.new('Part');prismCore.Parent=fx
+local prism={core=prismCore,scale=1}
+RoleEffectView.ramielCharge(prism,.55,2.20,false)
+local chargeField=assert(prism.chargeField)
+assert(chargeField.motes[1].gui.Enabled,'charge did not visibly overlap the unfolding shell')
+local function widthAt(remaining)
+ RoleEffectView.ramielCharge(prism,.95,remaining,false)
+ return chargeField.gui.Size[1]
+end
+local first,held,growing,ignition=widthAt(2.20),widthAt(.74),widthAt(.105),widthAt(0)
+assert(held>first*3 and growing>held*3 and ignition>growing*1.7 and ignition>6,'flare lost its early rise or big release')
+assert(chargeField.halo.gui.Enabled and chargeField.halo.image.Image=='rbxasset://textures/ui/VR/circleWhite.png')
+assert(chargeField.ring.rays[1].beam.Enabled,'flare ring missing at ignition')
+assert(chargeField.lamp.Enabled and chargeField.lamp.Brightness>7,'release did not light its glass')
+RoleEffectView.ramielCharge(prism,1,.17,false)
+local before=(chargeField.rays[1].tip.WorldPosition-chargeField.root.Position).Unit
+RoleEffectView.ramielCharge(prism,1,-.055,false)
+local after=(chargeField.rays[1].tip.WorldPosition-chargeField.root.Position).Unit
+assert(before:Dot(after)<-.60,'the star rays did not swing through the flash')
+assert(chargeField.wake.rays[1].beam.Enabled,'release pressure wave did not separate from the core flare')
+RoleEffectView.ramielCharge(prism,1,-.30,false)
+assert(chargeField.rays[1].core.Transparency[1].Value<1,'the launch star disappeared during the shot')
+local launchSize=chargeField.gui.Size[1]
+local launchOpacity=chargeField.rays[1].core.Transparency[1].Value
+RoleEffectView.ramielCharge(prism,1,-.32,false)
+assert(chargeField.gui.Size[1]==launchSize and chargeField.rays[1].core.Transparency[1].Value~=launchOpacity,
+ 'the launch star changed size or failed to flicker')
+RoleEffectView.ramielCharge(prism,1,-.22,false)
+local secondStar=assert(chargeField.sustainRays)[1].core
+local width,opacity=secondStar.Width0,secondStar.Transparency[1].Value
+assert(opacity<1 and width<chargeField.rays[1].core.Width0*.6,'the smaller firing star was missing during the beam')
+RoleEffectView.ramielCharge(prism,1,-.28,false)
+assert(math.abs(secondStar.Width0-width)>.001 and math.abs(secondStar.Transparency[1].Value-opacity)>.01,
+ 'the firing star did not flicker in size and opacity')
+RoleEffectView.ramielCharge(prism,1,-.43,false)
+assert(not prism.chargeField and not chargeField.root.Parent,'flare leaked past the beam hold')
+local beamCalls,kicks={},0
+local waves,shatters={},{}
+local chargeKicks={}
+RoleVisuals.Beam=function(...) table.insert(beamCalls,{...}) end
+RoleVisuals.PrismWave=function(...) table.insert(waves,{...}) end
+RoleVisuals.PrismShatter=function(...) table.insert(shatters,{...}) end
+local loop,launches,cracks=nil,0,0
+local audio={
+ setLoop=function(_,_,name,_,level) loop={name=name,level=level} end,
+ stopLoop=function() loop=nil end,
+ play=function(_,name) if name=='prism_fire' then launches+=1 elseif name=='prism_blast' then cracks+=1 end end,
+}
+local discharge=RoleEffectView.new(audio,function() kicks+=1 end,nil,function(_,point,level)
+ chargeKicks[#chargeKicks+1]={point=point,level=level}
+end)
+local cast=receipt('ramiel',115,'Prism',4.94)
+local beamDuration=DroneCatalog.Types.Ramiel.BeamHold
+cast:SetAttribute('Duration',.06);cast:SetAttribute('BeamHold',beamDuration)
+roleFolder.ChildAdded:Fire(cast)
+local prismDrones={ramiel={ramiel=prism}}
+discharge:step(115.2,prismDrones,targets)
+assert(not discharge.records[cast].prismAim)
+discharge:step(116.7,prismDrones,targets)
+local sight=assert(discharge.records[cast].prismAim)
+local aimWidth=sight.core.Width0
+assert(sight.tip.WorldPosition==cast:GetAttribute('Position') and sight.dot.Transparency<1 and #chargeKicks==0)
+discharge:step(119.95,prismDrones,targets)
+assert(sight.core.Width0>aimWidth*1.5 and #chargeKicks==1 and chargeKicks[1].level>.97,
+ 'the aim and camera cue did not build during the charge')
+assert(#beamCalls==0 and #waves==0 and kicks==0 and loop.name=='prism_charge','Ramiel fired before contact or missed its charge sound')
+cast:SetAttribute('PrismFrom',Vector3.zero)
+cast:SetAttribute('PrismEnd',Vector3.new(0,8,32))
+cast:SetAttribute('PrismGroundNormal',Vector3.yAxis)
+cast:SetAttribute('PrismHits',1);cast:SetAttribute('PrismHit1',Vector3.new(0,5,20))
+cast:SetAttribute('ContactAt',120)
+cast:SetAttribute('ContactPoint',Vector3.new(0,2,8))
+local floor=Vector3.new(0,0,8)
+cast:SetAttribute('BlastGround',floor);cast:SetAttribute('BlastRadius',11)
+discharge:step(120.01,prismDrones,targets)
+assert(#beamCalls==1 and kicks==1 and #waves==1 and #shatters==0)
+assert(not sight.root.Parent and not discharge.records[cast].prismAim,'the charge guide survived the firing beat')
+assert(waves[1][1]==floor and waves[1][2]==11 and waves[1][3]==beamDuration,'the shockwave did not share the beam beat')
+local beam=beamCalls[1]
+assert(math.abs(beam[1].Magnitude-1.22)<1e-6 and beam[2].Z==32 and beam[4]>=1.5 and beam[5]==beamDuration and beam[6]=='Prism')
+assert(beam[7]==Vector3.yAxis,'ground normal did not reach the renderer')
+local lighting=game:GetService('Lighting')
+local exposure=assert(lighting:FindFirstChild('RamielReleaseExposure'))
+local bloom=assert(lighting:FindFirstChild('RamielReleaseBloom'))
+assert(exposure.Enabled and exposure.Brightness>.9 and bloom.Enabled,'fresh shot did not wash the scene white')
+assert(#discharge.bursts==3,'the extra server contact had no impact effect')
+cast:SetAttribute('PausedAt',120.03)
+discharge:step(120.12,prismDrones,targets)
+assert(loop.name=='prism_sustain' and loop.level>1,'a work pause cut off the audible beam')
+assert(exposure.Brightness>.10 and exposure.Brightness<.50,'release did not clear quickly enough to show the shot')
+discharge:step(120.43,prismDrones,targets)
+assert(#beamCalls==1 and kicks==1 and launches==1,'Ramiel discharge replayed')
+assert(not loop,'the firing loop outlived the beam')
+discharge:step(120.45,prismDrones,targets)
+assert(not exposure.Parent and not bloom.Parent,'lighting did not recover after the shot')
+cast:SetAttribute('ShatterAt',120.50)
+discharge:step(120.49,prismDrones,targets)
+assert(#shatters==0 and cracks==0,'rubble or shatter audio fired during the blackout')
+discharge:step(120.51,prismDrones,targets)
+discharge:step(120.52,prismDrones,targets)
+assert(#shatters==1 and shatters[1][1]==floor and shatters[1][3]==120.50 and cracks==1 and #waves==1,
+ 'the confirmed break must release rubble and sound exactly once')
+local latePrism=RoleEffectView.new(nil,function() kicks+=1 end)
+local lateDrones={ramiel={ramiel=prism}}
+latePrism:step(120.23,lateDrones,targets)
+assert(#beamCalls==2 and kicks==2 and lateDrones.ramiel.shotReceipt==cast,'late observer lost the remaining beam or its shake')
+assert(not lighting:FindFirstChild('RamielReleaseExposure'),'late observer replayed the white flash')
+latePrism:destroy()
+discharge:destroy();cast:Destroy()
+local player=game:GetService('Players').LocalPlayer
+player:SetAttribute('ReducedFlashing',true)
+local reducedCast=receipt('reduced',125,'Prism',4.94)
+reducedCast:SetAttribute('ContactAt',130)
+local reducedPrism=RoleEffectView.new(nil)
+reducedPrism:step(129.91,{},targets)
+local reducedAim=assert(reducedPrism.records[reducedCast].prismAim)
+assert(reducedAim.core.Enabled and not reducedAim.glow.Enabled,'reduced flashing lost the steady aim line')
+reducedPrism:step(130.01,{},targets)
+assert(#beamCalls==3 and not reducedAim.root.Parent and not lighting:FindFirstChild('RamielReleaseExposure'),
+ 'reduced flashing suppressed the beam, left the aim or replayed the flash')
+reducedPrism:destroy();reducedCast:Destroy();player:SetAttribute('ReducedFlashing',nil)
+local bomb=receipt('nomad',125,'Nomad',4.05)
+bomb:SetAttribute('Duration',.95);bomb:SetAttribute('ContactAt',130)
+bomb:SetAttribute('BlastGround',workspace.CurrentCamera.CFrame.Position)
+local nomad=RoleEffectView.new(nil)
+nomad:step(130.02,{},targets)
+assert(not lighting:FindFirstChild('NomadImpactExposure'),'restored pre-particle Nomad unexpectedly flashes the screen')
+nomad:step(130.46,{},targets)
+nomad:destroy()
+player:SetAttribute('ReducedFlashing',true)
+local reducedNomad=RoleEffectView.new(nil)
+reducedNomad:step(130.02,{},targets)
+assert(not lighting:FindFirstChild('NomadImpactExposure'),'Nomad ignored reduced flashing')
+reducedNomad:destroy();player:SetAttribute('ReducedFlashing',nil);bomb:Destroy()
+prismCore:Destroy()
+local sustained=source:Clone();sustained.Color=Color3.fromRGB(205,26,63);sustained.Parent=workspace
+for key,value in pairs({HP=270,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreakAt=0,CutIsShot=false,CutFractured=false}) do
+ sustained:SetAttribute(key,value)
+end
+local cutting={source=sustained,view=sustained:Clone(),baseColor=sustained.Color,dirty=true,cutFeedback=rockDamage.feedback,
+ lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,135,3)}
+cutting.view.Parent=fx
+local priorColor
+for frame=0,45 do
+ local now=135+frame/60
+ sustained:SetAttribute('CutContactAt',now);cutting.dirty=true
+ crystalFrame({cutting},now);rockDamage.feedback:cut(cutting,now,1);rockDamage.feedback:applyTints(now)
+ assert(not cutting.flashAt or cutting.flashAt==135,'steady cutting restarted the rock flash')
+ local color=cutting.view.Color
+ if priorColor then assert(math.abs(color.G-priorColor.G)<.07,'a steady cut produced a visible brightness jump') end
+ priorColor=color
+end
+sustained:Destroy();cutting.view:Destroy()
+
+-- Contact debris must reach the floor before its fade, including high contacts.
+-- Test dense cuts and several display rates without changing damage or drops.
+for _,fps in ipairs({30,60,144}) do
+ local debris=CrystalImpactView.new(fx,nil)
+ local mineral=Instance.new('Part')
+ RockFinish.apply(mineral,Color3.fromRGB(205,26,63))
+ debris:chips(200,Vector3.new(0,8,0),Vector3.zAxis,mineral,6,0)
+ local chips=table.clone(debris.pieces)
+ local sizes={}
+ assert(#chips==6)
+ for frame=0,fps*2 do
+  local now=200+frame/fps
+  debris:step(now)
+  for _,piece in ipairs(chips) do
+   if piece.p.Parent then
+    assert(piece.p.Material==mineral.Material and piece.p.Reflectance==mineral.Reflectance)
+    assert(piece.p.Color.R>piece.p.Color.G and piece.p.Color.R-piece.p.Color.G<.22,'chips lost their muted stone tint')
+    local magnitude=piece.p.Size.Magnitude
+    assert(not sizes[piece] or magnitude<sizes[piece],'chip stopped shrinking before cleanup')
+    assert(piece.p.Transparency<.21,'chip faded instead of shrinking')
+    sizes[piece]=magnitude
+   end
+  end
+ end
+ for _,piece in ipairs(chips) do assert(piece.landedAt and not piece.p.Parent,'chip did not land and clean up') end
+ for n=1,20 do debris:chips(203,Vector3.new(0,2,0),Vector3.yAxis,mineral,6,0) end
+ assert(#debris.pieces<=28,'ordinary chips consumed the fracture reserve')
+ debris:destroy();mineral:Destroy()
+end
+
+local ring=PlaneBurst.create(fx,Color3.new(1,0,0))
+for _,normal in ipairs({Vector3.yAxis,Vector3.zAxis,Vector3.new(1,1,0).Unit}) do
+ PlaneBurst.pose(ring,normal,3,.7,.2)
+ for i,arc in ipairs(ring.rays) do
+  local nextArc=ring.rays[i%4+1]
+  assert((arc.b.Position-nextArc.a.Position).Magnitude<1e-6,'pressure front has an open geometric join')
+  local alpha=arc.beam.Transparency
+  assert(alpha[1].Value<.4 and alpha[#alpha].Value==nextArc.beam.Transparency[1].Value,
+   'internal pressure-wave seams faded into four separate arcs')
+ end
+end
+PlaneBurst.draw(ring,Vector3.yAxis,0,1,true,false)
+for _,arc in ipairs(ring.rays) do
+ assert(arc.beam.Enabled and arc.beam.Transparency[1].Value==0 and arc.beam.Transparency[2].Value==0
+  and (arc.beam.Color[1].Value-Vector3.one).Magnitude<1e-6,
+  'bullet ring must open fully opaque white')
+end
+PlaneBurst.draw(ring,Vector3.yAxis,.42,1,true,false)
+assert(ring.rays[2].beam.Transparency[2].Value>ring.rays[1].beam.Transparency[1].Value)
+assert(ring.rays[2].beam.Color[2].Value.G<.9,'ring did not take on its attack color')
+PlaneBurst.draw(ring,Vector3.yAxis,0,1,true,true)
+assert(ring.rays[1].beam.Transparency[1].Value>=.5,'reduced flashing did not soften the opening')
+PlaneBurst.destroy(ring)
+observer:destroy();rockDamage.feedback:destroy();fx:Destroy()
+print('PASS crystal contact clock keeps projectile, flash, fracture, split and audio in order without replay')

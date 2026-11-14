@@ -1,0 +1,45 @@
+# Mining and sentry effects: cloud implementation review
+
+Status: implemented and tested against deterministic Luau and synthetic API doubles. **Visual quality and motion are NOT VERIFIED**: this cloud session has no accessible Roblox Studio renderer. The independent art director retains veto; neither these tests nor historical screenshots approve the final revision.
+
+## What the code changes
+
+- The original `MiningFX.Beam` InnerBeam/OuterBeam objects are reused when present, while stale texture, curve and segmentation properties are normalized. The core is a narrow warm-white ribbon; the mint halo is wider and mostly transparent. Both face the camera, use straight one-segment geometry and a slight depth offset. Clearing the inherited scrolling texture prevents an unknown repeated texture from cropping a continuous beam. This is a code-level choice, not proof of its appearance at different graphics settings.
+- A muzzle attachment is parented to the rendered emitter and located at the authored shell's lower surface. It follows the rendered drone after hover, easing, hit feedback and recoil; it does not copy a world coordinate into an attachment's local `Position`.
+- The impact endpoint samples the visible cloned crystal union or the rendered original pyramid eye shell, rather than the server collider's old full-size center. A target-only raycast finds a collision surface; an exclusion ray checks for foreground obstructions. The local visual's `CanQuery` is temporarily enabled only for the non-yielding cosmetic query and restored even on failure. Failure, an unstreamed target or an obstruction disables the contact instead of inventing a floating endpoint. The collision proxy can differ from the actual rendered triangle surface; Studio inspection is required.
+- Each verified hit is saved in the target part's normalized object-space coordinates. Between samples it is transformed through the *current* Size and CFrame on every render, so crystal resizing/tilting and animated sentry-eye movement carry the point. Target/life/model changes invalidate the cache. At most twelve raycasts are budgeted per client render frame; each new sample uses up to two. A not-yet-sampled effect remains hidden rather than drawing an unverified contact.
+- `CombatTargetId`, `ForkTargetId` and `ChainTargetId` are server-published visual target identities. The client resolves them to the corresponding current viewmodel. These IDs do not authorize damage, rewards, targeting or movement. Sentry views update before drone attack beams, avoiding a one-frame lag behind animated eyes. Secondary arcs are shown only while the server's proc timer is active and both endpoints resolve.
+- The original inner beam's two-second buildup starts when server mining begins, independent of card-adjusted warmup; its valid previous target fades over 0.2 seconds. The impact marker requires the server's mining/attack flag. Target loss, occlusion, dead/reprinting life and failed queries clear the effect. Exact motion and transitions require engine review.
+- A tiny untextured contact ball replaces the continually emitted `sparkles_main.dds` sprite. Broken/staged crystals produce at most three small clones of the original crystal, launched outside and away from the most recently verified surface contact; no opaque-square particle texture is added. Fragments and transient effects have fixed client budgets and cleanup. They must still be inspected from multiple angles and for ground clipping in Studio.
+- The original sentry charge and fired-shot telegraph remains, but the giant textured billboard flare and stock dust emitter have been removed. The authored eye color and a shorter, dimmer, shadow-free point light carry the charge; textureless thin core/halo ribbons communicate aim/fire. Existing timed shot, hit, destruction and free-reprint behavior stays cosmetic.
+
+## Executed checks
+
+`tests/feedback.spec.lua` exercises real pure lifecycle code at 30/60/120/144 Hz, including size-normalized anchors, bounded invalid values, late-join reconstruction, two-second rise, fade interruption/restart, target switch and death/reprint invalidation. `tests/beam.integration.lua` executes the **actual** Presentation functions against a synthetic Roblox API double: authored muzzle position, stripping inherited textures, camera-facing ribbons, query-flag restoration after exceptions, expected movement/shrink/rotation reconstruction, obstacle and missing-target suppression, two-ray sample budgeting and cleanup. These are non-rendering checks; the API double cannot establish Roblox collision-fidelity behavior or visual quality.
+
+## Mandatory actual-engine evidence
+
+At the exact final built commit, record normal-speed close and ordinary-camera views of follow → 30+ stud assignment → overhead arrival → startup → all three shrinking/tilting stages → break/regrowth → recall. Sweep view angle and normal zoom; compare low/high graphics and desktop/phone sizes. Verify no gaps at the muzzle/impact, no clipped segment/texture, no contact swimming around the actual union, no white squares, no emitted fragment originating inside the rock or passing through unrelated objects, and no pop/jitter during each transition. Repeat during multi-drone geodes, fork/chain effects, turret moving eye/telegraph/fire, a drone's death/reprint, target disappearance and a late join. Check the same at representative fleet count with two actual Studio clients; inspect animated scenery/root contact separately.
+
+A source sketch, this report, simulation or one flattering still does not pass the owner's visual gate. If the union or MeshPart collision hull fails to match its rendered surface, or stock assets fail to load under any tested quality setting, the effect needs a new candidate and fresh review.
+
+## Primary API references
+
+- [Roblox Beam API](https://create.roblox.com/docs/reference/engine/classes/Beam): attachment endpoints, camera facing, segment counts, color/transparency and depth offset.
+- [Roblox ParticleEmitter API](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter): emitted sprite texture, transparency and emission behavior. This pass deliberately avoids the stock sparkle/dust emitters on these paths.
+- [Roblox raycasting](https://create.roblox.com/docs/workspace/raycasting): ray filters and hit position/normal. Raycast-based collision results are not a substitute for a final visual check.
+
+Owner parity clarification: the original inner beam retains its two-second active width ramp and 0.2-second hide. Warmup timing is server-owned and does not advance the inner beam; a separate visible charging cue remains subject to actual Studio motion review.
+
+## Fair contact verification follow-up
+
+An independent API-double reproduction rejected the earlier scheduler: with 48 stable primary beams at 30 FPS, only 18 ever appeared, and a starved previously verified beam stayed visible behind a new wall for 270 frames. The current renderer collects a frame's requests, serves oldest-due primary contacts before optional branches, and retains the 12-ray frame cap. Inactive contacts spend no rays. A verified anchor expires after 0.75 seconds; a valid recall started before expiry may complete its 0.2-second fade. If demand exceeds the available budget, expired beams hide until their fair verification turn instead of retaining a false contact. This deliberately bounded degradation may be visible under severe load and needs real-engine review.
+
+The actual Presentation module's API-double suite covers 48 primaries at 30/60/144 FPS with and without branches, inactive predecessors, primary priority, wall appearance, 240-beam overload and recovery, continued arrivals, and recall/fade expiry boundaries. An independent countercheck observed all 48 at 30 FPS and the obstructed late beam clearing within seven frames. These are not Studio render or multiplayer tests; the visual gate remains NOT VERIFIED.
+
+
+## Primary and branch fairness correction
+
+Independent API-double reproduction rejected the prior strict-primary scheduler: ordinary 18+18 at 30 FPS and 30+30 at 60 FPS displayed no branches over ten seconds. The revised frame scheduler allocates a bounded 12-ray budget to both classes based on their loads, retaining primary-first order and returning unused slots. A server-observed short fork or chain proc can wait for verification for at most 1.2 seconds and, once verified, its cosmetic continuation lasts at most 0.12 seconds; it carries no gameplay authority. Invalidated, dead, retargeted or occluded contacts cannot persist. Under loads beyond available capacity a waiting proc can expire unseen; this is a deliberate bounded limitation, not a guarantee of unlimited display.
+
+Thirty-six actual Presentation/API-double checks pass, including sustained 18/30/48 branches across frame rates, .18-second bursts, uneven 80-primary/43-branch load, 240-contact overload, churn, expiry and the original fade. Independent review reproduced the baseline and challenged the revised unequal-load case. This is not Studio rendering or multiplayer evidence.

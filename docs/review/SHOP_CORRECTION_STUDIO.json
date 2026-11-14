@@ -1,0 +1,52 @@
+{
+  "place_id": 136098934779395,
+  "verified": {
+    "ReplicatedStorage.Shared.DroneConfig": {
+      "bytes": 11176,
+      "hash": 1584961026,
+      "sha256": "c3258ae28b35312565d0114253321836af17c0809a9be8f758ba0bf96ae14eae"
+    },
+    "ServerScriptService.DroneRoleEffects": {
+      "bytes": 7215,
+      "hash": 262043406,
+      "sha256": "1689ceb4ab54a9aaa0f17d441c3f48093959f0518c82c562af2b3e8c941d030f"
+    },
+    "ReplicatedStorage.Shared.CrystalAudio": {
+      "bytes": 6387,
+      "hash": 1138997247,
+      "sha256": "5057652b3cb85998aa7840e53b6a12edf0b73d08361998523f17c36e7d706b68"
+    },
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": {
+      "bytes": 228994,
+      "hash": 353738297,
+      "sha256": "ae5e3a92446c617fb699915ad09dc1c365d8dbb4104d6a4fbe76d8f65a758b13"
+    },
+    "ReplicatedStorage.Shared.TacticalHUD": {
+      "bytes": 20189,
+      "hash": 583699677,
+      "sha256": "364bc3042fd5686902021370380f413b70faf3280a3144543137fd3b3862ea1a"
+    },
+    "ServerScriptService.MiningDiscoveries": {
+      "bytes": 7317,
+      "hash": 1740638684,
+      "sha256": "87036dd88d392a320fd6a46cd69d71f6fa5d6713267fea608aac5b970731b719"
+    },
+    "ServerScriptService.GlobalDroneControl": {
+      "bytes": 273009,
+      "hash": 540149128,
+      "sha256": "8172bb4e6e135a97955cb1c6b3e2f7ea4c0ea0f0b258aa1fb664de6431cd7c53"
+    }
+  },
+  "owner_authorized_stop": true,
+  "play_started": false,
+  "mode": "Edit",
+  "changed_sources": [
+    "ServerScriptService.GlobalDroneControl",
+    "ReplicatedStorage.Shared.TacticalHUD",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl"
+  ],
+  "published": false,
+  "http_restored": true,
+  "before_commit": "4bc85a9eeeecad390dc3328b39f2ef1e941994a1",
+  "validation": "Owner-started existing Play was inspected and runtime kiosk/button repair observed. Owner authorized Stop. Final corrected Sources verified in Edit; no new Play started."
+}

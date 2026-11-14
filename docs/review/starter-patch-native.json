@@ -1,0 +1,56 @@
+{
+  "universeId": 10774898335,
+  "sources": {
+    "ReplicatedStorage.Shared.DroneConfig": "1ef69b142a712808d1bf21d389053f248388b47774f1fd019e036a3eb614584c",
+    "ReplicatedStorage.Shared.TacticalHUD": "7f8578cff07c5fec1cc46645d262f7d275772b791735de21c9fcb12d7b4bb690",
+    "ReplicatedStorage.Shared.CrystalAudio": "dc47ebf29dd9062fd0e0980aa42e6ef2c2b20d1eaf26aab951d84a35a8028a74",
+    "StarterPlayer.StarterPlayerScripts.ClientDroneControl": "9fa93a4efbd03834fb044fbc31fdc934661db74422cad09fa1a9346e8eb018f2",
+    "ServerScriptService.DroneRoleEffects": "c04596e85e081bcf56a184e3e419ab0d4c5c011922fd9f83626549b55ca1165e",
+    "ServerScriptService.MiningDiscoveries": "1b00ffe6a06f6a109eb34b28694bb0d0ea94312ba8c8264946e3f723e1f5e6d8",
+    "ServerScriptService.GlobalDroneControl": "d281c63e01f8fd82c968bf3dc9c4645225da19de3e14b173a5e06e90aaff494b"
+  },
+  "roots": {
+    "ServerScriptService": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "ReplicatedStorage.Shared": "Enum.InstanceFileSyncStatus.SyncedAsRoot",
+    "StarterPlayer.StarterPlayerScripts": "Enum.InstanceFileSyncStatus.SyncedAsRoot"
+  },
+  "placeId": 124078027733625,
+  "running": false,
+  "loadedVersion": 90,
+  "art": {
+    "probes": 1089,
+    "place": 124078027733625,
+    "previewRemoved": true,
+    "universe": 10774898335,
+    "version": 90,
+    "fieldHits": 225,
+    "archived": 9,
+    "baseplateHits": 864,
+    "transparency": 0.800000011920929,
+    "size": [
+      30,
+      2,
+      30
+    ]
+  },
+  "nativeFile": "build/DRONE_GAME.rbxl",
+  "nativeSha256": "04968fd49d7ca56cd0b478a89189d4dd2c4577cfc76ac428bd8df72a1241947a",
+  "baselineGit": "5d6dc9f5bb9af1c44de5982f61466b18f3e437fb",
+  "reference": {
+    "placeId": 14302916915,
+    "universeId": 4945273529,
+    "patchSize": [
+      30,
+      2,
+      30
+    ],
+    "patchTransparency": 0.8,
+    "crystalFinish": "red Ice",
+    "crystalTransparency": 0.2
+  },
+  "play": {
+    "startedByTask": 0,
+    "existingTargetPlayStopped": true
+  },
+  "publication": false
+}

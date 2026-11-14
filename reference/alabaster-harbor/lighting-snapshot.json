@@ -1,0 +1,335 @@
+{
+  "name": "Place1",
+  "lighting": {
+    "ClockTime": {
+      "value": 7,
+      "type": "number"
+    },
+    "ColorShift_Bottom": {
+      "value": [
+        0,
+        0,
+        0
+      ],
+      "type": "Color3"
+    },
+    "FogColor": {
+      "value": [
+        0.7960785031318665,
+        0.7725490927696228,
+        0.7176470756530762
+      ],
+      "type": "Color3"
+    },
+    "FogEnd": {
+      "value": 1000000,
+      "type": "number"
+    },
+    "EnvironmentDiffuseScale": {
+      "value": 0.699999988079071,
+      "type": "number"
+    },
+    "Brightness": {
+      "value": 2,
+      "type": "number"
+    },
+    "ColorShift_Top": {
+      "value": [
+        0.4274509847164154,
+        0.32156863808631897,
+        0
+      ],
+      "type": "Color3"
+    },
+    "PrioritizeLightingQuality": {
+      "value": true,
+      "type": "boolean"
+    },
+    "LightingStyle": {
+      "value": "Enum.LightingStyle.Realistic",
+      "type": "EnumItem"
+    },
+    "TimeOfDay": {
+      "value": "07:00:00",
+      "type": "string"
+    },
+    "GlobalShadows": {
+      "value": true,
+      "type": "boolean"
+    },
+    "EnvironmentSpecularScale": {
+      "value": 0.6290000081062317,
+      "type": "number"
+    },
+    "Outlines": {
+      "value": false,
+      "type": "boolean"
+    },
+    "GeographicLatitude": {
+      "value": 360,
+      "type": "number"
+    },
+    "Ambient": {
+      "value": [
+        1,
+        0.9294118285179138,
+        0.7529412508010864
+      ],
+      "type": "Color3"
+    },
+    "OutdoorAmbient": {
+      "value": [
+        0.5764706134796143,
+        0.4274509847164154,
+        0
+      ],
+      "type": "Color3"
+    },
+    "ShadowColor": {
+      "value": [
+        0.699999988079071,
+        0.699999988079071,
+        0.7200000286102295
+      ],
+      "type": "Color3"
+    },
+    "ExposureCompensation": {
+      "value": 0.30000001192092896,
+      "type": "number"
+    },
+    "ShadowSoftness": {
+      "value": 0.6000000238418579,
+      "type": "number"
+    },
+    "FogStart": {
+      "value": 0,
+      "type": "number"
+    }
+  },
+  "placeId": 11490608035,
+  "children": [
+    {
+      "class": "Sky",
+      "name": "Sunless Blue Sky",
+      "properties": {
+        "StarCount": {
+          "value": 0,
+          "type": "number"
+        },
+        "SkyboxUp": {
+          "value": "rbxassetid://591059642",
+          "type": "string"
+        },
+        "MoonTextureId": {
+          "value": "rbxassetid://1345054856",
+          "type": "string"
+        },
+        "SkyboxBk": {
+          "value": "rbxassetid://591058823",
+          "type": "string"
+        },
+        "SkyboxDn": {
+          "value": "rbxassetid://591059876",
+          "type": "string"
+        },
+        "CelestialBodiesShown": {
+          "value": true,
+          "type": "boolean"
+        },
+        "SkyboxLf": {
+          "value": "rbxassetid://591057861",
+          "type": "string"
+        },
+        "SkyboxOrientation": {
+          "value": [
+            0,
+            0,
+            0
+          ],
+          "type": "Vector3"
+        },
+        "SunTextureId": {
+          "value": "rbxassetid://1345009717",
+          "type": "string"
+        },
+        "SunAngularSize": {
+          "value": 10,
+          "type": "number"
+        },
+        "SkyboxFt": {
+          "value": "rbxassetid://591058104",
+          "type": "string"
+        },
+        "SkyboxRt": {
+          "value": "rbxassetid://591057625",
+          "type": "string"
+        },
+        "MoonAngularSize": {
+          "value": 11,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "BloomEffect",
+      "name": "Bloom",
+      "properties": {
+        "Enabled": {
+          "value": true,
+          "type": "boolean"
+        },
+        "Threshold": {
+          "value": 1.5329999923706055,
+          "type": "number"
+        },
+        "Intensity": {
+          "value": 1,
+          "type": "number"
+        },
+        "Size": {
+          "value": 21,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "ColorCorrectionEffect",
+      "name": "ColorCorrection",
+      "properties": {
+        "Enabled": {
+          "value": true,
+          "type": "boolean"
+        },
+        "Saturation": {
+          "value": 0,
+          "type": "number"
+        },
+        "Contrast": {
+          "value": 0.4000000059604645,
+          "type": "number"
+        },
+        "TintColor": {
+          "value": [
+            0.9686275124549866,
+            0.9568628072738647,
+            0.8980392813682556
+          ],
+          "type": "Color3"
+        },
+        "Brightness": {
+          "value": 0,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "DepthOfFieldEffect",
+      "name": "DepthOfField",
+      "properties": {
+        "Enabled": {
+          "value": true,
+          "type": "boolean"
+        },
+        "FarIntensity": {
+          "value": 0.75,
+          "type": "number"
+        },
+        "FocusDistance": {
+          "value": 100,
+          "type": "number"
+        },
+        "InFocusRadius": {
+          "value": 10,
+          "type": "number"
+        },
+        "NearIntensity": {
+          "value": 0,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "Atmosphere",
+      "name": "Atmosphere",
+      "properties": {
+        "Density": {
+          "value": 0.10000000149011612,
+          "type": "number"
+        },
+        "Haze": {
+          "value": 0,
+          "type": "number"
+        },
+        "Color": {
+          "value": [
+            0.9725490808486938,
+            1,
+            0.9647059440612793
+          ],
+          "type": "Color3"
+        },
+        "Decay": {
+          "value": [
+            0.38823533058166504,
+            0.48235297203063965,
+            0.4745098352432251
+          ],
+          "type": "Color3"
+        },
+        "Glare": {
+          "value": 0,
+          "type": "number"
+        },
+        "Offset": {
+          "value": 1,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "SunRaysEffect",
+      "name": "SunRays",
+      "properties": {
+        "Enabled": {
+          "value": true,
+          "type": "boolean"
+        },
+        "Intensity": {
+          "value": 0.10000000149011612,
+          "type": "number"
+        },
+        "Spread": {
+          "value": 1,
+          "type": "number"
+        }
+      }
+    },
+    {
+      "class": "BlurEffect",
+      "name": "Blur",
+      "properties": {
+        "Enabled": {
+          "value": false,
+          "type": "boolean"
+        },
+        "Size": {
+          "value": 40,
+          "type": "number"
+        }
+      }
+    }
+  ],
+  "extra": [
+    {
+      "descendants": 0,
+      "class": "Script",
+      "name": "light cycle",
+      "source": "light = script.Parent\nlight.TimeOfDay = 7\n\n"
+    },
+    {
+      "descendants": 62,
+      "class": "ScreenGui",
+      "name": "lowPolyUI"
+    }
+  ]
+}

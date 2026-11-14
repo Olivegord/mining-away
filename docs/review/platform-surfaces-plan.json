@@ -1,0 +1,1009 @@
+{
+  "baseline": "8ea8c29643431891c5b81d215c4610731665c62555e264644d62932bbf8ecdd0",
+  "edits": [
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Quartz.Turf1",
+      "class": "Part",
+      "anchor": [
+        -105,
+        3.325000047683716,
+        118
+      ],
+      "anchorSize": [
+        140,
+        1.2999999523162842,
+        132
+      ],
+      "before": {
+        "position": [
+          -105,
+          3.325000047683716,
+          118
+        ],
+        "size": [
+          140,
+          1.2999999523162842,
+          132
+        ]
+      },
+      "after": {
+        "position": [
+          -137.5,
+          3.325000047683716,
+          118.0
+        ],
+        "size": [
+          75.0,
+          1.2999999523162842,
+          132.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Impact.Turf1",
+      "class": "Part",
+      "anchor": [
+        102,
+        3.325000047683716,
+        118.5
+      ],
+      "anchorSize": [
+        134,
+        1.2999999523162842,
+        131
+      ],
+      "before": {
+        "position": [
+          102,
+          3.325000047683716,
+          118.5
+        ],
+        "size": [
+          134,
+          1.2999999523162842,
+          131
+        ]
+      },
+      "after": {
+        "position": [
+          132.5,
+          3.325000047683716,
+          118.5
+        ],
+        "size": [
+          73.0,
+          1.2999999523162842,
+          131.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Ruby.Turf1",
+      "class": "Part",
+      "anchor": [
+        -142,
+        19.325000762939453,
+        7.5
+      ],
+      "anchorSize": [
+        112,
+        1.2999999523162842,
+        79
+      ],
+      "before": {
+        "position": [
+          -142,
+          19.325000762939453,
+          7.5
+        ],
+        "size": [
+          112,
+          1.2999999523162842,
+          79
+        ]
+      },
+      "after": {
+        "position": [
+          -174.0,
+          19.325000762939453,
+          7.5
+        ],
+        "size": [
+          48.0,
+          1.2999999523162842,
+          79.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Cobalt.Turf1",
+      "class": "Part",
+      "anchor": [
+        142,
+        19.325000762939453,
+        7.5
+      ],
+      "anchorSize": [
+        112,
+        1.2999999523162842,
+        79
+      ],
+      "before": {
+        "position": [
+          142,
+          19.325000762939453,
+          7.5
+        ],
+        "size": [
+          112,
+          1.2999999523162842,
+          79
+        ]
+      },
+      "after": {
+        "position": [
+          174.0,
+          19.325000762939453,
+          7.5
+        ],
+        "size": [
+          48.0,
+          1.2999999523162842,
+          79.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Violet.Turf1",
+      "class": "Part",
+      "anchor": [
+        -83,
+        37.32500076293945,
+        -119
+      ],
+      "anchorSize": [
+        94,
+        1.2999999523162842,
+        86
+      ],
+      "before": {
+        "position": [
+          -83,
+          37.32500076293945,
+          -119
+        ],
+        "size": [
+          94,
+          1.2999999523162842,
+          86
+        ]
+      },
+      "after": {
+        "position": [
+          -115.0,
+          37.32500076293945,
+          -119.0
+        ],
+        "size": [
+          30.0,
+          1.2999999523162842,
+          86.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Emerald.Turf1",
+      "class": "Part",
+      "anchor": [
+        79,
+        41.32500076293945,
+        -119.5
+      ],
+      "anchorSize": [
+        86,
+        1.2999999523162842,
+        87
+      ],
+      "before": {
+        "position": [
+          79,
+          41.32500076293945,
+          -119.5
+        ],
+        "size": [
+          86,
+          1.2999999523162842,
+          87
+        ]
+      },
+      "after": {
+        "position": [
+          111.0,
+          41.32500076293945,
+          -119.5
+        ],
+        "size": [
+          22.0,
+          1.2999999523162842,
+          87.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.NorthSouthWalk",
+      "class": "Part",
+      "anchor": [
+        0,
+        4.034999847412109,
+        -1
+      ],
+      "anchorSize": [
+        16,
+        0.07000000029802322,
+        70
+      ],
+      "before": {
+        "position": [
+          0,
+          4.034999847412109,
+          -1
+        ],
+        "size": [
+          16,
+          0.07000000029802322,
+          70
+        ]
+      },
+      "after": {
+        "position": [
+          0.0,
+          4.034999847412109,
+          -15.5
+        ],
+        "size": [
+          16.0,
+          0.07000000029802322,
+          17.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.EastWestWalk",
+      "class": "Part",
+      "anchor": [
+        0,
+        4.039999961853027,
+        0
+      ],
+      "anchorSize": [
+        100,
+        0.07999999821186066,
+        14
+      ],
+      "before": {
+        "position": [
+          0,
+          4.039999961853027,
+          0
+        ],
+        "size": [
+          100,
+          0.07999999821186066,
+          14
+        ]
+      },
+      "after": {
+        "position": [
+          1.0,
+          4.039999961853027,
+          -0.03500032424926758
+        ],
+        "size": [
+          39.0,
+          0.07999999821186066,
+          13.929999351501465
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.UtilityWalk",
+      "class": "Part",
+      "anchor": [
+        0,
+        4.034999847412109,
+        35
+      ],
+      "anchorSize": [
+        96,
+        0.07000000029802322,
+        20
+      ],
+      "before": {
+        "position": [
+          0,
+          4.034999847412109,
+          35
+        ],
+        "size": [
+          96,
+          0.07000000029802322,
+          20
+        ]
+      },
+      "after": {
+        "position": [
+          1.0,
+          4.034999847412109,
+          35.014999866485596
+        ],
+        "size": [
+          39.0,
+          0.07000000029802322,
+          19.97000026702881
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketGardens.GardenSoil",
+      "class": "Part",
+      "anchor": [
+        23,
+        4.039999961853027,
+        17
+      ],
+      "anchorSize": [
+        12,
+        0.07999999821186066,
+        10
+      ],
+      "before": {
+        "position": [
+          23,
+          4.039999961853027,
+          17
+        ],
+        "size": [
+          12,
+          0.07999999821186066,
+          10
+        ]
+      },
+      "after": {
+        "position": [
+          24.75,
+          4.039999961853027,
+          17.0
+        ],
+        "size": [
+          8.5,
+          0.07999999821186066,
+          10.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketGardens.GardenSoil",
+      "class": "Part",
+      "anchor": [
+        -23,
+        4.039999961853027,
+        17
+      ],
+      "anchorSize": [
+        12,
+        0.07999999821186066,
+        10
+      ],
+      "before": {
+        "position": [
+          -23,
+          4.039999961853027,
+          17
+        ],
+        "size": [
+          12,
+          0.07999999821186066,
+          10
+        ]
+      },
+      "after": {
+        "position": [
+          -23.75,
+          4.039999961853027,
+          17.0
+        ],
+        "size": [
+          10.5,
+          0.07999999821186066,
+          10.0
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.RubyTerrace.EarthMass",
+      "class": "Part",
+      "anchor": [
+        -118,
+        3,
+        0
+      ],
+      "anchorSize": [
+        64,
+        32,
+        64
+      ],
+      "before": {
+        "size": [
+          64,
+          32,
+          64
+        ]
+      },
+      "after": {
+        "size": [
+          63.6,
+          32,
+          63.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.CobaltTerrace.EarthMass",
+      "class": "Part",
+      "anchor": [
+        118,
+        3,
+        0
+      ],
+      "anchorSize": [
+        64,
+        32,
+        64
+      ],
+      "before": {
+        "size": [
+          64,
+          32,
+          64
+        ]
+      },
+      "after": {
+        "size": [
+          63.6,
+          32,
+          63.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.VioletTerrace.EarthMass",
+      "class": "Part",
+      "anchor": [
+        -68,
+        12,
+        -108
+      ],
+      "anchorSize": [
+        64,
+        50,
+        64
+      ],
+      "before": {
+        "size": [
+          64,
+          50,
+          64
+        ]
+      },
+      "after": {
+        "size": [
+          63.6,
+          50,
+          63.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.EmeraldTerrace.EarthMass",
+      "class": "Part",
+      "anchor": [
+        68,
+        14,
+        -108
+      ],
+      "anchorSize": [
+        64,
+        54,
+        64
+      ],
+      "before": {
+        "size": [
+          64,
+          54,
+          64
+        ]
+      },
+      "after": {
+        "size": [
+          63.6,
+          54,
+          63.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.NorthOverlook.Earth",
+      "class": "Part",
+      "anchor": [
+        0,
+        13,
+        -108
+      ],
+      "anchorSize": [
+        30,
+        52,
+        30
+      ],
+      "before": {
+        "position": [
+          0,
+          13,
+          -108
+        ],
+        "size": [
+          30,
+          52,
+          30
+        ]
+      },
+      "after": {
+        "position": [
+          0,
+          12.5,
+          -108
+        ],
+        "size": [
+          30,
+          51,
+          30
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.IslandGround.Earth",
+      "class": "Part",
+      "anchor": [
+        132,
+        -9,
+        -80
+      ],
+      "anchorSize": [
+        44,
+        16,
+        44
+      ],
+      "before": {
+        "size": [
+          44,
+          16,
+          44
+        ]
+      },
+      "after": {
+        "size": [
+          44,
+          16,
+          43.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.IslandGround.Turf",
+      "class": "Part",
+      "anchor": [
+        132,
+        -0.5,
+        -80
+      ],
+      "anchorSize": [
+        44,
+        1,
+        44
+      ],
+      "before": {
+        "size": [
+          44,
+          1,
+          44
+        ]
+      },
+      "after": {
+        "size": [
+          44,
+          1,
+          43.6
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.WalkableRoutes.QuartzBridge",
+      "class": "Part",
+      "anchor": [
+        -43,
+        3.4000000953674316,
+        56
+      ],
+      "anchorSize": [
+        14,
+        1.2000000476837158,
+        18.200000762939453
+      ],
+      "before": {
+        "position": [
+          -43,
+          3.4000000953674316,
+          56
+        ]
+      },
+      "after": {
+        "position": [
+          -43,
+          3.560000095367432,
+          56
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.GroundArt.WornRouteSurfaces.QuartzBridgeWornCenter",
+      "class": "Part",
+      "anchor": [
+        -43,
+        4.025000095367432,
+        56
+      ],
+      "anchorSize": [
+        8.119999885559082,
+        0.03500000014901161,
+        17.400001525878906
+      ],
+      "before": {
+        "position": [
+          -43,
+          4.025000095367432,
+          56
+        ]
+      },
+      "after": {
+        "position": [
+          -43,
+          4.185000095367432,
+          56
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.WalkableRoutes.TestBridge",
+      "class": "Part",
+      "anchor": [
+        45.5,
+        3.3999998569488525,
+        56.5
+      ],
+      "anchorSize": [
+        14,
+        1.2000000476837158,
+        19.881542205810547
+      ],
+      "before": {
+        "position": [
+          45.5,
+          3.3999998569488525,
+          56.5
+        ]
+      },
+      "after": {
+        "position": [
+          45.5,
+          3.5599998569488527,
+          56.5
+        ]
+      }
+    },
+    {
+      "path": "Workspace.MiningAway.Map.DronerevolutionTerraces.GroundArt.WornRouteSurfaces.TestBridgeWornCenter",
+      "class": "Part",
+      "anchor": [
+        45.5,
+        4.025000095367432,
+        56.5
+      ],
+      "anchorSize": [
+        8.119999885559082,
+        0.03500000014901161,
+        19.08154296875
+      ],
+      "before": {
+        "position": [
+          45.5,
+          4.025000095367432,
+          56.5
+        ]
+      },
+      "after": {
+        "position": [
+          45.5,
+          4.185000095367432,
+          56.5
+        ]
+      }
+    }
+  ],
+  "fills": [
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Quartz.Turf1",
+      "position": [
+        -68.0,
+        3.325000047683716,
+        156.0
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        56.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Quartz_Turf1_2",
+      "anchor": [
+        -105,
+        3.325000047683716,
+        118
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Quartz.Turf1",
+      "position": [
+        -68.0,
+        3.325000047683716,
+        58.0
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        12.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Quartz_Turf1_3",
+      "anchor": [
+        -105,
+        3.325000047683716,
+        118
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Quartz.Turf1",
+      "position": [
+        -35.5,
+        3.325000047683716,
+        118.0
+      ],
+      "size": [
+        1.0,
+        1.2999999523162842,
+        132.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Quartz_Turf1_4",
+      "anchor": [
+        -105,
+        3.325000047683716,
+        118
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Impact.Turf1",
+      "position": [
+        68.0,
+        3.325000047683716,
+        156.0
+      ],
+      "size": [
+        56.0,
+        1.2999999523162842,
+        56.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Impact_Turf1_2",
+      "anchor": [
+        102,
+        3.325000047683716,
+        118.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Impact.Turf1",
+      "position": [
+        37.5,
+        3.325000047683716,
+        118.5
+      ],
+      "size": [
+        5.0,
+        1.2999999523162842,
+        131.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Impact_Turf1_3",
+      "anchor": [
+        102,
+        3.325000047683716,
+        118.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Impact.Turf1",
+      "position": [
+        68.0,
+        3.325000047683716,
+        58.5
+      ],
+      "size": [
+        56.0,
+        1.2999999523162842,
+        11.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Impact_Turf1_4",
+      "anchor": [
+        102,
+        3.325000047683716,
+        118.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Ruby.Turf1",
+      "position": [
+        -118.0,
+        19.325000762939453,
+        39.5
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        15.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Ruby_Turf1_2",
+      "anchor": [
+        -142,
+        19.325000762939453,
+        7.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Cobalt.Turf1",
+      "position": [
+        118.0,
+        19.325000762939453,
+        39.5
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        15.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Cobalt_Turf1_2",
+      "anchor": [
+        142,
+        19.325000762939453,
+        7.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Violet.Turf1",
+      "position": [
+        -68.0,
+        37.32500076293945,
+        -151.0
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        22.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Violet_Turf1_2",
+      "anchor": [
+        -83,
+        37.32500076293945,
+        -119
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.QuarryContinuousGround.Terraces.Emerald.Turf1",
+      "position": [
+        68.0,
+        41.32500076293945,
+        -151.5
+      ],
+      "size": [
+        64.0,
+        1.2999999523162842,
+        23.0
+      ],
+      "name": "QuarryContinuousGround_Terraces_Emerald_Turf1_2",
+      "anchor": [
+        79,
+        41.32500076293945,
+        -119.5
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.EastWestWalk",
+      "position": [
+        -34.25,
+        4.039999961853027,
+        0.0
+      ],
+      "size": [
+        31.5,
+        0.07999999821186066,
+        14.0
+      ],
+      "name": "DronerevolutionTerraces_MarketSquare_EastWestWalk_2",
+      "anchor": [
+        0,
+        4.039999961853027,
+        0
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.EastWestWalk",
+      "position": [
+        35.25,
+        4.039999961853027,
+        0.0
+      ],
+      "size": [
+        29.5,
+        0.07999999821186066,
+        14.0
+      ],
+      "name": "DronerevolutionTerraces_MarketSquare_EastWestWalk_3",
+      "anchor": [
+        0,
+        4.039999961853027,
+        0
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.UtilityWalk",
+      "position": [
+        -33.25,
+        4.034999847412109,
+        35.0
+      ],
+      "size": [
+        29.5,
+        0.07000000029802322,
+        20.0
+      ],
+      "name": "DronerevolutionTerraces_MarketSquare_UtilityWalk_2",
+      "anchor": [
+        0,
+        4.034999847412109,
+        35
+      ]
+    },
+    {
+      "source": "Workspace.MiningAway.Map.DronerevolutionTerraces.MarketSquare.UtilityWalk",
+      "position": [
+        34.25,
+        4.034999847412109,
+        35.0
+      ],
+      "size": [
+        27.5,
+        0.07000000029802322,
+        20.0
+      ],
+      "name": "DronerevolutionTerraces_MarketSquare_UtilityWalk_3",
+      "anchor": [
+        0,
+        4.034999847412109,
+        35
+      ]
+    }
+  ]
+}

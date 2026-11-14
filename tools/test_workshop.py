@@ -1,0 +1,40 @@
+"""Quartz workshop logic, persistence and production-server integration; no visual/fun claims."""
+from pathlib import Path
+import subprocess,tempfile,sys
+from build import ROOT,bundle,client_bundle
+luau=Path(sys.argv[1] if len(sys.argv)>1 else '/private/tmp/mining-away-luau')
+for path in sorted((ROOT/'src').glob('*.lua')):
+ subprocess.run([str(luau/'luau-compile'),str(path)],check=True,stdout=subprocess.DEVNULL)
+subprocess.run([str(luau/'luau-analyze'),*[str(ROOT/'src'/f'{name}.lua') for name in ('Workshop','Shops','Profile','Cards','DroneAbilities','Persistence')]],check=True)
+for name in ('workshop','mining','persistence'):
+ subprocess.run([str(luau/'luau'),str(ROOT/'tests'/f'{name}.spec.lua')],check=True)
+with tempfile.TemporaryDirectory(prefix='quartz-workshop-') as directory:
+ for name,source in [('server',bundle()),('client',client_bundle())]:
+  path=Path(directory)/(name+'.lua');path.write_text(source)
+  subprocess.run([str(luau/'luau-compile'),str(path)],check=True,stdout=subprocess.DEVNULL)
+ if (ROOT/'tests/workshop.integration.lua').exists():
+  for studio in (False,True):
+   server=bundle().replace('World.placeStart(scene)\n', '''World.placeStart(scene)
+do
+ local stand=Instance.new('Model');stand.Name='LegendaryPreviewStand';stand.Parent=scene.map
+ World.part(stand,'Counter',scene.packStation.Position+Vector3.new(0,0,-12.5),Vector3.new(5,3,3),Color3.new(1,.7,.3))
+end
+''',1)
+   source='\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
+    'function runService:IsStudio() return true end' if studio else '',server,
+    ';(function()\n'+(ROOT/'tests/workshop.integration.lua').read_text()+'\nend)()'])
+   path=Path(directory)/('studio.lua' if studio else 'production.lua');path.write_text(source)
+   subprocess.run([str(luau/'luau'),str(path)],check=True)
+
+ for fixture in ['workshop-effects','crystal-run','crystal-startup']:
+  server=bundle()
+  if fixture=='crystal-startup':
+   # Select Crystal Run before the controller initializes its mode-specific services.
+   server=server.replace('World.placeStart(scene)\n','World.placeStart(scene)\nscene.runStart=scene.fields[1].center\n',1)
+  source='\n'.join([(ROOT/'tests/mock-roblox.lua').read_text(),(ROOT/'tests/gadget-server.setup.lua').read_text(),
+   "do local nativeType=typeof; typeof=function(x) return getmetatable(x)==VM and 'Vector3' or nativeType(x) end end" if fixture.startswith('crystal-') else '',
+   server,';(function()\n'+(ROOT/'tests'/f'{fixture}.integration.lua').read_text()+'\nend)()'])
+  path=Path(directory)/(fixture+'.lua');path.write_text(source)
+  subprocess.run([str(luau/'luau'),str(path)],check=True)
+
+subprocess.run([sys.executable,str(ROOT/'tests/live-build.spec.py')],check=True)
