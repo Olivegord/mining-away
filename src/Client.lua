@@ -1077,13 +1077,22 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,pin,width,field)
+local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
  local s=r.source;local view=r.view
- if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field then
+ if r.dirty then
+  r.fieldId=s:GetAttribute('FieldId')
+  r.center=s:GetAttribute('FullPosition') or s.Position
+ end
+ if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field
+  or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
   r.pin=pin;r.pinWidth=width;r.pinField=field
-  local selected=pin~=nil and width~=nil and field~=nil and s:GetAttribute('FieldId')==field
-   and Mining.selectorContains(pin,width*.5,s:GetAttribute('FullPosition') or s.Position)
-  if r.selected~=selected then r.selected=selected;r.dirty=true end
+  r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
+  local selected=pin~=nil and width~=nil and field~=nil and r.fieldId==field
+   and Mining.selectorContains(pin,width*.5,r.center)
+  local hovered=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
+   and Mining.selectorContains(aim,aimWidth*.5,r.center)
+  local wash=if hovered then .5 elseif selected then .4 else 0
+  if (r.wash or 0)~=wash then r.wash=wash;r.dirty=true end
  end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
@@ -1160,7 +1169,7 @@ local function renderResource(r,now,pin,width,field)
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
   if modifierTint then color=color:Lerp(modifierTint,.13) end
-  if r.selected then color=color:Lerp(Color3.new(1,1,1),.20) end
+  if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -1598,7 +1607,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,pin,width,field)
+  local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
   if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)

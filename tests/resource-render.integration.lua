@@ -64,12 +64,17 @@ local lateFixed={source=fixed,view=fixed:Clone(),baseColor=fixed.Color,dirty=tru
 renderResource(lateFixed,76)
 assert(lateFixed.view.Color.R==fixedRecord.view.Color.R and lateFixed.view.Size.X==fixedRecord.view.Size.X)
 fixed:SetAttribute('FieldId',8)
+fixedRecord.dirty=true
 local rockColor=fixedRecord.view.Color
 renderResource(fixedRecord,80,Vector3.new(-15,0,0),30,8)
-assert(fixedRecord.selected and fixedRecord.view.Color.G>rockColor.G,'a rock centered on the edge should get the wash')
+assert(fixedRecord.wash==.4 and fixedRecord.view.Color.G>rockColor.G,'a rock centered on the edge should get the wash')
 renderResource(fixedRecord,81,Vector3.new(-15.01,0,0),30,8)
-assert(not fixedRecord.selected and fixedRecord.view.Color.R==rockColor.R and fixedRecord.view.Color.G==rockColor.G,
+assert(fixedRecord.wash==0 and fixedRecord.view.Color.R==rockColor.R and fixedRecord.view.Color.G==rockColor.G,
  'moving the pin should restore the original shade')
 renderResource(fixedRecord,82,Vector3.zero,30,9)
-assert(not fixedRecord.selected,'another field must not get the wash')
+assert(fixedRecord.wash==0,'another field must not get the wash')
+renderResource(fixedRecord,83,nil,nil,nil,Vector3.zero,30,8)
+assert(fixedRecord.wash==.5 and fixedRecord.view.Color.G>rockColor.G,'hover should wash rocks before a click')
+renderResource(fixedRecord,84,nil,nil,nil,Vector3.xAxis*16,30,8)
+assert(fixedRecord.wash==0 and fixedRecord.view.Color.G==rockColor.G,'moving the preview away should clear the hover wash')
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

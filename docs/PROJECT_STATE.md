@@ -11,18 +11,24 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 43d4bc083add0a919542c395ae12ab7b4ad540baaadc82cb9416c34c76208557 | Force-field walls, flat aim outline and white wash on selected rocks installed. |
-| Shared Studio Sources | Team Create save **293**, November 14 at 12:26 PM Pacific | All seven Sources match the canonical file. |
+| Native-file SHA-256 | 03788b48bb65b423a11a086d93fa60e18ad560871ff5aec1467511fdc5883c88 | Shorter walls with a bright reveal and stronger aim and pin highlights. |
+| Shared Studio Sources | Team Create save **294**, November 14 at 12:32 PM Pacific | All seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the saved field walls and selection tint. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the shorter walls, bright reveal and rock highlights while aiming. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — shorter walls and rock highlights while aiming
+
+The walls rise to 10 studs with circular ease-out. They stay bright during the rise and spend 0.65 seconds blending into a fade based on the player's distance from the edge of the square. Every rock centered within the aiming outline gets a stronger white wash before selection, and pinned rocks keep a steady wash. The color stays orange until the field is cleared and gray during transfers.
+
+The owner ended Play before installation. Studio confirmed Team Create save **294** at **12:32:56 PM Pacific**, place **124078027733625**, universe **10774898335**. All seven Sources matched the canonical file after saving and the three Script Sync roots were connected. Workshop, Crystal Run, resource renderer and preservation checks passed. Detached Studio Edit checks verified the circular rise, bright reveal at a distance, fade and Reduced Motion. The broader gadget suite reaches the baseline courier-delay fixture failure. No agent-started Play, live visual or multiplayer check, or player publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit ce16aed` on the prior canonical snapshot.
 
 ## November 14 — full-width field walls and completion color
 

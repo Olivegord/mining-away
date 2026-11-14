@@ -14420,7 +14420,8 @@ local previewColor=Color3.fromRGB(234,245,255)
 local pendingColor=Color3.fromRGB(155,162,174)
 local activeColor=Color3.fromRGB(255,147,61)
 local clearColor=Color3.fromRGB(85,243,148)
-local riseTime,wallHeight=.68,19
+local riseTime,wallHeight=.68,10
+local revealFadeTime=.65
 local wallFade=NumberSequence.new({
  NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.30,.84),
  NumberSequenceKeypoint.new(.80,.49),NumberSequenceKeypoint.new(1,0),
@@ -14493,7 +14494,7 @@ local function setVisibility(side,opacity)
   f.Parent.Enabled=opacity>0
  end
 end
-local function showWalls(mark,point,width,color,dt,instant,eye)
+local function showWalls(mark,point,width,color,dt,instant,playerPosition,reveal)
  if not point then
   for _,side in ipairs(mark.sides) do setVisibility(side,0) end
   mark.point=nil
@@ -14501,9 +14502,24 @@ local function showWalls(mark,point,width,color,dt,instant,eye)
  end
  local moved=point~=mark.point
  if moved then mark.age=0 end
- if instant then mark.age=riseTime elseif not moved then mark.age=math.min(riseTime,mark.age+dt) end
- local height=.08+(wallHeight-.08)*(1-(1-mark.age/riseTime)^5)
+ if not moved then mark.age=math.min(riseTime+revealFadeTime,mark.age+dt) end
+ local remaining=instant and 0 or 1-math.min(1,mark.age/riseTime)
+ local height=.08+(wallHeight-.08)*math.sqrt(1-remaining^2)
  local sizeChanged=height~=mark.height or width~=mark.width
+ local opacity=0
+ if playerPosition then
+  local delta=playerPosition-point
+  local x=math.max(0,math.abs(delta.X)-width*.5)
+  local z=math.max(0,math.abs(delta.Z)-width*.5)
+  local distance=math.sqrt(x*x+z*z)
+  local fade=math.clamp(distance/54,0,1)
+  opacity=.53*(1-fade*fade*(3-2*fade))
+ end
+ if reveal and mark.age<riseTime+revealFadeTime then
+  local t=math.clamp((mark.age-riseTime)/revealFadeTime,0,1)
+  opacity=.84+(opacity-.84)*t*t*(3-2*t)
+ end
+ opacity=math.round(opacity*128)/128
  for i,side in ipairs(mark.sides) do
   local plane=side.part
   if moved or sizeChanged then
@@ -14512,13 +14528,6 @@ local function showWalls(mark,point,width,color,dt,instant,eye)
    plane.CFrame=sideFrame*CFrame.new(0,0,-width*.5)
   end
   if color~=mark.color then for _,f in ipairs(side.faces) do f.BackgroundColor3=color end end
-  local opacity=0
-  if eye then
-   local p=plane.CFrame:PointToObjectSpace(eye)
-   local nearest=Vector3.new(math.clamp(p.X,-width*.5,width*.5),math.clamp(p.Y,-height*.5,height*.5),0)
-   local proximity=math.clamp((46-(p-nearest).Magnitude)/38,0,1)
-   opacity=math.round(.44*proximity^2*64)/64
-  end
   setVisibility(side,opacity)
  end
  mark.point=point;mark.width=width;mark.height=height;mark.color=color
@@ -14596,8 +14605,9 @@ function V:showAim(dt,ray)
  if not self.pinned then return end
  local width=profile and Workshop.selectorWidth(profile) or 0
  self.clock+=dt
- if not visible or not ray then self.aimPoint=nil;self.clock=.033
- elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
+ if not visible or not ray then self.aimPoint=nil;self.aimField=nil;self.clock=.033
+ elseif self.clock>=.033 then self.clock=0;self.aimPoint,self.aimField=self:aim(ray) end
+ self.aimWidth=width
  local point=self.aimPoint
  if point and (point==pin or point==old) then point=nil end
  local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
@@ -14605,11 +14615,12 @@ function V:showAim(dt,ray)
  -- Keep the already extended walls when the current pin becomes the old one.
  if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
  local instant=o.reducedMotion()
- local camera=workspace.CurrentCamera
- local eye=camera and camera.CFrame.Position
- showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,eye)
+ local character=o.player.Character
+ local root=character and character:FindFirstChild('HumanoidRootPart')
+ local position=root and root.Position
+ showWalls(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant,position,true)
  showWalls(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
-  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,eye)
+  o.player:GetAttribute('MA_SelectorPreviousCleared') and clearColor or activeColor,dt,instant or self.previous.point~=old,position)
  showOutline(self.preview,point,width)
 end
 
@@ -15800,13 +15811,22 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,pin,width,field)
+local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
  local s=r.source;local view=r.view
- if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field then
+ if r.dirty then
+  r.fieldId=s:GetAttribute('FieldId')
+  r.center=s:GetAttribute('FullPosition') or s.Position
+ end
+ if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field
+  or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
   r.pin=pin;r.pinWidth=width;r.pinField=field
-  local selected=pin~=nil and width~=nil and field~=nil and s:GetAttribute('FieldId')==field
-   and Mining.selectorContains(pin,width*.5,s:GetAttribute('FullPosition') or s.Position)
-  if r.selected~=selected then r.selected=selected;r.dirty=true end
+  r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
+  local selected=pin~=nil and width~=nil and field~=nil and r.fieldId==field
+   and Mining.selectorContains(pin,width*.5,r.center)
+  local hovered=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
+   and Mining.selectorContains(aim,aimWidth*.5,r.center)
+  local wash=if hovered then .5 elseif selected then .4 else 0
+  if (r.wash or 0)~=wash then r.wash=wash;r.dirty=true end
  end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
@@ -15883,7 +15903,7 @@ local function renderResource(r,now,pin,width,field)
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
   if modifierTint then color=color:Lerp(modifierTint,.13) end
-  if r.selected then color=color:Lerp(Color3.new(1,1,1),.20) end
+  if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -16321,7 +16341,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,pin,width,field)
+  local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
   if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
