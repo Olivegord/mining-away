@@ -12,13 +12,13 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
 | Native-file SHA-256 | b938531df3cdea4324f637258b2f5e5eefdbdfa07aa1a994880766836b407782 | Stackable rock modifiers and minimal ore labels installed. |
-| Shared Studio Sources | Modifiers verified in the open Edit session | All seven Sources match the canonical file. The last confirmed Team Create save was the November 14, 11:20 AM Pacific field-selector build. |
+| Shared Studio Sources | Team Create save **292**, November 14 at 12:10 PM Pacific | All seven Sources match the canonical file from `461bfe21eac52b73924d950e0284cc5aaf826353`. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play in this open session loads modifiers and ore labels. A fresh Team Create session depends on a successful save. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the saved rock modifiers and ore labels. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
@@ -32,7 +32,7 @@ Charged uses intermittent yellow snaps plus more frequent drifting ions. Frosted
 
 Workshop, Crystal Run, pickup and native-file preservation checks passed. A detached Studio Edit test verified strike, gust, fracture and pickup instances and the three icons. The broader gadget harness reproduces the baseline courier-delay fixture failure. No Play, live visual review or multiplayer check ran.
 
-Studio was already open in Edit at place **124078027733625**, universe **10774898335**. All three Script Sync roots are connected and seven Sources matched the refreshed canonical file. Automatic approval review rejected the Team Create save while the Mac was locked, citing the unavailable desktop inspection and the gadget failure. No player publication. Reproduce using `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f49751e2141933cdc4d063310a589e9f5c835b09` on the prior canonical snapshot.
+Studio was already open in Edit at place **124078027733625**, universe **10774898335**. After the owner unlocked the Mac, Studio reported a successful **Team Create save 292** at **12:10:20 PM Pacific** for build `461bfe21eac52b73924d950e0284cc5aaf826353`. The Studio log confirmed the save. All three Script Sync roots reported `SyncedAsRoot`, and all seven Sources matched the canonical file after saving. No player publication. Reproduce using `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f49751e2141933cdc4d063310a589e9f5c835b09` on the prior canonical snapshot.
 
 ## November 14 — field selection and mining boundaries
 
