@@ -8091,8 +8091,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local half=original:Clone()
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
-   half.Material=Enum.Material.Concrete
-   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
+   half.Material=r.modifierColor and r.view.Material or Enum.Material.Concrete
+   half.Color=(r.modifierColor or r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -8101,7 +8101,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
-  local stone=r.stoneColor or v.Color
+  local stone=r.modifierColor or r.stoneColor or v.Color
+  local modifierSurface=r.modifierSurface
+  local massive=modifierSurface and modifierSurface.massive
+  local frosted=modifierSurface and modifierSurface.frosted
   local frame=r.splitPose or r.restPose
   local size=r.splitSize or v.Size
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
@@ -8137,16 +8140,21 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
+    local isIce=frosted and i%3==1
+    local chipColor=isIce and Color3.fromRGB(161,226,253) or stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
-    chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=v.Material;chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance
+    if massive and not isIce then size*=1.40 end
+    chip.Size=Vector3.new(size*(isIce and .32 or .55),size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
+    chip.Material=isIce and Enum.Material.Ice or v.Material
+    chip.MaterialVariant=isIce and '' or v.MaterialVariant;chip.Reflectance=v.Reflectance
     local origin=point+direction*.22
     chip.Position=origin
-   track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
-     (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
+    local velocity=direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3))
+    local heavy=massive and not isIce
+    track(chip,now,origin,velocity*(heavy and .76 or 1),
+     ground,Vector3.new(i*.83,i*1.47,i*.49),heavy and .58 or .85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil,heavy and 1.20 or .99)
    end
    if #self.pieces<48 and clusterSize<=5 then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or stone:Lerp(STONE_LIGHT,.40))
@@ -13180,15 +13188,17 @@ function Display.hide(rig)
 end
 
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
- if rig.record~=record then
+ local tint=record.effectColor or record.color
+ if rig.record~=record or rig.tint~=tint then
   rig.record=record
+  rig.tint=tint
   rig.scale=record.physical and 1 or .73
   rig.base.Size=Vector3.new(5.7,.02,5.7)*rig.scale
   rig.outline.Adornee=record.view
-  rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
-  rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.moteColor=record.color:Lerp(WHITE,.14)
-  local strand=ColorSequence.new(record.color:Lerp(WHITE,.32))
+  rig.outline.OutlineColor=tint:Lerp(WHITE,.25)
+  rig.halo.ImageColor3=tint:Lerp(WHITE,.10);rig.core.ImageColor3=tint:Lerp(WHITE,.62)
+  rig.moteColor=tint:Lerp(WHITE,.14)
+  local strand=ColorSequence.new(tint:Lerp(WHITE,.32))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end
@@ -13246,109 +13256,301 @@ return Display
 
 end)()
 local RockModifierView = (function()
--- Cosmetic reactions follow the rendered rock and its loose cargo.
+-- The same material and silhouette cues identify a modifier before and after mining.
 local V={}
 local bits=Mining.ROCK_MODIFIERS
-local charged=Color3.fromRGB(255,224,96)
-local frost=Color3.fromRGB(135,224,255)
-local dust=Color3.fromRGB(249,200,145)
+local charged=Color3.fromRGB(255,197,58)
+local frost=Color3.fromRGB(146,226,255)
+local dust=Color3.fromRGB(190,136,96)
 local white=Color3.fromRGB(249,251,255)
 local icons={
  {bit=bits.Charged,name='Charged',color=charged},
  {bit=bits.Frosted,name='Frosted',color=frost},
  {bit=bits.Massive,name='Massive',color=dust},
 }
-local disc=EnergyDisc.texture
 local star='rbxassetid://77624818077620'
-local elements=bit32.bor(bits.Charged,bits.Frosted)
-local tintByElement={[bits.Charged]=charged,[bits.Frosted]=frost,[elements]=charged:Lerp(frost,.5)}
+local smoke='rbxasset://textures/particles/smoke_main.dds'
+local obsidian=Color3.fromRGB(45,31,56)
+local ice=Color3.fromRGB(83,176,221)
+local sediment=Color3.fromRGB(126,72,42)
+local activeArcs=0
+local MAX_ARCS=10
 
-function V.tint(mask)
- return tintByElement[bit32.band(mask or 0,elements)]
+function V.glow(mask)
+ for _,entry in ipairs(icons) do
+  if bit32.btest(mask,entry.bit) then return entry.color end
+ end
 end
 
-local function emitter(part,name,color,texture,diameter,lifetime,speed,spread,gravity,streak)
- local p=Instance.new('ParticleEmitter')
- p.Name=name;p.Enabled=false;p.Rate=0;p.Texture=texture
- p.Color=ColorSequence.new(color:Lerp(white,.42),color)
- p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.23),NumberSequenceKeypoint.new(1,0)})
- p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,streak and .12 or .29),NumberSequenceKeypoint.new(.25,.32),NumberSequenceKeypoint.new(1,1)})
- p.LightInfluence=0;p.LightEmission=streak and .52 or .32
- p.Lifetime=NumberRange.new(lifetime*.63,lifetime)
- p.Speed=NumberRange.new(speed*.48,speed);p.Drag=streak and 3 or 1
- p.Acceleration=Vector3.yAxis*gravity;p.SpreadAngle=Vector2.new(spread,spread)
- if streak then
-  p.Orientation=Enum.ParticleOrientation.VelocityParallel;p.Squash=NumberSequence.new(.65)
- else p.RotSpeed=NumberRange.new(-55,55) end
- p.Parent=part
+local function prop(parent,class,name,material,color)
+ local p=Instance.new(class)
+ p.Name=name;p.Material=material;p.Color=color
+ p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+ p.Transparency=1;p.Parent=parent
  return p
 end
-local function prepare(view,state,mask,drop)
- if bit32.btest(mask,bits.Charged) and not state.arc then
-  state.arc=emitter(view,'ChargedSnap',charged,disc,drop and .39 or .57,.33,drop and 8 or 15,175,-20,true)
-  state.ions=emitter(view,'DriftingIons',Color3.fromRGB(174,243,147),disc,.24,1.35,2.4,40,1.4)
-  if not drop then state.crack=emitter(view,'ChargedCrack',charged,disc,.8,.47,30,165,-33,true) end
- end
- if bit32.btest(mask,bits.Frosted) and not state.flake then
-  state.flake=emitter(view,'FrostDrift',frost,star,.44,1.7,1.9,95,-1.5)
-  if not drop then state.ice=emitter(view,'FrostCrack',frost,star,.76,.76,15,160,-13) end
- end
- if bit32.btest(mask,bits.Massive) and not state.grit then
-  state.grit=emitter(view,'MassiveFractureGrit',dust,disc,.64,.91,drop and 4 or 10,155,-24)
+
+local function accent(state,class,name,material,color,offset,size,pitch,yaw,roll)
+ local p=prop(state.root,class,name,material,color)
+ table.insert(state.parts,{
+  part=p,offset=Vector3.new(table.unpack(offset)),size=Vector3.new(table.unpack(size)),
+  turn=CFrame.Angles(pitch,yaw,roll),
+ })
+end
+
+local function chargedSeams(state,drop)
+ -- The two exposed inlays follow different planes, leaving the ice and
+ -- sediment pieces room on a rock with all three modifiers.
+ for _,side in ipairs({-1,1}) do
+  local x=side*(drop and .39 or .31)
+  local z=-side*(drop and .33 or .29)
+  local y=drop and .15 or .05
+  local seam=drop and .29 or .36
+  local turn=side*.97
+  accent(state,'Part','GoldVein',Enum.Material.Neon,charged,{x,y,z},{.044,seam,.036},0,.54*side,turn)
+  accent(state,'Part','GoldFork',Enum.Material.Neon,Color3.fromRGB(255,231,135),
+   {x+.083*side,y+.13,z-.07*side},{.026,seam*.66,.030},.26,.54*side,-turn*.57)
+  accent(state,'WedgePart','AmberFacet',Enum.Material.Metal,Color3.fromRGB(188,108,22),
+   {x*1.08,y-.10,z*1.06},{.26,.30,.20},.13,side*2.35,-side*.42)
  end
 end
 
-local function line(parent,a,b,width,color,transparency)
- local p=Instance.new('Part')
- p.Name='LightningStroke';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
- p.Color=color;p.Material=Enum.Material.Neon;p.Transparency=transparency
- p.Size=Vector3.new(width,width,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Parent=parent
- return p
+local function frostRime(state,drop)
+ for _,side in ipairs({-1,1}) do
+  local x=side*(drop and .34 or .30)
+  local z=side*(drop and .32 or .28)
+  local y=drop and .13 or .18
+  accent(state,'WedgePart','RimeBlade',Enum.Material.Ice,Color3.fromRGB(180,238,255),
+   {x,y,z},{.34,.60,.29},side*.25,side*.93,side*.54)
+  accent(state,'WedgePart','BlueIce',Enum.Material.Ice,ice,
+   {x*1.28,y-.13,z*.89},{.23,.41,.23},side*.37,-side*1.40,side*.73)
+ end
 end
-local function event(view,bit,lowFlash,random)
- local top=view.Position+Vector3.yAxis*(view.Size.Y*.37)
- local parent=view.Parent
- if bit==bits.Charged then
-  if lowFlash then return end
-  local sky=top+Vector3.new(-3,25,2)
-  local from=sky
-  for i=1,6 do
-   local to=if i==6 then top else sky:Lerp(top,i/6)+Vector3.new(random:NextNumber(-2.3,2.3),0,random:NextNumber(-2,2))
-   local core=line(parent,from,to,.16,white,.1)
-   local halo=line(parent,from,to,.47,charged,.61)
-   task.delay(.12,function() core:Destroy() end)
-   task.delay(.23,function() halo:Destroy() end)
-   from=to
+
+local function strata(state,drop)
+ for i=1,3 do
+  local yaw=.25+(i-1)*math.pi*2/3
+  local x,z=math.sin(yaw),math.cos(yaw)
+  local radius=drop and .33 or .38
+  local y=drop and -.12 or -.30
+  accent(state,'WedgePart','DenseStone',Enum.Material.Slate,sediment,
+   {x*radius,y,z*radius},{.52,.35,.31},.18,yaw+.20,.15)
+  accent(state,'WedgePart','OchreLayer',Enum.Material.Rock,Color3.fromRGB(217,161,99),
+   {x*(radius+.027),y+.092,z*(radius+.027)},{.48,.17,.23},.19,yaw+.20,.15)
+ end
+end
+
+function V.finish(record,base,mask,drop)
+ local view,state=record.view,record.modifierSurface
+ if not state and mask==0 then return base end
+ if not state then
+  state={material=view.Material,variant=view.MaterialVariant,reflectance=view.Reflectance}
+  record.modifierSurface=state
+ end
+ local hasCharge=bit32.btest(mask,bits.Charged)
+ local hasFrost=bit32.btest(mask,bits.Frosted)
+ local hasMass=bit32.btest(mask,bits.Massive)
+ if state.mask~=mask or state.view~=view then
+  if state.mask~=mask then
+   if state.root then state.root:Destroy();state.root=nil end
+   if mask~=0 then
+    state.root=Instance.new('Folder');state.root.Name='ModifierSurface';state.root.Parent=view
+    state.parts={}
+    if hasMass then strata(state,drop) end
+    if hasFrost then frostRime(state,drop) end
+    if hasCharge then chargedSeams(state,drop) end
+   end
   end
- else
-  local gust=Instance.new('Part')
-  gust.Name='FrostGust';gust.Size=Vector3.new(.45,1.8,4);gust.Transparency=1;gust.Anchored=true
-  gust.CanCollide=false;gust.CanQuery=false;gust.CanTouch=false;gust.CastShadow=false
-  gust.CFrame=CFrame.lookAt(top-Vector3.xAxis*6,top)
-  gust.Parent=parent
-  local flakes=emitter(gust,'SweepingFrost',frost,star,.68,1.2,19,17,-2)
-  flakes.EmissionDirection=Enum.NormalId.Front
-  flakes:Emit(17)
-  task.delay(1.25,function() gust:Destroy() end)
+  state.mask=mask;state.view=view;state.pose=nil;state.size=nil;state.opacity=nil
+  state.massive=hasMass
+  state.frosted=hasFrost
+  if mask==0 then
+   view.Material=state.material;view.MaterialVariant=state.variant;view.Reflectance=state.reflectance
+   record.modifierSurface=nil
+  else
+   view.Material=if hasCharge then (drop and Enum.Material.Metal or Enum.Material.Slate)
+    elseif hasFrost then Enum.Material.Ice else Enum.Material.Slate
+   view.MaterialVariant=''
+   view.Reflectance=if hasCharge then (drop and .24 or .07) elseif hasFrost then .10 else .025
+   if view:IsA('PartOperation') then view.UsePartColor=true end
+  end
+ end
+ if hasCharge then return base:Lerp(obsidian,drop and .83 or .86) end
+ if hasFrost then return base:Lerp(ice,drop and .95 or .86) end
+ if hasMass then return base:Lerp(sediment,drop and .73 or .81) end
+ return base
+end
+
+function V.syncSurface(record)
+ local state=record.modifierSurface
+ if not state then return end
+ local view=record.view
+ local pose,size,opacity=view.CFrame,view.Size,1-view.Transparency
+ if state.pose==pose and state.size==size and state.opacity==opacity then return end
+ local resizing=state.size~=size
+ local moving=resizing or state.pose~=pose
+ local fading=state.opacity~=opacity
+ state.pose=pose;state.size=size;state.opacity=opacity
+ for _,accentPart in ipairs(state.parts) do
+  local p=accentPart.part
+  if resizing then p.Size=accentPart.size*size end
+  if moving then p.CFrame=pose*CFrame.new(accentPart.offset*size)*accentPart.turn end
+  if fading then p.Transparency=1-opacity end
  end
 end
-local function ambient(state,now,lowFlash,drop)
+
+local particleStyles={
+ sparks={name='GoldSparks',texture=star,light=.70,size=.84,life={.16,.39},speed={8,23},
+  color=charged,endColor=Color3.fromRGB(255,120,33),spread=78,gravity=-22,drag=4},
+ ions={name='AmberIons',texture=EnergyDisc.texture,light=.36,size=.32,life={.52,1.24},speed={1.2,3.4},
+  color=Color3.fromRGB(255,227,122),endColor=charged,spread=45,gravity=.8,drag=1.5},
+ flakes={name='RimeFlakes',texture=star,light=.30,size=.60,life={.72,1.63},speed={1.2,3.1},
+  color=white,endColor=frost,spread=71,gravity=-1.5,drag=1.35},
+ iceChips={name='FlyingIce',texture=star,light=.22,size=.95,life={.31,.80},speed={5,15},
+  color=frost,endColor=ice,spread=70,gravity=-23,drag=2.1},
+ vapor={name='ColdVapor',texture=smoke,light=0,size=1.6,life={.66,1.48},speed={2,5.3},
+  color=Color3.fromRGB(198,233,255),endColor=ice,spread=79,gravity=-.65,drag=2.1,cloud=true},
+ powder={name='StonePowder',texture=smoke,light=0,size=1.45,life={.47,1.26},speed={3,7.2},
+  color=Color3.fromRGB(224,180,137),endColor=sediment,spread=74,gravity=-2.1,drag=2.8,cloud=true},
+}
+
+local function emitter(parent,key,scale)
+ local style=particleStyles[key]
+ local diameter=style.size*scale
+ local p=Instance.new('ParticleEmitter')
+ p.Name=style.name;p.Enabled=false;p.Rate=0;p.Texture=style.texture
+ p.Color=ColorSequence.new(style.color,style.endColor)
+ if style.cloud then
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter*.33),
+   NumberSequenceKeypoint.new(.28,diameter,diameter*.22),NumberSequenceKeypoint.new(1,diameter*1.48)})
+  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.17,.56),
+   NumberSequenceKeypoint.new(.65,.74),NumberSequenceKeypoint.new(1,1)})
+ else
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.38),
+   NumberSequenceKeypoint.new(.39,diameter*.70),NumberSequenceKeypoint.new(1,0)})
+  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.09),NumberSequenceKeypoint.new(.53,.36),NumberSequenceKeypoint.new(1,1)})
+ end
+ p.LightEmission=style.light;p.LightInfluence=style.cloud and .58 or .12
+ p.Lifetime=NumberRange.new(table.unpack(style.life));p.Speed=NumberRange.new(table.unpack(style.speed))
+ p.Drag=style.drag;p.Acceleration=Vector3.yAxis*style.gravity
+ p.SpreadAngle=Vector2.new(style.spread,style.spread)
+ if key=='sparks' then
+  p.Orientation=Enum.ParticleOrientation.VelocityParallel;p.Squash=NumberSequence.new(-.58)
+ else
+  p.Rotation=NumberRange.new(-180,180);p.RotSpeed=NumberRange.new(-82,74)
+ end
+ p.Parent=parent
+ return p
+end
+
+local function prepare(view,state,mask,drop)
+ if state.prepared==mask then return end
+ if state.anchor then state.anchor:Destroy() end
+ state.anchor=Instance.new('Attachment');state.anchor.Name='RockModifierParticles';state.anchor.Parent=view
+ state.prepared=mask
+ local scale=drop and .60 or 1
+ state.sparks=nil;state.ions=nil;state.flakes=nil;state.iceChips=nil;state.vapor=nil;state.powder=nil
+ if bit32.btest(mask,bits.Charged) then
+  state.sparks=emitter(state.anchor,'sparks',scale)
+  state.ions=emitter(state.anchor,'ions',scale)
+ end
+ if bit32.btest(mask,bits.Frosted) then
+  state.flakes=emitter(state.anchor,'flakes',scale)
+  state.iceChips=emitter(state.anchor,'iceChips',scale)
+  state.vapor=emitter(state.anchor,'vapor',scale)
+ end
+ if bit32.btest(mask,bits.Massive) then state.powder=emitter(state.anchor,'powder',scale) end
+end
+
+local function stroke(parent,a,b,width,color,alpha,life)
+ local p=prop(parent,'Part','LightningStroke',Enum.Material.Neon,color)
+ p.Size=Vector3.new(width,width,(b-a).Magnitude)
+ p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Transparency=alpha
+ game:GetService('TweenService'):Create(p,TweenInfo.new(life),{Transparency=1}):Play()
+end
+
+local function lightning(view,from,to,random,large)
+ if not large and activeArcs>=MAX_ARCS then return end
+ local root=Instance.new('Folder');root.Name=large and 'ModifierStrike' or 'ModifierArc';root.Parent=view
+ activeArcs+=1
+ root.Destroying:Once(function() activeArcs-=1 end)
+ local knots=large and 7 or 4
+ local width=large and .17 or math.clamp(view.Size.Y*.035,.047,.13)
+ local jitter=large and 2.1 or width*3.4
+ local previous=from
+ for i=1,knots do
+  local point=if i==knots then to else from:Lerp(to,i/knots)
+   +Vector3.new(random:NextNumber(-jitter,jitter),large and 0 or random:NextNumber(-jitter,jitter),random:NextNumber(-jitter,jitter))
+  stroke(root,previous,point,width,white,.03,.14)
+  stroke(root,previous,point,width*2.3,charged,.56,.27)
+  if i==2 or (large and i==5) then
+   local tip=point+Vector3.new(jitter*1.55,-jitter*1.30,-jitter*.73)
+   local elbow=point:Lerp(tip,.46)+Vector3.new(0,jitter*.43,jitter*.33)
+   stroke(root,point,elbow,width*.63,charged,.09,.17)
+   stroke(root,elbow,tip,width*.42,charged,.22,.20)
+  end
+  previous=point
+ end
+ game:GetService('Debris'):AddItem(root,.29)
+end
+
+local function gust(view)
+ local frame,size=view.CFrame,view.Size
+ local top=frame.Position+Vector3.yAxis*(size.Y*.22)
+ local carrier=prop(view,'Part','FrostGust',Enum.Material.SmoothPlastic,white)
+ carrier.Size=Vector3.new(.08,.08,.08)
+ carrier.CFrame=CFrame.lookAt(top-Vector3.xAxis*size.X*.97,top)
+ local mist=emitter(carrier,'vapor',1.56)
+ local flakes=emitter(carrier,'flakes',1.18)
+ for _,p in ipairs({mist,flakes}) do
+  p.EmissionDirection=Enum.NormalId.Front;p.Speed=NumberRange.new(9,19);p.SpreadAngle=Vector2.new(22,18)
+ end
+ mist:Emit(8);flakes:Emit(16)
+ game:GetService('Debris'):AddItem(carrier,1.7)
+end
+
+local function ambient(view,state,now,lowFlash,drop)
  local random=state.random
- if state.arc and now>=(state.nextAt or 0) then
-  state.nextAt=now+random:NextNumber(2.25,4.7)
-  state.arc:Emit(lowFlash and 1 or 3)
+ if now<(state.nextAmbientAt or 0) then return end
+ state.nextAmbientAt=now+random:NextNumber(.44,.87)
+ local side=random:NextNumber()<.5 and -1 or 1
+ local size=view.Size
+ state.anchor.Position=Vector3.new(side*size.X*.26,size.Y*.27,-side*size.Z*.22)
+ if state.ions then
+  state.ions:Emit(drop and 1 or 2)
+  if not lowFlash and now>=(state.nextArcAt or 0) then
+   state.nextArcAt=now+random:NextNumber(1.7,3.6)
+   local frame=view.CFrame
+   local from=frame:PointToWorldSpace(state.anchor.Position)
+   local to=frame:PointToWorldSpace(Vector3.new(side*size.X*.52,-size.Y*.18,side*size.Z*.34))
+   lightning(view,from,to,random,false)
+   state.sparks:Emit(drop and 2 or 4)
+  end
  end
- if state.ions and now>=(state.nextIonAt or 0) then
-  state.nextIonAt=now+random:NextNumber(.26,.68)
-  state.ions:Emit(1)
+ if state.flakes then
+  state.anchor.Position=Vector3.new(side*size.X*.31,size.Y*.30,side*size.Z*.32)
+  state.flakes:Emit(drop and 1 or 2)
+  if now>=(state.nextMistAt or 0) then
+   state.nextMistAt=now+random:NextNumber(1.7,3.2)
+   state.vapor:Emit(drop and 1 or 2)
+  end
  end
- if state.flake and now>=(state.nextFrostAt or 0) then
-  state.nextFrostAt=now+random:NextNumber(.38,.93)
-  state.flake:Emit(drop and 1 or 2)
+end
+
+local function burst(view,state,lowFlash,full)
+ state.anchor.Position=Vector3.yAxis*(view.Size.Y*.36)
+ if state.sparks then
+  state.sparks:Emit(lowFlash and 3 or full and 17 or 7)
+  state.ions:Emit(full and 8 or 3)
  end
- if drop and state.grit and now>=(state.nextGritAt or 0) then
-  state.nextGritAt=now+random:NextNumber(2.9,5.2)
-  state.grit:Emit(2)
+ if state.iceChips then
+  state.iceChips:Emit(full and 12 or 5)
+  state.flakes:Emit(full and 7 or 3)
+  state.vapor:Emit(full and 5 or 2)
+ end
+ if state.powder then
+  state.anchor.Position=Vector3.yAxis*(-view.Size.Y*.26)
+  state.powder:Emit(full and 11 or 4)
  end
 end
 
@@ -13361,6 +13563,7 @@ function V.rock(record,now,lowFlash,eventKind)
   state.mask=source:GetAttribute('RockModifiers') or 0
   record.modifierFX=state
  end
+ V.syncSurface(record)
  local freshEvent=eventKind~=nil or state.eventPending or state.lastMask~=state.mask
  state.lastMask=state.mask
  if not freshEvent and now<(state.checkAt or 0) then return end
@@ -13371,27 +13574,27 @@ function V.rock(record,now,lowFlash,eventKind)
  state.random=state.random or Random.new(source:GetAttribute('StageSeed') or 1)
  state.eventPending=false
  for _,entry in ipairs(icons) do
-  local name=entry.name
   if entry.bit==bits.Massive or not bit32.btest(state.mask,entry.bit) then continue end
+  local name=entry.name
   local at=source:GetAttribute(name..'At')
   if at and at>now then state.eventPending=true;continue end
   if at and at~=state.seen[name] and now>=at then
    state.seen[name]=at
    if now-at<.55 and not record.visual.broken then
-    event(view,entry.bit,lowFlash,state.random)
+    state.anchor.Position=Vector3.yAxis*(view.Size.Y*.33)
     if entry.bit==bits.Charged then
-     state.arc:Emit(lowFlash and 4 or 12);state.ions:Emit(6)
-    else state.flake:Emit(9) end
+     local top=view.CFrame:PointToWorldSpace(state.anchor.Position)
+     if not lowFlash then lightning(view,top+Vector3.new(-3,25,2),top,state.random,true) end
+     state.nextArcAt=now+1.6
+     state.sparks:Emit(lowFlash and 4 or 17);state.ions:Emit(7)
+    else gust(view);state.nextMistAt=now+1.3 end
    end
   end
  end
  if eventKind=='stage' or eventKind=='break' then
-  local final=eventKind=='break'
-  if state.crack then state.crack:Emit(lowFlash and 4 or final and 16 or 9) end
-  if state.ice then state.ice:Emit(final and 13 or 7) end
-  if state.grit then state.grit:Emit(final and 10 or 4) end
+  burst(view,state,lowFlash,eventKind=='break')
  else
-  ambient(state,now,lowFlash,false)
+  ambient(view,state,now,lowFlash,false)
  end
 end
 
@@ -13400,19 +13603,16 @@ function V.drop(record,now,landingAge,lowFlash)
  if not state then
   state={random=Random.new(record.seed)};record.modifierFX=state
  end
- if state.mask~=record.modifiers then
-  state.mask=record.modifiers
-  prepare(record.view,state,state.mask,true)
- end
- if landingAge and landingAge>=0 and not state.landed then
+ local view=record.view
+ prepare(view,state,record.modifiers,true)
+ if not state.landed then
   state.landed=true
   if landingAge<.28 then
-   if state.arc then state.arc:Emit(lowFlash and 2 or 7) end
-   if state.flake then state.flake:Emit(7) end
-   if state.grit then state.grit:Emit(6) end
+   burst(view,state,lowFlash,false)
+   state.nextAmbientAt=now+.32
   end
  end
- ambient(state,now,lowFlash,true)
+ ambient(view,state,now,lowFlash,true)
 end
 
 local function icon(parent,entry,order)
@@ -13621,8 +13821,8 @@ local function sample(r,source,now)
  if r.modifiers~=modifiers then
   r.modifiers=modifiers
   if r.label then r.label:Destroy();r.label=nil end
-  local tint=RockModifierView.tint(modifiers)
-  r.color=tint and source.Color:Lerp(tint,.19) or source.Color
+  r.color=RockModifierView.finish(r,source.Color,modifiers,true)
+  r.effectColor=RockModifierView.glow(modifiers) or r.color
   r.view.Color=r.color;r.glow=nil
  end
  local at=source:GetAttribute('SnapshotAt') or now
@@ -13788,7 +13988,7 @@ function V:update(dt,now)
   local dust=not done and not reducedEffects and r.physical and cameraPosition
    and (r.pos-cameraPosition).Magnitude<75
    and not r.collectAt and source.Parent and latest and latest.dronePull
-  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
+  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.effectColor) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    if r.label then r.label.Enabled=false end
@@ -13918,7 +14118,7 @@ function V:update(dt,now)
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
     if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
     if r.label then r.label.Enabled=loose and distance<44 end
-    if r.modifiers~=0 and loose and distance<62 and not reducedEffects then
+    if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
      RockModifierView.drop(r,now,landingAge,reducedFlashing)
     end
    elseif r.label then r.label.Enabled=false end
@@ -13935,12 +14135,13 @@ function V:update(dt,now)
     if r.ribbon then
      if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
-     r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
+     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
    elseif r.ribbon then
     finishTrail(self,r,now)
    end
   end
+  if not done or r.view.Parent then RockModifierView.syncSurface(r) end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
 end
@@ -15901,8 +16102,9 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
-  if modifierTint then color=color:Lerp(modifierTint,.13) end
+  local modifiers=s:GetAttribute('RockModifiers') or 0
+  color=RockModifierView.finish(r,color,modifiers,false)
+  r.modifierColor=modifiers~=0 and color or nil
   if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
@@ -16342,10 +16544,10 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
   local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
-  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
+  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

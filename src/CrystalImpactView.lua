@@ -166,8 +166,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local half=original:Clone()
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
-   half.Material=Enum.Material.Concrete
-   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
+   half.Material=r.modifierColor and r.view.Material or Enum.Material.Concrete
+   half.Color=(r.modifierColor or r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -176,7 +176,10 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
-  local stone=r.stoneColor or v.Color
+  local stone=r.modifierColor or r.stoneColor or v.Color
+  local modifierSurface=r.modifierSurface
+  local massive=modifierSurface and modifierSurface.massive
+  local frosted=modifierSurface and modifierSurface.frosted
   local frame=r.splitPose or r.restPose
   local size=r.splitSize or v.Size
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
@@ -212,16 +215,21 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local chipColor=stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
+    local isIce=frosted and i%3==1
+    local chipColor=isIce and Color3.fromRGB(161,226,253) or stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
-    chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=v.Material;chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance
+    if massive and not isIce then size*=1.40 end
+    chip.Size=Vector3.new(size*(isIce and .32 or .55),size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
+    chip.Material=isIce and Enum.Material.Ice or v.Material
+    chip.MaterialVariant=isIce and '' or v.MaterialVariant;chip.Reflectance=v.Reflectance
     local origin=point+direction*.22
     chip.Position=origin
-   track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
-     ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
-     (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
+    local velocity=direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3))
+    local heavy=massive and not isIce
+    track(chip,now,origin,velocity*(heavy and .76 or 1),
+     ground,Vector3.new(i*.83,i*1.47,i*.49),heavy and .58 or .85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil,heavy and 1.20 or .99)
    end
    if #self.pieces<48 and clusterSize<=5 then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or stone:Lerp(STONE_LIGHT,.40))

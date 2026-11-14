@@ -55,15 +55,17 @@ function Display.hide(rig)
 end
 
 function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffects)
- if rig.record~=record then
+ local tint=record.effectColor or record.color
+ if rig.record~=record or rig.tint~=tint then
   rig.record=record
+  rig.tint=tint
   rig.scale=record.physical and 1 or .73
   rig.base.Size=Vector3.new(5.7,.02,5.7)*rig.scale
   rig.outline.Adornee=record.view
-  rig.outline.OutlineColor=record.color:Lerp(WHITE,.25)
-  rig.halo.ImageColor3=record.color:Lerp(WHITE,.10);rig.core.ImageColor3=record.color:Lerp(WHITE,.62)
-  rig.moteColor=record.color:Lerp(WHITE,.14)
-  local strand=ColorSequence.new(record.color:Lerp(WHITE,.32))
+  rig.outline.OutlineColor=tint:Lerp(WHITE,.25)
+  rig.halo.ImageColor3=tint:Lerp(WHITE,.10);rig.core.ImageColor3=tint:Lerp(WHITE,.62)
+  rig.moteColor=tint:Lerp(WHITE,.14)
+  local strand=ColorSequence.new(tint:Lerp(WHITE,.32))
   for i,beam in ipairs(rig.curves) do
    beam.Color=strand;beam.Width0=widths[i]*rig.scale;beam.Width1=widths[i+1]*rig.scale
   end

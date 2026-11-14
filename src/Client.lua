@@ -1167,8 +1167,9 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
-  if modifierTint then color=color:Lerp(modifierTint,.13) end
+  local modifiers=s:GetAttribute('RockModifiers') or 0
+  color=RockModifierView.finish(r,color,modifiers,false)
+  r.modifierColor=modifiers~=0 and color or nil
   if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
@@ -1608,10 +1609,10 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
   local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
-  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
+  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

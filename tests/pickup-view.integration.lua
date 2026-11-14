@@ -99,8 +99,9 @@ end)
 check('stacked icons and particles follow the drop while the launch trail finishes',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
- cargo.Material=Enum.Material.Glass
- for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,Mineral='Rock:Quartz:10',RockModifiers=7,SpawnAt=realTime,SnapshotAt=realTime,
+ cargo.Material=Enum.Material.SmoothPlastic
+ cargo.Color=Color3.fromRGB(221,40,74)
+ for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,Mineral='Rock:Quartz:10',RockModifiers=Mining.ROCK_MODIFIERS.Massive,SpawnAt=realTime,SnapshotAt=realTime,
   FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,
   OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
@@ -108,17 +109,30 @@ check('stacked icons and particles follow the drop while the launch trail finish
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
  assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and record.label.Enabled)
+ assert(record.label.Massive and not record.label.Charged and record.view.Material==Enum.Material.Slate)
+ assert(record.view.ModifierSurface.OchreLayer and record.view.Size==cargo.Size)
+ local bits=Mining.ROCK_MODIFIERS
+ cargo:SetAttribute('RockModifiers',bit32.bor(bits.Massive,bits.Frosted,bits.Charged))
+ renderer:update(1/60,realTime+.21)
  assert(record.label.Mineral.Text=='Quartz' and record.label.Charged and record.label.Frosted and record.label.Massive)
- assert(record.modifierFX.arc.Emitted>0 and record.modifierFX.ions.Emitted>0 and record.modifierFX.flake.Emitted>0)
- assert(record.view.Material==Enum.Material.SmoothPlastic)
+ local finish=record.view.ModifierSurface
+ assert(finish.GoldVein and finish.RimeBlade and finish.OchreLayer)
+ assert(record.view.Material==Enum.Material.Metal and record.view.Color.R<cargo.Color.R*.6 and record.view.Size==cargo.Size)
+ assert((finish.GoldVein.Position-record.view.Position).Magnitude<record.view.Size.Magnitude)
+ assert(not record.modifierFX,'modifier landing burst started during the launch')
  assert(cargo.LocalTransparencyModifier==1 and not record.idle)
  cargo:SetAttribute('GroundImpactAt',realTime+.98)
  cargo:SetAttribute('GroundImpactPosition',Vector3.new(4,.22,0))
  cargo:SetAttribute('GroundImpactSpeed',23)
  renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled and #audio.calls==sounds,'landing cue ran ahead of the buffered ore')
+ pl:SetAttribute('ReducedFlashing',true)
  renderer:update(1/60,realTime+1.10)
+ pl:SetAttribute('ReducedFlashing',false)
  assert(not ribbon.trail.Enabled and record.label.Enabled and record.label.Adornee==record.view)
  assert(record.modifierFX.landed)
+ local particles=record.modifierFX
+ assert(particles.sparks.Emitted>0 and particles.flakes.Emitted>0 and particles.powder.Emitted>0)
+ assert(record.displayRig.tint==record.effectColor)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land' and audio.calls[#audio.calls].position.X==4)
  assert(record.idle and record.idle.emitter.Emitted==1,'physical ore missed its landing sparkle')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
@@ -127,6 +141,7 @@ check('stacked icons and particles follow the drop while the launch trail finish
  renderer:update(1/60,realTime+1.37)
  assert(renderer.records[cargo]==record and record.view.Transparency==1 and ribbon.trail.Parent==record.view,
   'a quick collection cut the remaining trail segments')
+ assert(finish.GoldVein.Transparency==1 and finish.RimeBlade.Transparency==1 and finish.OchreLayer.Transparency==1)
  renderer:update(1/60,realTime+1.40)
  assert(renderer.records[cargo]==nil)
  assert(#audio.calls==sounds+1,'landing sound replayed during collection')

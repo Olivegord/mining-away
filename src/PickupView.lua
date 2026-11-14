@@ -162,8 +162,8 @@ local function sample(r,source,now)
  if r.modifiers~=modifiers then
   r.modifiers=modifiers
   if r.label then r.label:Destroy();r.label=nil end
-  local tint=RockModifierView.tint(modifiers)
-  r.color=tint and source.Color:Lerp(tint,.19) or source.Color
+  r.color=RockModifierView.finish(r,source.Color,modifiers,true)
+  r.effectColor=RockModifierView.glow(modifiers) or r.color
   r.view.Color=r.color;r.glow=nil
  end
  local at=source:GetAttribute('SnapshotAt') or now
@@ -329,7 +329,7 @@ function V:update(dt,now)
   local dust=not done and not reducedEffects and r.physical and cameraPosition
    and (r.pos-cameraPosition).Magnitude<75
    and not r.collectAt and source.Parent and latest and latest.dronePull
-  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
+  if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.effectColor) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
    if r.label then r.label.Enabled=false end
@@ -459,7 +459,7 @@ function V:update(dt,now)
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
     if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
     if r.label then r.label.Enabled=loose and distance<44 end
-    if r.modifiers~=0 and loose and distance<62 and not reducedEffects then
+    if r.modifiers~=0 and landingAge and landingAge>=0 and loose and distance<62 and not reducedEffects and not reducedMotion then
      RockModifierView.drop(r,now,landingAge,reducedFlashing)
     end
    elseif r.label then r.label.Enabled=false end
@@ -476,12 +476,13 @@ function V:update(dt,now)
     if r.ribbon then
      if not inFlight or reducedEffects or r.ribbon.untilAt then finishTrail(self,r,now) end
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
-     r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
+     r.ribbon=launchTrail(r.view,r.effectColor,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
    elseif r.ribbon then
     finishTrail(self,r,now)
    end
   end
+  if not done or r.view.Parent then RockModifierView.syncSurface(r) end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
 end

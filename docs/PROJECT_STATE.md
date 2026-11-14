@@ -11,18 +11,24 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 03788b48bb65b423a11a086d93fa60e18ad560871ff5aec1467511fdc5883c88 | Shorter walls with a bright reveal and stronger aim and pin highlights. |
-| Shared Studio Sources | Team Create save **294**, November 14 at 12:32 PM Pacific | All seven Sources match the canonical file. |
+| Native-file SHA-256 | 53eea3fe9ba187f0d140aa77cff0900da1f2ef84dc2397acd59b59bacfdd7c36 | Distinct Charged, Frosted and Massive finishes and effects on rocks and loose ore. |
+| Shared Studio Sources | Team Create save **295**, November 14 at 12:49 PM Pacific | All three Script Sync roots are connected and all seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the shorter walls, bright reveal and rock highlights while aiming. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the updated modifier materials, silhouettes, fracture effects and matching ore drops. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — readable rock modifiers and matching ore
+
+Charged gives the rock a dark mineral body, gold veins, branching arcs and orange sparks. Its ore has dark metallic faces and gold inlays. Frosted exposes pale ice blades and sheds frost, vapor and thin ice fragments. Massive grows ochre stone layers and breaks into bulkier pieces with a lower, slower trajectory and a dust puff. Each visible finish carries over to the drop. Stacked rocks and drops retain all of their surface cues. The pickup trail, outline and ground glow take their brightest modifier color, and the modifier burst fires on the buffered landing beat. Reduced effects retain the static finish. Mining work, drop values and storage use the existing server tuning.
+
+Studio was already open in Edit for place **124078027733625**, universe **10774898335**. Team Create save **295** succeeded at **12:49:03 PM Pacific**. All three Script Sync roots were connected, and all seven Studio Sources matched the canonical file after the save. No player publication. Detached Studio Edit checks exercised every modifier combination on rocks and ore, including surface following and visibility, electrical strikes, the cold gust and reduced effects. The pickup, Workshop and Crystal Run tests passed with API doubles. Source compilation and the canonical preservation check passed. The broader gadget suite reaches its existing courier-delay fixture failure. Live motion and multiplayer remain unverified. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit aad5686` on the prior canonical snapshot.
 
 ## November 14 — shorter walls and rock highlights while aiming
 
