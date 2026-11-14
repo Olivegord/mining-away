@@ -11,20 +11,28 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 53eea3fe9ba187f0d140aa77cff0900da1f2ef84dc2397acd59b59bacfdd7c36 | Distinct Charged, Frosted and Massive finishes and effects on rocks and loose ore. |
-| Shared Studio Sources | Team Create save **295**, November 14 at 12:49 PM Pacific | All three Script Sync roots are connected and all seven Sources match the canonical file. |
+| Native-file SHA-256 | 3092da2fd3a1b5ec20252d251151f412987f1f92d3b84e5eaf72701bca281f34 | Modifier outlines and particles, with temporary selector preview highlights. |
+| Shared Studio Sources | Team Create save **296**, November 14 at 1:27 PM Pacific | All three Script Sync roots are connected and all seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the updated modifier materials, silhouettes, fracture effects and matching ore drops. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads mineral-colored rocks and ore with modifier particles and preview-only selection outlines. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
 
+## November 14 — preserve mineral color through modifiers and selector preview
+
+Removed the tinted modifier surfaces and add-on pieces from both rocks and loose ore. Modifier colors appear in an occluded silhouette outline and concentric ground rings with a dark outer contour. Frosted adds pale mist and sleet around the original mineral. Massive kicks up ochre dust and weighted grit particles. Charged gives the arc an outer gold edge and a short white core. Tiny rectangular sparks stay opaque for their short lifetimes. The final fracture throws a larger spray and leaves expanding rings and smoke behind after the rock disappears. The white selector Highlight appears only while the aim square is visible and the rock center is inside it. Committing a pin clears the white outline. See the [VFX instructions](VFX_INSTRUCTIONS.md).
+
+DRONEREVOLUTION was already open in Edit at place **124078027733625**, universe **10774898335**. Team Create save **296** succeeded at **1:27:30 PM Pacific**. All three Script Sync roots were connected and all seven Sources matched the canonical file after saving. Detached Studio Edit checks exercised all rock modifier combinations, every modified pickup combination, preview clearance, arc rendering instances and break-tail ownership. Studio reported successful fetches for the spark, smoke, flake and ring textures. Pickup, resource renderer, crystal contact timing, Workshop, Crystal Run and native preservation checks passed. The broader gadget suite reaches its existing courier-delay fixture failure. Live motion and multiplayer remain unverified. No player publication. Reproduce with `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit 11640a8` on the prior canonical snapshot.
+
 ## November 14 — readable rock modifiers and matching ore
+
+Superseded by the modifier particle and outline pass above.
 
 Charged gives the rock a dark mineral body, gold veins, branching arcs and orange sparks. Its ore has dark metallic faces and gold inlays. Frosted exposes pale ice blades and sheds frost, vapor and thin ice fragments. Massive grows ochre stone layers and breaks into bulkier pieces with a lower, slower trajectory and a dust puff. Each visible finish carries over to the drop. Stacked rocks and drops retain all of their surface cues. The pickup trail, outline and ground glow take their brightest modifier color, and the modifier burst fires on the buffered landing beat. Reduced effects retain the static finish. Mining work, drop values and storage use the existing server tuning.
 

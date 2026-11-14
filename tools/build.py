@@ -93,8 +93,9 @@ def module_bundle(names):
   names=tuple(n for name in names for n in (('NomadView','RoleEffectView') if name=='RoleEffectView' else (name,)))
  if 'RockFinish' not in names and any(n in names for n in ('WorkEffects','RoleVisuals','CrystalImpactView')):
   names=('RockFinish',)+tuple(names)
- if 'PickupView' in names and 'RockModifierView' not in names:
-  names=tuple(n for name in names for n in (tuple(dep for dep in ('Mining','RockModifierView') if dep not in names)+(name,) if name=='PickupView' else (name,)))
+ if any(n in names for n in ('PickupDisplay','PickupView')) and 'RockModifierView' not in names:
+  pickup=next(n for n in names if n in ('PickupDisplay','PickupView'))
+  names=tuple(n for name in names for n in (tuple(dep for dep in ('Mining','RockModifierView') if dep not in names)+(name,) if name==pickup else (name,)))
  s='--!strict\n-- Drone Blower revolution • Olivegord/mining-away • generated from editable source.\n'
  for name in names:
   code=(ROOT/'src'/f'{name}.lua').read_text().replace('--!strict\n','')

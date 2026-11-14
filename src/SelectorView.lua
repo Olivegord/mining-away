@@ -195,6 +195,7 @@ function V:showAim(dt,ray)
  self.aimWidth=width
  local point=self.aimPoint
  if point and (point==pin or point==old) then point=nil end
+ self.previewPoint=point
  local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
  local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
  -- Keep the already extended walls when the current pin becomes the old one.

@@ -50,6 +50,7 @@ end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
+ if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
 end
@@ -79,6 +80,9 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
  rig.surface.Enabled=true
+ local mask=record.modifiers or 0
+ if mask~=0 and not rig.rings then rig.rings=RockModifierView.groundRings(rig.surface) end
+ if rig.rings then RockModifierView.drawRings(rig.rings,mask,strength) end
 
  local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
  if not reducedEffects then

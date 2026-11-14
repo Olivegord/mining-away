@@ -999,7 +999,6 @@ local function registerResource(source)
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resources[source].stoneColor=stoneColor;resources[source].stoneGradient=stoneGradient
- resources[source].modifiersDirty=true
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -1035,11 +1034,10 @@ local function observe(source)
   if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerDrone(source) end) end
  elseif source:IsA('BasePart') and (source:GetAttribute('ResourceId') or source.Parent.Name=='Resources' or source.Parent:GetAttribute('FieldId')) then
   registerResource(source)
-  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function(attribute)
+  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function()
    local record=resources[source]
    if record then
     record.dirty=true
-    if attribute=='RockModifiers' then record.modifiersDirty=true end
    else registerResource(source) end
   end) end
  elseif source:IsA('BasePart') and source.Parent:IsA('Model') and drones[source.Parent] then hidePart(source)
@@ -1077,23 +1075,19 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
+local function renderResource(r,now,aim,aimWidth,aimField)
  local s=r.source;local view=r.view
  if r.dirty then
   r.fieldId=s:GetAttribute('FieldId')
   r.center=s:GetAttribute('FullPosition') or s.Position
+  r.modifiers=s:GetAttribute('RockModifiers') or 0
  end
- if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field
-  or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
-  r.pin=pin;r.pinWidth=width;r.pinField=field
+ if r.dirty or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
   r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
-  local selected=pin~=nil and width~=nil and field~=nil and r.fieldId==field
-   and Mining.selectorContains(pin,width*.5,r.center)
-  local hovered=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
+  r.previewed=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
    and Mining.selectorContains(aim,aimWidth*.5,r.center)
-  local wash=if hovered then .5 elseif selected then .4 else 0
-  if (r.wash or 0)~=wash then r.wash=wash;r.dirty=true end
  end
+ if r.previewed or r.modifiers~=0 or r.rockOutline then RockModifierView.rockOutline(r) end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
@@ -1167,10 +1161,6 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  local modifiers=s:GetAttribute('RockModifiers') or 0
-  color=RockModifierView.finish(r,color,modifiers,false)
-  r.modifierColor=modifiers~=0 and color or nil
-  if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -1190,6 +1180,7 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
    r.splitPose=CFrame.new(center)*(r.restPose and r.restPose.Rotation or view.CFrame.Rotation)*CFrame.new(-r.splitSize*cutOffset)
   end
   view.Transparency=1
+  if r.rockOutline then r.rockOutline.Enabled=false end
  end
  if r.stoneGradient then
   RockFinish.setVisibility(r.stoneGradient,view.Transparency)
@@ -1602,17 +1593,14 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  presentation:beginFrame()
  chargerView:update(dt)
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
- local pin=player:GetAttribute('MA_Selector')
- local width=player:GetAttribute('MA_SelectorWidth')
- local field=player:GetAttribute('MA_SelectorField')
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
+  local fracture=renderResource(r,now,selectorView.previewPoint,selectorView.aimWidth,selectorView.aimField)
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
-  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
+  if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

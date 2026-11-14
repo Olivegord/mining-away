@@ -8091,8 +8091,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local half=original:Clone()
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
-   half.Material=r.modifierColor and r.view.Material or Enum.Material.Concrete
-   half.Color=(r.modifierColor or r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
+   half.Material=Enum.Material.Concrete
+   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,Feel.MaxCrystalDarkness)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -8101,10 +8101,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
  end
  local function split(self,r,now,prism,nomad)
   local v,s=r.view,r.source
-  local stone=r.modifierColor or r.stoneColor or v.Color
-  local modifierSurface=r.modifierSurface
-  local massive=modifierSurface and modifierSurface.massive
-  local frosted=modifierSurface and modifierSurface.frosted
+  local stone=r.stoneColor or v.Color
   local frame=r.splitPose or r.restPose
   local size=r.splitSize or v.Size
   local ground=s:GetAttribute('GroundY') or frame.Position.Y-size.Y*.5
@@ -8140,21 +8137,16 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     if #self.pieces>=48 then break end
     local theta=i*2.399963+now%3
     local direction=Vector3.new(math.cos(theta),0,math.sin(theta))
-    local isIce=frosted and i%3==1
-    local chipColor=isIce and Color3.fromRGB(161,226,253) or stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
+    local chipColor=stone:Lerp(STONE_LIGHT,variation:NextNumber(.05,.30))
     local chip=part(parent,'WedgePart','CrystalBreakPiece',chipColor)
     local size=strength*(prism and (.11+.052*(i%4)) or variation:NextNumber(.20,.48))
-    if massive and not isIce then size*=1.40 end
-    chip.Size=Vector3.new(size*(isIce and .32 or .55),size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
-    chip.Material=isIce and Enum.Material.Ice or v.Material
-    chip.MaterialVariant=isIce and '' or v.MaterialVariant;chip.Reflectance=v.Reflectance
+    chip.Size=Vector3.new(size*.55,size*(prism and 2.1 or variation:NextNumber(1.35,2.65)),size)
+    chip.Material=v.Material;chip.MaterialVariant=v.MaterialVariant;chip.Reflectance=v.Reflectance
     local origin=point+direction*.22
     chip.Position=origin
-    local velocity=direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3))
-    local heavy=massive and not isIce
-    track(chip,now,origin,velocity*(heavy and .76 or 1),
-     ground,Vector3.new(i*.83,i*1.47,i*.49),heavy and .58 or .85,
-     (i==2 or i==7) and (owned and .64 or .39) or nil,heavy and 1.20 or .99)
+   track(chip,now,origin,direction*((prism and 13 or 7)+2*(i%4))+Vector3.yAxis*(10+1.5*(i%3)),
+     ground,Vector3.new(i*.83,i*1.47,i*.49),.85,
+     (i==2 or i==7) and (owned and .64 or .39) or nil,.99)
    end
    if #self.pieces<48 and clusterSize<=5 then
     local spark=part(parent,'Part','CrystalSplitSpark',prism and RED_HIGHLIGHT or stone:Lerp(STONE_LIGHT,.40))
@@ -13130,6 +13122,486 @@ end
 return O
 
 end)()
+local RockModifierView = (function()
+-- Modifier effects frame the existing mineral and follow its authoritative events.
+local V={}
+local bits=Mining.ROCK_MODIFIERS
+local charged=Color3.fromRGB(255,200,63)
+local frost=Color3.fromRGB(135,225,255)
+local dust=Color3.fromRGB(222,162,106)
+local white=Color3.fromRGB(249,251,255)
+local icons={
+ {bit=bits.Charged,name='Charged',color=charged},
+ {bit=bits.Frosted,name='Frosted',color=frost},
+ {bit=bits.Massive,name='Massive',color=dust},
+}
+local square='rbxasset://textures/particles/SquareParticle.png'
+local smoke='rbxasset://textures/particles/smoke_main.dds'
+local star='rbxassetid://77624818077620'
+local ringTexture='rbxasset://textures/ui/AvatarExperience/AxisRing.png'
+local activeArcs,activeBreaks=0,0
+
+function V.glow(mask)
+ for _,entry in ipairs(icons) do
+  if bit32.btest(mask,entry.bit) then return entry.color end
+ end
+end
+
+function V.rockOutline(record)
+ local tint=record.previewed and white or V.glow(record.modifiers or 0)
+ local view,outline=record.view,record.rockOutline
+ if not tint and outline then
+  outline:Destroy();record.rockOutline=nil
+  return
+ end
+ local visible=tint~=nil and not record.visual.broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
+ if not visible then
+  if outline and outline.Enabled then outline.Enabled=false end
+  return
+ end
+ if not outline then
+  outline=Instance.new('Highlight');outline.Name='RockOutline'
+  outline.DepthMode=Enum.HighlightDepthMode.Occluded;outline.FillTransparency=1
+  outline.Parent=view;record.rockOutline=outline
+ end
+ local alpha=record.previewed and .06 or .15
+ if outline.OutlineColor~=tint then outline.OutlineColor=tint end
+ if outline.OutlineTransparency~=alpha then outline.OutlineTransparency=alpha end
+ if outline.Adornee~=view then outline.Adornee=view end
+ if not outline.Enabled then outline.Enabled=true end
+end
+
+local function carrier(parent,name)
+ local p=Instance.new('Part')
+ p.Name=name;p.Size=Vector3.one*.05;p.Anchored=true;p.Transparency=1
+ p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+ p.Parent=parent
+ return p
+end
+
+function V.groundRings(gui)
+ local shadow=Instance.new('ImageLabel');shadow.Name='OuterContour'
+ shadow.BackgroundTransparency=1;shadow.Image=ringTexture;shadow.ImageColor3=Color3.fromRGB(48,43,58)
+ shadow.AnchorPoint=Vector2.new(.5,.5);shadow.Position=UDim2.fromScale(.5,.5)
+ shadow.ZIndex=1;shadow.Visible=false;shadow.Parent=gui
+ local rings={shadow=shadow}
+ for i,entry in ipairs(icons) do
+  local image=Instance.new('ImageLabel');image.Name=entry.name..'Ring'
+  image.BackgroundTransparency=1;image.Image=ringTexture;image.ImageColor3=entry.color
+  image.AnchorPoint=Vector2.new(.5,.5);image.Position=UDim2.fromScale(.5,.5);image.Visible=false
+  image.ZIndex=2;image.Parent=gui;rings[i]=image
+ end
+ return rings
+end
+
+function V.drawRings(rings,mask,strength)
+ -- The dark outer contour keeps the bright rings legible on pale ground.
+ local index=0
+ for i,entry in ipairs(icons) do
+  local image=rings[i]
+  local visible=strength>.02 and bit32.btest(mask,entry.bit)
+  if image.Visible~=visible then image.Visible=visible end
+  if visible then
+   index+=1
+   local scale=.59+(index-1)*.14
+   local size=UDim2.fromScale(scale,scale)
+   local alpha=1-strength*(.81-(index-1)*.09)
+   if image.Size~=size then image.Size=size end
+   if image.ImageTransparency~=alpha then image.ImageTransparency=alpha end
+  end
+ end
+ local shadow=rings.shadow
+ shadow.Visible=index>0
+ if index>0 then
+  local scale=.65+(index-1)*.14
+  local size=UDim2.fromScale(scale,scale)
+  local alpha=1-strength*.72
+  if shadow.Size~=size then shadow.Size=size end
+  if shadow.ImageTransparency~=alpha then shadow.ImageTransparency=alpha end
+ end
+end
+
+local styles={
+ spark={name='ElectricSparks',texture=square,light=1,size=.19,life={.055,.13},speed={29,76},squash=2.1,
+  color=Color3.fromRGB(255,233,151),spread=103,gravity=-41,drag=.65,hard=true},
+ ember={name='HotSparkFragments',texture=square,light=.68,size=.095,life={.11,.29},speed={9,31},squash=.8,
+  color=Color3.fromRGB(255,154,38),spread=93,gravity=-37,drag=2,hard=true},
+ frost={name='SnowFlurry',texture=star,light=.26,size=.45,life={.84,1.70},speed={2.2,6},
+  color=white,endColor=frost,spread=77,gravity=-2,drag=1.65},
+ sleet={name='IceSpray',texture=square,light=.30,size=.22,life={.22,.64},speed={12,29},squash=1.2,
+  color=Color3.fromRGB(208,249,255),endColor=frost,spread=102,gravity=-22,drag=3},
+ grit={name='HeavyGrit',texture=square,light=0,size=.22,life={.19,.56},speed={6,18},
+  color=dust,endColor=Color3.fromRGB(149,105,81),spread=97,gravity=-29,drag=1.3},
+ ionSmoke={name='ArcSmoke',texture=smoke,light=0,size=3.6,life={.77,1.72},speed={1.4,5.4},
+  color=Color3.fromRGB(131,104,79),endColor=Color3.fromRGB(101,83,89),spread=64,gravity=.65,drag=1.9,cloud=true,alpha=.72},
+ mist={name='ColdMist',texture=smoke,light=.08,size=4.55,life={1.05,2.74},speed={1.2,5.5},
+  color=Color3.fromRGB(206,243,255),endColor=Color3.fromRGB(106,166,211),spread=77,gravity=.40,drag=2.25,cloud=true,alpha=.63},
+ powder={name='StoneDust',texture=smoke,light=0,size=4.1,life={.86,2.20},speed={2.3,7.3},
+  color=Color3.fromRGB(191,152,120),endColor=Color3.fromRGB(124,95,87),spread=96,gravity=.25,drag=2.85,cloud=true,alpha=.66},
+}
+
+local function emitter(parent,key,scale)
+ local style=styles[key]
+ local diameter=style.size*scale
+ local p=Instance.new('ParticleEmitter')
+ p.Name=style.name;p.Enabled=false;p.Rate=0;p.Texture=style.texture
+ p.Color=ColorSequence.new(style.color,style.endColor or style.color)
+ if style.hard then
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.40),
+   NumberSequenceKeypoint.new(1,diameter,diameter*.40)})
+  p.Transparency=NumberSequence.new(0)
+ elseif style.cloud then
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter*.36),
+   NumberSequenceKeypoint.new(.25,diameter,diameter*.26),NumberSequenceKeypoint.new(1,diameter*1.68)})
+  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,style.alpha),
+   NumberSequenceKeypoint.new(.52,style.alpha+.10),NumberSequenceKeypoint.new(1,1)})
+  p.ZOffset=-1.1*scale
+ else
+  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.40),
+   NumberSequenceKeypoint.new(.55,diameter*.82),NumberSequenceKeypoint.new(1,0)})
+  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.10),NumberSequenceKeypoint.new(.55,.29),NumberSequenceKeypoint.new(1,1)})
+ end
+ p.LightEmission=style.light;p.LightInfluence=style.cloud and .38 or .10
+ p.Lifetime=NumberRange.new(table.unpack(style.life));p.Speed=NumberRange.new(table.unpack(style.speed))
+ p.Drag=style.drag;p.Acceleration=Vector3.yAxis*style.gravity;p.WindAffectsDrag=false
+ p.SpreadAngle=Vector2.new(style.spread,style.spread)
+ if style.squash then
+  p.Orientation=Enum.ParticleOrientation.VelocityParallel;p.Squash=NumberSequence.new(style.squash)
+ else
+  p.Rotation=NumberRange.new(-180,180);p.RotSpeed=NumberRange.new(-55,63)
+ end
+ p.Parent=parent
+ return p
+end
+
+local function prepare(view,state,mask,scale)
+ if not state.air then
+  state.air=Instance.new('Attachment');state.air.Name='ModifierParticles';state.air.Parent=view
+  state.haze=Instance.new('Attachment');state.haze.Name='ModifierHaze';state.haze.Parent=view
+ end
+ for _,entry in ipairs(icons) do
+  local enabled=bit32.btest(mask,entry.bit)
+  local group=state[entry.name]
+  if enabled and not group then
+   if entry.bit==bits.Charged then
+    group={spark=emitter(state.air,'spark',scale),fragments=emitter(state.air,'ember',scale),smoke=emitter(state.haze,'ionSmoke',scale)}
+   elseif entry.bit==bits.Frosted then
+    group={flakes=emitter(state.air,'frost',scale),sleet=emitter(state.air,'sleet',scale),mist=emitter(state.haze,'mist',scale)}
+   else
+    group={grit=emitter(state.air,'grit',scale),dust=emitter(state.haze,'powder',scale)}
+   end
+   state[entry.name]=group
+  elseif not enabled and group then
+   for _,p in pairs(group) do p:Destroy() end
+   state[entry.name]=nil
+  end
+ end
+end
+
+local function point(parent,position)
+ local a=Instance.new('Attachment');a.Position=position;a.Parent=parent
+ return a
+end
+
+local function lightning(view,from,to,random,large,bend)
+ if activeArcs>=8 or not view.Parent then return end
+ local parent=carrier(view.Parent,'RockLightning')
+ parent.Position=to
+ activeArcs+=1
+ parent.Destroying:Once(function() activeArcs-=1 end)
+ local knots=large and 8 or 5
+ local width=large and .16 or math.clamp(view.Size.Y*.038,.064,.18)
+ local jitter=large and 2.30 or width*5
+ local function line(a,b,weight)
+  local beam=Instance.new('Beam');beam.Name='GoldEdge';beam.Attachment0=a;beam.Attachment1=b
+  beam.Width0=width*2.45*weight;beam.Width1=width*1.94*weight
+  beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.77;beam.LightInfluence=0
+  beam.Color=ColorSequence.new(charged);beam.Transparency=NumberSequence.new(.42);beam.Parent=parent
+  local core=beam:Clone();core.Name='WhiteCore'
+  core.Width0=width*.72*weight;core.Width1=width*.53*weight;core.LightEmission=1
+  core.Color=ColorSequence.new(white);core.Transparency=NumberSequence.new(.02);core.ZOffset=.035;core.Parent=parent
+ end
+ local previous=point(parent,from-to)
+ for i=1,knots do
+  local pos=if i==knots then Vector3.zero else (from-to)*(1-i/knots)
+   +Vector3.new(random:NextNumber(-jitter,jitter),large and 0 or random:NextNumber(-jitter,jitter),random:NextNumber(-jitter,jitter))
+  if bend then pos+=bend*math.sin(i/knots*math.pi) end
+  local nextPoint=point(parent,pos)
+  line(previous,nextPoint,1)
+  if i==2 or i==knots-2 then
+   local facing=i==2 and 1 or -1
+   local elbow=point(parent,pos+Vector3.new(jitter*facing,-jitter*.57,jitter*.51))
+   local tip=point(parent,pos+Vector3.new(jitter*1.9*facing,-jitter*1.42,-jitter*.14))
+   line(nextPoint,elbow,.59);line(elbow,tip,.32)
+  end
+  previous=nextPoint
+ end
+ -- The white discharge ends abruptly while the gold edge contracts.
+ local tween=game:GetService('TweenService')
+ for _,beam in ipairs(parent:GetChildren()) do
+  if beam:IsA('Beam') then
+   local life=beam.Name=='WhiteCore' and .045 or .125
+   tween:Create(beam,TweenInfo.new(life,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Width0=0,Width1=0}):Play()
+  end
+ end
+ game:GetService('Debris'):AddItem(parent,.16)
+end
+
+local function behind(view,state,lower)
+ local camera=workspace.CurrentCamera
+ local direction=camera and view.Position-camera.CFrame.Position or Vector3.zAxis
+ local flat=Vector3.new(direction.X,0,direction.Z)
+ flat=flat.Magnitude>.01 and flat.Unit or Vector3.zAxis
+ local width=math.min(view.Size.X,view.Size.Z)
+ local origin=view.Position+flat*(width*.54)+Vector3.yAxis*(view.Size.Y*lower)
+ state.haze.Position=state.haze.Parent.CFrame:PointToObjectSpace(origin)
+end
+
+local function electric(state,lowFlash,count)
+ local group=state.Charged
+ group.spark.Brightness=lowFlash and .58 or 2.15
+ group.spark:Emit(lowFlash and math.ceil(count*.36) or count)
+ group.fragments:Emit(lowFlash and math.ceil(count*.24) or math.ceil(count*.70))
+end
+
+local function arc(view,state,now,lowFlash,drop,strike)
+ local size,frame,random=view.Size,view.CFrame,state.random
+ local side=random:NextNumber()<.5 and -1 or 1
+ local from,to,bend
+ if strike then
+  to=frame:PointToWorldSpace(Vector3.yAxis*(size.Y*.44))
+  from=to+Vector3.new(-3,25,2)
+ else
+  local camera=workspace.CurrentCamera
+  local eye=camera and frame:PointToObjectSpace(camera.CFrame.Position) or Vector3.zAxis
+  local toward=Vector3.new(eye.X,0,eye.Z)
+  toward=toward.Magnitude>.01 and toward.Unit or Vector3.zAxis
+  local across=Vector3.yAxis:Cross(toward)*side
+  from=frame:PointToWorldSpace((toward*.36+across*.32+Vector3.yAxis*.43)*size)
+  to=frame:PointToWorldSpace((toward*.42-across*.42+Vector3.yAxis*.06)*size)
+  -- Bow around the near face so the middle of the arc stays above the stone.
+  bend=frame:VectorToWorldSpace((toward*.28+Vector3.yAxis*.15)*size)
+ end
+ if not lowFlash then lightning(view,from,to,random,strike==true,bend) end
+ if not strike and not lowFlash then
+  state.air.Position=frame:PointToObjectSpace(from)
+  electric(state,false,drop and 3 or 6)
+ end
+ state.air.Position=frame:PointToObjectSpace(to)
+ electric(state,lowFlash,strike and 28 or drop and 7 or 12)
+ behind(view,state,-.17)
+ state.Charged.smoke:Emit(strike and 5 or drop and 1 or 2)
+ state.nextArcAt=now+random:NextNumber(1.65,3.3)
+end
+
+local function frostGust(view,state)
+ local group=state.Frosted
+ behind(view,state,-.23)
+ state.air.Position=Vector3.new(-view.Size.X*.29,view.Size.Y*.17,0)
+ state.air.CFrame*=CFrame.Angles(0,0,-1.05)
+ group.flakes:Emit(12);group.sleet:Emit(13)
+ state.air.CFrame=CFrame.new(state.air.Position)
+ group.mist:Emit(9)
+end
+
+local function ambient(view,state,now,lowFlash,drop)
+ local random=state.random
+ if state.Charged and now>=(state.nextArcAt or 0) then arc(view,state,now,lowFlash,drop,false) end
+ if now<(state.nextAt or 0) then return end
+ state.nextAt=now+random:NextNumber(.55,.86)
+ behind(view,state,-.29)
+ local bearing=random:NextNumber(0,2*math.pi)
+ local size=view.Size
+ state.air.Position=Vector3.new(math.cos(bearing)*size.X*.37,size.Y*.18,math.sin(bearing)*size.Z*.37)
+ if state.Frosted then
+  state.Frosted.flakes:Emit(drop and 2 or 3)
+  state.Frosted.mist:Emit(drop and 1 or 2)
+ end
+ if state.Massive and now>=(state.nextDustAt or 0) then
+  state.nextDustAt=now+random:NextNumber(1.1,2.2)
+  state.Massive.dust:Emit(drop and 1 or 2)
+ end
+end
+
+local function burst(view,state,lowFlash,kind)
+ local final=kind=='break'
+ local ground=kind=='land'
+ state.air.Position=Vector3.yAxis*(view.Size.Y*(ground and -.20 or .26))
+ behind(view,state,ground and -.45 or -.26)
+ if state.Charged then
+  electric(state,lowFlash,final and 32 or ground and 12 or 9)
+  state.Charged.smoke:Emit(final and 7 or 2)
+ end
+ if state.Frosted then
+  state.Frosted.sleet:Emit(final and 23 or ground and 10 or 8)
+  state.Frosted.flakes:Emit(final and 16 or 6)
+  state.Frosted.mist:Emit(final and 12 or ground and 4 or 3)
+ end
+ if state.Massive then
+  state.Massive.grit:Emit(final and 21 or 7)
+  state.Massive.dust:Emit(final and 11 or ground and 5 or 4)
+ end
+ if final and activeBreaks<10 and view.Parent then
+  -- The source rock expires before the cold breath. Keep the tails on a
+  -- detached carrier in the same frame until the longest emitter has finished.
+  local tail=carrier(view.Parent,'RockModifierFallout')
+  tail.CFrame=view.CFrame
+  local rings=state.ringBase
+  if rings then
+   rings.Parent=tail;rings.Rings.Enabled=true
+   local target=Vector3.new(rings.Size.X*1.74,.02,rings.Size.Z*1.74)
+   local tween=game:GetService('TweenService')
+   local ease=TweenInfo.new(.43,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+   tween:Create(rings,ease,{Size=target}):Play()
+   for _,image in pairs(state.rings) do tween:Create(image,ease,{ImageTransparency=1}):Play() end
+   state.ringBase=nil
+  end
+  state.air.Parent=tail;state.haze.Parent=tail
+  activeBreaks+=1
+  tail.Destroying:Once(function() activeBreaks-=1 end)
+  game:GetService('Debris'):AddItem(tail,2.8)
+ end
+end
+
+local function rockRings(record,state,visible)
+ local base=state.ringBase
+ if not visible then
+  if base then base.Rings.Enabled=false end
+  return
+ end
+ local view=record.view
+ if not base then
+  base=carrier(view,'RockModifierRings')
+  local gui=Instance.new('SurfaceGui');gui.Name='Rings';gui.Face=Enum.NormalId.Top
+  gui.CanvasSize=Vector2.new(256,256);gui.LightInfluence=0;gui.Parent=base
+  state.rings=V.groundRings(gui);state.ringBase=base
+ end
+ local ground=record.source:GetAttribute('GroundY') or view.Position.Y-view.Size.Y*.5
+ local center=record.center or view.Position
+ local size=view.Size
+ local span=Vector3.new(math.max(2.6,size.X*2.15),.02,math.max(2.6,size.Z*2.15))
+ local position=Vector3.new(center.X,ground+.046,center.Z)
+ if base.Size~=span then base.Size=span end
+ if base.Position~=position then base.Position=position end
+ if not base.Rings.Enabled then base.Rings.Enabled=true end
+ if state.ringMask~=record.modifiers then
+  state.ringMask=record.modifiers;V.drawRings(state.rings,state.ringMask,.63)
+ end
+end
+
+function V.rock(record,now,lowFlash,eventKind)
+ local mask=record.modifiers
+ local view=record.view
+ local state=record.modifierFX
+ if not state then
+  state={seen={},random=Random.new(record.source:GetAttribute('StageSeed') or 1)}
+  record.modifierFX=state
+ end
+ local changed=state.mask~=mask
+ if not changed and not eventKind and now<(state.checkAt or 0) then return end
+ state.checkAt=now+.11
+ if mask==0 then
+  if state.ringBase then state.ringBase:Destroy() end
+  if state.air then state.air:Destroy();state.haze:Destroy() end
+  record.modifierFX=nil
+  return
+ end
+ local near=BeamVFX.near(view.Position,84)
+ local broken=record.visual.broken
+ local visible=not broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
+ rockRings(record,state,near and visible)
+ if not near or (not visible and eventKind~='break') or BeamVFX.reduced() then return end
+ if broken and state.finished then return end
+ if state.mask~=mask then
+  prepare(view,state,mask,math.clamp(view.Size.Magnitude*.18,.83,1.32))
+  state.mask=mask
+ end
+ for _,entry in ipairs(icons) do
+  if entry.bit==bits.Massive or not bit32.btest(mask,entry.bit) then continue end
+  local name=entry.name
+  local at=record.source:GetAttribute(name..'At')
+  if at and at~=state.seen[name] and now>=at then
+   state.seen[name]=at
+   if now-at<.55 and not broken then
+    if entry.bit==bits.Charged then arc(view,state,now,lowFlash,false,true)
+    else frostGust(view,state);state.nextAt=now+.55 end
+   end
+  end
+ end
+ if eventKind then
+  if eventKind=='break' then state.finished=true end
+  if eventKind=='break' and state.Charged and not lowFlash then
+   local from=view.Position+Vector3.yAxis*(view.Size.Y*.44)
+   local to=view.Position+view.CFrame.RightVector*(view.Size.X*.82)-Vector3.yAxis*(view.Size.Y*.19)
+   lightning(view,from,to,state.random,false)
+  end
+  burst(view,state,lowFlash,eventKind)
+ else ambient(view,state,now,lowFlash,false) end
+end
+
+function V.drop(record,now,landingAge,lowFlash)
+ local state=record.modifierFX
+ if not state then
+  state={random=Random.new(record.seed)}
+  record.modifierFX=state
+ end
+ local view=record.view
+ if state.mask~=record.modifiers then
+  prepare(view,state,record.modifiers,.65)
+  state.mask=record.modifiers
+ end
+ if not state.landed then
+  state.landed=true
+  if landingAge<.28 then
+   burst(view,state,lowFlash,'land')
+   state.nextAt=now+.44
+   state.nextArcAt=now+.72
+  end
+ end
+ ambient(view,state,now,lowFlash,true)
+end
+
+local function icon(parent,entry,order)
+ local frame=Instance.new('Frame')
+ frame.Name=entry.name;frame.Size=UDim2.fromOffset(10,12)
+ frame.BackgroundTransparency=1;frame.LayoutOrder=order;frame.Parent=parent
+ local function stroke(x,y,width,height,rotation)
+  local piece=Instance.new('Frame')
+  piece.BorderSizePixel=0;piece.BackgroundColor3=entry.color;piece.AnchorPoint=Vector2.new(.5,.5)
+  piece.Position=UDim2.fromOffset(x,y);piece.Size=UDim2.fromOffset(width,height);piece.Rotation=rotation
+  piece.Parent=frame
+ end
+ if entry.bit==bits.Charged then
+  stroke(4,4,2,6,33);stroke(5,6,6,2,0);stroke(6,8,2,6,33)
+ elseif entry.bit==bits.Frosted then
+  for angle=0,120,60 do stroke(5,6,1,10,angle) end
+  stroke(5,6,4,4,45)
+ else
+  stroke(5,6,6,6,45);stroke(5,6,2,2,0)
+ end
+end
+
+function V.dropLabel(view,material,mask)
+ local gui=Instance.new('BillboardGui');gui.Name='OreLabel'
+ gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(126,18)
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.34)
+ gui.AlwaysOnTop=false;gui.Adornee=view
+ local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal
+ row.HorizontalAlignment=Enum.HorizontalAlignment.Center;row.VerticalAlignment=Enum.VerticalAlignment.Center
+ row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,3);row.Parent=gui
+ local text=Instance.new('TextLabel');text.Name='Mineral';text.Text=material;text.TextSize=12;text.LayoutOrder=0
+ text.AutomaticSize=Enum.AutomaticSize.X;text.Size=UDim2.fromOffset(0,18);text.BackgroundTransparency=1
+ text.Font=Enum.Font.GothamMedium;text.TextColor3=white;text.TextStrokeColor3=Color3.fromRGB(18,23,32)
+ text.TextStrokeTransparency=.18;text.Parent=gui
+ for i,entry in ipairs(icons) do
+  if bit32.btest(mask,entry.bit) then icon(gui,entry,i) end
+ end
+ gui.Parent=view
+ return gui
+end
+return V
+
+end)()
 local PickupDisplay = (function()
 -- The resting ore display is local and borrows its position from the pickup view.
 local Display={}
@@ -13183,6 +13655,7 @@ end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
+ if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
 end
@@ -13212,6 +13685,9 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
  rig.surface.Enabled=true
+ local mask=record.modifiers or 0
+ if mask~=0 and not rig.rings then rig.rings=RockModifierView.groundRings(rig.surface) end
+ if rig.rings then RockModifierView.drawRings(rig.rings,mask,strength) end
 
  local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
  if not reducedEffects then
@@ -13253,407 +13729,6 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
 end
 
 return Display
-
-end)()
-local RockModifierView = (function()
--- The same material and silhouette cues identify a modifier before and after mining.
-local V={}
-local bits=Mining.ROCK_MODIFIERS
-local charged=Color3.fromRGB(255,197,58)
-local frost=Color3.fromRGB(146,226,255)
-local dust=Color3.fromRGB(190,136,96)
-local white=Color3.fromRGB(249,251,255)
-local icons={
- {bit=bits.Charged,name='Charged',color=charged},
- {bit=bits.Frosted,name='Frosted',color=frost},
- {bit=bits.Massive,name='Massive',color=dust},
-}
-local star='rbxassetid://77624818077620'
-local smoke='rbxasset://textures/particles/smoke_main.dds'
-local obsidian=Color3.fromRGB(45,31,56)
-local ice=Color3.fromRGB(83,176,221)
-local sediment=Color3.fromRGB(126,72,42)
-local activeArcs=0
-local MAX_ARCS=10
-
-function V.glow(mask)
- for _,entry in ipairs(icons) do
-  if bit32.btest(mask,entry.bit) then return entry.color end
- end
-end
-
-local function prop(parent,class,name,material,color)
- local p=Instance.new(class)
- p.Name=name;p.Material=material;p.Color=color
- p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
- p.Transparency=1;p.Parent=parent
- return p
-end
-
-local function accent(state,class,name,material,color,offset,size,pitch,yaw,roll)
- local p=prop(state.root,class,name,material,color)
- table.insert(state.parts,{
-  part=p,offset=Vector3.new(table.unpack(offset)),size=Vector3.new(table.unpack(size)),
-  turn=CFrame.Angles(pitch,yaw,roll),
- })
-end
-
-local function chargedSeams(state,drop)
- -- The two exposed inlays follow different planes, leaving the ice and
- -- sediment pieces room on a rock with all three modifiers.
- for _,side in ipairs({-1,1}) do
-  local x=side*(drop and .39 or .31)
-  local z=-side*(drop and .33 or .29)
-  local y=drop and .15 or .05
-  local seam=drop and .29 or .36
-  local turn=side*.97
-  accent(state,'Part','GoldVein',Enum.Material.Neon,charged,{x,y,z},{.044,seam,.036},0,.54*side,turn)
-  accent(state,'Part','GoldFork',Enum.Material.Neon,Color3.fromRGB(255,231,135),
-   {x+.083*side,y+.13,z-.07*side},{.026,seam*.66,.030},.26,.54*side,-turn*.57)
-  accent(state,'WedgePart','AmberFacet',Enum.Material.Metal,Color3.fromRGB(188,108,22),
-   {x*1.08,y-.10,z*1.06},{.26,.30,.20},.13,side*2.35,-side*.42)
- end
-end
-
-local function frostRime(state,drop)
- for _,side in ipairs({-1,1}) do
-  local x=side*(drop and .34 or .30)
-  local z=side*(drop and .32 or .28)
-  local y=drop and .13 or .18
-  accent(state,'WedgePart','RimeBlade',Enum.Material.Ice,Color3.fromRGB(180,238,255),
-   {x,y,z},{.34,.60,.29},side*.25,side*.93,side*.54)
-  accent(state,'WedgePart','BlueIce',Enum.Material.Ice,ice,
-   {x*1.28,y-.13,z*.89},{.23,.41,.23},side*.37,-side*1.40,side*.73)
- end
-end
-
-local function strata(state,drop)
- for i=1,3 do
-  local yaw=.25+(i-1)*math.pi*2/3
-  local x,z=math.sin(yaw),math.cos(yaw)
-  local radius=drop and .33 or .38
-  local y=drop and -.12 or -.30
-  accent(state,'WedgePart','DenseStone',Enum.Material.Slate,sediment,
-   {x*radius,y,z*radius},{.52,.35,.31},.18,yaw+.20,.15)
-  accent(state,'WedgePart','OchreLayer',Enum.Material.Rock,Color3.fromRGB(217,161,99),
-   {x*(radius+.027),y+.092,z*(radius+.027)},{.48,.17,.23},.19,yaw+.20,.15)
- end
-end
-
-function V.finish(record,base,mask,drop)
- local view,state=record.view,record.modifierSurface
- if not state and mask==0 then return base end
- if not state then
-  state={material=view.Material,variant=view.MaterialVariant,reflectance=view.Reflectance}
-  record.modifierSurface=state
- end
- local hasCharge=bit32.btest(mask,bits.Charged)
- local hasFrost=bit32.btest(mask,bits.Frosted)
- local hasMass=bit32.btest(mask,bits.Massive)
- if state.mask~=mask or state.view~=view then
-  if state.mask~=mask then
-   if state.root then state.root:Destroy();state.root=nil end
-   if mask~=0 then
-    state.root=Instance.new('Folder');state.root.Name='ModifierSurface';state.root.Parent=view
-    state.parts={}
-    if hasMass then strata(state,drop) end
-    if hasFrost then frostRime(state,drop) end
-    if hasCharge then chargedSeams(state,drop) end
-   end
-  end
-  state.mask=mask;state.view=view;state.pose=nil;state.size=nil;state.opacity=nil
-  state.massive=hasMass
-  state.frosted=hasFrost
-  if mask==0 then
-   view.Material=state.material;view.MaterialVariant=state.variant;view.Reflectance=state.reflectance
-   record.modifierSurface=nil
-  else
-   view.Material=if hasCharge then (drop and Enum.Material.Metal or Enum.Material.Slate)
-    elseif hasFrost then Enum.Material.Ice else Enum.Material.Slate
-   view.MaterialVariant=''
-   view.Reflectance=if hasCharge then (drop and .24 or .07) elseif hasFrost then .10 else .025
-   if view:IsA('PartOperation') then view.UsePartColor=true end
-  end
- end
- if hasCharge then return base:Lerp(obsidian,drop and .83 or .86) end
- if hasFrost then return base:Lerp(ice,drop and .95 or .86) end
- if hasMass then return base:Lerp(sediment,drop and .73 or .81) end
- return base
-end
-
-function V.syncSurface(record)
- local state=record.modifierSurface
- if not state then return end
- local view=record.view
- local pose,size,opacity=view.CFrame,view.Size,1-view.Transparency
- if state.pose==pose and state.size==size and state.opacity==opacity then return end
- local resizing=state.size~=size
- local moving=resizing or state.pose~=pose
- local fading=state.opacity~=opacity
- state.pose=pose;state.size=size;state.opacity=opacity
- for _,accentPart in ipairs(state.parts) do
-  local p=accentPart.part
-  if resizing then p.Size=accentPart.size*size end
-  if moving then p.CFrame=pose*CFrame.new(accentPart.offset*size)*accentPart.turn end
-  if fading then p.Transparency=1-opacity end
- end
-end
-
-local particleStyles={
- sparks={name='GoldSparks',texture=star,light=.70,size=.84,life={.16,.39},speed={8,23},
-  color=charged,endColor=Color3.fromRGB(255,120,33),spread=78,gravity=-22,drag=4},
- ions={name='AmberIons',texture=EnergyDisc.texture,light=.36,size=.32,life={.52,1.24},speed={1.2,3.4},
-  color=Color3.fromRGB(255,227,122),endColor=charged,spread=45,gravity=.8,drag=1.5},
- flakes={name='RimeFlakes',texture=star,light=.30,size=.60,life={.72,1.63},speed={1.2,3.1},
-  color=white,endColor=frost,spread=71,gravity=-1.5,drag=1.35},
- iceChips={name='FlyingIce',texture=star,light=.22,size=.95,life={.31,.80},speed={5,15},
-  color=frost,endColor=ice,spread=70,gravity=-23,drag=2.1},
- vapor={name='ColdVapor',texture=smoke,light=0,size=1.6,life={.66,1.48},speed={2,5.3},
-  color=Color3.fromRGB(198,233,255),endColor=ice,spread=79,gravity=-.65,drag=2.1,cloud=true},
- powder={name='StonePowder',texture=smoke,light=0,size=1.45,life={.47,1.26},speed={3,7.2},
-  color=Color3.fromRGB(224,180,137),endColor=sediment,spread=74,gravity=-2.1,drag=2.8,cloud=true},
-}
-
-local function emitter(parent,key,scale)
- local style=particleStyles[key]
- local diameter=style.size*scale
- local p=Instance.new('ParticleEmitter')
- p.Name=style.name;p.Enabled=false;p.Rate=0;p.Texture=style.texture
- p.Color=ColorSequence.new(style.color,style.endColor)
- if style.cloud then
-  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter*.33),
-   NumberSequenceKeypoint.new(.28,diameter,diameter*.22),NumberSequenceKeypoint.new(1,diameter*1.48)})
-  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.92),NumberSequenceKeypoint.new(.17,.56),
-   NumberSequenceKeypoint.new(.65,.74),NumberSequenceKeypoint.new(1,1)})
- else
-  p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.38),
-   NumberSequenceKeypoint.new(.39,diameter*.70),NumberSequenceKeypoint.new(1,0)})
-  p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.09),NumberSequenceKeypoint.new(.53,.36),NumberSequenceKeypoint.new(1,1)})
- end
- p.LightEmission=style.light;p.LightInfluence=style.cloud and .58 or .12
- p.Lifetime=NumberRange.new(table.unpack(style.life));p.Speed=NumberRange.new(table.unpack(style.speed))
- p.Drag=style.drag;p.Acceleration=Vector3.yAxis*style.gravity
- p.SpreadAngle=Vector2.new(style.spread,style.spread)
- if key=='sparks' then
-  p.Orientation=Enum.ParticleOrientation.VelocityParallel;p.Squash=NumberSequence.new(-.58)
- else
-  p.Rotation=NumberRange.new(-180,180);p.RotSpeed=NumberRange.new(-82,74)
- end
- p.Parent=parent
- return p
-end
-
-local function prepare(view,state,mask,drop)
- if state.prepared==mask then return end
- if state.anchor then state.anchor:Destroy() end
- state.anchor=Instance.new('Attachment');state.anchor.Name='RockModifierParticles';state.anchor.Parent=view
- state.prepared=mask
- local scale=drop and .60 or 1
- state.sparks=nil;state.ions=nil;state.flakes=nil;state.iceChips=nil;state.vapor=nil;state.powder=nil
- if bit32.btest(mask,bits.Charged) then
-  state.sparks=emitter(state.anchor,'sparks',scale)
-  state.ions=emitter(state.anchor,'ions',scale)
- end
- if bit32.btest(mask,bits.Frosted) then
-  state.flakes=emitter(state.anchor,'flakes',scale)
-  state.iceChips=emitter(state.anchor,'iceChips',scale)
-  state.vapor=emitter(state.anchor,'vapor',scale)
- end
- if bit32.btest(mask,bits.Massive) then state.powder=emitter(state.anchor,'powder',scale) end
-end
-
-local function stroke(parent,a,b,width,color,alpha,life)
- local p=prop(parent,'Part','LightningStroke',Enum.Material.Neon,color)
- p.Size=Vector3.new(width,width,(b-a).Magnitude)
- p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Transparency=alpha
- game:GetService('TweenService'):Create(p,TweenInfo.new(life),{Transparency=1}):Play()
-end
-
-local function lightning(view,from,to,random,large)
- if not large and activeArcs>=MAX_ARCS then return end
- local root=Instance.new('Folder');root.Name=large and 'ModifierStrike' or 'ModifierArc';root.Parent=view
- activeArcs+=1
- root.Destroying:Once(function() activeArcs-=1 end)
- local knots=large and 7 or 4
- local width=large and .17 or math.clamp(view.Size.Y*.035,.047,.13)
- local jitter=large and 2.1 or width*3.4
- local previous=from
- for i=1,knots do
-  local point=if i==knots then to else from:Lerp(to,i/knots)
-   +Vector3.new(random:NextNumber(-jitter,jitter),large and 0 or random:NextNumber(-jitter,jitter),random:NextNumber(-jitter,jitter))
-  stroke(root,previous,point,width,white,.03,.14)
-  stroke(root,previous,point,width*2.3,charged,.56,.27)
-  if i==2 or (large and i==5) then
-   local tip=point+Vector3.new(jitter*1.55,-jitter*1.30,-jitter*.73)
-   local elbow=point:Lerp(tip,.46)+Vector3.new(0,jitter*.43,jitter*.33)
-   stroke(root,point,elbow,width*.63,charged,.09,.17)
-   stroke(root,elbow,tip,width*.42,charged,.22,.20)
-  end
-  previous=point
- end
- game:GetService('Debris'):AddItem(root,.29)
-end
-
-local function gust(view)
- local frame,size=view.CFrame,view.Size
- local top=frame.Position+Vector3.yAxis*(size.Y*.22)
- local carrier=prop(view,'Part','FrostGust',Enum.Material.SmoothPlastic,white)
- carrier.Size=Vector3.new(.08,.08,.08)
- carrier.CFrame=CFrame.lookAt(top-Vector3.xAxis*size.X*.97,top)
- local mist=emitter(carrier,'vapor',1.56)
- local flakes=emitter(carrier,'flakes',1.18)
- for _,p in ipairs({mist,flakes}) do
-  p.EmissionDirection=Enum.NormalId.Front;p.Speed=NumberRange.new(9,19);p.SpreadAngle=Vector2.new(22,18)
- end
- mist:Emit(8);flakes:Emit(16)
- game:GetService('Debris'):AddItem(carrier,1.7)
-end
-
-local function ambient(view,state,now,lowFlash,drop)
- local random=state.random
- if now<(state.nextAmbientAt or 0) then return end
- state.nextAmbientAt=now+random:NextNumber(.44,.87)
- local side=random:NextNumber()<.5 and -1 or 1
- local size=view.Size
- state.anchor.Position=Vector3.new(side*size.X*.26,size.Y*.27,-side*size.Z*.22)
- if state.ions then
-  state.ions:Emit(drop and 1 or 2)
-  if not lowFlash and now>=(state.nextArcAt or 0) then
-   state.nextArcAt=now+random:NextNumber(1.7,3.6)
-   local frame=view.CFrame
-   local from=frame:PointToWorldSpace(state.anchor.Position)
-   local to=frame:PointToWorldSpace(Vector3.new(side*size.X*.52,-size.Y*.18,side*size.Z*.34))
-   lightning(view,from,to,random,false)
-   state.sparks:Emit(drop and 2 or 4)
-  end
- end
- if state.flakes then
-  state.anchor.Position=Vector3.new(side*size.X*.31,size.Y*.30,side*size.Z*.32)
-  state.flakes:Emit(drop and 1 or 2)
-  if now>=(state.nextMistAt or 0) then
-   state.nextMistAt=now+random:NextNumber(1.7,3.2)
-   state.vapor:Emit(drop and 1 or 2)
-  end
- end
-end
-
-local function burst(view,state,lowFlash,full)
- state.anchor.Position=Vector3.yAxis*(view.Size.Y*.36)
- if state.sparks then
-  state.sparks:Emit(lowFlash and 3 or full and 17 or 7)
-  state.ions:Emit(full and 8 or 3)
- end
- if state.iceChips then
-  state.iceChips:Emit(full and 12 or 5)
-  state.flakes:Emit(full and 7 or 3)
-  state.vapor:Emit(full and 5 or 2)
- end
- if state.powder then
-  state.anchor.Position=Vector3.yAxis*(-view.Size.Y*.26)
-  state.powder:Emit(full and 11 or 4)
- end
-end
-
-function V.rock(record,now,lowFlash,eventKind)
- local state=record.modifierFX
- local source,view=record.source,record.view
- if not state or record.modifiersDirty then
-  record.modifiersDirty=nil
-  state=state or {seen={}}
-  state.mask=source:GetAttribute('RockModifiers') or 0
-  record.modifierFX=state
- end
- V.syncSurface(record)
- local freshEvent=eventKind~=nil or state.eventPending or state.lastMask~=state.mask
- state.lastMask=state.mask
- if not freshEvent and now<(state.checkAt or 0) then return end
- state.checkAt=now+.13
- if state.mask==0 or not BeamVFX.near(view.Position,78) then return end
- if (record.visual.broken and eventKind~='break') or BeamVFX.reduced() then return end
- prepare(view,state,state.mask,false)
- state.random=state.random or Random.new(source:GetAttribute('StageSeed') or 1)
- state.eventPending=false
- for _,entry in ipairs(icons) do
-  if entry.bit==bits.Massive or not bit32.btest(state.mask,entry.bit) then continue end
-  local name=entry.name
-  local at=source:GetAttribute(name..'At')
-  if at and at>now then state.eventPending=true;continue end
-  if at and at~=state.seen[name] and now>=at then
-   state.seen[name]=at
-   if now-at<.55 and not record.visual.broken then
-    state.anchor.Position=Vector3.yAxis*(view.Size.Y*.33)
-    if entry.bit==bits.Charged then
-     local top=view.CFrame:PointToWorldSpace(state.anchor.Position)
-     if not lowFlash then lightning(view,top+Vector3.new(-3,25,2),top,state.random,true) end
-     state.nextArcAt=now+1.6
-     state.sparks:Emit(lowFlash and 4 or 17);state.ions:Emit(7)
-    else gust(view);state.nextMistAt=now+1.3 end
-   end
-  end
- end
- if eventKind=='stage' or eventKind=='break' then
-  burst(view,state,lowFlash,eventKind=='break')
- else
-  ambient(view,state,now,lowFlash,false)
- end
-end
-
-function V.drop(record,now,landingAge,lowFlash)
- local state=record.modifierFX
- if not state then
-  state={random=Random.new(record.seed)};record.modifierFX=state
- end
- local view=record.view
- prepare(view,state,record.modifiers,true)
- if not state.landed then
-  state.landed=true
-  if landingAge<.28 then
-   burst(view,state,lowFlash,false)
-   state.nextAmbientAt=now+.32
-  end
- end
- ambient(view,state,now,lowFlash,true)
-end
-
-local function icon(parent,entry,order)
- local frame=Instance.new('Frame')
- frame.Name=entry.name;frame.Size=UDim2.fromOffset(10,12)
- frame.BackgroundTransparency=1;frame.LayoutOrder=order;frame.Parent=parent
- local function stroke(x,y,width,height,rotation)
-  local piece=Instance.new('Frame')
-  piece.BorderSizePixel=0;piece.BackgroundColor3=entry.color;piece.AnchorPoint=Vector2.new(.5,.5)
-  piece.Position=UDim2.fromOffset(x,y);piece.Size=UDim2.fromOffset(width,height);piece.Rotation=rotation
-  piece.Parent=frame
- end
- if entry.bit==bits.Charged then
-  stroke(4,4,2,6,33);stroke(5,6,6,2,0);stroke(6,8,2,6,33)
- elseif entry.bit==bits.Frosted then
-  for angle=0,120,60 do stroke(5,6,1,10,angle) end
-  stroke(5,6,4,4,45)
- else
-  stroke(5,6,6,6,45);stroke(5,6,2,2,0)
- end
-end
-
-function V.dropLabel(view,material,mask)
- local gui=Instance.new('BillboardGui');gui.Name='OreLabel'
- gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(126,18)
- gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.34)
- gui.AlwaysOnTop=false;gui.Adornee=view
- local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal
- row.HorizontalAlignment=Enum.HorizontalAlignment.Center;row.VerticalAlignment=Enum.VerticalAlignment.Center
- row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,3);row.Parent=gui
- local text=Instance.new('TextLabel');text.Name='Mineral';text.Text=material;text.TextSize=12;text.LayoutOrder=0
- text.AutomaticSize=Enum.AutomaticSize.X;text.Size=UDim2.fromOffset(0,18);text.BackgroundTransparency=1
- text.Font=Enum.Font.GothamMedium;text.TextColor3=white;text.TextStrokeColor3=Color3.fromRGB(18,23,32)
- text.TextStrokeTransparency=.18;text.Parent=gui
- for i,entry in ipairs(icons) do
-  if bit32.btest(mask,entry.bit) then icon(gui,entry,i) end
- end
- gui.Parent=view
- return gui
-end
-return V
 
 end)()
 local PickupView = (function()
@@ -13821,9 +13896,7 @@ local function sample(r,source,now)
  if r.modifiers~=modifiers then
   r.modifiers=modifiers
   if r.label then r.label:Destroy();r.label=nil end
-  r.color=RockModifierView.finish(r,source.Color,modifiers,true)
   r.effectColor=RockModifierView.glow(modifiers) or r.color
-  r.view.Color=r.color;r.glow=nil
  end
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
@@ -14141,7 +14214,6 @@ function V:update(dt,now)
     finishTrail(self,r,now)
    end
   end
-  if not done or r.view.Parent then RockModifierView.syncSurface(r) end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
 end
@@ -14811,6 +14883,7 @@ function V:showAim(dt,ray)
  self.aimWidth=width
  local point=self.aimPoint
  if point and (point==pin or point==old) then point=nil end
+ self.previewPoint=point
  local transfer=old and o.player:GetAttribute('MA_SelectorTransition')
  local color=transfer and pendingColor or (o.player:GetAttribute('MA_SelectorCleared') and clearColor or activeColor)
  -- Keep the already extended walls when the current pin becomes the old one.
@@ -15934,7 +16007,6 @@ local function registerResource(source)
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resources[source].stoneColor=stoneColor;resources[source].stoneGradient=stoneGradient
- resources[source].modifiersDirty=true
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -15970,11 +16042,10 @@ local function observe(source)
   if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerDrone(source) end) end
  elseif source:IsA('BasePart') and (source:GetAttribute('ResourceId') or source.Parent.Name=='Resources' or source.Parent:GetAttribute('FieldId')) then
   registerResource(source)
-  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function(attribute)
+  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function()
    local record=resources[source]
    if record then
     record.dirty=true
-    if attribute=='RockModifiers' then record.modifiersDirty=true end
    else registerResource(source) end
   end) end
  elseif source:IsA('BasePart') and source.Parent:IsA('Model') and drones[source.Parent] then hidePart(source)
@@ -16012,23 +16083,19 @@ connect(world.DescendantRemoving,function(source)
  hiddenParts[source]=nil
 end)
 local function resourceById(id) return resourceIndex[tostring(id)] end
-local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
+local function renderResource(r,now,aim,aimWidth,aimField)
  local s=r.source;local view=r.view
  if r.dirty then
   r.fieldId=s:GetAttribute('FieldId')
   r.center=s:GetAttribute('FullPosition') or s.Position
+  r.modifiers=s:GetAttribute('RockModifiers') or 0
  end
- if r.dirty or r.pin~=pin or r.pinWidth~=width or r.pinField~=field
-  or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
-  r.pin=pin;r.pinWidth=width;r.pinField=field
+ if r.dirty or r.aim~=aim or r.aimWidth~=aimWidth or r.aimField~=aimField then
   r.aim=aim;r.aimWidth=aimWidth;r.aimField=aimField
-  local selected=pin~=nil and width~=nil and field~=nil and r.fieldId==field
-   and Mining.selectorContains(pin,width*.5,r.center)
-  local hovered=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
+  r.previewed=aim~=nil and aimWidth~=nil and aimField~=nil and r.fieldId==aimField
    and Mining.selectorContains(aim,aimWidth*.5,r.center)
-  local wash=if hovered then .5 elseif selected then .4 else 0
-  if (r.wash or 0)~=wash then r.wash=wash;r.dirty=true end
  end
+ if r.previewed or r.modifiers~=0 or r.rockOutline then RockModifierView.rockOutline(r) end
  -- Mature, unchanged rocks need no repeated attribute reads, trigonometry or
  -- geometry writes. Spawn growth is animated; mining size changes are snaps.
  if r.settled and not r.dirty then return end
@@ -16102,10 +16169,6 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
-  local modifiers=s:GetAttribute('RockModifiers') or 0
-  color=RockModifierView.finish(r,color,modifiers,false)
-  r.modifierColor=modifiers~=0 and color or nil
-  if r.wash and r.wash>0 then color=color:Lerp(Color3.new(1,1,1),r.wash) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -16125,6 +16188,7 @@ local function renderResource(r,now,pin,width,field,aim,aimWidth,aimField)
    r.splitPose=CFrame.new(center)*(r.restPose and r.restPose.Rotation or view.CFrame.Rotation)*CFrame.new(-r.splitSize*cutOffset)
   end
   view.Transparency=1
+  if r.rockOutline then r.rockOutline.Enabled=false end
  end
  if r.stoneGradient then
   RockFinish.setVisibility(r.stoneGradient,view.Transparency)
@@ -16537,17 +16601,14 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  presentation:beginFrame()
  chargerView:update(dt)
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
- local pin=player:GetAttribute('MA_Selector')
- local width=player:GetAttribute('MA_SelectorWidth')
- local field=player:GetAttribute('MA_SelectorField')
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  local fracture=renderResource(r,now,pin,width,field,selectorView.aimPoint,selectorView.aimWidth,selectorView.aimField)
+  local fracture=renderResource(r,now,selectorView.previewPoint,selectorView.aimWidth,selectorView.aimField)
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
-  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
+  if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

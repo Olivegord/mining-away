@@ -162,9 +162,7 @@ local function sample(r,source,now)
  if r.modifiers~=modifiers then
   r.modifiers=modifiers
   if r.label then r.label:Destroy();r.label=nil end
-  r.color=RockModifierView.finish(r,source.Color,modifiers,true)
   r.effectColor=RockModifierView.glow(modifiers) or r.color
-  r.view.Color=r.color;r.glow=nil
  end
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
@@ -482,7 +480,6 @@ function V:update(dt,now)
     finishTrail(self,r,now)
    end
   end
-  if not done or r.view.Parent then RockModifierView.syncSurface(r) end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
 end

@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — modifiers preserve mineral color
+
+Keep the original mineral color, material and crystal silhouette for rocks and loose ore. A Frosted ruby remains red. Use native Roblox Highlights with transparent fill and layered ground outlines instead of attached pieces. The white selector highlight is confined to the live aiming preview. Charged sparks use tiny, fast, opaque rectangles that disappear at expiry. Cold vapor and rock dust are larger, softer background particles. Let the short arc, fracture spray and lingering smoke read as separate beats. [Riot Games’ visual effects guide](https://www.riotgames.com/en/artedu/visual-effects) · [Roblox ParticleEmitter reference](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter)
+
 ## November 14 — stone debris and red dust
 
 Take the tint and material for physical shavings from the rendered stone. Use soft, muted dust at contact and in the initial break burst. Tint the small flying rectangles and the lingering motes to the rock’s ore color. Begin darkening steadily as health falls, and cap the reduction at 38% through the split so the faces stay readable.
