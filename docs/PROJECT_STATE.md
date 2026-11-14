@@ -6,6 +6,8 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 
 ## November 14 — open core light, bismuth and a spawn comparison row
 
+Gameplay/source/native revision **57ad961** on codex/restore-feel-prestige.
+
 The owner rejected the inset vein strips and requested rays from a thin opening into a glowing core. The eight existing rock templates now have hollow interiors, hairline shell openings and smaller solid luminous cores. Native Beam fans emit parallel light shafts from the opening, with soft washes and slow motes. No neon strips sit on the stone surface. The five drops now have distinct topology/proportions: quartz cluster, broad ruby, stepped metallic bismuth/cobalt, long violet needle, and mostly black emerald with green/gold glow concentrated at the bottom.
 
 The requested row is authored in **Workspace.MiningAway.Map.MineralLineup**, about **24 studs in front of SpawnLocation**, at **z=-12**, with five minerals left-to-right and a core-light sample at the right end. It is visible in shared Edit and saved in the canonical file. Edit specimens use persistent native parts generated from the same geometry description; Play displays the exact cached pickup meshes, gradients and slow motion. The specimens are non-collectible and cannot grant rewards or expire. They add no gameplay scripts. The scoped native saver appended only this folder (1,318 instances), preserving all previous instances, properties and 50 Sources. Serialized round-trip verified five minerals, core geometry and all 22 connected sample beams.
