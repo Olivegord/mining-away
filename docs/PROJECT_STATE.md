@@ -12,17 +12,23 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
 | Native-file SHA-256 | `6c01a9760926cf9a9590644662548d3cb77166619d52e6fa956b790792ee777e` | Textured Orbital and Ramiel effects, refreshed in the preserved local native file. |
-| Shared Studio Sources | Team Create save **263** | All seven managed Sources match the canonical file after saving. |
+| Shared Studio Sources | Team Create save **264** | All seven managed Sources match the canonical file after saving. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the textured Orbital and Ramiel effects from save **263**. |
+| Shared Studio entry point | **DRONEREVOLUTION in Studio Edit** | New Play sessions load the textured beams and the restored depot interactions from save **264**. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — remove saved drone preview and restore prompt startup
+
+Shared Edit contained `Workspace.TemporaryDirectGrabRecording` with nine display drones and a preview-only `ReplicatedStorage.MiningAway` folder containing just `CargoCrystal`. During Play, the server created the real network folder beside the preview folder. Studio logged the client waiting indefinitely for `ReplicatedStorage.MiningAway.Command`, before registering the depot prompt handlers. Both preview branches were removed from shared Edit. The original drone template, authored map and controller Sources were preserved. The canonical file already lacked both preview branches.
+
+Team Create save **264** was confirmed for place **124078027733625**, universe **10774898335**. All seven managed Sources still match the canonical file and all three Script Sync roots remain connected. Studio was already open and remains in Edit. No player release or agent-started Play session. The next Play session should initialize the prompt handlers from the single runtime network folder. Live prompt activation remains unverified.
 
 ## November 13 — organic Orbital and Ramiel beam surfaces
 
