@@ -38,11 +38,11 @@ end
 """
 with tempfile.TemporaryDirectory(prefix='mining-gadget-tests-') as directory:
     fixtures = {
-        'resource-render': mock + '\n' + module_bundle(('Feel', 'RockFinish')) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
+        'resource-render': mock + '\n' + module_bundle(('Feel', 'RockFinish', 'EnergyDisc', 'Mining', 'RockModifierView')) + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + '\n' + resource_render + '\n' + (ROOT / 'tests/resource-render.integration.lua').read_text(),
         'contact-render': mock + '\n' + (ROOT / 'tests/mining-contact.integration.lua').read_text() + '\n' + module_bundle(('BeamVFX','Mining','WorkEffects')) + '\n' + (ROOT / 'tests/mining-contact.assert.lua').read_text(),
         'crystal-clock': mock + '\n' + (ROOT / 'tests/resource-render.setup.lua').read_text() + crystal_clock_setup +
-        module_bundle(('Feel', 'Feedback', 'PickupMotion', 'ImpactFreeze', 'RockFinish', 'CrystalImpactView', 'DroneCatalog', 'PlaneBurst', 'RoleEffectView')) + '\n' + resource_render +
-        '\nlocal impactFreeze=ImpactFreeze.new({})\nlocal function crystalFrame(resources,now)\n' + crystal_frame + '\nend\n' +
+        module_bundle(('Feel', 'Feedback', 'PickupMotion', 'ImpactFreeze', 'RockFinish', 'CrystalImpactView', 'DroneCatalog', 'PlaneBurst', 'RoleEffectView', 'Mining', 'RockModifierView')) + '\n' + resource_render +
+        '\nlocal impactFreeze=ImpactFreeze.new({})\nlocal function crystalFrame(resources,now)\n local lowFlash=false\n' + crystal_frame + '\nend\n' +
         (ROOT / 'tests/crystal-contact-clock.integration.lua').read_text(),
         'prism-server': mock + '\n' + (ROOT / 'tests/gadget-server.setup.lua').read_text() + '\n' + bundle() + '\n' + (ROOT / 'tests/prism-server.integration.lua').read_text(),
         'nomad-view': mock + '\n' + (ROOT / 'tests/nomad-view.setup.lua').read_text() + '\n' + module_bundle(('Feel','EnergyDisc','NomadView')) + '\n' + (ROOT / 'tests/nomad-view.integration.lua').read_text(),

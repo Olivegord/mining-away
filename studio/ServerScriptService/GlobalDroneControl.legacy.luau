@@ -2050,6 +2050,9 @@ local Mining = (function()
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
 M.SELECTOR_LEASH=100
+M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4}
+M.MASSIVE_CHANCE=.09
+M.MASSIVE_SCALE=1.38
 local SELECTOR_GRID=2
 local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
@@ -8105,7 +8108,7 @@ function W.initialize(): any
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
     local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,Count=78,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=78,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
@@ -9549,7 +9552,7 @@ function scene.poseResource(r)
  part.CFrame=Feel.groundedRockFrame(r.position,part.Size,part:GetAttribute('GroundY'),r.stage,r.stageSeed,part:GetAttribute('CubicRock')==false,r.referenceCrystal,r.steady)
  if r.cutOffset then part.CFrame*=CFrame.new(-part.Size*r.cutOffset) end
 end
-local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk)
+local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCount,junk,modifiers)
  maxHealth=(maxHealth-10)*(field.cfg.HealthMultiplier or 1)+10
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
@@ -9569,7 +9572,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  local shell=kind=='Geode';local size=visualSize or (reference and 3 or (maxHealth/(shell and 37.5 or 25))*(kind=='Shard' and .8 or 1))
  local fullSize=original and original.Size*(size/3) or Vector3.one*size
  if cut then fullSize*=CrystalCuts.proportions(cut,original) end
- local steady=field.cfg.ContinuousCrystals==true and size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35
+ local steady=field.cfg.ContinuousCrystals==true and (modifiers==Mining.ROCK_MODIFIERS.Massive
+  or size>=Mining.FIELD_CRYSTAL_MIN_SIZE+Mining.FIELD_CRYSTAL_SIZE_RANGE*1.80/3.35)
  if steady then part:SetAttribute('SteadyCrystal',true) end
  local ground=field.part.Position.Y+field.part.Size.Y*.5
  -- Anchor every size to the bottom of the reference mesh at its original scale.
@@ -9598,6 +9602,8 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  part.Parent=field.model
  local r={id=instanceId..':r'..resourceSerial,field=field,part=part,referenceCrystal=reference,hp=maxHealth-10,maxHP=maxHealth,fullSize=fullSize,position=finish,start=start,
   slots={},limit=(shell or (not field.cfg.SelectionOnly and (stageCount or 3)>3)) and 3 or 1,kind=kind,paid=false,ore=ore,hardness=field.cfg.Hardness or 1,spawnAt=now,readyAt=now+2,stage=0,stageCount=stageCount or 3,steady=steady,stageSeed=seed:NextInteger(1,1000000),removeAt=nil}
+ r.modifiers=modifiers
+ if modifiers then part:SetAttribute('RockModifiers',modifiers) end
  if junk then
   r.spawnAt=now+.18*(junk.order-1)
   r.readyAt=r.spawnAt+JunkField.FallTime+JunkField.SettleTime
@@ -9668,7 +9674,8 @@ function scene.replenishJunk(field)
   end
  end
 end
-local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
+scene.modifierRandom=Random.new()
+local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,ordinaryOnly)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
@@ -9687,7 +9694,10 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
    elseif reference and field.cfg.SelectionOnly and field.cfg.Hardness>1 then Mining.deepCrystal(roll,field.cfg.Hardness,field.cfg.Ore)
    else Mining.resource(roll,kind,field.cfg.Hardness)
  end
- local visualSize=reference and not continuous and (not field.cfg.SelectionOnly or field.cfg.Hardness<=1) and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local ordinarySize=reference and not continuous and (not field.cfg.SelectionOnly or field.cfg.Hardness<=1) and 3 or mineral.size*(boulder and Mining.BOULDER_SIZE or 1)
+ local massive=if plan then plan.massive else not ordinaryOnly and field.cfg.RockModifiers and kind=='Crystal'
+  and scene.modifierRandom:NextNumber()<Mining.MASSIVE_CHANCE
+ local visualSize=ordinarySize*(massive and Mining.MASSIVE_SCALE or 1)
  local original=kind=='Crystal' and not boulder and scene.classicCrystal
  local dimensions=original and original.Size*(visualSize/3) or Vector3.one*visualSize
  local radius=ResourcePlacement.radius(dimensions.X,dimensions.Y,dimensions.Z,kind,field.cfg.ReferenceCrystals and kind=='Crystal')
@@ -9735,16 +9745,58 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
    return true
   end,preferred,integerGrid,nil,bounds,not nearPin and field.pockets or nil)
  local spot=selected and patch.CFrame:PointToWorldSpace(Vector3.new(selected.x,0,selected.z))
- if not spot then return false end
- if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral} end
+ if not spot then
+  if massive and not plan then return spawnResource(field,kind,prepareOnly,nil,nearPin,true) end
+  return false
+ end
+ if prepareOnly then return true,1,{spot=spot,field=field.id,mineral=mineral,massive=massive} end
  local work=mineral.work*(boulder and Mining.BOULDER_WORK or 1)
  local ore=(mineral.ore or field.cfg.Ore)*(boulder and Mining.BOULDER_WORK or 1)
- local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3)
+ local resource=makeResource(field,spot,kind,work+10,ore,visualSize,boulder and 7 or mineral.stages or field.cfg.Cracks or 3,nil,
+  massive and Mining.ROCK_MODIFIERS.Massive or nil)
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
 function scene.rockInSquare(square,rock)
  return square.field==rock.field and Mining.selectorContains(square.center,square.half,rock.position)
+end
+function scene.stepRockModifiers(field)
+ local random=scene.modifierRandom
+ local nextAt=field.nextModifierAt
+ if nextAt and now<nextAt then return end
+ local crews={}
+ for _,p in pairs(profiles) do
+  local rootPart=healthy(p) and characterRoot(p)
+  if rootPart and nearMiningField(rootPart.Position,field) then table.insert(crews,{root=rootPart,pin=p.miningSquare}) end
+ end
+ if #crews==0 then field.nextModifierAt=nil;return end
+ if not nextAt then field.nextModifierAt=now+random:NextNumber(5,9);return end
+ local bits=Mining.ROCK_MODIFIERS
+ local modifier=random:NextNumber()<.6 and bits.Charged or bits.Frosted
+ local best,bestScore,active=nil,0,0
+ for _,rock in ipairs(field.resources) do
+  if rock.paid or rock.kind~='Crystal' or not rock.part.Parent then continue end
+  if bit32.btest(rock.modifiers or 0,modifier) then active+=1;continue end
+  if rock.cargoProduced or rock.clusterShot or now<rock.readyAt then continue end
+  local weight=0
+  for _,crew in ipairs(crews) do
+   if (rock.position-crew.root.Position).Magnitude<=46 then
+    weight=math.max(weight,crew.pin and scene.rockInSquare(crew.pin,rock) and 5 or 1)
+   end
+  end
+  if weight>0 then
+   -- Favor the current work and let a few events visibly layer.
+   if rock.modifiers then weight*=2 end
+   local score=random:NextNumber()^(1/weight)
+   if not best or score>bestScore then best,bestScore=rock,score end
+  end
+ end
+ if active<6 and best then
+  best.modifiers=bit32.bor(best.modifiers or 0,modifier)
+  best.part:SetAttribute(modifier==bits.Charged and 'ChargedAt' or 'FrostedAt',now)
+  best.part:SetAttribute('RockModifiers',best.modifiers)
+ end
+ field.nextModifierAt=now+random:NextNumber(14,24)
 end
 function scene.replacementDue(field,vacancy)
  return vacancy and now>=(vacancy.regrowAt or 0) and field.respawnClock>=vacancy.at
@@ -9915,6 +9967,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  end
  chip.Anchored=true;chip.CanCollide=false;chip.CanTouch=false;chip.CanQuery=false;chip.Transparency=0
  chip:SetAttribute('Owner',drop.owner);chip:SetAttribute('RunId',drop.runId);chip:SetAttribute('Units',drop.units);chip:SetAttribute('Mineral',drop.material)
+ if drop.modifiers and drop.modifiers~=0 then chip:SetAttribute('RockModifiers',drop.modifiers) end
  chip:SetAttribute('SpawnAt',launchAt);chip:SetAttribute('ExpiresAt',launchAt+OreDrops.LIFETIME);chip:SetAttribute('FloorY',drop.floor);chip:SetAttribute('Homing',false)
  chip:SetAttribute('PickupId',pickupSerial);chip:SetAttribute('Position',position);chip:SetAttribute('Velocity',velocity);chip:SetAttribute('SnapshotAt',launchAt)
  if drop.oreArc then
@@ -9986,7 +10039,8 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local edge=extraction and Vector3.new(r.part.Size.X,0,r.part.Size.Z).Magnitude*.5+.42 or .24
   local position=r.part.Position+out*edge+Vector3.yAxis*(r.part.Size.Y*.18+.18)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,
-   units=1,raw=true,oreArc=true,finishing=not extraction,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14},position,Vector3.new(vx,vy,vz),r.field.color)
+   units=1,raw=true,oreArc=true,finishing=not extraction,floor=fieldTop+.22,fieldPart=r.field.part,reachBonus=early*14,
+   modifiers=r.modifiers},position,Vector3.new(vx,vy,vz),r.field.color)
   p.dirty=true;p.publishDirty=true;return
  end
  local target=extraction and Mining.extractedOre(r.ore,r.stage,r.stageCount,d.stats.earlyDrop) or r.ore
@@ -10030,6 +10084,10 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   end
   if nearest then
    nearest.units+=units;nearest.refreshedAt=now
+   if r.modifiers then
+    nearest.modifiers=bit32.bor(nearest.modifiers or 0,r.modifiers)
+    nearest.part:SetAttribute('RockModifiers',nearest.modifiers)
+   end
    nearest.reachBonus=math.max(nearest.reachBonus or 0,reachBonus)
    nearest.part:SetAttribute('Units',nearest.units)
    nearest.part:SetAttribute('ExpiresAt',now+OreDrops.LIFETIME)
@@ -10042,7 +10100,7 @@ local function award(d: any,r: any,specialistCut: boolean?,extraction: boolean?)
   local ox,oy,oz,vx,vy,vz=OreDrops.launch(index,pickupSerial+1,r.part.Size.X,r.part.Size.Y,r.part.Size.Z)
   local position=r.part.Position+Vector3.new(ox,oy,oz)
   scene.spawnOrePickup(r.part,{owner=d.owner,runId=profile.run.id,nodeId=r.id,material=material,units=n,quiet=r.referenceCrystal,
-   oreArc=true,floor=ground+.22,fieldPart=r.field.part,reachBonus=reachBonus},position,Vector3.new(vx,vy,vz),r.field.color)
+   oreArc=true,floor=ground+.22,fieldPart=r.field.part,reachBonus=reachBonus,modifiers=r.modifiers},position,Vector3.new(vx,vy,vz),r.field.color)
  end
  p.dirty=true;p.publishDirty=true
 end
@@ -10064,11 +10122,13 @@ function scene.resetPress(press)
 end
 function scene.finishPress(press)
  local inputs=press.pressInputs
+ local modifiers=0
  for _,id in ipairs(inputs) do
   local drop=pickups[id]
   if not drop or drop.pressCarrier~=press or not drop.part.Parent or OreDrops.expired(drop.refreshedAt or drop.spawnAt,now,drop.returnUntil) then
    scene.resetPress(press);return
   end
+  modifiers=bit32.bor(modifiers,drop.modifiers or 0)
  end
  local first=pickups[inputs[1]]
  local intake=press.pos-Vector3.yAxis*.85
@@ -10077,7 +10137,7 @@ function scene.finishPress(press)
  local value=press.pressInputValue
  local output={owner=first.owner,runId=first.runId,nodeId=first.nodeId,tierMaterial=tier.material,
   material=Workshop.cargoKey(tier.material,value,true),value=value,units=1,raw=true,compacted=true,
-  floor=first.floor,fieldPart=first.fieldPart}
+  floor=first.floor,fieldPart=first.fieldPart,modifiers=modifiers}
  local tint=Color3.fromRGB(table.unpack(Shops.COLORS[tier.name]))
  table.insert(scene.pressOutputs,{at=now+Workshop.PRESS_EJECT,template=Instance.new('Part'),drop=output,
   position=intake+outlet.RightVector*2.25,outlet=outlet,color=tint})
@@ -13280,6 +13340,10 @@ RunService.Heartbeat:Connect(function(dt: number)
   for _,d in pairs(drones) do snapshotDrone(d) end
   scene.publishCharger()
   for _,field in ipairs(patches) do
+   if field.cfg.RockModifiers and now>=(field.checkModifiersAt or 0) then
+    field.checkModifiersAt=now+1
+    scene.stepRockModifiers(field)
+   end
    for _,r in ipairs(field.resources) do
     scene.regrow(r,snapshotDt)
     local solid=not r.referenceCrystal and not r.paid and now>=r.readyAt

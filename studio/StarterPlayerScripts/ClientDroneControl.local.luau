@@ -955,6 +955,9 @@ local Mining = (function()
 local M={PULSE_INTERVAL=.8,RESONANCE_RANGE=10,HEALTH_MULTIPLIER=1,BOULDER_CHANCE=.2,BOULDER_WORK=3,BOULDER_SIZE=2.6,EXTRACTION_SHARE=.5}
 M.SELECTOR_RANGE=44
 M.SELECTOR_LEASH=100
+M.ROCK_MODIFIERS={Massive=1,Charged=2,Frosted=4}
+M.MASSIVE_CHANCE=.09
+M.MASSIVE_SCALE=1.38
 local SELECTOR_GRID=2
 local DEPOT_ROUTE_RADIUS=54 -- Half the authored Crystal Run bed width.
 function M.selectorCenter(position,frame,size)
@@ -13242,6 +13245,217 @@ end
 return Display
 
 end)()
+local RockModifierView = (function()
+-- Cosmetic reactions follow the rendered rock and its loose cargo.
+local V={}
+local bits=Mining.ROCK_MODIFIERS
+local charged=Color3.fromRGB(255,224,96)
+local frost=Color3.fromRGB(135,224,255)
+local dust=Color3.fromRGB(249,200,145)
+local white=Color3.fromRGB(249,251,255)
+local icons={
+ {bit=bits.Charged,name='Charged',color=charged},
+ {bit=bits.Frosted,name='Frosted',color=frost},
+ {bit=bits.Massive,name='Massive',color=dust},
+}
+local disc=EnergyDisc.texture
+local star='rbxassetid://77624818077620'
+local elements=bit32.bor(bits.Charged,bits.Frosted)
+local tintByElement={[bits.Charged]=charged,[bits.Frosted]=frost,[elements]=charged:Lerp(frost,.5)}
+
+function V.tint(mask)
+ return tintByElement[bit32.band(mask or 0,elements)]
+end
+
+local function emitter(part,name,color,texture,diameter,lifetime,speed,spread,gravity,streak)
+ local p=Instance.new('ParticleEmitter')
+ p.Name=name;p.Enabled=false;p.Rate=0;p.Texture=texture
+ p.Color=ColorSequence.new(color:Lerp(white,.42),color)
+ p.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,diameter,diameter*.23),NumberSequenceKeypoint.new(1,0)})
+ p.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,streak and .12 or .29),NumberSequenceKeypoint.new(.25,.32),NumberSequenceKeypoint.new(1,1)})
+ p.LightInfluence=0;p.LightEmission=streak and .52 or .32
+ p.Lifetime=NumberRange.new(lifetime*.63,lifetime)
+ p.Speed=NumberRange.new(speed*.48,speed);p.Drag=streak and 3 or 1
+ p.Acceleration=Vector3.yAxis*gravity;p.SpreadAngle=Vector2.new(spread,spread)
+ if streak then
+  p.Orientation=Enum.ParticleOrientation.VelocityParallel;p.Squash=NumberSequence.new(.65)
+ else p.RotSpeed=NumberRange.new(-55,55) end
+ p.Parent=part
+ return p
+end
+local function prepare(view,state,mask,drop)
+ if bit32.btest(mask,bits.Charged) and not state.arc then
+  state.arc=emitter(view,'ChargedSnap',charged,disc,drop and .39 or .57,.33,drop and 8 or 15,175,-20,true)
+  state.ions=emitter(view,'DriftingIons',Color3.fromRGB(174,243,147),disc,.24,1.35,2.4,40,1.4)
+  if not drop then state.crack=emitter(view,'ChargedCrack',charged,disc,.8,.47,30,165,-33,true) end
+ end
+ if bit32.btest(mask,bits.Frosted) and not state.flake then
+  state.flake=emitter(view,'FrostDrift',frost,star,.44,1.7,1.9,95,-1.5)
+  if not drop then state.ice=emitter(view,'FrostCrack',frost,star,.76,.76,15,160,-13) end
+ end
+ if bit32.btest(mask,bits.Massive) and not state.grit then
+  state.grit=emitter(view,'MassiveFractureGrit',dust,disc,.64,.91,drop and 4 or 10,155,-24)
+ end
+end
+
+local function line(parent,a,b,width,color,transparency)
+ local p=Instance.new('Part')
+ p.Name='LightningStroke';p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+ p.Color=color;p.Material=Enum.Material.Neon;p.Transparency=transparency
+ p.Size=Vector3.new(width,width,(b-a).Magnitude);p.CFrame=CFrame.lookAt((a+b)*.5,b);p.Parent=parent
+ return p
+end
+local function event(view,bit,lowFlash,random)
+ local top=view.Position+Vector3.yAxis*(view.Size.Y*.37)
+ local parent=view.Parent
+ if bit==bits.Charged then
+  if lowFlash then return end
+  local sky=top+Vector3.new(-3,25,2)
+  local from=sky
+  for i=1,6 do
+   local to=if i==6 then top else sky:Lerp(top,i/6)+Vector3.new(random:NextNumber(-2.3,2.3),0,random:NextNumber(-2,2))
+   local core=line(parent,from,to,.16,white,.1)
+   local halo=line(parent,from,to,.47,charged,.61)
+   task.delay(.12,function() core:Destroy() end)
+   task.delay(.23,function() halo:Destroy() end)
+   from=to
+  end
+ else
+  local gust=Instance.new('Part')
+  gust.Name='FrostGust';gust.Size=Vector3.new(.45,1.8,4);gust.Transparency=1;gust.Anchored=true
+  gust.CanCollide=false;gust.CanQuery=false;gust.CanTouch=false;gust.CastShadow=false
+  gust.CFrame=CFrame.lookAt(top-Vector3.xAxis*6,top)
+  gust.Parent=parent
+  local flakes=emitter(gust,'SweepingFrost',frost,star,.68,1.2,19,17,-2)
+  flakes.EmissionDirection=Enum.NormalId.Front
+  flakes:Emit(17)
+  task.delay(1.25,function() gust:Destroy() end)
+ end
+end
+local function ambient(state,now,lowFlash,drop)
+ local random=state.random
+ if state.arc and now>=(state.nextAt or 0) then
+  state.nextAt=now+random:NextNumber(2.25,4.7)
+  state.arc:Emit(lowFlash and 1 or 3)
+ end
+ if state.ions and now>=(state.nextIonAt or 0) then
+  state.nextIonAt=now+random:NextNumber(.26,.68)
+  state.ions:Emit(1)
+ end
+ if state.flake and now>=(state.nextFrostAt or 0) then
+  state.nextFrostAt=now+random:NextNumber(.38,.93)
+  state.flake:Emit(drop and 1 or 2)
+ end
+ if drop and state.grit and now>=(state.nextGritAt or 0) then
+  state.nextGritAt=now+random:NextNumber(2.9,5.2)
+  state.grit:Emit(2)
+ end
+end
+
+function V.rock(record,now,lowFlash,eventKind)
+ local state=record.modifierFX
+ local source,view=record.source,record.view
+ if not state or record.modifiersDirty then
+  record.modifiersDirty=nil
+  state=state or {seen={}}
+  state.mask=source:GetAttribute('RockModifiers') or 0
+  record.modifierFX=state
+ end
+ local freshEvent=eventKind~=nil or state.eventPending or state.lastMask~=state.mask
+ state.lastMask=state.mask
+ if not freshEvent and now<(state.checkAt or 0) then return end
+ state.checkAt=now+.13
+ if state.mask==0 or not BeamVFX.near(view.Position,78) then return end
+ if (record.visual.broken and eventKind~='break') or BeamVFX.reduced() then return end
+ prepare(view,state,state.mask,false)
+ state.random=state.random or Random.new(source:GetAttribute('StageSeed') or 1)
+ state.eventPending=false
+ for _,entry in ipairs(icons) do
+  local name=entry.name
+  if entry.bit==bits.Massive or not bit32.btest(state.mask,entry.bit) then continue end
+  local at=source:GetAttribute(name..'At')
+  if at and at>now then state.eventPending=true;continue end
+  if at and at~=state.seen[name] and now>=at then
+   state.seen[name]=at
+   if now-at<.55 and not record.visual.broken then
+    event(view,entry.bit,lowFlash,state.random)
+    if entry.bit==bits.Charged then
+     state.arc:Emit(lowFlash and 4 or 12);state.ions:Emit(6)
+    else state.flake:Emit(9) end
+   end
+  end
+ end
+ if eventKind=='stage' or eventKind=='break' then
+  local final=eventKind=='break'
+  if state.crack then state.crack:Emit(lowFlash and 4 or final and 16 or 9) end
+  if state.ice then state.ice:Emit(final and 13 or 7) end
+  if state.grit then state.grit:Emit(final and 10 or 4) end
+ else
+  ambient(state,now,lowFlash,false)
+ end
+end
+
+function V.drop(record,now,landingAge,lowFlash)
+ local state=record.modifierFX
+ if not state then
+  state={random=Random.new(record.seed)};record.modifierFX=state
+ end
+ if state.mask~=record.modifiers then
+  state.mask=record.modifiers
+  prepare(record.view,state,state.mask,true)
+ end
+ if landingAge and landingAge>=0 and not state.landed then
+  state.landed=true
+  if landingAge<.28 then
+   if state.arc then state.arc:Emit(lowFlash and 2 or 7) end
+   if state.flake then state.flake:Emit(7) end
+   if state.grit then state.grit:Emit(6) end
+  end
+ end
+ ambient(state,now,lowFlash,true)
+end
+
+local function icon(parent,entry,order)
+ local frame=Instance.new('Frame')
+ frame.Name=entry.name;frame.Size=UDim2.fromOffset(10,12)
+ frame.BackgroundTransparency=1;frame.LayoutOrder=order;frame.Parent=parent
+ local function stroke(x,y,width,height,rotation)
+  local piece=Instance.new('Frame')
+  piece.BorderSizePixel=0;piece.BackgroundColor3=entry.color;piece.AnchorPoint=Vector2.new(.5,.5)
+  piece.Position=UDim2.fromOffset(x,y);piece.Size=UDim2.fromOffset(width,height);piece.Rotation=rotation
+  piece.Parent=frame
+ end
+ if entry.bit==bits.Charged then
+  stroke(4,4,2,6,33);stroke(5,6,6,2,0);stroke(6,8,2,6,33)
+ elseif entry.bit==bits.Frosted then
+  for angle=0,120,60 do stroke(5,6,1,10,angle) end
+  stroke(5,6,4,4,45)
+ else
+  stroke(5,6,6,6,45);stroke(5,6,2,2,0)
+ end
+end
+
+function V.dropLabel(view,material,mask)
+ local gui=Instance.new('BillboardGui');gui.Name='OreLabel'
+ gui.MaxDistance=44;gui.LightInfluence=0;gui.Size=UDim2.fromOffset(126,18)
+ gui.StudsOffsetWorldSpace=Vector3.yAxis*(view.Size.Magnitude*.5+.34)
+ gui.AlwaysOnTop=false;gui.Adornee=view
+ local row=Instance.new('UIListLayout');row.FillDirection=Enum.FillDirection.Horizontal
+ row.HorizontalAlignment=Enum.HorizontalAlignment.Center;row.VerticalAlignment=Enum.VerticalAlignment.Center
+ row.SortOrder=Enum.SortOrder.LayoutOrder;row.Padding=UDim.new(0,3);row.Parent=gui
+ local text=Instance.new('TextLabel');text.Name='Mineral';text.Text=material;text.TextSize=12;text.LayoutOrder=0
+ text.AutomaticSize=Enum.AutomaticSize.X;text.Size=UDim2.fromOffset(0,18);text.BackgroundTransparency=1
+ text.Font=Enum.Font.GothamMedium;text.TextColor3=white;text.TextStrokeColor3=Color3.fromRGB(18,23,32)
+ text.TextStrokeTransparency=.18;text.Parent=gui
+ for i,entry in ipairs(icons) do
+  if bit32.btest(mask,entry.bit) then icon(gui,entry,i) end
+ end
+ gui.Parent=view
+ return gui
+end
+return V
+
+end)()
 local PickupView = (function()
 -- Owner/run-bound ore. Smooth visuals observe server snapshots and receipts;
 -- neither a magnet animation nor a disappearing view can grant backpack units.
@@ -13391,18 +13605,26 @@ local function pickupNumber(parent)
  text.TextStrokeColor3=Color3.fromRGB(38,27,12);text.TextStrokeTransparency=.14;text.Parent=gui;gui.Parent=parent
  return gui,text
 end
-local function cargoWorth(parent)
- local gui=Instance.new('BillboardGui');gui.Name='CargoWorth';gui.Size=UDim2.fromOffset(66,18)
- gui.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);gui.MaxDistance=18;gui.Enabled=false;gui.Parent=parent
- local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
- text.TextSize=13;text.Font=Enum.Font.GothamBold;text.TextColor3=PICKUP_HIGHLIGHT
- text.TextStrokeTransparency=.18;text.Parent=gui
- return gui,text
-end
 local function sample(r,source,now)
  -- A stationary pile can be combined or renewed without changing pose.
  r.units=source:GetAttribute('Units') or 1
  r.expiresAt=source:GetAttribute('ExpiresAt')
+ local key=source:GetAttribute('Mineral')
+ if key~=r.mineralKey or not r.mineral then
+  r.mineralKey=key
+  local material=Workshop.crystalCargo(key) or key
+  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+  r.mineral=tier and tier.name or material or 'Ore'
+  if r.label then r.label.Mineral.Text=r.mineral end
+ end
+ local modifiers=source:GetAttribute('RockModifiers') or 0
+ if r.modifiers~=modifiers then
+  r.modifiers=modifiers
+  if r.label then r.label:Destroy();r.label=nil end
+  local tint=RockModifierView.tint(modifiers)
+  r.color=tint and source.Color:Lerp(tint,.19) or source.Color
+  r.view.Color=r.color;r.glow=nil
+ end
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
  local position=source:GetAttribute('Position') or source.Position
@@ -13428,7 +13650,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
+   samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -13509,7 +13731,6 @@ function V:update(dt,now)
  local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
- local closest,bestDistance=nil,math.huge
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
@@ -13570,6 +13791,7 @@ function V:update(dt,now)
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
+   if r.label then r.label.Enabled=false end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
    if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
@@ -13691,6 +13913,15 @@ function V:update(dt,now)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if cameraPosition then
+    local distance=(r.drawPosition-cameraPosition).Magnitude
+    local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
+    if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+    if r.label then r.label.Enabled=loose and distance<44 end
+    if r.modifiers~=0 and loose and distance<62 and not reducedEffects then
+     RockModifierView.drop(r,now,landingAge,reducedFlashing)
+    end
+   elseif r.label then r.label.Enabled=false end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
    if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
@@ -13706,23 +13937,12 @@ function V:update(dt,now)
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
-    if r.physical and r.owner==self.player.UserId and live and r.landAge and not seated and not inFlight and not pulling and distance<18^2 and opacity>.35 then
-     local rank=distance-(self.valueTarget==r and 8 or 0)
-     if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
-    end
    elseif r.ribbon then
     finishTrail(self,r,now)
    end
   end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
- if closest~=self.valueTarget then
-  self.valueTarget=closest
-  if closest then
-   if not self.valueGui then self.valueGui,self.valueText=cargoWorth(self.parent) end
-   self.valueGui.Adornee=closest.view;self.valueText.Text=tostring(closest.cargoValue)..' Q';self.valueGui.Enabled=true
-  elseif self.valueGui then self.valueGui.Enabled=false;self.valueGui.Adornee=nil end
- end
 end
 function V:destroy()
  if self.closed then return end;self.closed=true
@@ -13731,7 +13951,6 @@ function V:destroy()
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
- if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
 end
 return V
@@ -15483,6 +15702,7 @@ local function registerResource(source)
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resources[source].stoneColor=stoneColor;resources[source].stoneGradient=stoneGradient
+ resources[source].modifiersDirty=true
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -15518,9 +15738,12 @@ local function observe(source)
   if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerDrone(source) end) end
  elseif source:IsA('BasePart') and (source:GetAttribute('ResourceId') or source.Parent.Name=='Resources' or source.Parent:GetAttribute('FieldId')) then
   registerResource(source)
-  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function()
+  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function(attribute)
    local record=resources[source]
-   if record then record.dirty=true else registerResource(source) end
+   if record then
+    record.dirty=true
+    if attribute=='RockModifiers' then record.modifiersDirty=true end
+   else registerResource(source) end
   end) end
  elseif source:IsA('BasePart') and source.Parent:IsA('Model') and drones[source.Parent] then hidePart(source)
  end
@@ -15632,6 +15855,8 @@ local function renderResource(r,now)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
+  if modifierTint then color=color:Lerp(modifierTint,.13) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -15668,6 +15893,7 @@ local function renderResource(r,now)
  end
  rockDamage:update(r,now)
  r.settled=now>=readyAt
+ return event
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -16061,10 +16287,12 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  end
  presentation:beginFrame()
  chargerView:update(dt)
+ local lowFlash=player:GetAttribute('ReducedFlashing')==true
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  renderResource(r,now)
+  local fracture=renderResource(r,now)
+  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end

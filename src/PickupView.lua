@@ -146,18 +146,26 @@ local function pickupNumber(parent)
  text.TextStrokeColor3=Color3.fromRGB(38,27,12);text.TextStrokeTransparency=.14;text.Parent=gui;gui.Parent=parent
  return gui,text
 end
-local function cargoWorth(parent)
- local gui=Instance.new('BillboardGui');gui.Name='CargoWorth';gui.Size=UDim2.fromOffset(66,18)
- gui.StudsOffsetWorldSpace=Vector3.new(0,1.14,0);gui.MaxDistance=18;gui.Enabled=false;gui.Parent=parent
- local text=Instance.new('TextLabel');text.Size=UDim2.fromScale(1,1);text.BackgroundTransparency=1
- text.TextSize=13;text.Font=Enum.Font.GothamBold;text.TextColor3=PICKUP_HIGHLIGHT
- text.TextStrokeTransparency=.18;text.Parent=gui
- return gui,text
-end
 local function sample(r,source,now)
  -- A stationary pile can be combined or renewed without changing pose.
  r.units=source:GetAttribute('Units') or 1
  r.expiresAt=source:GetAttribute('ExpiresAt')
+ local key=source:GetAttribute('Mineral')
+ if key~=r.mineralKey or not r.mineral then
+  r.mineralKey=key
+  local material=Workshop.crystalCargo(key) or key
+  local tier=Workshop.CRYSTAL_BY_MATERIAL[material]
+  r.mineral=tier and tier.name or material or 'Ore'
+  if r.label then r.label.Mineral.Text=r.mineral end
+ end
+ local modifiers=source:GetAttribute('RockModifiers') or 0
+ if r.modifiers~=modifiers then
+  r.modifiers=modifiers
+  if r.label then r.label:Destroy();r.label=nil end
+  local tint=RockModifierView.tint(modifiers)
+  r.color=tint and source.Color:Lerp(tint,.19) or source.Color
+  r.view.Color=r.color;r.glow=nil
+ end
  local at=source:GetAttribute('SnapshotAt') or now
  if r.sampleAt and at<=r.sampleAt then return end
  local position=source:GetAttribute('Position') or source.Position
@@ -183,7 +191,7 @@ function V.new(root,parent,audio,reducedMotion)
   source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
   local id=source:GetAttribute('PickupId')
   local r={view=view,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
-   samples={},owner=source:GetAttribute('Owner'),cargoValue=source:GetAttribute('CargoValue') or 0,
+   samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
   local velocity=source:GetAttribute('OreLaunchVelocity')
@@ -264,7 +272,6 @@ function V:update(dt,now)
  local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
  local displayAt=now-PickupMotion.DELAY
- local closest,bestDistance=nil,math.huge
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
   if not r.collectAt and source.Parent then
@@ -325,6 +332,7 @@ function V:update(dt,now)
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.color) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
+   if r.label then r.label.Enabled=false end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
    if r.ribbon or r.liftTail and now<r.liftTail then r.view.Transparency=1
@@ -446,6 +454,15 @@ function V:update(dt,now)
     end
    end
    if opacity~=r.opacity then r.view.Transparency=1-opacity;r.opacity=opacity end
+   if cameraPosition then
+    local distance=(r.drawPosition-cameraPosition).Magnitude
+    local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
+    if loose and distance<44 and not r.label then r.label=RockModifierView.dropLabel(r.view,r.mineral,r.modifiers) end
+    if r.label then r.label.Enabled=loose and distance<44 end
+    if r.modifiers~=0 and loose and distance<62 and not reducedEffects then
+     RockModifierView.drop(r,now,landingAge,reducedFlashing)
+    end
+   elseif r.label then r.label.Enabled=false end
    local canGlint=landingAge and ((landingAge<.24 and (live or r.collectAt)) or (live and not seated and not pulling))
    if (r.arc or r.physical) and landingAge and landingAge>=0 and not reducedEffects and cameraPosition and (canGlint or r.idle) then
     local distanceFade=math.clamp((72-(r.drawPosition-cameraPosition).Magnitude)/12,0,1)
@@ -461,23 +478,12 @@ function V:update(dt,now)
     elseif inFlight and not r.trailUsed and distance<100^2 and self.trailCount<TRAIL_LIMIT and not reducedEffects then
      r.ribbon=launchTrail(r.view,r.color,r.physical and .32 or .16);r.trailUsed=true;self.trailCount+=1
     end
-    if r.physical and r.owner==self.player.UserId and live and r.landAge and not seated and not inFlight and not pulling and distance<18^2 and opacity>.35 then
-     local rank=distance-(self.valueTarget==r and 8 or 0)
-     if rank<bestDistance or (rank==bestDistance and r.seed<closest.seed) then closest=r;bestDistance=rank end
-    end
    elseif r.ribbon then
     finishTrail(self,r,now)
    end
   end
  end
  updateDisplays(self,now,reducedMotion,reducedEffects)
- if closest~=self.valueTarget then
-  self.valueTarget=closest
-  if closest then
-   if not self.valueGui then self.valueGui,self.valueText=cargoWorth(self.parent) end
-   self.valueGui.Adornee=closest.view;self.valueText.Text=tostring(closest.cargoValue)..' Q';self.valueGui.Enabled=true
-  elseif self.valueGui then self.valueGui.Enabled=false;self.valueGui.Adornee=nil end
- end
 end
 function V:destroy()
  if self.closed then return end;self.closed=true
@@ -486,7 +492,6 @@ function V:destroy()
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
- if self.valueGui then self.valueGui:Destroy() end
  self.records={};self.byId={}
 end
 return V

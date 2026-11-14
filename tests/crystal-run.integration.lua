@@ -983,10 +983,10 @@ input('PlaceSelector','press-pin',{fieldId=f.id,position=Vector3.new(0,5.5,-68)}
 assert(buyer.miningSquare)
 for id,drop in pairs(pickups) do if drop.owner==shopper.UserId then drop.part:Destroy();pickups[id]=nil end end
 local floor=f.center+Vector3.new(0,.75,0)
-local function pressOre(material,value,owner,position)
+local function pressOre(material,value,owner,position,modifiers)
  scene.spawnOrePickup(bed,{owner=owner or shopper.UserId,runId=data(buyer).run.id,nodeId='press-test',
   material=Workshop.cargoKey(material,value),tierMaterial=material,value=value,raw=true,units=1,
-  floor=floor.Y,fieldPart=bed},position or floor,Vector3.zero,Color3.new(1,0,0))
+  floor=floor.Y,fieldPart=bed,modifiers=modifiers},position or floor,Vector3.zero,Color3.new(1,0,0))
  local drop=pickups[pickupSerial];drop.age=1;drop.landed=true
  return drop
 end
@@ -1008,7 +1008,7 @@ assert(not buyer.compactorTarget and not relaying.pressSocket,'press interrupted
 for _,drop in ipairs({lone,remote,relaying}) do
  pickups[drop.part:GetAttribute('PickupId')]=nil;drop.part:Destroy()
 end
-local raw={pressOre('Quartz',10),pressOre('Quartz',12),pressOre('Quartz',14),pressOre('Quartz',16)}
+local raw={pressOre('Quartz',10,nil,nil,2),pressOre('Quartz',12,nil,nil,4),pressOre('Quartz',14,nil,nil,1),pressOre('Quartz',16)}
 for _=1,50 do
  pressTicks(1)
  if raw[2].pressSocket then break end
@@ -1024,6 +1024,7 @@ pressTicks(70)
 local pressedOre=pickups[pickupSerial]
 assert(pressedOre.units==1 and pressedOre.tierMaterial=='Quartz' and pressedOre.compacted)
 assert(pressedOre.value==36,'press lost value or minted Quartz')
+assert(pressedOre.modifiers==7 and pressedOre.part:GetAttribute('RockModifiers')==7)
 pressTicks(math.ceil(1.5/C.Tick))
 assert(not raw[4].pressSocket and raw[4].part.Parent and not buyer.compactorTarget,'a single rock was trapped')
 assert(foreign.part.Parent and Pro.cargoUnits(data(buyer))==10,'press changed foreign ore or a full bag')
@@ -1399,3 +1400,46 @@ do
  players.PlayerRemoving:Fire(tester);players.PlayerRemoving:Fire(other)
 end
 print('PASS two lasers can share a selected deep cut with separate stations, one reward and no foreign slot')
+
+do
+ local tester=player(98697);players.PlayerAdded:Fire(tester)
+ local crew=profiles[tester.UserId]
+ local worker=crew.drones[1]
+ local folder=Instance.new('Folder');folder.Parent=run
+ local surface=World.part(folder,'Field',Vector3.new(-180,5,-50),Vector3.new(68,1,48),f.color)
+ local field={id=#patches+1,cfg={Key='Quartz',Material='Quartz',Value=1,Hardness=1,SelectionOnly=true,RockModifiers=true,
+  ContinuousCrystals=true,AlwaysUnlocked=true,ReferenceCrystals=true,Count=2,Respawn=8,Ore=10,Turrets=0},
+  part=surface,model=folder,center=surface.Position,color=f.color,resources={},turrets={},respawnQueue={},e=R.newEncounter(C)}
+ field.e.phase='Safe';patches[field.id]=field
+ local bits=Mining.ROCK_MODIFIERS
+ local roll=0
+ local random=scene.modifierRandom
+ scene.modifierRandom={NextNumber=function(_,a,b) if a then return (a+b)*.5 end;return roll end}
+ local spawned,_,massive=spawnResource(field,'Crystal')
+ assert(spawned and massive.modifiers==bits.Massive)
+ assert(massive.part:GetAttribute('RockModifiers')==bits.Massive)
+ local mineral=Mining.fieldCrystal(75,1,10,3)
+ local planned={spot=surface.Position+Vector3.xAxis*19,mineral=mineral,massive=false}
+ local _,_,plain=spawnResource(field,'Crystal',false,planned)
+ assert(plain and not plain.modifiers)
+ massive.readyAt=now;plain.readyAt=now
+ tester.Character:PivotTo(CFrame.new(massive.position+Vector3.yAxis*3))
+ -- Keep the one eligible rock beside its owner when each event arrives.
+ plain.readyAt=now+100
+ scene.stepRockModifiers(field);assert(field.nextModifierAt>now and not massive.part:GetAttribute('ChargedAt'))
+ now=field.nextModifierAt
+ scene.stepRockModifiers(field)
+ assert(massive.part:GetAttribute('ChargedAt')==now and massive.modifiers==3)
+ roll=.9;now=field.nextModifierAt
+ scene.stepRockModifiers(field)
+ assert(massive.part:GetAttribute('FrostedAt')==now and massive.modifiers==7)
+ assert(not plain.modifiers)
+ crew.miningSquare={field=field,center=massive.position,half=15}
+ assert(assignOre(crew,worker,massive));worker.squareJob=crew.miningSquare;worker.pos=committedStation(worker,massive)
+ assert(hitResource(worker,massive,1000) and massive.paid)
+ local drop=pickups[pickupSerial]
+ assert(drop.nodeId==massive.id and drop.units==1 and drop.value==massive.ore and drop.part:GetAttribute('RockModifiers')==7)
+ assert(drop.launchAt==massive.splitAt+OreDrops.REWARD_DELAY)
+ players.PlayerRemoving:Fire(tester);scene.modifierRandom=random
+end
+print('PASS Massive spawn, two stacked field events and one authoritative modified ore drop')

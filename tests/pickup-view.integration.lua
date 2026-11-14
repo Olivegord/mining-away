@@ -17,13 +17,13 @@ check('rotating fragment stays supported above the authoritative floor',function
  assert(r.drawPosition.Y>=.22 and r.view.Size.Y==.58)
  assert(source.LocalTransparencyModifier==1 and not r.view.CanCollide and not r.view.CanQuery)
 end)
-check('scattered ore is one plain collectible visual',function()
+check('ordinary scattered ore shows a minimal mineral label even with reduced effects',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  source:SetAttribute('SnapshotAt',realTime+.01);source:SetAttribute('Velocity',Vector3.new(10,16,0))
  view:update(1/60,realTime+.01)
- assert(#r.view:GetDescendants()==0 and r.view.Name=='CollectibleOre')
+ assert(r.label.Enabled and r.label.Mineral.Text=='Ore' and #r.label:GetChildren()==2 and r.view.Name=='CollectibleOre')
  pl:SetAttribute('ReducedEffects',true);view:update(1/60,realTime+.02)
- assert(#r.view:GetDescendants()==0)
+ assert(r.label.Enabled and not r.modifierFX)
  pl:SetAttribute('ReducedEffects',false);workspace.CurrentCamera=camera
 end)
 check('landing settles the fragment without adding another mining sound',function()
@@ -96,18 +96,20 @@ check('ordinary ore clinks once when its buffered landing data arrives',function
  assert(#audio.calls==sounds+1,'landing cue replayed')
  renderer:destroy();loose:Destroy()
 end)
-check('physical launch trail fades on the displayed landing and never reappears during collection',function()
+check('stacked icons and particles follow the drop while the launch trail finishes',function()
  local camera=workspace.CurrentCamera;workspace.CurrentCamera={CFrame=CFrame.new(0,4,8)}
  local cargo=fixturePart(root,'RawCrystalCargo',Vector3.new(0,3,0),Vector3.new(1.48,1.70,1.42))
  cargo.Material=Enum.Material.Glass
- for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,SpawnAt=realTime,SnapshotAt=realTime,
+ for k,v in pairs({PickupId=3,Owner=pl.UserId,PhysicalCargo=true,CargoValue=10,Mineral='Rock:Quartz:10',RockModifiers=7,SpawnAt=realTime,SnapshotAt=realTime,
   FloorY=.22,Position=cargo.Position,Velocity=Vector3.new(7,30,0),OreLaunchOrigin=cargo.Position,
   OreLaunchVelocity=Vector3.new(7,30,0)}) do cargo:SetAttribute(k,v) end
  local renderer=PickupView.new(root,fx,audio);local record=assert(renderer.records[cargo])
  local sounds=#audio.calls
  renderer:update(1/60,realTime+.2)
  local ribbon=assert(record.ribbon)
- assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and not renderer.valueGui)
+ assert(ribbon.trail.Enabled and ribbon.trail.Parent==record.view and record.label.Enabled)
+ assert(record.label.Mineral.Text=='Quartz' and record.label.Charged and record.label.Frosted and record.label.Massive)
+ assert(record.modifierFX.arc.Emitted>0 and record.modifierFX.ions.Emitted>0 and record.modifierFX.flake.Emitted>0)
  assert(record.view.Material==Enum.Material.SmoothPlastic)
  assert(cargo.LocalTransparencyModifier==1 and not record.idle)
  cargo:SetAttribute('GroundImpactAt',realTime+.98)
@@ -115,11 +117,13 @@ check('physical launch trail fades on the displayed landing and never reappears 
  cargo:SetAttribute('GroundImpactSpeed',23)
  renderer:update(1/60,realTime+1.03);assert(ribbon.trail.Enabled and #audio.calls==sounds,'landing cue ran ahead of the buffered ore')
  renderer:update(1/60,realTime+1.10)
- assert(not ribbon.trail.Enabled and renderer.valueGui.Enabled and renderer.valueGui.Adornee==record.view)
+ assert(not ribbon.trail.Enabled and record.label.Enabled and record.label.Adornee==record.view)
+ assert(record.modifierFX.landed)
  assert(#audio.calls==sounds+1 and audio.calls[#audio.calls].kind=='ore_land' and audio.calls[#audio.calls].position.X==4)
  assert(record.idle and record.idle.emitter.Emitted==1,'physical ore missed its landing sparkle')
  cargo:SetAttribute('CollectedAt',realTime+1.16)
  renderer:update(1/60,realTime+1.16)
+ assert(not record.label.Enabled)
  renderer:update(1/60,realTime+1.37)
  assert(renderer.records[cargo]==record and record.view.Transparency==1 and ribbon.trail.Parent==record.view,
   'a quick collection cut the remaining trail segments')
@@ -225,9 +229,10 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  end
  assert(mostLit>0 and mostLit<=12 and renderer.idleCount==lit)
  assert(renderer.idleCount+#renderer.idlePool<=12,'glint pool exceeded the visual budget')
- local gui=renderer.valueGui
- assert(gui.Adornee==renderer.records[sources[2]].view and renderer.valueText.Text=='2 Q')
- assert(#renderer.displays==12 and #visuals:GetChildren()==93,'the display pool or shared label exceeded its budget')
+ local gui=renderer.records[sources[2]].label
+ assert(gui.Adornee==renderer.records[sources[2]].view and gui.Mineral.Text=='Ore')
+ assert(renderer.records[sources[1]].label.Enabled and not renderer.records[sources[80]].label)
+ assert(#renderer.displays==12 and #visuals:GetChildren()==92,'the display pool exceeded its budget')
  local rig=renderer.displays[1]
  assert(rig.record==renderer.records[sources[1]] and rig.outline.Adornee==rig.record.view and rig.outline.Enabled
   and rig.outline.DepthMode==Enum.HighlightDepthMode.Occluded and rig.outline.FillTransparency==1)
@@ -253,7 +258,7 @@ check('resting gems hover with a bounded swirl, rising motes, ground glow and ou
  assert(rig.outline.Adornee==renderer.records[sources[1]].view,'changing the distance order retargeted an existing outline')
  workspace.CurrentCamera.CFrame=CFrame.new(15,2,0)
  renderer:update(1/60,realTime+5)
- assert(renderer.valueGui==gui and math.abs(gui.Adornee.CFrame.Position.X-15)<.7)
+ assert(renderer.records[sources[2]].label==gui and math.abs(gui.Adornee.CFrame.Position.X-1.5)<.7)
  local first=renderer.records[sources[2]]
  sources[2]:SetAttribute('Units',4)
  renderer:update(1/60,realTime+6)

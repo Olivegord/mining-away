@@ -11,18 +11,28 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | edb019f7632737b1c39c61d7d898e3fe142820b9d390fe8615f8d03dc00a9600 | Updated field selector and center-bounded mining installed. |
-| Shared Studio Sources | November 14, 11:20 AM Pacific Team Create save | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | b938531df3cdea4324f637258b2f5e5eefdbdfa07aa1a994880766836b407782 | Stackable rock modifiers and minimal ore labels installed. |
+| Shared Studio Sources | Modifiers verified in the open Edit session | All seven Sources match the canonical file. The last confirmed Team Create save was the November 14, 11:20 AM Pacific field-selector build. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the brighter aim square, taller status beams and center-bounded mining. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play in this open session loads modifiers and ore labels. A fresh Team Create session depends on a successful save. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — stackable rock modifiers and drop labels
+
+Lightning applies Charged and a cold gust applies Frosted to nearby live rocks, with a preference for the current mining square and for rocks that already have a modifier. The first event is scheduled 5–9 seconds after entering a field, then attempts recur every 14–24 seconds. Massive has a 9% spawn roll and increases the rock's scale by 38%, with an ordinary-size fallback if placement fails. The three effects can stack. Mining work, rewards and storage rules retain their existing tuning.
+
+Charged uses intermittent yellow snaps plus more frequent drifting ions. Frosted uses pale blue flakes. Each modifier adds its own fracture particles and continues on the loose ore. Compactor output inherits the union of the inputs' modifiers. Loose drops use a small mineral name with bolt, snowflake and diamond icons as applicable. Reduced Effects keeps the label available.
+
+Workshop, Crystal Run, pickup and native-file preservation checks passed. A detached Studio Edit test verified strike, gust, fracture and pickup instances and the three icons. The broader gadget harness reproduces the baseline courier-delay fixture failure. No Play, live visual review or multiplayer check ran.
+
+Studio was already open in Edit at place **124078027733625**, universe **10774898335**. All three Script Sync roots are connected and seven Sources matched the refreshed canonical file. Automatic approval review rejected the Team Create save while the Mac was locked, citing the unavailable desktop inspection and the gadget failure. No player publication. Reproduce using `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit f49751e2141933cdc4d063310a589e9f5c835b09` on the prior canonical snapshot.
 
 ## November 14 — field selection and mining boundaries
 

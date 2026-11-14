@@ -999,6 +999,7 @@ local function registerResource(source)
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
  resources[source].stoneColor=stoneColor;resources[source].stoneGradient=stoneGradient
+ resources[source].modifiersDirty=true
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -1034,9 +1035,12 @@ local function observe(source)
   if not observed[source] then observed[source]=source.AttributeChanged:Connect(function() registerDrone(source) end) end
  elseif source:IsA('BasePart') and (source:GetAttribute('ResourceId') or source.Parent.Name=='Resources' or source.Parent:GetAttribute('FieldId')) then
   registerResource(source)
-  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function()
+  if not observed[source] then observed[source]=source.AttributeChanged:Connect(function(attribute)
    local record=resources[source]
-   if record then record.dirty=true else registerResource(source) end
+   if record then
+    record.dirty=true
+    if attribute=='RockModifiers' then record.modifiersDirty=true end
+   else registerResource(source) end
   end) end
  elseif source:IsA('BasePart') and source.Parent:IsA('Model') and drones[source.Parent] then hidePart(source)
  end
@@ -1148,6 +1152,8 @@ local function renderResource(r,now)
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
   local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  local modifierTint=RockModifierView.tint(s:GetAttribute('RockModifiers'))
+  if modifierTint then color=color:Lerp(modifierTint,.13) end
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
@@ -1184,6 +1190,7 @@ local function renderResource(r,now)
  end
  rockDamage:update(r,now)
  r.settled=now>=readyAt
+ return event
 end
 local function resolveRenderedTarget(kind,id,allowBreaking)
  if type(id)~='string' or id=='' then return nil end
@@ -1577,10 +1584,12 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  end
  presentation:beginFrame()
  chargerView:update(dt)
+ local lowFlash=player:GetAttribute('ReducedFlashing')==true
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
-  renderResource(r,now)
+  local fracture=renderResource(r,now)
+  if r.modifiersDirty or r.modifierFX and r.modifierFX.mask~=0 then RockModifierView.rock(r,now,lowFlash,fracture) end
   if dirty or (r.nextContactAt and now>=r.nextContactAt) or r.kick or r.chipTail then
    rockDamage.feedback:react(r,now)
   end
