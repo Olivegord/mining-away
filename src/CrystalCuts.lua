@@ -3,6 +3,7 @@ local CrystalGeometry=require('./CrystalGeometry')
 local CrystalVeins=require('./CrystalVeins')
 local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
 C.mineralCuts={
+ Amber={'Crown','Terrace'},RunQuartz={'Needle','Spear'},Diamond={'Spear','Oblique'},
  Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Terrace'},
  Cobalt={'Oblique','Spear'},RunCobalt={'Oblique','Spear'},
  Violet={'Triad','Fan'},RunViolet={'Triad','Fan'},

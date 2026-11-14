@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — distinct Amber, Quartz and Diamond finishes
+
+The new five-field order is Amber, Ruby, Quartz, Violet, Diamond. Amber uses SmoothPlastic, low transparency and no interior specks. Quartz has a clear blue-to-gold shell, 76 blue/white crown dots and 85 much finer golden base grains. Diamond has pink/cyan/green/orange facets, five irregular triangulated translucent mineral clouds, sparse fixed grains, three short colored light rays and a faster small four-point sparkle cadence. Rays share the existing display pool and obey hide/distance/Reduced Effects; Reduced Motion holds their brightness steady. The GemKind attribute identifies the finish after PickupView renames the part.
+
+The east plaza row uses these same production pickups in Play. Authored Edit shells/inclusions/clouds are static colored union approximations of the same geometry, without runtime EditableMesh serialization. Previous specimens remain in ServerStorage.RockVarietyArchive. Existing Cobalt/Emerald geometry and saved cargo values remain supported. Native component comparison verified all five sample/drop meshes, material/opacity and effects; no full Play or multiplayer test was started.
+
 ## November 14 — rejected string rays and preview mismatch
 
 Revision **387e854** replaces the 22 parallel crack beams with two short, textured, fading shafts, tightens/tapers the actual shell openings, and lowers mote rate/speed. Preserve the inner core and surface occlusion. Plot boundary opacity uses camera-to-pin distance: hidden through 42 studs, smooth fade to full visibility by 70; the initial reveal and previous pin obey the same gate.

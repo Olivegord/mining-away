@@ -3,13 +3,20 @@
 local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
- {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='Amber',name='Amber',hardness=1,value=1,cracks=3,color={255,153,20}},
  {material='RunRuby',name='Ruby',hardness=3,value=4,cracks=3},
- {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
+ {material='RunQuartz',name='Quartz',hardness=9,value=16,cracks=3,color={97,177,224}},
  {material='RunViolet',name='Violet',hardness=27,value=64,cracks=5},
+ {material='Diamond',name='Diamond',hardness=81,value=256,cracks=7,color={232,181,224}},
+}
+-- Keep old loose cargo and explicit-value Rock:/Block: keys valid.
+W.CRYSTAL_LEGACY={
+ {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
+for _,tier in ipairs(W.CRYSTAL_LEGACY) do W.CRYSTAL_BY_MATERIAL[tier.material]=tier end
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end

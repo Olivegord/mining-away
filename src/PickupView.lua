@@ -72,8 +72,9 @@ local function updateGlint(self,r,age,strength,now)
   removeIdle(self,r)
  end
  local clock=age-.5+r.seed*.61
- local cycle=age<.5 and -1 or math.floor(clock/2.65)
- local phase=age<.5 and age or clock%2.65
+ local interval=r.view:GetAttribute('GemKind')=='Diamond' and 1.65 or 2.65
+ local cycle=age<.5 and -1 or math.floor(clock/interval)
+ local phase=age<.5 and age or clock%interval
  if phase>=.24 or strength<.04 or r.glintCycle==cycle or self.idleCount>=GLINT_LIMIT then return end
  r.glintCycle=cycle;r.glintUntil=now+GLINT_LIFETIME
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1

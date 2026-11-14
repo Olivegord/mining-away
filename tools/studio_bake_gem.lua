@@ -3,7 +3,7 @@ local function bakeGemPreview(key,data,frame,size)
  local function part(class,name,size,frame,color,parent)
   local p=Instance.new(class);p.Name=name;p.Size=size;p.CFrame=frame;p.Color=color
   p.Anchored=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
-  p.Material=Enum.Material.Neon;p.Parent=parent
+  p.Material=Enum.Material[data.material];p.Parent=parent
   return p
  end
  local function triangle(a,b,c,color,parent,alpha)
@@ -51,24 +51,29 @@ local function bakeGemPreview(key,data,frame,size)
   local v={}
   for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do v[#v+1]=point(grain[1]+d*radius) end
   for _,f in ipairs({{1,3,5},{5,3,2},{2,3,6},{6,3,1},{1,5,4},{5,2,4},{2,6,4},{6,1,4}}) do
-   triangle(v[f[1]],v[f[2]],v[f[3]],Color3.new(1,1,1),preview,0)
+   triangle(v[f[1]],v[f[2]],v[f[3]],grain[3] or Color3.new(1,1,1),preview,0)
   end
+ end
+ local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
+ for _,f in ipairs(data.clouds or {}) do
+  triangle(point(f[1]),point(f[2]),point(f[3]),f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),clouds,.38)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.
- local groups={{},{}}
+ local groups={{},{},clouds:GetChildren()}
  for _,p in ipairs(preview:GetChildren()) do local group=p.Transparency==0 and groups[2] or groups[1];group[#group+1]=p end
  for index,pieces in ipairs(groups) do
   if #pieces>0 then
    local first=table.remove(pieces,1)
    local result=game:GetService('GeometryService'):UnionAsync(first,pieces,{CollisionFidelity=Enum.CollisionFidelity.Box,RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false})
    assert(#result==1,'specimen consolidation failed')
-   local combined=result[1];combined.Name=index==1 and 'FacetShell' or 'FixedInclusions'
+   local combined=result[1];combined.Name=index==1 and 'FacetShell' or index==2 and 'FixedInclusions' or 'MineralClouds'
    combined.UsePartColor=false;combined.Anchored=true;combined.CanCollide=false;combined.CanTouch=false;combined.CanQuery=false;combined.CastShadow=false
    combined.Material=first.Material;combined.Reflectance=first.Reflectance;combined.Transparency=first.Transparency
    combined.Parent=preview;first:Destroy();for _,p in ipairs(pieces) do p:Destroy() end
    task.wait()
   end
  end
+ clouds:Destroy()
  return preview
 end

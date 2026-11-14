@@ -7,7 +7,7 @@ camera.CFrame=CFrame.new(0,10,8)
 local view=PickupView.new(sources,fx,nil,function() return false end)
 local report={}
 local now=workspace:GetServerTimeNow()
-for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+for i,key in ipairs(RockFinish.Gems.geometry.order) do
  local sample=assert(view.byId[-i]);assert(sample.faceted,'sample mesh fallback '..key)
  local source=view.lineup.sources[i]
  local actual=source:Clone();actual:SetAttribute('PickupId',i+100);actual.Parent=sources
@@ -23,4 +23,14 @@ end
 camera.CFrame=before
 shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() view:update(1/60,workspace:GetServerTimeNow()) end,
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
+local diamond=view.byId[-5]
+assert(diamond.view:FindFirstChild('MineralClouds'))
+assert(diamond.displayRig.rays[1].beam.Enabled)
+PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,true,true)
+for _,ray in ipairs(diamond.displayRig.rays) do assert(not ray.beam.Enabled) end
+PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,false,false)
+for _,ray in ipairs(diamond.displayRig.rays) do assert(ray.beam.Enabled) end
+assert(not view.byId[-1].view:FindFirstChild('FixedInclusions'))
+assert(view.byId[-1].view.Material==Enum.Material.SmoothPlastic)
+assert(view.byId[-3].view.Transparency>view.byId[-1].view.Transparency)
 return report

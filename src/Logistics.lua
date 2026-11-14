@@ -6,10 +6,12 @@ local Shops=require('./Shops')
 local L: any={CAPACITY=120,LAUNCH_SECONDS=6,CARRIER_PRICE=1500,BACKPACK_PRICE=750}
 local materials={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 local mineral={Quartz=true,Ruby=true,Cobalt=true,Violet=true,Emerald=true}
-for _,tier in ipairs(Workshop.CRYSTAL_TIERS) do
+for _,catalog in ipairs({Workshop.CRYSTAL_LEGACY,Workshop.CRYSTAL_TIERS}) do
+for _,tier in ipairs(catalog) do
  if not mineral[tier.material] then
   table.insert(materials,tier.material);mineral[tier.material]=true
  end
+end
 end
 local miningRoles={Striker=true,Charger=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local function integer(n: any): any return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end

@@ -93,13 +93,20 @@ local Workshop = (function()
 local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
- {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='Amber',name='Amber',hardness=1,value=1,cracks=3,color={255,153,20}},
  {material='RunRuby',name='Ruby',hardness=3,value=4,cracks=3},
- {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
+ {material='RunQuartz',name='Quartz',hardness=9,value=16,cracks=3,color={97,177,224}},
  {material='RunViolet',name='Violet',hardness=27,value=64,cracks=5},
+ {material='Diamond',name='Diamond',hardness=81,value=256,cracks=7,color={232,181,224}},
+}
+-- Keep old loose cargo and explicit-value Rock:/Block: keys valid.
+W.CRYSTAL_LEGACY={
+ {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
+for _,tier in ipairs(W.CRYSTAL_LEGACY) do W.CRYSTAL_BY_MATERIAL[tier.material]=tier end
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
@@ -2738,27 +2745,29 @@ local Geometry=(function()
 -- One geometry description feeds runtime meshes and the durable Edit specimens.
 local G={}
 local rgb=Color3.fromRGB
-G.order={'Quartz','Ruby','Cobalt','Violet','Emerald'}
+G.order={'Amber','Ruby','Quartz','Violet','Diamond'}
 G.definitions={
- Quartz={kind='cluster',aspect=Vector3.new(1.02,1.85,.85),colors={rgb(21,62,104),rgb(54,176,195),rgb(215,255,239),rgb(143,116,224)}},
+ Amber={kind='amber',aspect=Vector3.new(.94,1.20,.82),colors={rgb(255,87,4),rgb(255,149,6),rgb(255,222,102),rgb(255,181,32)},opacity=.86,vertexAlpha=.97,material='SmoothPlastic'},
+ Quartz={kind='cluster',aspect=Vector3.new(1.02,1.85,.85),colors={rgb(235,186,64),rgb(182,218,217),rgb(44,137,221),rgb(124,188,239)},opacity=.34,vertexAlpha=.87,material='Glass'},
+ Diamond={kind='diamond',aspect=Vector3.new(.88,1.92,.77),colors={rgb(171,239,183),rgb(162,210,231),rgb(246,170,216),rgb(255,195,127)},opacity=.48,vertexAlpha=.90,material='Glass'},
  Ruby={kind='ruby',aspect=Vector3.new(.94,1.10,.84),colors={rgb(65,8,62),rgb(218,26,83),rgb(255,167,123),rgb(255,86,164)},opacity=.72,vertexAlpha=.86},
  Cobalt={kind='bismuth',aspect=Vector3.new(1.16,1.68,1.02),colors={rgb(13,21,48),rgb(40,113,232),rgb(248,213,96),rgb(175,57,211)}},
  Violet={kind='needle',aspect=Vector3.new(.46,3.05,.48),colors={rgb(27,4,51),rgb(139,18,209),rgb(255,180,246),rgb(105,49,201)}},
  Emerald={kind='dark',aspect=Vector3.new(.92,1.70,.78),colors={rgb(17,13,23),rgb(27,39,39),rgb(67,240,190),rgb(156,246,145)}},
 }
 function G.key(value)
- value=type(value)=='string' and value or 'Quartz'
+ value=type(value)=='string' and value or 'Amber'
  value=value:match('^Rock:(%a+):') or value:match('^Block:(%a+):') or value
  value=value:gsub('^Run','')
- return G.definitions[value] and value or 'Quartz'
+ return G.definitions[value] and value or 'Amber'
 end
 function G.describe(key)
  key=G.key(key)
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
- local data={faces={},grains={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
+ local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
   opacity=spec.opacity or (key=='Emerald' and .96 or key=='Cobalt' and 1 or .76),
-  vertexAlpha=spec.vertexAlpha or .88}
+  vertexAlpha=spec.vertexAlpha or .88,material=spec.material or (key=='Cobalt' and 'Metal' or 'Neon')}
  if key=='Emerald' then data.tint=spec.colors[3] end
  local function gradient(p,sector)
   local t=math.clamp(p.Y+.5,0,1)
@@ -2769,6 +2778,10 @@ function G.describe(key)
    local dark=spec.colors[1]:Lerp(spec.colors[2],sector%3*.18)
    return dark:Lerp(sector%2==0 and spec.colors[3] or spec.colors[4],glow)
   end
+  if spec.kind=='diamond' then
+   local palette={rgb(241,144,204),rgb(99,208,227),rgb(155,222,161),rgb(248,185,126),rgb(168,166,174),rgb(160,191,223)}
+   return palette[sector%#palette+1]:Lerp(spec.colors[math.clamp(math.floor(t*3)+1,1,4)],.36)
+  end
   local midpoint=ruby and .52 or .56
   local c=t<midpoint and spec.colors[1]:Lerp(spec.colors[2],t/midpoint)
    or spec.colors[2]:Lerp(spec.colors[3],(t-midpoint)/(ruby and .48 or .44))
@@ -2778,7 +2791,7 @@ function G.describe(key)
   local n=(b-a):Cross(c-a)
   if n.Magnitude<.000001 then return end
   if n:Dot((a+b+c)/3-(center or Vector3.zero))<0 then b,c=c,b end
-  local shade=sector%2==0 and .12 or (ruby and .38 or .28)
+  local shade=spec.kind=='amber' and (sector%2==0 and .01 or .12) or spec.kind=='diamond' and .07 or sector%2==0 and .12 or (ruby and .38 or .28)
   local function color(p) return (fixed or gradient(p,sector)):Lerp(Color3.new(0,0,0),shade) end
   data.faces[#data.faces+1]={a,b,c,color(a),color(b),color(c)}
  end
@@ -2807,18 +2820,49 @@ function G.describe(key)
   end
   local random=Random.new(seed)
   for i=1,grainCount do
-   local y=random:NextNumber(ruby and -.30 or -.29,ruby and .32 or .28)
+   local y=spec.kind=='cluster' and random:NextNumber(.12,.40) or random:NextNumber(ruby and -.30 or -.29,ruby and .32 or .28)
    local r=((ruby and .28 or .23)-math.abs(y)*(ruby and .38 or .32))*math.sqrt(random:NextNumber())
    local a=random:NextNumber(0,math.pi*2)
    local size=random:NextNumber(.008,ruby and .015 or .014)*(ruby and (i%9==0 and 1.35 or 1) or math.min(scale.X,scale.Y,scale.Z))
-   data.grains[#data.grains+1]={transform(Vector3.new(math.cos(a)*r+y*lean,y,math.sin(a)*r)),size}
+   data.grains[#data.grains+1]={transform(Vector3.new(math.cos(a)*r+y*lean,y,math.sin(a)*r)),size, spec.kind=='cluster' and rgb(167,219,255) or rgb(255,255,255)}
   end
  end
  local long={{.025,.5},{.34,.28},{.36,-.29},{.035,-.5}}
  if spec.kind=='cluster' then
-  prism(6,long,.04,CFrame.new(.01,.02,0),Vector3.new(.65,.96,.66),18,593)
-  prism(5,long,-.12,CFrame.new(-.32,-.18,.04)*CFrame.Angles(0,.4,.33),Vector3.new(.40,.67,.43),9,614)
-  prism(6,long,.06,CFrame.new(.30,-.24,.10)*CFrame.Angles(-.19,0,-.38),Vector3.new(.37,.58,.39),8,631)
+  prism(6,long,.04,CFrame.new(.01,.02,0),Vector3.new(.65,.96,.66),42,593)
+  prism(5,long,-.12,CFrame.new(-.32,-.18,.04)*CFrame.Angles(0,.4,.33),Vector3.new(.40,.67,.43),18,614)
+  prism(6,long,.06,CFrame.new(.30,-.24,.10)*CFrame.Angles(-.19,0,-.38),Vector3.new(.37,.58,.39),16,631)
+  -- Fine ochre sediment is fixed inside the lower body, distinct from the
+  -- larger blue-white dots at the crowns. It tumbles with the stone.
+  local random=Random.new(404)
+  for i=1,85 do
+   local y=random:NextNumber(-.42,-.12)
+   data.grains[#data.grains+1]={Vector3.new(random:NextNumber(-.13,.13),y,random:NextNumber(-.12,.12)),random:NextNumber(.0018,.0045),rgb(232,199,111)}
+  end
+ elseif spec.kind=='amber' then
+  prism(7,{{.27,.43},{.46,.20},{.44,-.24},{.24,-.44}},-.18,CFrame.new(),Vector3.one,0,901)
+ elseif spec.kind=='diamond' then
+  prism(6,{{.015,.5},{.45,.17},{.40,-.27},{.025,-.5}},-.13,CFrame.new(),Vector3.one,8,918)
+  -- Irregular translucent mineral clouds sit within the clear shell. A small
+  -- triangulated color field gives muddy patches instead of uniform confetti.
+  local random=Random.new(107)
+  local palette={rgb(223,157,195),rgb(91,185,203),rgb(154,188,134),rgb(220,168,115),rgb(133,127,126)}
+  for patch=1,5 do
+   local center=Vector3.new(random:NextNumber(-.10,.10),-.27+(patch-1)*.13,random:NextNumber(-.10,.10))
+   local frame=CFrame.new(center)*CFrame.Angles(.24*patch,.7*patch,-.26*patch)
+   local rows={}
+   for y=0,5 do
+    rows[y]={}
+    for x=0,5 do
+     local position=frame:PointToWorldSpace(Vector3.new((x/5-.5)*.38*(.65+.35*math.sin(y/5*math.pi)),(y/5-.5)*.31+math.sin(x*1.7+patch)*.015,random:NextNumber(-.018,.018)))
+     rows[y][x]={position,palette[patch]:Lerp(rgb(159,151,140),random:NextNumber(.1,.58))}
+    end
+   end
+   for y=0,4 do for x=0,4 do
+    local a,b,c,d=rows[y][x],rows[y][x+1],rows[y+1][x],rows[y+1][x+1]
+    for _,t in ipairs({{a,b,c},{b,d,c}}) do data.clouds[#data.clouds+1]={t[1][1],t[2][1],t[3][1],t[1][2],t[2][2],t[3][2]} end
+   end end
+  end
  elseif spec.kind=='needle' then
   prism(5,{{.015,.5},{.34,.29},{.46,-.13},{.025,-.5}},-.22,CFrame.new(),Vector3.one,26,702)
  elseif spec.kind=='dark' then
@@ -2895,9 +2939,10 @@ local function build(key)
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
- local white=core:AddColor(Color3.new(1,1,1),1)
+
  for _,grain in ipairs(data.grains) do
   local center,s=grain[1],grain[2]
+  local white=core:AddColor(grain[3] or Color3.new(1,1,1),1)
   local v,p={},{}
   for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do
    p[#p+1]=center+d*s;v[#v+1]=core:AddVertex(p[#p])
@@ -2914,7 +2959,23 @@ local function build(key)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)
   grains.Parent=shell
  end
- if key=='Cobalt' then shell.Material=Enum.Material.Metal;shell.Reflectance=.18 end
+ if #data.clouds>0 then
+  local cloud=assert(assets:CreateEditableMesh());meshes[#meshes+1]=cloud
+  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
+  for _,f in ipairs(data.clouds) do
+   local ids={}
+   for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
+   local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.62),cloud:AddColor(f[5],.62),cloud:AddColor(f[6],.62)})
+  end
+  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.SmoothPlastic
+  inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
+  inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
+  inside.Parent=shell
+ end
+ shell.Material=Enum.Material[data.material]
+ shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .12 or key=='Quartz' and .04 or 0
+ shell:SetAttribute('GemKind',key)
  shell:SetAttribute('GemAspect',data.aspect)
  shell:SetAttribute('GemOpacity',data.opacity)
  shell.Transparency=1-shell:GetAttribute('GemOpacity')
@@ -2922,7 +2983,7 @@ local function build(key)
 end
 function Gem.prepare()
  if attempted then return end;attempted=true
- for _,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+ for _,key in ipairs({'Amber','Ruby','Quartz','Violet','Diamond','Cobalt','Emerald'}) do
   local first=#meshes
   local ok,result=pcall(build,key)
   if ok then templates[key]=result
@@ -2941,11 +3002,13 @@ function Gem.clone(source)
  return p,true
 end
 function Gem.update(part,opacity)
- local core=part:FindFirstChild('FixedInclusions')
+ for _,name in ipairs({'FixedInclusions','MineralClouds'}) do
+ local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
   core.Transparency=1-opacity
+ end
  end
 end
 return Gem
@@ -13924,6 +13987,7 @@ local PickupDisplay = (function()
 local Display={}
 local WHITE=Color3.new(1,1,1)
 local SOFT_GLOW='rbxasset://textures/ui/AvatarExperience/glowLight.png'
+local RAY_COLORS={Color3.fromRGB(255,166,217),Color3.fromRGB(128,222,244),Color3.fromRGB(192,244,165)}
 local SWEEP,SEGMENTS=math.pi*2.16,4
 local widths={.008,.044,.050,.030,.004}
 local transparencies={1,.34,.05,.29,1}
@@ -13964,14 +14028,26 @@ function Display.new(parent,slot)
   beam.Enabled=false;beam.Parent=base;curves[i]=beam
  end
  for i=1,5 do motes[i]=EnergyDisc.sprite(base,'RisingOreMote') end
+ local rays={}
+ for i=1,3 do
+  local a=Instance.new('Attachment');a.Name='DiamondRayStart';a.Parent=base
+  local b=Instance.new('Attachment');b.Name='DiamondRayEnd';b.Parent=base
+  local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
+  beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
+  beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
+  beam.Color=ColorSequence.new(RAY_COLORS[i],WHITE)
+  beam.Width0=.09;beam.Width1=.025;beam.Enabled=false;beam.Parent=base
+  rays[i]={a=a,b=b,beam=beam}
+ end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
  return {base=base,surface=surface,halo=halo,core=core,outline=outline,points=points,curves=curves,motes=motes,
-  groundOffset=Vector3.yAxis*((slot-1)*.004)}
+  rays=rays,groundOffset=Vector3.yAxis*((slot-1)*.004)}
 end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
+ for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false end
  if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
@@ -14006,6 +14082,20 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  if mask~=0 and not rig.rings then rig.rings=RockModifierView.groundRings(rig.surface) end
  if rig.rings then RockModifierView.drawRings(rig.rings,mask,strength) end
 
+ -- Three short facet rays, attached to Diamond's body, with staggered slow
+ -- breaths. Reused with the display pool and disabled by Reduced Effects.
+ local diamond=record.view:GetAttribute('GemKind')=='Diamond'
+ for i,ray in ipairs(rig.rays) do
+  ray.beam.Enabled=diamond and not reducedEffects
+  if ray.beam.Enabled then
+   local angle=i*2.399+record.seed*.31
+   local start=record.view.CFrame:PointToWorldSpace(record.view.Size*Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23))
+   ray.a.Position=start-ground
+   ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*(1.15+i*.2)
+   local power=strength*(reducedMotion and .4 or (.25+.32*(.5+.5*math.sin(now*.9+i*2.1))^3))
+   ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-power),NumberSequenceKeypoint.new(1,1)})
+  end
+ end
  local phase=(reducedMotion and 0 or now*1.5)+record.seed*1.47
  if not reducedEffects then
   -- Adjacent cubic segments share the helix's tangent and width at each join.
@@ -14069,7 +14159,7 @@ function L.new(parent,add,finish)
  local self={sources={},records={},hidden={},finish=finish}
  if not root then return self end
  local born=workspace:GetServerTimeNow()-10
- for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+ for i,key in ipairs(finish.Gems.geometry.order) do
   local model=root:FindFirstChild(key)
   local anchor=model and model:FindFirstChild('SpecimenAnchor')
   if anchor then
@@ -14215,8 +14305,9 @@ local function updateGlint(self,r,age,strength,now)
   removeIdle(self,r)
  end
  local clock=age-.5+r.seed*.61
- local cycle=age<.5 and -1 or math.floor(clock/2.65)
- local phase=age<.5 and age or clock%2.65
+ local interval=r.view:GetAttribute('GemKind')=='Diamond' and 1.65 or 2.65
+ local cycle=age<.5 and -1 or math.floor(clock/interval)
+ local phase=age<.5 and age or clock%interval
  if phase>=.24 or strength<.04 or r.glintCycle==cycle or self.idleCount>=GLINT_LIMIT then return end
  r.glintCycle=cycle;r.glintUntil=now+GLINT_LIFETIME
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1

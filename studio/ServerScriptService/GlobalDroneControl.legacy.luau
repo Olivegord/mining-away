@@ -6,13 +6,20 @@ local Workshop = (function()
 local W={PACK_BASE=20,PACK_GROWTH=1.35,LEVEL_COST=20,LEVEL_GROWTH=1.7,PRESTIGE_BASE=160}
 -- Distinct cargo IDs preserve the older mineral shops and the value of saved ore.
 W.CRYSTAL_TIERS={
- {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='Amber',name='Amber',hardness=1,value=1,cracks=3,color={255,153,20}},
  {material='RunRuby',name='Ruby',hardness=3,value=4,cracks=3},
- {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
+ {material='RunQuartz',name='Quartz',hardness=9,value=16,cracks=3,color={97,177,224}},
  {material='RunViolet',name='Violet',hardness=27,value=64,cracks=5},
+ {material='Diamond',name='Diamond',hardness=81,value=256,cracks=7,color={232,181,224}},
+}
+-- Keep old loose cargo and explicit-value Rock:/Block: keys valid.
+W.CRYSTAL_LEGACY={
+ {material='Quartz',name='Quartz',hardness=1,value=1,cracks=3},
+ {material='RunCobalt',name='Cobalt',hardness=9,value=16,cracks=3},
  {material='RunEmerald',name='Emerald',hardness=81,value=256,cracks=7},
 }
 W.CRYSTAL_BY_MATERIAL={}
+for _,tier in ipairs(W.CRYSTAL_LEGACY) do W.CRYSTAL_BY_MATERIAL[tier.material]=tier end
 for _,tier in ipairs(W.CRYSTAL_TIERS) do
  W.CRYSTAL_BY_MATERIAL[tier.material]=tier
 end
@@ -3523,6 +3530,7 @@ return V
 end)()
 local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
 C.mineralCuts={
+ Amber={'Crown','Terrace'},RunQuartz={'Needle','Spear'},Diamond={'Spear','Oblique'},
  Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Terrace'},
  Cobalt={'Oblique','Spear'},RunCobalt={'Oblique','Spear'},
  Violet={'Triad','Fan'},RunViolet={'Triad','Fan'},
@@ -8200,8 +8208,8 @@ function W.initialize(): any
     local model=run:FindFirstChild(original.Key)
     local part=model and model:FindFirstChild('Field')
     assert(part and part:IsA('BasePart') and part:GetAttribute('CrystalZone')==i,'Missing Crystal Run zone '..original.Key)
-    local cfg={Name=original.Key,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
-     Hardness=tier.hardness,Cracks=tier.cracks,Color=original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=78,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
+    local cfg={Name=tier.name,Key=original.Key,Material=tier.material,AlwaysUnlocked=true,SelectionOnly=true,
+     Hardness=tier.hardness,Cracks=tier.cracks,Color=tier.color or original.Color,ReferenceCrystals=true,ContinuousCrystals=true,RockModifiers=true,Count=78,Ore=10,Value=tier.value,Respawn=8+i-1,Turrets=0}
     local id=#fieldMetadata+1
     part:SetAttribute('FieldId',id);model:SetAttribute('FieldId',id)
     fieldMetadata[id]={id=id,cfg=cfg,center=part.Position,part=part,model=model}
@@ -8509,10 +8517,12 @@ local Logistics = (function()
 local L: any={CAPACITY=120,LAUNCH_SECONDS=6,CARRIER_PRICE=1500,BACKPACK_PRICE=750}
 local materials={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 local mineral={Quartz=true,Ruby=true,Cobalt=true,Violet=true,Emerald=true}
-for _,tier in ipairs(Workshop.CRYSTAL_TIERS) do
+for _,catalog in ipairs({Workshop.CRYSTAL_LEGACY,Workshop.CRYSTAL_TIERS}) do
+for _,tier in ipairs(catalog) do
  if not mineral[tier.material] then
   table.insert(materials,tier.material);mineral[tier.material]=true
  end
+end
 end
 local miningRoles={Striker=true,Charger=true,Bubbler=true,Halver=true,Gridcutter=true,Singularity=true,Starforge=true,Frostbite=true,Resonator=true}
 local function integer(n: any): any return type(n)=='number' and n==n and n>=0 and n<1e14 and n%1==0 end

@@ -31,9 +31,10 @@ local function build(key)
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
- local white=core:AddColor(Color3.new(1,1,1),1)
+
  for _,grain in ipairs(data.grains) do
   local center,s=grain[1],grain[2]
+  local white=core:AddColor(grain[3] or Color3.new(1,1,1),1)
   local v,p={},{}
   for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do
    p[#p+1]=center+d*s;v[#v+1]=core:AddVertex(p[#p])
@@ -50,7 +51,23 @@ local function build(key)
   grains:SetAttribute('CenterRatio',((coreMin+coreMax)*.5-data.center)/data.extents)
   grains.Parent=shell
  end
- if key=='Cobalt' then shell.Material=Enum.Material.Metal;shell.Reflectance=.18 end
+ if #data.clouds>0 then
+  local cloud=assert(assets:CreateEditableMesh());meshes[#meshes+1]=cloud
+  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
+  for _,f in ipairs(data.clouds) do
+   local ids={}
+   for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
+   local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.62),cloud:AddColor(f[5],.62),cloud:AddColor(f[6],.62)})
+  end
+  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.SmoothPlastic
+  inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
+  inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
+  inside.Parent=shell
+ end
+ shell.Material=Enum.Material[data.material]
+ shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .12 or key=='Quartz' and .04 or 0
+ shell:SetAttribute('GemKind',key)
  shell:SetAttribute('GemAspect',data.aspect)
  shell:SetAttribute('GemOpacity',data.opacity)
  shell.Transparency=1-shell:GetAttribute('GemOpacity')
@@ -58,7 +75,7 @@ local function build(key)
 end
 function Gem.prepare()
  if attempted then return end;attempted=true
- for _,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+ for _,key in ipairs({'Amber','Ruby','Quartz','Violet','Diamond','Cobalt','Emerald'}) do
   local first=#meshes
   local ok,result=pcall(build,key)
   if ok then templates[key]=result
@@ -77,11 +94,13 @@ function Gem.clone(source)
  return p,true
 end
 function Gem.update(part,opacity)
- local core=part:FindFirstChild('FixedInclusions')
+ for _,name in ipairs({'FixedInclusions','MineralClouds'}) do
+ local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
   core.Transparency=1-opacity
+ end
  end
 end
 return Gem

@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — orange starter, blue/gold Quartz and top-tier Diamond
+
+The owner supplied three crystal photos and requested more mineral variation. Make the first mineral a matte orange translucent cut with a strong warm gradient and no blanket of white specks; move Quartz later. Make Diamond the highest tier, with pink, blue, green and orange facets, muddy internal texture, a few beams and the small sparkle effect. Use the third reference for a nearly clear crystal with speckled blue tips and a yellow, finely grainy base. The implementation uses this blue/gold treatment for later Quartz. Preserve the accepted Ruby cut and the real-drop specimen replay.
+
 ## November 14 — restore the earlier Ruby drop
 
 Use the Ruby model from the mineral variety pass (3b1f622), immediately before the owner’s “amazing!” message. Match the east plaza Ruby specimen to the drop while retaining the current preview animation and the other minerals.

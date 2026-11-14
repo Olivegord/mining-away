@@ -10,7 +10,7 @@ function L.new(parent,add,finish)
  local self={sources={},records={},hidden={},finish=finish}
  if not root then return self end
  local born=workspace:GetServerTimeNow()-10
- for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+ for i,key in ipairs(finish.Gems.geometry.order) do
   local model=root:FindFirstChild(key)
   local anchor=model and model:FindFirstChild('SpecimenAnchor')
   if anchor then
