@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — move the specimen row and show the drop
+
+Keep the specimen display near spawn, away from the shops and other displays. Replay the actual ore launch, tumble, landing and hover so the specimens demonstrate how each mineral appears in play.
+
 ## November 14 — softer cracks, distant plot walls and honest previews
 
 The owner rejected the long parallel crack rays as strange-looking. Keep the thin opening and glowing core, but remove the string/fence appearance. Plot boundary beams must only appear when the camera is far away. The spawn specimens must match the actual in-game drops, including their effects; a separately styled showcase is not an acceptable comparison. This supersedes the parallel ray-fan presentation below.
