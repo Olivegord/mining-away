@@ -1,5 +1,13 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — rejected string rays and preview mismatch
+
+Revision **387e854** replaces the 22 parallel crack beams with two short, textured, fading shafts, tightens/tapers the actual shell openings, and lowers mote rate/speed. Preserve the inner core and surface occlusion. Plot boundary opacity uses camera-to-pin distance: hidden through 42 studs, smooth fade to full visibility by 70; the initial reveal and previous pin obey the same gate.
+
+The five spawn specimens now enter the actual PickupView registration/update path with private negative local IDs. They cannot grant rewards or attract drones, and do not expire. Their mesh, opacity, hover, outline, ground glow, strand, motes and glints share the production renderer. The owner’s Play logs showed Emerald failing at CreateEditableMesh; each generated mesh is now converted to FixedSize and the dynamic allocation released before building the next. Cobalt no longer allocates an unused grain mesh. [Roblox fixed-size mesh memory guidance](https://create.roblox.com/docs/reference/engine/classes/AssetService#CreateEditableMeshAsync).
+
+Durable Edit specimens bake the same transformed triangles and grain coordinates into nine colored unions, fixing the previous bismuth scaling mismatch and oversized Edit grains. They are static, discretized-color approximations in Edit; Play uses the exact pickup renderer. Native Edit component checks compared all five sample/drop meshes, materials, opacity and display rigs. No new full Play or multiplayer validation was performed.
+
 ## November 14 — open shell/core light and distinct specimen geometry
 
 The latest owner request rejects the inset strips below. Preserve the existing rock silhouette while hollowing its center and cutting a thin, irregular opening through the shell. One smaller, solid luminous mineral sits inside. Native Beam fans project parallel, slightly varied rays from the lips of the crack, with a faint wider wash and slow round motes. The reference is the owner's attached light-shaft photograph. There is no emissive strip on the rock skin. Fourteen nearby rocks within 80 studs can show this local detail. Reduced Effects retains the inner core but disables rays/motes; Reduced Motion holds brightness steady and disables motes. All eight templates passed a native query proving that sight lines through the openings hit the inner core before the shell, plus pose/scale and cleanup checks.

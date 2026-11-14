@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — softer cracks, distant plot walls and honest previews
+
+The owner rejected the long parallel crack rays as strange-looking. Keep the thin opening and glowing core, but remove the string/fence appearance. Plot boundary beams must only appear when the camera is far away. The spawn specimens must match the actual in-game drops, including their effects; a separately styled showcase is not an acceptable comparison. This supersedes the parallel ray-fan presentation below.
+
 ## November 14 — thin open cracks, core rays and spawn specimens
 
 The owner rejected the recessed vein strips. Open the stone shell with a very thin crack, reveal a luminous inner core, and make the principal effect visible Beam rays escaping the opening. The supplied light-shaft photograph is the beam reference. Make dropped minerals substantially different: elongated needles, multi-point formations, a mostly dark crystal with concentrated glow, and geometric bismuth terraces. Add all five dropped minerals in a line near spawn so they can be compared without mining. This supersedes the previous inset-channel direction.
