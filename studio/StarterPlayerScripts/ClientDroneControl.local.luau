@@ -2760,8 +2760,8 @@ function R.texture(u,v,key)
  local muddy=math.clamp(.5+cloud*1.6,0,1)
  if key=='Amber' then return .97+fine*.1,1 end
  if key=='Quartz' then return math.clamp(.80+cloud*.17+fine*.35+fracture*.17,.57,1),.70+muddy*.3 end
- local veil=math.clamp((cloud-.035)*4.8,0,.62)
- return math.clamp(.96-veil+fine*.35+fracture*.18,.32,1),.82+muddy*.18
+ local veil=math.clamp((cloud-.08)*.70,0,.10)
+ return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
 local function colors(key,p,index)
  if key=='Amber' then
@@ -2774,16 +2774,16 @@ local function colors(key,p,index)
   local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
   return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
  end
- local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(183,173,193),rgb(192,221,241),rgb(244,194,222)}
+ local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(218,231,246),rgb(192,221,241),rgb(244,194,222)}
  local faces={2,1,4,3,1,2,4,2,3,5,2,1,4,1,3,2}
  local base=palette[faces[index] or 2]
  local alternate=palette[(index+2)%#palette+1]
  local t=math.clamp(.48+p.Y*.54+p.X*.37-p.Z*.48,0,1)
- return base:Lerp(alternate,t*.44):Lerp(white,.19)
+ return base:Lerp(alternate,t*.44):Lerp(white,.04)
 end
 function R.describe(key)
  if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
- local data={key=key,faces={},grains={},clouds={},boxes={},texture=key,
+ local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
   opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or .88,
   material=key=='Amber' and 'SmoothPlastic' or 'Neon',
@@ -2824,6 +2824,21 @@ function R.describe(key)
     center/=#polygon
     local axis=(polygon[1]-center).Unit;local other=plane[1].Unit:Cross(axis)
     table.sort(polygon,function(a,b) local x,y=a-center,b-center;return math.atan2(x:Dot(other),x:Dot(axis))<math.atan2(y:Dot(other),y:Dot(axis)) end)
+    if key=='Diamond' and (index==1 or index==4 or index==5 or index==8 or index==9 or index==14) then
+     local palette={rgb(107,237,255),rgb(255,153,218),rgb(165,255,153),rgb(255,197,132)}
+          local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
+     for i=1,#polygon do
+      local a,b=polygon[i],polygon[i%#polygon+1]
+      local mid=(a+b)*.5
+      local color=mid.Y>.16 and (mid.X>0 and palette[4] or palette[2]) or mid.Y<-.16 and palette[3] or (mid.X<0 and palette[1] or palette[2])
+      local width=(index==4 or index==9) and .007 or .0035
+      local ia=a+(center-a).Unit*width;local ib=b+(center-b).Unit*width
+      local function point(p) return frame:PointToWorldSpace(p*scale)+normal end
+      a,b,ia,ib=point(a),point(b),point(ia),point(ib)
+      data.rims[#data.rims+1]={a,b,ia,color,color,color,.96,.96,0}
+      data.rims[#data.rims+1]={b,ib,ia,color,color,color,.96,0,0}
+     end
+    end
     for i=1,#polygon do
      face(frame:PointToWorldSpace(center*scale),frame:PointToWorldSpace(polygon[i]*scale),frame:PointToWorldSpace(polygon[i%#polygon+1]*scale),index,frame.Position)
     end
@@ -2871,7 +2886,7 @@ function R.describe(key)
   for i,f in ipairs(data.faces) do
    if i%3==1 then
     local g={}
-    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.26);g[n+6]=f[n+6] end
+    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.18);g[n+6]=f[n+6] end
     data.clouds[#data.clouds+1]=g
    end
   end
@@ -2879,6 +2894,17 @@ function R.describe(key)
  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
  for _,f in ipairs(data.faces) do for i=1,3 do lo=lo:Min(f[i]);hi=hi:Max(f[i]) end end
  data.center=(lo+hi)*.5;data.extents=hi-lo
+ if key=='Diamond' then
+  data.flares={}
+  for _,target in ipairs({V(-.30,.20,-.30),V(.35,-.30,.20),V(.12,.38,.22)}) do
+   local best,distance=nil,math.huge
+   for _,f in ipairs(data.rims) do for i=1,2 do
+    local d=(f[i]-target).Magnitude
+    if d<distance then best=f[i];distance=d end
+   end end
+   data.flares[#data.flares+1]=(best-data.center)/data.extents
+  end
+ end
  return data
 end
 return R
@@ -3097,13 +3123,29 @@ local function build(key)
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.22),cloud:AddColor(f[5],.22),cloud:AddColor(f[6],.22)})
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.065),cloud:AddColor(f[5],.065),cloud:AddColor(f[6],.065)})
   end
   local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
-  if texture then inside.TextureContent=Content.fromObject(texture) end
+  -- Diamond's pale inner reflections are luminous, not a second dark texture.
+  if texture and key~='Diamond' then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
+ end
+ if data.rims and #data.rims>0 then
+  local rim=assert(assets:CreateEditableMesh());meshes[#meshes+1]=rim
+  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
+  for _,f in ipairs(data.rims) do
+   local ids={}
+   for i=1,3 do ids[i]=rim:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
+   local triangle=rim:AddTriangle(ids[1],ids[2],ids[3])
+   rim:SetFaceColors(triangle,{rim:AddColor(f[4],f[7]),rim:AddColor(f[5],f[8]),rim:AddColor(f[6],f[9])})
+  end
+  local edges=part(rim,'PrismaticEdges')
+  edges:SetAttribute('SizeRatio',(hi-lo)/data.extents)
+  edges:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
+  edges.Parent=shell
+  for i,position in ipairs(data.flares) do shell:SetAttribute('GemFlare'..i,position) end
  end
  shell.Material=Enum.Material[data.material]
  shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .12 or key=='Quartz' and .04 or 0
@@ -3134,12 +3176,12 @@ function Gem.clone(source)
  return p,true
 end
 function Gem.update(part,opacity)
- for _,name in ipairs({'FixedInclusions','MineralClouds'}) do
+ for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do
  local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  core.Transparency=1-opacity
+  core.Transparency=1-opacity*(name=='MineralClouds' and .16 or 1)
  end
  end
 end
@@ -14167,9 +14209,13 @@ function Display.new(parent,slot)
   local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
   beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
   beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
-  beam.Color=ColorSequence.new(RAY_COLORS[i],WHITE)
-  beam.Width0=.09;beam.Width1=.025;beam.Enabled=false;beam.Parent=base
-  rays[i]={a=a,b=b,beam=beam}
+  beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
+  beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
+  local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
+  flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
+  local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
+  local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
+  rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
  end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
@@ -14179,7 +14225,8 @@ end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
- for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false end
+ if rig.light then rig.light.Enabled=false end
+ for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false;ray.flare.Enabled=false end
  if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
@@ -14219,14 +14266,21 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  -- Three short facet rays, attached to Diamond's body, with staggered slow
  -- breaths. Reused with the display pool and disabled by Reduced Effects.
  local diamond=record.view:GetAttribute('GemKind')=='Diamond'
+ if diamond and not rig.light then
+  local light=Instance.new('PointLight');light.Name='DiamondSpill';light.Color=Color3.fromRGB(203,236,255);light.Range=5;light.Shadows=false;light.Parent=rig.rays[1].a;rig.light=light
+ end
+ if rig.light then rig.light.Enabled=diamond and not reducedEffects;rig.light.Brightness=.65*strength end
  for i,ray in ipairs(rig.rays) do
   ray.beam.Enabled=diamond and not reducedEffects
+  ray.flare.Enabled=ray.beam.Enabled
   if ray.beam.Enabled then
    local angle=i*2.399+record.seed*.31
-   local start=record.view.CFrame:PointToWorldSpace(record.view.Size*Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23))
+   local point=record.view:GetAttribute('GemFlare'..i) or Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23)
+   local start=record.view.CFrame:PointToWorldSpace(record.view.Size*point)
    ray.a.Position=start-ground
    ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*(1.15+i*.2)
-   local power=strength*(reducedMotion and .4 or (.25+.32*(.5+.5*math.sin(now*.9+i*2.1))^3))
+   local power=strength*(reducedMotion and .58 or (.42+.30*(.5+.5*math.sin(now*.9+i*2.1))^3))
+   ray.glow.ImageTransparency=1-power*.70;ray.star.ImageTransparency=1-power*.88
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-power),NumberSequenceKeypoint.new(1,1)})
   end
  end
@@ -14447,9 +14501,11 @@ local function updateGlint(self,r,age,strength,now)
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
  local size=r.view.Size
  local side=r.seed%2==0 and 1 or -1
- r.idle.anchor.Position=Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
+ local flare=r.view:GetAttribute('GemFlare'..((math.max(0,cycle)%3)+1))
+ r.idle.anchor.Position=flare and size*flare or Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
  local width=r.physical and 1.95 or 1.35
  local emitter=r.idle.emitter
+ emitter.Brightness=flare and 3.2 or 2
  emitter.Size=NumberSequence.new({
   NumberSequenceKeypoint.new(0,width*.24),
   NumberSequenceKeypoint.new(.12,width),

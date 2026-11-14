@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — luminous Diamond follow-up; preserve approved Amber
+
+Diamond optical texture now stays pale rather than producing charcoal patches. Its internal reflections have lower opacity. Narrow mesh ribbons add pink/cyan/mint/peach facet rims; three normalized edge anchors carry white-to-color rays, small star/halo sprites and the existing four-point particle glint. A pooled, Diamond-only local light adds short-range spill. Hide/distance/Reduced Effects disable rays, flares and light; Reduced Motion keeps their intensity steady. No gameplay change. Amber and Quartz geometry/colors/texture were compared exactly against the prior revision.
+
+The Diamond-only authored preview has a SmoothPlastic shell/cloud union to avoid the native Neon union washing out its vertex colors, plus Neon rims. Play retains the luminous textured mesh and effects. This static Edit approximation has no animated flare, and is not a pixel-exact representation of Play. Only Diamond PreviewGeometry is replaced; its predecessor is archived in ServerStorage.DiamondLightArchive.
+
 ## November 14 — rejected regular cuts and floating diamond patches
 
 The owner rejected the first Amber / Quartz / Diamond pass. GemRefinement now derives their uneven planar cuts from half-space intersections. Amber has a tilted cut and a strong burnt-orange to honey gradient. Quartz has a broken crown, smaller blue grains contained inside its cut volume, a pale middle and gold base. Diamond replaces five floating patches with near-shell fracture surfaces, brighter pink/cyan/mint/peach planes and deterministic cloudy texture. Two cached EditableImages (256² Diamond, 128² Quartz) supply fine fixed optical detail; no per-frame texture generation or new uploaded asset. The existing Mesh/Image API permission applies. Image allocation failure retains the colored mesh and logs a texture fallback.

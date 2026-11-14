@@ -13,8 +13,8 @@ function R.texture(u,v,key)
  local muddy=math.clamp(.5+cloud*1.6,0,1)
  if key=='Amber' then return .97+fine*.1,1 end
  if key=='Quartz' then return math.clamp(.80+cloud*.17+fine*.35+fracture*.17,.57,1),.70+muddy*.3 end
- local veil=math.clamp((cloud-.035)*4.8,0,.62)
- return math.clamp(.96-veil+fine*.35+fracture*.18,.32,1),.82+muddy*.18
+ local veil=math.clamp((cloud-.08)*.70,0,.10)
+ return math.clamp(.99-veil+fine*.08+fracture*.035,.88,1),.92+muddy*.08
 end
 local function colors(key,p,index)
  if key=='Amber' then
@@ -27,16 +27,16 @@ local function colors(key,p,index)
   local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
   return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
  end
- local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(183,173,193),rgb(192,221,241),rgb(244,194,222)}
+ local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(218,231,246),rgb(192,221,241),rgb(244,194,222)}
  local faces={2,1,4,3,1,2,4,2,3,5,2,1,4,1,3,2}
  local base=palette[faces[index] or 2]
  local alternate=palette[(index+2)%#palette+1]
  local t=math.clamp(.48+p.Y*.54+p.X*.37-p.Z*.48,0,1)
- return base:Lerp(alternate,t*.44):Lerp(white,.19)
+ return base:Lerp(alternate,t*.44):Lerp(white,.04)
 end
 function R.describe(key)
  if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
- local data={key=key,faces={},grains={},clouds={},boxes={},texture=key,
+ local data={key=key,faces={},grains={},clouds={},rims={},boxes={},texture=key,
   opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
   vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or .88,
   material=key=='Amber' and 'SmoothPlastic' or 'Neon',
@@ -77,6 +77,21 @@ function R.describe(key)
     center/=#polygon
     local axis=(polygon[1]-center).Unit;local other=plane[1].Unit:Cross(axis)
     table.sort(polygon,function(a,b) local x,y=a-center,b-center;return math.atan2(x:Dot(other),x:Dot(axis))<math.atan2(y:Dot(other),y:Dot(axis)) end)
+    if key=='Diamond' and (index==1 or index==4 or index==5 or index==8 or index==9 or index==14) then
+     local palette={rgb(107,237,255),rgb(255,153,218),rgb(165,255,153),rgb(255,197,132)}
+          local normal=frame:VectorToWorldSpace(plane[1].Unit)*.0015
+     for i=1,#polygon do
+      local a,b=polygon[i],polygon[i%#polygon+1]
+      local mid=(a+b)*.5
+      local color=mid.Y>.16 and (mid.X>0 and palette[4] or palette[2]) or mid.Y<-.16 and palette[3] or (mid.X<0 and palette[1] or palette[2])
+      local width=(index==4 or index==9) and .007 or .0035
+      local ia=a+(center-a).Unit*width;local ib=b+(center-b).Unit*width
+      local function point(p) return frame:PointToWorldSpace(p*scale)+normal end
+      a,b,ia,ib=point(a),point(b),point(ia),point(ib)
+      data.rims[#data.rims+1]={a,b,ia,color,color,color,.96,.96,0}
+      data.rims[#data.rims+1]={b,ib,ia,color,color,color,.96,0,0}
+     end
+    end
     for i=1,#polygon do
      face(frame:PointToWorldSpace(center*scale),frame:PointToWorldSpace(polygon[i]*scale),frame:PointToWorldSpace(polygon[i%#polygon+1]*scale),index,frame.Position)
     end
@@ -124,7 +139,7 @@ function R.describe(key)
   for i,f in ipairs(data.faces) do
    if i%3==1 then
     local g={}
-    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.26);g[n+6]=f[n+6] end
+    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.18);g[n+6]=f[n+6] end
     data.clouds[#data.clouds+1]=g
    end
   end
@@ -132,6 +147,17 @@ function R.describe(key)
  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
  for _,f in ipairs(data.faces) do for i=1,3 do lo=lo:Min(f[i]);hi=hi:Max(f[i]) end end
  data.center=(lo+hi)*.5;data.extents=hi-lo
+ if key=='Diamond' then
+  data.flares={}
+  for _,target in ipairs({V(-.30,.20,-.30),V(.35,-.30,.20),V(.12,.38,.22)}) do
+   local best,distance=nil,math.huge
+   for _,f in ipairs(data.rims) do for i=1,2 do
+    local d=(f[i]-target).Magnitude
+    if d<distance then best=f[i];distance=d end
+   end end
+   data.flares[#data.flares+1]=(best-data.center)/data.extents
+  end
+ end
  return data
 end
 return R

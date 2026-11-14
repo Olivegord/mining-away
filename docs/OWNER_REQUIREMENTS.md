@@ -1,8 +1,12 @@
 # Owner requirements
 
+## November 14 — Amber approved; brighter Diamond and colored edges
+
+The owner explicitly likes the revised Amber. Preserve it. Diamond still looks muddy/dark compared with the supplied photo and lacks its light emission and colored edges. Lift its dark texture, retain light pastel color through the body, and add selective luminous pink/cyan/mint/peach rims, short facet rays and small sparkle flares. Compare the actual pickup renderer against the image.
+
 ## November 14 — rejected first Amber / Quartz / Diamond pass
 
-The owner says Quartz and Amber look bad, need stronger gradients and less symmetrical shapes; the asymmetry critique applies broadly. Diamond is especially far from the supplied reference. Inspect the actual engine result against the three attached photos before handing it back. Replace the hollow regular diamond with floating colored patches; aim for irregular cuts, color through the body and cloudy fractured texture. The previous implementation and passing checks are not visual approval.
+The owner says Quartz and Amber look bad, need stronger gradients and less symmetrical shapes; the asymmetry critique applies broadly. Diamond is especially far from the supplied reference. Inspect the actual engine result against the three attached photos before handing it back. Replace the hollow regular diamond containing floating colored patches; aim for irregular cuts, color through the body and cloudy fractured texture. The previous implementation and passing checks are not visual approval.
 
 ## November 14 — orange starter, blue/gold Quartz and top-tier Diamond
 

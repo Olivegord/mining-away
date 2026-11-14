@@ -80,9 +80,11 @@ local function updateGlint(self,r,age,strength,now)
  r.idle=table.remove(self.idlePool) or makeGlint();self.idleCount+=1
  local size=r.view.Size
  local side=r.seed%2==0 and 1 or -1
- r.idle.anchor.Position=Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
+ local flare=r.view:GetAttribute('GemFlare'..((math.max(0,cycle)%3)+1))
+ r.idle.anchor.Position=flare and size*flare or Vector3.new(side*size.X*.27,size.Y*.43,-side*size.Z*.08)
  local width=r.physical and 1.95 or 1.35
  local emitter=r.idle.emitter
+ emitter.Brightness=flare and 3.2 or 2
  emitter.Size=NumberSequence.new({
   NumberSequenceKeypoint.new(0,width*.24),
   NumberSequenceKeypoint.new(.12,width),

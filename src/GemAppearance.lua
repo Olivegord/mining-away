@@ -82,13 +82,29 @@ local function build(key)
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
    if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.22),cloud:AddColor(f[5],.22),cloud:AddColor(f[6],.22)})
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.065),cloud:AddColor(f[5],.065),cloud:AddColor(f[6],.065)})
   end
   local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
-  if texture then inside.TextureContent=Content.fromObject(texture) end
+  -- Diamond's pale inner reflections are luminous, not a second dark texture.
+  if texture and key~='Diamond' then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
+ end
+ if data.rims and #data.rims>0 then
+  local rim=assert(assets:CreateEditableMesh());meshes[#meshes+1]=rim
+  local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
+  for _,f in ipairs(data.rims) do
+   local ids={}
+   for i=1,3 do ids[i]=rim:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
+   local triangle=rim:AddTriangle(ids[1],ids[2],ids[3])
+   rim:SetFaceColors(triangle,{rim:AddColor(f[4],f[7]),rim:AddColor(f[5],f[8]),rim:AddColor(f[6],f[9])})
+  end
+  local edges=part(rim,'PrismaticEdges')
+  edges:SetAttribute('SizeRatio',(hi-lo)/data.extents)
+  edges:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
+  edges.Parent=shell
+  for i,position in ipairs(data.flares) do shell:SetAttribute('GemFlare'..i,position) end
  end
  shell.Material=Enum.Material[data.material]
  shell.Reflectance=key=='Cobalt' and .18 or key=='Diamond' and .12 or key=='Quartz' and .04 or 0
@@ -119,12 +135,12 @@ function Gem.clone(source)
  return p,true
 end
 function Gem.update(part,opacity)
- for _,name in ipairs({'FixedInclusions','MineralClouds'}) do
+ for _,name in ipairs({'FixedInclusions','MineralClouds','PrismaticEdges'}) do
  local core=part:FindFirstChild(name)
  if core then
   core.Size=part.Size*core:GetAttribute('SizeRatio')
   core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
-  core.Transparency=1-opacity
+  core.Transparency=1-opacity*(name=='MineralClouds' and .16 or 1)
  end
  end
 end

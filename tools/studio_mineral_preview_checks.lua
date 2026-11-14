@@ -25,13 +25,17 @@ shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() vi
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
 local diamond=view.byId[-5]
 assert(diamond.view:FindFirstChild('MineralClouds'))
+assert(diamond.view:FindFirstChild('PrismaticEdges'))
+assert(diamond.displayRig.light and diamond.displayRig.light.Enabled)
+assert(not view.byId[-1].displayRig.light)
+for i=1,3 do assert(typeof(diamond.view:GetAttribute('GemFlare'..i))=='Vector3') end
 assert(diamond.view:GetAttribute('OpticalTexture'))
 assert(view.byId[-3].view:GetAttribute('OpticalTexture'))
 assert(diamond.displayRig.rays[1].beam.Enabled)
 PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,true,true)
-for _,ray in ipairs(diamond.displayRig.rays) do assert(not ray.beam.Enabled) end
+for _,ray in ipairs(diamond.displayRig.rays) do assert(not ray.beam.Enabled and not ray.flare.Enabled) end
 PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,false,false)
-for _,ray in ipairs(diamond.displayRig.rays) do assert(ray.beam.Enabled) end
+for _,ray in ipairs(diamond.displayRig.rays) do assert(ray.beam.Enabled and ray.flare.Enabled) end
 assert(not view.byId[-1].view:FindFirstChild('FixedInclusions'))
 assert(view.byId[-1].view.Material==Enum.Material.SmoothPlastic)
 assert(view.byId[-3].view.Transparency>view.byId[-1].view.Transparency)

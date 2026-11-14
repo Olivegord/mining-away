@@ -50,9 +50,13 @@ function Display.new(parent,slot)
   local beam=Instance.new('Beam');beam.Name='DiamondPrismRay';beam.Attachment0=a;beam.Attachment1=b
   beam.FaceCamera=true;beam.LightEmission=1;beam.LightInfluence=0;beam.Segments=1
   beam.Texture=SOFT_GLOW;beam.TextureMode=Enum.TextureMode.Stretch;beam.TextureSpeed=0
-  beam.Color=ColorSequence.new(RAY_COLORS[i],WHITE)
-  beam.Width0=.09;beam.Width1=.025;beam.Enabled=false;beam.Parent=base
-  rays[i]={a=a,b=b,beam=beam}
+  beam.Color=ColorSequence.new(WHITE,RAY_COLORS[i])
+  beam.Width0=.22;beam.Width1=.018;beam.Enabled=false;beam.Parent=base
+  local flare=Instance.new('BillboardGui');flare.Name='DiamondFacetGlow';flare.Size=UDim2.fromOffset(28,28)
+  flare.AlwaysOnTop=false;flare.LightInfluence=0;flare.Brightness=2;flare.Enabled=false;flare.Parent=a
+  local glow=glowImage(flare,'ColoredFlare',1);glow.ImageColor3=RAY_COLORS[i]
+  local star=glowImage(flare,'FacetStar',.68);star.Image='rbxassetid://77624818077620';star.ImageColor3=WHITE
+  rays[i]={a=a,b=b,beam=beam,flare=flare,glow=glow,star=star}
  end
  base.Parent=parent
  -- Separate overlapping translucent ground sprites by a small, stable depth.
@@ -62,7 +66,8 @@ end
 
 function Display.hide(rig)
  rig.outline.Enabled=false;rig.surface.Enabled=false
- for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false end
+ if rig.light then rig.light.Enabled=false end
+ for _,ray in ipairs(rig.rays) do ray.beam.Enabled=false;ray.flare.Enabled=false end
  if rig.rings then RockModifierView.drawRings(rig.rings,0,0) end
  for _,beam in ipairs(rig.curves) do beam.Enabled=false end
  for _,mote in ipairs(rig.motes) do mote.gui.Enabled=false end
@@ -102,14 +107,21 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  -- Three short facet rays, attached to Diamond's body, with staggered slow
  -- breaths. Reused with the display pool and disabled by Reduced Effects.
  local diamond=record.view:GetAttribute('GemKind')=='Diamond'
+ if diamond and not rig.light then
+  local light=Instance.new('PointLight');light.Name='DiamondSpill';light.Color=Color3.fromRGB(203,236,255);light.Range=5;light.Shadows=false;light.Parent=rig.rays[1].a;rig.light=light
+ end
+ if rig.light then rig.light.Enabled=diamond and not reducedEffects;rig.light.Brightness=.65*strength end
  for i,ray in ipairs(rig.rays) do
   ray.beam.Enabled=diamond and not reducedEffects
+  ray.flare.Enabled=ray.beam.Enabled
   if ray.beam.Enabled then
    local angle=i*2.399+record.seed*.31
-   local start=record.view.CFrame:PointToWorldSpace(record.view.Size*Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23))
+   local point=record.view:GetAttribute('GemFlare'..i) or Vector3.new(math.cos(angle)*.23,(i-2)*.22,math.sin(angle)*.23)
+   local start=record.view.CFrame:PointToWorldSpace(record.view.Size*point)
    ray.a.Position=start-ground
    ray.b.Position=ray.a.Position+Vector3.new(math.cos(angle),.22*(i-2),math.sin(angle))*(1.15+i*.2)
-   local power=strength*(reducedMotion and .4 or (.25+.32*(.5+.5*math.sin(now*.9+i*2.1))^3))
+   local power=strength*(reducedMotion and .58 or (.42+.30*(.5+.5*math.sin(now*.9+i*2.1))^3))
+   ray.glow.ImageTransparency=1-power*.70;ray.star.ImageTransparency=1-power*.88
    ray.beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.16,1-power),NumberSequenceKeypoint.new(1,1)})
   end
  end
