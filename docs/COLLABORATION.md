@@ -95,3 +95,7 @@ For revision 387e854, tools/studio_mineral_lineup.lua stages a replacement row a
 ### Amber / Quartz / Diamond row refresh
 
 The current row uses `tools/studio_rock_variety.lua` and `tools/refresh_rock_variety.py`. Bundle RockFinish and studio_bake_gem.lua before the stage, extract its scenery/archive sections, check the exact preceding native SHA, apply, then write. This archives the previous row as `ServerStorage.RockVarietyArchive.MineralLineup` and preserves the existing map and Sources. The runtime order comes from GemGeometry.order; production tier economics come from Workshop.CRYSTAL_TIERS. Keep legacy cargo entries in CRYSTAL_BY_MATERIAL so saved cargo is neither discarded nor revalued.
+
+### Reference rework after owner rejection
+
+The replacement row uses `tools/studio_gem_reference_rework.lua` and `tools/refresh_gem_reference_rework.py`, archiving the preceding row in `ServerStorage.GemReferenceReworkArchive`. Its checked pre-edit native SHA is recorded in PROJECT_STATE. GemRefinement supplies irregular cut planes and the deterministic optical texture function. GemAppearance creates and caches two small EditableImages during preparation; the native Edit bake samples their colors into persistent unions. Runtime sample/drop comparison still uses PickupView. Do not serialize an object-backed TextureContent into a saved native mesh or claim the coarse Edit texture approximation is pixel-identical to Play.
