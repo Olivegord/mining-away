@@ -1,6 +1,14 @@
 -- Crystal Run templates and their fracture halves are built once per server.
 local CrystalGeometry=require('./CrystalGeometry')
+local CrystalVeins=require('./CrystalVeins')
 local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
+C.mineralCuts={
+ Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Terrace'},
+ Cobalt={'Oblique','Spear'},RunCobalt={'Oblique','Spear'},
+ Violet={'Triad','Fan'},RunViolet={'Triad','Fan'},
+ Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
+}
+C.inset=CrystalVeins.carve
 local clusters={
  Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},
  Fan={core='Oblique',width=.72,height=.92, feet={{-.54,.05,.79,-.53},{.56,.13,.63,.43},{.17,-.56,.29,.28}}},

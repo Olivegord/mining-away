@@ -1,13 +1,16 @@
 -- Box-mapped side faces keep the gradient attached as the rock shrinks.
 local Finish={}
-local STONE=Color3.fromRGB(117,115,112)
+Finish.Gems=require('./GemAppearance')
+local Veins=require('./RockVeins')
+Finish.veins=Veins.update
+local STONE=Color3.fromRGB(91,96,107)
 local SHADE=Color3.fromRGB(15,13,14)
 Finish.StoneLight=Color3.fromRGB(188,177,164)
 local GRADIENT='rbxassetid://117998501972844'
 local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
 
 function Finish.apply(view,mineral)
- local tint=STONE:Lerp(mineral,.22)
+ local tint=STONE:Lerp(mineral,.12)
  view.Material=Enum.Material.Concrete
  view.MaterialVariant=''
  view.Reflectance=0

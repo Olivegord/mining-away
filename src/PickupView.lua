@@ -2,7 +2,7 @@
 -- neither a magnet animation nor a disappearing view can grant backpack units.
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
-local GemAppearance=require('./GemAppearance')
+local GemAppearance=RockFinish.Gems
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
@@ -189,9 +189,9 @@ function V.new(root,parent,audio,reducedMotion)
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view,faceted=GemAppearance.clone(source);view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
-  source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
+  source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,faceted=faceted,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={view=view,faceted=faceted,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -333,6 +333,7 @@ function V:update(dt,now)
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.effectColor) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
+   if r.faceted then GemAppearance.update(r.view,0) end
    if r.label then r.label.Enabled=false end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
@@ -454,7 +455,8 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .78 or 1);r.opacity=opacity end
+   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .72 or 1);r.opacity=opacity end
+   if r.faceted then GemAppearance.update(r.view,opacity) end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24

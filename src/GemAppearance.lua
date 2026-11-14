@@ -1,80 +1,131 @@
--- One shared local mesh gives loose gems hard normals and colored internal facets.
--- Keep the original replicated pickup as the authoritative source and fallback.
+-- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
-local template,mesh,attempted
-function Gem.prepare()
- if attempted then return end
- attempted=true
- local ok,result=pcall(function()
-  local assets=game:GetService('AssetService')
-  mesh=assert(assets:CreateEditableMesh())
-  local positions,ids={},{}
-  local function vertex(p)
-   positions[#positions+1]=p;ids[#ids+1]=mesh:AddVertex(p)
-   return #ids
-  end
-  local rings={}
-  for level,spec in ipairs({{.24,.5},{.5,.12},{.47,.04}}) do
-   rings[level]={}
-   for i=1,8 do
-    local angle=(i-1)*math.pi/4+math.pi/8
-    rings[level][i]=vertex(Vector3.new(math.cos(angle)*spec[1],spec[2],math.sin(angle)*spec[1]))
-   end
-  end
-  local top=vertex(Vector3.new(0,.5,0))
-  local tip=vertex(Vector3.new(.04,-.5,-.02))
-  local palette={Color3.fromRGB(255,145,181),Color3.fromRGB(190,24,72),Color3.fromRGB(102,9,52),
-   Color3.fromRGB(238,48,104),Color3.fromRGB(255,202,205),Color3.fromRGB(143,12,74),
-   Color3.fromRGB(239,76,155),Color3.fromRGB(76,8,43)}
+local templates,meshes,attempted={},{},false
+local rgb=Color3.fromRGB
+local definitions={
+ Quartz={sides=6,lean=.08,rings={{.18,.5},{.40,.27},{.45,-.30},{.22,-.47}},
+  colors={rgb(36,71,123),rgb(64,181,197),rgb(196,255,234),rgb(158,120,231)},aspect=Vector3.new(.68,1.55,.70)},
+ Ruby={sides=7,lean=-.12,rings={{.28,.46},{.48,.19},{.44,-.22},{.25,-.44}},
+  colors={rgb(65,8,62),rgb(218,26,83),rgb(255,167,123),rgb(255,86,164)},aspect=Vector3.new(.94,1.10,.84)},
+ Cobalt={sides=5,lean=.23,rings={{.07,.5},{.32,.27},{.47,-.25},{.20,-.48}},
+  colors={rgb(17,20,92),rgb(33,93,235),rgb(133,250,255),rgb(133,52,240)},aspect=Vector3.new(.74,1.60,.63)},
+ Violet={sides=6,lean=-.18,rings={{.08,.5},{.43,.10},{.38,-.25},{.07,-.50}},
+  colors={rgb(35,13,97),rgb(127,40,216),rgb(255,159,226),rgb(76,197,255)},aspect=Vector3.new(.70,1.46,.78)},
+ Emerald={sides=6,lean=.05,rings={{.31,.5},{.47,.28},{.47,-.29},{.26,-.47}},
+  colors={rgb(5,60,66),rgb(12,157,116),rgb(197,250,122),rgb(55,232,214)},aspect=Vector3.new(.88,1.34,.73)},
+}
+function Gem.key(value)
+ value=type(value)=='string' and value or 'Quartz'
+ value=value:match('^Rock:(%a+):') or value:match('^Block:(%a+):') or value
+ value=value:gsub('^Run','')
+ return definitions[value] and value or 'Quartz'
+end
+function Gem.tint(value) return definitions[Gem.key(value)].colors[2] end
+local function build(key,spec)
+ local assets=game:GetService('AssetService')
+ local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
+ local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
+ local positions,ids={},{}
+ local function vertex(p) positions[#positions+1]=p;ids[#ids+1]=mesh:AddVertex(p);return #ids end
+ local function color(p,sector)
+  local t=math.clamp(p.Y+.5,0,1)
+  local c=t<.52 and spec.colors[1]:Lerp(spec.colors[2],t/.52)
+   or spec.colors[2]:Lerp(spec.colors[3],(t-.52)/.48)
+  return c:Lerp(spec.colors[4],sector%3==0 and .45 or .08)
+ end
+ local function triangle(a,b,c,sector)
+  local n=(positions[b]-positions[a]):Cross(positions[c]-positions[a])
+  if n:Dot((positions[a]+positions[b]+positions[c])/3)<0 then b,c=c,b;n=-n end
+  local f=mesh:AddTriangle(ids[a],ids[b],ids[c]);local normal=mesh:AddNormal(n.Unit)
+  mesh:SetFaceNormals(f,{normal,normal,normal})
   local colors={}
-  for i,color in ipairs(palette) do colors[i]=mesh:AddColor(color:Lerp(Color3.new(0,0,0),.48),.72) end
-  local function triangle(a,b,c,color,gradient)
-   local normal=(positions[b]-positions[a]):Cross(positions[c]-positions[a])
-   local center=(positions[a]+positions[b]+positions[c])/3
-   if normal:Dot(center)<0 then b,c=c,b;normal=-normal end
-   local face=mesh:AddTriangle(ids[a],ids[b],ids[c])
-   local n=mesh:AddNormal(normal.Unit)
-   mesh:SetFaceNormals(face,{n,n,n})
-   mesh:SetFaceColors(face,{colors[color],colors[gradient or color],colors[color]})
+  for _,v in ipairs({a,b,c}) do
+   local tint=color(positions[v],sector)
+   colors[#colors+1]=mesh:AddColor(tint:Lerp(Color3.new(0,0,0),sector%2==0 and .12 or .38),.86)
   end
-  for i=1,8 do
-   local j=i%8+1
-   triangle(top,rings[1][i],rings[1][j],1)
-   triangle(rings[1][i],rings[2][i],rings[2][j],i,(i+2)%8+1)
-   triangle(rings[1][i],rings[2][j],rings[1][j],j)
-   triangle(rings[2][i],rings[3][i],rings[3][j],5)
-   triangle(rings[2][i],rings[3][j],rings[2][j],5)
-   triangle(rings[3][i],tip,rings[3][j],(i+3)%8+1,i)
+  mesh:SetFaceColors(f,colors)
+ end
+ local rings={}
+ for level,ring in ipairs(spec.rings) do
+  rings[level]={}
+  for i=1,spec.sides do
+   local angle=(i-1)*2*math.pi/spec.sides+.19
+   local radius=ring[1]*(i%3==0 and .88 or 1)
+   rings[level][i]=vertex(Vector3.new(math.cos(angle)*radius+ring[2]*spec.lean,ring[2],math.sin(angle)*radius))
   end
-  -- Tiny solid inclusions have stable local positions and true depth/parallax.
-  -- They share the gem mesh, so rotation never turns them into orbiting sparkles.
-  colors[9]=mesh:AddColor(Color3.fromRGB(255,243,255),1)
-  local random=Random.new(593)
-  for i=1,26 do
-   local y=random:NextNumber(-.24,.30)
-   local radius=(.38-math.abs(y)*.55)*math.sqrt(random:NextNumber())
-   local angle=random:NextNumber(0,math.pi*2)
-   local center=Vector3.new(math.cos(angle)*radius,y,math.sin(angle)*radius)
-   local size=random:NextNumber(.003,.006)
-   local a=vertex(center+Vector3.new(size,size,size))
-   local b=vertex(center+Vector3.new(-size,-size,size))
-   local c=vertex(center+Vector3.new(-size,size,-size))
-   local d=vertex(center+Vector3.new(size,-size,-size))
-   triangle(a,b,c,9);triangle(a,d,b,9);triangle(a,c,d,9);triangle(b,d,c,9)
+ end
+ local top=vertex(Vector3.new(spec.lean*.5,.5,0));local bottom=vertex(Vector3.new(-spec.lean*.45,-.5,0))
+ for i=1,spec.sides do
+  local j=i%spec.sides+1
+  triangle(top,rings[1][i],rings[1][j],i)
+  for k=1,#rings-1 do
+   triangle(rings[k][i],rings[k+1][i],rings[k+1][j],i)
+   triangle(rings[k][i],rings[k+1][j],rings[k][j],i+1)
   end
-  local part=assets:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box})
-  part.Name='FacetedRuby';part.Anchored=true;part.Color=Color3.new(1,1,1)
-  part.Material=Enum.Material.Neon;part.Transparency=.22;part.Reflectance=0;part.DoubleSided=true
-  part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
-  return part
- end)
- if ok then template=result
- elseif mesh then mesh:Destroy();mesh=nil end
+  triangle(rings[#rings][i],bottom,rings[#rings][j],i)
+ end
+ local random=Random.new(593+spec.sides*17)
+ local white=core:AddColor(rgb(255,255,255),1)
+ -- Larger opaque grains at multiple depths; never orbit, twinkle or reroll.
+ local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
+ for i=1,30 do
+  local y=random:NextNumber(-.30,.32)
+  local radius=(.28-math.abs(y)*.38)*math.sqrt(random:NextNumber())
+  local a=random:NextNumber(0,math.pi*2)
+  local center=Vector3.new(math.cos(a)*radius+y*spec.lean,y,math.sin(a)*radius)
+  local s=random:NextNumber(.008,.015)*(i%9==0 and 1.35 or 1)
+  local v,p={},{}
+  for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do
+   p[#p+1]=center+d*s;v[#v+1]=core:AddVertex(p[#p])
+   coreMin=coreMin:Min(p[#p]);coreMax=coreMax:Max(p[#p])
+  end
+  for _,face in ipairs({{1,3,5},{5,3,2},{2,3,6},{6,3,1},{1,5,4},{5,2,4},{2,6,4},{6,1,4}}) do
+   local x,y1,z=table.unpack(face)
+   if (p[y1]-p[x]):Cross(p[z]-p[x]):Dot((p[x]+p[y1]+p[z])/3-center)<0 then y1,z=z,y1 end
+   local f=core:AddTriangle(v[x],v[y1],v[z]);core:SetFaceColors(f,{white,white,white})
+  end
+ end
+ local function part(m,name)
+  local p=assets:CreateMeshPartAsync(Content.fromObject(m),{CollisionFidelity=Enum.CollisionFidelity.Box})
+  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
+  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+  return p
+ end
+ local shell=part(mesh,'Faceted'..key)
+ local grains=part(core,'FixedInclusions')
+ local lo,hi=positions[1],positions[1]
+ for _,p in ipairs(positions) do lo=lo:Min(p);hi=hi:Max(p) end
+ grains:SetAttribute('SizeRatio',(coreMax-coreMin)/(hi-lo))
+ grains:SetAttribute('CenterRatio',((coreMin+coreMax)-(lo+hi))*.5/(hi-lo))
+ grains.Parent=shell;shell:SetAttribute('GemAspect',spec.aspect);shell.Transparency=.28
+ return shell
+end
+function Gem.prepare()
+ if attempted then return end;attempted=true
+ for _,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+  local first=#meshes
+  local ok,result=pcall(build,key,definitions[key])
+  if ok then templates[key]=result
+  else
+   for i=#meshes,first+1,-1 do meshes[i]:Destroy();meshes[i]=nil end
+   if warn then warn('GemAppearance '..key..': '..tostring(result)) end
+  end
+ end
 end
 function Gem.clone(source)
+ local template=templates[Gem.key(source:GetAttribute('Mineral'))]
  if not template or source.Name=='PressedCargo' then return source:Clone(),false end
- local part=template:Clone();part.Size=source.Size;part.CFrame=source.CFrame
- for key,value in pairs(source:GetAttributes()) do part:SetAttribute(key,value) end
- return part,true
+ local p=template:Clone();p.Size=source.Size*template:GetAttribute('GemAspect');p.CFrame=source.CFrame
+ for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
+ Gem.update(p,1)
+ return p,true
+end
+function Gem.update(part,opacity)
+ local core=part:FindFirstChild('FixedInclusions')
+ if core then
+  core.Size=part.Size*core:GetAttribute('SizeRatio')
+  core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
+  core.Transparency=1-opacity
+ end
 end
 return Gem

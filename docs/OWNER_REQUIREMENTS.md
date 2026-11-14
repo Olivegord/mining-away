@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — mineral variety and recessed veins
+
+Make fixed white interior specks visible, increase the color gradients, and give each ore its own palette and shape. Use the newest Mines board crystal sketches for varied silhouettes. Remove mineable-rock modifier outlines and replace them with small, deeply inset mineral channels releasing soft light and slow glowing particles. The attached blue seam photo is the vein reference, with substantially more recess requested. This supersedes the earlier all-red loose ore and modifier outline direction; preserve the white aiming preview and the existing pickup display.
+
 ## November 14 — Pinterest particles and volumetric gems
 
 Apply the Mines board’s particle palettes, shapes and smooth eased motion. The owner especially favors pin 968344357402992555 for gem volume, color gradients, luminous edges and white inclusions with fixed positions inside the stone. Aim toward that reference in Roblox. The loose gems should feel crystalline and internally detailed. The owner authorized implementation after the reference review.

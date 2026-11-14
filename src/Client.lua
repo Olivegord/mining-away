@@ -1593,6 +1593,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  presentation:beginFrame()
  chargerView:update(dt)
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
+ local reducedVeins,stillVeins=BeamVFX.reduced(),CrystalImpactView.reducedMotion()
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
@@ -1601,6 +1602,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
    rockDamage.feedback:react(r,now)
   end
   if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
+  if r.stoneGradient then RockFinish.veins(r,now,reducedVeins,stillVeins) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

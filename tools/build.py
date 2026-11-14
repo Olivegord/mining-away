@@ -91,7 +91,7 @@ def module_bundle(names):
   names=tuple(n for name in names for n in (('ImpactRubble','HeavyBeamFX','RoleVisuals') if name=='RoleVisuals' else (name,)))
  if 'RoleEffectView' in names and 'NomadView' not in names:
   names=tuple(n for name in names for n in (('NomadView','RoleEffectView') if name=='RoleEffectView' else (name,)))
- if 'RockFinish' not in names and any(n in names for n in ('WorkEffects','RoleVisuals','CrystalImpactView')):
+ if 'RockFinish' not in names and any(n in names for n in ('WorkEffects','RoleVisuals','CrystalImpactView','PickupView','PickupDisplay')):
   names=('RockFinish',)+tuple(names)
  if any(n in names for n in ('PickupDisplay','PickupView')) and 'RockModifierView' not in names:
   pickup=next(n for n in names if n in ('PickupDisplay','PickupView'))
@@ -103,10 +103,11 @@ def module_bundle(names):
    # Keep World helpers scoped to World; the game controller is near Luau's local limit.
    biome=(ROOT/'src/QuarryBiomes.lua').read_text()
    code=code.replace("require('./QuarryBiomes')",'(function()\n'+biome+'\nend)()')
-  if name=='PickupView':
-   appearance=(ROOT/'src/GemAppearance.lua').read_text()
-   code=code.replace("local GemAppearance=require('./GemAppearance')",'local GemAppearance=(function()\n'+appearance+'\nend)()')
+  if name=='RockFinish':
+   for embedded in ('GemAppearance','RockVeins'):
+    code=code.replace("require('./"+embedded+"')",'(function()\n'+(ROOT/'src'/f'{embedded}.lua').read_text()+'\nend)()')
   if name=='CrystalCuts':
+   code=code.replace("require('./CrystalVeins')",'(function()\n'+(ROOT/'src/CrystalVeins.lua').read_text()+'\nend)()')
    geometry=(ROOT/'src/CrystalGeometry.lua').read_text()
    code=code.replace("local CrystalGeometry=require('./CrystalGeometry')",'local CrystalGeometry=(function()\n'+geometry+'\nend)()')
   if 'Workshop' in names[:names.index(name)]:code=code.replace("local Workshop=require('./Workshop')\n",'')

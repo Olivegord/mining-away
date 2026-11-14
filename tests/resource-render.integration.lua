@@ -83,11 +83,11 @@ assert(not fixedRecord.rockOutline and fixedRecord.view.Color==rockColor,'cleari
 fixed:SetAttribute('RockModifiers',Mining.ROCK_MODIFIERS.Frosted);fixedRecord.dirty=true
 local material=fixedRecord.view.Material
 renderResource(fixedRecord,85)
-outline=assert(fixedRecord.rockOutline)
-assert(outline.Enabled and outline.OutlineColor.B>outline.OutlineColor.R and outline.FillTransparency==1)
+assert(not fixedRecord.rockOutline,'a modifier restored the removed silhouette outline')
 assert(fixedRecord.view.Color.R==rockColor.R and fixedRecord.view.Color.G==rockColor.G and fixedRecord.view.Material==material,'Frosted changed the red mineral')
 renderResource(fixedRecord,86,Vector3.zero,30,8)
+outline=assert(fixedRecord.rockOutline)
 assert(outline.Enabled and outline.OutlineColor.R>.9)
 renderResource(fixedRecord,87)
-assert(outline.Enabled and outline.OutlineColor.B>outline.OutlineColor.R,'clearing the preview should restore the modifier outline')
+assert(not fixedRecord.rockOutline,'clearing the preview should remove the outline even on modified rocks')
 print('PASS production resource renderer: immediate size snaps, replicated stage turns, idle fast path and no duplicate effects over 7200 stable frames')

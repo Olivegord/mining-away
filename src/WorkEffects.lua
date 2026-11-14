@@ -565,7 +565,7 @@ function W:courier(drone,record,now)
      local key,_,packed=Workshop.crystalCargo(material)
      local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
      packed=packed==true
-     if not slot.cargo or slot.packed~=packed then
+     if not slot.cargo or slot.packed~=packed or not packed then
       if slot.cargo then slot.cargo:Destroy() end
       local mesh
       if not packed then
@@ -577,17 +577,25 @@ function W:courier(drone,record,now)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
       slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
       slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
+      slot.faceted=false
+      if not packed then
+       slot.cargo:SetAttribute('Mineral',key or material);slot.cargo.Size=cargoRawSize
+       local gem,faceted=RockFinish.Gems.clone(slot.cargo)
+       if faceted then
+        local old=slot.cargo;gem.Name='MountedCargo';gem.Parent=old.Parent;old:Destroy()
+        slot.cargo=gem;slot.faceted=true
+       else gem:Destroy() end
+      end
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=not packed and Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
-      or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
+     slot.cargo.Color=slot.faceted and WHITE or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize*(slot.cargo:GetAttribute('GemAspect') or Vector3.one)
      if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
      slot.packed=packed
     end
     local cargo=slot.cargo
-    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or 0
+    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and .28 or 0)
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
     size=cargo.Size
@@ -615,10 +623,15 @@ function W:courier(drone,record,now)
    end
    drawClaw(slot,cargoFrame,size,closed,i<=parcelUnits or receiving)
   end
+  for _,slot in ipairs(fx.mounts) do
+   if slot.cargo and slot.faceted then
+    RockFinish.Gems.update(slot.cargo,math.clamp((1-slot.cargo.Transparency)/.72,0,1))
+   end
+  end
   for i=count+1,#fx.mounts do
    local slot=fx.mounts[i];slot.hub.Transparency=1
    for _,finger in ipairs(slot.fingers) do for _,segment in ipairs(finger) do segment.Transparency=1 end end
-   if slot.cargo then slot.cargo.Transparency=1 end
+   if slot.cargo then slot.cargo.Transparency=1;if slot.faceted then RockFinish.Gems.update(slot.cargo,0) end end
    if slot.dust then slot.dust.Enabled=false end
   end
  end

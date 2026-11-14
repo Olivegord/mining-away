@@ -140,7 +140,6 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
-W.RAW_CRYSTAL_COLOR={204,32,47}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
@@ -2731,14 +2730,250 @@ end)()
 local RockFinish = (function()
 -- Box-mapped side faces keep the gradient attached as the rock shrinks.
 local Finish={}
-local STONE=Color3.fromRGB(117,115,112)
+Finish.Gems=(function()
+-- Shared per-mineral shells and opaque, fixed interior grains.
+local Gem={}
+local templates,meshes,attempted={},{},false
+local rgb=Color3.fromRGB
+local definitions={
+ Quartz={sides=6,lean=.08,rings={{.18,.5},{.40,.27},{.45,-.30},{.22,-.47}},
+  colors={rgb(36,71,123),rgb(64,181,197),rgb(196,255,234),rgb(158,120,231)},aspect=Vector3.new(.68,1.55,.70)},
+ Ruby={sides=7,lean=-.12,rings={{.28,.46},{.48,.19},{.44,-.22},{.25,-.44}},
+  colors={rgb(65,8,62),rgb(218,26,83),rgb(255,167,123),rgb(255,86,164)},aspect=Vector3.new(.94,1.10,.84)},
+ Cobalt={sides=5,lean=.23,rings={{.07,.5},{.32,.27},{.47,-.25},{.20,-.48}},
+  colors={rgb(17,20,92),rgb(33,93,235),rgb(133,250,255),rgb(133,52,240)},aspect=Vector3.new(.74,1.60,.63)},
+ Violet={sides=6,lean=-.18,rings={{.08,.5},{.43,.10},{.38,-.25},{.07,-.50}},
+  colors={rgb(35,13,97),rgb(127,40,216),rgb(255,159,226),rgb(76,197,255)},aspect=Vector3.new(.70,1.46,.78)},
+ Emerald={sides=6,lean=.05,rings={{.31,.5},{.47,.28},{.47,-.29},{.26,-.47}},
+  colors={rgb(5,60,66),rgb(12,157,116),rgb(197,250,122),rgb(55,232,214)},aspect=Vector3.new(.88,1.34,.73)},
+}
+function Gem.key(value)
+ value=type(value)=='string' and value or 'Quartz'
+ value=value:match('^Rock:(%a+):') or value:match('^Block:(%a+):') or value
+ value=value:gsub('^Run','')
+ return definitions[value] and value or 'Quartz'
+end
+function Gem.tint(value) return definitions[Gem.key(value)].colors[2] end
+local function build(key,spec)
+ local assets=game:GetService('AssetService')
+ local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
+ local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
+ local positions,ids={},{}
+ local function vertex(p) positions[#positions+1]=p;ids[#ids+1]=mesh:AddVertex(p);return #ids end
+ local function color(p,sector)
+  local t=math.clamp(p.Y+.5,0,1)
+  local c=t<.52 and spec.colors[1]:Lerp(spec.colors[2],t/.52)
+   or spec.colors[2]:Lerp(spec.colors[3],(t-.52)/.48)
+  return c:Lerp(spec.colors[4],sector%3==0 and .45 or .08)
+ end
+ local function triangle(a,b,c,sector)
+  local n=(positions[b]-positions[a]):Cross(positions[c]-positions[a])
+  if n:Dot((positions[a]+positions[b]+positions[c])/3)<0 then b,c=c,b;n=-n end
+  local f=mesh:AddTriangle(ids[a],ids[b],ids[c]);local normal=mesh:AddNormal(n.Unit)
+  mesh:SetFaceNormals(f,{normal,normal,normal})
+  local colors={}
+  for _,v in ipairs({a,b,c}) do
+   local tint=color(positions[v],sector)
+   colors[#colors+1]=mesh:AddColor(tint:Lerp(Color3.new(0,0,0),sector%2==0 and .12 or .38),.86)
+  end
+  mesh:SetFaceColors(f,colors)
+ end
+ local rings={}
+ for level,ring in ipairs(spec.rings) do
+  rings[level]={}
+  for i=1,spec.sides do
+   local angle=(i-1)*2*math.pi/spec.sides+.19
+   local radius=ring[1]*(i%3==0 and .88 or 1)
+   rings[level][i]=vertex(Vector3.new(math.cos(angle)*radius+ring[2]*spec.lean,ring[2],math.sin(angle)*radius))
+  end
+ end
+ local top=vertex(Vector3.new(spec.lean*.5,.5,0));local bottom=vertex(Vector3.new(-spec.lean*.45,-.5,0))
+ for i=1,spec.sides do
+  local j=i%spec.sides+1
+  triangle(top,rings[1][i],rings[1][j],i)
+  for k=1,#rings-1 do
+   triangle(rings[k][i],rings[k+1][i],rings[k+1][j],i)
+   triangle(rings[k][i],rings[k+1][j],rings[k][j],i+1)
+  end
+  triangle(rings[#rings][i],bottom,rings[#rings][j],i)
+ end
+ local random=Random.new(593+spec.sides*17)
+ local white=core:AddColor(rgb(255,255,255),1)
+ -- Larger opaque grains at multiple depths; never orbit, twinkle or reroll.
+ local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
+ for i=1,30 do
+  local y=random:NextNumber(-.30,.32)
+  local radius=(.28-math.abs(y)*.38)*math.sqrt(random:NextNumber())
+  local a=random:NextNumber(0,math.pi*2)
+  local center=Vector3.new(math.cos(a)*radius+y*spec.lean,y,math.sin(a)*radius)
+  local s=random:NextNumber(.008,.015)*(i%9==0 and 1.35 or 1)
+  local v,p={},{}
+  for _,d in ipairs({Vector3.xAxis,-Vector3.xAxis,Vector3.yAxis,-Vector3.yAxis,Vector3.zAxis,-Vector3.zAxis}) do
+   p[#p+1]=center+d*s;v[#v+1]=core:AddVertex(p[#p])
+   coreMin=coreMin:Min(p[#p]);coreMax=coreMax:Max(p[#p])
+  end
+  for _,face in ipairs({{1,3,5},{5,3,2},{2,3,6},{6,3,1},{1,5,4},{5,2,4},{2,6,4},{6,1,4}}) do
+   local x,y1,z=table.unpack(face)
+   if (p[y1]-p[x]):Cross(p[z]-p[x]):Dot((p[x]+p[y1]+p[z])/3-center)<0 then y1,z=z,y1 end
+   local f=core:AddTriangle(v[x],v[y1],v[z]);core:SetFaceColors(f,{white,white,white})
+  end
+ end
+ local function part(m,name)
+  local p=assets:CreateMeshPartAsync(Content.fromObject(m),{CollisionFidelity=Enum.CollisionFidelity.Box})
+  p.Name=name;p.Anchored=true;p.Color=Color3.new(1,1,1);p.Material=Enum.Material.Neon
+  p.Reflectance=0;p.DoubleSided=true;p.CanCollide=false;p.CanTouch=false;p.CanQuery=false;p.CastShadow=false
+  return p
+ end
+ local shell=part(mesh,'Faceted'..key)
+ local grains=part(core,'FixedInclusions')
+ local lo,hi=positions[1],positions[1]
+ for _,p in ipairs(positions) do lo=lo:Min(p);hi=hi:Max(p) end
+ grains:SetAttribute('SizeRatio',(coreMax-coreMin)/(hi-lo))
+ grains:SetAttribute('CenterRatio',((coreMin+coreMax)-(lo+hi))*.5/(hi-lo))
+ grains.Parent=shell;shell:SetAttribute('GemAspect',spec.aspect);shell.Transparency=.28
+ return shell
+end
+function Gem.prepare()
+ if attempted then return end;attempted=true
+ for _,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
+  local first=#meshes
+  local ok,result=pcall(build,key,definitions[key])
+  if ok then templates[key]=result
+  else
+   for i=#meshes,first+1,-1 do meshes[i]:Destroy();meshes[i]=nil end
+   if warn then warn('GemAppearance '..key..': '..tostring(result)) end
+  end
+ end
+end
+function Gem.clone(source)
+ local template=templates[Gem.key(source:GetAttribute('Mineral'))]
+ if not template or source.Name=='PressedCargo' then return source:Clone(),false end
+ local p=template:Clone();p.Size=source.Size*template:GetAttribute('GemAspect');p.CFrame=source.CFrame
+ for k,v in pairs(source:GetAttributes()) do p:SetAttribute(k,v) end
+ Gem.update(p,1)
+ return p,true
+end
+function Gem.update(part,opacity)
+ local core=part:FindFirstChild('FixedInclusions')
+ if core then
+  core.Size=part.Size*core:GetAttribute('SizeRatio')
+  core.CFrame=part.CFrame*CFrame.new(part.Size*core:GetAttribute('CenterRatio'))
+  core.Transparency=1-opacity
+ end
+end
+return Gem
+
+end)()
+local Veins=(function()
+-- A bounded set of nearby channel lights. Geometry comes from actual inset
+-- channels on the replicated rock; local effects track its exact rendered pose.
+local V={}
+local active=0
+local LIMIT,RANGE=20,76
+local function release(record)
+ if record.veinFX then record.veinFX.root:Destroy();record.veinFX=nil end
+end
+local function make(record)
+ local encoded=record.view:GetAttribute('InsetVeins')
+ if not encoded then return nil end
+ local ok,paths=pcall(function() return game:GetService('HttpService'):JSONDecode(encoded) end)
+ if not ok then return nil end
+ local root=Instance.new('Folder');root.Name='InsetMineralLight'
+ local state={root=root,segments={},vents={},seed=record.source:GetAttribute('StageSeed') or 1}
+ local color=record.baseColor
+ local white=Color3.fromRGB(231,255,249)
+ for _,path in ipairs(paths) do
+  local points={}
+  for _,p in ipairs(path.points) do points[#points+1]=Vector3.new(p[1],p[2],p[3]) end
+  for i=1,#points-1 do
+   local part=Instance.new('Part');part.Name='RecessedVeinCore';part.Anchored=true
+   part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
+   part.Material=Enum.Material.Neon;part.Color=color:Lerp(white,i%3==0 and .38 or .12)
+   part.Parent=root
+   state.segments[#state.segments+1]={part=part,a=points[i],b=points[i+1],width=path.width*((i==1 or i==#points-1) and .16 or .29)}
+  end
+  local index=math.ceil(#points*.58);local p=path.points[index]
+  local anchor=Instance.new('Attachment');anchor.Name='VeinVent';anchor.Parent=record.view
+  local endPoint=Instance.new('Attachment');endPoint.Name='VeinRayEnd';endPoint.Parent=record.view
+  local beam=Instance.new('Beam');beam.Name='SoftEscapingLight';beam.FaceCamera=true
+  beam.Attachment0=anchor;beam.Attachment1=endPoint;beam.Segments=3;beam.LightEmission=1;beam.LightInfluence=0
+  beam.Color=ColorSequence.new(white:Lerp(color,.30),color)
+  beam.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.76),NumberSequenceKeypoint.new(.30,.91),NumberSequenceKeypoint.new(1,1)})
+  beam.Parent=anchor
+  local dust=Instance.new('ParticleEmitter');dust.Name='SlowVeinMotes'
+  dust.Texture='rbxasset://textures/ui/VR/circleWhite.png';dust.LightEmission=1;dust.LightInfluence=0;dust.Brightness=1.4
+  dust.Color=ColorSequence.new(white:Lerp(color,.32),color)
+  dust.Rate=1.7;dust.Lifetime=NumberRange.new(1.5,2.4);dust.Speed=NumberRange.new(.22,.52)
+  dust.Drag=.5;dust.Acceleration=Vector3.new(0,.24,0);dust.SpreadAngle=Vector2.new(22,22)
+  dust.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,.065),NumberSequenceKeypoint.new(.25,.10),NumberSequenceKeypoint.new(1,0)})
+  dust.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.28),NumberSequenceKeypoint.new(.6,.40),NumberSequenceKeypoint.new(1,1)})
+  dust.EmissionDirection=Enum.NormalId.Top;dust.Enabled=false;dust.Parent=anchor
+  state.vents[#state.vents+1]={a=anchor,b=endPoint,beam=beam,dust=dust,point=points[index],normal=Vector3.new(p[4],p[5],p[6])}
+ end
+ active+=1
+ root.Destroying:Once(function()
+  active-=1
+  for _,vent in ipairs(state.vents) do vent.a:Destroy();vent.b:Destroy() end
+ end)
+ root.Parent=record.view
+ return state
+end
+function V.update(record,now,reducedEffects,reducedMotion)
+ local view=record.view
+ if record.visual.broken or view.Transparency>=1 or (view.LocalTransparencyModifier or 0)>=1 then release(record);return end
+ local state=record.veinFX
+ if now>=(record.veinCheckAt or 0) then
+  record.veinCheckAt=now+.24
+  local camera=workspace.CurrentCamera
+  record.veinNear=camera and (camera.CFrame.Position-view.Position).Magnitude<RANGE
+  if not record.veinNear then release(record);return end
+  if not state and active<LIMIT then
+   state=make(record);record.veinFX=state
+  end
+ end
+ if not state then return end
+ local size,frame=view.Size,view.CFrame
+ if state.size~=size or state.frame~=frame then
+  state.size=size;state.frame=frame
+  local scale=math.min(size.X,size.Z)
+  for _,line in ipairs(state.segments) do
+   local a,b=frame:PointToWorldSpace(line.a*size),frame:PointToWorldSpace(line.b*size)
+   line.part.Size=Vector3.new(scale*line.width,scale*line.width*.68,(b-a).Magnitude+.012)
+   line.part.CFrame=CFrame.lookAt((a+b)*.5,b)
+  end
+  for _,vent in ipairs(state.vents) do
+   local point=vent.point*size
+   local normal=vent.normal
+   local across=normal:Cross(Vector3.yAxis)
+   if across.Magnitude<.01 then across=Vector3.xAxis end
+   across=across.Unit
+   vent.a.CFrame=CFrame.fromMatrix(point,across,normal,across:Cross(normal))
+   vent.b.Position=point+normal*math.clamp(scale*.26,.45,1.15)+Vector3.yAxis*.16
+   vent.beam.Width0=scale*.035;vent.beam.Width1=scale*.18
+  end
+ end
+ if now<(state.nextAt or 0) then return end
+ state.nextAt=now+.10
+ local breath=reducedMotion and 1 or .86+.14*math.sin(now*.85+state.seed)
+ for _,line in ipairs(state.segments) do line.part.Transparency=1-(1-view.Transparency)*breath end
+ for _,vent in ipairs(state.vents) do
+  vent.beam.Enabled=not reducedEffects
+  vent.beam.Brightness=breath*.85
+  vent.dust.Enabled=not reducedEffects and not reducedMotion
+ end
+end
+return V
+
+end)()
+Finish.veins=Veins.update
+local STONE=Color3.fromRGB(91,96,107)
 local SHADE=Color3.fromRGB(15,13,14)
 Finish.StoneLight=Color3.fromRGB(188,177,164)
 local GRADIENT='rbxassetid://117998501972844'
 local FACES={Enum.NormalId.Front,Enum.NormalId.Right,Enum.NormalId.Back,Enum.NormalId.Left}
 
 function Finish.apply(view,mineral)
- local tint=STONE:Lerp(mineral,.22)
+ local tint=STONE:Lerp(mineral,.12)
  view.Material=Enum.Material.Concrete
  view.MaterialVariant=''
  view.Reflectance=0
@@ -3349,7 +3584,7 @@ function W:courier(drone,record,now)
      local key,_,packed=Workshop.crystalCargo(material)
      local tier=key and Workshop.CRYSTAL_BY_MATERIAL[key]
      packed=packed==true
-     if not slot.cargo or slot.packed~=packed then
+     if not slot.cargo or slot.packed~=packed or not packed then
       if slot.cargo then slot.cargo:Destroy() end
       local mesh
       if not packed then
@@ -3361,17 +3596,25 @@ function W:courier(drone,record,now)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
       slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
       slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
+      slot.faceted=false
+      if not packed then
+       slot.cargo:SetAttribute('Mineral',key or material);slot.cargo.Size=cargoRawSize
+       local gem,faceted=RockFinish.Gems.clone(slot.cargo)
+       if faceted then
+        local old=slot.cargo;gem.Name='MountedCargo';gem.Parent=old.Parent;old:Destroy()
+        slot.cargo=gem;slot.faceted=true
+       else gem:Destroy() end
+      end
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=not packed and Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
-      or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
-     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
+     slot.cargo.Color=slot.faceted and WHITE or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
+     slot.cargo.Size=packed and cargoBlockSize or cargoRawSize*(slot.cargo:GetAttribute('GemAspect') or Vector3.one)
      if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
      slot.packed=packed
     end
     local cargo=slot.cargo
-    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or 0
+    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and .28 or 0)
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
     size=cargo.Size
@@ -3399,10 +3642,15 @@ function W:courier(drone,record,now)
    end
    drawClaw(slot,cargoFrame,size,closed,i<=parcelUnits or receiving)
   end
+  for _,slot in ipairs(fx.mounts) do
+   if slot.cargo and slot.faceted then
+    RockFinish.Gems.update(slot.cargo,math.clamp((1-slot.cargo.Transparency)/.72,0,1))
+   end
+  end
   for i=count+1,#fx.mounts do
    local slot=fx.mounts[i];slot.hub.Transparency=1
    for _,finger in ipairs(slot.fingers) do for _,segment in ipairs(finger) do segment.Transparency=1 end end
-   if slot.cargo then slot.cargo.Transparency=1 end
+   if slot.cargo then slot.cargo.Transparency=1;if slot.faceted then RockFinish.Gems.update(slot.cargo,0) end end
    if slot.dust then slot.dust.Enabled=false end
   end
  end
@@ -13164,7 +13412,7 @@ function V.glow(mask)
 end
 
 function V.rockOutline(record)
- local tint=record.previewed and white or V.glow(record.modifiers or 0)
+ local tint=record.previewed and white or nil
  local view,outline=record.view,record.rockOutline
  if not tint and outline then
   outline:Destroy();record.rockOutline=nil
@@ -13479,32 +13727,6 @@ local function burst(view,state,lowFlash,kind)
  end
 end
 
-local function rockRings(record,state,visible)
- local base=state.ringBase
- if not visible then
-  if base then base.Rings.Enabled=false end
-  return
- end
- local view=record.view
- if not base then
-  base=carrier(view,'RockModifierRings')
-  local gui=Instance.new('SurfaceGui');gui.Name='Rings';gui.Face=Enum.NormalId.Top
-  gui.CanvasSize=Vector2.new(256,256);gui.LightInfluence=0;gui.Parent=base
-  state.rings=V.groundRings(gui);state.ringBase=base
- end
- local ground=record.source:GetAttribute('GroundY') or view.Position.Y-view.Size.Y*.5
- local center=record.center or view.Position
- local size=view.Size
- local span=Vector3.new(math.max(2.6,size.X*2.15),.02,math.max(2.6,size.Z*2.15))
- local position=Vector3.new(center.X,ground+.046,center.Z)
- if base.Size~=span then base.Size=span end
- if base.Position~=position then base.Position=position end
- if not base.Rings.Enabled then base.Rings.Enabled=true end
- if state.ringMask~=record.modifiers then
-  state.ringMask=record.modifiers;V.drawRings(state.rings,state.ringMask,.63)
- end
-end
-
 function V.rock(record,now,lowFlash,eventKind)
  local mask=record.modifiers
  local view=record.view
@@ -13525,7 +13747,7 @@ function V.rock(record,now,lowFlash,eventKind)
  local near=BeamVFX.near(view.Position,84)
  local broken=record.visual.broken
  local visible=not broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
- rockRings(record,state,near and visible)
+ -- Mineral channels replace modifier silhouette and ground outlines.
  if not near or (not visible and eventKind~='break') or BeamVFX.reduced() then return end
  if broken and state.finished then return end
  if state.mask~=mask then
@@ -13754,89 +13976,7 @@ local PickupView = (function()
 -- neither a magnet animation nor a disappearing view can grant backpack units.
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
-local GemAppearance=(function()
--- One shared local mesh gives loose gems hard normals and colored internal facets.
--- Keep the original replicated pickup as the authoritative source and fallback.
-local Gem={}
-local template,mesh,attempted
-function Gem.prepare()
- if attempted then return end
- attempted=true
- local ok,result=pcall(function()
-  local assets=game:GetService('AssetService')
-  mesh=assert(assets:CreateEditableMesh())
-  local positions,ids={},{}
-  local function vertex(p)
-   positions[#positions+1]=p;ids[#ids+1]=mesh:AddVertex(p)
-   return #ids
-  end
-  local rings={}
-  for level,spec in ipairs({{.24,.5},{.5,.12},{.47,.04}}) do
-   rings[level]={}
-   for i=1,8 do
-    local angle=(i-1)*math.pi/4+math.pi/8
-    rings[level][i]=vertex(Vector3.new(math.cos(angle)*spec[1],spec[2],math.sin(angle)*spec[1]))
-   end
-  end
-  local top=vertex(Vector3.new(0,.5,0))
-  local tip=vertex(Vector3.new(.04,-.5,-.02))
-  local palette={Color3.fromRGB(255,145,181),Color3.fromRGB(190,24,72),Color3.fromRGB(102,9,52),
-   Color3.fromRGB(238,48,104),Color3.fromRGB(255,202,205),Color3.fromRGB(143,12,74),
-   Color3.fromRGB(239,76,155),Color3.fromRGB(76,8,43)}
-  local colors={}
-  for i,color in ipairs(palette) do colors[i]=mesh:AddColor(color:Lerp(Color3.new(0,0,0),.48),.72) end
-  local function triangle(a,b,c,color,gradient)
-   local normal=(positions[b]-positions[a]):Cross(positions[c]-positions[a])
-   local center=(positions[a]+positions[b]+positions[c])/3
-   if normal:Dot(center)<0 then b,c=c,b;normal=-normal end
-   local face=mesh:AddTriangle(ids[a],ids[b],ids[c])
-   local n=mesh:AddNormal(normal.Unit)
-   mesh:SetFaceNormals(face,{n,n,n})
-   mesh:SetFaceColors(face,{colors[color],colors[gradient or color],colors[color]})
-  end
-  for i=1,8 do
-   local j=i%8+1
-   triangle(top,rings[1][i],rings[1][j],1)
-   triangle(rings[1][i],rings[2][i],rings[2][j],i,(i+2)%8+1)
-   triangle(rings[1][i],rings[2][j],rings[1][j],j)
-   triangle(rings[2][i],rings[3][i],rings[3][j],5)
-   triangle(rings[2][i],rings[3][j],rings[2][j],5)
-   triangle(rings[3][i],tip,rings[3][j],(i+3)%8+1,i)
-  end
-  -- Tiny solid inclusions have stable local positions and true depth/parallax.
-  -- They share the gem mesh, so rotation never turns them into orbiting sparkles.
-  colors[9]=mesh:AddColor(Color3.fromRGB(255,243,255),1)
-  local random=Random.new(593)
-  for i=1,26 do
-   local y=random:NextNumber(-.24,.30)
-   local radius=(.38-math.abs(y)*.55)*math.sqrt(random:NextNumber())
-   local angle=random:NextNumber(0,math.pi*2)
-   local center=Vector3.new(math.cos(angle)*radius,y,math.sin(angle)*radius)
-   local size=random:NextNumber(.003,.006)
-   local a=vertex(center+Vector3.new(size,size,size))
-   local b=vertex(center+Vector3.new(-size,-size,size))
-   local c=vertex(center+Vector3.new(-size,size,-size))
-   local d=vertex(center+Vector3.new(size,-size,-size))
-   triangle(a,b,c,9);triangle(a,d,b,9);triangle(a,c,d,9);triangle(b,d,c,9)
-  end
-  local part=assets:CreateMeshPartAsync(Content.fromObject(mesh),{CollisionFidelity=Enum.CollisionFidelity.Box})
-  part.Name='FacetedRuby';part.Anchored=true;part.Color=Color3.new(1,1,1)
-  part.Material=Enum.Material.Neon;part.Transparency=.22;part.Reflectance=0;part.DoubleSided=true
-  part.CanCollide=false;part.CanTouch=false;part.CanQuery=false;part.CastShadow=false
-  return part
- end)
- if ok then template=result
- elseif mesh then mesh:Destroy();mesh=nil end
-end
-function Gem.clone(source)
- if not template or source.Name=='PressedCargo' then return source:Clone(),false end
- local part=template:Clone();part.Size=source.Size;part.CFrame=source.CFrame
- for key,value in pairs(source:GetAttributes()) do part:SetAttribute(key,value) end
- return part,true
-end
-return Gem
-
-end)()
+local GemAppearance=RockFinish.Gems
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
@@ -14023,9 +14163,9 @@ function V.new(root,parent,audio,reducedMotion)
   local position=source:GetAttribute('Position');if typeof(position)~='Vector3' then return end
   local view,faceted=GemAppearance.clone(source);view.Name='CollectibleOre';view.LocalTransparencyModifier=0
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
-  source.LocalTransparencyModifier=1;view.Transparency=1;view.Parent=parent
+  source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,faceted=faceted,pos=position,size=source.Size,color=source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={view=view,faceted=faceted,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -14167,6 +14307,7 @@ function V:update(dt,now)
   if dust and not r.liftDust then r.liftDust=liftDust(r.view,r.effectColor) end
   if r.liftDust then r.liftDust.Enabled=dust==true end
   if done then
+   if r.faceted then GemAppearance.update(r.view,0) end
    if r.label then r.label.Enabled=false end
    finishTrail(self,r,now);removeIdle(self,r)
    if r.liftDust and not r.liftTail then r.liftTail=now+.42 end
@@ -14288,7 +14429,8 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .78 or 1);r.opacity=opacity end
+   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .72 or 1);r.opacity=opacity end
+   if r.faceted then GemAppearance.update(r.view,opacity) end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
     local loose=live and not seated and not pulling and not docking and displayAt>=r.born and opacity>.24
@@ -16704,6 +16846,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
  presentation:beginFrame()
  chargerView:update(dt)
  local lowFlash=player:GetAttribute('ReducedFlashing')==true
+ local reducedVeins,stillVeins=BeamVFX.reduced(),CrystalImpactView.reducedMotion()
  for _,r in pairs(resources) do
   if impactFreeze:holds(r) then continue end
   local dirty=r.dirty
@@ -16712,6 +16855,7 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
    rockDamage.feedback:react(r,now)
   end
   if r.modifiers~=0 or r.modifierFX then RockModifierView.rock(r,now,lowFlash,fracture) end
+  if r.stoneGradient then RockFinish.veins(r,now,reducedVeins,stillVeins) end
  end
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)

@@ -433,6 +433,10 @@ if scene.runStart and scene.classicCrystal then
  local originalHalves=CrystalCuts.splitOriginal(scene.classicCrystal)
  if originalHalves then originalHalves.Parent=fractures end
  table.insert(scene.crystalCuts.variants,'Original')
+ for _,name in ipairs(CrystalCuts.variants) do
+  local shape=scene.crystalCuts[name]
+  if shape then scene.crystalCuts[name]=CrystalCuts.inset(shape) end
+ end
  scene.crystalCuts.Gem=CrystalCuts.build('Gem')
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
@@ -467,8 +471,12 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
+ local choices=CrystalCuts.mineralCuts[field.cfg.Material or field.cfg.Key]
  local variant=original and field.cfg.ContinuousCrystals and scene.crystalCuts and
-  scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
+  (choices or scene.crystalCuts.variants)[seed:NextInteger(1,#(choices or scene.crystalCuts.variants))]
+ if variant and not table.find(scene.crystalCuts.variants,variant) then
+  variant=scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
+ end
  local cut=variant and scene.crystalCuts[variant]
  local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
  if variant then part:SetAttribute('CrystalCut',variant) end
@@ -868,7 +876,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
  chip.Size=drop.raw and Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE)) or Vector3.new(.97,.73,.88)
  chip.Position=position
- chip.Color=drop.compacted and color or Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
+ chip.Color=color
  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then

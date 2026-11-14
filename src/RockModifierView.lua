@@ -23,7 +23,7 @@ function V.glow(mask)
 end
 
 function V.rockOutline(record)
- local tint=record.previewed and white or V.glow(record.modifiers or 0)
+ local tint=record.previewed and white or nil
  local view,outline=record.view,record.rockOutline
  if not tint and outline then
   outline:Destroy();record.rockOutline=nil
@@ -338,32 +338,6 @@ local function burst(view,state,lowFlash,kind)
  end
 end
 
-local function rockRings(record,state,visible)
- local base=state.ringBase
- if not visible then
-  if base then base.Rings.Enabled=false end
-  return
- end
- local view=record.view
- if not base then
-  base=carrier(view,'RockModifierRings')
-  local gui=Instance.new('SurfaceGui');gui.Name='Rings';gui.Face=Enum.NormalId.Top
-  gui.CanvasSize=Vector2.new(256,256);gui.LightInfluence=0;gui.Parent=base
-  state.rings=V.groundRings(gui);state.ringBase=base
- end
- local ground=record.source:GetAttribute('GroundY') or view.Position.Y-view.Size.Y*.5
- local center=record.center or view.Position
- local size=view.Size
- local span=Vector3.new(math.max(2.6,size.X*2.15),.02,math.max(2.6,size.Z*2.15))
- local position=Vector3.new(center.X,ground+.046,center.Z)
- if base.Size~=span then base.Size=span end
- if base.Position~=position then base.Position=position end
- if not base.Rings.Enabled then base.Rings.Enabled=true end
- if state.ringMask~=record.modifiers then
-  state.ringMask=record.modifiers;V.drawRings(state.rings,state.ringMask,.63)
- end
-end
-
 function V.rock(record,now,lowFlash,eventKind)
  local mask=record.modifiers
  local view=record.view
@@ -384,7 +358,7 @@ function V.rock(record,now,lowFlash,eventKind)
  local near=BeamVFX.near(view.Position,84)
  local broken=record.visual.broken
  local visible=not broken and view.Transparency<1 and (view.LocalTransparencyModifier or 0)<1
- rockRings(record,state,near and visible)
+ -- Mineral channels replace modifier silhouette and ground outlines.
  if not near or (not visible and eventKind~='break') or BeamVFX.reduced() then return end
  if broken and state.finished then return end
  if state.mask~=mask then

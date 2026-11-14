@@ -53,7 +53,6 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
-W.RAW_CRYSTAL_COLOR={204,32,47}
 W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
@@ -1645,7 +1644,7 @@ end)()
 local Config = (function()
 -- All numbers are provisional playtest tuning. No permanent fleet ownership cap.
 local fields={
- {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={255,0,0},ReferenceCrystals=true,Count=16,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={30,2,30}},
+ {Name='Landing Quartz',Key='Quartz',Hardness=1,Color={120,215,219},ReferenceCrystals=true,Count=16,Ore=10,Value=1,Respawn=8,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Offset={58.9,0,68.4},Size={30,2,30}},
  {Name='Ruby Grove',Key='Ruby',Hardness=1.8,Color={226,75,112},Count=16,Ore=12,Value=2,Respawn=14,Turrets=0,TurretHP=0,Damage=0,RecommendedFleet=1,Original='rubyPatch',Offset={-62.7,11.5,108.3},Size={42,2,42}},
  {Name='Cobalt Ridge',Key='Cobalt',Hardness=3.2,Color={89,150,234},Count=6,Ore=15,Value=4,Respawn=25,Turrets=1,TurretHP=260,Damage=19,ShotCooldown=1.8,RecommendedFleet=1,Original='cobaltPatch',Offset={1.9,18.5,-98.8},Size={42,2,42}},
  {Name='Violet Basin',Key='Violet',Hardness=5.2,Color={166,115,217},Count=9,Ore=16,Value=7,Respawn=35,Turrets=2,TurretHP=390,Damage=24,ShotCooldown=1.8,RecommendedFleet=3,Offset={106.4,28.5,-77.9},Size={47.6,2,44.8}},
@@ -3435,7 +3434,94 @@ local G={
 return G
 
 end)()
+local CrystalVeins=(function()
+-- Carve a narrow, jagged channel once per native crystal template. The shell
+-- itself supplies the recessed walls; normalized anchors survive stage scaling.
+local V={}
+function V.carve(source)
+ local world=Instance.new('WorldModel')
+ local probe=source:Clone();probe.CanQuery=true;probe.CanCollide=false;probe.CanTouch=false;probe.Transparency=1;probe.Parent=world
+ world.Name='CrystalVeinQuery';world.Parent=workspace
+ task.wait() -- WorldModel spatial queries require an active world root.
+ local size=probe.Size
+ local frame=probe.CFrame
+ local cutters,paths={},{}
+ local seed=29
+ for i=1,#source.Name do seed=seed*7+source.Name:byte(i);seed=seed%1000000 end
+ local random=Random.new(seed)
+ for side=1,2 do
+  local normal=side==1 and Vector3.new(0,0,1) or Vector3.new(0,0,-1)
+  local path={}
+  local drift=random:NextNumber(-.16,.02)
+  for i=1,9 do
+   local y=(-.30+(i-1)*.063+random:NextNumber(-.012,.012))*size.Y
+   drift=math.clamp(drift+random:NextNumber(-.08,.10),-.24,.24)
+   local x=drift*size.X
+   local point=Vector3.new(x,y,normal.Z*size.Z*1.4)
+   local hit=world:Raycast(frame:PointToWorldSpace(point),frame:VectorToWorldSpace(-normal*size.Magnitude*2))
+   if hit then path[#path+1]={point=hit.Position,normal=frame:VectorToWorldSpace(normal)} end
+  end
+  if #path>=4 then
+   local width=math.min(size.X,size.Z)*.090
+   local depth=math.min(size.X,size.Z)*.12
+   for i=1,#path-1 do
+    local a,b=path[i],path[i+1]
+    local mid=(a.point+b.point)*.5
+    local tangent=(b.point-a.point).Unit
+    local across=tangent:Cross(a.normal).Unit
+    local n=across:Cross(tangent).Unit
+    local cutter=Instance.new('Part');cutter.Anchored=true
+    cutter.Size=Vector3.new(width*(.72+.28*math.sin(i*1.7)^2),(b.point-a.point).Magnitude+width,depth*2)
+    cutter.CFrame=CFrame.fromMatrix(mid,across,tangent,n)
+    cutters[#cutters+1]=cutter
+   end
+   paths[#paths+1]={points=path,width=width,depth=depth}
+  end
+ end
+ probe.Parent=nil;world:Destroy()
+ if #cutters==0 then probe:Destroy();return source end
+ local ok,parts=pcall(function()
+  return game:GetService('GeometryService'):SubtractAsync(probe,cutters,{
+   CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,
+   RenderFidelity=Enum.RenderFidelity.Precise,SplitApart=false,
+  })
+ end)
+ probe:Destroy();for _,p in ipairs(cutters) do p:Destroy() end
+ if not ok or #parts~=1 then
+  if ok then for _,p in ipairs(parts) do p:Destroy() end end
+  return source
+ end
+ local result=parts[1]
+ result.Name=source.Name;result.Anchored=true;result.CanCollide=false;result.CanTouch=false;result.CanQuery=false
+ result.Material=source.Material;result.Color=source.Color;result.Reflectance=0;result.Transparency=source.Transparency
+ if result:IsA('PartOperation') then result.UsePartColor=true end
+ for k,v in pairs(source:GetAttributes()) do result:SetAttribute(k,v) end
+ local encoded={}
+ for _,path in ipairs(paths) do
+  local points={}
+  for _,p in ipairs(path.points) do
+   local inset=p.point-p.normal*path.depth*.63
+   local localPoint=result.CFrame:PointToObjectSpace(inset)/result.Size
+   local n=result.CFrame:VectorToObjectSpace(p.normal)
+   points[#points+1]={localPoint.X,localPoint.Y,localPoint.Z,n.X,n.Y,n.Z}
+  end
+  encoded[#encoded+1]={points=points,width=path.width/math.min(result.Size.X,result.Size.Z)}
+ end
+ result:SetAttribute('InsetVeins',game:GetService('HttpService'):JSONEncode(encoded))
+ source:Destroy()
+ return result
+end
+return V
+
+end)()
 local C={variants={'Needle','Crown','Spear','Oblique','Triad','Fan','Terrace','Outcrop'}}
+C.mineralCuts={
+ Quartz={'Needle','Spear'},Ruby={'Crown','Terrace'},RunRuby={'Crown','Terrace'},
+ Cobalt={'Oblique','Spear'},RunCobalt={'Oblique','Spear'},
+ Violet={'Triad','Fan'},RunViolet={'Triad','Fan'},
+ Emerald={'Outcrop','Needle'},RunEmerald={'Outcrop','Needle'},
+}
+C.inset=CrystalVeins.carve
 local clusters={
  Triad={core='Spear',width=.92,height=1, feet={{-.45,.14,.56,-.28},{.49,-.15,.44,.33},{.04,.52,.25,-.21}}},
  Fan={core='Oblique',width=.72,height=.92, feet={{-.54,.05,.79,-.53},{.56,.13,.63,.43},{.17,-.56,.29,.28}}},
@@ -9523,6 +9609,10 @@ if scene.runStart and scene.classicCrystal then
  local originalHalves=CrystalCuts.splitOriginal(scene.classicCrystal)
  if originalHalves then originalHalves.Parent=fractures end
  table.insert(scene.crystalCuts.variants,'Original')
+ for _,name in ipairs(CrystalCuts.variants) do
+  local shape=scene.crystalCuts[name]
+  if shape then scene.crystalCuts[name]=CrystalCuts.inset(shape) end
+ end
  scene.crystalCuts.Gem=CrystalCuts.build('Gem')
  -- Couriers show the cut cargo even while the original field is streamed out.
  local cargoShape=(scene.crystalCuts.Gem or scene.classicCrystal):Clone()
@@ -9557,8 +9647,12 @@ local function makeResource(field,position,kind,maxHealth,ore,visualSize,stageCo
  resourceSerial=resourceSerial+1
  local template=junk and ((field.junkTemplates and field.junkTemplates:FindFirstChild(junk.template)) or field.junk:FindFirstChild(junk.template,true))
  local original=not junk and kind=='Crystal' and ((stageCount or 3)==3 or field.cfg.SelectionOnly) and scene.classicCrystal
+ local choices=CrystalCuts.mineralCuts[field.cfg.Material or field.cfg.Key]
  local variant=original and field.cfg.ContinuousCrystals and scene.crystalCuts and
-  scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
+  (choices or scene.crystalCuts.variants)[seed:NextInteger(1,#(choices or scene.crystalCuts.variants))]
+ if variant and not table.find(scene.crystalCuts.variants,variant) then
+  variant=scene.crystalCuts.variants[seed:NextInteger(1,#scene.crystalCuts.variants)]
+ end
  local cut=variant and scene.crystalCuts[variant]
  local part=(template or cut or original) and (template or cut or original):Clone() or Instance.new('Part')
  if variant then part:SetAttribute('CrystalCut',variant) end
@@ -9958,7 +10052,7 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
  chip.Size=drop.raw and Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE)) or Vector3.new(.97,.73,.88)
  chip.Position=position
- chip.Color=drop.compacted and color or Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
+ chip.Color=color
  chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
  chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
