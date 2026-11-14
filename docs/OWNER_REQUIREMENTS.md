@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — thin open cracks, core rays and spawn specimens
+
+The owner rejected the recessed vein strips. Open the stone shell with a very thin crack, reveal a luminous inner core, and make the principal effect visible Beam rays escaping the opening. The supplied light-shaft photograph is the beam reference. Make dropped minerals substantially different: elongated needles, multi-point formations, a mostly dark crystal with concentrated glow, and geometric bismuth terraces. Add all five dropped minerals in a line near spawn so they can be compared without mining. This supersedes the previous inset-channel direction.
+
 ## November 14 — mineral variety and recessed veins
 
 Make fixed white interior specks visible, increase the color gradients, and give each ore its own palette and shape. Use the newest Mines board crystal sketches for varied silhouettes. Remove mineable-rock modifier outlines and replace them with small, deeply inset mineral channels releasing soft light and slow glowing particles. The attached blue seam photo is the vein reference, with substantially more recess requested. This supersedes the earlier all-red loose ore and modifier outline direction; preserve the white aiming preview and the existing pickup display.

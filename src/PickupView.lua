@@ -3,6 +3,7 @@
 local Players=game:GetService('Players')
 local Http=game:GetService('HttpService')
 local GemAppearance=RockFinish.Gems
+local MineralLineup=require('./MineralLineup')
 local V={};V.__index=V
 local PICKUP_HIGHLIGHT=Color3.fromRGB(255,248,221)
 local TRAIL_LIFETIME,TRAIL_LIMIT=.29,12
@@ -182,6 +183,7 @@ function V.new(root,parent,audio,reducedMotion)
  local player=Players.LocalPlayer
  local self=setmetatable({records={},byId={},parent=parent,root=root,connections={},audio=audio,lastSound=0,reducedMotion=reducedMotion,
   player=player,trailCount=0,idleCount=0,idlePool={},displays={},freeDisplays={},displayCandidates={},lastTotal=player:GetAttribute('CollectedOreTotal') or 0},V)
+ self.lineup=MineralLineup.new(parent,GemAppearance,RockFinish)
  local function add(source)
   if self.closed then return end
   if not source:IsA('BasePart') or not source:GetAttribute('PickupId') or self.records[source] then return end
@@ -191,7 +193,7 @@ function V.new(root,parent,audio,reducedMotion)
   view.CanQuery=false;view.CanCollide=false;view.CanTouch=false;view.CastShadow=false
   source.LocalTransparencyModifier=1;view.Transparency=1;if faceted then GemAppearance.update(view,0) end;view.Parent=parent
   local id=source:GetAttribute('PickupId')
-  local r={view=view,faceted=faceted,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
+  local r={view=view,faceted=faceted,gemOpacity=view:GetAttribute('GemOpacity') or .76,pos=position,size=view.Size,color=faceted and GemAppearance.tint(source:GetAttribute('Mineral')) or source.Color,seed=id,physical=source:GetAttribute('PhysicalCargo')==true,
    samples={},owner=source:GetAttribute('Owner'),
    born=source:GetAttribute('SpawnAt') or workspace:GetServerTimeNow()}
   local origin=source:GetAttribute('OreLaunchOrigin')
@@ -272,6 +274,7 @@ function V:update(dt,now)
  local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
  local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
+ MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects)
  local displayAt=now-PickupMotion.DELAY
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
@@ -455,7 +458,7 @@ function V:update(dt,now)
      table.insert(self.displayCandidates,r)
     end
    end
-   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and .72 or 1);r.opacity=opacity end
+   if opacity~=r.opacity then r.view.Transparency=1-opacity*(r.faceted and r.gemOpacity or 1);r.opacity=opacity end
    if r.faceted then GemAppearance.update(r.view,opacity) end
    if cameraPosition then
     local distance=(r.drawPosition-cameraPosition).Magnitude
@@ -495,6 +498,7 @@ function V:destroy()
  for _,glint in ipairs(self.idlePool) do glint.anchor:Destroy() end
  for _,rig in ipairs(self.displays) do rig.base:Destroy() end
  if self.amountGui then self.amountGui:Destroy() end
+ MineralLineup.destroy(self.lineup)
  self.records={};self.byId={}
 end
 return V

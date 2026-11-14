@@ -64,6 +64,10 @@ MOTIF_SCOPE = {
         ("Stars", "Daisies", "BlueGingham", "RedGingham", "Pips", "Waves", "Knit", "Studs")
     }, {"MaterialVariant"}),
 }
+MINERAL_LINEUP_SCOPE = {
+    "scenery": (MAP, {"MineralLineup"}, {"Folder", "Model", "Part", "WedgePart", "UnionOperation",
+        "SurfaceGui", "TextLabel", "Attachment", "Beam", "ParticleEmitter", "Decal"}),
+}
 JUNK_CUBE_SCOPE = {
     "templates": ("ServerStorage", {"JunkCubeTemplates"}, {"Folder", "Part", "Decal"}),
 }
@@ -498,6 +502,8 @@ def main():
                        help="Append only the reserve enclosure, landscapes, oddities, and cloud blocks")
     scope.add_argument("--quarry-motifs", dest="addition", action="store_const", const=MOTIF_SCOPE,
                        help="Append the eight original quarry patterns and their props")
+    scope.add_argument("--mineral-lineup", dest="addition", action="store_const", const=MINERAL_LINEUP_SCOPE,
+                       help="Append only the authored mineral specimens beside spawn")
     scope.add_argument("--junk-cubes", dest="addition", action="store_const", const=JUNK_CUBE_SCOPE,
                        help="Append only the textured junk cube template library")
     scope.add_argument("--block-rim", action="store_true", help="Add the block rim and archive replaced scenery")

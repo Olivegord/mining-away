@@ -3435,51 +3435,50 @@ return G
 
 end)()
 local CrystalVeins=(function()
--- Carve a narrow, jagged channel once per native crystal template. The shell
--- itself supplies the recessed walls; normalized anchors survive stage scaling.
+-- Hollow the original rock, then cut a hairline opening through its shell.
+-- The glowing geometry is a single inner mineral, never strips on the surface.
 local V={}
 function V.carve(source)
- local world=Instance.new('WorldModel')
+ local world=Instance.new('WorldModel');world.Name='CrystalCoreQuery'
  local probe=source:Clone();probe.CanQuery=true;probe.CanCollide=false;probe.CanTouch=false;probe.Transparency=1;probe.Parent=world
- world.Name='CrystalVeinQuery';world.Parent=workspace
- task.wait() -- WorldModel spatial queries require an active world root.
- local size=probe.Size
- local frame=probe.CFrame
+ world.Parent=workspace;task.wait()
+ local size,frame=probe.Size,probe.CFrame
  local cutters,paths={},{}
  local seed=29
- for i=1,#source.Name do seed=seed*7+source.Name:byte(i);seed=seed%1000000 end
+ for i=1,#source.Name do seed=(seed*7+source.Name:byte(i))%1000000 end
  local random=Random.new(seed)
+ local cavity=source:Clone()
+ cavity.Size=source.Size*Vector3.new(.76,.85,.76)
+ cavity.CFrame+=source.ExtentsCFrame.Position-cavity.ExtentsCFrame.Position
+ cutters[#cutters+1]=cavity
  for side=1,2 do
-  local normal=side==1 and Vector3.new(0,0,1) or Vector3.new(0,0,-1)
+  local normal=Vector3.new(0,0,side==1 and 1 or -1)
   local path={}
-  local drift=random:NextNumber(-.16,.02)
-  for i=1,9 do
-   local y=(-.30+(i-1)*.063+random:NextNumber(-.012,.012))*size.Y
-   drift=math.clamp(drift+random:NextNumber(-.08,.10),-.24,.24)
-   local x=drift*size.X
-   local point=Vector3.new(x,y,normal.Z*size.Z*1.4)
+  local drift=random:NextNumber(-.09,.03)
+  for i=1,6 do
+   local y=(-.32+(i-1)*.12)*size.Y
+   drift=math.clamp(drift+random:NextNumber(-.045,.055),-.16,.16)
+   local point=Vector3.new(drift*size.X,y,normal.Z*size.Z*1.4)
    local hit=world:Raycast(frame:PointToWorldSpace(point),frame:VectorToWorldSpace(-normal*size.Magnitude*2))
    if hit then path[#path+1]={point=hit.Position,normal=frame:VectorToWorldSpace(normal)} end
   end
   if #path>=4 then
-   local width=math.min(size.X,size.Z)*.090
-   local depth=math.min(size.X,size.Z)*.12
+   local width=math.min(size.X,size.Z)*.024
    for i=1,#path-1 do
     local a,b=path[i],path[i+1]
-    local mid=(a.point+b.point)*.5
     local tangent=(b.point-a.point).Unit
     local across=tangent:Cross(a.normal).Unit
     local n=across:Cross(tangent).Unit
     local cutter=Instance.new('Part');cutter.Anchored=true
-    cutter.Size=Vector3.new(width*(.72+.28*math.sin(i*1.7)^2),(b.point-a.point).Magnitude+width,depth*2)
-    cutter.CFrame=CFrame.fromMatrix(mid,across,tangent,n)
+    cutter.Size=Vector3.new(width*(i%2==0 and .72 or 1),(b.point-a.point).Magnitude+width,size.Z*.8)
+    cutter.CFrame=CFrame.fromMatrix((a.point+b.point)*.5-a.normal*size.Z*.32,across,tangent,n)
     cutters[#cutters+1]=cutter
    end
-   paths[#paths+1]={points=path,width=width,depth=depth}
+   paths[#paths+1]={points=path,width=width}
   end
  end
  probe.Parent=nil;world:Destroy()
- if #cutters==0 then probe:Destroy();return source end
+ if #paths==0 then probe:Destroy();cavity:Destroy();return source end
  local ok,parts=pcall(function()
   return game:GetService('GeometryService'):SubtractAsync(probe,cutters,{
    CollisionFidelity=Enum.CollisionFidelity.PreciseConvexDecomposition,
@@ -3500,15 +3499,23 @@ function V.carve(source)
  for _,path in ipairs(paths) do
   local points={}
   for _,p in ipairs(path.points) do
-   local inset=p.point-p.normal*path.depth*.63
-   local localPoint=result.CFrame:PointToObjectSpace(inset)/result.Size
+   local position=result.CFrame:PointToObjectSpace(p.point)/result.Size
    local n=result.CFrame:VectorToObjectSpace(p.normal)
-   points[#points+1]={localPoint.X,localPoint.Y,localPoint.Z,n.X,n.Y,n.Z}
+   points[#points+1]={position.X,position.Y,position.Z,n.X,n.Y,n.Z}
   end
   encoded[#encoded+1]={points=points,width=path.width/math.min(result.Size.X,result.Size.Z)}
  end
- result:SetAttribute('InsetVeins',game:GetService('HttpService'):JSONEncode(encoded))
- source:Destroy()
+ result:SetAttribute('CoreFissures',game:GetService('HttpService'):JSONEncode(encoded))
+ result:SetAttribute('InsetVeins',nil)
+ local center=source.ExtentsCFrame.Position
+ source.Size*=Vector3.new(.65,.73,.65)
+ source.CFrame+=center-source.ExtentsCFrame.Position
+ source.Name='CoreGeometry';source.Material=Enum.Material.Neon;source.Transparency=1
+ source.CanCollide=false;source.CanTouch=false;source.CanQuery=false;source.CastShadow=false
+ source:SetAttribute('SizeRatio',source.Size/result.Size)
+ source:SetAttribute('CenterRatio',result.CFrame:PointToObjectSpace(source.Position)/result.Size)
+ source:SetAttribute('RelativeRotation',result.CFrame:ToObjectSpace(source.CFrame).Rotation)
+ source.Parent=result
  return result
 end
 return V

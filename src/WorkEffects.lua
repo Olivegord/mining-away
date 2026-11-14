@@ -595,7 +595,7 @@ function W:courier(drone,record,now)
      slot.packed=packed
     end
     local cargo=slot.cargo
-    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and .28 or 0)
+    cargo.Transparency=(i==loadingSlot and beforeContact) and 1 or (slot.faceted and 1-(slot.cargo:GetAttribute('GemOpacity') or .76) or 0)
     local position=cargoFrame.Position
     local rotation=cargoFrame.Rotation
     size=cargo.Size
@@ -625,7 +625,7 @@ function W:courier(drone,record,now)
   end
   for _,slot in ipairs(fx.mounts) do
    if slot.cargo and slot.faceted then
-    RockFinish.Gems.update(slot.cargo,math.clamp((1-slot.cargo.Transparency)/.72,0,1))
+    RockFinish.Gems.update(slot.cargo,math.clamp((1-slot.cargo.Transparency)/(slot.cargo:GetAttribute('GemOpacity') or .76),0,1))
    end
   end
   for i=count+1,#fx.mounts do

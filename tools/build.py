@@ -105,7 +105,12 @@ def module_bundle(names):
    code=code.replace("require('./QuarryBiomes')",'(function()\n'+biome+'\nend)()')
   if name=='RockFinish':
    for embedded in ('GemAppearance','RockVeins'):
-    code=code.replace("require('./"+embedded+"')",'(function()\n'+(ROOT/'src'/f'{embedded}.lua').read_text()+'\nend)()')
+    module=(ROOT/'src'/f'{embedded}.lua').read_text()
+    if embedded=='GemAppearance':
+     module=module.replace("require('./GemGeometry')",'(function()\n'+(ROOT/'src/GemGeometry.lua').read_text()+'\nend)()')
+    code=code.replace("require('./"+embedded+"')",'(function()\n'+module+'\nend)()')
+  if name=='PickupView':
+   code=code.replace("require('./MineralLineup')",'(function()\n'+(ROOT/'src/MineralLineup.lua').read_text()+'\nend)()')
   if name=='CrystalCuts':
    code=code.replace("require('./CrystalVeins')",'(function()\n'+(ROOT/'src/CrystalVeins.lua').read_text()+'\nend)()')
    geometry=(ROOT/'src/CrystalGeometry.lua').read_text()
