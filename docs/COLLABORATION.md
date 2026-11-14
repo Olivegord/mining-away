@@ -79,3 +79,7 @@ The [continuous ground pass](../tools/studio_quarry_continuous_ground.lua) stage
 The [quarry motif pass](../tools/studio_quarry_motifs.lua) stages `scenery` and `variants` at `shared.QuarryMotifs.snapshot`. Run the native saver with `--quarry-motifs` to check the export against the current canonical hash. After `shared.QuarryMotifs.apply()` succeeds in the shared Edit document, write the scoped export, verify the canonical file and clear the transient stage.
 
 The [courtyard pass](../tools/studio_quarry_courtyard.lua) stages `scenery`, `variants`, and `edits` at `shared.QuarryCourtyard.snapshot`. Run [the scoped saver](../tools/refresh_quarry_courtyard.py) with the export directory and `--baseline-sha256`. After checking the export, call `shared.QuarryCourtyard.apply()` in Edit, rerun the saver with `--write`, and verify the canonical file.
+
+## Runtime gem API access
+
+The owner approved enabling **Allow Mesh / Image APIs** for DRONEREVOLUTION on November 14, 2026. The setting was saved and verified by reopening Experience Settings → Security. GemAppearance needs that experience setting for runtime EditableMesh construction. Tool-context Edit samples can succeed while game scripts are blocked, so inspect the actual Play-session logs when diagnosing fallback to the original gem.
