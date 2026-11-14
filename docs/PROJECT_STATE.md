@@ -10,7 +10,7 @@ Based on owner-selected pin https://www.pinterest.com/pin/968344357402992555/, l
 
 Studio was already open in shared Edit at place **124078027733625**, universe **10774898335**. Script Sync delivered the client. All three roots were connected and all seven installed SHA-256 hashes matched the canonical snapshot after saving. The Studio log records **Saved new changes in DRONEREVOLUTION to Roblox** at **1:38:35 PM Pacific**, November 14 (Save to Roblox, publishType=2). This was a shared Edit save. No player release was requested or issued. Native snapshot SHA-256 is **69d8c6bfe2a926aff1f033797739ed3f746fbc9377214aceb1654d82e4e44928**. The temporary Edit sample was removed before saving. Next Play loads this gem/particle pass.
 
-Pickup trajectory and production renderer checks, 28 VFX behavior checks, full client/server compilation and native preservation verification passed. Native Edit samples verified mesh construction, visible internal inclusions and the final finish. These are component samples. Gameplay motion, low-graphics appearance and multiplayer remain unverified. Reproduce with `python3 tools/script_sync.py`, then `python3 tools/build.py --previous-commit cf86d81` against the prior canonical snapshot. The Git commit containing this section is the exact revision for this pass.
+Pickup trajectory and production renderer checks, 28 VFX behavior checks, full client/server compilation and native preservation verification passed. Native Edit samples verified mesh construction, visible internal inclusions and the final finish. These are component samples. Gameplay motion, low-graphics appearance and multiplayer remain unverified. Reproduce with `python3 tools/script_sync.py`, then `python3 tools/build.py --previous-commit cf86d81` against the prior canonical snapshot. Gameplay revision **186f5ae** contains this pass.
 
 ## Identity and delivery state
 
@@ -19,14 +19,14 @@ Pickup trajectory and production renderer checks, 28 VFX behavior checks, full c
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 69d8c6bfe2a926aff1f033797739ed3f746fbc9377214aceb1654d82e4e44928 | Modifier outlines and particles, with temporary selector preview highlights. |
-| Shared Studio Sources | Team Create save **296**, November 14 at 1:27 PM Pacific | All three Script Sync roots are connected and all seven Sources match the canonical file. |
+| Native-file SHA-256 | 69d8c6bfe2a926aff1f033797739ed3f746fbc9377214aceb1654d82e4e44928 | Ruby gradient facets, fixed interior inclusions and crystal release particles. |
+| Shared Studio Sources | Shared Edit save verified November 14 at **1:38:35 PM Pacific** | All three Script Sync roots are connected and all seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads mineral-colored rocks and ore with modifier particles and preview-only selection outlines. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the ruby gem depth and crystal release particle pass, including the existing modifier effects. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
