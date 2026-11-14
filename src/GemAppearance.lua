@@ -1,6 +1,6 @@
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
-local templates,meshes,attempted={},{},false
+local templates,meshes,textures,attempted={},{},{},false
 local Geometry=require('./GemGeometry')
 Gem.geometry=Geometry
 Gem.key=Geometry.key
@@ -8,6 +8,27 @@ function Gem.tint(value) local key=Geometry.key(value);local spec=Geometry.defin
 local function build(key)
  local data=Geometry.describe(key)
  local assets=game:GetService('AssetService')
+ local texture
+ if data.texture and key~='Amber' then
+  local ok,result=pcall(function()
+   local width=key=='Diamond' and 256 or 128
+   local bitmap=assert(assets:CreateEditableImage({Size=Vector2.new(width,width)}))
+   local pixels=buffer.create(width*width*4)
+   for y=0,width-1 do
+    for x=0,width-1 do
+     local value,alpha=Geometry.texture(x/width,y/width,key)
+     local offset=(y*width+x)*4;local shade=math.floor(value*255+.5)
+     buffer.writeu8(pixels,offset,shade);buffer.writeu8(pixels,offset+1,shade);buffer.writeu8(pixels,offset+2,shade)
+     buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
+    end
+    if y%32==0 then task.wait() end
+   end
+   bitmap:WritePixelsBuffer(Vector2.zero,Vector2.new(width,width),pixels)
+   return bitmap
+  end)
+  if ok then texture=result;textures[#textures+1]=texture
+  else warn('Gem texture fallback '..key..': '..tostring(result)) end
+ end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
  for _,f in ipairs(data.faces) do
   local ids={}
@@ -15,6 +36,7 @@ local function build(key)
   local face=mesh:AddTriangle(ids[1],ids[2],ids[3])
   local n=mesh:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
   mesh:SetFaceNormals(face,{n,n,n})
+  if f[7] then mesh:SetFaceUVs(face,{mesh:AddUV(f[7]),mesh:AddUV(f[8]),mesh:AddUV(f[9])}) end
   mesh:SetFaceColors(face,{mesh:AddColor(f[4],data.vertexAlpha),mesh:AddColor(f[5],data.vertexAlpha),mesh:AddColor(f[6],data.vertexAlpha)})
  end
  local function part(m,name)
@@ -28,6 +50,7 @@ local function build(key)
   return p
  end
  local shell=part(mesh,'Faceted'..key)
+ if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -58,9 +81,11 @@ local function build(key)
    local ids={}
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.62),cloud:AddColor(f[5],.62),cloud:AddColor(f[6],.62)})
+   if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.22),cloud:AddColor(f[5],.22),cloud:AddColor(f[6],.22)})
   end
-  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.SmoothPlastic
+  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
+  if texture then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell

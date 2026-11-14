@@ -2740,10 +2740,151 @@ local Finish={}
 Finish.Gems=(function()
 -- Shared per-mineral shells and opaque, fixed interior grains.
 local Gem={}
-local templates,meshes,attempted={},{},false
+local templates,meshes,textures,attempted={},{},{},false
 local Geometry=(function()
 -- One geometry description feeds runtime meshes and the durable Edit specimens.
 local G={}
+local Refinement=(function()
+-- Uneven cut planes and optical color, shared by native previews and pickups.
+-- Texture samples are deterministic and fixed to the crystal's facets.
+local R={}
+local rgb=Color3.fromRGB
+local V=Vector3.new
+local white=rgb(255,255,255)
+function R.texture(u,v,key)
+ local warp=math.noise(u*3.2,v*3.2,7)*.19
+ local cloud=math.noise(u*7+warp,v*5-warp,4)*.5+math.noise(u*19,v*17,9)*.22
+ local fine=math.noise(u*113,v*127,3)*.12
+ local line=math.abs(math.noise(u*12+warp,v*9,21))
+ local fracture=math.clamp((.014-line)*65,0,1)
+ local muddy=math.clamp(.5+cloud*1.6,0,1)
+ if key=='Amber' then return .97+fine*.1,1 end
+ if key=='Quartz' then return math.clamp(.80+cloud*.17+fine*.35+fracture*.17,.57,1),.70+muddy*.3 end
+ local veil=math.clamp((cloud-.035)*4.8,0,.62)
+ return math.clamp(.96-veil+fine*.35+fracture*.18,.32,1),.82+muddy*.18
+end
+local function colors(key,p,index)
+ if key=='Amber' then
+  local t=math.clamp(.49+p.Y*.8+p.X*.48-p.Z*.21,0,1)
+  local c=t<.57 and rgb(241,50,0):Lerp(rgb(255,133,0),t/.57) or rgb(255,133,0):Lerp(rgb(255,222,102),(t-.57)/.43)
+  -- Broad pale side facets and a deep orange body, not one yellow stripe.
+  return c:Lerp(index%5==0 and rgb(255,227,139) or rgb(255,83,0),index%5==0 and .30 or .08)
+ elseif key=='Quartz' then
+  local t=math.clamp((p.Y+.49)/.96,0,1)
+  local c=t<.42 and rgb(235,196,103):Lerp(rgb(210,228,218),t/.42) or rgb(210,228,218):Lerp(rgb(62,155,216),(t-.42)/.58)
+  return c:Lerp(rgb(179,221,237),index%4==0 and .28 or .02)
+ end
+ local palette={rgb(246,174,219),rgb(141,221,239),rgb(183,226,180),rgb(249,199,153),rgb(183,173,193),rgb(192,221,241),rgb(244,194,222)}
+ local faces={2,1,4,3,1,2,4,2,3,5,2,1,4,1,3,2}
+ local base=palette[faces[index] or 2]
+ local alternate=palette[(index+2)%#palette+1]
+ local t=math.clamp(.48+p.Y*.54+p.X*.37-p.Z*.48,0,1)
+ return base:Lerp(alternate,t*.44):Lerp(white,.19)
+end
+function R.describe(key)
+ if key~='Amber' and key~='Quartz' and key~='Diamond' then return nil end
+ local data={key=key,faces={},grains={},clouds={},boxes={},texture=key,
+  opacity=key=='Amber' and .88 or key=='Quartz' and .31 or .80,
+  vertexAlpha=key=='Amber' and .97 or key=='Quartz' and .83 or .88,
+  material=key=='Amber' and 'SmoothPlastic' or 'Neon',
+  aspect=key=='Amber' and V(1.10,1.42,.73) or key=='Quartz' and V(.96,2.05,.78) or V(.99,2.22,.69)}
+ local function face(a,b,c,index,center)
+  if (b-a):Cross(c-a):Dot((a+b+c)/3-center)<0 then b,c=c,b end
+  local f={a,b,c,colors(key,a,index),colors(key,b,index),colors(key,c,index)}
+  -- One fixed projected coordinate system per plane keeps the texture continuous
+  -- across the triangle fan. Adjacent planes refract different parts of it.
+  local n=(b-a):Cross(c-a).Unit
+  local right=n:Cross(math.abs(n.Y)>.9 and Vector3.zAxis or Vector3.yAxis).Unit
+  local up=n:Cross(right)
+  for i,p in ipairs({a,b,c}) do f[6+i]=Vector2.new(p:Dot(right)*.71+.43+index*.071,p:Dot(up)*.77+.54+index*.043) end
+  data.faces[#data.faces+1]=f
+ end
+ local function cut(planes,frame,scale)
+  -- Intersections of actual cutting planes make broad, unequal planar facets.
+  -- Ring jitter would bend faces and still leave the regular barrel silhouette.
+  local vertices={}
+  data.solids=data.solids or {};data.solids[#data.solids+1]={planes=planes,frame=frame,scale=scale}
+  for a=1,#planes-2 do for b=a+1,#planes-1 do for c=b+1,#planes do
+   local A,B,C=planes[a],planes[b],planes[c]
+   local denominator=A[1]:Dot(B[1]:Cross(C[1]))
+   if math.abs(denominator)>.00001 then
+    local p=(B[1]:Cross(C[1])*A[2]+C[1]:Cross(A[1])*B[2]+A[1]:Cross(B[1])*C[2])/denominator
+    local valid=true
+    for _,plane in ipairs(planes) do if p:Dot(plane[1])>plane[2]+.00005 then valid=false;break end end
+    if valid then
+     for _,v in ipairs(vertices) do if (p-v).Magnitude<.0001 then valid=false;break end end
+     if valid then vertices[#vertices+1]=p end
+    end
+   end
+  end end end
+  for index,plane in ipairs(planes) do
+   local polygon={};local center=Vector3.zero
+   for _,p in ipairs(vertices) do if math.abs(p:Dot(plane[1])-plane[2])<.0001 then polygon[#polygon+1]=p;center+=p end end
+   if #polygon>=3 then
+    center/=#polygon
+    local axis=(polygon[1]-center).Unit;local other=plane[1].Unit:Cross(axis)
+    table.sort(polygon,function(a,b) local x,y=a-center,b-center;return math.atan2(x:Dot(other),x:Dot(axis))<math.atan2(y:Dot(other),y:Dot(axis)) end)
+    for i=1,#polygon do
+     face(frame:PointToWorldSpace(center*scale),frame:PointToWorldSpace(polygon[i]*scale),frame:PointToWorldSpace(polygon[i%#polygon+1]*scale),index,frame.Position)
+    end
+   end
+  end
+ end
+ local function plane(x,y,z,d) return {V(x,y,z),d} end
+ local amber={plane(1,0,0,.48),plane(-1,0,0,.41),plane(.20,1,.12,.52),plane(-.21,-1,.13,.43),plane(0,0,1,.32),plane(0,0,-1,.34),
+  plane(1,.61,.14,.51),plane(-1,.34,-.10,.47),plane(.52,-1,.14,.53),plane(-.71,-1,-.08,.62),
+  plane(.21,.48,1,.41),plane(.2,-.45,1,.37),plane(-.15,.53,-1,.45),plane(.75,-.2,1,.51),plane(-.84,.08,-1,.49),plane(.80,0,-1,.53),plane(-.64,-.3,1,.51)}
+ local quartz={plane(1,-.14,.06,.34),plane(-1,.23,.02,.34),plane(-.12,-1,.12,.49),plane(-.14,1,.08,.24),plane(0,0,1,.28),plane(0,0,-1,.30),
+  plane(1,.55,.08,.47),plane(-1,.32,.10,.39),plane(.12,.48,1,.34),plane(.05,.19,-1,.35),
+  plane(.8,0,1,.41),plane(-.63,0,-1,.42),plane(-.9,-.12,1,.47),plane(1,-.1,-1,.45),plane(.1,-1,-.3,.53)}
+ local diamond={plane(1,0,0,.44),plane(-1,0,0,.40),plane(0,0,1,.29),plane(0,0,-1,.30),
+  plane(1,.54,.12,.37),plane(-1,.85,-.06,.49),plane(.16,.59,1,.35),plane(-.09,.73,-1,.44),
+  plane(.81,-.78,.08,.45),plane(-1,-.69,.09,.43),plane(.15,-.61,1,.36),plane(-.12,-.69,-1,.42),
+  plane(.86,.06,1,.51),plane(-.82,-.08,-1,.48),plane(-.80,.05,1,.47),plane(.95,-.04,-1,.51)}
+ if key=='Amber' then
+  cut(amber,CFrame.Angles(0,.11,-.24),Vector3.one)
+ elseif key=='Quartz' then
+  cut(quartz,CFrame.Angles(.03,.1,.08),Vector3.one)
+  -- Broken stepped crown, grown from one broad trunk rather than a symmetric
+  -- three-pronged star. The tips have different heights, widths and directions.
+  cut(diamond,CFrame.new(-.15,.30,.01)*CFrame.Angles(.06,.21,-.14),V(.55,.54,.60))
+  cut(diamond,CFrame.new(.22,.19,-.04)*CFrame.Angles(-.11,-.23,-.26),V(.40,.68,.48))
+  local random=Random.new(404)
+  for i=1,520 do
+   if #data.grains>=116 then break end
+   local top=#data.grains<76
+   local p=top and V(random:NextNumber(-.22,.24),random:NextNumber(.12,.49),random:NextNumber(-.18,.16))
+    or V(random:NextNumber(-.22,.22),random:NextNumber(-.47,-.22),random:NextNumber(-.19,.19))
+   local inside=false
+   for _,solid in ipairs(data.solids) do
+    local q=solid.frame:PointToObjectSpace(p)/solid.scale
+    local fits=true
+    for _,plane in ipairs(solid.planes) do if q:Dot(plane[1])>plane[2]-.015 then fits=false;break end end
+    if fits then inside=true;break end
+   end
+   if inside then data.grains[#data.grains+1]={p,random:NextNumber(top and .0016 or .0015,top and .0045 or .0032),top and rgb(141,205,239) or rgb(240,212,142)} end
+  end
+ else
+  cut(diamond,CFrame.Angles(.04,-.08,-.12),Vector3.one)
+  -- Close inset fracture surfaces carry the same cloudy optical texture.
+  -- They span the volume rather than floating as five colored islands.
+  for i,f in ipairs(data.faces) do
+   if i%3==1 then
+    local g={}
+    for n=1,3 do g[n]=f[n]*.82+V(.015,-.012,.008);g[n+3]=f[n+3]:Lerp(white,.26);g[n+6]=f[n+6] end
+    data.clouds[#data.clouds+1]=g
+   end
+  end
+ end
+ local lo,hi=Vector3.one*math.huge,-Vector3.one*math.huge
+ for _,f in ipairs(data.faces) do for i=1,3 do lo=lo:Min(f[i]);hi=hi:Max(f[i]) end end
+ data.center=(lo+hi)*.5;data.extents=hi-lo
+ return data
+end
+return R
+
+end)()
+G.texture=Refinement.texture
 local rgb=Color3.fromRGB
 G.order={'Amber','Ruby','Quartz','Violet','Diamond'}
 G.definitions={
@@ -2763,6 +2904,7 @@ function G.key(value)
 end
 function G.describe(key)
  key=G.key(key)
+ local refined=Refinement.describe(key);if refined then return refined end
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
  local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
@@ -2801,9 +2943,9 @@ function G.describe(key)
   for k,ring in ipairs(rings) do
    rows[k]={}
    for i=1,sides do
-    local angle=(i-1)*2*math.pi/sides+.19
-    local radius=ring[1]*(i%3==0 and (ruby and .88 or .90) or 1)
-    rows[k][i]=transform(Vector3.new(math.cos(angle)*radius+ring[2]*lean,ring[2],math.sin(angle)*radius))
+    local angle=(i-1)*2*math.pi/sides+.19+.10*math.sin(i*2.31)
+    local radius=ring[1]*(.92+.15*math.sin(i*1.71+k*.21))
+    rows[k][i]=transform(Vector3.new(math.cos(angle)*radius+ring[2]*lean,ring[2]+.035*math.sin(i*2.16+k*.9),math.sin(angle)*radius))
    end
   end
   local top=transform(Vector3.new(lean*.5,.5,0))
@@ -2828,42 +2970,7 @@ function G.describe(key)
   end
  end
  local long={{.025,.5},{.34,.28},{.36,-.29},{.035,-.5}}
- if spec.kind=='cluster' then
-  prism(6,long,.04,CFrame.new(.01,.02,0),Vector3.new(.65,.96,.66),42,593)
-  prism(5,long,-.12,CFrame.new(-.32,-.18,.04)*CFrame.Angles(0,.4,.33),Vector3.new(.40,.67,.43),18,614)
-  prism(6,long,.06,CFrame.new(.30,-.24,.10)*CFrame.Angles(-.19,0,-.38),Vector3.new(.37,.58,.39),16,631)
-  -- Fine ochre sediment is fixed inside the lower body, distinct from the
-  -- larger blue-white dots at the crowns. It tumbles with the stone.
-  local random=Random.new(404)
-  for i=1,85 do
-   local y=random:NextNumber(-.42,-.12)
-   data.grains[#data.grains+1]={Vector3.new(random:NextNumber(-.13,.13),y,random:NextNumber(-.12,.12)),random:NextNumber(.0018,.0045),rgb(232,199,111)}
-  end
- elseif spec.kind=='amber' then
-  prism(7,{{.27,.43},{.46,.20},{.44,-.24},{.24,-.44}},-.18,CFrame.new(),Vector3.one,0,901)
- elseif spec.kind=='diamond' then
-  prism(6,{{.015,.5},{.45,.17},{.40,-.27},{.025,-.5}},-.13,CFrame.new(),Vector3.one,8,918)
-  -- Irregular translucent mineral clouds sit within the clear shell. A small
-  -- triangulated color field gives muddy patches instead of uniform confetti.
-  local random=Random.new(107)
-  local palette={rgb(223,157,195),rgb(91,185,203),rgb(154,188,134),rgb(220,168,115),rgb(133,127,126)}
-  for patch=1,5 do
-   local center=Vector3.new(random:NextNumber(-.10,.10),-.27+(patch-1)*.13,random:NextNumber(-.10,.10))
-   local frame=CFrame.new(center)*CFrame.Angles(.24*patch,.7*patch,-.26*patch)
-   local rows={}
-   for y=0,5 do
-    rows[y]={}
-    for x=0,5 do
-     local position=frame:PointToWorldSpace(Vector3.new((x/5-.5)*.38*(.65+.35*math.sin(y/5*math.pi)),(y/5-.5)*.31+math.sin(x*1.7+patch)*.015,random:NextNumber(-.018,.018)))
-     rows[y][x]={position,palette[patch]:Lerp(rgb(159,151,140),random:NextNumber(.1,.58))}
-    end
-   end
-   for y=0,4 do for x=0,4 do
-    local a,b,c,d=rows[y][x],rows[y][x+1],rows[y+1][x],rows[y+1][x+1]
-    for _,t in ipairs({{a,b,c},{b,d,c}}) do data.clouds[#data.clouds+1]={t[1][1],t[2][1],t[3][1],t[1][2],t[2][2],t[3][2]} end
-   end end
-  end
- elseif spec.kind=='needle' then
+ if spec.kind=='needle' then
   prism(5,{{.015,.5},{.34,.29},{.46,-.13},{.025,-.5}},-.22,CFrame.new(),Vector3.one,26,702)
  elseif spec.kind=='dark' then
   prism(5,{{.025,.5},{.43,.15},{.45,-.28},{.035,-.5}},.17,CFrame.new(),Vector3.one,14,721)
@@ -2916,6 +3023,27 @@ function Gem.tint(value) local key=Geometry.key(value);local spec=Geometry.defin
 local function build(key)
  local data=Geometry.describe(key)
  local assets=game:GetService('AssetService')
+ local texture
+ if data.texture and key~='Amber' then
+  local ok,result=pcall(function()
+   local width=key=='Diamond' and 256 or 128
+   local bitmap=assert(assets:CreateEditableImage({Size=Vector2.new(width,width)}))
+   local pixels=buffer.create(width*width*4)
+   for y=0,width-1 do
+    for x=0,width-1 do
+     local value,alpha=Geometry.texture(x/width,y/width,key)
+     local offset=(y*width+x)*4;local shade=math.floor(value*255+.5)
+     buffer.writeu8(pixels,offset,shade);buffer.writeu8(pixels,offset+1,shade);buffer.writeu8(pixels,offset+2,shade)
+     buffer.writeu8(pixels,offset+3,math.floor(alpha*255+.5))
+    end
+    if y%32==0 then task.wait() end
+   end
+   bitmap:WritePixelsBuffer(Vector2.zero,Vector2.new(width,width),pixels)
+   return bitmap
+  end)
+  if ok then texture=result;textures[#textures+1]=texture
+  else warn('Gem texture fallback '..key..': '..tostring(result)) end
+ end
  local mesh=assert(assets:CreateEditableMesh());meshes[#meshes+1]=mesh
  for _,f in ipairs(data.faces) do
   local ids={}
@@ -2923,6 +3051,7 @@ local function build(key)
   local face=mesh:AddTriangle(ids[1],ids[2],ids[3])
   local n=mesh:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
   mesh:SetFaceNormals(face,{n,n,n})
+  if f[7] then mesh:SetFaceUVs(face,{mesh:AddUV(f[7]),mesh:AddUV(f[8]),mesh:AddUV(f[9])}) end
   mesh:SetFaceColors(face,{mesh:AddColor(f[4],data.vertexAlpha),mesh:AddColor(f[5],data.vertexAlpha),mesh:AddColor(f[6],data.vertexAlpha)})
  end
  local function part(m,name)
@@ -2936,6 +3065,7 @@ local function build(key)
   return p
  end
  local shell=part(mesh,'Faceted'..key)
+ if texture then shell.TextureContent=Content.fromObject(texture);shell:SetAttribute('OpticalTexture',true) end
  if #data.grains>0 then
   local core=assert(assets:CreateEditableMesh());meshes[#meshes+1]=core
  local coreMin,coreMax=Vector3.one*math.huge,-Vector3.one*math.huge
@@ -2966,9 +3096,11 @@ local function build(key)
    local ids={}
    for i=1,3 do ids[i]=cloud:AddVertex(f[i]);lo=lo:Min(f[i]);hi=hi:Max(f[i]) end
    local face=cloud:AddTriangle(ids[1],ids[2],ids[3])
-   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.62),cloud:AddColor(f[5],.62),cloud:AddColor(f[6],.62)})
+   if f[7] then cloud:SetFaceUVs(face,{cloud:AddUV(f[7]),cloud:AddUV(f[8]),cloud:AddUV(f[9])}) end
+   cloud:SetFaceColors(face,{cloud:AddColor(f[4],.22),cloud:AddColor(f[5],.22),cloud:AddColor(f[6],.22)})
   end
-  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.SmoothPlastic
+  local inside=part(cloud,'MineralClouds');inside.Material=Enum.Material.Neon
+  if texture then inside.TextureContent=Content.fromObject(texture) end
   inside:SetAttribute('SizeRatio',(hi-lo)/data.extents)
   inside:SetAttribute('CenterRatio',((hi+lo)*.5-data.center)/data.extents)
   inside.Parent=shell
@@ -14073,7 +14205,9 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local scale=rig.scale
  ground+=rig.groundOffset
  if rig.base.Position~=ground then rig.base.Position=ground end
- rig.outline.OutlineTransparency=1-strength*.94
+ local kind=record.view:GetAttribute('GemKind')
+ local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
+ rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
  rig.outline.Enabled=record.view.Parent~=nil and record.view.Transparency<1
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
@@ -14132,7 +14266,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local remaining=1-t
    local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining,tint,opacity)
+   EnergyDisc.place(mote,position,diameter*scale*remaining*(optical and .38 or 1),tint,opacity*(optical and .65 or 1))
   end
  end
 end

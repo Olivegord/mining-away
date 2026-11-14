@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — rejected first Amber / Quartz / Diamond pass
+
+The owner says Quartz and Amber look bad, need stronger gradients and less symmetrical shapes; the asymmetry critique applies broadly. Diamond is especially far from the supplied reference. Inspect the actual engine result against the three attached photos before handing it back. Replace the hollow regular diamond with floating colored patches; aim for irregular cuts, color through the body and cloudy fractured texture. The previous implementation and passing checks are not visual approval.
+
 ## November 14 — orange starter, blue/gold Quartz and top-tier Diamond
 
 The owner supplied three crystal photos and requested more mineral variation. Make the first mineral a matte orange translucent cut with a strong warm gradient and no blanket of white specks; move Quartz later. Make Diamond the highest tier, with pink, blue, green and orange facets, muddy internal texture, a few beams and the small sparkle effect. Use the third reference for a nearly clear crystal with speckled blue tips and a yellow, finely grainy base. The implementation uses this blue/gold treatment for later Quartz. Preserve the accepted Ruby cut and the real-drop specimen replay.

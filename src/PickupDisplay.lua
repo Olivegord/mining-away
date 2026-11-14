@@ -88,7 +88,9 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
  local scale=rig.scale
  ground+=rig.groundOffset
  if rig.base.Position~=ground then rig.base.Position=ground end
- rig.outline.OutlineTransparency=1-strength*.94
+ local kind=record.view:GetAttribute('GemKind')
+ local optical=kind=='Amber' or kind=='Quartz' or kind=='Diamond'
+ rig.outline.OutlineTransparency=1-strength*(optical and .24 or .94)
  rig.outline.Enabled=record.view.Parent~=nil and record.view.Transparency<1
  rig.halo.ImageTransparency=1-strength*(reducedEffects and .37 or .83)
  rig.core.ImageTransparency=1-strength*(reducedEffects and .49 or .98)
@@ -147,7 +149,7 @@ function Display.draw(rig,record,ground,now,strength,reducedMotion,reducedEffect
    local remaining=1-t
    local tint=rig.moteColor:Lerp(record.color:Lerp(Color3.fromRGB(119,62,166),.24),t*t)
    local opacity=(1-math.exp(-t*18))*math.sqrt(remaining)*strength*.82
-   EnergyDisc.place(mote,position,diameter*scale*remaining,tint,opacity)
+   EnergyDisc.place(mote,position,diameter*scale*remaining*(optical and .38 or 1),tint,opacity*(optical and .65 or 1))
   end
  end
 end

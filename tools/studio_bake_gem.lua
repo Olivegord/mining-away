@@ -31,17 +31,33 @@ local function bakeGemPreview(key,data,frame,size)
  -- Bake the same transformed triangles and interpolated facet colors used
  -- by GemAppearance. Box scaling before rotation distorted the old bismuth.
  local alpha=1-data.opacity*data.vertexAlpha
+ local function texturedTriangle(vertices,colors,uvs,depth,parent,transparency)
+  if depth>0 then
+   local ab,bc,ca=(vertices[1]+vertices[2])*.5,(vertices[2]+vertices[3])*.5,(vertices[3]+vertices[1])*.5
+   local cab,cbc,cca=colors[1]:Lerp(colors[2],.5),colors[2]:Lerp(colors[3],.5),colors[3]:Lerp(colors[1],.5)
+   local uab,ubc,uca=(uvs[1]+uvs[2])*.5,(uvs[2]+uvs[3])*.5,(uvs[3]+uvs[1])*.5
+   texturedTriangle({vertices[1],ab,ca},{colors[1],cab,cca},{uvs[1],uab,uca},depth-1,parent,transparency)
+   texturedTriangle({ab,vertices[2],bc},{cab,colors[2],cbc},{uab,uvs[2],ubc},depth-1,parent,transparency)
+   texturedTriangle({ca,bc,vertices[3]},{cca,cbc,colors[3]},{uca,ubc,uvs[3]},depth-1,parent,transparency)
+   texturedTriangle({ab,bc,ca},{cab,cbc,cca},{uab,ubc,uca},depth-1,parent,transparency)
+   return
+  end
+  local c=colors[1]:Lerp(colors[2],.5):Lerp(colors[3],1/3)
+  if data.texture then
+   local uv=(uvs[1]+uvs[2]+uvs[3])/3
+   local shade=RockFinish.Gems.geometry.texture(uv.X%1,uv.Y%1,key)
+   c=Color3.new(c.R*shade,c.G*shade,c.B*shade)
+  end
+  triangle(vertices[1],vertices[2],vertices[3],c,parent,transparency)
+ end
  for index,f in ipairs(data.faces) do
   local a,b,c=point(f[1]),point(f[2]),point(f[3])
   if key=='Cobalt' then triangle(a,b,c,f[4],preview,alpha)
   else
-   local ab,bc,ca=(a+b)*.5,(b+c)*.5,(c+a)*.5
-   triangle(a,ab,ca,f[4]:Lerp(f[5],1/6):Lerp(f[6],1/6),preview,alpha)
-   triangle(ab,b,bc,f[5]:Lerp(f[4],1/6):Lerp(f[6],1/6),preview,alpha)
-   triangle(ca,bc,c,f[6]:Lerp(f[4],1/6):Lerp(f[5],1/6),preview,alpha)
-   triangle(ab,bc,ca,f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),preview,alpha)
+   local uvs={f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero}
+   texturedTriangle({a,b,c},{f[4],f[5],f[6]},uvs,key=='Diamond' and 2 or 1,preview,alpha)
   end
-  if index%150==0 then task.wait() end
+  if index%70==0 then task.wait() end
  end
  if key=='Cobalt' then
   for _,facet in ipairs(preview:GetChildren()) do facet.Material=Enum.Material.Metal;facet.Reflectance=.18 end
@@ -56,7 +72,7 @@ local function bakeGemPreview(key,data,frame,size)
  end
  local clouds=Instance.new('Folder');clouds.Name='MineralClouds'
  for _,f in ipairs(data.clouds or {}) do
-  triangle(point(f[1]),point(f[2]),point(f[3]),f[4]:Lerp(f[5],.5):Lerp(f[6],1/3),clouds,.38)
+  texturedTriangle({point(f[1]),point(f[2]),point(f[3])},{f[4],f[5],f[6]},{f[7] or Vector2.zero,f[8] or Vector2.zero,f[9] or Vector2.zero},1,clouds,.78)
  end
  -- Consolidate the durable Edit approximation into one shell and one grain
  -- object. Thousands of temporary wedges must not remain in the live map.

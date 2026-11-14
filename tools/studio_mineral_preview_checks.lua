@@ -25,6 +25,8 @@ shared.MineralPreviewCheck={view=view,root=fx,report=report,update=function() vi
  close=function() view:destroy();fx:Destroy();shared.MineralPreviewCheck=nil end}
 local diamond=view.byId[-5]
 assert(diamond.view:FindFirstChild('MineralClouds'))
+assert(diamond.view:GetAttribute('OpticalTexture'))
+assert(view.byId[-3].view:GetAttribute('OpticalTexture'))
 assert(diamond.displayRig.rays[1].beam.Enabled)
 PickupDisplay.draw(diamond.displayRig,diamond,diamond.view.Position-Vector3.yAxis*2,now,1,true,true)
 for _,ray in ipairs(diamond.displayRig.rays) do assert(not ray.beam.Enabled) end

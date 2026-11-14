@@ -1,5 +1,11 @@
 # VFX instructions — owner feedback and implementation
 
+## November 14 — rejected regular cuts and floating diamond patches
+
+The owner rejected the first Amber / Quartz / Diamond pass. GemRefinement now derives their uneven planar cuts from half-space intersections. Amber has a tilted cut and a strong burnt-orange to honey gradient. Quartz has a broken crown, smaller blue grains contained inside its cut volume, a pale middle and gold base. Diamond replaces five floating patches with near-shell fracture surfaces, brighter pink/cyan/mint/peach planes and deterministic cloudy texture. Two cached EditableImages (256² Diamond, 128² Quartz) supply fine fixed optical detail; no per-frame texture generation or new uploaded asset. The existing Mesh/Image API permission applies. Image allocation failure retains the colored mesh and logs a texture fallback.
+
+Ruby/Violet retain their palettes and general cuts with unequal sector widths/heights. The three optical stones keep the pickup display, with a fainter outline and smaller rising discs to expose their surfaces. Diamond keeps its short rays and four-point glints. Native Edit previews bake coarse texture samples into colored unions; Play uses the full image texture on the actual pickup mesh. Never describe that Edit approximation or an API-double pass as exact photorealism, gameplay acceptance or a multiplayer test.
+
 ## November 14 — distinct Amber, Quartz and Diamond finishes
 
 The new five-field order is Amber, Ruby, Quartz, Violet, Diamond. Amber uses SmoothPlastic, low transparency and no interior specks. Quartz has a clear blue-to-gold shell, 76 blue/white crown dots and 85 much finer golden base grains. Diamond has pink/cyan/green/orange facets, five irregular triangulated translucent mineral clouds, sparse fixed grains, three short colored light rays and a faster small four-point sparkle cadence. Rays share the existing display pool and obey hide/distance/Reduced Effects; Reduced Motion holds their brightness steady. The GemKind attribute identifies the finish after PickupView renames the part.

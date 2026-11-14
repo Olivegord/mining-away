@@ -107,7 +107,7 @@ def module_bundle(names):
    for embedded in ('GemAppearance','RockVeins'):
     module=(ROOT/'src'/f'{embedded}.lua').read_text()
     if embedded=='GemAppearance':
-     module=module.replace("require('./GemGeometry')",'(function()\n'+(ROOT/'src/GemGeometry.lua').read_text()+'\nend)()')
+     module=module.replace("require('./GemGeometry')",'(function()\n'+(ROOT/'src/GemGeometry.lua').read_text().replace("require('./GemRefinement')", '(function()\n'+(ROOT/'src/GemRefinement.lua').read_text()+'\nend)()')+'\nend)()')
     code=code.replace("require('./"+embedded+"')",'(function()\n'+module+'\nend)()')
   if name=='PickupView':
    code=code.replace("require('./MineralLineup')",'(function()\n'+(ROOT/'src/MineralLineup.lua').read_text()+'\nend)()')

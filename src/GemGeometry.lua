@@ -1,5 +1,7 @@
 -- One geometry description feeds runtime meshes and the durable Edit specimens.
 local G={}
+local Refinement=require('./GemRefinement')
+G.texture=Refinement.texture
 local rgb=Color3.fromRGB
 G.order={'Amber','Ruby','Quartz','Violet','Diamond'}
 G.definitions={
@@ -19,6 +21,7 @@ function G.key(value)
 end
 function G.describe(key)
  key=G.key(key)
+ local refined=Refinement.describe(key);if refined then return refined end
  local spec=G.definitions[key]
  local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
  local data={faces={},grains={},clouds={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
@@ -57,9 +60,9 @@ function G.describe(key)
   for k,ring in ipairs(rings) do
    rows[k]={}
    for i=1,sides do
-    local angle=(i-1)*2*math.pi/sides+.19
-    local radius=ring[1]*(i%3==0 and (ruby and .88 or .90) or 1)
-    rows[k][i]=transform(Vector3.new(math.cos(angle)*radius+ring[2]*lean,ring[2],math.sin(angle)*radius))
+    local angle=(i-1)*2*math.pi/sides+.19+.10*math.sin(i*2.31)
+    local radius=ring[1]*(.92+.15*math.sin(i*1.71+k*.21))
+    rows[k][i]=transform(Vector3.new(math.cos(angle)*radius+ring[2]*lean,ring[2]+.035*math.sin(i*2.16+k*.9),math.sin(angle)*radius))
    end
   end
   local top=transform(Vector3.new(lean*.5,.5,0))
@@ -84,42 +87,7 @@ function G.describe(key)
   end
  end
  local long={{.025,.5},{.34,.28},{.36,-.29},{.035,-.5}}
- if spec.kind=='cluster' then
-  prism(6,long,.04,CFrame.new(.01,.02,0),Vector3.new(.65,.96,.66),42,593)
-  prism(5,long,-.12,CFrame.new(-.32,-.18,.04)*CFrame.Angles(0,.4,.33),Vector3.new(.40,.67,.43),18,614)
-  prism(6,long,.06,CFrame.new(.30,-.24,.10)*CFrame.Angles(-.19,0,-.38),Vector3.new(.37,.58,.39),16,631)
-  -- Fine ochre sediment is fixed inside the lower body, distinct from the
-  -- larger blue-white dots at the crowns. It tumbles with the stone.
-  local random=Random.new(404)
-  for i=1,85 do
-   local y=random:NextNumber(-.42,-.12)
-   data.grains[#data.grains+1]={Vector3.new(random:NextNumber(-.13,.13),y,random:NextNumber(-.12,.12)),random:NextNumber(.0018,.0045),rgb(232,199,111)}
-  end
- elseif spec.kind=='amber' then
-  prism(7,{{.27,.43},{.46,.20},{.44,-.24},{.24,-.44}},-.18,CFrame.new(),Vector3.one,0,901)
- elseif spec.kind=='diamond' then
-  prism(6,{{.015,.5},{.45,.17},{.40,-.27},{.025,-.5}},-.13,CFrame.new(),Vector3.one,8,918)
-  -- Irregular translucent mineral clouds sit within the clear shell. A small
-  -- triangulated color field gives muddy patches instead of uniform confetti.
-  local random=Random.new(107)
-  local palette={rgb(223,157,195),rgb(91,185,203),rgb(154,188,134),rgb(220,168,115),rgb(133,127,126)}
-  for patch=1,5 do
-   local center=Vector3.new(random:NextNumber(-.10,.10),-.27+(patch-1)*.13,random:NextNumber(-.10,.10))
-   local frame=CFrame.new(center)*CFrame.Angles(.24*patch,.7*patch,-.26*patch)
-   local rows={}
-   for y=0,5 do
-    rows[y]={}
-    for x=0,5 do
-     local position=frame:PointToWorldSpace(Vector3.new((x/5-.5)*.38*(.65+.35*math.sin(y/5*math.pi)),(y/5-.5)*.31+math.sin(x*1.7+patch)*.015,random:NextNumber(-.018,.018)))
-     rows[y][x]={position,palette[patch]:Lerp(rgb(159,151,140),random:NextNumber(.1,.58))}
-    end
-   end
-   for y=0,4 do for x=0,4 do
-    local a,b,c,d=rows[y][x],rows[y][x+1],rows[y+1][x],rows[y+1][x+1]
-    for _,t in ipairs({{a,b,c},{b,d,c}}) do data.clouds[#data.clouds+1]={t[1][1],t[2][1],t[3][1],t[1][2],t[2][2],t[3][2]} end
-   end end
-  end
- elseif spec.kind=='needle' then
+ if spec.kind=='needle' then
   prism(5,{{.015,.5},{.34,.29},{.46,-.13},{.025,-.5}},-.22,CFrame.new(),Vector3.one,26,702)
  elseif spec.kind=='dark' then
   prism(5,{{.025,.5},{.43,.15},{.45,-.28},{.035,-.5}},.17,CFrame.new(),Vector3.one,14,721)
