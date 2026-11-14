@@ -15,7 +15,7 @@ local function build(key)
   local face=mesh:AddTriangle(ids[1],ids[2],ids[3])
   local n=mesh:AddNormal((f[2]-f[1]):Cross(f[3]-f[1]).Unit)
   mesh:SetFaceNormals(face,{n,n,n})
-  mesh:SetFaceColors(face,{mesh:AddColor(f[4],.88),mesh:AddColor(f[5],.88),mesh:AddColor(f[6],.88)})
+  mesh:SetFaceColors(face,{mesh:AddColor(f[4],data.vertexAlpha),mesh:AddColor(f[5],data.vertexAlpha),mesh:AddColor(f[6],data.vertexAlpha)})
  end
  local function part(m,name)
   -- Release the large dynamic allocation before building the next mineral.
@@ -52,7 +52,7 @@ local function build(key)
  end
  if key=='Cobalt' then shell.Material=Enum.Material.Metal;shell.Reflectance=.18 end
  shell:SetAttribute('GemAspect',data.aspect)
- shell:SetAttribute('GemOpacity',key=='Emerald' and .96 or key=='Cobalt' and 1 or .76)
+ shell:SetAttribute('GemOpacity',data.opacity)
  shell.Transparency=1-shell:GetAttribute('GemOpacity')
  return shell
 end

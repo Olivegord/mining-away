@@ -4,7 +4,7 @@ local rgb=Color3.fromRGB
 G.order={'Quartz','Ruby','Cobalt','Violet','Emerald'}
 G.definitions={
  Quartz={kind='cluster',aspect=Vector3.new(1.02,1.85,.85),colors={rgb(21,62,104),rgb(54,176,195),rgb(215,255,239),rgb(143,116,224)}},
- Ruby={kind='ruby',aspect=Vector3.new(1.14,1.02,.98),colors={rgb(45,6,43),rgb(213,24,79),rgb(255,163,115),rgb(244,71,158)}},
+ Ruby={kind='ruby',aspect=Vector3.new(.94,1.10,.84),colors={rgb(65,8,62),rgb(218,26,83),rgb(255,167,123),rgb(255,86,164)},opacity=.72,vertexAlpha=.86},
  Cobalt={kind='bismuth',aspect=Vector3.new(1.16,1.68,1.02),colors={rgb(13,21,48),rgb(40,113,232),rgb(248,213,96),rgb(175,57,211)}},
  Violet={kind='needle',aspect=Vector3.new(.46,3.05,.48),colors={rgb(27,4,51),rgb(139,18,209),rgb(255,180,246),rgb(105,49,201)}},
  Emerald={kind='dark',aspect=Vector3.new(.92,1.70,.78),colors={rgb(17,13,23),rgb(27,39,39),rgb(67,240,190),rgb(156,246,145)}},
@@ -18,7 +18,10 @@ end
 function G.describe(key)
  key=G.key(key)
  local spec=G.definitions[key]
- local data={faces={},grains={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2]}
+ local ruby=spec.kind=='ruby' -- The Ruby cut and finish from 3b1f622.
+ local data={faces={},grains={},boxes={},aspect=spec.aspect,key=key,tint=spec.colors[2],
+  opacity=spec.opacity or (key=='Emerald' and .96 or key=='Cobalt' and 1 or .76),
+  vertexAlpha=spec.vertexAlpha or .88}
  if key=='Emerald' then data.tint=spec.colors[3] end
  local function gradient(p,sector)
   local t=math.clamp(p.Y+.5,0,1)
@@ -29,15 +32,16 @@ function G.describe(key)
    local dark=spec.colors[1]:Lerp(spec.colors[2],sector%3*.18)
    return dark:Lerp(sector%2==0 and spec.colors[3] or spec.colors[4],glow)
   end
-  local c=t<.56 and spec.colors[1]:Lerp(spec.colors[2],t/.56)
-   or spec.colors[2]:Lerp(spec.colors[3],(t-.56)/.44)
-  return c:Lerp(spec.colors[4],sector%3==0 and .28 or .04)
+  local midpoint=ruby and .52 or .56
+  local c=t<midpoint and spec.colors[1]:Lerp(spec.colors[2],t/midpoint)
+   or spec.colors[2]:Lerp(spec.colors[3],(t-midpoint)/(ruby and .48 or .44))
+  return c:Lerp(spec.colors[4],sector%3==0 and (ruby and .45 or .28) or (ruby and .08 or .04))
  end
  local function face(a,b,c,sector,center,fixed)
   local n=(b-a):Cross(c-a)
   if n.Magnitude<.000001 then return end
   if n:Dot((a+b+c)/3-(center or Vector3.zero))<0 then b,c=c,b end
-  local shade=sector%2==0 and .12 or .28
+  local shade=sector%2==0 and .12 or (ruby and .38 or .28)
   local function color(p) return (fixed or gradient(p,sector)):Lerp(Color3.new(0,0,0),shade) end
   data.faces[#data.faces+1]={a,b,c,color(a),color(b),color(c)}
  end
@@ -48,28 +52,29 @@ function G.describe(key)
    rows[k]={}
    for i=1,sides do
     local angle=(i-1)*2*math.pi/sides+.19
-    local radius=ring[1]*(i%3==0 and .90 or 1)
+    local radius=ring[1]*(i%3==0 and (ruby and .88 or .90) or 1)
     rows[k][i]=transform(Vector3.new(math.cos(angle)*radius+ring[2]*lean,ring[2],math.sin(angle)*radius))
    end
   end
   local top=transform(Vector3.new(lean*.5,.5,0))
-  local bottom=transform(Vector3.new(-lean*.5,-.5,0))
+  local bottom=transform(Vector3.new(-lean*(ruby and .45 or .5),-.5,0))
   local center=frame.Position
   for i=1,sides do
    local j=i%sides+1
    face(top,rows[1][i],rows[1][j],i,center)
    for k=1,#rows-1 do
     face(rows[k][i],rows[k+1][i],rows[k+1][j],i,center)
-    face(rows[k][i],rows[k+1][j],rows[k][j],i,center)
+    face(rows[k][i],rows[k+1][j],rows[k][j],ruby and i+1 or i,center)
    end
    face(rows[#rows][i],bottom,rows[#rows][j],i,center)
   end
   local random=Random.new(seed)
   for i=1,grainCount do
-   local y=random:NextNumber(-.29,.28)
-   local r=(.23-math.abs(y)*.32)*math.sqrt(random:NextNumber())
+   local y=random:NextNumber(ruby and -.30 or -.29,ruby and .32 or .28)
+   local r=((ruby and .28 or .23)-math.abs(y)*(ruby and .38 or .32))*math.sqrt(random:NextNumber())
    local a=random:NextNumber(0,math.pi*2)
-   data.grains[#data.grains+1]={transform(Vector3.new(math.cos(a)*r+y*lean,y,math.sin(a)*r)),random:NextNumber(.008,.014)*math.min(scale.X,scale.Y,scale.Z)}
+   local size=random:NextNumber(.008,ruby and .015 or .014)*(ruby and (i%9==0 and 1.35 or 1) or math.min(scale.X,scale.Y,scale.Z))
+   data.grains[#data.grains+1]={transform(Vector3.new(math.cos(a)*r+y*lean,y,math.sin(a)*r)),size}
   end
  end
  local long={{.025,.5},{.34,.28},{.36,-.29},{.035,-.5}}
@@ -82,7 +87,7 @@ function G.describe(key)
  elseif spec.kind=='dark' then
   prism(5,{{.025,.5},{.43,.15},{.45,-.28},{.035,-.5}},.17,CFrame.new(),Vector3.one,14,721)
  elseif spec.kind=='ruby' then
-  prism(7,{{.28,.46},{.50,.12},{.43,-.29},{.16,-.48}},-.10,CFrame.new(),Vector3.one,30,659)
+  prism(7,{{.28,.46},{.48,.19},{.44,-.22},{.25,-.44}},-.12,CFrame.new(),Vector3.one,30,593+7*17)
  else
   -- Hollow square terraces with open centers, plus two offset satellite steps.
   -- These are geometric hopper crystals, not a prism with a rainbow texture.
