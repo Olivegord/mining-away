@@ -211,6 +211,7 @@ function V.new(root,parent,audio,reducedMotion)
   local contactAt=source:GetAttribute('GroundImpactAt')
   if not r.arc and type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
+  return r
  end
  self.lineup=MineralLineup.new(parent,add,RockFinish)
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -274,10 +275,19 @@ function V:update(dt,now)
  local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
  local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
- MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects)
+ local character=self.player.Character
+ local rootPart=character and character:FindFirstChild('HumanoidRootPart')
+ MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects,rootPart and rootPart.Position,cameraPosition)
  local displayAt=now-PickupMotion.DELAY
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
+  local replayAt=r.previewReplayAt
+  if replayAt and displayAt>=replayAt then
+   r.born=replayAt;r.previewReplayAt=nil;replayAt=nil
+   r.landCue=nil;r.glintCycle=nil;r.trailUsed=nil
+   r.hoverAlpha=nil;r.hoverStartedAt=nil;r.restSample=nil
+   removeTrail(self,r);removeIdle(self,r)
+  end
   if not r.collectAt and source.Parent then
    local processed=source:GetAttribute('ProcessedAt')
    local collectedAt=processed or source:GetAttribute('CollectedAt')
@@ -328,6 +338,9 @@ function V:update(dt,now)
    -- Keep the record briefly in case its collection receipt arrives late.
    opacity=0;done=now-r.removedAt>=.28
   end
+  if replayAt then
+   opacity*=math.clamp((replayAt-displayAt)/MineralLineup.fadeTime,0,1)
+  end
   if r.arc and displayAt<r.born then opacity=0 end
   local latest=r.samples[#r.samples]
   local dust=not done and not reducedEffects and r.physical and cameraPosition
@@ -360,7 +373,7 @@ function V:update(dt,now)
     if age-r.landAge>=.28 then r.landCue=true
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
-     if self.audio then
+     if self.audio and not r.preview then
       self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end

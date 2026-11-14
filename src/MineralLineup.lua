@@ -1,11 +1,13 @@
 -- Authored specimens remain in Edit. Play substitutes the exact drop renderer,
--- with no pickup IDs, rewards, attraction or expiry.
+-- with local-only IDs and no rewards, attraction or expiry.
 local L={}
+local REPLAY_INTERVAL,STAGGER=12,.22
+L.fadeTime=.30
 function L.new(parent,add,finish)
  local map=workspace:FindFirstChild('MiningAway')
  map=map and map:FindFirstChild('Map')
  local root=map and map:FindFirstChild('MineralLineup')
- local self={sources={},hidden={},finish=finish}
+ local self={sources={},records={},hidden={},finish=finish}
  if not root then return self end
  local born=workspace:GetServerTimeNow()-10
  for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
@@ -18,15 +20,21 @@ function L.new(parent,add,finish)
    source.Size=Vector3.new(table.unpack(Workshop.ROCK_SIZE))
    local floor=model.DisplayPad.Position.Y+model.DisplayPad.Size.Y*.5+.22
    local position=Vector3.new(anchor.Position.X,floor,anchor.Position.Z)
+   local vx,vy,vz=OreDrops.cargoLaunch(i,false)
+   -- Use the real launch speed, aimed inward so every path lands on its pad.
+   local outward=-model.DisplayPad.CFrame.LookVector
+   local heading=outward*math.sqrt(vx*vx+vz*vz)
+   local arc=OreDrops.rawArc(0,1.5,0,-heading.X,vy,-heading.Z,0)
+   local origin=position+Vector3.new(-arc.landX,1.5,-arc.landZ)
    source.Position=position;source.Transparency=0
    for name,value in pairs({PickupId=-i,PhysicalCargo=true,Units=1,Mineral=key,
     Position=position,Velocity=Vector3.zero,FloorY=floor,SnapshotAt=born+2,SpawnAt=born,
-    GroundImpactAt=born+1,GroundImpactPosition=position,GroundImpactSpeed=0,
-    OreLaunchOrigin=position+Vector3.yAxis,OreLaunchVelocity=Vector3.new(.01,1,0),CleanCargoArc=true}) do
+    OreLaunchOrigin=origin,OreLaunchVelocity=Vector3.new(-heading.X,vy,-heading.Z),CleanCargoArc=true}) do
     source:SetAttribute(name,value)
    end
    source.Parent=parent;self.sources[#self.sources+1]=source
-   add(source)
+   local record=add(source)
+   record.preview=true;self.records[#self.records+1]=record
    for _,p in ipairs(model.PreviewGeometry:GetDescendants()) do
     if p:IsA('BasePart') then p.LocalTransparencyModifier=1;self.hidden[#self.hidden+1]=p end
    end
@@ -47,8 +55,28 @@ function L.new(parent,add,finish)
  end
  return self
 end
-function L.update(self,now,reducedMotion,reducedEffects)
+function L.update(self,now,reducedMotion,reducedEffects,playerPosition,cameraPosition)
  if self.core then self.finish.veins(self.core,now,reducedEffects,reducedMotion) end
+ if reducedMotion then
+  self.nextReplay=nil
+  for _,record in ipairs(self.records) do record.previewReplayAt=nil end
+  return
+ end
+ local nearby=false
+ if playerPosition and cameraPosition then
+  for _,record in ipairs(self.records) do
+   local point=Vector3.new(record.arc.landX,record.arc.floor,record.arc.landZ)
+   if (point-playerPosition).Magnitude<25 and (point-cameraPosition).Magnitude<45 then nearby=true;break end
+  end
+ end
+ if not nearby then return end
+ if self.nextReplay and now<self.nextReplay then return end
+ -- Let someone arrive and look up before the first gem fires. Keep the row
+ -- settled between passes so the shapes can still be compared side by side.
+ for i,record in ipairs(self.records) do
+  record.previewReplayAt=now+.85+(i-1)*STAGGER
+ end
+ self.nextReplay=now+REPLAY_INTERVAL
 end
 function L.destroy(self)
  for _,source in ipairs(self.sources) do source:Destroy() end

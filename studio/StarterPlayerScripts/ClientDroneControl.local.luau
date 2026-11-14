@@ -14053,13 +14053,15 @@ local Http=game:GetService('HttpService')
 local GemAppearance=RockFinish.Gems
 local MineralLineup=(function()
 -- Authored specimens remain in Edit. Play substitutes the exact drop renderer,
--- with no pickup IDs, rewards, attraction or expiry.
+-- with local-only IDs and no rewards, attraction or expiry.
 local L={}
+local REPLAY_INTERVAL,STAGGER=12,.22
+L.fadeTime=.30
 function L.new(parent,add,finish)
  local map=workspace:FindFirstChild('MiningAway')
  map=map and map:FindFirstChild('Map')
  local root=map and map:FindFirstChild('MineralLineup')
- local self={sources={},hidden={},finish=finish}
+ local self={sources={},records={},hidden={},finish=finish}
  if not root then return self end
  local born=workspace:GetServerTimeNow()-10
  for i,key in ipairs({'Quartz','Ruby','Cobalt','Violet','Emerald'}) do
@@ -14072,15 +14074,21 @@ function L.new(parent,add,finish)
    source.Size=Vector3.new(table.unpack(Workshop.ROCK_SIZE))
    local floor=model.DisplayPad.Position.Y+model.DisplayPad.Size.Y*.5+.22
    local position=Vector3.new(anchor.Position.X,floor,anchor.Position.Z)
+   local vx,vy,vz=OreDrops.cargoLaunch(i,false)
+   -- Use the real launch speed, aimed inward so every path lands on its pad.
+   local outward=-model.DisplayPad.CFrame.LookVector
+   local heading=outward*math.sqrt(vx*vx+vz*vz)
+   local arc=OreDrops.rawArc(0,1.5,0,-heading.X,vy,-heading.Z,0)
+   local origin=position+Vector3.new(-arc.landX,1.5,-arc.landZ)
    source.Position=position;source.Transparency=0
    for name,value in pairs({PickupId=-i,PhysicalCargo=true,Units=1,Mineral=key,
     Position=position,Velocity=Vector3.zero,FloorY=floor,SnapshotAt=born+2,SpawnAt=born,
-    GroundImpactAt=born+1,GroundImpactPosition=position,GroundImpactSpeed=0,
-    OreLaunchOrigin=position+Vector3.yAxis,OreLaunchVelocity=Vector3.new(.01,1,0),CleanCargoArc=true}) do
+    OreLaunchOrigin=origin,OreLaunchVelocity=Vector3.new(-heading.X,vy,-heading.Z),CleanCargoArc=true}) do
     source:SetAttribute(name,value)
    end
    source.Parent=parent;self.sources[#self.sources+1]=source
-   add(source)
+   local record=add(source)
+   record.preview=true;self.records[#self.records+1]=record
    for _,p in ipairs(model.PreviewGeometry:GetDescendants()) do
     if p:IsA('BasePart') then p.LocalTransparencyModifier=1;self.hidden[#self.hidden+1]=p end
    end
@@ -14101,8 +14109,28 @@ function L.new(parent,add,finish)
  end
  return self
 end
-function L.update(self,now,reducedMotion,reducedEffects)
+function L.update(self,now,reducedMotion,reducedEffects,playerPosition,cameraPosition)
  if self.core then self.finish.veins(self.core,now,reducedEffects,reducedMotion) end
+ if reducedMotion then
+  self.nextReplay=nil
+  for _,record in ipairs(self.records) do record.previewReplayAt=nil end
+  return
+ end
+ local nearby=false
+ if playerPosition and cameraPosition then
+  for _,record in ipairs(self.records) do
+   local point=Vector3.new(record.arc.landX,record.arc.floor,record.arc.landZ)
+   if (point-playerPosition).Magnitude<25 and (point-cameraPosition).Magnitude<45 then nearby=true;break end
+  end
+ end
+ if not nearby then return end
+ if self.nextReplay and now<self.nextReplay then return end
+ -- Let someone arrive and look up before the first gem fires. Keep the row
+ -- settled between passes so the shapes can still be compared side by side.
+ for i,record in ipairs(self.records) do
+  record.previewReplayAt=now+.85+(i-1)*STAGGER
+ end
+ self.nextReplay=now+REPLAY_INTERVAL
 end
 function L.destroy(self)
  for _,source in ipairs(self.sources) do source:Destroy() end
@@ -14321,6 +14349,7 @@ function V.new(root,parent,audio,reducedMotion)
   local contactAt=source:GetAttribute('GroundImpactAt')
   if not r.arc and type(contactAt)=='number' and contactAt>0 then r.landAge=math.max(0,contactAt-r.born) end
   self.records[source]=r;self.byId[id]=r;sample(r,source,workspace:GetServerTimeNow())
+  return r
  end
  self.lineup=MineralLineup.new(parent,add,RockFinish)
  for _,source in ipairs(root:GetDescendants()) do add(source) end
@@ -14384,10 +14413,19 @@ function V:update(dt,now)
  local reducedFlashing=self.player:GetAttribute('ReducedFlashing')==true
  local glintStrength=reducedFlashing and .36 or 1
  local reducedMotion=self.reducedMotion and self.reducedMotion()
- MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects)
+ local character=self.player.Character
+ local rootPart=character and character:FindFirstChild('HumanoidRootPart')
+ MineralLineup.update(self.lineup,now,reducedMotion,reducedEffects,rootPart and rootPart.Position,cameraPosition)
  local displayAt=now-PickupMotion.DELAY
  table.clear(self.displayCandidates)
  for source,r in pairs(self.records) do
+  local replayAt=r.previewReplayAt
+  if replayAt and displayAt>=replayAt then
+   r.born=replayAt;r.previewReplayAt=nil;replayAt=nil
+   r.landCue=nil;r.glintCycle=nil;r.trailUsed=nil
+   r.hoverAlpha=nil;r.hoverStartedAt=nil;r.restSample=nil
+   removeTrail(self,r);removeIdle(self,r)
+  end
   if not r.collectAt and source.Parent then
    local processed=source:GetAttribute('ProcessedAt')
    local collectedAt=processed or source:GetAttribute('CollectedAt')
@@ -14438,6 +14476,9 @@ function V:update(dt,now)
    -- Keep the record briefly in case its collection receipt arrives late.
    opacity=0;done=now-r.removedAt>=.28
   end
+  if replayAt then
+   opacity*=math.clamp((replayAt-displayAt)/MineralLineup.fadeTime,0,1)
+  end
   if r.arc and displayAt<r.born then opacity=0 end
   local latest=r.samples[#r.samples]
   local dust=not done and not reducedEffects and r.physical and cameraPosition
@@ -14470,7 +14511,7 @@ function V:update(dt,now)
     if age-r.landAge>=.28 then r.landCue=true
     elseif typeof(point)=='Vector3' and speed>0 then
      r.landCue=true
-     if self.audio then
+     if self.audio and not r.preview then
       self.audio:play('ore_land',point,{level=math.clamp(speed/43,.67,1.18)*(r.arc and 1.12 or r.physical and 1 or .82),
        pitch=(r.physical and .84 or 1.02)+(r.seed%4)*.028})
      end
