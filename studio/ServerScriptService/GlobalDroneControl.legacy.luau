@@ -53,6 +53,8 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
+W.RAW_CRYSTAL_COLOR={204,32,47}
+W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
@@ -1965,9 +1967,10 @@ function F.crystalStageShape(stage,count,fullSize)
  local progress=math.clamp(stage/math.max(1,count or 3),0,1)
  return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
 end
+F.MaxCrystalDarkness=.42
 function F.crystalDarkness(hp,maxHP)
  local spent=1-math.clamp((hp-10)/math.max(1,maxHP-10),0,1)
- return 1-(1-spent^1.28)^1.25
+ return F.MaxCrystalDarkness*(1-(1-spent^1.28)^1.25)
 end
 function F.junkDarkness(hp,maxHP,stage,count)
  local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
@@ -3574,7 +3577,7 @@ function C.split(template,name)
    base:Destroy();container:Destroy();return nil
   end
   clean(half,index==1 and 'Left' or 'Right')
-  half.Color=Color3.new(0,0,0);half.CastShadow=false
+  half.CastShadow=false
   half:SetAttribute('SizeRatio',half.Size/size)
   -- CSG extents may sit off-center from the returned part's CFrame. Account
   -- for the mesh-local offset when applying non-uniform stage dimensions.
@@ -9915,10 +9918,11 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
  chip.Size=drop.raw and Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE)) or Vector3.new(.97,.73,.88)
- chip.Position=position;chip.Color=color
- if not drop.compacted then chip.Material=Enum.Material.Neon;chip.MaterialVariant='';chip.Reflectance=0 end
+ chip.Position=position
+ chip.Color=drop.compacted and color or Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
+ chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
+ chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
-  if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
   chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end

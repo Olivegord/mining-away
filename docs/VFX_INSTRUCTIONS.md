@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 13 — colored fracture and polished red drops
+
+Keep the rock’s stone color visible through damage, Ramiel’s cluster contact, and the split. The matte sides and darker base remain readable as the rock shrinks. Raw crystal drops are glossy red with timed landing and idle glints. Preserve the separate chips and sparks on impact.
+
 ## November 13 — matte stone and neon ore contrast
 
 Ordinary rocks have lightly mineral-tinted gray stone faces, a smooth darker base and no idle sun glints. Keep the existing shapes and let the damage tint carry the stone and its base shadow to black. Keep active contact effects and the larger neon drops.

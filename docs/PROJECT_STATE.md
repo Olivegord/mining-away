@@ -11,18 +11,26 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 82ee68e8944e450be8a1f1cf6b1f77cd8085b551ca9fe7761073ecfff0b48e4d | Matte stone finish and vertical shade installed. |
-| Shared Studio Sources | Save 286 | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | a0c67c5421484208ca70e0f3fb328f56cc6c1d880cb4c2645c2f05d4bbca531a | Visible damage tint and polished red ore installed. |
+| Shared Studio Sources | Save 287 | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matte, muted mineable rocks with darker bases alongside the neon ore. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matte rocks that retain color through the split, and polished red ore drops with glints. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — visible fracture color and polished red ore
+
+Ordinary rock damage and Ramiel cluster contact darken the stone tint by at most 42%. The splitting halves keep a darker version of the same stone color. Loose ore and unpressed ore on the Emptier mount now use polished red SmoothPlastic with modest reflectance. Existing landing and idle glints, color-tagged mineral values, and collection timing remain in place.
+
+The owner ended Play and Studio returned to Edit for DRONEREVOLUTION place **124078027733625**, universe **10774898335**. The server arrived through Script Sync. The StarterPlayerScripts root reported `Errored`, so the client was installed against verified before and after hashes. Team Create save **287** succeeded and all seven Sources matched `build/DRONE_GAME.rbxl` after the save. The canonical refresh preserved native scenery and backup scripts. No player publication.
+
+Crystal Run integration, crystal contact timing, beam and pickup tests passed with API doubles. The broader gadget suite stops at the existing courier-delay fixture. No native Play or multiplayer visual check was run for this change. Reproduce the seven Sources with `python3 tools/script_sync.py` and verify the committed canonical file with `python3 tools/build.py`.
 
 ## November 13 — matte rocks with darker bases
 

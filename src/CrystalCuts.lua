@@ -135,7 +135,7 @@ function C.split(template,name)
    base:Destroy();container:Destroy();return nil
   end
   clean(half,index==1 and 'Left' or 'Right')
-  half.Color=Color3.new(0,0,0);half.CastShadow=false
+  half.CastShadow=false
   half:SetAttribute('SizeRatio',half.Size/size)
   -- CSG extents may sit off-center from the returned part's CFrame. Account
   -- for the mesh-local offset when applying non-uniform stage dimensions.

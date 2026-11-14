@@ -75,8 +75,9 @@ for _,gradient in ipairs(r.stoneGradient) do
  assert(gradient.LocalTransparencyModifier==1,'a rock gradient remained visible after the split')
 end
 local split=rockDamage.feedback.fractures
-assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Color.R==0 and split[2].p.Color.R==0,
- 'a shot that skipped stages failed to open the black final-stage model')
+assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Material==Enum.Material.Concrete
+ and split[1].p.Color.R>.18 and split[2].p.Color.R>.18,
+ 'a shot that skipped stages failed to open the visible final-stage stone model')
 local startGap=(split[2].p.Position-split[1].p.Position).Magnitude
 rockDamage.feedback:step(103.23)
 assert((split[2].p.Position-split[1].p.Position).Magnitude>startGap+.15,'the halves did not separate')
@@ -115,8 +116,9 @@ crystalFrame({target},104.33)
 assert(target.view.Color==beforeChar and #audio==11,'the target reacted before beam contact')
 crystalFrame({target},104.35)
 rockDamage.feedback:applyTints(104.35)
-assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==11,'beam contact did not blacken the rock in place')
-for _,gradient in ipairs(target.stoneGradient) do assert(gradient.Color3.R==0,'a gradient stayed visible over the blackout') end
+assert(target.view.Color.R>.20 and target.view.Color.R<beforeChar.R*.65 and (target.view.Size-size).Magnitude<.001 and #audio==11,
+ 'beam contact failed to darken the rock in place while keeping its stone color')
+for _,gradient in ipairs(target.stoneGradient) do assert(gradient.Color3.R>0,'the gradient went fully black') end
 for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=104.84,CrystalBreakAt=104.84,CrystalSplitAt=104.84,CutProjectile='Prism'}) do
  charred:SetAttribute(key,value)
 end

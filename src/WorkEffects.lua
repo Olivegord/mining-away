@@ -566,11 +566,11 @@ function W:courier(drone,record,now)
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
       slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
-      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or .25
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=key=='Quartz' and not packed and Color3.fromRGB(255,0,0)
+     slot.cargo.Color=not packed and Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
       or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
      slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
      if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end

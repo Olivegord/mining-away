@@ -140,6 +140,8 @@ function W.courierStroke(age)
  return W.COURIER_CLEARANCE*(1-lower+lift),close,1-lower
 end
 W.ROCK_SIZE={2.16,1.28,1.94}
+W.RAW_CRYSTAL_COLOR={204,32,47}
+W.RAW_CRYSTAL_REFLECTANCE=.30
 W.BLOCK_SIZE={1.45,.90,1.22}
 W.EMPTIER_WAIT=6
 W.COMPACTOR_BATCH=3
@@ -808,9 +810,10 @@ function F.crystalStageShape(stage,count,fullSize)
  local progress=math.clamp(stage/math.max(1,count or 3),0,1)
  return fullSize and shape+Vector3.yAxis*progress/fullSize or shape
 end
+F.MaxCrystalDarkness=.42
 function F.crystalDarkness(hp,maxHP)
  local spent=1-math.clamp((hp-10)/math.max(1,maxHP-10),0,1)
- return 1-(1-spent^1.28)^1.25
+ return F.MaxCrystalDarkness*(1-(1-spent^1.28)^1.25)
 end
 function F.junkDarkness(hp,maxHP,stage,count)
  local progress=math.clamp((1-hp/math.max(1,maxHP))*(count+1)-stage,0,1)
@@ -3301,11 +3304,11 @@ function W:courier(drone,record,now)
       slot.cargo=part(fx.root,'MountedCargo',mesh and mesh:IsA('UnionOperation') and mesh or nil)
       if slot.cargo:IsA('PartOperation') then slot.cargo.UsePartColor=true end
       slot.cargo.Material=packed and Enum.Material.Metal or Enum.Material.SmoothPlastic
-      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or .25
+      slot.cargo.MaterialVariant='';slot.cargo.Reflectance=packed and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
       slot.dust=fx.detailed and cargoDust(slot.cargo) or nil
      end
      local rgb=Shops.COLORS[tier and tier.name or material]
-     slot.cargo.Color=key=='Quartz' and not packed and Color3.fromRGB(255,0,0)
+     slot.cargo.Color=not packed and Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
       or rgb and Color3.fromRGB(table.unpack(rgb)) or GOLD
      slot.cargo.Size=packed and cargoBlockSize or cargoRawSize
      if slot.dust then slot.dust.Color=ColorSequence.new(slot.cargo.Color:Lerp(WHITE,.52),slot.cargo.Color) end
@@ -8061,6 +8064,8 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    local half=original:Clone()
    local side=index==1 and -1 or 1
    local center=original:GetAttribute('CenterRatio')*size
+   half.Material=Enum.Material.Concrete
+   half.Color=(r.stoneColor or r.baseColor):Lerp(CHAR,.54)
    half.Size=original:GetAttribute('SizeRatio')*size
    half.CFrame=frame*CFrame.new(center);half.Parent=parent
    self.fractures[#self.fractures+1]={p=half,at=reduced and now-.24 or now,hinge=hinge,side=side,reduced=reduced,
@@ -8153,7 +8158,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
    else
     local charAt=r.clusterAt
     local charred=charAt and now>=charAt
-    local shade=charred and 1 or darkness(r,now)
+    local shade=charred and Feel.MaxCrystalDarkness or darkness(r,now)
     if r.stoneGradient then RockFinish.setDarkness(r.stoneGradient,shade) end
     local age=r.flashAt and now-r.flashAt or math.huge
     local duration=r.flashDuration or .28
@@ -8161,7 +8166,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     local initial=Feedback.impactWhite(age,duration)*(r.flashStrength or 0)*attack
     local afterglow=math.max(0,1-(now-(r.cutPulseAt or -math.huge))/.18)
     local pulse=(r.cutPulse or 0)*afterglow
-    local white=math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))*(1-shade)
+    local white=charred and 0 or math.max(initial*(reduced and .25 or 1),pulse*(reduced and .015 or .045))*(1-shade)
     view.Color=(r.mineralColor or r.baseColor):Lerp(CHAR,shade):Lerp(HOT,white)
     if age>=duration then r.flashAt=nil end
     if not r.flashAt and afterglow<=0 and now>=(r.shadeAt or 0)+.11 and (not charAt or charred) then self:forget(r) end

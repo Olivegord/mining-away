@@ -821,10 +821,11 @@ function scene.spawnOrePickup(template,drop,position,velocity,color)
  for key in pairs(chip:GetAttributes()) do chip:SetAttribute(key,nil) end
  chip.Name=drop.raw and (drop.compacted and 'PressedCargo' or 'RawCrystalCargo') or 'OreFragment'
  chip.Size=drop.raw and Vector3.new(table.unpack(drop.compacted and Workshop.BLOCK_SIZE or Workshop.ROCK_SIZE)) or Vector3.new(.97,.73,.88)
- chip.Position=position;chip.Color=color
- if not drop.compacted then chip.Material=Enum.Material.Neon;chip.MaterialVariant='';chip.Reflectance=0 end
+ chip.Position=position
+ chip.Color=drop.compacted and color or Color3.fromRGB(table.unpack(Workshop.RAW_CRYSTAL_COLOR))
+ chip.Material=drop.compacted and Enum.Material.Metal or Enum.Material.SmoothPlastic
+ chip.MaterialVariant='';chip.Reflectance=drop.compacted and 0 or Workshop.RAW_CRYSTAL_REFLECTANCE
  if drop.raw then
-  if drop.compacted then chip.Material=Enum.Material.Metal;chip.MaterialVariant='';chip.Reflectance=0 end
   chip:SetAttribute('PhysicalCargo',true)
   chip:SetAttribute('CargoValue',drop.value)
  end

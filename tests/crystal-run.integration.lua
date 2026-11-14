@@ -236,7 +236,9 @@ do
   assert(old.part:GetAttribute('CrystalSplitAt')==now,'large crystals must split on the finishing hit clock')
   local cargo=pickups[pickupSerial]
   assert(cargo.nodeId==old.id and cargo.units==1 and cargo.value==mineral.ore)
-  assert(cargo.part.Material==Enum.Material.Neon and cargo.part.Size.X>2,'raw reward lost its larger neon silhouette')
+  assert(cargo.part.Material==Enum.Material.SmoothPlastic and cargo.part.Size.X>2 and cargo.part.Reflectance==Workshop.RAW_CRYSTAL_REFLECTANCE,
+   'raw reward lost its larger polished finish')
+  assert(cargo.part.Color.R>.75 and cargo.part.Color.R>cargo.part.Color.G*4,'raw reward lost its red color')
   assert(old.part.Size.Y>old.fullSize.Y*Feel.crystalStageShape(old.stage,old.stageCount).Y+.999,
    'the finishing hit failed to use the taller last stage')
   assert(math.abs(cargo.launchAt-old.splitAt-OreDrops.REWARD_DELAY)<.001)
