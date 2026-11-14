@@ -217,6 +217,7 @@ local fleetView
 local function inspectingFleet() return fleetView and fleetView:isOpen() end
 local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
+ reducedMotion=CrystalImpactView.reducedMotion,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
@@ -1737,7 +1738,7 @@ connect(RunService.RenderStepped,function(dt)
   local input=UIS:GetLastInputType()
   if touch and touch.active then
    local point=touch.input.Position
-   ray=camera:ViewportPointToRay(point.X,point.Y)
+   if not tacticalHUD:blocksPoint(point) then ray=camera:ScreenPointToRay(point.X,point.Y) end
   elseif input.Name:match('^Gamepad') then
    local size=camera.ViewportSize
    ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)

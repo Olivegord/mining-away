@@ -581,7 +581,7 @@ function scene.replenishJunk(field)
   end
  end
 end
-local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
+local function spawnResource(field,forceKind,prepareOnly,plan,nearPin)
  local usage=nodeUsage(field);if usage>=field.cfg.Count then return false end
  local kind=forceKind or ((not field.cfg.SelectionOnly and field.id>1 and field.cfg.Count-usage>=5 and seed:NextNumber()<.12) and 'Geode' or 'Crystal')
  if kind=='Geode' and field.cfg.Count-usage<5 then kind='Crystal' end
@@ -614,9 +614,8 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
   local frame=patch.CFrame
   local center=frame:PointToObjectSpace(nearPin.center)
   local right,look=frame.RightVector,frame.LookVector
-  local padding=insidePin and 0 or radius
-  local x=nearPin.half*(math.abs(right.X)+math.abs(right.Z))+padding
-  local z=nearPin.half*(math.abs(look.X)+math.abs(look.Z))+padding
+  local x=nearPin.half*(math.abs(right.X)+math.abs(right.Z))
+  local z=nearPin.half*(math.abs(look.X)+math.abs(look.Z))
   bounds={minX=center.X-x,maxX=center.X+x,minZ=center.Z-z,maxZ=center.Z+z}
  end
  local occupied={}
@@ -639,11 +638,7 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
    return seed:NextNumber(a,b)
   end,function(x,z)
    local candidate=patch.CFrame:PointToWorldSpace(Vector3.new(x,0,z))
-   if nearPin then
-    if insidePin then
-     if math.abs(candidate.X-nearPin.center.X)>nearPin.half or math.abs(candidate.Z-nearPin.center.Z)>nearPin.half then return false end
-    elseif not Mining.selectorTouches(nearPin.center,nearPin.half,CFrame.new(candidate),dimensions) then return false end
-   end
+   if nearPin and not Mining.selectorContains(nearPin.center,nearPin.half,candidate) then return false end
    -- Sample the rock's turn clearance against authored fixtures and scenery.
    for _,offset in ipairs({Vector3.zero,Vector3.new(-.707,0,-.707),Vector3.new(.707,0,-.707),Vector3.new(-.707,0,.707),Vector3.new(.707,0,.707)}) do
     local origin=Vector3.new(candidate.X,field.center.Y+(field.cfg.SelectionOnly and 20 or 64),candidate.Z)+offset*radius
@@ -661,14 +656,16 @@ local function spawnResource(field,forceKind,prepareOnly,plan,nearPin,insidePin)
  return true,kind=='Geode' and 5 or 1,resource
 end
 function scene.respawnEarlier(a,b) return a.at<b.at end
+function scene.rockInSquare(square,rock)
+ return square.field==rock.field and Mining.selectorContains(square.center,square.half,rock.position)
+end
 function scene.replacementDue(field,vacancy)
  return vacancy and now>=(vacancy.regrowAt or 0) and field.respawnClock>=vacancy.at
 end
 function scene.replacementSquare(field,vacancy)
  local owner=vacancy.owner and profiles[vacancy.owner]
  local square=owner and not owner.leaving and owner.miningSquare
- if square and square.field==field
-  and Mining.selectorTouches(square.center,square.half,vacancy.frame,vacancy.size) then return square end
+ if square and square.field==field and Mining.selectorContains(square.center,square.half,vacancy.position) then return square end
  return nil
 end
 function scene.spawnReplacement(field,kind,vacancy)
@@ -678,12 +675,12 @@ function scene.spawnReplacement(field,kind,vacancy)
   -- replenish the rest of the field through ordinary placement.
   local growing=0
   for _,r in ipairs(field.resources) do
-   if not r.paid and r.part.Parent and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then
+   if not r.paid and r.part.Parent and scene.rockInSquare(square,r) then
     growing+=1
     if now>=r.readyAt or growing>=2 then return spawnResource(field,kind) end
    end
   end
-  local spawned,cost=spawnResource(field,kind,false,nil,square,true)
+  local spawned,cost=spawnResource(field,kind,false,nil,square)
   if spawned then return true,cost end
  end
  return spawnResource(field,kind)
@@ -1290,7 +1287,8 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  local looseSeams=d.stats.earlyDrop or 0
  local candidates={}
  for _,other in ipairs(primary.field.resources) do
-  if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent then
+  if other~=primary and not other.paid and now>=other.readyAt and other.part.Parent
+   and (not d.squareJob or scene.rockInSquare(d.squareJob,other)) then
    local distance=(other.position-primary.position).Magnitude
    if distance<=radius then
     local workToOre=0
@@ -1307,7 +1305,6 @@ local function secondaryMining(d: any,primary: any,amount: number,radius: number
  end)
  for _,candidate in ipairs(candidates) do
   local other=candidate.resource
-  if d.squareJob and not Mining.selectorTouches(d.squareJob.center,d.squareJob.half,other.part.CFrame,other.part.Size) then continue end
   if sameRockType(d,other,assist) and not other.slots[d.id] then
    if not assist then other.slots[d.id]=1 end
    local accepted=hitResource(d,other,amount,true,radius,nil,contactKind)
@@ -1343,6 +1340,7 @@ end
 local function clusterEligible(d,p,rock,field)
  return rock.field==field and not rock.paid and rock.hp>0 and not rock.clusterShot
   and rock.part.Parent and now>=rock.readyAt and rock.kind~='Geode'
+  and (not d.squareJob or scene.rockInSquare(d.squareJob,rock))
   and playerCanMine(p,rock.field) and sameRockType(d,rock)
 end
 function scene.prismTrace(d,primary,station,stopAtPrimary)
@@ -1393,6 +1391,8 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
  local clusterFinish=clusterRole==d.role and clusterHit and clusterHit.rock==r and shot and shot==r.clusterShot
   and shot.finishKind==contactKind and shot.drone==d and now>=shot.blastAt
  if r.clusterShot and not clusterFinish then return false end
+ local square=if clusterFinish then shot.square else d.squareJob
+ if square and not scene.rockInSquare(square,r) then return false end
  if not healthy(p) or d.hp<=0 or r.paid or r.hp<=0 or not r.part.Parent or not R.finite(amount) or amount<=0 or (not abilityOrigin and not assist and not clusterFinish and not r.slots[d.id]) or not playerCanMine(p,r.field) or now<r.readyAt then return false end
  if contactKind~='Consumable' and contactKind~='FieldTool' and not sameRockType(d,r,assist) then return false end
  local recipient=d
@@ -1592,7 +1592,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
     -- minimum delay on the server clock for both natural and planted rocks.
     local vacancy={at=respawnClock+C.MinimumRockRespawn+r.field.cfg.Respawn,regrowAt=now+C.MinimumRockRespawn}
     if r.field.cfg.SelectionOnly and d.squareJob and d.squareJob==p.miningSquare then
-     vacancy.owner=d.owner;vacancy.frame=CFrame.new(r.position);vacancy.size=r.fullSize
+     vacancy.owner=d.owner;vacancy.position=r.position
     end
     table.insert(r.field.respawnQueue,vacancy)
    end
@@ -1632,6 +1632,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
    local worker=drones[id]
    if worker and worker.target==r then
     local manual=worker.manualTarget~=nil
+    local pin=worker.squareJob
     local contact=worker.mineBreakContact
     local keepContact=contact~=nil and contact.primaryId==r.id and contact.at==now
     if not keepContact and r.field.cfg.SelectionOnly and worker.state=='Mine' and worker.mining then
@@ -1645,13 +1646,13 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
      r.part:SetAttribute('EffectCancelledSerial',worker.specialJob.serial);r.part:SetAttribute('EffectType',nil)
     end
     retireTarget(worker,keepContact)
-    -- Breaking a shell commits its existing crew to the actual revealed work.
-    -- This is continuation of that ordered geode, not free field automation.
-    -- New stones still have their normal growth/arrival/warmup gates.
-    if revealed then
+    -- A retired pin only finishes its existing target. A current pin may
+    -- reserve a revealed core or shard inside its own boundary.
+    if revealed and (not pin or pin==p.miningSquare) then
      for _,nextRock in ipairs(revealed) do
-      if not next(nextRock.slots) then
+      if not next(nextRock.slots) and (not pin or scene.rockInSquare(pin,nextRock)) then
        worker.target=nextRock;worker.targetSlot=1;nextRock.slots[id]=1
+       worker.squareJob=pin
        worker.manualTarget=manual and nextRock.id or nil
        worker.lingerUntil=nil;worker.lingerGoal=nil;worker.state='Travel'
        updateSlots(nextRock);break
@@ -1672,7 +1673,7 @@ hitResource=function(d: any,r: any,amount: number,secondary: boolean?,secondaryR
 end
 scene.clusterShots={}
 function scene.queueCluster(d,profile,job,hits,blastAt,finishKind)
- local shot={drone=d,profile=profile,runId=data(profile).run.id,hits=hits,
+ local shot={drone=d,profile=profile,runId=data(profile).run.id,hits=hits,square=d.squareJob,
   projectile=job.projectile,blastAt=blastAt,finishKind=finishKind}
  scene.clusterShots[shot]=true
  job.impacted=true
@@ -1750,7 +1751,7 @@ function scene.fireNomad(d,primary,job)
  local hits={}
  for i=1,math.min(#neighbors,spec.BlastTargets-1) do hits[i]=neighbors[i] end
  hits[#hits+1]={rock=primary,point=job.contact,normal=(job.from-job.contact).Unit}
- local shot={drone=d,blastAt=now,finishKind='NomadFinish'}
+ local shot={drone=d,blastAt=now,finishKind='NomadFinish',square=d.squareJob}
  job.impacted=true
  d.nomadReadyAt=job.startedAt+job.duration
  RoleEffects.NomadContact(job.projectile,job.contact,Vector3.new(center.X,ground,center.Z),spec.BlastRadius,now)
@@ -1813,7 +1814,7 @@ local function chooseResource(d: any,field: any,square: any?)
   and DroneCatalog.cycle(d.role,d.owned.base.miningDPS,d.stats.miningDPS)
  for _,r in ipairs(field.resources) do
   if not r.paid and r.hp>0 and not r.clusterShot and r.part.Parent and now>=r.readyAt and (not r.blockedUntil or not r.blockedUntil[d.id] or now>=r.blockedUntil[d.id])
-   and (not square or Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)) then
+   and (not square or scene.rockInSquare(square,r)) then
    local used=0;local foreign=false
    for id in pairs(r.slots) do used+=1;if not drones[id] or drones[id].owner~=d.owner then foreign=true end end
    local paired=square and square.pairId==r.id and not r.cargoProduced
@@ -1822,7 +1823,8 @@ local function chooseResource(d: any,field: any,square: any?)
     local neighbors=0
     if Mining.kind(d.owned.type)=='Green' then
      for _,other in ipairs(field.resources) do
-      if other~=r and not other.paid and now>=other.readyAt and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
+      if other~=r and not other.paid and now>=other.readyAt and (not square or scene.rockInSquare(square,other))
+       and (other.position-r.position).Magnitude<=Mining.RESONANCE_RANGE then neighbors=neighbors+1;if neighbors==3 then break end end
      end
     end
     local distance=(r.position-d.pos).Magnitude
@@ -1862,12 +1864,16 @@ end
 function scene.clearSquare(p)
  if not p.miningSquare then return end
  p.miningSquare=nil
+ p.previousSquare=nil
  p.shiftSquare=nil;p.shiftUntil=nil
  p.player:SetAttribute('MA_Selector',nil)
  p.player:SetAttribute('MA_SelectorWidth',nil)
  p.player:SetAttribute('MA_SelectorWorking',nil)
  p.player:SetAttribute('MA_SelectorStatus',nil)
  p.player:SetAttribute('MA_SelectorFocus',nil)
+ p.player:SetAttribute('MA_SelectorPrevious',nil)
+ p.player:SetAttribute('MA_SelectorPreviousWidth',nil)
+ p.player:SetAttribute('MA_SelectorTransition',nil)
 end
 function scene.squareInRange(position,square)
  return Mining.selectorInRange(position,square.center)
@@ -1906,7 +1912,7 @@ end
 function scene.idleSquareStatus(p,square)
  local growing,claimed=false,false
  for _,r in ipairs(square.field.resources) do
-  if r.paid or r.hp<=0 or not r.part.Parent or not Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then continue end
+  if r.paid or r.hp<=0 or not r.part.Parent or not scene.rockInSquare(square,r) then continue end
   if now<r.readyAt then
    growing=true
   else
@@ -1932,7 +1938,8 @@ function scene.publishSquareStatus(p)
  local square=p.miningSquare
  if not square then return end
  scene.publishSquareFocus(p,square)
- local working,finishing,moving=false,false,false
+ local working,moving,arrived,holdingTravel=false,false,false,false
+ local finishing
  local available,recharging=0,0
  local pair=resources[square.pairId]
  local cuttingPair=0
@@ -1947,10 +1954,23 @@ function scene.publishSquareStatus(p)
   available+=1
   if d.recharging then recharging+=1 end
   if scene.committedWork(d) then
-   if d.squareJob==square then working=true;break end
-   finishing=true
-  elseif d.squareJob==square and d.target then moving=true end
+   if d.squareJob==square then working=true
+   elseif d.squareJob then finishing=finishing or d.squareJob end
+  elseif d.squareJob==square and d.target then moving=true
+  elseif d.state=='HoldSelector' and d.holdPin==square and d.intentGoal then
+   if (d.pos-d.intentGoal).Magnitude>2 then holdingTravel=true else arrived=true end
+  elseif p.previousSquare and (d.lingerUntil or d.specialRecovery or d.breaker) then holdingTravel=true end
  end
+ if working or arrived then square.arrived=true end
+ local transition=if finishing then 'Finishing'
+  elseif not square.arrived and (moving or holdingTravel or now<(square.placedAt or 0)+C.Snapshot) then 'Moving' else nil
+ local previous=finishing or (transition and p.previousSquare) or nil
+ p.previousSquare=previous
+ local previousCenter=previous and previous.center
+ local previousWidth=previous and previous.half*2
+ if p.player:GetAttribute('MA_SelectorPreviousWidth')~=previousWidth then p.player:SetAttribute('MA_SelectorPreviousWidth',previousWidth) end
+ if p.player:GetAttribute('MA_SelectorPrevious')~=previousCenter then p.player:SetAttribute('MA_SelectorPrevious',previousCenter) end
+ if p.player:GetAttribute('MA_SelectorTransition')~=transition then p.player:SetAttribute('MA_SelectorTransition',transition) end
  local status=if not healthy(p) or not characterRoot(p) then 'Paused'
   elseif Pro.cargoUnits(data(p))>=Ca.capacity(data(p),previewPerks(p)) and Workshop.starLevel(data(p),'autosell')==0 then 'BagFull'
   elseif working and p.shiftSquare==square and now<(p.shiftUntil or 0) then 'Surge'
@@ -2176,7 +2196,7 @@ function scene.holdSquare(d,p,dt)
   -- Park at the same low working altitude instead of rising after each cut.
   height=7
  end
- d.mining=false;d.state='HoldSelector'
+ d.mining=false;d.state='HoldSelector';d.holdPin=square
  move(d,square.center+offset+Vector3.new(0,height,0),dt)
  return true
 end
@@ -2411,7 +2431,10 @@ local function specialDrone(d: any,p: any,field: any,dt: number)
  end
  -- Keep the same reservation during recovery. A new serial can begin only
  -- after the current complete gesture; no extra warmup or overlapping hits.
- if d.specialJob==job and job.impacted and now>=job.startedAt+job.duration then d.specialJob=nil end
+ if d.specialJob==job and job.impacted and now>=job.startedAt+job.duration then
+  d.specialJob=nil
+  if d.squareJob~=p.miningSquare then d.warmAt=nil end
+ end
 end
 local roleAbilityStep
 local function followRole(d,p,hr,dt,state)
@@ -2518,7 +2541,7 @@ local function breakerDrone(d,p,hr,field,dt)
  if d.target and (d.target.paid or not d.target.part.Parent or d.target.field~=field) then release(d) end
  -- Owning a breaker earns autonomous heavy-rock work after the owner chooses
  -- a rock. The ordinary miner still needs the earned Rock Scanner.
- if not field.junk and not d.target and (p.workField==field.id or d.deployedCarrier) then
+ if not field.junk and not field.cfg.SelectionOnly and not d.target and (p.workField==field.id or d.deployedCarrier) then
   local node=DroneRoles.chooseTarget('Charger',roleNodes(p,field,d),{x=d.pos.X,y=d.pos.Y,z=d.pos.Z},now)
   local r=node and resources[node.id]
   if r then
@@ -3474,6 +3497,7 @@ local function abilityContext(p,fieldId,operator,deployment)
  end
  local function targetRecord(r)
   if not r or r.paid or r.hp<=0 or now<r.readyAt or not r.part.Parent then return nil end
+  if r.field.cfg.SelectionOnly and not deployment and (not p.miningSquare or not scene.rockInSquare(p.miningSquare,r)) then return nil end
   if not deployment and actor and not sameRockType(actor,r) then return nil end
   if deployment then
    local offset=r.position-deployment.position;local radius=Consumables.ITEMS[deployment.kind].radius
@@ -3500,10 +3524,6 @@ local function abilityContext(p,fieldId,operator,deployment)
   targets=function(id,kind)
    local list={};if not valid(id) then return list end
    for _,r in ipairs(patches[id].resources) do
-    if r.field.cfg.SelectionOnly and not deployment then
-     local square=p.miningSquare
-     if not square or square.field~=r.field or not Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size) then continue end
-    end
     local target=targetRecord(r)
     if target then
      -- Survey the same vertical path that the authoritative orbital hit uses.
@@ -3740,14 +3760,14 @@ function scene.moveSquareWork(p,current,square)
  if not sameField then return end
  local function staysInSquare(r)
   return r and not r.paid and r.part.Parent
-   and Mining.selectorTouches(square.center,square.half,r.part.CFrame,r.part.Size)
+   and scene.rockInSquare(square,r)
  end
  for _,r in ipairs(square.field.resources) do
   if r.lastPin==current and r.lastPinOwner==p.player.UserId and staysInSquare(r) then r.lastPin=square end
  end
  for _,d in ipairs(p.drones) do
   local target=d.target
-  if d.squareJob==current and staysInSquare(target) then
+  if d.squareJob==current and staysInSquare(target) and not (target.clusterShot and target.clusterShot.drone==d) then
    local changingPair=current.pairId==target.id and square.pairId~=target.id
    if scene.committedWork(d) or not changingPair then d.squareJob=square end
   end
@@ -3764,12 +3784,12 @@ function scene.placeSquare(p,payload)
  local center=Mining.selectorCenter(position,part.CFrame,part.Size)
  if not center then return end
  local hr=characterRoot(p)
- local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5}
+ local square={field=field,center=center,half=Workshop.selectorWidth(data(p))*.5,placedAt=now}
  if not hr or not scene.squareInRange(hr.Position,square) then return end
  local leadId=payload.leadId
  local lead=type(leadId)=='string' and #leadId<=128 and resources[leadId]
- if lead and lead.field==field and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
-  and Mining.selectorTouches(center,square.half,lead.part.CFrame,lead.part.Size) then
+ if lead and not lead.paid and not lead.cargoProduced and lead.hp>0 and lead.part.Parent and now>=lead.readyAt
+  and scene.rockInSquare(square,lead) then
   if scene.canPairCut(p,lead) then square.pairId=leadId;square.focusId=leadId
   elseif not next(lead.slots) then square.leadId=leadId;square.focusId=leadId
   else
@@ -3792,6 +3812,7 @@ function scene.placeSquare(p,payload)
   return
  end
  scene.moveSquareWork(p,current,square)
+ p.previousSquare=p.previousSquare or current
  p.oreQueue={};p.workField=field.id;p.miningSquare=square
  scene.prioritizeSquareApproach(p,square)
  scene.publishSquareStatus(p)

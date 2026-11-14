@@ -11,18 +11,26 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | c456c1e825d9d710ea58167d857f4fb555cd64bc84217e46da225ac29b39a2aa | Ore-colored break rectangles and lingering dust installed. |
-| Shared Studio Sources | Save 290 | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | edb019f7632737b1c39c61d7d898e3fe142820b9d390fe8615f8d03dc00a9600 | Updated field selector and center-bounded mining installed. |
+| Shared Studio Sources | November 14, 11:20 AM Pacific Team Create save | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads break rectangles and fine dust tinted to the rock’s ore. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the brighter aim square, taller status beams and center-bounded mining. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 14 — field selection and mining boundaries
+
+Mouse and touch previews use a thicker outline and a translucent square showing the actual mining footprint. Four corner beams rise 19 studs with staggered quintic-out easing. Gray marks the pending destination. The old outline remains while workers finish their cuts and during the approach to the new field. Green shows active cutting, blue shows the ready pin, amber flags cargo or claim issues, violet reports regrowth or recharging, and gold signals a surge. Reduced Motion displays fully extended beams immediately.
+
+Direct mining, chained hits, specialist clusters and autonomous drone abilities use the rock center on the horizontal plane. Centers on the square's edge count. The selection persists across normal depot visits, keeps committed old cuts during a move, and admits new rocks only within the destination boundary. The Crystal Run, Workshop and native-file preservation suite passed with API doubles and offline checks. Live visual, touch and multiplayer acceptance still need Play.
+
+Studio was already open in Edit at place **124078027733625**, universe **10774898335**. All three Script Sync roots reported `SyncedAsRoot`, and all seven Sources matched the canonical file after the successful **Save to Roblox** receipt at **11:20:12 AM Pacific**. This was a Team Create save. No player publication or agent-started Play. Reproduce by running `python3 tools/script_sync.py` and `python3 tools/build.py --previous-commit af96561864395eb1e766d807a96fe47cf3f64d69` on the previous canonical snapshot. Run `python3 tools/build.py` to verify the current snapshot.
 
 ## November 14 — ore-colored break rectangles and fine dust
 

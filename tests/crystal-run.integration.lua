@@ -58,16 +58,42 @@ scene.publishSquareStatus(rival);assert(other:GetAttribute('MA_SelectorStatus')=
 players.PlayerRemoving:Fire(other)
 pin(13.3);assert(p.miningSquare.center.X==14)
 assert(pl:GetAttribute('MA_SelectorStatus')=='FinishingCut' and pl:GetAttribute('MA_SelectorWorking')==false)
+assert(pl:GetAttribute('MA_SelectorPrevious')==pinned.center and pl:GetAttribute('MA_SelectorPreviousWidth')==30)
+assert(pl:GetAttribute('MA_SelectorTransition')=='Finishing')
 step(1);assert(d.target==a,'moving the square interrupted a live cut')
 pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,20)))
 for _=1,600 do step(1);if a.paid then break end end
 assert(a.paid,'first committed target did not finish')
-step(80);assert(d.target==b,'the crew did not keep working at the moved square after the player left')
-assert(Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,edge.part.CFrame,edge.part.Size),'boundary overlap must count')
-assert(not Mining.selectorTouches(p.miningSquare.center,p.miningSquare.half,a.part.CFrame,a.part.Size))
+local approachSteps=0
+while not d.target and approachSteps<30 do step(1);approachSteps+=1 end
+assert(d.target==b and not scene.committedWork(d))
+scene.publishSquareStatus(p)
+assert(pl:GetAttribute('MA_SelectorPrevious')==pinned.center and pl:GetAttribute('MA_SelectorTransition')=='Moving')
+step(80-approachSteps);assert(d.target==b,'the crew did not keep working at the moved square after the player left')
+assert(scene.rockInSquare(p.miningSquare,edge),'a center on the line counts')
+assert(not scene.rockInSquare(p.miningSquare,a))
 
 -- Mining regenerates health and restores its stage, with a single ore ledger.
 d.pos=Feel.mineGoal(b.position,d.targetSlot,false,b.fullSize,b.referenceCrystal)
+local previousWarm=d.warmAt;d.warmAt=now
+scene.publishSquareStatus(p)
+d.warmAt=previousWarm
+assert(pl:GetAttribute('MA_SelectorPrevious')==nil and pl:GetAttribute('MA_SelectorTransition')==nil)
+local originalSeed=seed;seed=Random.new(119)
+local outside=rock(29.5,100)
+seed=originalSeed
+assert(outside.position.X-outside.part.Size.X*.5<edge.position.X and not scene.rockInSquare(p.miningSquare,outside),
+ 'an overlapping body with its center outside must be excluded')
+local beforeOutside=outside.hp
+assert(not hitResource(d,outside,10,true,20,nil,'Aftershock') and outside.hp==beforeOutside)
+assert(not clusterEligible(d,p,outside,f) and clusterEligible(d,p,edge,f))
+local previousPosition=pl.Character:GetPivot()
+pl.Character:PivotTo(CFrame.new(Vector3.new(0,8,-68)))
+local targetCtx=abilityContext(p,f.id,d)
+assert(targetCtx.target(outside.id,f.id)==nil and targetCtx.target(edge.id,f.id))
+pl.Character:PivotTo(previousPosition)
+outside.part:Destroy();resources[outside.id]=nil
+table.remove(f.resources,table.find(f.resources,outside))
 assert(hitResource(d,b,65,false));local paid=b.extractedOre;assert(paid==nil,'a crack duplicated the ordinary final cargo reward')
 release(d)
 local stage=b.stage
@@ -137,7 +163,7 @@ command.OnServerEvent:Fire(pl,'Recall');step(1)
 assert(not p.miningSquare and not d.target and d.state=='Follow' and d.goal.Z>0,'explicit recall failed to bring back the fleet')
 assert(pl:GetAttribute('MA_Selector')==nil and pl:GetAttribute('MA_SelectorWorking')==nil)
 status(nil)
-print('PASS Crystal Run pin, status transitions, reservations, recall, edge overlap, committed work, regrowth, charging, full-bag mining and Star Shop effects')
+print('PASS Crystal Run pin, handoff, reservations, recall, center boundary, committed work, regrowth, charging, full-bag mining and Star Shop effects')
 
 
 -- The production spawner uses the entire bed, including former lanes.
@@ -178,7 +204,7 @@ for _,r in ipairs(f.resources) do r.readyAt=now end
 local reserved={}
 for _,worker in ipairs(crew.drones) do
  droneStep(worker,C.Tick)
- assert(worker.target and Mining.selectorTouches(crew.miningSquare.center,crew.miningSquare.half,worker.target.part.CFrame,worker.target.part.Size) and not reserved[worker.target])
+ assert(worker.target and scene.rockInSquare(crew.miningSquare,worker.target) and not reserved[worker.target])
  reserved[worker.target]=true
 end
 players.PlayerRemoving:Fire(crewPlayer)
@@ -274,7 +300,7 @@ do
  advance(refillDelay-.35)
  assert(nodeUsage(field)==0,'a pinned vacancy grew before the normal delay')
  local replacement=refillWithCenteredDraw()
- assert(Mining.selectorTouches(square.center,square.half,replacement.part.CFrame,replacement.part.Size),
+ assert(scene.rockInSquare(square,replacement),
   'replacement left the depleted mining pin')
  assert(replacement.readyAt-replacement.spawnAt==2 and not next(replacement.slots) and scene.idleSquareStatus(team,square)=='Growing')
  advance(2.25)
@@ -300,7 +326,7 @@ do
  end
  local fallback=refillWithCenteredDraw()
  workspace.Raycast=raycast
- assert(fallback.position.Z==surface.Position.Z and not Mining.selectorTouches(square.center,square.half,fallback.part.CFrame,fallback.part.Size),
+ assert(fallback.position.Z==surface.Position.Z and not scene.rockInSquare(square,fallback),
   'blocked local growth must still refill the wider field')
  print(string.format('PASS depleted Quartz pin refill z %.0f, ordinary refill z %.0f, both after a %d-second cooldown',replacement.position.Z,ordinary.position.Z,refillDelay))
 
@@ -315,7 +341,7 @@ do
  seed=originalSeed
  local inside={}
  for _,rock in ipairs(field.resources) do
-  if not rock.paid and Mining.selectorTouches(pinCenter,team.miningSquare.half,rock.part.CFrame,rock.part.Size) then table.insert(inside,rock) end
+  if not rock.paid and scene.rockInSquare(team.miningSquare,rock) then table.insert(inside,rock) end
  end
  assert(nodeUsage(field)==3 and #field.respawnQueue==0 and #inside==2,'the cleared pin should regrow two of the three replacements')
  for _,rock in ipairs(inside) do

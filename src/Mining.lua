@@ -38,18 +38,8 @@ function M.onDepotApproach(position,center,depot,depotFrame,depotSize)
   and (position-destination).Magnitude<(center-destination).Magnitude
   and M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
 end
--- Horizontal separating axes for the square and the crystal's current body.
--- A crystal touching the boundary is eligible even if its center is outside.
-function M.selectorTouches(center,half,frame,size)
- local x,z=center.X-frame.Position.X,center.Z-frame.Position.Z
- local right,back=frame.RightVector,-frame.LookVector
- local rx,rz=right.X,right.Z
- local bx,bz=back.X,back.Z
- local sx,sz=size.X*.5,size.Z*.5
- return math.abs(x)<=half+math.abs(rx)*sx+math.abs(bx)*sz
-  and math.abs(z)<=half+math.abs(rz)*sx+math.abs(bz)*sz
-  and math.abs(x*rx+z*rz)<=sx+half*(math.abs(rx)+math.abs(rz))
-  and math.abs(x*bx+z*bz)<=sz+half*(math.abs(bx)+math.abs(bz))
+function M.selectorContains(center,half,position)
+ return math.abs(position.X-center.X)<=half and math.abs(position.Z-center.Z)<=half
 end
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end

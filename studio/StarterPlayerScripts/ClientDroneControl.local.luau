@@ -990,18 +990,8 @@ function M.onDepotApproach(position,center,depot,depotFrame,depotSize)
   and (position-destination).Magnitude<(center-destination).Magnitude
   and M.onSelectorDepotRoute(position,center,depot,depotFrame,depotSize)
 end
--- Horizontal separating axes for the square and the crystal's current body.
--- A crystal touching the boundary is eligible even if its center is outside.
-function M.selectorTouches(center,half,frame,size)
- local x,z=center.X-frame.Position.X,center.Z-frame.Position.Z
- local right,back=frame.RightVector,-frame.LookVector
- local rx,rz=right.X,right.Z
- local bx,bz=back.X,back.Z
- local sx,sz=size.X*.5,size.Z*.5
- return math.abs(x)<=half+math.abs(rx)*sx+math.abs(bx)*sz
-  and math.abs(z)<=half+math.abs(rz)*sx+math.abs(bz)*sz
-  and math.abs(x*rx+z*rz)<=sx+half*(math.abs(rx)+math.abs(rz))
-  and math.abs(x*bx+z*bz)<=sz+half*(math.abs(bx)+math.abs(bz))
+function M.selectorContains(center,half,position)
+ return math.abs(position.X-center.X)<=half and math.abs(position.Z-center.Z)<=half
 end
 local roleKinds={Dart='Blue',Striker='Blue',Medic='Green',Charger='Red',Orbiter='Blue',Scrapper='Blue'}
 function M.kind(kind: string): string return roleKinds[kind] or kind end
@@ -14207,56 +14197,90 @@ local SelectorView = (function()
 -- Local aiming, pinned command feedback and bounded crystal healing cues.
 local V={}
 V.__index=V
-local idle=ColorSequence.new(Color3.fromRGB(167,212,218))
-local active=ColorSequence.new(Color3.fromRGB(255,215,123))
-local preview=ColorSequence.new(Color3.fromRGB(211,230,229))
-local heights={.06,.27,.54}
-local widths={.075,.11,.15}
-local fades={.28,.68,.87}
+local function tint(r,g,b) return ColorSequence.new(Color3.fromRGB(r,g,b)) end
+local preview=tint(228,248,255)
+local pending=tint(158,166,176)
+local cutting=tint(85,245,173)
+local idle=tint(112,207,255)
+local caution=tint(255,190,99)
+local depleted=tint(177,165,231)
+local statusColors={
+ BagFull=caution,LooseOre=caution,Claimed=caution,
+ Growing=depleted,Refilling=depleted,NoCrystals=depleted,
+ Surge=tint(255,219,103),SurgeReady=tint(255,219,103),
+ Paused=pending,NoMiners=pending,Recharging=tint(190,147,255),
+}
+local riseTime=.68
+local pillarHeight=19
+local railFade=NumberSequence.new(.14)
+local pillarFade=NumberSequence.new({NumberSequenceKeypoint.new(0,.04),
+ NumberSequenceKeypoint.new(.72,.2),NumberSequenceKeypoint.new(1,1)})
 
-local function marker(parent,isPreview)
- local anchor=Instance.new('Part')
- anchor.Name=isPreview and 'SelectorPreview' or 'MiningSelector'
- anchor.Size=Vector3.one;anchor.Anchored=true;anchor.Transparency=1
- anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.Parent=parent
- local layers={}
- for i,height in ipairs(heights) do
-  if isPreview and i>1 then break end
-  local layer={height=height,corners={},beams={}}
-  for n=1,4 do
-   local corner=Instance.new('Attachment');corner.Parent=anchor;layer.corners[n]=corner
-  end
-  for n=1,4 do
-   local beam=Instance.new('Beam')
-   beam.Attachment0=layer.corners[n];beam.Attachment1=layer.corners[n%4+1]
-   beam.FaceCamera=true;beam.Segments=1;beam.LightEmission=.25;beam.LightInfluence=.25
-   beam.Width0=widths[i];beam.Width1=widths[i];beam.Enabled=false
-   beam.Transparency=NumberSequence.new(isPreview and .73 or fades[i])
-   beam.Parent=anchor;layer.beams[n]=beam
-  end
-  layers[i]=layer
- end
- return {anchor=anchor,layers=layers}
+local function beam(anchor,from,to,width,endWidth,transparency)
+ local line=Instance.new('Beam')
+ line.Attachment0=from;line.Attachment1=to
+ line.FaceCamera=true;line.Segments=8;line.LightEmission=.22;line.LightInfluence=0
+ line.Width0=width;line.Width1=endWidth;line.Transparency=transparency;line.Enabled=false
+ line.Parent=anchor
+ return line
 end
 
-local function show(mark,point,width,color)
- local visible=point~=nil
- if visible and mark.point~=point then mark.anchor.Position=point end
- if visible and mark.width~=width then
-  local h=width*.5
-  for _,layer in ipairs(mark.layers) do
-   local y=layer.height
-   for i,corner in ipairs(layer.corners) do
-    corner.Position=Vector3.new((i==1 or i==4) and -h or h,y,i<=2 and -h or h)
-   end
+local function marker(parent,name,isPreview)
+ local anchor=Instance.new('Part')
+ anchor.Name=name;anchor.Size=Vector3.one;anchor.Anchored=true;anchor.Transparency=1
+ anchor.CanCollide=false;anchor.CanTouch=false;anchor.CanQuery=false;anchor.CastShadow=false;anchor.Parent=parent
+ local mark={anchor=anchor,feet={},tips={},beams={}}
+ for i=1,4 do
+  local foot=Instance.new('Attachment');foot.Parent=anchor;mark.feet[i]=foot
+  if not isPreview then
+   local tip=Instance.new('Attachment');tip.Parent=anchor;mark.tips[i]=tip
+   table.insert(mark.beams,beam(anchor,foot,tip,1.05,.32,pillarFade))
   end
+ end
+ local width=isPreview and .85 or .42
+ for i,foot in ipairs(mark.feet) do
+  table.insert(mark.beams,beam(anchor,foot,mark.feet[i%4+1],width,width,railFade))
+ end
+ if isPreview then
+  local fill=Instance.new('Part')
+  fill.Name='AimFootprint';fill.Color=preview.Keypoints[1].Value;fill.Material=Enum.Material.Neon
+  fill.Transparency=1;fill.Anchored=true;fill.CanCollide=false;fill.CanTouch=false;fill.CanQuery=false;fill.CastShadow=false
+  fill.Parent=anchor;mark.fill=fill
+ end
+ return mark
+end
+
+local function show(mark,point,width,color,dt,instant)
+ local visible=point~=nil
+ local moved=visible and point~=mark.point
+ local resized=visible and width~=mark.width
+ if moved then
+  mark.anchor.Position=point
+  mark.age=if instant then math.huge else 0
+ end
+ if resized then
+  local h=width*.5
+  for i,foot in ipairs(mark.feet) do
+   foot.Position=Vector3.new((i==1 or i==4) and -h or h,.12,i<=2 and -h or h)
+  end
+  if mark.fill then mark.fill.Size=Vector3.new(width,.03,width) end
   mark.width=width
  end
+ if visible and mark.fill and moved then mark.fill.Position=point+Vector3.yAxis*.045 end
+ if visible and #mark.tips>0 and (moved or resized or mark.age<riseTime+.09) then
+  if instant then mark.age=math.huge elseif not moved then mark.age+=dt end
+  for i,tip in ipairs(mark.tips) do
+   local t=math.clamp((mark.age-(i-1)*.03)/riseTime,0,1)
+   local rise=1-(1-t)^5
+   tip.Position=mark.feet[i].Position+Vector3.yAxis*(.25+(pillarHeight-.25)*rise)
+  end
+ end
  if visible~=mark.visible or visible and color~=mark.color then
-  for _,layer in ipairs(mark.layers) do for _,beam in ipairs(layer.beams) do
-   beam.Enabled=visible
-   if visible then beam.Color=color end
-  end end
+  for _,line in ipairs(mark.beams) do
+   line.Enabled=visible
+   if visible then line.Color=color end
+  end
+  if mark.fill then mark.fill.Transparency=visible and .86 or 1 end
  end
  mark.visible=visible;mark.point=point;mark.color=color
 end
@@ -14322,20 +14346,32 @@ end
 function V:showAim(dt,ray)
  local o=self.options
  local profile=o.profile()
- local pin=not o.hidden() and o.player:GetAttribute('MA_Selector') or nil
+ local visible=profile and not o.hidden()
+ local pin=visible and o.player:GetAttribute('MA_Selector') or nil
+ local old=pin and o.player:GetAttribute('MA_SelectorPrevious') or nil
  if not self.pinned and profile and o.world.Map:FindFirstChild('CrystalRun') then
-  self.pinned=marker(o.parent,false);self.preview=marker(o.parent,true)
+  self.pinned=marker(o.parent,'MiningSelector',false)
+  self.previous=marker(o.parent,'PreviousMiningSelector',false)
+  self.preview=marker(o.parent,'SelectorPreview',true)
  end
- if not self.pinned or not profile then return end
- local width=Workshop.selectorWidth(profile)
+ if not self.pinned then return end
+ local width=profile and Workshop.selectorWidth(profile) or 0
  self.clock+=dt
- if not ray then self.aimPoint=nil
+ if not visible or not ray then self.aimPoint=nil;self.clock=.033
  elseif self.clock>=.033 then self.clock=0;self.aimPoint=self:aim(ray) end
  local point=self.aimPoint
- if point and pin and (point-pin).Magnitude<.8 then point=nil end
- local pinnedWidth=o.player:GetAttribute('MA_SelectorWidth') or width
- show(self.pinned,pin,pinnedWidth,o.player:GetAttribute('MA_SelectorWorking') and active or idle)
- show(self.preview,point,width,preview)
+ if point and (point==pin or point==old) then point=nil end
+ local transition=o.player:GetAttribute('MA_SelectorTransition')
+ local status=o.player:GetAttribute('MA_SelectorStatus')
+ local working=o.player:GetAttribute('MA_SelectorWorking')
+ local color=transition and pending or statusColors[status] or (working and cutting or idle)
+ -- Carry the existing beams over intact when that field becomes the previous one.
+ if old and old~=pin and self.pinned.point==old then self.pinned,self.previous=self.previous,self.pinned end
+ local instant=o.reducedMotion()
+ show(self.pinned,pin,o.player:GetAttribute('MA_SelectorWidth') or width,color,dt,instant)
+ show(self.previous,old~=pin and old or nil,o.player:GetAttribute('MA_SelectorPreviousWidth') or width,
+  transition=='Finishing' and cutting or idle,dt,instant or self.previous.point~=old)
+ show(self.preview,point,width,preview,dt,true)
 end
 
 function V:heal(view,now)
@@ -14373,7 +14409,7 @@ function V:updateHealing(now)
  end
 end
 function V:destroy()
- if self.pinned then self.pinned.anchor:Destroy();self.preview.anchor:Destroy() end
+ if self.pinned then self.pinned.anchor:Destroy();self.previous.anchor:Destroy();self.preview.anchor:Destroy() end
  for _,cue in ipairs(self.cues) do cue.gui:Destroy() end
 end
 return V
@@ -14665,6 +14701,7 @@ local fleetView
 local function inspectingFleet() return fleetView and fleetView:isOpen() end
 local function menusVisible() return modal.Visible or inspectingFleet() or (logisticsView and logisticsView:isOpen()) end
 local selectorView=SelectorView.new({world=world,player=player,parent=localFX,command=command,profile=function() return profile end,
+ reducedMotion=CrystalImpactView.reducedMotion,
  hidden=function() return menusVisible() or (logisticsView and logisticsView.selected~=nil) or (toolView and toolView:selected()~=nil) end})
 local sheet=U.panel(modal,UDim2.fromOffset(12,12),UDim2.fromOffset(1010,664),palette.panel,20);sheet.Name='MenuSheet';sheet.ZIndex=21
 local sheetScale=Instance.new('UIScale');sheetScale.Parent=sheet
@@ -16185,7 +16222,7 @@ connect(RunService.RenderStepped,function(dt)
   local input=UIS:GetLastInputType()
   if touch and touch.active then
    local point=touch.input.Position
-   ray=camera:ViewportPointToRay(point.X,point.Y)
+   if not tacticalHUD:blocksPoint(point) then ray=camera:ScreenPointToRay(point.X,point.Y) end
   elseif input.Name:match('^Gamepad') then
    local size=camera.ViewportSize
    ray=camera:ViewportPointToRay(size.X*.5,size.Y*.5)
