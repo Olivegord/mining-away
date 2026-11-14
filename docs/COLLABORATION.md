@@ -86,7 +86,7 @@ The owner approved enabling **Allow Mesh / Image APIs** for DRONEREVOLUTION on N
 
 ## Mineral comparison row
 
-The November 14 owner-requested specimens are authored in Workspace.MiningAway.Map.MineralLineup. Stage tools/studio_mineral_lineup.lua with the CrystalCuts and RockFinish bundles, then export shared.MineralLineupStage.snapshot.scenery to scenery.b64. The native saver supports --mineral-lineup and only appends that exact folder. Check against the verified canonical SHA before applying the stage or writing. Do not serialize runtime EditableMesh content into the native file; the persistent Edit specimens use native geometry derived from the same description, and the Play renderer substitutes the cached gem meshes locally.
+The November 14 owner-requested specimens are authored in Workspace.MiningAway.Map.MineralLineup. Stage tools/studio_mineral_lineup.lua with the CrystalCuts and RockFinish bundles and tools/studio_bake_gem.lua, then export shared.MineralLineupStage.snapshot.scenery to scenery.b64. The native saver supports --mineral-lineup and only appends that exact folder. Check against the verified canonical SHA before applying the stage or writing. Do not serialize runtime EditableMesh content into the native file; the persistent Edit specimens use native geometry derived from the same description, and the Play renderer substitutes the cached gem meshes locally.
 
 ### Refreshing the mineral row
 

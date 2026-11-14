@@ -4,6 +4,14 @@ Last substantive handoff: **November 14, 2026, America/Los_Angeles**. Read this 
 
 **Current implementation:** New Crystal Run players start with two Laser Miners, Inkbeam, Needler, Ballcaster, Vacuum, Compactor and two Emptiers. The seven non-Emptiers are permanent. Returning profiles keep earned drones and prior fleets, with a targeted correction for the short-lived 17-drone starter grant. The backpack starts with ten slots. Each ordinary crystal gives one raw rock. Across Crystal Run, larger crystals take longer to cut, fracture in more stages and sell for more per slot. Needler fires quickly and hits exposed deep cores 25% harder. Ballcaster builds a heavier shot and hits the first two layers of deep crystals 50% harder. Field hardness still triples by depth. Emptiers collect loose ore directly, carry four cargo items by default and can depart early when the parcel will fund the next pack or prestige. The Compactor packs matching rocks into one block worth their total value. The first pack offers Double Beam, Loose Seams and Aftershock. Prestige grants one of three stable permanent drone choices and an opening +50% base mining power per prestige (first three), then +25 percentage points. The first three sale goals are now 160, 400 and 1,000 Quartz; later thresholds retain their previous values.
 
+## November 14 — restore the Ruby cut
+
+Gameplay/source/native revision **384fe28** on codex/restore-feel-prestige restores the Ruby shell, proportions, rose gradient, translucency and fixed grains from **3b1f622**. The east plaza Ruby specimen uses the same cut and still replays the real drop. The native mirror replaces only Ruby’s PreviewGeometry and retains the previous two preview unions in ServerStorage.MineralLineupArchive. Other gems, the preview row placement, and the mineable rocks are unchanged.
+
+Studio was already open; the owner ended Play before installation. Shared **DRONEREVOLUTION Edit**, place **124078027733625**, universe **10774898335**, was saved at **3:17:18 PM Pacific, November 14** (publishType=2). All seven managed Sources matched **build/DRONE_GAME.rbxl**, SHA-256 **a894782993baa3a728aae5b616dd29b07fa37ba08bfc8c32a189245927138c39**, and all three Script Sync roots were connected. No publication. Next Play uses the restored Ruby for drops and the preview.
+
+The source comparison matched 56 original triangles, every vertex color/alpha, and all 30 originally seeded grains. It also checked that the other four cuts match the preceding build. Pickup and beam suites passed and the authored preview was visually inspected in Edit. No new Play test. For the map mirror, bundle RockFinish and tools/studio_bake_gem.lua before tools/studio_restore_ruby.lua, extract shared.RubyRestore.data to ruby.b64, and use tools/refresh_ruby_preview.py against the preceding native SHA with the checked apply/write workflow.
+
 ## November 14 — east plaza mineral drop display
 
 Gameplay/source/native revision **63b247f** on codex/restore-feel-prestige. The display now runs along the east side of the spawn plaza at **x=32, z=-23.5 to 13.5**. All five minerals and the core specimen moved as a row. The pad bases were seated at the local floor height; a 13 × 45 stud clearance check covered the pads and their flight paths. The scoped save changed 22 part poses in the authored row and preserved the remaining map and Sources before client refresh.
@@ -75,14 +83,14 @@ Pickup trajectory and production renderer checks, 28 VFX behavior checks, full c
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | 105f18637ccef82d640773a84178c791bf5f39e59ebf4857cb0190bbe9cc227d | East plaza mineral row with staggered drop replays. |
-| Shared Studio Sources | Shared Edit save verified November 14 at **3:10:46 PM Pacific** | All three Script Sync roots are connected and all seven Sources match the canonical file. |
+| Native-file SHA-256 | a894782993baa3a728aae5b616dd29b07fa37ba08bfc8c32a189245927138c39 | Restored Ruby cut and matching east plaza specimen. |
+| Shared Studio Sources | Shared Edit save verified November 14 at **3:17:18 PM Pacific** | All three Script Sync roots are connected and all seven Sources match the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the east plaza specimen row and its staggered drop replays. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play uses the restored Ruby cut for drops and the east plaza preview. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 

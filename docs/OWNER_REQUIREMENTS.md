@@ -1,5 +1,9 @@
 # Owner requirements
 
+## November 14 — restore the earlier Ruby drop
+
+Use the Ruby model from the mineral variety pass (3b1f622), immediately before the owner’s “amazing!” message. Match the east plaza Ruby specimen to the drop while retaining the current preview animation and the other minerals.
+
 ## November 14 — move the specimen row and show the drop
 
 Keep the specimen display near spawn, away from the shops and other displays. Replay the actual ore launch, tumble, landing and hover so the specimens demonstrate how each mineral appears in play.
