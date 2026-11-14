@@ -11,18 +11,26 @@ Last substantive handoff: **November 13, 2026, America/Los_Angeles**. Read this 
 | Shared GitHub repository | `Olivegord/mining-away` | Existing repository; the owner requests public, shared access. No replacement repository or fork. |
 | Integration branch | `codex/restore-feel-prestige` | Current code, native game and handoff. `git log -1` identifies the exact checkout revision. |
 | Canonical editable file | `build/DRONE_GAME.rbxl` | This actual native file is tracked, including its authored map. |
-| Native-file SHA-256 | ca7435ece0e2a5b6d1932e986c92172668672c68465c7c9904a80b19f2a4ac46 | Crystal cracking, larger ore and the existing local hitstop installed. |
-| Shared Studio Sources | Save 285 | All seven Sources verified against the canonical file. |
+| Native-file SHA-256 | 82ee68e8944e450be8a1f1cf6b1f77cd8085b551ca9fe7761073ecfff0b48e4d | Matte stone finish and vertical shade installed. |
+| Shared Studio Sources | Save 286 | All seven Sources verified against the canonical file. |
 | Shared Roblox experience | **DRONEREVOLUTION** | Place **124078027733625**, universe **10774898335**, owner OliveGord. |
 | Roblox collaborator | **MideDibber** | Playtest and Edit both checked in Creator Hub on November 6. |
 | Older separate experience | **Drone Blower revolution** | Place **136098934779395**, universe **10773006567**. Historical capture provenance, not the sharing destination. |
 | Open Mining Away reference | **mining away**, place **14302916915**, universe **4945273529** | Crystal and follow sources read in an existing Play session. |
 | Local association | `game.PlaceId == 0` when inspected | A filename is not proof of association with any cloud experience. |
-| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads the larger and denser Crystal Run rocks, black opening halves, revised shake and neon drops. |
+| Shared Studio entry point | DRONEREVOLUTION in Edit | Next Play loads matte, muted mineable rocks with darker bases alongside the neon ore. |
 | Roblox publication | **This revision is unpublished** | The last documented publication receipt is v43 for `8e7ddaf688c7abf5db32b5cb7336425b919453db`. No player release was issued in this pass. The current public build was not independently checked. |
 | GitHub write invitation | **Pending the friend's GitHub username** | Roblox username/permissions are not GitHub identity/permissions. Public viewing does not grant push access. |
 
 [DRONEREVOLUTION](https://www.roblox.com/games/124078027733625) · [verified collaborator page](https://create.roblox.com/dashboard/creations/experiences/10774898335/permissions) · [review PR](https://github.com/Olivegord/mining-away/pull/1)
+
+## November 13 — matte rocks with darker bases
+
+Ordinary crystals use a matte concrete finish, a gray stone tint with 22% of each mineral color, and a smooth vertical shadow on the existing rock geometry. The gradient is projected onto the four side faces and stays attached as each rock shrinks. It darkens with the rock and disappears at the split. Removed idle sun glints. Mining contact, black split pieces, and neon drops retain their existing presentation. The shared gradient image is Roblox asset `117998501972844` and its source PNG is `assets/crystals/base-gradient.png`.
+
+Studio was open in Edit at DRONEREVOLUTION place **124078027733625**, universe **10774898335**. The client Script Sync root reported `Errored`; the updated client was installed against verified before and after hashes. Team Create save **286** succeeded and all seven Sources were hash-verified against `build/DRONE_GAME.rbxl` after saving. The Source refresh preserved the authored map and backup scripts. No player publication.
+
+An Edit camera sample compared the gradient on the original and clustered rocks beside neon ore. Studio loaded the stored texture successfully. The rock render, break timing and beam checks passed with API doubles. The broader gadget suite still stops at the existing courier-delay fixture. No native Play or multiplayer test. Reproduce the seven Sources with `python3 tools/script_sync.py` and verify the canonical file with `python3 tools/build.py`.
 
 ## November 13 — rock cracking and neon drops
 

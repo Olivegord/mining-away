@@ -1,5 +1,9 @@
 # VFX instructions — owner feedback and implementation
 
+## November 13 — matte stone and neon ore contrast
+
+Ordinary rocks have lightly mineral-tinted gray stone faces, a smooth darker base and no idle sun glints. Keep the existing shapes and let the damage tint carry the stone and its base shadow to black. Keep active contact effects and the larger neon drops.
+
 ## November 13 — rock opening and damage shade
 
 At the release beat, show the last-stage silhouette opening from its foot into two black halves. Keep the existing chips, fireworks, and landing tails. Smooth the main rock shade toward black from the authoritative remaining work, and attenuate white hit flashes as the surface darkens. Keep discrete launch and hit feedback small. Reduce the stronger split shakes and let Ballcaster and Needler launch cues play even when their projectile head is outside the visual budget. Make the loose reward larger and neon.

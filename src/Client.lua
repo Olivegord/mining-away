@@ -12,7 +12,6 @@ local localFX=Instance.new('Folder');localFX.Name='MiningAwayPresentation';local
 local soundscape=Soundscape.new(localFX)
 local presentation=Presentation.new({parent=localFX,audio=soundscape})
 local rockDamage=RockDamage.new()
-rockDamage.sunGlints=CrystalSunGlints.new(localFX,player)
 -- Startup is silent. The established cut and contact cues remain spatial.
 soundscape.chargeFromRenderer=true
 BeamVFX.onCue=function(kind,position,now)
@@ -989,12 +988,16 @@ local function registerResource(source)
  local view=source:Clone();view.Name='View_Resource_'..tostring(id)
  for _,v in ipairs(view:GetDescendants()) do if v:IsA('LuaSourceContainer') or v:IsA('BillboardGui') or v:IsA('Beam') or v:IsA('ParticleEmitter') or v:IsA('Light') then v:Destroy() end end
  view.Anchored=true;view.CanCollide=false;view.CanTouch=false;view.CanQuery=false;view.LocalTransparencyModifier=0
- view.Reflectance=source.Reflectance;view.Parent=localFX;hidePart(source)
+ local stoneColor,stoneGradient
+ if source:GetAttribute('Kind')=='Crystal' and (source:GetAttribute('BreakSerial') or 0)==0 then
+  stoneColor,stoneGradient=RockFinish.apply(view,source.Color)
+ end
+ view.Parent=localFX;hidePart(source)
  if source:GetAttribute('Kind')=='Junk' then
   for _,decal in ipairs(source:GetChildren()) do if decal:IsA('Decal') then hidePart(decal) end end
  end
  resources[source]={source=source,view=view,id=tostring(id),baseColor=source.Color,cutFeedback=source:GetAttribute('ZoneName') and rockDamage.feedback or nil,dirty=true,lastContactAt=source:GetAttribute('CutContactAt') or 0,lastBreakAt=source:GetAttribute('CrystalBreakAt') or 0,visual=Feel.newStagePresentation(source:GetAttribute('Stage') or 0,(source:GetAttribute('BreakSerial') or 0)>0 or (source:GetAttribute('HP') or 1)<=0,workspace:GetServerTimeNow(),source:GetAttribute('StageCount') or 3)}
- resources[source].glintSeed=source:GetAttribute('StageSeed') or 0
+ resources[source].stoneColor=stoneColor;resources[source].stoneGradient=stoneGradient
  resourceIndex[tostring(id)]=resources[source]
  rockDamage:register(resources[source])
 end
@@ -1143,13 +1146,17 @@ local function renderResource(r,now)
   end
   view.CFrame=frame*CFrame.new(displaySize*((r.damageOffset or Vector3.zero)-cutOffset))
   local maxHealth=s:GetAttribute('MaxHP') or 1
-  local color=r.baseColor:Lerp(Color3.fromRGB(237,105,46),heat*.11)
+  local color=(r.stoneColor or r.baseColor):Lerp(Color3.fromRGB(237,105,46),heat*.11)
   if junk then
    view.Color=color:Lerp(Color3.new(0,0,0),Feel.junkDarkness(health,maxHealth,stage,stageCount))
   else
    if r.cutFeedback then
     r.cutFeedback:shade(r,color,Feel.crystalDarkness(health,maxHealth),now)
-   else view.Color=color:Lerp(Color3.new(0,0,0),Feel.crystalDarkness(health,maxHealth)) end
+   else
+    local darkness=Feel.crystalDarkness(health,maxHealth)
+    view.Color=color:Lerp(Color3.new(0,0,0),darkness)
+    if r.stoneGradient then RockFinish.setDarkness(r.stoneGradient,darkness) end
+   end
   end
  else
   if event=='break' and cut then
@@ -1160,7 +1167,9 @@ local function renderResource(r,now)
   end
   view.Transparency=1
  end
- if junk then
+ if r.stoneGradient then
+  RockFinish.setVisibility(r.stoneGradient,view.Transparency)
+ elseif junk then
   for _,decal in ipairs(view:GetChildren()) do
    if decal:IsA('Decal') then decal.LocalTransparencyModifier=view.Transparency end
   end
@@ -1574,8 +1583,6 @@ RunService:BindToRenderStep('MiningAwayWorldPresentation',Enum.RenderPriority.Ca
    rockDamage.feedback:react(r,now)
   end
  end
- rockDamage.sunGlints:update(resources,now,dt,
-  player:GetAttribute('ReducedEffects')==true or player:GetAttribute('MA_ReducedEffects')==true,CrystalImpactView.reducedMotion())
  rockDamage.feedback:step(now)
  selectorView:updateHealing(now)
  rockDamage:step(now)

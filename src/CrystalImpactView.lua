@@ -260,7 +260,7 @@ function V.new(parent,audio,onSplit,onCameraBeat,findFracture)
     local charAt=r.clusterAt
     local charred=charAt and now>=charAt
     local shade=charred and 1 or darkness(r,now)
-    r.visibleDarkness=shade
+    if r.stoneGradient then RockFinish.setDarkness(r.stoneGradient,shade) end
     local age=r.flashAt and now-r.flashAt or math.huge
     local duration=r.flashDuration or .28
     local attack=math.clamp(age/.026,0,1)

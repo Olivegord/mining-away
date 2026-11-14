@@ -25,6 +25,8 @@ for k,v in pairs({Kind='Crystal',ZoneName='Ruby',FullSize=Vector3.one*3,FullPosi
 local r={source=source,view=source:Clone(),baseColor=source.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,100,3)}
 r.view.Parent=fx
+r.stoneColor,r.stoneGradient=RockFinish.apply(r.view,Color3.fromRGB(255,0,0))
+assert(r.view.Material==Enum.Material.Concrete and r.view.Reflectance==0 and #r.stoneGradient==4 and r.stoneColor.R<.65)
 local resources={r}
 crystalFrame(resources,100)
 local function shot(at,hp,stage)
@@ -69,6 +71,9 @@ assert(r.view.Transparency==1 and r.lastBreakAt==103.01 and #audio==9 and #cues=
  'the first frame back did not split and play the impact sounds')
 assert(audio[7]=='crystal_split' and audio[8]=='crystal_impact' and audio[9]=='crystal_release_tink'
  and #cameraKicks==1 and cameraKicks[1]==103.07 and splitParticles==1)
+for _,gradient in ipairs(r.stoneGradient) do
+ assert(gradient.LocalTransparencyModifier==1,'a rock gradient remained visible after the split')
+end
 local split=rockDamage.feedback.fractures
 assert(#split==2 and math.abs(split[1].p.Size.Y-2.1775)<.001 and split[1].p.Color.R==0 and split[2].p.Color.R==0,
  'a shot that skipped stages failed to open the black final-stage model')
@@ -103,6 +108,7 @@ for key,value in pairs({HP=300,Stage=0,BreakSerial=0,CutContactAt=0,CrystalBreak
 local target={source=charred,view=charred:Clone(),baseColor=charred.Color,dirty=true,cutFeedback=rockDamage.feedback,
  lastContactAt=0,lastBreakAt=0,visual=Feel.newStagePresentation(0,false,104,3)}
 target.view.Parent=fx
+target.stoneColor,target.stoneGradient=RockFinish.apply(target.view,target.baseColor)
 crystalFrame({target},104)
 local beforeChar,size=target.view.Color,target.view.Size
 crystalFrame({target},104.33)
@@ -110,6 +116,7 @@ assert(target.view.Color==beforeChar and #audio==11,'the target reacted before b
 crystalFrame({target},104.35)
 rockDamage.feedback:applyTints(104.35)
 assert(target.view.Color.R<.08 and (target.view.Size-size).Magnitude<.001 and #audio==11,'beam contact did not blacken the rock in place')
+for _,gradient in ipairs(target.stoneGradient) do assert(gradient.Color3.R==0,'a gradient stayed visible over the blackout') end
 for key,value in pairs({HP=0,Stage=3,BreakSerial=1,CutContactAt=104.84,CrystalBreakAt=104.84,CrystalSplitAt=104.84,CutProjectile='Prism'}) do
  charred:SetAttribute(key,value)
 end
